@@ -1,5 +1,99 @@
 # @memberjunction/ng-markdown
 
+## 6.2.0
+
+### Minor Changes
+
+- 56d7614: Follow-up improvements for interactive architecture diagrams (`@memberjunction/ai-diagrams` and `@memberjunction/ng-markdown`):
+  - Keep the diagram stage at full width when the side inspector opens (`scroll-padding-right` + `::after` spacer) and scroll clicked or jumped-to nodes and edges into view so the panel never covers the selected element.
+  - Render edges underneath nodes with a roving `tabindex` (`ArrowLeft`/`ArrowRight`/`ArrowUp`/`ArrowDown`), scope lit marker IDs per diagram instance in Light DOM, and animate comet flow and node arrival glows on user selection or trace (stopping on clear for WCAG 2.2.2 compliance, while respecting sequence message order, upstream + downstream traces, and disconnected cycles).
+  - Repair smartypants-mangled CSS custom properties inside `<svg><style>`, provide SVG presentation fallbacks, and deduplicate `DIAGRAM_CSS`.
+  - Support `mj-diagram` JSON code fences in `<mj-markdown>` with deferred `@memberjunction/ai-diagrams` loading, chunk-load error guards, and async render/destroy race guards, and register `Render Architecture Diagram` and `Get Architecture Diagram Reference` on `Sage` and `Infographic Agent`.
+- e69634e: Add interactive architecture diagrams. `@memberjunction/ai-diagrams` validates an MJ Diagram spec (workflow, lifecycle, sequence, dataflow), renders a self-contained SVG whose colors come from `--mj-*` design tokens, and mounts a click-to-inspect viewer with path tracing. New CoreActions `Render Architecture Diagram` and `Get Architecture Diagram Reference`, with `Data Visualization` skill and `Research Report Writer` agent metadata. `@memberjunction/ng-markdown` upgrades embedded diagrams in place, and the `@memberjunction/ng-artifacts` SVG viewer shows every SVG artifact sanitized with `MarkdownService.SanitizeHtml` and inside a shadow root, so the artifact's own CSS stays in the preview. The viewer's `SafeSvgContent` property is removed.
+
+### Patch Changes
+
+- 0b509c0: Open inline markdown links in a new browser tab by default in `@memberjunction/ng-conversations` (`target="_blank"` with `rel="noopener noreferrer"`), and add an `OpenLinksInNewTab` `@Input()` on `MarkdownComponent`, `ConversationChatAreaComponent`, `MessageListComponent`, `MessageItemComponent`, `RealtimeSessionOverlayComponent`, and `RealtimeSessionThreadComponent` so hosts can override the behavior.
+- 09c7d57: `<mj-markdown>` images can be capped by the host with the `--mj-markdown-image-max-height` CSS custom property (unset: no cap, as before), and a new `ImageClicked` output reports a clicked or keyboard-activated image (not one inside a link; images stay inert unless the output is bound). The conversation message item binds it and opens the image in the chat's existing image viewer, the same way an attachment thumbnail opens. The image viewer's Download opens a cross-origin image in a new tab instead of navigating the app away (browsers ignore `download` across origins).
+- c271ddf: `<mj-markdown>` re-renders when a PascalCase input changes (`[Data]`, `[EnableHtml]`, ...), not only its deprecated camelCase alias. MathML detection no longer matches custom elements such as `<math-field>`.
+- ae0a662: Markdown now renders math: TeX the way language models write it (`$…$` and `\(…\)` inline, `$$…$$` and `\[…\]` for display) and MathML markup, including the prefixed `<mml:math>` that JATS article XML uses.
+  - **markdown-core:** a new `CreateMathExtension` recognizes the math and emits a `code.mj-math` placeholder holding the TeX (a `math` / `mathBlock` token on the AST path). It is tokenized first, so `_` and `*` inside a formula no longer become emphasis, and smartypants leaves its quotes and dashes alone. Single dollars follow Pandoc's rule, so prices stay prices ("$5 and $10", "$5-$10"), and `\[…\]`/`\(…\)` count only around something that reads as TeX, so escaped brackets like "\[1\]" stay brackets. MathML elements (`<math>` or `<mml:math>`) are matched whole, emitted with their prefixes removed, and kept away from markdown, so pretty-printed formulas don't turn into code blocks or emphasis. On by default; `enableMath: false` turns it off.
+  - **ng-markdown:** `MarkdownService.RenderMath(container)` typesets the placeholders with KaTeX as MathML, which browsers lay out natively, so hosts need no KaTeX stylesheet or fonts. KaTeX is loaded on first use, like Mermaid, so documents without math never download it. `<mj-markdown>` calls it after render (new `EnableMath` input). TeX that KaTeX can't parse, or that defines macros, stays visible as source; user sizes are capped. The sanitizer now allows MathML (DOMPurify's MathML profile, plus `columnalign`/`columnspacing`, which its list misspells or lacks). Chrome ignores MathML's `mathvariant` and `columnalign`, so styled letters are spelled with Unicode math characters (\mathbf{E} as 𝐄, \mathbb{R} as ℝ) and the stylesheet aligns `aligned`/`cases` columns.
+  - **ng-chat:** typesets math in its messages (`RenderMath` after `parse()`).
+  - **mobile-app:** shows math as its source, without delimiters, until mobile has a typesetter.
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [62857b4]
+- Updated dependencies [56d7614]
+- Updated dependencies [ae0a662]
+- Updated dependencies [e69634e]
+- Updated dependencies [80905a1]
+  - @memberjunction/ai-diagrams@6.2.0
+  - @memberjunction/markdown-core@6.2.0
+
+## 6.2.0-edge.8
+
+### Minor Changes
+
+- 56d7614: Follow-up improvements for interactive architecture diagrams (`@memberjunction/ai-diagrams` and `@memberjunction/ng-markdown`):
+  - Keep the diagram stage at full width when the side inspector opens (`scroll-padding-right` + `::after` spacer) and scroll clicked or jumped-to nodes and edges into view so the panel never covers the selected element.
+  - Render edges underneath nodes with a roving `tabindex` (`ArrowLeft`/`ArrowRight`/`ArrowUp`/`ArrowDown`), scope lit marker IDs per diagram instance in Light DOM, and animate comet flow and node arrival glows on user selection or trace (stopping on clear for WCAG 2.2.2 compliance, while respecting sequence message order, upstream + downstream traces, and disconnected cycles).
+  - Repair smartypants-mangled CSS custom properties inside `<svg><style>`, provide SVG presentation fallbacks, and deduplicate `DIAGRAM_CSS`.
+  - Support `mj-diagram` JSON code fences in `<mj-markdown>` with deferred `@memberjunction/ai-diagrams` loading, chunk-load error guards, and async render/destroy race guards, and register `Render Architecture Diagram` and `Get Architecture Diagram Reference` on `Sage` and `Infographic Agent`.
+- e69634e: Add interactive architecture diagrams. `@memberjunction/ai-diagrams` validates an MJ Diagram spec (workflow, lifecycle, sequence, dataflow), renders a self-contained SVG whose colors come from `--mj-*` design tokens, and mounts a click-to-inspect viewer with path tracing. New CoreActions `Render Architecture Diagram` and `Get Architecture Diagram Reference`, with `Data Visualization` skill and `Research Report Writer` agent metadata. `@memberjunction/ng-markdown` upgrades embedded diagrams in place, and the `@memberjunction/ng-artifacts` SVG viewer shows every SVG artifact sanitized with `MarkdownService.SanitizeHtml` and inside a shadow root, so the artifact's own CSS stays in the preview. The viewer's `SafeSvgContent` property is removed.
+
+### Patch Changes
+
+- 0b509c0: Open inline markdown links in a new browser tab by default in `@memberjunction/ng-conversations` (`target="_blank"` with `rel="noopener noreferrer"`), and add an `OpenLinksInNewTab` `@Input()` on `MarkdownComponent`, `ConversationChatAreaComponent`, `MessageListComponent`, `MessageItemComponent`, `RealtimeSessionOverlayComponent`, and `RealtimeSessionThreadComponent` so hosts can override the behavior.
+- Updated dependencies [62857b4]
+- Updated dependencies [56d7614]
+- Updated dependencies [e69634e]
+  - @memberjunction/ai-diagrams@6.2.0-edge.8
+  - @memberjunction/markdown-core@6.2.0-edge.8
+
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- @memberjunction/markdown-core@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Patch Changes

@@ -207,6 +207,11 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
     public UnregisterEngine(engine: unknown): void {
         const name = (engine as object).constructor.name;
         this._engines.delete(name);
+        for (const [k, v] of this._engines) {
+            if (v.instance === engine) {
+                this._engines.delete(k);
+            }
+        }
     }
 
     /**
@@ -333,6 +338,20 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
     private checkEngineLoaded(engine: unknown): boolean {
         if (engine && typeof engine === 'object' && 'Loaded' in engine) {
             return Boolean((engine as { Loaded: boolean }).Loaded);
+        }
+        return false;
+    }
+
+    /**
+     * True when a specific property on a `BaseEngine` has already finished `HandleSingleViewResult`
+     * with `loadedSuccessfully === true` (and was not permission-denied), even if other properties
+     * on the same engine are still loading.
+     */
+    private checkEnginePropertyLoaded(engineObj: Record<string, unknown>, propertyName: string | undefined): boolean {
+        if (!propertyName) return false;
+        const isPropertyLoaded = engineObj['IsPropertyLoaded'];
+        if (typeof isPropertyLoaded === 'function') {
+            return Boolean(isPropertyLoaded.call(engineObj, propertyName));
         }
         return false;
     }
@@ -655,8 +674,10 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
      * ```
      *
      * Notes:
-     * - Only **loaded** engines are considered (a registered-but-not-yet-loaded
-     *   engine has no data to offer).
+     * - Only **loaded** data is considered (a registered-but-not-yet-loaded
+     *   engine has no data to offer). A `BaseEngine` is asked per property via
+     *   `IsPropertyLoaded`, so a property that failed or was skipped for lack of
+     *   Read permission is never returned, even when the engine is `Loaded`.
      * - The returned `records` is the engine's *live* array — read it, don't
      *   mutate it. For `'simple'` configs the rows are plain objects, not
      *   `BaseEntity` instances (check `config.ResultType` if you need ORM rows).
@@ -681,14 +702,22 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
         for (const [className, info] of this._engines) {
             const engine = info.instance;
             if (!engine || typeof engine !== 'object') continue;
-            // Only loaded engines have data to offer.
-            if (!this.checkEngineLoaded(engine)) continue;
+            const engineLoaded = this.checkEngineLoaded(engine);
 
             const engineObj = engine as Record<string, unknown>;
             const configs = this.readEngineConfigs(engineObj);
             if (!configs) continue;
+            // An engine that tracks per-property load state is the authority on each property, even
+            // once the engine as a whole is Loaded: a config skipped for lack of Read permission (or
+            // one whose load failed) holds `[]`, which must never be served as the full table.
+            const tracksPropertyState = typeof engineObj['IsPropertyLoaded'] === 'function';
 
             for (const cfg of configs) {
+                const hasData = tracksPropertyState
+                    ? this.checkEnginePropertyLoaded(engineObj, cfg.PropertyName)
+                    : engineLoaded;
+                if (!hasData) continue;
+
                 // Only entity configs (Type defaults to 'entity') with a matching EntityName.
                 if ((cfg.Type ?? 'entity') !== 'entity') continue;
                 if (!cfg.EntityName || cfg.EntityName.trim().toLowerCase() !== target) continue;

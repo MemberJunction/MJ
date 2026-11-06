@@ -476,7 +476,7 @@ async function discoverNumericOrderTarget(ctx: IntegrationCheckContext): Promise
             { EntityName: entity.Name, ExtraFilter: `${field.Name} IS NOT NULL`, ResultType: 'count_only' }, ctx.User,
         );
         if (c.Success && (c.TotalRowCount ?? 0) >= 3 && (c.TotalRowCount ?? 0) <= 3000) {
-            return { Entity: entity, Field: field, Count: c.TotalRowCount };
+            return { Entity: entity, Field: field, Count: (c.TotalRowCount ?? 0) };
         }
     }
     return null;

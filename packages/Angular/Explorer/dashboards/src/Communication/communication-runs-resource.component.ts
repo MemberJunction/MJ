@@ -291,10 +291,10 @@ export class CommunicationRunsResourceComponent extends BaseResourceComponent im
                 this.Runs = runsResult.Results as MJCommunicationRunEntity[];
             }
 
-            if (activeResult.Success) this.Summary.active = activeResult.TotalRowCount;
-            if (completedResult.Success) this.Summary.completed = completedResult.TotalRowCount;
+            if (activeResult.Success) this.Summary.active = activeResult.TotalRowCount ?? 0;
+            if (completedResult.Success) this.Summary.completed = completedResult.TotalRowCount ?? 0;
 
-            const totalCompleted = this.Summary.completed + (failedResult.Success ? failedResult.TotalRowCount : 0);
+            const totalCompleted = this.Summary.completed + (failedResult.Success ? failedResult.TotalRowCount ?? 0 : 0);
             this.Summary.successRate = totalCompleted > 0
                 ? Math.round((this.Summary.completed / totalCompleted) * 100)
                 : 100;

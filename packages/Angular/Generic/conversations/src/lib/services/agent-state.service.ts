@@ -339,6 +339,7 @@ export class AgentStateService implements OnDestroy {
           ExtraFilter: `ConversationDetailID='${conversationDetailId}' AND Status IN ('Running', 'Paused')`,
           OrderBy: 'StartedAt DESC',
           MaxRows: 1,
+          SkipTotalRowCount: true,
           Fields: ['ID'],
           ResultType: 'simple'
         },

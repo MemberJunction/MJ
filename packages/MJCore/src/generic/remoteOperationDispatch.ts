@@ -8,6 +8,7 @@
 
 import { MJGlobal } from "@memberjunction/global";
 import { BaseRemotableOperation, RemoteOpServerContext } from "./baseRemotableOperation";
+import { ServerOperationScopeManager } from "./entityLifecyclePolicy";
 import { IMetadataProvider, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
 import { UserInfo } from "./securityInfo";
 
@@ -44,7 +45,7 @@ export async function DispatchRemoteOperationInProcess<TInput = unknown, TOutput
         };
     }
 
-    const user = options.user ?? fallbackUser;
+    const user = options?.user ?? fallbackUser;
     if (!user) {
         return {
             Success: false,
@@ -53,13 +54,39 @@ export async function DispatchRemoteOperationInProcess<TInput = unknown, TOutput
         };
     }
 
+    const requestedFingerprint = options?.contractFingerprint?.trim();
+    if (requestedFingerprint && op.ContractFingerprint && requestedFingerprint !== op.ContractFingerprint) {
+        return {
+            Success: false,
+            ResultCode: 'CONTRACT_MISMATCH',
+            ErrorMessage: `Contract fingerprint mismatch for operation '${operationKey}' (client='${requestedFingerprint}', server='${op.ContractFingerprint}')`,
+        };
+    }
+
     const context: RemoteOpServerContext = {
         provider,
         user,
         emitProgress: (progress) => options.onProgress?.(progress),
-        handle: undefined,
+        handle: options.handle,
+        requestOrigin: options.requestOrigin,
+        clientIp: options.clientIp,
+        sessionId: options.sessionId,
+        apiKeyHash: options.apiKeyHash,
     };
-    return op.ExecuteServer(input, context);
+    if (op.GrantsServerWriteAuthority) {
+        return ServerOperationScopeManager.Instance.RunWithAuthority(
+            {
+                operationKey: op.OperationKey || operationKey,
+                source: 'RemotableOperation',
+                allowedEntities: op.AuthorizedWriteEntities,
+                userId: user.ID,
+            },
+            () => op.ExecuteServer(input, context),
+        );
+    }
+    return ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() =>
+        op.ExecuteServer(input, context),
+    );
 }
 
 /** @deprecated Use {@link DispatchRemoteOperationInProcess}. */

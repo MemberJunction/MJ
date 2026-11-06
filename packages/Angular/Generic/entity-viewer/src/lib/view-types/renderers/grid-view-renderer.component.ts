@@ -1169,6 +1169,7 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
         Fields: child.PrimaryKeys.map(f => f.Name),
         ResultType: 'simple' as const,
         MaxRows: 1,
+        SkipTotalRowCount: true,
       })),
     );
     if (results.some(r => !r.Success)) return null;

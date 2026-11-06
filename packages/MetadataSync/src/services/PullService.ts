@@ -1260,11 +1260,13 @@ export class PullService {
     }
 
     // Composition axes and relatedEntities before primaryKey and sync. A collection the pull did not
-    // produce (one the author declared but the pull config does not fetch) is kept from the file.
+    // produce (one the author declared but the pull config does not fetch) is kept from the file;
+    // embeds merge by name the same way.
     if (existing.collections || newData.collections) {
       result.collections = { ...existing.collections, ...newData.collections };
     }
-    this.copyCompositionAxes(result, { fields: {}, embeds: newData.embeds ?? existing.embeds, extension: newData.extension ?? existing.extension });
+    const embeds = existing.embeds || newData.embeds ? { ...existing.embeds, ...newData.embeds } : undefined;
+    this.copyCompositionAxes(result, { fields: {}, embeds, extension: newData.extension ?? existing.extension });
     if (existing.relatedEntities || newData.relatedEntities) {
       result.relatedEntities = {
         ...existing.relatedEntities,

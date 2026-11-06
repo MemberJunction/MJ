@@ -3,7 +3,7 @@
  * @module @memberjunction/testing-cli
  */
 
-import { TestEngine } from '@memberjunction/testing-engine';
+import { TestEngine, ParseShardSpec } from '@memberjunction/testing-engine';
 import { UserInfo } from '@memberjunction/core';
 import { SuiteFlags } from '../types';
 import { OutputFormatter } from '../utils/output-formatter';
@@ -17,6 +17,7 @@ import { LoadOraclesModule } from '../utils/oracle-module-loader';
 import { LoadCheckModules } from '../utils/check-module-loader';
 import { installInstrumentedCacheFirst, FormatSkipGateReport } from '@memberjunction/testing-integration';
 import { EvaluateSuiteSkipGate } from './suite-skip-gate';
+import { FlushAndExit } from '../utils/flush-and-exit';
 
 /**
  * Suite command - Execute a test suite
@@ -33,6 +34,11 @@ export class SuiteCommand {
      */
     async Execute(suiteId: string | undefined, flags: SuiteFlags, contextUser?: UserInfo): Promise<void> {
         try {
+            const parsedShard = flags.shard ? ParseShardSpec(flags.shard) : undefined;
+            if (flags.transport && flags.transport !== 'server' && flags.transport !== 'client' && flags.transport !== 'all') {
+                throw new Error(`Invalid --transport value '${String(flags.transport)}': expected 'server', 'client', or 'all'.`);
+            }
+
             // Integration tests must install the instrumented cache as the FIRST caller
             // (before any provider setup) or its counters are a silent no-op. Opt-in via
             // MJ_INTEGRATION_TEST=1 so every other suite run is byte-for-byte unchanged.
@@ -165,6 +171,8 @@ export class SuiteCommand {
                 repeatCountOverride: flags.flakyCheck && flags.flakyCheck > 1 ? flags.flakyCheck : undefined,
                 rubricId: rubric?.rubricId,
                 rubricVersionId: rubric?.versionId,
+                transport: flags.transport,
+                shard: parsedShard,
             }, contextUser);
 
             this.spinner.stop();
@@ -198,8 +206,9 @@ export class SuiteCommand {
             // Clean up resources
             await CloseMJProvider();
 
-            // Exit with appropriate code (non-zero if any test failed or the skip gate failed)
-            process.exit(result.failedTests === 0 && skipGate.Passed ? 0 : 1);
+            // Exit with appropriate code (non-zero if any test failed or the skip gate failed),
+            // after the result above has reached a piped stdout in full
+            await FlushAndExit(result.failedTests === 0 && skipGate.Passed ? 0 : 1);
 
         } catch (error) {
             this.spinner.fail();

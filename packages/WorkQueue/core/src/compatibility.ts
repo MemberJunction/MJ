@@ -38,6 +38,9 @@ export function SubscriptionUnsupportedReason(
     if (policy.PartitionMode === 'Ordered' && !capabilities.SupportsOrdered) {
         return `Subscription '${name}': Ordered requires the Database transport`;
     }
+    if (policy.ExhaustionBehavior === 'Discard' && !capabilities.SupportsOrdered) {
+        return `Subscription '${name}': ExhaustionBehavior 'Discard' requires the Database transport`;
+    }
     if (policy.BackoffMaxSeconds > capabilities.MaxRetryDelaySeconds) {
         return `Subscription '${name}' has BackoffMaxSeconds ${policy.BackoffMaxSeconds}, above this transport's limit of ${capabilities.MaxRetryDelaySeconds}`;
     }

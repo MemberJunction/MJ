@@ -67,9 +67,18 @@ export type RealtimeTurnDetectionMode = 'default' | 'serverVad' | 'semanticVad' 
 export interface RealtimeTurnDetectionSettings {
     /** The normalized mode; absent = `'default'`. */
     Mode?: RealtimeTurnDetectionMode;
-    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored by profiles without a mapping. */
+    /**
+     * The cross-driver patient (`low`) / normal (`auto`) / eager (`high`) turn-taking dial; ignored by drivers without a
+     * mapping. OpenAI and Eleven Realtime: semantic-VAD `eagerness`, applied only with `Mode: 'semanticVad'`. xAI: an
+     * end-of-turn silence ladder (off when any layer sets `SilenceDurationMs`). Gemini: end-of-speech sensitivity.
+     * ElevenLabs Agents: turn eagerness.
+     */
     Eagerness?: 'low' | 'auto' | 'high';
-    /** Server-VAD activation threshold (0–1); ignored by profiles without a mapping. */
+    /**
+     * Server-VAD activation threshold (0–1); ignored by profiles without a mapping. A profile whose provider has
+     * coarser controls maps it as an approximate value: Gemini Live has two start-of-speech buckets, so below 0.5 is START_SENSITIVITY_HIGH
+     * and 0.5 or more is START_SENSITIVITY_LOW.
+     */
     Threshold?: number;
     /** Server-VAD trailing-silence duration in ms; ignored by profiles without a mapping. */
     SilenceDurationMs?: number;

@@ -1350,10 +1350,10 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       if (result.Success) {
         // Non-silent cap: if the entity has more matching rows than we're allowed to pull at once,
         // tell the user the operation covered the first N — don't let it look like the full set.
-        if (result.TotalRowCount > EntityViewerComponent.EXPORT_MAX_RECORDS) {
+        if ((result.TotalRowCount ?? 0) > EntityViewerComponent.EXPORT_MAX_RECORDS) {
           MJNotificationService.Instance.CreateSimpleNotification(
             `This operation is limited to the first ${EntityViewerComponent.EXPORT_MAX_RECORDS.toLocaleString()} of ` +
-            `${result.TotalRowCount.toLocaleString()} matching records. Narrow the view with a filter to include the rest.`,
+            `${(result.TotalRowCount ?? 0).toLocaleString()} matching records. Narrow the view with a filter to include the rest.`,
             'warning',
             6000
           );
@@ -1488,7 +1488,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
 
         const total = countResult?.Success && countResult.TotalRowCount != null
           ? countResult.TotalRowCount
-          : result.TotalRowCount;
+          : result.TotalRowCount ?? 0;
         this.TotalRecordCount = total;
         this.FilteredRecordCount = this.InternalRecords.length;
 

@@ -13,8 +13,12 @@ import { LocalCacheManager } from "./localCacheManager";
 import { AssertClientInputWritableForUser } from "./entityValueFieldSecurity";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
-import { FormatBinaryChangeValue, ScanSQLForScreening, SQLExpressionValidator, uuidv4 } from "@memberjunction/global";
+import { CanonicalPrimaryKeyValue } from "./util";
+import { FormatBinaryChangeValue, ScanSQLForScreening, SQLExpressionValidator, uuidv4, ValidationResult, EscapeSQLString } from "@memberjunction/global";
 import { GetDialect, SQLDialect } from "@memberjunction/sql-dialect";
+import { EntityLifecyclePolicyEngine } from "./entityLifecyclePolicy";
+import { DocumentNumberingEngine } from "./documentNumberingEngine";
+import { CrossEntityPolicyEngine } from "./crossEntityPolicyEngine";
 
 // Re-export PlatformSQL types from their canonical location for backward compatibility
 export { DatabasePlatform, PlatformSQL, IsPlatformSQL } from "./platformSQL";
@@ -153,6 +157,41 @@ export interface PostCommitToken {
  * Subclasses implement abstract methods for DB-specific SQL dialect generation.
  */
 export abstract class DatabaseProviderBase extends ProviderBase {
+    private static _nextProviderInstanceId = 1;
+    private readonly _providerInstanceId = DatabaseProviderBase._nextProviderInstanceId++;
+    private _transactionEpoch = 0;
+
+    /**
+     * Whether the calling async scope is part of this provider's ambient transaction.
+     * Subclasses with async-context transaction affinity (`GenericDatabaseProvider`) override this
+     * so concurrent callers on a shared provider do not share transaction-scoped caches.
+     */
+    protected IsCallerInAmbientTransaction(): boolean {
+        return this.IsInTransaction || this.CurrentTransactionDepth > 0;
+    }
+
+    /**
+     * Unique cache key identifying this provider's current active transaction epoch, or `null` when
+     * no entity/physical transaction is open for the calling async scope. Used by
+     * {@link CrossEntityPolicyEngine} to memoize parent-record lookups across batch/graph saves and
+     * evict them cleanly on commit or rollback.
+     */
+    public get TransactionScopeCacheKey(): string | null {
+        if (this.IsCallerInAmbientTransaction() && (this.IsInTransaction || this.CurrentTransactionDepth > 0)) {
+            return `tx:${this._providerInstanceId}:${this._transactionEpoch}`;
+        }
+        return null;
+    }
+
+    /**
+     * Advances this provider's transaction epoch and evicts any transaction-scoped
+     * {@link CrossEntityPolicyEngine} caches bound to it.
+     */
+    protected BumpTransactionEpoch(): void {
+        this._transactionEpoch++;
+        CrossEntityPolicyEngine.Instance.ClearProviderScope(this);
+    }
+
     /**
      * Server-side providers trust the local cache completely because it is
      * kept in perfect sync via BaseEntity save/delete events and cross-server
@@ -436,6 +475,13 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     await this.RollbackTransaction();
                 }
             } finally {
+                if (!isNested || !settledAsCommit) {
+                    if (typeof this.BumpTransactionEpoch === 'function') {
+                        this.BumpTransactionEpoch();
+                    } else {
+                        CrossEntityPolicyEngine.Instance.ClearProviderScope(this);
+                    }
+                }
                 await LocalCacheManager.Instance.EndEntityEventBatch(this, settledAsCommit);
             }
         };
@@ -519,6 +565,28 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * @param recordPKValue The primary key value to find
      */
     protected abstract BuildChildDiscoverySQL(childEntities: EntityInfo[], recordPKValue: string): string;
+
+    /**
+     * Builds a batched UNION ALL query probing all `childEntities`' `BaseView`s for a set
+     * of parent primary-key values (`WHERE pk IN (...)`), returning `(EntityName, RecordPK, Priority)`.
+     * Dialect providers override this to use platform-native string-literal and CAST syntax.
+     */
+    protected BuildChildDiscoveryBatchSQL(childEntities: EntityInfo[], recordPKValues: string[]): string {
+        if (recordPKValues.length === 0) return '';
+        const escapedKeys = recordPKValues
+            .map(v => `'${EscapeSQLString(String(v))}'`)
+            .join(', ');
+        const unionParts = childEntities
+            .filter(child => child.PrimaryKeys.length > 0)
+            .map((child, idx) => {
+                const schema = child.SchemaName || this.MJCoreSchemaName || '__mj';
+                const sourceRef = this.QuoteSchemaAndView(schema, child.BaseView);
+                const pkRef = this.QuoteIdentifier(child.FirstPrimaryKey.Name); // first-pk-ok: IS-A children share the parent's single key
+                const escapedName = `'${EscapeSQLString(child.Name)}'`;
+                return `SELECT ${escapedName} AS ${this.QuoteIdentifier('EntityName')}, CAST(${pkRef} AS VARCHAR(255)) AS ${this.QuoteIdentifier('RecordPK')}, ${idx + 1} AS ${this.QuoteIdentifier('Priority')} FROM ${sourceRef} WHERE ${pkRef} IN (${escapedKeys})`;
+            });
+        return unionParts.length > 0 ? unionParts.join(' UNION ALL ') : '';
+    }
 
     /**
      * Builds SQL for hard-link (foreign key) dependency queries.
@@ -890,6 +958,122 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 .map((r) => ({ ChildEntityName: r.EntityName }));
         }
         return [];
+    }
+
+    private static readonly DEFAULT_ISA_DISCOVERY_BATCH_CHUNK_SIZE = 500;
+
+    /**
+     * Maximum number of parent primary keys included in a single `BuildChildDiscoveryBatchSQL`
+     * `WHERE PK IN (...)` statement inside {@link FindISAChildEntitiesBatch}.
+     */
+    protected get ISADiscoveryBatchChunkSize(): number {
+        return DatabaseProviderBase.DEFAULT_ISA_DISCOVERY_BATCH_CHUNK_SIZE;
+    }
+
+    /**
+     * Batch-discovers IS-A child entity types for multiple parent primary keys in a single
+     * UNION ALL SQL query (chunked at {@link ISADiscoveryBatchChunkSize} keys per statement to
+     * stay well within SQL limits).
+     */
+    public async FindISAChildEntitiesBatch(
+        entityInfo: EntityInfo,
+        recordPKValues: string[],
+        contextUser?: UserInfo
+    ): Promise<Map<string, string[]>> {
+        const resultMap = new Map<string, string[]>();
+        const childEntities = entityInfo.ChildEntities;
+        if (childEntities.length === 0 || recordPKValues.length === 0) {
+            return resultMap;
+        }
+
+        // IS-A children share the parent's single key, so the parent's key type decides how values
+        // are canonicalized (UUIDs case-insensitively, anything else by exact text).
+        const pkIsUuid = Boolean(entityInfo.FirstPrimaryKey?.IsUniqueIdentifier); // first-pk-ok: IS-A children share the parent's single key
+        const uniquePKs = this.deduplicateCanonicalPKs(recordPKValues, pkIsUuid);
+        if (uniquePKs.length === 0) {
+            return resultMap;
+        }
+
+        const priorityByChildName = new Map<string, number>();
+        for (let i = 0; i < childEntities.length; i++) {
+            priorityByChildName.set(childEntities[i].Name.toLowerCase(), i + 1);
+        }
+
+        const chunkSize = this.ISADiscoveryBatchChunkSize;
+        const collected = new Map<string, Array<{ name: string; priority: number }>>();
+        for (let start = 0; start < uniquePKs.length; start += chunkSize) {
+            const chunk = uniquePKs.slice(start, start + chunkSize);
+            await this.collectISAChildBatchChunk(
+                childEntities,
+                chunk,
+                pkIsUuid,
+                priorityByChildName,
+                collected,
+                contextUser
+            );
+        }
+
+        for (const [pkKey, entries] of collected) {
+            entries.sort((a, b) => a.priority - b.priority);
+            const names: string[] = [];
+            for (const entry of entries) {
+                if (!names.includes(entry.name)) {
+                    names.push(entry.name);
+                }
+            }
+            resultMap.set(pkKey, names);
+        }
+        return resultMap;
+    }
+
+    private deduplicateCanonicalPKs(recordPKValues: ReadonlyArray<string>, pkIsUuid: boolean): string[] {
+        const uniquePKs: string[] = [];
+        const seen = new Set<string>();
+        for (const rawPk of recordPKValues) {
+            if (!rawPk) continue;
+            const norm = CanonicalPrimaryKeyValue(String(rawPk), pkIsUuid);
+            if (!seen.has(norm)) {
+                seen.add(norm);
+                uniquePKs.push(String(rawPk).trim());
+            }
+        }
+        return uniquePKs;
+    }
+
+    private async collectISAChildBatchChunk(
+        childEntities: EntityInfo[],
+        chunk: string[],
+        pkIsUuid: boolean,
+        priorityByChildName: ReadonlyMap<string, number>,
+        collected: Map<string, Array<{ name: string; priority: number }>>,
+        contextUser?: UserInfo
+    ): Promise<void> {
+        const batchSQL = this.BuildChildDiscoveryBatchSQL(childEntities, chunk);
+        if (!batchSQL) return;
+
+        const rows = await this.ExecuteSQL<{ EntityName?: string; ChildEntityName?: string; RecordPK?: string; Priority?: number }>(
+            batchSQL,
+            undefined,
+            undefined,
+            contextUser
+        );
+        if (!rows || rows.length === 0) return;
+
+        for (const row of rows) {
+            const entityName = row.EntityName ?? row.ChildEntityName;
+            if (!entityName || row.RecordPK == null) continue;
+            const pkKey = CanonicalPrimaryKeyValue(String(row.RecordPK), pkIsUuid);
+            const priority =
+                typeof row.Priority === 'number'
+                    ? row.Priority
+                    : (priorityByChildName.get(entityName.toLowerCase()) ?? Number.MAX_SAFE_INTEGER);
+            let bucket = collected.get(pkKey);
+            if (!bucket) {
+                bucket = [];
+                collected.set(pkKey, bucket);
+            }
+            bucket.push({ name: entityName, priority });
+        }
     }
 
     /**
@@ -1314,6 +1498,39 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * SQL Server overrides this to fire before-save entity actions and AI actions.
      */
     protected async OnBeforeSaveExecute(_entity: BaseEntity, _user: UserInfo, _options: EntitySaveOptions, _context: SaveContext): Promise<void> {
+        /* no-op by default */
+    }
+
+    /**
+     * Returns true when `Save()` must enlist {@link OnDurableAfterSaveExecute} transactionally
+     * (wrapping direct saves in an {@link EntityTransactionScope}, and awaiting durable action
+     * submission inside `TransactionGroup` save callbacks before group completion).
+     *
+     * Default: `false` (zero extra transaction overhead on ordinary entity saves).
+     */
+    protected async ShouldEnlistSaveInTransaction(
+        _entity: BaseEntity,
+        _user: UserInfo,
+        _options: EntitySaveOptions,
+        _isNewRecord: boolean,
+    ): Promise<boolean> {
+        return false;
+    }
+
+    /**
+     * Awaited immediately after the save SQL succeeds (inside direct `Save()`'s
+     * {@link EntityTransactionScope} before commit, or inside a `TransactionGroup` item's completion
+     * callback after hydrating DB-generated PKs and before {@link OnAfterSaveExecute}) when
+     * {@link ShouldEnlistSaveInTransaction} returned `true`.
+     * Used by `GenericDatabaseProvider` to enlist durable after-save entity actions atomically in the
+     * same SQL transaction as the entity write.
+     */
+    protected async OnDurableAfterSaveExecute(
+        _entity: BaseEntity,
+        _user: UserInfo,
+        _options: EntitySaveOptions,
+        _context: SaveContext,
+    ): Promise<void> {
         /* no-op by default */
     }
 
@@ -1892,6 +2109,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      */
     public async Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions): Promise<{}> {
         const entityResult = new BaseEntityResult();
+        let autoNumberTxScope: EntityTransactionScope | null = null;
+        let autoNumberTxCommitted = false;
+        let assignedAutoNumberFields: string[] = [];
         // Each suspend is matched by exactly one resume, whichever path (success, transaction
         // callback, or catch) gets there first: providers count suspensions, so a stray resume
         // would re-enable refresh while another save is still running.
@@ -1906,8 +2126,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 this.OnResumeRefresh();
             }
         };
+        let transactionPreprocessingRegistered = false;
+        let transactionReadyRaised = false;
         try {
             entity.RegisterTransactionPreprocessing();
+            transactionPreprocessingRegistered = Boolean(entity.TransactionGroup);
 
             // External-data-source entities are read-only — MJ is never the system of record for
             // remote data. Refuse writes at the provider layer so the guarantee holds regardless of
@@ -1949,8 +2172,34 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 entityResult.OriginalValues = entity.Fields.map((f) => ({ FieldName: f.Name, Value: f.Value }));
                 entity.RegisterResultHistoryEntry(entityResult);
 
-                // Step 2: Validation hook
+                // Step 2: Validation hook (lifecycle gates, state machine, auto-number, cross-entity policies, & provider hook)
                 if (!bReplay) {
+                    const gateError = EntityLifecyclePolicyEngine.Instance.CheckWritePermissionGate(
+                        entity,
+                        bNewRecord ? 'Create' : 'Update',
+                        user,
+                        true,
+                    );
+                    if (gateError) {
+                        entityResult.Success = false;
+                        entityResult.EndedAt = new Date();
+                        entityResult.Message = gateError;
+                        return false;
+                    }
+
+                    const lifecycleValidation = new ValidationResult();
+                    lifecycleValidation.Success = true;
+                    EntityLifecyclePolicyEngine.Instance.ValidateLifecycleOnEntity(entity, user, lifecycleValidation);
+                    DocumentNumberingEngine.Instance.ValidateAutoNumberFields(entity, lifecycleValidation);
+                    if (!lifecycleValidation.Success) {
+                        entityResult.Success = false;
+                        entityResult.EndedAt = new Date();
+                        entityResult.Errors.push(...lifecycleValidation.Errors);
+                        entityResult.Message = lifecycleValidation.Errors.map((e) => e.Message).join('; ');
+                        entityResult.MessageIncludesErrors = true;
+                        return false;
+                    }
+
                     const validationMessage = await this.OnValidateBeforeSave(entity, user, saveContext);
                     if (validationMessage) {
                         entityResult.Success = false;
@@ -1986,6 +2235,38 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 // Step 3: Before-save hook (entity actions, AI actions)
                 if (!bReplay) {
                     await this.OnBeforeSaveExecute(entity, user, options, saveContext);
+                }
+
+                // Step 3a: Cross-entity policy evaluation (after RLS pre-check and before-save hooks;
+                // TransactionGroup items defer batch evaluation to TransactionGroupBase.Submit())
+                if (!bReplay && !entity.TransactionGroup) {
+                    const crossPolicyError = await CrossEntityPolicyEngine.Instance.EnforceBeforeSave(
+                        entity,
+                        user,
+                        this,
+                        saveContext,
+                    );
+                    if (crossPolicyError) {
+                        entityResult.Success = false;
+                        entityResult.EndedAt = new Date();
+                        entityResult.Message = crossPolicyError;
+                        return false;
+                    }
+                }
+
+                // Step 3a-ii: Scoped document auto-numbering allocation (transactional & gap-free).
+                // For TransactionGroup saves, allocation is deferred to TransactionItem.PrepareBeforeSubmit
+                // inside BeginGroupTransaction() so sequence locks and rollback match the group transaction.
+                const deferAutoNumberToGroup =
+                    !bReplay &&
+                    bNewRecord &&
+                    Boolean(entity.TransactionGroup) &&
+                    DocumentNumberingEngine.Instance.NeedsAllocation(entity);
+                if (!bReplay && bNewRecord && !entity.TransactionGroup && DocumentNumberingEngine.Instance.NeedsAllocation(entity)) {
+                    if (DocumentNumberingEngine.Instance.RequiresTransactionalSave(entity.EntityInfo)) {
+                        autoNumberTxScope = await this.BeginEntityTransaction();
+                    }
+                    assignedAutoNumberFields = await DocumentNumberingEngine.Instance.AllocateAndAssignForEntity(entity, this, user);
                 }
 
                 // Step 3b: Post-image RLS check. The pre-image/pre-hook check at step 2b
@@ -2024,7 +2305,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 }
 
                 // Step 4: Generate provider-specific SQL
-                const sqlDetails = await this.GenerateSaveSQL(entity, bNewRecord, user, options);
+                let sqlDetails = await this.GenerateSaveSQL(entity, bNewRecord, user, options);
                 const effectiveReturnMode: EntitySaveReturnMode = options?.SaveReturnMode ?? entity.EntityInfo.SaveReturnMode;
                 // Snapshot the entity's in-memory field values at the exact point SQL parameters were bound
                 // (before awaiting ExecuteSQL). If the caller mutates the entity in memory while an async
@@ -2047,6 +2328,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 if (entity.TransactionGroup && !bReplay) {
                     // ---- Transaction Group path ----
                     entity.RaiseReadyForTransaction();
+                    transactionReadyRaised = true;
                     suspendRefresh();
 
                     const extraData = this.GetTransactionExtraData(entity);
@@ -2057,97 +2339,213 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     });
                     extraData.entityName = entity.EntityInfo.Name;
 
-                    entity.TransactionGroup.AddTransaction(
-                        new TransactionItem(
-                            entity,
-                            entityResult.Type === 'create' ? 'Create' : 'Update',
-                            sqlDetails.literalSQL ?? sqlDetails.fullSQL,
-                            sqlDetails.literalSQL ? null : (sqlDetails.parameters ?? null),
-                            extraData,
-                            (transactionResult: Record<string, unknown>, success: boolean) => {
-                                resumeRefresh();
-                                entityResult.EndedAt = new Date();
-                                if (success && transactionResult) {
-                                    this.OnAfterSaveExecute(entity, user, options, saveContext);
-                                    entityResult.Success = true;
-                                    const mergedResult: Record<string, unknown> = preSaveValues
-                                        ? { ...preSaveValues, ...transactionResult }
-                                        : transactionResult;
-                                    entityResult.NewValues = this.MapTransactionResultToNewValues(mergedResult);
-                                } else {
-                                    entityResult.Success = false;
-                                    entityResult.Message = 'Transaction Failed';
+                    type TransactionRowValue = string | number | boolean | Date | Uint8Array | object | null | undefined;
+                    const txItem = new TransactionItem(
+                        entity,
+                        entityResult.Type === 'create' ? 'Create' : 'Update',
+                        sqlDetails.literalSQL ?? sqlDetails.fullSQL,
+                        sqlDetails.literalSQL ? null : (sqlDetails.parameters ?? null),
+                        extraData,
+                        async (transactionResult: Record<string, TransactionRowValue>, success: boolean) => {
+                            resumeRefresh();
+                            entityResult.EndedAt = new Date();
+                            if (success && transactionResult) {
+                                if (bNewRecord) {
+                                    let hydratedPk = false;
+                                    for (const pkField of entity.EntityInfo.PrimaryKeys) {
+                                        const fieldObj = entity.Fields.find((f) => f.Name === pkField.Name);
+                                        if (
+                                            fieldObj &&
+                                            (fieldObj.Value === null || fieldObj.Value === undefined) &&
+                                            transactionResult[pkField.Name] != null
+                                        ) {
+                                            fieldObj.Value = transactionResult[pkField.Name];
+                                            hydratedPk = true;
+                                        }
+                                    }
+                                    if (hydratedPk) {
+                                        entity.PrimaryKey.LoadFromEntityFields(entity.PrimaryKeys);
+                                    }
                                 }
-                            },
-                        ),
+                                if (await this.ShouldEnlistSaveInTransaction(entity, user, options, bNewRecord)) {
+                                    await this.OnDurableAfterSaveExecute(entity, user, options, saveContext);
+                                }
+                                if (preSaveValues) {
+                                    for (const [key, val] of Object.entries(preSaveValues as Record<string, TransactionRowValue>)) {
+                                        if (!(key in transactionResult)) {
+                                            transactionResult[key] = val;
+                                        }
+                                    }
+                                    Object.defineProperty(transactionResult, '__mj_preMerged', {
+                                        value: true,
+                                        enumerable: false,
+                                        configurable: true,
+                                    });
+                                }
+                                const patches = await this.OnSaveCompleted(entity, sqlDetails, user, options, saveContext);
+                                if (patches) {
+                                    Object.assign(transactionResult, patches);
+                                }
+                                CrossEntityPolicyEngine.Instance.NotifyEntityMutated(
+                                    this,
+                                    entity,
+                                    bNewRecord ? 'Create' : 'Update',
+                                );
+                                this.OnAfterSaveExecute(entity, user, options, saveContext);
+                                entityResult.Success = true;
+                                entityResult.NewValues = this.MapTransactionResultToNewValues(transactionResult);
+                            } else {
+                                entityResult.Success = false;
+                                if (!entityResult.Message) {
+                                    entityResult.Message =
+                                        transactionResult instanceof Error ? transactionResult.message : 'Transaction Failed';
+                                }
+                            }
+                        },
                     );
+                    if (deferAutoNumberToGroup) {
+                        let groupAssignedFields: string[] = [];
+                        txItem.PrepareBeforeSubmit = async (): Promise<void> => {
+                            groupAssignedFields = await DocumentNumberingEngine.Instance.AllocateAndAssignForEntity(entity, this, user);
+                            sqlDetails = await this.GenerateSaveSQL(entity, bNewRecord, user, options);
+                            txItem.Instruction = sqlDetails.literalSQL ?? sqlDetails.fullSQL;
+                            txItem.Vars = sqlDetails.literalSQL ? null : (sqlDetails.parameters ?? null);
+                            if (preSaveValues) {
+                                for (const fName of groupAssignedFields) {
+                                    preSaveValues[fName] = entity.Get(fName);
+                                }
+                            }
+                        };
+                        txItem.RevertAfterRollback = (): void => {
+                            if (groupAssignedFields.length > 0) {
+                                DocumentNumberingEngine.Instance.RevertAssignedNumbers(entity, groupAssignedFields);
+                                groupAssignedFields = [];
+                            }
+                        };
+                    }
+                    entity.TransactionGroup.AddTransaction(txItem);
                     return true;
                 } else {
                     // ---- Direct execution path ----
+                    const enlistInTx = !bReplay && await this.ShouldEnlistSaveInTransaction(entity, user, options, bNewRecord);
+                    const saveTxScope = enlistInTx && !autoNumberTxScope ? await this.BeginEntityTransaction() : null;
+                    let saveTxCommitted = false;
                     suspendRefresh();
 
-                    let result: Record<string, unknown>[];
-                    if (bReplay) {
-                        result = [entity.GetAll()];
-                    } else {
-                        const execOptions = this.BuildSaveExecuteOptions(entity, sqlDetails);
-                        const rawResult = await this.ExecuteSQL<Record<string, unknown>>(
-                            sqlDetails.fullSQL,
-                            sqlDetails.parameters ?? undefined,
-                            execOptions,
-                            user,
-                        );
-                        result = await this.PostProcessRows(rawResult, entity.EntityInfo, user);
-                    }
-
-                    resumeRefresh();
-                    entityResult.EndedAt = new Date();
-
-                    if (result && result.length > 0) {
-                        this.OnAfterSaveExecute(entity, user, options, saveContext);
-                        entityResult.Success = true;
-
-                        // In 'datestamps_only' mode, the SP/query returned only the PK and
-                        // __mj_CreatedAt/__mj_UpdatedAt columns. Merge those returned values
-                        // onto the pre-save snapshot so caller-set fields remain intact without
-                        // falsely marking concurrent in-flight mutations as clean.
-                        let mergedRow: Record<string, unknown>;
-                        if (preSaveValues) {
-                            mergedRow = { ...preSaveValues, ...result[0] };
-                            Object.defineProperty(mergedRow, '__mj_preMerged', {
-                                value: true,
-                                enumerable: false,
-                                configurable: true,
-                            });
+                    type SaveRowList = Awaited<ReturnType<typeof this.PostProcessRows>>;
+                    let result: SaveRowList;
+                    try {
+                        if (bReplay) {
+                            result = [entity.GetAll()];
                         } else {
-                            mergedRow = result[0];
+                            const execOptions = this.BuildSaveExecuteOptions(entity, sqlDetails);
+                            const rawResult = await this.ExecuteSQL<SaveRowList[number]>(
+                                sqlDetails.fullSQL,
+                                sqlDetails.parameters ?? undefined,
+                                execOptions,
+                                user,
+                            );
+                            result = await this.PostProcessRows(rawResult, entity.EntityInfo, user);
                         }
 
-                        // OnSaveCompleted may return patch fields (e.g., updated lat/lng
-                        // from geocoding) that need to be merged onto the SP result before
-                        // the entity loads the data via finalizeSave().
-                        const patches = await this.OnSaveCompleted(entity, sqlDetails, user, options, saveContext);
-                        if (patches) {
-                            Object.assign(mergedRow, patches);
-                        }
+                        resumeRefresh();
+                        entityResult.EndedAt = new Date();
 
-                        return mergedRow;
-                    } else {
-                        if (bNewRecord)
-                            throw new Error(`SQL Error: Error creating new record, no rows returned from SQL: ${sqlDetails.literalSQL ?? sqlDetails.fullSQL}`);
-                        else
-                            throw new Error(`SQL Error: Error updating record, no MATCHING rows found within the database: ${sqlDetails.literalSQL ?? sqlDetails.fullSQL}`);
+                        if (result && result.length > 0) {
+                            if (bNewRecord) {
+                                let hydratedPk = false;
+                                for (const pkField of entity.EntityInfo.PrimaryKeys) {
+                                    const fieldObj = entity.Fields.find(f => f.Name === pkField.Name);
+                                    if (fieldObj && (fieldObj.Value === null || fieldObj.Value === undefined) && result[0][pkField.Name] != null) {
+                                        fieldObj.Value = result[0][pkField.Name];
+                                        hydratedPk = true;
+                                    }
+                                }
+                                if (hydratedPk) {
+                                    entity.PrimaryKey.LoadFromEntityFields(entity.PrimaryKeys);
+                                }
+                            }
+                            if (enlistInTx) {
+                                await this.OnDurableAfterSaveExecute(entity, user, options, saveContext);
+                            }
+                            if (saveTxScope) {
+                                await saveTxScope.Commit();
+                                saveTxCommitted = true;
+                            }
+                            if (autoNumberTxScope) {
+                                await autoNumberTxScope.Commit();
+                                autoNumberTxCommitted = true;
+                            }
+                        } else {
+                            if (bNewRecord)
+                                throw new Error(`SQL Error: Error creating new record, no rows returned from SQL: ${sqlDetails.literalSQL ?? sqlDetails.fullSQL}`);
+                            else
+                                throw new Error(`SQL Error: Error updating record, no MATCHING rows found within the database: ${sqlDetails.literalSQL ?? sqlDetails.fullSQL}`);
+                        }
+                    } catch (innerErr) {
+                        if (saveTxScope && !saveTxCommitted) {
+                            await saveTxScope.Rollback();
+                        }
+                        throw innerErr;
                     }
+
+                    CrossEntityPolicyEngine.Instance.NotifyEntityMutated(
+                        this,
+                        entity,
+                        bNewRecord ? 'Create' : 'Update',
+                    );
+                    this.OnAfterSaveExecute(entity, user, options, saveContext);
+                    entityResult.Success = true;
+
+                    // In 'datestamps_only' mode, the SP/query returned only the PK and
+                    // __mj_CreatedAt/__mj_UpdatedAt columns. Merge those returned values
+                    // onto the pre-save snapshot so caller-set fields remain intact without
+                    // falsely marking concurrent in-flight mutations as clean.
+                    let mergedRow: SaveRowList[number];
+                    if (preSaveValues) {
+                        mergedRow = { ...preSaveValues, ...result[0] };
+                        Object.defineProperty(mergedRow, '__mj_preMerged', {
+                            value: true,
+                            enumerable: false,
+                            configurable: true,
+                        });
+                    } else {
+                        mergedRow = result[0];
+                    }
+
+                    // OnSaveCompleted may return patch fields (e.g., updated lat/lng
+                    // from geocoding) that need to be merged onto the SP result before
+                    // the entity loads the data via finalizeSave().
+                    const patches = await this.OnSaveCompleted(entity, sqlDetails, user, options, saveContext);
+                    if (patches) {
+                        Object.assign(mergedRow, patches);
+                    }
+
+                    return mergedRow;
                 }
             } else {
                 return entity.GetAll(); // nothing to save
             }
         } catch (e) {
+            if (autoNumberTxScope && !autoNumberTxCommitted) {
+                try {
+                    await autoNumberTxScope.Rollback();
+                } catch (rbErr) {
+                    LogError(rbErr);
+                }
+            }
+            if (assignedAutoNumberFields.length > 0 && !autoNumberTxCommitted) {
+                DocumentNumberingEngine.Instance.RevertAssignedNumbers(entity, assignedAutoNumberFields);
+            }
             resumeRefresh();
             entityResult.EndedAt = new Date();
             entityResult.Message = (e as Error).message;
             LogError(e);
             throw e;
+        } finally {
+            if (transactionPreprocessingRegistered && !transactionReadyRaised) {
+                entity.RaiseReadyForTransaction();
+            }
         }
     }
 
@@ -2163,8 +2561,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      */
     public async Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo): Promise<boolean> {
         const entityResult = new BaseEntityResult();
+        let transactionPreprocessingRegistered = false;
+        let transactionReadyRaised = false;
         try {
             entity.RegisterTransactionPreprocessing();
+            transactionPreprocessingRegistered = Boolean(entity.TransactionGroup);
 
             // External-data-source entities are read-only (see Save) — refuse deletes at the provider
             // layer regardless of the generated base class. The normal path (ReadOnlyExternalBaseEntity)
@@ -2189,6 +2590,21 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             }));
             entity.RegisterResultHistoryEntry(entityResult);
 
+            if (!bReplay) {
+                const gateError = EntityLifecyclePolicyEngine.Instance.CheckWritePermissionGate(
+                    entity,
+                    'Delete',
+                    user,
+                    true,
+                );
+                if (gateError) {
+                    entityResult.Success = false;
+                    entityResult.EndedAt = new Date();
+                    entityResult.Message = gateError;
+                    return false;
+                }
+            }
+
             // Generate provider-specific delete SQL
             const sqlDetails = this.GenerateDeleteSQL(entity, user, options);
 
@@ -2208,9 +2624,26 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 }
             }
 
+            // Cross-entity policy evaluation for Delete (after RLS and before-delete hooks;
+            // TransactionGroup items defer batch evaluation to TransactionGroupBase.Submit())
+            if (!bReplay && !entity.TransactionGroup) {
+                const crossPolicyError = await CrossEntityPolicyEngine.Instance.EnforceBeforeDelete(
+                    entity,
+                    user,
+                    this,
+                );
+                if (crossPolicyError) {
+                    entityResult.Success = false;
+                    entityResult.EndedAt = new Date();
+                    entityResult.Message = crossPolicyError;
+                    return false;
+                }
+            }
+
             if (entity.TransactionGroup && !bReplay) {
                 // ---- Transaction Group path ----
                 entity.RaiseReadyForTransaction();
+                transactionReadyRaised = true;
 
                 const extraData = this.GetTransactionExtraData(entity);
                 if (entity.EntityInfo.TrackRecordChanges) {
@@ -2236,14 +2669,21 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                                 // (PostgreSQL accepts its legacy `_result_id` shape there).
                                 if (!this.ValidateDeleteResult(entity, [transactionResult], entityResult)) {
                                     entityResult.Success = false;
-                                    return;
+                                    throw new Error(
+                                        entityResult.Message ||
+                                            `Failed to delete ${entity.EntityInfo.Name}: record not found or primary key mismatch`,
+                                    );
                                 }
+                                CrossEntityPolicyEngine.Instance.NotifyEntityMutated(this, entity, 'Delete');
                                 this.OnAfterDeleteExecute(entity, user, options);
                                 entityResult.NewValues = this.MapTransactionResultToNewValues(transactionResult);
                                 entityResult.Success = true;
                             } else {
                                 entityResult.Success = false;
-                                entityResult.Message = 'Transaction failed to commit';
+                                if (!entityResult.Message) {
+                                    entityResult.Message =
+                                        transactionResult instanceof Error ? transactionResult.message : 'Transaction failed to commit';
+                                }
                             }
                         },
                     ),
@@ -2271,6 +2711,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                         return false;
                     }
 
+                    CrossEntityPolicyEngine.Instance.NotifyEntityMutated(this, entity, 'Delete');
                     this.OnAfterDeleteExecute(entity, user, options);
                     entityResult.EndedAt = new Date();
                     return true;
@@ -2286,6 +2727,10 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             entityResult.Success = false;
             entityResult.EndedAt = new Date();
             return false;
+        } finally {
+            if (transactionPreprocessingRegistered && !transactionReadyRaised) {
+                entity.RaiseReadyForTransaction();
+            }
         }
     }
 

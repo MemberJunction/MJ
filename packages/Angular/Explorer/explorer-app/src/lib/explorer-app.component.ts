@@ -294,6 +294,21 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   public IsChatOverlayReady = false;
 
   /**
+   * True when the active resource surface publishes `SuppressChatOverlay: true` in its agent
+   * context because it hosts its own right-edge conversation slide-in, preventing two right-edge
+   * chat entry points from appearing at the same time.
+   */
+  public get IsChatOverlaySuppressedBySurface(): boolean {
+    const additional = this.AppContextSnapshot?.AdditionalContext;
+    if (!additional || typeof additional !== 'object') {
+      return false;
+    }
+    const record = additional as Record<string, unknown>;
+    return record['SuppressChatOverlay'] === true;
+  }
+
+
+  /**
    * Instance-config chrome flags, resolved once and cached. The getters below are
    * read by Angular change detection on every pass, so a per-read engine lookup
    * would run constantly; this resolves the set once (live from fail-open defaults
@@ -632,14 +647,18 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
             if (token) {
               await this.HandleLogin(token, userInfo);
             } else {
-              // Token expired or missing — attempt a full refresh which will
-              // redirect to the identity provider if interaction is required.
+              // Token expired or missing — attempt a fast refresh which will
+              // immediately redirect to the identity provider if interaction is required.
               console.warn('User info available but no token found, attempting refresh...');
+              this.SubHeaderText = 'Session expired — redirecting to sign in...';
+              this.cdr.detectChanges();
               try {
                 const refreshedToken = await this.AuthBase.refreshToken();
                 await this.HandleLogin(refreshedToken.idToken, userInfo);
               } catch (e) {
                 console.error('Token refresh failed, redirecting to login:', e);
+                this.SubHeaderText = 'Your session has expired. Redirecting to sign in...';
+                this.cdr.detectChanges();
                 // refreshToken() normally redirects (and never returns) when
                 // interaction is required.  If we reach here, force login as
                 // a last-resort safety net.
