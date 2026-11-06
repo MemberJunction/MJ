@@ -833,12 +833,25 @@ export function EvaluateFeatureAndPredictionDrift(
 export async function LoadFeatureAndPredictionDriftFromFeatureValues(
   options: LoadDriftFromFeatureValuesOptions,
 ): Promise<FeatureAndPredictionDriftInput> {
+  const DAY_MS = 86_400_000;
+  const nowMs = Date.now();
+  const parsedEvalStart = options.EvaluationWindowStart
+    ? new Date(options.EvaluationWindowStart).getTime()
+    : NaN;
+  const evalStartMs = Number.isFinite(parsedEvalStart) ? parsedEvalStart : nowMs - 7 * DAY_MS;
+  const parsedBaselineEnd = options.BaselineWindowEnd
+    ? new Date(options.BaselineWindowEnd).getTime()
+    : NaN;
+  const baselineEndMs = Number.isFinite(parsedBaselineEnd) ? parsedBaselineEnd : evalStartMs;
+  const baselineStartMs = baselineEndMs - 28 * DAY_MS;
+
   const filterClauses: string[] = [];
   if (typeof options.RecordProcessID === 'string' && options.RecordProcessID.trim().length > 0) {
     filterClauses.push(`RecordProcessID = '${EscapeSQLString(options.RecordProcessID.trim())}'`);
   } else if (typeof options.ModelID === 'string' && options.ModelID.trim().length > 0) {
     filterClauses.push(`AIModelID = '${EscapeSQLString(options.ModelID.trim())}'`);
   }
+  filterClauses.push(`ComputedAt >= '${EscapeSQLString(new Date(baselineStartMs).toISOString())}'`);
 
   const rv = RunView.FromMetadataProvider(options.Provider);
   const res = await rv.RunView<FeatureValueDriftRow>(
@@ -901,30 +914,16 @@ export async function LoadFeatureAndPredictionDriftFromFeatureValues(
   const baselineConfidences: number[] = [];
   const evaluationConfidences: number[] = [];
 
-  const baselineCutoffMs = options.BaselineWindowEnd
-    ? new Date(options.BaselineWindowEnd).getTime()
-    : options.EvaluationWindowStart
-      ? new Date(options.EvaluationWindowStart).getTime()
-      : null;
-  const evalCutoffMs = options.EvaluationWindowStart
-    ? new Date(options.EvaluationWindowStart).getTime()
-    : baselineCutoffMs;
-
   for (const [featureName, featureRows] of championByFeature.entries()) {
     const sorted = [...featureRows].sort(
       (a, b) => new Date(a.ComputedAt).getTime() - new Date(b.ComputedAt).getTime(),
     );
 
-    let baselineWindow: FeatureValueDriftRow[];
-    let evalWindow: FeatureValueDriftRow[];
-    if (baselineCutoffMs !== null && evalCutoffMs !== null && Number.isFinite(baselineCutoffMs)) {
-      baselineWindow = sorted.filter((r) => new Date(r.ComputedAt).getTime() < evalCutoffMs);
-      evalWindow = sorted.filter((r) => new Date(r.ComputedAt).getTime() >= evalCutoffMs);
-    } else {
-      const mid = Math.floor(sorted.length / 2);
-      baselineWindow = sorted.slice(0, mid);
-      evalWindow = sorted.slice(mid);
-    }
+    const baselineWindow = sorted.filter((r) => {
+      const ts = new Date(r.ComputedAt).getTime();
+      return ts >= baselineStartMs && ts < baselineEndMs;
+    });
+    const evalWindow = sorted.filter((r) => new Date(r.ComputedAt).getTime() >= evalStartMs);
 
     const hasNumeric = sorted.some((r) => typeof r.ValueNumeric === 'number');
     const hasCategorical = sorted.some((r) => typeof r.ValueText === 'string' && r.ValueNumeric === null);

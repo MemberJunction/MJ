@@ -105,7 +105,7 @@ export class PredictiveStudioPromoteModelAction extends BasePredictiveStudioActi
         signOff,
         reason,
         contextUser: params.ContextUser,
-        provider: params.Provider || Metadata.Provider, // global-provider-ok: RunActionParams.Provider is optional; ActionEngine contract falls back to the global provider (ActionEngine-Base.ts:413-419)
+        provider: params.Provider || Metadata.Provider, // global-provider-ok: RunActionParams.Provider is optional; ActionEngine contract falls back to the global provider (ActionEngine-Base.ts)
       });
 
       return this.mapOutcome(params, modelId, outcome);

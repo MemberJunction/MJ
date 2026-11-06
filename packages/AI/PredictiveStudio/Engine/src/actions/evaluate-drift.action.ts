@@ -10,22 +10,46 @@
 
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RegisterClass } from '@memberjunction/global';
-import { LogError, Metadata, type IMetadataProvider } from '@memberjunction/core';
-import type { MJUserNotificationEntity } from '@memberjunction/core-entities';
+import { LogError, Metadata, RunView, type IMetadataProvider } from '@memberjunction/core';
+import type { MJRecordProcessEntity, MJUserNotificationEntity } from '@memberjunction/core-entities';
 import { BaseAction } from '@memberjunction/actions';
 
 import { BasePredictiveStudioAction, type JsonObject } from './base-predictive-studio.action';
 import { EVALUATE_DRIFT_DRIVER_CLASS } from './driver-classes';
 import {
+  ComputeConfidenceAndChallengerDivergence,
   EvaluateFeatureAndPredictionDrift,
   LoadFeatureAndPredictionDriftFromFeatureValues,
   type ChampionChallengerPair,
   type ConfidenceAndDivergenceInput,
+  type DriftSeverity,
   type FeatureAndPredictionDriftInput,
   type FeatureAndPredictionDriftReport,
+  type FeaturePSIResult,
 } from '../maintenance/psi-drift-detector';
 
 export { EVALUATE_DRIFT_DRIVER_CLASS } from './driver-classes';
+
+type ActiveRecordProcessRow = Pick<MJRecordProcessEntity, 'ID' | 'Name' | 'WorkType' | 'Status'>;
+
+export interface ProcessDriftSummaryItem {
+  readonly RecordProcessID: string;
+  readonly ProcessName?: string;
+  readonly WorkType?: MJRecordProcessEntity['WorkType'];
+  readonly OverallSeverity: DriftSeverity;
+  readonly MaxPSI: number;
+  readonly ShouldAlert: boolean;
+  readonly InsufficientData: boolean;
+  readonly AlertEmitted: boolean;
+  readonly AlertID?: string;
+  readonly Summary: string;
+}
+
+const SEVERITY_RANK: Record<DriftSeverity, number> = {
+  None: 0,
+  Warning: 1,
+  Critical: 2,
+};
 
 /**
  * Injectable seam for emitting a drift alert (e.g., creating an `MJ: User Notifications`
@@ -40,7 +64,7 @@ export interface IDriftAlertEmitter {
 
 /**
  * Production {@link IDriftAlertEmitter} that persists an `MJ: User Notifications` alert
- * for `params.ContextUser` when a metadata provider with `GetEntityObject` is available.
+ * for `params.ContextUser` when a metadata provider is available.
  */
 export class DefaultDriftAlertEmitter implements IDriftAlertEmitter {
   constructor(private readonly provider?: IMetadataProvider) {}
@@ -49,12 +73,8 @@ export class DefaultDriftAlertEmitter implements IDriftAlertEmitter {
     report: FeatureAndPredictionDriftReport,
     params: RunActionParams,
   ): Promise<{ readonly AlertID?: string; readonly Emitted: boolean }> {
-    const provider = this.provider ?? params.Provider ?? Metadata.Provider; // global-provider-ok: RunActionParams.Provider is optional; ActionEngine contract falls back to the global provider (ActionEngine-Base.ts:413-419)
-    if (
-      !provider ||
-      typeof provider.GetEntityObject !== 'function' ||
-      !params.ContextUser?.ID
-    ) {
+    const provider = this.provider ?? params.Provider ?? Metadata.Provider; // global-provider-ok: RunActionParams.Provider is optional; ActionEngine contract falls back to the global provider (ActionEngine-Base.ts)
+    if (!provider || !params.ContextUser?.ID) {
       return { Emitted: false };
     }
     try {
@@ -89,7 +109,6 @@ export class DefaultDriftAlertEmitter implements IDriftAlertEmitter {
 @RegisterClass(BaseAction, EVALUATE_DRIFT_DRIVER_CLASS)
 export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudioAction {
   private static defaultAlertEmitter: IDriftAlertEmitter | null = null;
-  private alertEmitter: IDriftAlertEmitter | null = null;
 
   /**
    * Configure a process-wide default {@link IDriftAlertEmitter} used by fresh action
@@ -97,14 +116,6 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
    */
   public static SetDefaultAlertEmitter(emitter: IDriftAlertEmitter | null): void {
     EvaluateFeatureAndPredictionDriftAction.defaultAlertEmitter = emitter;
-  }
-
-  /**
-   * Configure an instance-level {@link IDriftAlertEmitter} seam for emitting drift notifications
-   * or HITL requests when `ShouldAlert` is triggered.
-   */
-  public SetAlertEmitter(emitter: IDriftAlertEmitter | null): void {
-    this.alertEmitter = emitter;
   }
 
   /** @inheritdoc */
@@ -134,7 +145,7 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
       const criticalThreshold = this.getNumericParam(params, 'CriticalPSIThreshold');
       const epsilon = this.getNumericParam(params, 'Epsilon');
       const minSampleSize = this.getNumericParam(params, 'MinSampleSize');
-      const provider = params.Provider || Metadata.Provider; // global-provider-ok: RunActionParams.Provider is optional; ActionEngine contract falls back to the global provider (ActionEngine-Base.ts:413-419)
+      const provider = params.Provider || Metadata.Provider; // global-provider-ok: RunActionParams.Provider is optional; ActionEngine contract falls back to the global provider (ActionEngine-Base.ts)
 
       let driftInput: FeatureAndPredictionDriftInput;
       if (hasInlineFeatures) {
@@ -164,10 +175,25 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
           MinSampleSize: minSampleSize,
         });
       } else {
-        return this.fail(
-          'MISSING_PARAMETER',
-          'At least one of RecordProcessID, ModelID, NumericFeatures, CategoricalFeatures, PrebinnedFeatures, or ConfidenceAndDivergence must be provided.',
-        );
+        const explicitTargetParam = (params.Params ?? []).some((p) => {
+          const normalized = p.Name?.trim().toLowerCase();
+          return (
+            p.Type !== 'Output' &&
+            (normalized === 'recordprocessid' || normalized === 'modelid')
+          );
+        });
+        if (explicitTargetParam) {
+          return this.fail(
+            'MISSING_PARAMETER',
+            'At least one of RecordProcessID, ModelID, NumericFeatures, CategoricalFeatures, PrebinnedFeatures, or ConfidenceAndDivergence must be provided.',
+          );
+        }
+        return await this.runScheduledProcessSweep(params, provider, {
+          warningThreshold,
+          criticalThreshold,
+          epsilon,
+          minSampleSize,
+        });
       }
 
       const report = EvaluateFeatureAndPredictionDrift(driftInput);
@@ -177,7 +203,6 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
       let alertId: string | undefined;
       if (report.ShouldAlert && emitAlertOnDrift) {
         const activeEmitter =
-          this.alertEmitter ??
           EvaluateFeatureAndPredictionDriftAction.defaultAlertEmitter ??
           new DefaultDriftAlertEmitter(provider);
         const alertOutcome = await activeEmitter.EmitDriftAlert(report, params);
@@ -207,6 +232,128 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
       }
       return this.fail('UNEXPECTED_ERROR', `Drift evaluation failed: ${message}`);
     }
+  }
+
+  private async runScheduledProcessSweep(
+    params: RunActionParams,
+    provider: IMetadataProvider,
+    thresholds: {
+      warningThreshold?: number;
+      criticalThreshold?: number;
+      epsilon?: number;
+      minSampleSize?: number;
+    },
+  ): Promise<ActionResultSimple> {
+    const rv = RunView.FromMetadataProvider(provider);
+    const processesRes = await rv.RunView<ActiveRecordProcessRow>(
+      {
+        EntityName: 'MJ: Record Processes',
+        ExtraFilter: "Status = 'Active' AND WorkType IN ('ML Model', 'Infer')",
+        Fields: ['ID', 'Name', 'WorkType', 'Status'],
+        OrderBy: 'Name ASC, ID ASC',
+        ResultType: 'simple',
+      },
+      params.ContextUser,
+    );
+
+    if (!processesRes.Success) {
+      throw new Error(
+        `Failed to load active MJ: Record Processes for drift sweep: ${processesRes.ErrorMessage ?? 'unknown error'}`,
+      );
+    }
+
+    const activeProcesses = processesRes.Results ?? [];
+    const baselineWindowEnd = this.getStringParam(params, 'BaselineWindowEnd');
+    const evaluationWindowStart = this.getStringParam(params, 'EvaluationWindowStart');
+    const emitAlertOnDrift = this.getBooleanParam(params, 'EmitAlertOnDrift', true);
+    const activeEmitter =
+      EvaluateFeatureAndPredictionDriftAction.defaultAlertEmitter ??
+      new DefaultDriftAlertEmitter(provider);
+
+    let overallSeverity: DriftSeverity = 'None';
+    let maxPSI = 0;
+    const driftedFeatures: FeaturePSIResult[] = [];
+    const featureResults: FeaturePSIResult[] = [];
+    const processResults: ProcessDriftSummaryItem[] = [];
+    let shouldAlert = false;
+    let insufficientData = activeProcesses.length === 0;
+    let alertEmitted = false;
+    let firstAlertId: string | undefined;
+    let lastDivergence = ComputeConfidenceAndChallengerDivergence({});
+
+    for (const proc of activeProcesses) {
+      const driftInput = await LoadFeatureAndPredictionDriftFromFeatureValues({
+        RecordProcessID: proc.ID,
+        BaselineWindowEnd: baselineWindowEnd,
+        EvaluationWindowStart: evaluationWindowStart,
+        Provider: provider,
+        ContextUser: params.ContextUser,
+        WarningPSIThreshold: thresholds.warningThreshold,
+        CriticalPSIThreshold: thresholds.criticalThreshold,
+        Epsilon: thresholds.epsilon,
+        MinSampleSize: thresholds.minSampleSize,
+      });
+      const report = EvaluateFeatureAndPredictionDrift(driftInput);
+      lastDivergence = report.DivergenceMetrics;
+
+      if (SEVERITY_RANK[report.OverallSeverity] > SEVERITY_RANK[overallSeverity]) {
+        overallSeverity = report.OverallSeverity;
+      }
+      if (report.MaxPSI > maxPSI) {
+        maxPSI = report.MaxPSI;
+      }
+      driftedFeatures.push(...report.DriftedFeatures);
+      featureResults.push(...report.FeatureResults);
+      if (report.ShouldAlert) {
+        shouldAlert = true;
+      }
+      if (report.InsufficientData) {
+        insufficientData = true;
+      }
+
+      let procAlertEmitted = false;
+      let procAlertId: string | undefined;
+      if (report.ShouldAlert && emitAlertOnDrift) {
+        const alertOutcome = await activeEmitter.EmitDriftAlert(report, params);
+        procAlertEmitted = alertOutcome.Emitted;
+        procAlertId = alertOutcome.AlertID;
+        if (procAlertEmitted) {
+          alertEmitted = true;
+          firstAlertId = firstAlertId ?? procAlertId;
+        }
+      }
+
+      processResults.push({
+        RecordProcessID: proc.ID,
+        ProcessName: proc.Name,
+        WorkType: proc.WorkType,
+        OverallSeverity: report.OverallSeverity,
+        MaxPSI: report.MaxPSI,
+        ShouldAlert: report.ShouldAlert,
+        InsufficientData: report.InsufficientData,
+        AlertEmitted: procAlertEmitted,
+        AlertID: procAlertId,
+        Summary: report.Summary,
+      });
+    }
+
+    const summary = `ProcessesEvaluated=${processResults.length}, OverallSeverity=${overallSeverity}, MaxPSI=${maxPSI.toFixed(4)}, DriftedFeatures=${driftedFeatures.length}`;
+
+    this.addOutputParam(params, 'OverallSeverity', overallSeverity);
+    this.addOutputParam(params, 'MaxPSI', maxPSI);
+    this.addOutputParam(params, 'DriftedFeatures', driftedFeatures);
+    this.addOutputParam(params, 'FeatureResults', featureResults);
+    this.addOutputParam(params, 'DivergenceMetrics', lastDivergence);
+    this.addOutputParam(params, 'ShouldAlert', shouldAlert);
+    this.addOutputParam(params, 'InsufficientData', insufficientData);
+    this.addOutputParam(params, 'AlertEmitted', alertEmitted);
+    if (firstAlertId) {
+      this.addOutputParam(params, 'AlertID', firstAlertId);
+    }
+    this.addOutputParam(params, 'ProcessResults', processResults);
+    this.addOutputParam(params, 'Summary', summary);
+
+    return this.ok(params, summary);
   }
 
   private parseNumericFeatures(

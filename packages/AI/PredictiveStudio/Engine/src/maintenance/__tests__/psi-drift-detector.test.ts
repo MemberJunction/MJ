@@ -203,8 +203,12 @@ describe('psi-drift-detector', () => {
     });
   });
 
-  describe('LoadFeatureAndPredictionDriftFromFeatureValues (D9)', () => {
-    it('should load Champion and Challenger rows from MJ: Feature Values via RunView and build drift input', async () => {
+  describe('LoadFeatureAndPredictionDriftFromFeatureValues (D9, R4)', () => {
+    it('should load Champion and Challenger rows from MJ: Feature Values via RunView with a ComputedAt >= baselineStart filter and split 28d baseline vs 7d evaluation windows', async () => {
+      const nowMs = Date.now();
+      const fourteenDaysAgoMs = nowMs - 14 * 86_400_000;
+      const twoDaysAgoMs = nowMs - 2 * 86_400_000;
+
       const rows = [
         ...Array.from({ length: 120 }, (_, i) => ({
           ID: `champ-base-${i}`,
@@ -219,7 +223,7 @@ describe('psi-drift-detector', () => {
           ValueText: null,
           Confidence: 0.88,
           Reasoning: null,
-          ComputedAt: new Date(Date.UTC(2026, 0, 1, 0, i)),
+          ComputedAt: new Date(fourteenDaysAgoMs + i * 60_000),
         })),
         ...Array.from({ length: 120 }, (_, i) => ({
           ID: `champ-eval-${i}`,
@@ -234,7 +238,7 @@ describe('psi-drift-detector', () => {
           ValueText: null,
           Confidence: 0.52,
           Reasoning: null,
-          ComputedAt: new Date(Date.UTC(2026, 0, 2, 0, i)),
+          ComputedAt: new Date(twoDaysAgoMs + i * 60_000),
         })),
         {
           ID: 'chall-1',
@@ -249,7 +253,7 @@ describe('psi-drift-detector', () => {
           ValueText: null,
           Confidence: null,
           Reasoning: 'SHADOW_TIMEOUT: exceeded 200ms',
-          ComputedAt: new Date(Date.UTC(2026, 0, 2, 0, 0)),
+          ComputedAt: new Date(twoDaysAgoMs),
         },
       ];
 
@@ -275,6 +279,7 @@ describe('psi-drift-detector', () => {
       });
 
       expect(capturedFilter).toContain("RecordProcessID = 'rp-drift-1'");
+      expect(capturedFilter).toContain("ComputedAt >= '");
       expect(driftInput.NumericFeatures?.['ChurnScore']?.Baseline).toHaveLength(120);
       expect(driftInput.NumericFeatures?.['ChurnScore']?.Evaluation).toHaveLength(120);
       expect(driftInput.ConfidenceAndDivergence?.Pairs).toHaveLength(1);
@@ -283,6 +288,55 @@ describe('psi-drift-detector', () => {
       const report = EvaluateFeatureAndPredictionDrift(driftInput);
       expect(report.OverallSeverity).toBe('Critical');
       expect(report.ShouldAlert).toBe(true);
+    });
+
+    it('reports InsufficientData=true and OverallSeverity="None" when all 200 rows fall inside the last 24h evaluation window with an empty baseline window (R4)', async () => {
+      const nowMs = Date.now();
+      const twelveHoursAgoMs = nowMs - 12 * 3_600_000;
+
+      // All 200 rows are within the last 24 hours: first 100 are 0.1, next 100 are 0.9.
+      // Under a naive 50/50 median split this would falsely report Critical drift,
+      // whereas under the 28d baseline / 7d evaluation window the baseline window is empty -> InsufficientData=true.
+      const rows = Array.from({ length: 200 }, (_, i) => ({
+        ID: `champ-recent-${i}`,
+        RecordProcessID: 'rp-recent-only',
+        ProcessRunID: 'run-recent',
+        EntityID: 'ent-1',
+        RecordID: `rec-recent-${i}`,
+        FeatureName: 'ChurnScore',
+        Role: 'Champion' as const,
+        AIModelID: 'model-1',
+        ValueNumeric: i < 100 ? 0.1 : 0.9,
+        ValueText: null,
+        Confidence: 0.9,
+        Reasoning: null,
+        ComputedAt: new Date(twelveHoursAgoMs + i * 1_000),
+      }));
+
+      const provider = {
+        RunView: async (): Promise<RunViewResult> => ({
+          Success: true,
+          Results: rows,
+          RowCount: rows.length,
+          TotalRowCount: rows.length,
+          ExecutionTime: 1,
+          ErrorMessage: '',
+        }),
+      } as Pick<IMetadataProvider, 'RunView'> as IMetadataProvider;
+
+      const driftInput = await LoadFeatureAndPredictionDriftFromFeatureValues({
+        RecordProcessID: 'rp-recent-only',
+        Provider: provider,
+        ContextUser: { ID: 'user-1' } as UserInfo,
+      });
+
+      expect(driftInput.NumericFeatures?.['ChurnScore']?.Baseline).toHaveLength(0);
+      expect(driftInput.NumericFeatures?.['ChurnScore']?.Evaluation).toHaveLength(200);
+
+      const report = EvaluateFeatureAndPredictionDrift(driftInput);
+      expect(report.InsufficientData).toBe(true);
+      expect(report.OverallSeverity).toBe('None');
+      expect(report.ShouldAlert).toBe(false);
     });
   });
 });

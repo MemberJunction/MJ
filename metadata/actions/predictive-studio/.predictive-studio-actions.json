@@ -1113,10 +1113,10 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "Optional ID of the MJ: Record Processes row whose MJ: Feature Values (Champion and Challenger) should be loaded and evaluated."
+            "Description": "Optional ID of the MJ: Record Processes row whose MJ: Feature Values (Champion and Challenger) should be loaded and evaluated. When omitted with no ModelID or inline features, the action sweeps all active ML Model and Infer Record Processes."
           },
           "primaryKey": {
-            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A01"
+            "ID": "BAD3857D-FD2F-478B-8D1B-A787895D2689"
           }
         },
         {
@@ -1130,7 +1130,35 @@
             "Description": "Optional ID of the MJ: ML Models row being evaluated."
           },
           "primaryKey": {
-            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A02"
+            "ID": "DD4BD809-7A9A-4C42-B902-8006A4CDD9F4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BaselineWindowEnd",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional ISO-8601 end timestamp of the 28-day baseline window (defaults to EvaluationWindowStart)."
+          },
+          "primaryKey": {
+            "ID": "30EE8975-2F29-4281-9C5C-67A650AE00F4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EvaluationWindowStart",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional ISO-8601 start timestamp of the rolling evaluation window (defaults to 7 days before now)."
+          },
+          "primaryKey": {
+            "ID": "D2119413-E620-483D-9858-FE3FDDEBF165"
           }
         },
         {
@@ -1144,7 +1172,7 @@
             "Description": "Optional map of numeric feature names to { Baseline: number[], Evaluation: number[], Bins?: number }."
           },
           "primaryKey": {
-            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A03"
+            "ID": "55ACC329-302D-4736-976E-8E6AB175FFA8"
           }
         },
         {
@@ -1158,7 +1186,7 @@
             "Description": "Optional map of categorical feature names to { Baseline: string[], Evaluation: string[] }."
           },
           "primaryKey": {
-            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A04"
+            "ID": "41ACFA8D-E532-4B64-A0AD-197FE5570131"
           }
         },
         {
@@ -1172,7 +1200,7 @@
             "Description": "Optional map of pre-binned feature names to { BaselineProportions: number[], EvaluationProportions: number[], BaselineSampleCount?: number, EvaluationSampleCount?: number }."
           },
           "primaryKey": {
-            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A05"
+            "ID": "7C32E9F5-5A2A-4ECA-9C2C-0A0E73B4B919"
           }
         },
         {
@@ -1186,7 +1214,7 @@
             "Description": "Optional confidence-floor and champion-vs-challenger shadow divergence input."
           },
           "primaryKey": {
-            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A06"
+            "ID": "1C3C774E-3A84-4DFB-B0CC-C5D0DB09963F"
           }
         },
         {
@@ -1200,7 +1228,7 @@
             "Description": "Optional PSI warning threshold (defaults to 0.10; must be > 0 and < CriticalPSIThreshold)."
           },
           "primaryKey": {
-            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A07"
+            "ID": "41E81A09-121C-4211-ACE9-96EB7AAD5E61"
           }
         },
         {
@@ -1214,7 +1242,7 @@
             "Description": "Optional PSI critical threshold (defaults to 0.25; must be > WarningPSIThreshold)."
           },
           "primaryKey": {
-            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A08"
+            "ID": "6050F3D9-557A-42A8-B5CD-5FE55F5144E9"
           }
         },
         {
@@ -1228,7 +1256,7 @@
             "Description": "Optional Laplace smoothing epsilon in (0, 0.01] (defaults to 0.0001)."
           },
           "primaryKey": {
-            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A09"
+            "ID": "8FBD6EE0-A1B5-4A7A-8830-1EE2BF47A2B6"
           }
         },
         {
@@ -1242,7 +1270,7 @@
             "Description": "Optional minimum valid sample size per window before PSI is evaluated (defaults to 100)."
           },
           "primaryKey": {
-            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A0A"
+            "ID": "35586C14-3565-46D1-9F2B-90021B14BFD2"
           }
         },
         {
@@ -1256,7 +1284,7 @@
             "Description": "Whether to emit a drift alert when ShouldAlert is true (defaults to true)."
           },
           "primaryKey": {
-            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A0B"
+            "ID": "4EE7A519-74E6-4064-AF30-1D7FC4308065"
           }
         },
         {
@@ -1270,7 +1298,7 @@
             "Description": "Overall drift severity ('None', 'Warning', or 'Critical')."
           },
           "primaryKey": {
-            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A0C"
+            "ID": "6BF7D6C7-738B-47BE-BD08-16A64041D29A"
           }
         },
         {
@@ -1284,7 +1312,7 @@
             "Description": "Maximum Population Stability Index observed across evaluated features."
           },
           "primaryKey": {
-            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A0D"
+            "ID": "E8DD41D8-AA10-4889-AD9E-E9CD1509B93A"
           }
         },
         {
@@ -1298,7 +1326,7 @@
             "Description": "List of FeaturePSIResult entries whose Severity is 'Warning' or 'Critical'."
           },
           "primaryKey": {
-            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A0E"
+            "ID": "55E7A367-59B2-4D01-A56C-A3E2C3DBD7A5"
           }
         },
         {
@@ -1312,7 +1340,7 @@
             "Description": "Per-feature PSI results for all evaluated features."
           },
           "primaryKey": {
-            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A0F"
+            "ID": "D7F72508-672F-4761-B16D-A3844C250E14"
           }
         },
         {
@@ -1326,7 +1354,7 @@
             "Description": "Computed confidence-floor degradation and champion-vs-challenger divergence metrics."
           },
           "primaryKey": {
-            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A10"
+            "ID": "2BEC7223-8135-4871-B63D-5BAA0B15BD7F"
           }
         },
         {
@@ -1340,7 +1368,21 @@
             "Description": "Whether drift or divergence exceeded an alerting threshold."
           },
           "primaryKey": {
-            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A11"
+            "ID": "CF752FBD-862F-4F8D-8425-2F62EA4347D1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "InsufficientData",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Whether one or more evaluated features or windows had fewer than MinSampleSize samples."
+          },
+          "primaryKey": {
+            "ID": "9CF911B1-AD8F-4D3F-ADA8-4A3B91001473"
           }
         },
         {
@@ -1354,7 +1396,35 @@
             "Description": "Whether an alert record was emitted."
           },
           "primaryKey": {
-            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A12"
+            "ID": "02E2A8E1-023E-4D33-B78C-B76E6A56BBF0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AlertID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "ID of the emitted MJ: User Notifications alert record, when AlertEmitted is true."
+          },
+          "primaryKey": {
+            "ID": "C51A8001-709B-4914-B9BB-8A1BAA5FB2A0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ProcessResults",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "Per-Record-Process drift evaluation summaries when the action runs in scheduled sweep mode."
+          },
+          "primaryKey": {
+            "ID": "5F38028E-2EDC-4FDB-AC82-A11FDC54FAA1"
           }
         },
         {
@@ -1368,7 +1438,7 @@
             "Description": "Human-readable drift summary."
           },
           "primaryKey": {
-            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A13"
+            "ID": "B2C2E98C-0B84-4D6B-9E3E-141E723241CF"
           }
         }
       ],
@@ -1381,7 +1451,7 @@
             "Description": "Feature and prediction drift evaluation completed."
           },
           "primaryKey": {
-            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1B01"
+            "ID": "3B85FFEC-D9EA-48F7-A5E1-993697EA4B20"
           }
         },
         {
@@ -1392,7 +1462,7 @@
             "Description": "No feature distributions or RecordProcessID/ModelID were provided."
           },
           "primaryKey": {
-            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1B02"
+            "ID": "D715F230-B3FF-48CA-9F78-B557FD9E8A81"
           }
         },
         {
@@ -1403,7 +1473,7 @@
             "Description": "One or more PSI threshold or smoothing parameters were out of range."
           },
           "primaryKey": {
-            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1B03"
+            "ID": "06E09800-525D-4A71-B4F4-37809BF1EB65"
           }
         },
         {
@@ -1414,13 +1484,13 @@
             "Description": "An unexpected error occurred during drift evaluation."
           },
           "primaryKey": {
-            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1B04"
+            "ID": "0FA1B422-8E43-4385-B81C-D849E4DF2053"
           }
         }
       ]
     },
     "primaryKey": {
-      "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A00"
+      "ID": "9673E816-6985-4773-B172-E669522FC13D"
     }
   }
 ]

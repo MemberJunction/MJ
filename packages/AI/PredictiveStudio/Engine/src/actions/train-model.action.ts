@@ -102,7 +102,7 @@ export class PredictiveStudioTrainModelAction extends BasePredictiveStudioAction
    * way. Overridable so tests inject in-memory seams.
    */
   protected async buildDeps(params: RunActionParams): Promise<TrainingDeps> {
-    const provider = params.Provider || Metadata.Provider; // global-provider-ok: RunActionParams.Provider is optional; ActionEngine contract falls back to the global provider (ActionEngine-Base.ts:413-419)
+    const provider = params.Provider || Metadata.Provider; // global-provider-ok: RunActionParams.Provider is optional; ActionEngine contract falls back to the global provider (ActionEngine-Base.ts)
     return BuildTrainingDeps(provider, params.ContextUser);
   }
 }
