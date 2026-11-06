@@ -4286,6 +4286,9 @@ importers:
       docx:
         specifier: ^9.5.1
         version: 9.6.1
+      dompurify:
+        specifier: ^3.3.0
+        version: 3.3.1
       exceljs:
         specifier: ^4.4.0
         version: 4.4.0

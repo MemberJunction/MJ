@@ -25,9 +25,9 @@ export class TextExtractor {
 
         let text = html;
 
-        // Remove script and style elements entirely
-        text = text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-        text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+        // Remove script and style elements entirely (end tags may carry spaces or attributes)
+        text = TextExtractor.replaceUntilStable(text, /<script\b[^>]*>[\s\S]*?<\/script[^>]*>/gi, '');
+        text = TextExtractor.replaceUntilStable(text, /<style\b[^>]*>[\s\S]*?<\/style[^>]*>/gi, '');
 
         // Replace block-level elements with newlines
         text = text.replace(/<\/(p|div|h[1-6]|li|tr|br|blockquote|pre)>/gi, '\n');
@@ -35,7 +35,7 @@ export class TextExtractor {
         text = text.replace(/<(p|div|h[1-6]|li|tr|blockquote|pre)[^>]*>/gi, '\n');
 
         // Remove remaining HTML tags
-        text = text.replace(/<[^>]+>/g, ' ');
+        text = TextExtractor.replaceUntilStable(text, /<[^>]+>/g, ' ');
 
         // Decode common HTML entities
         text = TextExtractor.decodeHTMLEntities(text);
@@ -82,6 +82,17 @@ export class TextExtractor {
 
         // All other text types
         return TextExtractor.ExtractFromPlainText(content);
+    }
+
+    /** Applies a replacement until the text stops changing, so a removal cannot leave a new match behind. */
+    private static replaceUntilStable(text: string, pattern: RegExp, replacement: string): string {
+        let previous: string;
+        let current = text;
+        do {
+            previous = current;
+            current = current.replace(pattern, replacement);
+        } while (current !== previous);
+        return current;
     }
 
     /**

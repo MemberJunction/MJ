@@ -25,6 +25,14 @@ describe('TextExtractor', () => {
             expect(result).not.toContain('script');
         });
 
+        it('should remove script elements whose end tag has spaces or attributes', () => {
+            const html = '<p>Before</p><script>alert(1)</script ><script>alert(2)</script foo="x"><p>After</p>';
+            const result = TextExtractor.ExtractFromHTML(html);
+            expect(result).not.toContain('alert');
+            expect(result).toContain('Before');
+            expect(result).toContain('After');
+        });
+
         it('should remove style tags and their content', () => {
             const html = '<style>.red { color: red; }</style><p>Visible text</p>';
             const result = TextExtractor.ExtractFromHTML(html);

@@ -7,6 +7,7 @@
  */
 
 import { JSDOM } from 'jsdom';
+import createDOMPurify, { type DOMPurify } from 'dompurify';
 import { ViewBox, Accessibility, Palette } from './svg-types';
 
 /**
@@ -67,22 +68,33 @@ export class SVGUtils {
      * @returns Sanitized SVG string
      */
     static SanitizeSVG(svgString: string): string {
-        let sanitized = svgString;
+        return this.getSvgPurifier().sanitize(svgString, {
+            USE_PROFILES: { html: true, svg: true, svgFilters: true },
+            ADD_TAGS: ['use'],
+        });
+    }
 
-        // Remove event handlers
-        sanitized = sanitized.replace(/\son\w+="[^"]*"/gi, '');
-        sanitized = sanitized.replace(/\son\w+='[^']*'/gi, '');
+    private static svgPurifier: DOMPurify | null = null;
 
-        // Remove external xlink:href (keep data URIs)
-        sanitized = sanitized.replace(/xlink:href="(?!data:)[^"]*"/gi, 'xlink:href=""');
-
-        // Remove external href (keep # anchors and mailto:)
-        sanitized = sanitized.replace(/href="(?!#|mailto:)[^"]*"/gi, 'href=""');
-
-        // Remove script tags
-        sanitized = sanitized.replace(/<script[\s\S]*?<\/script>/gi, '');
-
-        return sanitized;
+    /**
+     * DOMPurify bound to a jsdom window, created once. Its hook empties every `href` /
+     * `xlink:href` that does not point inside the document (`#`), at a `mailto:` link, or
+     * (for `xlink:href`) at a `data:` URI, so the SVG loads nothing external.
+     */
+    private static getSvgPurifier(): DOMPurify {
+        if (!this.svgPurifier) {
+            const purifier = createDOMPurify(new JSDOM('').window as unknown as Window & typeof globalThis);
+            purifier.addHook('afterSanitizeAttributes', (node: Element) => {
+                for (const name of ['href', 'xlink:href']) {
+                    const value = node.getAttribute(name);
+                    if (value === null) continue;
+                    const allowed = name === 'href' ? /^(#|mailto:)/i : /^(#|data:)/i;
+                    if (!allowed.test(value.trim())) node.setAttribute(name, '');
+                }
+            });
+            this.svgPurifier = purifier;
+        }
+        return this.svgPurifier;
     }
 
     /** @deprecated Use {@link SanitizeSVG}. */
@@ -455,7 +467,21 @@ export class SVGUtils {
         showControls: boolean = false
     ): string {
         return `<script type="text/javascript"><![CDATA[
-(function() {
+${this.GeneratePanZoomScriptBody(containerId, minScale, maxScale, showControls)}
+]]></script>`;
+    }
+
+    /**
+     * The JavaScript of {@link GeneratePanZoomScript} without the `<script>` wrapper, for setting
+     * as the `textContent` of a script element built through the DOM.
+     */
+    static GeneratePanZoomScriptBody(
+        containerId: string = 'pan-zoom-container',
+        minScale: number = 0.5,
+        maxScale: number = 3,
+        showControls: boolean = false
+    ): string {
+        return `(function() {
     const svg = document.currentScript.closest('svg');
     const container = svg.getElementById('${containerId}');
     if (!container) return;
@@ -548,8 +574,7 @@ export class SVGUtils {
 
     svg.style.cursor = 'grab';
     ${showControls ? this.generateZoomControlsScript() : ''}
-})();
-]]></script>`;
+})();`;
     }
 
     /** @deprecated Use {@link GeneratePanZoomScript}. */
