@@ -2,21 +2,23 @@
  * @module actions/evaluate-drift.action
  *
  * **Evaluate Feature and Prediction Drift** action (`WS-4.4`) — the thin Action boundary
- * over {@link EvaluateFeatureAndPredictionDrift} so scheduled maintenance workflows,
- * agents, or administrative runs can compute Population Stability Index (PSI),
- * confidence-floor degradation, and champion-vs-challenger divergence metrics, and
- * emit a drift alert when thresholds are breached.
+ * over {@link EvaluateFeatureAndPredictionDrift} and {@link LoadFeatureAndPredictionDriftFromFeatureValues}
+ * so scheduled maintenance workflows, agents, or administrative runs can compute
+ * Population Stability Index (PSI), confidence-floor degradation, and
+ * champion-vs-challenger divergence metrics, and emit a drift alert when thresholds are breached.
  */
 
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RegisterClass } from '@memberjunction/global';
-import { LogError } from '@memberjunction/core';
+import { LogError, Metadata, type IMetadataProvider } from '@memberjunction/core';
+import type { MJUserNotificationEntity } from '@memberjunction/core-entities';
 import { BaseAction } from '@memberjunction/actions';
 
 import { BasePredictiveStudioAction, type JsonObject } from './base-predictive-studio.action';
 import { EVALUATE_DRIFT_DRIVER_CLASS } from './driver-classes';
 import {
   EvaluateFeatureAndPredictionDrift,
+  LoadFeatureAndPredictionDriftFromFeatureValues,
   type ChampionChallengerPair,
   type ConfidenceAndDivergenceInput,
   type FeatureAndPredictionDriftInput,
@@ -26,8 +28,8 @@ import {
 export { EVALUATE_DRIFT_DRIVER_CLASS } from './driver-classes';
 
 /**
- * Injectable seam for emitting a drift alert (e.g., creating an `MJ: AI Agent Requests`
- * HITL review or notification record) when `report.ShouldAlert` is `true`.
+ * Injectable seam for emitting a drift alert (e.g., creating an `MJ: User Notifications`
+ * or `MJ: AI Agent Requests` record) when `report.ShouldAlert` is `true`.
  */
 export interface IDriftAlertEmitter {
   EmitDriftAlert(
@@ -37,15 +39,68 @@ export interface IDriftAlertEmitter {
 }
 
 /**
+ * Production {@link IDriftAlertEmitter} that persists an `MJ: User Notifications` alert
+ * for `params.ContextUser` when a metadata provider with `GetEntityObject` is available.
+ */
+export class DefaultDriftAlertEmitter implements IDriftAlertEmitter {
+  constructor(private readonly provider?: IMetadataProvider) {}
+
+  public async EmitDriftAlert(
+    report: FeatureAndPredictionDriftReport,
+    params: RunActionParams,
+  ): Promise<{ readonly AlertID?: string; readonly Emitted: boolean }> {
+    const provider = this.provider ?? params.Provider ?? Metadata.Provider; // global-provider-ok: RunActionParams.Provider is optional; ActionEngine contract falls back to the global provider (ActionEngine-Base.ts:413-419)
+    if (
+      !provider ||
+      typeof provider.GetEntityObject !== 'function' ||
+      !params.ContextUser?.ID
+    ) {
+      return { Emitted: false };
+    }
+    try {
+      const notification = await provider.GetEntityObject<MJUserNotificationEntity>(
+        'MJ: User Notifications',
+        params.ContextUser,
+      );
+      notification.NewRecord();
+      notification.UserID = params.ContextUser.ID;
+      notification.Title = `Predictive Drift Alert (${report.OverallSeverity})`;
+      notification.Message = report.Summary;
+      notification.Unread = true;
+      const saved = await notification.Save();
+      if (!saved) {
+        LogError(
+          `DefaultDriftAlertEmitter: failed to save drift notification: ${notification.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+        );
+        return { Emitted: false };
+      }
+      return { AlertID: notification.ID || undefined, Emitted: true };
+    } catch (error: unknown) {
+      LogError(error);
+      return { Emitted: false };
+    }
+  }
+}
+
+/**
  * Evaluates feature PSI across numeric, categorical, and pre-binned features along with
  * confidence-floor and champion-vs-challenger divergence metrics.
  */
 @RegisterClass(BaseAction, EVALUATE_DRIFT_DRIVER_CLASS)
 export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudioAction {
+  private static defaultAlertEmitter: IDriftAlertEmitter | null = null;
   private alertEmitter: IDriftAlertEmitter | null = null;
 
   /**
-   * Configure an optional {@link IDriftAlertEmitter} seam for emitting drift notifications
+   * Configure a process-wide default {@link IDriftAlertEmitter} used by fresh action
+   * instances instantiated through `ActionEngineServer` / `ClassFactory`.
+   */
+  public static SetDefaultAlertEmitter(emitter: IDriftAlertEmitter | null): void {
+    EvaluateFeatureAndPredictionDriftAction.defaultAlertEmitter = emitter;
+  }
+
+  /**
+   * Configure an instance-level {@link IDriftAlertEmitter} seam for emitting drift notifications
    * or HITL requests when `ShouldAlert` is triggered.
    */
   public SetAlertEmitter(emitter: IDriftAlertEmitter | null): void {
@@ -69,38 +124,63 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
         this.getJsonObjectParam(params, 'ConfidenceAndDivergence'),
       );
 
-      const hasAnyInput =
+      const hasInlineFeatures =
         numericFeatures !== undefined ||
         categoricalFeatures !== undefined ||
         prebinnedFeatures !== undefined ||
         confidenceAndDivergence !== undefined;
 
-      if (!hasAnyInput) {
+      const warningThreshold = this.getNumericParam(params, 'WarningPSIThreshold');
+      const criticalThreshold = this.getNumericParam(params, 'CriticalPSIThreshold');
+      const epsilon = this.getNumericParam(params, 'Epsilon');
+      const minSampleSize = this.getNumericParam(params, 'MinSampleSize');
+      const provider = params.Provider || Metadata.Provider; // global-provider-ok: RunActionParams.Provider is optional; ActionEngine contract falls back to the global provider (ActionEngine-Base.ts:413-419)
+
+      let driftInput: FeatureAndPredictionDriftInput;
+      if (hasInlineFeatures) {
+        driftInput = {
+          ModelID: modelId,
+          RecordProcessID: recordProcessId,
+          NumericFeatures: numericFeatures,
+          CategoricalFeatures: categoricalFeatures,
+          PrebinnedFeatures: prebinnedFeatures,
+          ConfidenceAndDivergence: confidenceAndDivergence,
+          WarningPSIThreshold: warningThreshold,
+          CriticalPSIThreshold: criticalThreshold,
+          Epsilon: epsilon,
+          MinSampleSize: minSampleSize,
+        };
+      } else if (recordProcessId || modelId) {
+        driftInput = await LoadFeatureAndPredictionDriftFromFeatureValues({
+          RecordProcessID: recordProcessId,
+          ModelID: modelId,
+          BaselineWindowEnd: this.getStringParam(params, 'BaselineWindowEnd'),
+          EvaluationWindowStart: this.getStringParam(params, 'EvaluationWindowStart'),
+          Provider: provider,
+          ContextUser: params.ContextUser,
+          WarningPSIThreshold: warningThreshold,
+          CriticalPSIThreshold: criticalThreshold,
+          Epsilon: epsilon,
+          MinSampleSize: minSampleSize,
+        });
+      } else {
         return this.fail(
           'MISSING_PARAMETER',
-          'At least one of NumericFeatures, CategoricalFeatures, PrebinnedFeatures, or ConfidenceAndDivergence must be provided.',
+          'At least one of RecordProcessID, ModelID, NumericFeatures, CategoricalFeatures, PrebinnedFeatures, or ConfidenceAndDivergence must be provided.',
         );
       }
-
-      const driftInput: FeatureAndPredictionDriftInput = {
-        ModelID: modelId,
-        RecordProcessID: recordProcessId,
-        NumericFeatures: numericFeatures,
-        CategoricalFeatures: categoricalFeatures,
-        PrebinnedFeatures: prebinnedFeatures,
-        ConfidenceAndDivergence: confidenceAndDivergence,
-        WarningPSIThreshold: this.getNumericParam(params, 'WarningPSIThreshold'),
-        CriticalPSIThreshold: this.getNumericParam(params, 'CriticalPSIThreshold'),
-        Epsilon: this.getNumericParam(params, 'Epsilon'),
-      };
 
       const report = EvaluateFeatureAndPredictionDrift(driftInput);
       const emitAlertOnDrift = this.getBooleanParam(params, 'EmitAlertOnDrift', true);
 
       let alertEmitted = false;
       let alertId: string | undefined;
-      if (report.ShouldAlert && emitAlertOnDrift && this.alertEmitter) {
-        const alertOutcome = await this.alertEmitter.EmitDriftAlert(report, params);
+      if (report.ShouldAlert && emitAlertOnDrift) {
+        const activeEmitter =
+          this.alertEmitter ??
+          EvaluateFeatureAndPredictionDriftAction.defaultAlertEmitter ??
+          new DefaultDriftAlertEmitter(provider);
+        const alertOutcome = await activeEmitter.EmitDriftAlert(report, params);
         alertEmitted = alertOutcome.Emitted;
         alertId = alertOutcome.AlertID;
       }
@@ -111,6 +191,7 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
       this.addOutputParam(params, 'FeatureResults', report.FeatureResults);
       this.addOutputParam(params, 'DivergenceMetrics', report.DivergenceMetrics);
       this.addOutputParam(params, 'ShouldAlert', report.ShouldAlert);
+      this.addOutputParam(params, 'InsufficientData', report.InsufficientData);
       this.addOutputParam(params, 'AlertEmitted', alertEmitted);
       if (alertId) {
         this.addOutputParam(params, 'AlertID', alertId);
@@ -120,10 +201,11 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
       return this.ok(params, report.Summary);
     } catch (error: unknown) {
       LogError(error);
-      return this.fail(
-        'UNEXPECTED_ERROR',
-        `Drift evaluation failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.startsWith('INVALID_PARAMETER:')) {
+        return this.fail('INVALID_PARAMETER', message);
+      }
+      return this.fail('UNEXPECTED_ERROR', `Drift evaluation failed: ${message}`);
     }
   }
 
@@ -133,12 +215,15 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
     if (!raw) {
       return undefined;
     }
-    const result: Record<string, { Baseline: number[]; Evaluation: number[]; Bins?: number }> = {};
+    const result: Record<
+      string,
+      { Baseline: (number | null)[]; Evaluation: (number | null)[]; Bins?: number }
+    > = {};
     for (const [key, val] of Object.entries(raw)) {
       if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
         const rec = val as Record<string, unknown>;
-        const baseline = this.toNumberArray(rec['Baseline']);
-        const evaluation = this.toNumberArray(rec['Evaluation']);
+        const baseline = this.toNullableNumberArray(rec['Baseline']);
+        const evaluation = this.toNullableNumberArray(rec['Evaluation']);
         const bins = typeof rec['Bins'] === 'number' ? rec['Bins'] : undefined;
         result[key] = { Baseline: baseline, Evaluation: evaluation, Bins: bins };
       }
@@ -152,12 +237,12 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
     if (!raw) {
       return undefined;
     }
-    const result: Record<string, { Baseline: string[]; Evaluation: string[] }> = {};
+    const result: Record<string, { Baseline: (string | null)[]; Evaluation: (string | null)[] }> = {};
     for (const [key, val] of Object.entries(raw)) {
       if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
         const rec = val as Record<string, unknown>;
-        const baseline = this.toStringArray(rec['Baseline']);
-        const evaluation = this.toStringArray(rec['Evaluation']);
+        const baseline = this.toNullableStringArray(rec['Baseline']);
+        const evaluation = this.toNullableStringArray(rec['Evaluation']);
         result[key] = { Baseline: baseline, Evaluation: evaluation };
       }
     }
@@ -170,13 +255,30 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
     if (!raw) {
       return undefined;
     }
-    const result: Record<string, { BaselineProportions: number[]; EvaluationProportions: number[] }> = {};
+    const result: Record<
+      string,
+      {
+        BaselineProportions: number[];
+        EvaluationProportions: number[];
+        BaselineSampleCount?: number;
+        EvaluationSampleCount?: number;
+      }
+    > = {};
     for (const [key, val] of Object.entries(raw)) {
       if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
         const rec = val as Record<string, unknown>;
         const baseline = this.toNumberArray(rec['BaselineProportions']);
         const evaluation = this.toNumberArray(rec['EvaluationProportions']);
-        result[key] = { BaselineProportions: baseline, EvaluationProportions: evaluation };
+        const baseSampleCount =
+          typeof rec['BaselineSampleCount'] === 'number' ? rec['BaselineSampleCount'] : undefined;
+        const evalSampleCount =
+          typeof rec['EvaluationSampleCount'] === 'number' ? rec['EvaluationSampleCount'] : undefined;
+        result[key] = {
+          BaselineProportions: baseline,
+          EvaluationProportions: evaluation,
+          BaselineSampleCount: baseSampleCount,
+          EvaluationSampleCount: evalSampleCount,
+        };
       }
     }
     return Object.keys(result).length > 0 ? result : undefined;
@@ -201,9 +303,16 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
           ChallengerLabel: typeof rec['ChallengerLabel'] === 'string' ? rec['ChallengerLabel'] : undefined,
           ChampionLatencyMs: typeof rec['ChampionLatencyMs'] === 'number' ? rec['ChampionLatencyMs'] : undefined,
           ChallengerLatencyMs: typeof rec['ChallengerLatencyMs'] === 'number' ? rec['ChallengerLatencyMs'] : undefined,
+          TimedOut: typeof rec['TimedOut'] === 'boolean' ? rec['TimedOut'] : undefined,
+          ErrorMessage: typeof rec['ErrorMessage'] === 'string' ? rec['ErrorMessage'] : undefined,
         });
       }
     }
+
+    const problemType =
+      raw['ProblemType'] === 'classification' || raw['ProblemType'] === 'regression'
+        ? raw['ProblemType']
+        : undefined;
 
     return {
       BaselineConfidences: Array.isArray(raw['BaselineConfidences'])
@@ -220,6 +329,10 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
       MaxMeanAbsoluteScoreDelta:
         typeof raw['MaxMeanAbsoluteScoreDelta'] === 'number' ? raw['MaxMeanAbsoluteScoreDelta'] : undefined,
       MaxP95LatencyRatio: typeof raw['MaxP95LatencyRatio'] === 'number' ? raw['MaxP95LatencyRatio'] : undefined,
+      ProblemType: problemType,
+      ScoreAgreementTolerance:
+        typeof raw['ScoreAgreementTolerance'] === 'number' ? raw['ScoreAgreementTolerance'] : undefined,
+      MinSampleSize: typeof raw['MinSampleSize'] === 'number' ? raw['MinSampleSize'] : undefined,
     };
   }
 
@@ -230,10 +343,17 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
     return val.filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
   }
 
-  private toStringArray(val: unknown): string[] {
+  private toNullableNumberArray(val: unknown): (number | null)[] {
     if (!Array.isArray(val)) {
       return [];
     }
-    return val.map((v) => String(v));
+    return val.map((v) => (typeof v === 'number' && Number.isFinite(v) ? v : null));
+  }
+
+  private toNullableStringArray(val: unknown): (string | null)[] {
+    if (!Array.isArray(val)) {
+      return [];
+    }
+    return val.map((v) => (v === null || v === undefined ? null : String(v)));
   }
 }

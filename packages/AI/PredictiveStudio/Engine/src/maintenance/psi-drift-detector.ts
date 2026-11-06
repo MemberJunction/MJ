@@ -16,6 +16,9 @@
  * - $\text{PSI} \ge 0.25$: `'Critical'` (severe distributional shift)
  */
 
+import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import type { MJFeatureValueEntity } from '@memberjunction/core-entities';
+import { EscapeSQLString } from '@memberjunction/global';
 import type { DriftContext, DriftResult, IDriftDetector } from './types';
 
 /** Default Laplace smoothing constant for zero-count bins. */
@@ -26,6 +29,9 @@ export const PSI_WARNING_THRESHOLD = 0.10;
 
 /** Default critical drift threshold for Population Stability Index. */
 export const PSI_CRITICAL_THRESHOLD = 0.25;
+
+/** Default minimum valid sample size required before PSI or confidence drift is evaluated. */
+export const DEFAULT_MIN_SAMPLE_SIZE = 100;
 
 /** Severity level for feature or prediction drift. */
 export type DriftSeverity = 'None' | 'Warning' | 'Critical';
@@ -39,6 +45,10 @@ export interface FeaturePSIResult {
   readonly BinCount: number;
   readonly BaselineSampleCount: number;
   readonly EvaluationSampleCount: number;
+  readonly InsufficientData?: boolean;
+  readonly BaselineMissingRate?: number;
+  readonly EvaluationMissingRate?: number;
+  readonly MissingRateDelta?: number;
 }
 
 /** Paired champion and challenger shadow observation for a single record. */
@@ -50,6 +60,8 @@ export interface ChampionChallengerPair {
   readonly ChallengerLabel?: string;
   readonly ChampionLatencyMs?: number;
   readonly ChallengerLatencyMs?: number;
+  readonly TimedOut?: boolean;
+  readonly ErrorMessage?: string;
 }
 
 /** Input to {@link ComputeConfidenceAndChallengerDivergence}. */
@@ -69,6 +81,12 @@ export interface ConfidenceAndDivergenceInput {
   readonly MaxMeanAbsoluteScoreDelta?: number;
   /** Maximum acceptable p95 challenger-to-champion latency ratio (defaults to `3.0`). */
   readonly MaxP95LatencyRatio?: number;
+  /** Problem type for numeric score agreement ('classification' uses probability cut unless tolerance given; 'regression' uses tolerance band). */
+  readonly ProblemType?: 'classification' | 'regression';
+  /** Maximum absolute difference between champion and challenger numeric scores counted as agreement in regression/tolerance mode. */
+  readonly ScoreAgreementTolerance?: number;
+  /** Minimum valid confidence observations required before flagging confidence degradation (defaults to `100`). */
+  readonly MinSampleSize?: number;
 }
 
 /** Computed confidence-floor and champion-vs-challenger divergence metrics. */
@@ -77,7 +95,10 @@ export interface ConfidenceAndDivergenceMetrics {
   readonly EvaluationMeanConfidence: number | null;
   readonly BelowFloorRate: number | null;
   readonly ConfidenceDegraded: boolean;
+  readonly ConfidenceInsufficientData?: boolean;
   readonly PairCount: number;
+  readonly ChallengerTimeoutCount: number;
+  readonly ChallengerFailureCount: number;
   readonly AgreementRate: number | null;
   readonly MeanAbsoluteScoreDelta: number | null;
   readonly P95LatencyRatio: number | null;
@@ -89,18 +110,41 @@ export interface FeatureAndPredictionDriftInput {
   readonly ModelID?: string;
   readonly RecordProcessID?: string;
   readonly NumericFeatures?: Readonly<
-    Record<string, { readonly Baseline: readonly number[]; readonly Evaluation: readonly number[]; readonly Bins?: number }>
+    Record<
+      string,
+      {
+        readonly Baseline: readonly (number | null | undefined)[];
+        readonly Evaluation: readonly (number | null | undefined)[];
+        readonly Bins?: number;
+      }
+    >
   >;
   readonly CategoricalFeatures?: Readonly<
-    Record<string, { readonly Baseline: readonly string[]; readonly Evaluation: readonly string[] }>
+    Record<
+      string,
+      {
+        readonly Baseline: readonly (string | null | undefined)[];
+        readonly Evaluation: readonly (string | null | undefined)[];
+      }
+    >
   >;
   readonly PrebinnedFeatures?: Readonly<
-    Record<string, { readonly BaselineProportions: readonly number[]; readonly EvaluationProportions: readonly number[] }>
+    Record<
+      string,
+      {
+        readonly BaselineProportions: readonly number[];
+        readonly EvaluationProportions: readonly number[];
+        readonly BaselineSampleCount?: number;
+        readonly EvaluationSampleCount?: number;
+      }
+    >
   >;
   readonly ConfidenceAndDivergence?: ConfidenceAndDivergenceInput;
   readonly WarningPSIThreshold?: number;
   readonly CriticalPSIThreshold?: number;
   readonly Epsilon?: number;
+  /** Minimum sample count required per window before PSI is evaluated (defaults to `100`). */
+  readonly MinSampleSize?: number;
 }
 
 /** Aggregate report returned by {@link EvaluateFeatureAndPredictionDrift}. */
@@ -113,8 +157,40 @@ export interface FeatureAndPredictionDriftReport {
   readonly DriftedFeatures: readonly FeaturePSIResult[];
   readonly DivergenceMetrics: ConfidenceAndDivergenceMetrics;
   readonly ShouldAlert: boolean;
+  readonly InsufficientData: boolean;
   readonly Summary: string;
 }
+
+/** Options for loading baseline and evaluation windows from `MJ: Feature Values`. */
+export interface LoadDriftFromFeatureValuesOptions {
+  readonly RecordProcessID?: string;
+  readonly ModelID?: string;
+  readonly BaselineWindowEnd?: Date | string;
+  readonly EvaluationWindowStart?: Date | string;
+  readonly Provider: IMetadataProvider;
+  readonly ContextUser?: UserInfo;
+  readonly WarningPSIThreshold?: number;
+  readonly CriticalPSIThreshold?: number;
+  readonly Epsilon?: number;
+  readonly MinSampleSize?: number;
+}
+
+type FeatureValueDriftRow = Pick<
+  MJFeatureValueEntity,
+  | 'ID'
+  | 'RecordProcessID'
+  | 'ProcessRunID'
+  | 'EntityID'
+  | 'RecordID'
+  | 'FeatureName'
+  | 'Role'
+  | 'AIModelID'
+  | 'ValueNumeric'
+  | 'ValueText'
+  | 'Confidence'
+  | 'Reasoning'
+  | 'ComputedAt'
+>;
 
 /**
  * Classify a PSI value into `'None'`, `'Warning'`, or `'Critical'`.
@@ -131,6 +207,37 @@ export function ClassifyPSISeverity(
     return 'Critical';
   }
   return 'Warning';
+}
+
+/**
+ * Validate PSI threshold and smoothing parameters, throwing an explicit `INVALID_PARAMETER` error
+ * when out of range or inverted.
+ */
+export function ValidateDriftThresholds(
+  warningThreshold: number,
+  criticalThreshold: number,
+  epsilon: number,
+): void {
+  if (!Number.isFinite(warningThreshold) || warningThreshold <= 0) {
+    throw new Error(
+      `INVALID_PARAMETER: WarningPSIThreshold must be a finite positive number (received ${String(warningThreshold)}).`,
+    );
+  }
+  if (!Number.isFinite(criticalThreshold) || criticalThreshold <= 0) {
+    throw new Error(
+      `INVALID_PARAMETER: CriticalPSIThreshold must be a finite positive number (received ${String(criticalThreshold)}).`,
+    );
+  }
+  if (warningThreshold >= criticalThreshold) {
+    throw new Error(
+      `INVALID_PARAMETER: WarningPSIThreshold (${warningThreshold}) must be strictly less than CriticalPSIThreshold (${criticalThreshold}).`,
+    );
+  }
+  if (!Number.isFinite(epsilon) || epsilon <= 0 || epsilon > 0.01) {
+    throw new Error(
+      `INVALID_PARAMETER: Epsilon must be in (0, 0.01] (received ${String(epsilon)}).`,
+    );
+  }
 }
 
 /**
@@ -183,24 +290,50 @@ export function ComputePopulationStabilityIndex(
 }
 
 /**
- * Compute PSI for a continuous/numeric feature by constructing equal-width bins across
- * the baseline range `[min, max]` (with open boundary tails `(-inf, edge_1)` and `[edge_{B-1}, +inf)`)
- * so out-of-range evaluation shifts are captured in the boundary bins.
+ * Compute PSI for a continuous/numeric feature by constructing empirical quantile bins from
+ * the baseline distribution (with open boundary tails `(-inf, q_1)` and `[q_{B-1}, +inf)`
+ * and deduplicated interior edges when ties exist), tracking missing/non-finite rates in a
+ * dedicated missingness bin.
  */
 export function ComputeNumericFeaturePSI(
   featureName: string,
-  baselineValues: readonly number[],
-  evaluationValues: readonly number[],
+  baselineValues: readonly (number | null | undefined)[],
+  evaluationValues: readonly (number | null | undefined)[],
   numBins: number = 10,
   epsilon: number = DEFAULT_PSI_EPSILON,
   warningThreshold: number = PSI_WARNING_THRESHOLD,
   criticalThreshold: number = PSI_CRITICAL_THRESHOLD,
+  minSampleSize: number = DEFAULT_MIN_SAMPLE_SIZE,
 ): FeaturePSIResult {
-  const cleanBaseline = baselineValues.filter((v) => typeof v === 'number' && Number.isFinite(v));
-  const cleanEval = evaluationValues.filter((v) => typeof v === 'number' && Number.isFinite(v));
-  const bins = Math.max(2, Math.floor(numBins));
+  const cleanBaseline: number[] = [];
+  for (const v of baselineValues) {
+    if (typeof v === 'number' && Number.isFinite(v)) {
+      cleanBaseline.push(v);
+    }
+  }
+  const cleanEval: number[] = [];
+  for (const v of evaluationValues) {
+    if (typeof v === 'number' && Number.isFinite(v)) {
+      cleanEval.push(v);
+    }
+  }
 
-  if (cleanBaseline.length === 0 || cleanEval.length === 0) {
+  const bins = Math.max(2, Math.floor(numBins));
+  const minSamples = Math.max(1, Math.floor(minSampleSize));
+  const baseTotal = baselineValues.length;
+  const evalTotal = evaluationValues.length;
+  const baseMissingCount = baseTotal - cleanBaseline.length;
+  const evalMissingCount = evalTotal - cleanEval.length;
+  const baseMissingRate = baseTotal > 0 ? baseMissingCount / baseTotal : 0;
+  const evalMissingRate = evalTotal > 0 ? evalMissingCount / evalTotal : 0;
+  const missingRateDelta = Math.abs(evalMissingRate - baseMissingRate);
+
+  const severeMissingSurge =
+    cleanBaseline.length >= minSamples &&
+    evalTotal >= minSamples &&
+    (cleanEval.length === 0 || missingRateDelta >= criticalThreshold);
+
+  if (!severeMissingSurge && (cleanBaseline.length < minSamples || cleanEval.length < minSamples)) {
     return {
       FeatureName: featureName,
       FeatureType: 'Numeric',
@@ -209,66 +342,152 @@ export function ComputeNumericFeaturePSI(
       BinCount: bins,
       BaselineSampleCount: cleanBaseline.length,
       EvaluationSampleCount: cleanEval.length,
+      InsufficientData: true,
+      BaselineMissingRate: baseMissingRate,
+      EvaluationMissingRate: evalMissingRate,
+      MissingRateDelta: missingRateDelta,
     };
   }
 
-  let minVal = cleanBaseline[0];
-  let maxVal = cleanBaseline[0];
-  for (const v of cleanBaseline) {
-    if (v < minVal) minVal = v;
-    if (v > maxVal) maxVal = v;
+  const sortedBaseline = [...cleanBaseline].sort((a, b) => a - b);
+  const minVal = sortedBaseline[0];
+  const maxVal = sortedBaseline[sortedBaseline.length - 1];
+
+  let baseCounts: number[];
+  let evalCounts: number[];
+
+  if (minVal === maxVal) {
+    // Constant baseline: bin 0 = exact baseline value, bin 1 = any shifted value
+    baseCounts = [cleanBaseline.length, 0];
+    let exactEval = 0;
+    let shiftedEval = 0;
+    for (const v of cleanEval) {
+      if (v === minVal) {
+        exactEval++;
+      } else {
+        shiftedEval++;
+      }
+    }
+    evalCounts = [exactEval, shiftedEval];
+  } else {
+    // Empirical baseline quantile interior edges q_1 .. q_{bins-1}, deduplicating collapsed edges
+    const edges: number[] = [];
+    for (let k = 1; k < bins; k++) {
+      const pos = (k / bins) * (sortedBaseline.length - 1);
+      const lower = Math.floor(pos);
+      const upper = Math.ceil(pos);
+      const weight = pos - lower;
+      const q = sortedBaseline[lower] * (1 - weight) + sortedBaseline[upper] * weight;
+      if (edges.length === 0 || q > edges[edges.length - 1]) {
+        edges.push(q);
+      }
+    }
+
+    const effectiveBins = edges.length + 1;
+    baseCounts = new Array<number>(effectiveBins).fill(0);
+    evalCounts = new Array<number>(effectiveBins).fill(0);
+
+    const toQuantileBinIndex = (val: number): number => {
+      let lo = 0;
+      let hi = edges.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        if (val >= edges[mid]) {
+          lo = mid + 1;
+        } else {
+          hi = mid;
+        }
+      }
+      return lo;
+    };
+
+    for (const v of cleanBaseline) {
+      baseCounts[toQuantileBinIndex(v)]++;
+    }
+    for (const v of cleanEval) {
+      evalCounts[toQuantileBinIndex(v)]++;
+    }
   }
 
-  const span = maxVal - minVal > 0 ? maxVal - minVal : 1;
-  const step = span / bins;
-
-  const baseCounts = new Array<number>(bins).fill(0);
-  const evalCounts = new Array<number>(bins).fill(0);
-
-  const toBinIndex = (val: number): number => {
-    const idx = Math.floor((val - minVal) / step);
-    return Math.max(0, Math.min(bins - 1, idx));
-  };
-
-  for (const v of cleanBaseline) {
-    baseCounts[toBinIndex(v)]++;
-  }
-  for (const v of cleanEval) {
-    evalCounts[toBinIndex(v)]++;
+  if (baseMissingCount > 0 || evalMissingCount > 0) {
+    baseCounts.push(baseMissingCount);
+    evalCounts.push(evalMissingCount);
   }
 
   const psi = ComputePopulationStabilityIndex(baseCounts, evalCounts, epsilon);
+  let severity = ClassifyPSISeverity(psi, warningThreshold, criticalThreshold);
+  if (severeMissingSurge && severity !== 'Critical') {
+    severity = 'Critical';
+  }
+
   return {
     FeatureName: featureName,
     FeatureType: 'Numeric',
     PSI: psi,
-    Severity: ClassifyPSISeverity(psi, warningThreshold, criticalThreshold),
-    BinCount: bins,
+    Severity: severity,
+    BinCount: baseCounts.length,
     BaselineSampleCount: cleanBaseline.length,
     EvaluationSampleCount: cleanEval.length,
+    InsufficientData: false,
+    BaselineMissingRate: baseMissingRate,
+    EvaluationMissingRate: evalMissingRate,
+    MissingRateDelta: missingRateDelta,
   };
 }
 
 /**
- * Compute PSI for a categorical feature across the union of observed baseline and evaluation categories.
+ * Compute PSI for a categorical feature across the union of observed baseline and evaluation categories,
+ * tracking missing (`null`/`undefined`) rates in a dedicated bucket.
  */
 export function ComputeCategoricalFeaturePSI(
   featureName: string,
-  baselineCategories: readonly string[],
-  evaluationCategories: readonly string[],
+  baselineCategories: readonly (string | null | undefined)[],
+  evaluationCategories: readonly (string | null | undefined)[],
   epsilon: number = DEFAULT_PSI_EPSILON,
   warningThreshold: number = PSI_WARNING_THRESHOLD,
   criticalThreshold: number = PSI_CRITICAL_THRESHOLD,
+  minSampleSize: number = DEFAULT_MIN_SAMPLE_SIZE,
 ): FeaturePSIResult {
-  if (baselineCategories.length === 0 || evaluationCategories.length === 0) {
+  const minSamples = Math.max(1, Math.floor(minSampleSize));
+  const cleanBaseline: string[] = [];
+  for (const raw of baselineCategories) {
+    if (typeof raw === 'string') {
+      cleanBaseline.push(raw);
+    }
+  }
+  const cleanEval: string[] = [];
+  for (const raw of evaluationCategories) {
+    if (typeof raw === 'string') {
+      cleanEval.push(raw);
+    }
+  }
+
+  const baseTotal = baselineCategories.length;
+  const evalTotal = evaluationCategories.length;
+  const baseMissingCount = baseTotal - cleanBaseline.length;
+  const evalMissingCount = evalTotal - cleanEval.length;
+  const baseMissingRate = baseTotal > 0 ? baseMissingCount / baseTotal : 0;
+  const evalMissingRate = evalTotal > 0 ? evalMissingCount / evalTotal : 0;
+  const missingRateDelta = Math.abs(evalMissingRate - baseMissingRate);
+
+  const severeMissingSurge =
+    cleanBaseline.length >= minSamples &&
+    evalTotal >= minSamples &&
+    (cleanEval.length === 0 || missingRateDelta >= criticalThreshold);
+
+  if (!severeMissingSurge && (cleanBaseline.length < minSamples || cleanEval.length < minSamples)) {
     return {
       FeatureName: featureName,
       FeatureType: 'Categorical',
       PSI: 0,
       Severity: 'None',
       BinCount: 0,
-      BaselineSampleCount: baselineCategories.length,
-      EvaluationSampleCount: evaluationCategories.length,
+      BaselineSampleCount: cleanBaseline.length,
+      EvaluationSampleCount: cleanEval.length,
+      InsufficientData: true,
+      BaselineMissingRate: baseMissingRate,
+      EvaluationMissingRate: evalMissingRate,
+      MissingRateDelta: missingRateDelta,
     };
   }
 
@@ -276,13 +495,11 @@ export function ComputeCategoricalFeaturePSI(
   const baseMap = new Map<string, number>();
   const evalMap = new Map<string, number>();
 
-  for (const raw of baselineCategories) {
-    const key = String(raw);
+  for (const key of cleanBaseline) {
     categories.add(key);
     baseMap.set(key, (baseMap.get(key) ?? 0) + 1);
   }
-  for (const raw of evaluationCategories) {
-    const key = String(raw);
+  for (const key of cleanEval) {
     categories.add(key);
     evalMap.set(key, (evalMap.get(key) ?? 0) + 1);
   }
@@ -291,15 +508,29 @@ export function ComputeCategoricalFeaturePSI(
   const baseCounts = orderedKeys.map((k) => baseMap.get(k) ?? 0);
   const evalCounts = orderedKeys.map((k) => evalMap.get(k) ?? 0);
 
+  if (baseMissingCount > 0 || evalMissingCount > 0) {
+    baseCounts.push(baseMissingCount);
+    evalCounts.push(evalMissingCount);
+  }
+
   const psi = ComputePopulationStabilityIndex(baseCounts, evalCounts, epsilon);
+  let severity = ClassifyPSISeverity(psi, warningThreshold, criticalThreshold);
+  if (severeMissingSurge && severity !== 'Critical') {
+    severity = 'Critical';
+  }
+
   return {
     FeatureName: featureName,
     FeatureType: 'Categorical',
     PSI: psi,
-    Severity: ClassifyPSISeverity(psi, warningThreshold, criticalThreshold),
-    BinCount: orderedKeys.length,
-    BaselineSampleCount: baselineCategories.length,
-    EvaluationSampleCount: evaluationCategories.length,
+    Severity: severity,
+    BinCount: baseCounts.length,
+    BaselineSampleCount: cleanBaseline.length,
+    EvaluationSampleCount: cleanEval.length,
+    InsufficientData: false,
+    BaselineMissingRate: baseMissingRate,
+    EvaluationMissingRate: evalMissingRate,
+    MissingRateDelta: missingRateDelta,
   };
 }
 
@@ -315,6 +546,8 @@ export function ComputeConfidenceAndChallengerDivergence(
   const minAgreementRate = input.MinAgreementRate ?? 0.85;
   const maxMeanAbsScoreDelta = input.MaxMeanAbsoluteScoreDelta ?? 0.15;
   const maxP95LatencyRatio = input.MaxP95LatencyRatio ?? 3.0;
+  const minSamples = Math.max(1, Math.floor(input.MinSampleSize ?? DEFAULT_MIN_SAMPLE_SIZE));
+  const scoreTolerance = input.ScoreAgreementTolerance ?? maxMeanAbsScoreDelta;
 
   const baseConf = (input.BaselineConfidences ?? []).filter((v) => typeof v === 'number' && Number.isFinite(v));
   const evalConf = (input.EvaluationConfidences ?? []).filter((v) => typeof v === 'number' && Number.isFinite(v));
@@ -326,36 +559,83 @@ export function ComputeConfidenceAndChallengerDivergence(
   const belowFloorRate =
     evalConf.length > 0 ? evalConf.filter((c) => c < confidenceFloor).length / evalConf.length : null;
 
+  const confidenceInsufficientData =
+    (evalConf.length > 0 && evalConf.length < minSamples) ||
+    (baseConf.length > 0 && baseConf.length < minSamples);
+
   const meanDropExceeded =
+    !confidenceInsufficientData &&
     baselineMeanConfidence !== null &&
     evaluationMeanConfidence !== null &&
     baselineMeanConfidence - evaluationMeanConfidence > maxMeanConfidenceDrop;
-  const floorBreached = belowFloorRate !== null && belowFloorRate > maxBelowFloorRate;
+  const floorBreached =
+    !confidenceInsufficientData && belowFloorRate !== null && belowFloorRate > maxBelowFloorRate;
   const confidenceDegraded = meanDropExceeded || floorBreached;
 
   const pairs = input.Pairs ?? [];
   let labelPairs = 0;
   let labelAgreements = 0;
+  let challengerTimeoutCount = 0;
+  let challengerFailureCount = 0;
   const scoreDeltas: number[] = [];
   const champLatencies: number[] = [];
   const challLatencies: number[] = [];
 
   for (const pair of pairs) {
-    if (pair.ChampionLabel !== undefined && pair.ChallengerLabel !== undefined) {
+    const isTimedOut = pair.TimedOut === true;
+    const hasError = typeof pair.ErrorMessage === 'string' && pair.ErrorMessage.trim().length > 0;
+    const hasChampOutput =
+      typeof pair.ChampionScore === 'number' || typeof pair.ChampionLabel === 'string';
+    const hasChallOutput =
+      typeof pair.ChallengerScore === 'number' || typeof pair.ChallengerLabel === 'string';
+    const isMissingChallenger = hasChampOutput && !hasChallOutput;
+
+    if (isTimedOut) {
+      challengerTimeoutCount++;
+    }
+    if (isTimedOut || hasError || isMissingChallenger) {
+      challengerFailureCount++;
+      labelPairs++;
+    } else if (pair.ChampionLabel !== undefined && pair.ChallengerLabel !== undefined) {
       labelPairs++;
       if (pair.ChampionLabel === pair.ChallengerLabel) {
         labelAgreements++;
       }
-    } else if (typeof pair.ChampionScore === 'number' && typeof pair.ChallengerScore === 'number') {
+    } else if (
+      typeof pair.ChampionScore === 'number' &&
+      Number.isFinite(pair.ChampionScore) &&
+      typeof pair.ChallengerScore === 'number' &&
+      Number.isFinite(pair.ChallengerScore)
+    ) {
       labelPairs++;
-      const champPositive = pair.ChampionScore >= 0.5;
-      const challPositive = pair.ChallengerScore >= 0.5;
-      if (champPositive === challPositive) {
-        labelAgreements++;
+      const useToleranceBand =
+        input.ProblemType === 'regression' ||
+        input.ScoreAgreementTolerance !== undefined ||
+        pair.ChampionScore < 0 ||
+        pair.ChampionScore > 1 ||
+        pair.ChallengerScore < 0 ||
+        pair.ChallengerScore > 1;
+      if (useToleranceBand) {
+        if (Math.abs(pair.ChampionScore - pair.ChallengerScore) <= scoreTolerance) {
+          labelAgreements++;
+        }
+      } else {
+        const champPositive = pair.ChampionScore >= 0.5;
+        const challPositive = pair.ChallengerScore >= 0.5;
+        if (champPositive === challPositive) {
+          labelAgreements++;
+        }
       }
     }
 
-    if (typeof pair.ChampionScore === 'number' && typeof pair.ChallengerScore === 'number') {
+    if (
+      !isTimedOut &&
+      !hasError &&
+      typeof pair.ChampionScore === 'number' &&
+      Number.isFinite(pair.ChampionScore) &&
+      typeof pair.ChallengerScore === 'number' &&
+      Number.isFinite(pair.ChallengerScore)
+    ) {
       scoreDeltas.push(Math.abs(pair.ChampionScore - pair.ChallengerScore));
     }
     if (typeof pair.ChampionLatencyMs === 'number' && pair.ChampionLatencyMs > 0) {
@@ -384,7 +664,10 @@ export function ComputeConfidenceAndChallengerDivergence(
     EvaluationMeanConfidence: evaluationMeanConfidence,
     BelowFloorRate: belowFloorRate,
     ConfidenceDegraded: confidenceDegraded,
+    ConfidenceInsufficientData: confidenceInsufficientData,
     PairCount: pairs.length,
+    ChallengerTimeoutCount: challengerTimeoutCount,
+    ChallengerFailureCount: challengerFailureCount,
     AgreementRate: agreementRate,
     MeanAbsoluteScoreDelta: meanAbsoluteScoreDelta,
     P95LatencyRatio: p95LatencyRatio,
@@ -402,25 +685,48 @@ export function EvaluateFeatureAndPredictionDrift(
   const epsilon = input.Epsilon ?? DEFAULT_PSI_EPSILON;
   const warnThreshold = input.WarningPSIThreshold ?? PSI_WARNING_THRESHOLD;
   const critThreshold = input.CriticalPSIThreshold ?? PSI_CRITICAL_THRESHOLD;
+  const minSampleSize = input.MinSampleSize ?? DEFAULT_MIN_SAMPLE_SIZE;
+
+  ValidateDriftThresholds(warnThreshold, critThreshold, epsilon);
 
   const featureResults: FeaturePSIResult[] = [];
 
   if (input.PrebinnedFeatures) {
     for (const [featureName, spec] of Object.entries(input.PrebinnedFeatures)) {
-      const psi = ComputePopulationStabilityIndex(
-        spec.BaselineProportions,
-        spec.EvaluationProportions,
-        epsilon,
-      );
-      featureResults.push({
-        FeatureName: featureName,
-        FeatureType: 'Prebinned',
-        PSI: psi,
-        Severity: ClassifyPSISeverity(psi, warnThreshold, critThreshold),
-        BinCount: Math.max(spec.BaselineProportions.length, spec.EvaluationProportions.length),
-        BaselineSampleCount: spec.BaselineProportions.length,
-        EvaluationSampleCount: spec.EvaluationProportions.length,
-      });
+      const baseSampleCount = spec.BaselineSampleCount ?? spec.BaselineProportions.length;
+      const evalSampleCount = spec.EvaluationSampleCount ?? spec.EvaluationProportions.length;
+      const explicitCountsUnderMin =
+        (spec.BaselineSampleCount !== undefined && spec.BaselineSampleCount < minSampleSize) ||
+        (spec.EvaluationSampleCount !== undefined && spec.EvaluationSampleCount < minSampleSize);
+
+      if (explicitCountsUnderMin) {
+        featureResults.push({
+          FeatureName: featureName,
+          FeatureType: 'Prebinned',
+          PSI: 0,
+          Severity: 'None',
+          BinCount: Math.max(spec.BaselineProportions.length, spec.EvaluationProportions.length),
+          BaselineSampleCount: baseSampleCount,
+          EvaluationSampleCount: evalSampleCount,
+          InsufficientData: true,
+        });
+      } else {
+        const psi = ComputePopulationStabilityIndex(
+          spec.BaselineProportions,
+          spec.EvaluationProportions,
+          epsilon,
+        );
+        featureResults.push({
+          FeatureName: featureName,
+          FeatureType: 'Prebinned',
+          PSI: psi,
+          Severity: ClassifyPSISeverity(psi, warnThreshold, critThreshold),
+          BinCount: Math.max(spec.BaselineProportions.length, spec.EvaluationProportions.length),
+          BaselineSampleCount: baseSampleCount,
+          EvaluationSampleCount: evalSampleCount,
+          InsufficientData: false,
+        });
+      }
     }
   }
 
@@ -435,6 +741,7 @@ export function EvaluateFeatureAndPredictionDrift(
           epsilon,
           warnThreshold,
           critThreshold,
+          minSampleSize,
         ),
       );
     }
@@ -450,16 +757,35 @@ export function EvaluateFeatureAndPredictionDrift(
           epsilon,
           warnThreshold,
           critThreshold,
+          minSampleSize,
         ),
       );
     }
   }
 
-  const divergence = ComputeConfidenceAndChallengerDivergence(input.ConfidenceAndDivergence);
+  const divergenceInput: ConfidenceAndDivergenceInput | undefined = input.ConfidenceAndDivergence
+    ? {
+        ...input.ConfidenceAndDivergence,
+        MinSampleSize: input.ConfidenceAndDivergence.MinSampleSize ?? minSampleSize,
+      }
+    : undefined;
+  const divergence = ComputeConfidenceAndChallengerDivergence(divergenceInput);
   const driftedFeatures = featureResults.filter((f) => f.Severity !== 'None');
   const maxPSI = featureResults.reduce((max, f) => Math.max(max, f.PSI), 0);
+  const insufficientData =
+    featureResults.some((f) => f.InsufficientData === true) ||
+    divergence.ConfidenceInsufficientData === true;
 
   let overallSeverity: DriftSeverity = ClassifyPSISeverity(maxPSI, warnThreshold, critThreshold);
+  for (const f of featureResults) {
+    if (f.Severity === 'Critical') {
+      overallSeverity = 'Critical';
+      break;
+    }
+    if (f.Severity === 'Warning' && overallSeverity === 'None') {
+      overallSeverity = 'Warning';
+    }
+  }
   if (overallSeverity === 'None' && (divergence.ConfidenceDegraded || divergence.ChallengerDiverged)) {
     overallSeverity = 'Warning';
   }
@@ -472,6 +798,9 @@ export function EvaluateFeatureAndPredictionDrift(
     `MaxPSI=${maxPSI.toFixed(4)}`,
     `DriftedFeatures=${driftedFeatures.length}/${featureResults.length}`,
   ];
+  if (insufficientData) {
+    summaryParts.push('InsufficientData=true');
+  }
   if (divergence.ConfidenceDegraded) {
     summaryParts.push(
       `ConfidenceDegraded=true (BelowFloorRate=${(divergence.BelowFloorRate ?? 0).toFixed(2)})`,
@@ -479,7 +808,7 @@ export function EvaluateFeatureAndPredictionDrift(
   }
   if (divergence.ChallengerDiverged) {
     summaryParts.push(
-      `ChallengerDiverged=true (AgreementRate=${(divergence.AgreementRate ?? 1).toFixed(2)}, MeanDelta=${(divergence.MeanAbsoluteScoreDelta ?? 0).toFixed(4)})`,
+      `ChallengerDiverged=true (AgreementRate=${(divergence.AgreementRate ?? 1).toFixed(2)}, MeanDelta=${(divergence.MeanAbsoluteScoreDelta ?? 0).toFixed(4)}, Timeouts=${divergence.ChallengerTimeoutCount}, Failures=${divergence.ChallengerFailureCount})`,
     );
   }
 
@@ -492,37 +821,219 @@ export function EvaluateFeatureAndPredictionDrift(
     DriftedFeatures: driftedFeatures,
     DivergenceMetrics: divergence,
     ShouldAlert: shouldAlert,
+    InsufficientData: insufficientData,
     Summary: summaryParts.join(', '),
   };
 }
 
 /**
+ * Load baseline and rolling evaluation feature distributions, confidence distributions, and
+ * champion-vs-challenger pairs from `MJ: Feature Values` for a given `RecordProcessID` or `ModelID`.
+ */
+export async function LoadFeatureAndPredictionDriftFromFeatureValues(
+  options: LoadDriftFromFeatureValuesOptions,
+): Promise<FeatureAndPredictionDriftInput> {
+  const filterClauses: string[] = [];
+  if (typeof options.RecordProcessID === 'string' && options.RecordProcessID.trim().length > 0) {
+    filterClauses.push(`RecordProcessID = '${EscapeSQLString(options.RecordProcessID.trim())}'`);
+  } else if (typeof options.ModelID === 'string' && options.ModelID.trim().length > 0) {
+    filterClauses.push(`AIModelID = '${EscapeSQLString(options.ModelID.trim())}'`);
+  }
+
+  const rv = RunView.FromMetadataProvider(options.Provider);
+  const res = await rv.RunView<FeatureValueDriftRow>(
+    {
+      EntityName: 'MJ: Feature Values',
+      ExtraFilter: filterClauses.join(' AND '),
+      OrderBy: 'ComputedAt ASC',
+      Fields: [
+        'ID',
+        'RecordProcessID',
+        'ProcessRunID',
+        'EntityID',
+        'RecordID',
+        'FeatureName',
+        'Role',
+        'AIModelID',
+        'ValueNumeric',
+        'ValueText',
+        'Confidence',
+        'Reasoning',
+        'ComputedAt',
+      ],
+      ResultType: 'simple',
+      IgnoreMaxRows: true,
+    },
+    options.ContextUser,
+  );
+
+  if (!res.Success) {
+    throw new Error(
+      `Failed to load MJ: Feature Values for drift evaluation: ${res.ErrorMessage ?? 'unknown error'}`,
+    );
+  }
+
+  const rows = res.Results ?? [];
+  const championByFeature = new Map<string, FeatureValueDriftRow[]>();
+  const latestChampionByRecordFeature = new Map<string, FeatureValueDriftRow>();
+  const challengerRows: FeatureValueDriftRow[] = [];
+
+  for (const row of rows) {
+    if (row.Role === 'Challenger') {
+      challengerRows.push(row);
+    } else {
+      const featureName = row.FeatureName || 'Prediction';
+      const list = championByFeature.get(featureName) ?? [];
+      list.push(row);
+      championByFeature.set(featureName, list);
+      latestChampionByRecordFeature.set(`${row.RecordID}::${featureName}`, row);
+    }
+  }
+
+  const numericFeatures: Record<
+    string,
+    { Baseline: (number | null)[]; Evaluation: (number | null)[] }
+  > = {};
+  const categoricalFeatures: Record<
+    string,
+    { Baseline: (string | null)[]; Evaluation: (string | null)[] }
+  > = {};
+  const baselineConfidences: number[] = [];
+  const evaluationConfidences: number[] = [];
+
+  const baselineCutoffMs = options.BaselineWindowEnd
+    ? new Date(options.BaselineWindowEnd).getTime()
+    : options.EvaluationWindowStart
+      ? new Date(options.EvaluationWindowStart).getTime()
+      : null;
+  const evalCutoffMs = options.EvaluationWindowStart
+    ? new Date(options.EvaluationWindowStart).getTime()
+    : baselineCutoffMs;
+
+  for (const [featureName, featureRows] of championByFeature.entries()) {
+    const sorted = [...featureRows].sort(
+      (a, b) => new Date(a.ComputedAt).getTime() - new Date(b.ComputedAt).getTime(),
+    );
+
+    let baselineWindow: FeatureValueDriftRow[];
+    let evalWindow: FeatureValueDriftRow[];
+    if (baselineCutoffMs !== null && evalCutoffMs !== null && Number.isFinite(baselineCutoffMs)) {
+      baselineWindow = sorted.filter((r) => new Date(r.ComputedAt).getTime() < evalCutoffMs);
+      evalWindow = sorted.filter((r) => new Date(r.ComputedAt).getTime() >= evalCutoffMs);
+    } else {
+      const mid = Math.floor(sorted.length / 2);
+      baselineWindow = sorted.slice(0, mid);
+      evalWindow = sorted.slice(mid);
+    }
+
+    const hasNumeric = sorted.some((r) => typeof r.ValueNumeric === 'number');
+    const hasCategorical = sorted.some((r) => typeof r.ValueText === 'string' && r.ValueNumeric === null);
+
+    if (hasNumeric) {
+      numericFeatures[featureName] = {
+        Baseline: baselineWindow.map((r) => (typeof r.ValueNumeric === 'number' ? r.ValueNumeric : null)),
+        Evaluation: evalWindow.map((r) => (typeof r.ValueNumeric === 'number' ? r.ValueNumeric : null)),
+      };
+    } else if (hasCategorical) {
+      categoricalFeatures[featureName] = {
+        Baseline: baselineWindow.map((r) => (typeof r.ValueText === 'string' ? r.ValueText : null)),
+        Evaluation: evalWindow.map((r) => (typeof r.ValueText === 'string' ? r.ValueText : null)),
+      };
+    }
+
+    for (const r of baselineWindow) {
+      if (typeof r.Confidence === 'number' && Number.isFinite(r.Confidence)) {
+        baselineConfidences.push(r.Confidence);
+      }
+    }
+    for (const r of evalWindow) {
+      if (typeof r.Confidence === 'number' && Number.isFinite(r.Confidence)) {
+        evaluationConfidences.push(r.Confidence);
+      }
+    }
+  }
+
+  const pairs: ChampionChallengerPair[] = [];
+  for (const chall of challengerRows) {
+    const featureName = chall.FeatureName || 'Prediction';
+    const champ = latestChampionByRecordFeature.get(`${chall.RecordID}::${featureName}`);
+    const reasoning = chall.Reasoning ?? '';
+    const isTimeout = reasoning.includes('SHADOW_TIMEOUT');
+    const isError = reasoning.includes('SHADOW_ERROR');
+    pairs.push({
+      RecordID: chall.RecordID,
+      ChampionScore: typeof champ?.ValueNumeric === 'number' ? champ.ValueNumeric : undefined,
+      ChallengerScore: typeof chall.ValueNumeric === 'number' ? chall.ValueNumeric : undefined,
+      ChampionLabel: typeof champ?.ValueText === 'string' ? champ.ValueText : undefined,
+      ChallengerLabel: typeof chall.ValueText === 'string' ? chall.ValueText : undefined,
+      TimedOut: isTimeout ? true : undefined,
+      ErrorMessage: isError ? reasoning : undefined,
+    });
+  }
+
+  return {
+    ModelID: options.ModelID,
+    RecordProcessID: options.RecordProcessID,
+    NumericFeatures: Object.keys(numericFeatures).length > 0 ? numericFeatures : undefined,
+    CategoricalFeatures: Object.keys(categoricalFeatures).length > 0 ? categoricalFeatures : undefined,
+    ConfidenceAndDivergence: {
+      BaselineConfidences: baselineConfidences,
+      EvaluationConfidences: evaluationConfidences,
+      Pairs: pairs,
+      MinSampleSize: options.MinSampleSize,
+    },
+    WarningPSIThreshold: options.WarningPSIThreshold,
+    CriticalPSIThreshold: options.CriticalPSIThreshold,
+    Epsilon: options.Epsilon,
+    MinSampleSize: options.MinSampleSize,
+  };
+}
+
+/**
  * Statistical PSI-backed implementation of {@link IDriftDetector} for `MaintenanceEngine`.
+ * Only `OverallSeverity === 'Critical'` sets `drifted: true` (triggering automatic retraining);
+ * `Warning` severity alerts via `ShouldAlert` without triggering retrain.
  */
 export class PSIDriftDetector implements IDriftDetector {
   constructor(
     private readonly providerFn?: (modelId: string) => Promise<FeatureAndPredictionDriftInput> | FeatureAndPredictionDriftInput,
     private readonly warningThreshold: number = PSI_WARNING_THRESHOLD,
     private readonly criticalThreshold: number = PSI_CRITICAL_THRESHOLD,
+    private readonly minSampleSize: number = DEFAULT_MIN_SAMPLE_SIZE,
   ) {}
 
   public async detectDrift(context: DriftContext): Promise<DriftResult> {
-    if (!this.providerFn) {
+    let input: FeatureAndPredictionDriftInput;
+    if (this.providerFn) {
+      input = await this.providerFn(context.modelId);
+    } else if (context.provider && (context.recordProcessId || context.modelId)) {
+      input = await LoadFeatureAndPredictionDriftFromFeatureValues({
+        RecordProcessID: context.recordProcessId,
+        ModelID: context.modelId,
+        Provider: context.provider,
+        ContextUser: context.contextUser,
+        WarningPSIThreshold: this.warningThreshold,
+        CriticalPSIThreshold: this.criticalThreshold,
+        MinSampleSize: this.minSampleSize,
+      });
+    } else {
       return {
         drifted: false,
         score: 0,
         detail: 'No feature distribution provider configured for PSIDriftDetector.',
       };
     }
-    const input = await this.providerFn(context.modelId);
+
     const report = EvaluateFeatureAndPredictionDrift({
       ...input,
       ModelID: context.modelId,
-      WarningPSIThreshold: this.warningThreshold,
-      CriticalPSIThreshold: this.criticalThreshold,
+      RecordProcessID: context.recordProcessId ?? input.RecordProcessID,
+      WarningPSIThreshold: input.WarningPSIThreshold ?? this.warningThreshold,
+      CriticalPSIThreshold: input.CriticalPSIThreshold ?? this.criticalThreshold,
+      MinSampleSize: input.MinSampleSize ?? this.minSampleSize,
     });
     return {
-      drifted: report.ShouldAlert,
+      drifted: report.OverallSeverity === 'Critical',
       score: report.MaxPSI,
       detail: report.Summary,
     };

@@ -185,6 +185,8 @@ export class MaintenanceEngine {
       trainedRowCount,
       currentRowCount,
       lastScoredRowCount: binding.LastRowCount ?? undefined,
+      contextUser: deps.contextUser,
+      provider: deps.provider,
     };
     const result = await deps.driftDetector.detectDrift(context);
     if (result.drifted) {

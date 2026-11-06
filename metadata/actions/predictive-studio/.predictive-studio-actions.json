@@ -1088,5 +1088,339 @@
       "lastModified": "2026-07-01T17:33:33.586Z",
       "checksum": "235c098a3be2ec1579ed84a9cfc8fad0ae93a9604e71375a4b3c6074249aace7"
     }
+  },
+  {
+    "_comments": [
+      "Evaluate Feature and Prediction Drift — thin Action boundary over EvaluateFeatureAndPredictionDrift and LoadFeatureAndPredictionDriftFromFeatureValues.",
+      "Computes Population Stability Index (PSI) across baseline quantile bins, confidence-floor degradation, and champion-vs-challenger shadow divergence,",
+      "loading rolling windows from MJ: Feature Values when RecordProcessID or ModelID is supplied without inline feature arrays."
+    ],
+    "fields": {
+      "Name": "Evaluate Feature and Prediction Drift",
+      "Description": "Evaluates Population Stability Index (PSI) feature and prediction drift across numeric, categorical, and pre-binned distributions, confidence-floor degradation, and champion-vs-challenger shadow divergence. Loads baseline and rolling evaluation windows from MJ: Feature Values when RecordProcessID or ModelID is provided, and emits a drift alert notification when thresholds are breached.",
+      "Type": "Custom",
+      "DriverClass": "PredictiveStudioEvaluateDriftAction",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-wave-square"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RecordProcessID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional ID of the MJ: Record Processes row whose MJ: Feature Values (Champion and Challenger) should be loaded and evaluated."
+          },
+          "primaryKey": {
+            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A01"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ModelID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional ID of the MJ: ML Models row being evaluated."
+          },
+          "primaryKey": {
+            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A02"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NumericFeatures",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional map of numeric feature names to { Baseline: number[], Evaluation: number[], Bins?: number }."
+          },
+          "primaryKey": {
+            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A03"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CategoricalFeatures",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional map of categorical feature names to { Baseline: string[], Evaluation: string[] }."
+          },
+          "primaryKey": {
+            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A04"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PrebinnedFeatures",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional map of pre-binned feature names to { BaselineProportions: number[], EvaluationProportions: number[], BaselineSampleCount?: number, EvaluationSampleCount?: number }."
+          },
+          "primaryKey": {
+            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A05"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConfidenceAndDivergence",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional confidence-floor and champion-vs-challenger shadow divergence input."
+          },
+          "primaryKey": {
+            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A06"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WarningPSIThreshold",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional PSI warning threshold (defaults to 0.10; must be > 0 and < CriticalPSIThreshold)."
+          },
+          "primaryKey": {
+            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A07"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CriticalPSIThreshold",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional PSI critical threshold (defaults to 0.25; must be > WarningPSIThreshold)."
+          },
+          "primaryKey": {
+            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A08"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Epsilon",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional Laplace smoothing epsilon in (0, 0.01] (defaults to 0.0001)."
+          },
+          "primaryKey": {
+            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A09"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MinSampleSize",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional minimum valid sample size per window before PSI is evaluated (defaults to 100)."
+          },
+          "primaryKey": {
+            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A0A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EmitAlertOnDrift",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Whether to emit a drift alert when ShouldAlert is true (defaults to true)."
+          },
+          "primaryKey": {
+            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A0B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OverallSeverity",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Overall drift severity ('None', 'Warning', or 'Critical')."
+          },
+          "primaryKey": {
+            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A0C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxPSI",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Maximum Population Stability Index observed across evaluated features."
+          },
+          "primaryKey": {
+            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A0D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DriftedFeatures",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "List of FeaturePSIResult entries whose Severity is 'Warning' or 'Critical'."
+          },
+          "primaryKey": {
+            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A0E"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FeatureResults",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "Per-feature PSI results for all evaluated features."
+          },
+          "primaryKey": {
+            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A0F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DivergenceMetrics",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Computed confidence-floor degradation and champion-vs-challenger divergence metrics."
+          },
+          "primaryKey": {
+            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A10"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ShouldAlert",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Whether drift or divergence exceeded an alerting threshold."
+          },
+          "primaryKey": {
+            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A11"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AlertEmitted",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Whether an alert record was emitted."
+          },
+          "primaryKey": {
+            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A12"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Summary",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Human-readable drift summary."
+          },
+          "primaryKey": {
+            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A13"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Feature and prediction drift evaluation completed."
+          },
+          "primaryKey": {
+            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1B01"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "No feature distributions or RecordProcessID/ModelID were provided."
+          },
+          "primaryKey": {
+            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1B02"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_PARAMETER",
+            "IsSuccess": false,
+            "Description": "One or more PSI threshold or smoothing parameters were out of range."
+          },
+          "primaryKey": {
+            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1B03"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred during drift evaluation."
+          },
+          "primaryKey": {
+            "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1B04"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A00"
+    }
   }
 ]
