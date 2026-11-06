@@ -1,8 +1,10 @@
 import {
     BaseEntity,
     BaseEntityResult,
+    EntityDeleteOptions,
     EntitySaveOptions,
     IMetadataProvider,
+    LogError,
     ValidationErrorInfo,
     ValidationErrorType,
     ValidationResult,
@@ -17,7 +19,8 @@ import {
     MJConversationEntity,
     MergeRestrictedFieldsIntoAnchorMetadata,
     ParseConversationAnchorMetadata,
-    UserCanReadLinkedRecord
+    UserCanReadLinkedRecord,
+    UserMayDeleteConversation
 } from '@memberjunction/core-entities';
 import { CheckAnonymousOwnershipKeyChange, IsSetByTransactionVariable } from './anonymousOwnershipKeyGuard';
 
@@ -39,6 +42,11 @@ import { CheckAnonymousOwnershipKeyChange, IsSetByTransactionVariable } from './
  *      (`IsConversationHiddenByFieldSecurity`).
  *    - When `AnchorType === 'Field'` targets an FLS-governed field (`HasFieldPermissions === true`),
  *      automatically stamps that canonical field name into `AnchorMetadataObject.restrictedFields`.
+ * 5. Enforces who may delete a conversation for everyone: the owner, an Owner-level grantee, or a user in the
+ *    Developer or Integration role ({@link UserMayDeleteConversation}). The entity permission lets any UI user
+ *    delete conversations, and a row-level rule like this cannot be expressed there, so this override is the
+ *    boundary; the client checks only shape the UI. Refusals return `false` and record a `BaseEntityResult`, as
+ *    `MJListEntityServer.Delete` does.
  */
 @RegisterClass(BaseEntity, 'MJ: Conversations')
 export class MJConversationEntityServer extends MJConversationEntity {
@@ -55,6 +63,32 @@ export class MJConversationEntityServer extends MJConversationEntity {
             }
         }
         return result;
+    }
+
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        let refusal: string | null;
+        try {
+            const decision = await UserMayDeleteConversation(
+                this.ProviderToUse as unknown as IMetadataProvider,
+                this.ContextCurrentUser,
+                { ID: this.ID, UserID: this.UserID }
+            );
+            refusal = decision.Allowed ? null : decision.Reason ?? 'You do not have permission to delete this conversation.';
+        } catch (error) {
+            LogError(`MJConversationEntityServer: delete permission check failed for conversation ${this.ID}: ${error instanceof Error ? error.message : String(error)}`);
+            refusal = 'Unable to verify permission to delete this conversation.';
+        }
+        if (refusal) {
+            const result = new BaseEntityResult();
+            result.StartedAt = new Date();
+            result.Success = false;
+            result.Type = 'delete';
+            result.Message = refusal;
+            result.EndedAt = new Date();
+            this.RegisterResultHistoryEntry(result);
+            return false;
+        }
+        return super.Delete(options);
     }
 
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {

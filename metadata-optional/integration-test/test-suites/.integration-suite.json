@@ -1917,6 +1917,17 @@
           "primaryKey": {
             "ID": "B3E731A9-F19F-4DF1-AAA9-A20B77C19FA5"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT164 - Conversation Delete Guard (client transport)",
+            "Sequence": 78,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "02D61BD5-5BE3-4648-A4EE-C2673E136547"
+          }
         }
       ]
     },

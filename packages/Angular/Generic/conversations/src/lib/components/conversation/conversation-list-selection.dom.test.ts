@@ -73,6 +73,7 @@ const stubEngine = (
   GetSharedByInfo: () => null,
   CanShareConversation: ConversationEngine.prototype.CanShareConversation,
   CanEditConversation: ConversationEngine.prototype.CanEditConversation,
+  CanDeleteConversation: ConversationEngine.prototype.CanDeleteConversation,
   CanMoveConversation: ConversationEngine.prototype.CanMoveConversation,
   GetProjectVisibilityTier: (): 'Private' | 'Shared' | 'Public' => 'Private',
   GetConversation: (id: string) => conversations.find(c => c.ID === id),

@@ -7,7 +7,8 @@ import {
   UserInfoEngine,
   ResourcePermissionEngine,
   PROJECTS_RESOURCE_TYPE_ID,
-  IsInheritingFolderAccess
+  IsInheritingFolderAccess,
+  CONVERSATION_DELETE_REFUSED_REASON
 } from '@memberjunction/core-entities';
 import { MJDialogService } from '@memberjunction/ng-ui-components';
 import { DialogService } from '../../services/dialog.service';
@@ -111,7 +112,11 @@ interface ListContextMenu {
                       aria-label="Share">
                 <i class="fas fa-user-plus"></i>
               </button>
-              <button class="selection-bar-btn danger" (click)="BarDelete()" title="Delete" aria-label="Delete">
+              <button class="selection-bar-btn danger"
+                      (click)="BarDelete()"
+                      [disabled]="!CanDeleteAny(SelectedIds)"
+                      [title]="CanDeleteAny(SelectedIds) ? 'Delete' : DeleteRefusedReason"
+                      aria-label="Delete">
                 <i class="fas fa-trash"></i>
               </button>
             </div>
@@ -519,7 +524,9 @@ interface ListContextMenu {
                 </button>
               }
               <div class="menu-divider"></div>
-              <button class="menu-item danger" (click)="ContextDelete()">
+              <button class="menu-item danger" (click)="ContextDelete()"
+                      [disabled]="!CanDeleteAny(ContextMenu.targets)"
+                      [attr.title]="CanDeleteAny(ContextMenu.targets) ? null : DeleteRefusedReason">
                 <i class="fas fa-trash"></i>
                 <span>{{ ContextMenu.targets.length > 1 ? 'Delete ' + ContextMenu.targets.length : 'Delete' }}</span>
               </button>
@@ -965,7 +972,16 @@ interface ListContextMenu {
       color: var(--mj-status-error);
     }
 
-    .menu-item.danger:hover {
+    .menu-item:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .menu-item:disabled:hover {
+      background: transparent;
+    }
+
+    .menu-item.danger:hover:not(:disabled) {
       background: color-mix(in srgb, var(--mj-status-error) 15%, transparent);
       color: var(--mj-status-error);
     }
@@ -1416,6 +1432,8 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   /** Why Share is unavailable, shown on its disabled button. */
   public readonly ShareRefusedReason = 'Only the owner, or someone with Owner access, can share a conversation';
 
+  /** Why Delete is unavailable, shown on its disabled buttons. Same rule the server enforces. */
+  public readonly DeleteRefusedReason = CONVERSATION_DELETE_REFUSED_REASON;
   /** Why Folder Share is unavailable, shown on its disabled button. */
   public readonly FolderShareRefusedReason = 'Only the folder owner, or someone with Owner access, can share a folder';
 
@@ -2317,6 +2335,19 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     return this.engine.CanShareConversation(conversation, this.CurrentUser.ID);
   }
 
+  /**
+   * True when at least one of the conversations can be deleted by the current user: they own it,
+   * hold Owner access, or are in the Developer or Integration role. The server enforces the same rule.
+   */
+  public CanDeleteAny(ids: string[]): boolean {
+    return ids.some(id => this.canDelete(this.engine.GetConversation(id)));
+  }
+
+  private canDelete(conversation: MJConversationEntity | undefined): boolean {
+    if (!conversation || !this.CurrentUser) return false;
+    return this.engine.CanDeleteConversation(conversation, this.CurrentUser);
+  }
+
   /** True when the current user owns the folder or holds Owner permission on it. */
   public CanShareFolder(folder: MJProjectEntity | null | undefined): boolean {
     if (!folder || !this.CurrentUser) return false;
@@ -2622,6 +2653,10 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   }
 
   async DeleteConversation(conversation: MJConversationEntity): Promise<void> {
+    if (!this.canDelete(conversation)) {
+      await this.dialogService.alert('Cannot Delete', `${this.DeleteRefusedReason}.`);
+      return;
+    }
     try {
       const confirmed = await this.dialogService.confirm({
         title: 'Delete Conversation',
@@ -2890,6 +2925,11 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
     if (count === 0) return;
 
+    if (!this.CanDeleteAny(ids)) {
+      await this.dialogService.alert('Cannot Delete', `${this.DeleteRefusedReason}.`);
+      return;
+    }
+
     const confirmed = await this.dialogService.confirm({
       title: 'Delete Conversations',
       message: `Are you sure you want to delete ${count} conversation${count > 1 ? 's' : ''}? This action cannot be undone.`,
@@ -2920,14 +2960,14 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     count: number
   ): Promise<void> {
     if (result.Failed.length === 0) return;
+    const failedNames = result.Failed.map(f => `"${f.Name}" (${f.Error})`).join(', ');
     if (result.Successful.length === 0) {
       await this.dialogService.alert(
         'Delete Failed',
-        `None of the ${count} conversations could be deleted. They may have already been removed.`
+        `None of the ${count} conversations could be deleted: ${failedNames}`
       );
       return;
     }
-    const failedNames = result.Failed.map(f => `"${f.Name}"`).join(', ');
     await this.dialogService.alert(
       'Partial Success',
       `Deleted ${result.Successful.length} of ${count} conversations.\n\n` +
