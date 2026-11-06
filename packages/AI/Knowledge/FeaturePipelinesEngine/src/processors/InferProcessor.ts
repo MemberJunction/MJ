@@ -241,6 +241,12 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
     /** Each record's Feature Value writes waiting for its write-back, in order, by record ID (deferred mode only). */
     private pendingFeatureValues = new Map<string, FeatureValueWriteParams[]>();
 
+    /** Champion prompt data captured during compute hooks, keyed by record ID, for mirror invocation by the shadow challenger. */
+    private championPromptDataByRecord = new Map<string, Record<string, unknown>>();
+
+    /** Champion user message captured during compute hooks, keyed by record ID, for mirror invocation by the shadow challenger. */
+    private championUserMessageByRecord = new Map<string, string | null>();
+
     private _challengerConfig: MJRecordProcessEntity_IRecordProcessChallengerConfig | null = null;
 
     /**
@@ -332,8 +338,14 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             processor = new InferProcessor(rp.PromptID, inputMapping, spec, rp.OutputMapping || null);
         }
 
-        if (rp.ChallengerConfigurationObject) {
-            processor.ChallengerConfig = rp.ChallengerConfigurationObject;
+        try {
+            if (rp.ChallengerConfigurationObject) {
+                processor.ChallengerConfig = rp.ChallengerConfigurationObject;
+            }
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            LogError(`InferProcessor.CreateFromRecordProcess: invalid ChallengerConfiguration on RecordProcess '${rp.ID}': ${msg}`);
+            processor.ChallengerConfig = null;
         }
         return processor;
     }
@@ -1509,6 +1521,14 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
     }
 
     private dispatchChallengerIfConfigured(featureValues: FeatureValueWriteParams): void {
+        const recordId = featureValues.Record.RecordID;
+        const capturedPromptData = recordId ? this.championPromptDataByRecord.get(recordId) : undefined;
+        const capturedUserMessage = recordId ? this.championUserMessageByRecord.get(recordId) : undefined;
+        if (recordId) {
+            this.championPromptDataByRecord.delete(recordId);
+            this.championUserMessageByRecord.delete(recordId);
+        }
+
         const config = this.ChallengerConfig;
         if (!config || !this.ShouldSampleChallenger(config)) {
             return;
@@ -1527,7 +1547,15 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         const task: Promise<void> = new Promise<void>((resolve) => {
             setImmediate(resolve);
         })
-            .then(() => this.executeChallengerShadow(frozenRecord, contextSnapshot, config))
+            .then(() =>
+                this.executeChallengerShadow(
+                    frozenRecord,
+                    contextSnapshot,
+                    config,
+                    capturedPromptData,
+                    capturedUserMessage,
+                ),
+            )
             .catch((err: unknown) => {
                 const msg = err instanceof Error ? err.message : String(err);
                 LogError(`InferProcessor: unhandled shadow challenger error for record '${frozenRecord.RecordID}': ${msg}`);
@@ -1543,6 +1571,8 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         record: RecordRef,
         context: RecordProcessorContext,
         config: MJRecordProcessEntity_IRecordProcessChallengerConfig,
+        capturedPromptData?: Record<string, unknown>,
+        capturedUserMessage?: string | null,
     ): Promise<void> {
         const challengerPromptID = config.ChallengerPromptID?.trim();
         if (!challengerPromptID) {
@@ -1570,8 +1600,9 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             }, maxLatencyMs);
         });
 
+        let runPromise: Promise<unknown> | undefined;
         try {
-            const runPromise = (async () => {
+            runPromise = (async () => {
                 await AIEngine.Instance.Config(false, context.ContextUser);
                 const challengerPrompt = AIEngine.Instance.Prompts.find((p) => UUIDsEqual(p.ID, challengerPromptID));
                 if (!challengerPrompt) {
@@ -1584,8 +1615,9 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
 
                 const params = new AIPromptParams();
                 params.prompt = challengerPrompt as MJAIPromptEntityExtended;
-                params.data = await this.buildPromptData(record, context);
-                const userMessage = await this.BuildUserMessage(record);
+                params.data = capturedPromptData ?? (await this.buildPromptData(record, context));
+                const userMessage =
+                    capturedUserMessage !== undefined ? capturedUserMessage : await this.BuildUserMessage(record);
                 if (userMessage !== null) {
                     params.templateMessageRole = 'system';
                     params.conversationMessages = [{ role: ChatMessageRole.user, content: userMessage }];
@@ -1634,6 +1666,10 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             timedOut,
             errorMessage,
         });
+
+        if (runPromise) {
+            await runPromise.catch(() => {});
+        }
     }
 
     private async persistChallengerFeatureValues(options: {
@@ -2044,11 +2080,23 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
     /** The driver's callbacks into this processor's overridable steps, so extensions keep working. */
     private buildComputeHooks(): FeaturePipelineComputeHooks {
         return {
-            BuildPromptData: (record, ctx) => this.buildPromptData(record, ctx),
+            BuildPromptData: async (record, ctx) => {
+                const data = await this.buildPromptData(record, ctx);
+                if (record.RecordID) {
+                    this.championPromptDataByRecord.set(record.RecordID, data);
+                }
+                return data;
+            },
             BeforeBuildContext: (record, ctx) => this.beforeBuildContext(record, ctx),
             BeforePromptExecute: (params, record, ctx) => this.beforePromptExecute(params, record, ctx),
             AfterPromptExecute: (result, record, ctx) => this.afterPromptExecute(result, record, ctx),
-            BuildUserMessage: (record) => this.BuildUserMessage(record),
+            BuildUserMessage: async (record) => {
+                const msg = await this.BuildUserMessage(record);
+                if (record.RecordID) {
+                    this.championUserMessageByRecord.set(record.RecordID, msg);
+                }
+                return msg;
+            },
         };
     }
 

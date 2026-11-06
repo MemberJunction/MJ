@@ -511,4 +511,126 @@ describe('InferProcessor Lifecycle Hooks (P1-6)', () => {
         expect(fromRp.ChallengerConfig).toBeNull();
         expect(fromRp.ShouldSampleChallenger()).toBe(false);
     });
+
+    it('gracefully handles malformed JSON in ChallengerConfigurationObject by logging and setting ChallengerConfig=null (S2)', () => {
+        const rpDouble = {
+            ID: 'rp-infer-malformed',
+            Name: 'Malformed Challenger RP',
+            PromptID: 'prompt-champion-1',
+            Configuration: null,
+            InputMapping: null,
+            OutputMapping: null,
+            get ChallengerConfigurationObject(): never {
+                throw new SyntaxError('Unexpected token in JSON: {"Enabled":true,}');
+            },
+        };
+
+        const fromRp = InferProcessor.FromRecordProcess(rpDouble as unknown as MJRecordProcessEntity);
+        expect(fromRp.ChallengerConfig).toBeNull();
+        expect(fromRp.ShouldSampleChallenger()).toBe(false);
+    });
+
+    it('reuses champion captured prompt data and user message for challenger execution instead of re-rendering (M2)', async () => {
+        const origConfig = AIEngine.Instance.Config;
+        const origPromptsDescriptor =
+            Object.getOwnPropertyDescriptor(AIEngine.Instance, 'Prompts') ??
+            Object.getOwnPropertyDescriptor(Object.getPrototypeOf(AIEngine.Instance), 'Prompts');
+        const origPromptModelsDescriptor =
+            Object.getOwnPropertyDescriptor(AIEngine.Instance, 'PromptModels') ??
+            Object.getOwnPropertyDescriptor(Object.getPrototypeOf(AIEngine.Instance), 'PromptModels');
+        const origRecordFeatureValues = FeatureValueCacheService.Instance.RecordFeatureValues;
+
+        FeatureValueCacheService.Instance.RecordFeatureValues = async () => ({
+            Upserted: 1,
+            Unchanged: 0,
+            Previous: { StandardTitle: null },
+        });
+
+        const config: MJRecordProcessEntity_IRecordProcessChallengerConfig = {
+            Enabled: true,
+            SampleRate: 1.0,
+            WorkType: 'Infer',
+            ChallengerPromptID: 'prompt-challenger-m2',
+            MaxLatencyMs: 5000,
+        };
+
+        const processor = new ShadowTestableInferProcessor(
+            'prompt-champion-1',
+            undefined,
+            { Outputs: [{ Name: 'StandardTitle', Ref: '$.StandardTitle', Target: { Mode: 'none' } }] },
+            null,
+        );
+        processor.ChallengerConfig = config;
+
+        try {
+            AIEngine.Instance.Config = (async () => {}) as typeof AIEngine.Instance.Config;
+            const fakePrompt: Pick<MJAIPromptEntityExtended, 'ID' | 'Name'> = {
+                ID: 'prompt-challenger-m2',
+                Name: 'Challenger Title Normalizer',
+            };
+            Object.defineProperty(AIEngine.Instance, 'Prompts', {
+                configurable: true,
+                get: () => [fakePrompt as MJAIPromptEntityExtended],
+            });
+            Object.defineProperty(AIEngine.Instance, 'PromptModels', {
+                configurable: true,
+                get: () => [
+                    { PromptID: 'prompt-challenger-m2', ModelID: 'model-challenger-llm', Priority: 1, Status: 'Active' },
+                ],
+            });
+
+            const provider: Pick<IMetadataProvider, 'EntityByID' | 'GetEntityObject'> = {
+                EntityByID: () => undefined,
+                GetEntityObject: async <T>() => new ChallengerFeatureValueDouble() as T,
+            };
+            const context: RecordProcessorContext = {
+                ContextUser: { ID: 'user-1' } as UserInfo,
+                Provider: provider as IMetadataProvider,
+                RecordProcessID: 'rp-infer-m2',
+                ProcessRunID: 'run-infer-m2',
+                EntityID: 'ent-contacts',
+            };
+
+            // Emulate champion compute hooks capturing prompt data & user message
+            const hooks = (processor as unknown as { buildComputeHooks: () => {
+                BuildPromptData: (record: RecordRef, ctx: RecordProcessorContext) => Promise<Record<string, unknown>>;
+                BuildUserMessage: (record: RecordRef, ctx: RecordProcessorContext) => Promise<string | null>;
+            } }).buildComputeHooks();
+
+            const testRecord: RecordRef = { EntityID: 'ent-contacts', RecordID: 'rec-m2-1', Record: { title: 'Lead Architect' } };
+            const capturedData = await hooks.BuildPromptData(testRecord, context);
+            const capturedUserMsg = await hooks.BuildUserMessage(testRecord, context);
+
+            await processor.InvokeWithFeatureValues({
+                Record: testRecord,
+                Context: context,
+                Payload: { StandardTitle: 'CHAMPION_ARCHITECT' },
+                PromptID: 'prompt-champion-1',
+                ConstraintHash: 'hash-1',
+                InputHash: 'input-1',
+                Pin: {
+                    PromptID: 'prompt-champion-1',
+                    PromptVersionHash: 'pv-1',
+                    AIModelID: 'model-champion-llm',
+                    ParametersHash: 'params-1',
+                    SpecHash: 'spec-1',
+                },
+            });
+
+            await processor.FlushShadowInFlight();
+
+            expect(processor.ChallengerCalls).toHaveLength(1);
+            expect(processor.ChallengerCalls[0].data).toEqual(capturedData);
+            expect(processor.ChallengerCalls[0].userMessage).toBe(capturedUserMsg ?? undefined);
+        } finally {
+            AIEngine.Instance.Config = origConfig;
+            if (origPromptsDescriptor) {
+                Object.defineProperty(AIEngine.Instance, 'Prompts', origPromptsDescriptor);
+            }
+            if (origPromptModelsDescriptor) {
+                Object.defineProperty(AIEngine.Instance, 'PromptModels', origPromptModelsDescriptor);
+            }
+            FeatureValueCacheService.Instance.RecordFeatureValues = origRecordFeatureValues;
+        }
+    });
 });
