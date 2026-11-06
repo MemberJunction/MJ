@@ -176,7 +176,7 @@ describe('BuildEntityHistory — a hard-deleted record', () => {
 
   it('reads it from its Delete row: held while the Delete is not in force, deleted once it is', () => {
     const h = RecordHistory.BuildEntityHistory(PEOPLE, deletedRows, new Map(), ['Status'], policy, now);
-    expect(h.DeletedRecordAt('P1', new Date('2024-06-01T00:00:00Z'))).toEqual({ Status: 'held', Row: { ID: 'P1', Status: 'Active' }, ChangeID: 'd1', ChangedAt: new Date('2024-06-01T00:00:00Z') });
+    expect(h.DeletedRecordAt('P1', new Date('2024-06-01T00:00:00Z'))).toEqual({ Status: 'held', Row: new Map([['ID', 'P1'], ['Status', 'Active']]), ChangeID: 'd1', ChangedAt: new Date('2024-06-01T00:00:00Z') });
     expect(h.DeletedRecordAt('p1', new Date('2024-06-02T00:00:00Z'))).toMatchObject({ Status: 'deleted', ChangeID: 'd1' });
   });
   it('does not count its final Delete as a change unless the Delete recorded a different value', () => {

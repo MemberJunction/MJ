@@ -786,6 +786,34 @@ describe('AsOfFeatureAssembler — a stored value changed after the decision by 
     }
   });
 
+  it('reads a virtual field of a hard-deleted parent on the assembly day from its Delete row while it stood, and uncovers it once deleted', async () => {
+    const withVirtual: AssemblyEntityInfo = { ...entities.People, Fields: [...entities.People.Fields, { ...field('RegionName'), IsVirtual: true }] };
+    const virtual: FeatureColumnSpec = { ...stored, name: 'RegionName', source: { kind: 'record-changes', entity: 'People', field: 'RegionName', keyField: 'PersonID' } };
+    const onAssemblyDay: AssemblyRowRef[] = [{ RowID: 'y1', EntityKey: 'y1', DecisionDate: new Date('2026-10-12T00:00:00Z'), Period: null }];
+    const withoutP1 = { ...data, People: data.People.filter((p) => p.ID !== 'P1') };
+    const deletedOn = (at: string) => ({ People: [rc('c0', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed', RegionName: 'North' }), rc('d1', 'P1', 'Delete', at, { ID: 'P1', Status: 'Lapsed', RegionName: 'North' })] });
+    const assemble = (deleteAt: string) => new AsOfFeatureAssembler().Assemble({
+      ...input([virtual], { Rows: onAssemblyDay, Tables: withoutP1, Changes: deletedOn(deleteAt), Unit: { ...unit, history: { ...unit.history, onUncoveredRow: 'exclude-and-count' } } }),
+      Metadata: { Entity: (n) => (n === 'People' ? withVirtual : metadata.Entity(n)) },
+    });
+    const held = await assemble('2026-10-20T00:00:00Z');
+    expect(held.Status === 'assembled' ? held.Rows[0].Values : held).toEqual(['North']);
+    expect(held.Status === 'assembled' && held.Rows[0].Provenance[0]).toMatchObject({ source: 'record-changes', sourceRef: 'People/p1/RegionName', sourceVersion: 'd1', computedAt: '2026-10-20T00:00:00.000Z' });
+    // The history read only explains the missing row; nothing replays a virtual field, so it records no coverage.
+    expect(held.Status === 'assembled' && held.Coverage.filter((c) => c.entity === 'People')).toEqual([]);
+    const deleted = await assemble('2025-01-01T00:00:00Z');
+    expect(deleted.Status === 'assembled' ? deleted.UncoveredRowsExcluded : deleted).toEqual([{ entity: 'People', field: 'RegionName', rows: 1 }]);
+  });
+
+  it('uncovers a row on the assembly day whose hard-deleted parent has a history of only Update and Delete rows', async () => {
+    const replayed: FeatureColumnSpec = { ...stored, source: { kind: 'record-changes', entity: 'People', field: 'Status', keyField: 'PersonID' } };
+    const onAssemblyDay: AssemblyRowRef[] = [{ RowID: 'y1', EntityKey: 'y1', DecisionDate: new Date('2026-10-12T00:00:00Z'), Period: null }];
+    const withoutP1 = { ...data, People: data.People.filter((p) => p.ID !== 'P1') };
+    const noCreate = { People: [rc('u0', 'P1', 'Update', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }, ['Status']), rc('d1', 'P1', 'Delete', '2025-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' })] };
+    const out = await new AsOfFeatureAssembler().Assemble(input([replayed], { Rows: onAssemblyDay, Tables: withoutP1, Changes: noCreate, Unit: { ...unit, history: { ...unit.history, onUncoveredRow: 'exclude-and-count' } } }));
+    expect(out.Status === 'assembled' ? out.UncoveredRowsExcluded : out).toEqual([{ entity: 'People', field: 'Status', rows: 1 }]);
+  });
+
   it('keeps the stored value when a later Snapshot or Create row carries the same value of the field', async () => {
     const out = await new AsOfFeatureAssembler().Assemble(input([stored], { Rows: one, Tables: data, Changes: { People: [
       rc('s0', 'P1', 'Snapshot', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }),
@@ -845,10 +873,10 @@ describe('replay reader — creation rule', () => {
     public get CreatedAtReads(): number { return this.FieldReads.filter((f) => f?.includes('__mj_CreatedAt')).length; }
   }
   const assemble = (data: Record<string, SourceRow[]>, rowChanges: Record<string, RecordChangeRow[]>, tiers: AssemblyEntityInfo = entities.Tiers) => {
-    const spy = new SpyDataAccess(data);
+    const spy = new SpyDataAccess({ ...data, 'MJ: Record Changes': recordChangeRows(rowChanges) });
     const base = input([tier], { Tables: data, Changes: rowChanges, Rows: lateRow });
     const withTiers: IAssemblyMetadata = { Entity: (n) => (n === 'Tiers' ? tiers : metadata.Entity(n)) };
-    return new AsOfFeatureAssembler().Assemble({ ...base, DataAccess: spy, Metadata: withTiers }).then((out) => ({ out, spy }));
+    return new AsOfFeatureAssembler().Assemble({ ...base, DataAccess: spy, History: new RunViewRecordHistoryReader(spy, { mode: 'complete' }), Metadata: withTiers }).then((out) => ({ out, spy }));
   };
 
   it('reads a record whose history starts with a Snapshot as missing when its __mj_CreatedAt is after the decision', async () => {
@@ -904,10 +932,10 @@ describe('replay reader — creation rule', () => {
     const mixedRow: AssemblyRowRef[] = [{ RowID: 'Y2', EntityKey: 'Y2', DecisionDate: new Date('2023-12-01T00:00:00Z'), Period: null }];
     const data: Record<string, SourceRow[]> = { ...tables, Tiers: [{ ID: 'Y2', Tier: 'Silver', __mj_CreatedAt: new Date('2024-01-01T00:00:00Z') }] };
     const history: Record<string, RecordChangeRow[]> = { ...changes, Tiers: [rc('ts-2', 'Y2', 'Snapshot', '2024-02-01T00:00:00Z', { ID: 'Y2', Tier: 'Silver' })] };
-    const spy = new CaseSensitiveDataAccess(data);
+    const spy = new CaseSensitiveDataAccess({ ...data, 'MJ: Record Changes': recordChangeRows(history) });
     const base = input([tier], { Tables: data, Changes: history, Rows: mixedRow });
     const withTiers: IAssemblyMetadata = { Entity: (n) => (n === 'Tiers' ? entities.Tiers : metadata.Entity(n)) };
-    const out = await new AsOfFeatureAssembler().Assemble({ ...base, DataAccess: spy, Metadata: withTiers });
+    const out = await new AsOfFeatureAssembler().Assemble({ ...base, DataAccess: spy, History: new RunViewRecordHistoryReader(spy, { mode: 'complete' }), Metadata: withTiers });
     expect(out.Status === 'refused' ? out.Refusal : null).toBeNull();
     if (out.Status !== 'assembled') return;
     expect(out.Rows[0].Provenance[0]).toMatchObject({ sourceRef: 'Tiers/y2/Tier', sourceVersion: 'created-after-decision' });

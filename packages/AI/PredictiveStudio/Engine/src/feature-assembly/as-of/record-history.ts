@@ -37,8 +37,8 @@ export type HistoryValue =
 export interface DeletedRecordRead {
   /** `held` when the Delete is at or after the instant, so the record still stood then; `deleted` when it is before. */
   readonly Status: 'held' | 'deleted';
-  /** The record as its Delete row recorded it (the row's FullRecordJSON; a non-scalar value reads as null). */
-  readonly Row: Readonly<Record<string, CellValue>>;
+  /** The record as its Delete row recorded it, by field (the row's FullRecordJSON; a non-scalar value reads as null). */
+  readonly Row: ReadonlyMap<string, CellValue>;
   /** The Delete change row. */
   readonly ChangeID: string;
   readonly ChangedAt: Date;
@@ -365,20 +365,15 @@ export class RecordHistory {
   }
 
   /** The scalar fields of a FullRecordJSON snapshot; a malformed snapshot reads as no fields, a non-scalar value as null. */
-  private static recordOf(json: string): Readonly<Record<string, CellValue>> {
+  private static recordOf(json: string): ReadonlyMap<string, CellValue> {
     const parsed: ParseResult<JsonValue> = JsonParse.ParseJsonText(json, 'FullRecordJSON');
-    if (parsed.Ok === false || !JsonParse.IsJsonObject(parsed.Value)) return {};
-    const out: Record<string, CellValue> = {};
-    for (const [f, v] of Object.entries(parsed.Value)) out[f] = typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' ? v : null;
-    return out;
+    if (parsed.Ok === false || !JsonParse.IsJsonObject(parsed.Value)) return new Map<string, CellValue>();
+    return new Map(Object.entries(parsed.Value).map(([f, v]) => [f, typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' ? v : null] as const));
   }
 
-  /** A field of a FullRecordJSON snapshot; a malformed snapshot or a non-scalar value reads as null. */
+  /** A field of a FullRecordJSON snapshot; a malformed snapshot, an absent field or a non-scalar value reads as null. */
   private static fieldOf(json: string, field: string): CellValue {
-    const parsed: ParseResult<JsonValue> = JsonParse.ParseJsonText(json, 'FullRecordJSON');
-    if (parsed.Ok === false || !JsonParse.IsJsonObject(parsed.Value)) return null;
-    const v = parsed.Value[field];
-    return typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' ? v : null;
+    return RecordHistory.recordOf(json).get(field) ?? null;
   }
 
   /** The field names a ChangesJSON lists; a malformed one lists none. */
@@ -450,13 +445,11 @@ export class RunViewRecordHistoryReader implements IRecordHistoryReader {
   public async Load(entity: AssemblyEntityInfo, keys: readonly string[], fields: readonly string[], policy: ChangeHistoryPolicy, now: Date): Promise<EntityHistory> {
     const changes = await this.changeRowsOf(entity);
     const current = await KeyedReader.ReadPresentByKeys(this.dataAccess, entity.Name, entity.PrimaryKey, keys, fields);
-    const deleted = RecordHistory.KeysDeletedByHistory(changes);
-    const unexplained = current.MissingKeys.filter((k) => !deleted.has(k));
-    if (unexplained.length > 0) {
-      const rowsExpected = current.Rows.size + current.MissingKeys.length;
-      throw new AssemblyRefused({ kind: 'truncated-read', entity: entity.Name, rowsExpected, rowsRead: current.Rows.size });
+    const history = RecordHistory.BuildEntityHistory(entity, changes, current.Rows, fields, policy, now);
+    if (current.MissingKeys.some((k) => history.DeletedRecordAt(k, now) === null)) {
+      throw new AssemblyRefused({ kind: 'truncated-read', entity: entity.Name, rowsExpected: current.Rows.size + current.MissingKeys.length, rowsRead: current.Rows.size });
     }
-    return RecordHistory.BuildEntityHistory(entity, changes, current.Rows, fields, policy, now);
+    return history;
   }
 
   /** The entity's complete change rows, read on the first load of the entity and shared by every later one. */
