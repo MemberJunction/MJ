@@ -121,6 +121,11 @@ function makeViewResult<T>(results: T[], success: boolean = true): RunViewResult
     };
 }
 
+/** A `count_only` result: no rows, the count in TotalRowCount. */
+function makeCountResult(count: number): RunViewResult {
+    return { ...makeViewResult([]), TotalRowCount: count };
+}
+
 describe('AgentFeedbackCoordinator', () => {
     let coordinator: AgentFeedbackCoordinator;
 
@@ -393,41 +398,6 @@ describe('AgentFeedbackCoordinator', () => {
                         { ID: USER_2, IsActive: true },
                         { ID: USER_3, IsActive: true },
                     ]),
-                    makeViewResult([
-                        // USER_1 has 2 open requests
-                        {
-                            ID: 'r1',
-                            RequestForUserID: USER_1,
-                            Status: 'Requested',
-                            RequestedAt: '2026-11-02T10:00:00Z',
-                        },
-                        {
-                            ID: 'r2',
-                            RequestForUserID: USER_1,
-                            Status: 'Requested',
-                            RequestedAt: '2026-11-02T11:00:00Z',
-                        },
-                        // USER_2 and USER_3 both have 1 open request; USER_3's latest assignment is older than USER_2's
-                        {
-                            ID: 'r3',
-                            RequestForUserID: USER_2,
-                            Status: 'Requested',
-                            RequestedAt: '2026-11-02T12:00:00Z',
-                        },
-                        {
-                            ID: 'r4',
-                            RequestForUserID: USER_3,
-                            Status: 'Requested',
-                            RequestedAt: '2026-11-01T08:00:00Z',
-                        },
-                        // Responded requests do not count as open
-                        {
-                            ID: 'r5',
-                            RequestForUserID: USER_3,
-                            Status: 'Responded',
-                            RequestedAt: '2026-10-30T08:00:00Z',
-                        },
-                    ]),
                     // latest assignments of any status, newest first
                     makeViewResult([
                         { ID: 'r3', RequestForUserID: USER_2, RequestedAt: '2026-11-02T12:00:00Z' },
@@ -436,7 +406,9 @@ describe('AgentFeedbackCoordinator', () => {
                         { ID: 'r4', RequestForUserID: USER_3, RequestedAt: '2026-11-01T08:00:00Z' },
                         { ID: 'r5', RequestForUserID: USER_3, RequestedAt: '2026-10-30T08:00:00Z' },
                     ]),
-                ]);
+                ])
+                // open-request counts: USER_1 has 2; USER_2 and USER_3 have 1 each, and USER_3's latest assignment is older
+                .mockResolvedValueOnce([makeCountResult(2), makeCountResult(1), makeCountResult(1)]);
 
             const picked = await coordinator.ResolveAssigneeUserID(
                 { type: 'List', listID: LIST_ID, listStrategy: 'LeastBusy' },
@@ -444,19 +416,12 @@ describe('AgentFeedbackCoordinator', () => {
             );
             expect(picked).toBe(USER_3);
 
-            const leastBusyBatch2 = mockRunViews.mock.calls[1][0];
-            expect(leastBusyBatch2[0].ExtraFilter).toBe(
-                `ID IN ('${USER_1}', '${USER_2}', '${USER_3}') AND IsActive = 1`
-            );
-            expect(leastBusyBatch2[1].ExtraFilter).toBe(
-                `RequestForUserID IN ('${USER_1}', '${USER_2}', '${USER_3}') AND Status = 'Requested'`
-            );
-            expect(leastBusyBatch2[1].OrderBy).toBe('RequestedAt DESC, ID DESC');
-            expect(leastBusyBatch2[1].IgnoreMaxRows).toBe(true);
-            expect(leastBusyBatch2[1].MaxRows).toBeUndefined();
-            expect(leastBusyBatch2[2].ExtraFilter).toBe(`RequestForUserID IN ('${USER_1}', '${USER_2}', '${USER_3}')`);
-            expect(leastBusyBatch2[2].OrderBy).toBe('RequestedAt DESC, ID DESC');
-            expect(leastBusyBatch2[2].MaxRows).toBe(500);
+            const selectionViews = mockRunViews.mock.calls[1][0];
+            expect(selectionViews).toHaveLength(2);
+            expect(selectionViews[0].ExtraFilter).toBe(`ID IN ('${USER_1}', '${USER_2}', '${USER_3}') AND IsActive = 1`);
+            expect(selectionViews[1].ExtraFilter).toBe(`RequestForUserID IN ('${USER_1}', '${USER_2}', '${USER_3}')`);
+            expect(selectionViews[1].OrderBy).toBe('RequestedAt DESC, ID DESC');
+            expect(selectionViews[1].MaxRows).toBe(500);
         });
 
         it('should break a LeastBusy tie at zero open requests by the oldest last assignment of any status, not list order', async () => {
@@ -473,14 +438,14 @@ describe('AgentFeedbackCoordinator', () => {
                         { ID: USER_1, IsActive: true },
                         { ID: USER_2, IsActive: true },
                     ]),
-                    // neither member has an open request
-                    makeViewResult([]),
                     // USER_1 answered a request yesterday; USER_2 was last assigned a week ago
                     makeViewResult([
                         { ID: 'a1', RequestForUserID: USER_1, RequestedAt: '2026-11-05T09:00:00Z' },
                         { ID: 'a2', RequestForUserID: USER_2, RequestedAt: '2026-10-29T09:00:00Z' },
                     ]),
-                ]);
+                ])
+                // neither member has an open request
+                .mockResolvedValueOnce([makeCountResult(0), makeCountResult(0)]);
 
             const picked = await coordinator.ResolveAssigneeUserID(
                 { type: 'List', listID: LIST_ID, listStrategy: 'LeastBusy' },
@@ -489,31 +454,7 @@ describe('AgentFeedbackCoordinator', () => {
             expect(picked).toBe(USER_2);
         });
 
-        it('should count a user with 10 older open Requested rows beyond 500 newer closed rows in LeastBusy mode', async () => {
-            const allRequests = [
-                // 1 recent open request for USER_2 (newest row)
-                {
-                    ID: 'open-user-2',
-                    RequestForUserID: USER_2,
-                    Status: 'Requested' as const,
-                    RequestedAt: '2026-11-06T12:00:00Z',
-                },
-                // 500 newer Responded requests for USER_1
-                ...Array.from({ length: 500 }, (_, i) => ({
-                    ID: `closed-${i}`,
-                    RequestForUserID: USER_1,
-                    Status: 'Responded' as const,
-                    RequestedAt: '2026-11-05T12:00:00Z',
-                })),
-                // 10 older open requests for USER_1 (sit past index 500 if closed rows are not filtered out)
-                ...Array.from({ length: 10 }, (_, i) => ({
-                    ID: `open-user-1-${i}`,
-                    RequestForUserID: USER_1,
-                    Status: 'Requested' as const,
-                    RequestedAt: '2026-10-01T12:00:00Z',
-                })),
-            ];
-
+        it('should count open requests in LeastBusy mode with one count_only view per member, in a batch of its own, and load no open request rows', async () => {
             mockRunViews
                 .mockResolvedValueOnce([
                     makeViewResult([{ ID: LIST_ID, EntityID: 'e-users', Entity: 'MJ: Users' }]),
@@ -522,39 +463,68 @@ describe('AgentFeedbackCoordinator', () => {
                         { ID: 'ld-2', RecordID: USER_2, Sequence: 2, Status: 'Pending' },
                     ]),
                 ])
-                .mockImplementationOnce(async (views: RunViewParams[]) => {
-                    const reqView = views[1];
-                    const filterStr = String(reqView.ExtraFilter ?? '');
-                    const filtered = filterStr.includes("Status = 'Requested'")
-                        ? allRequests.filter((r) => r.Status === 'Requested')
-                        : allRequests;
-                    const capped =
-                        reqView.IgnoreMaxRows === true
-                            ? filtered
-                            : filtered.slice(0, reqView.MaxRows ?? 1000);
-                    return [
-                        makeViewResult([
-                            { ID: USER_1, IsActive: true },
-                            { ID: USER_2, IsActive: true },
-                        ]),
-                        makeViewResult(capped),
-                        makeViewResult(allRequests.slice(0, views[2].MaxRows ?? 1000)),
-                    ];
-                });
+                .mockResolvedValueOnce([
+                    makeViewResult([
+                        { ID: USER_1, IsActive: true },
+                        { ID: USER_2, IsActive: true },
+                    ]),
+                    makeViewResult([]),
+                ])
+                // USER_1 holds 10 open requests (however old), USER_2 holds 1
+                .mockResolvedValueOnce([makeCountResult(10), makeCountResult(1)]);
+
+            const caller = createParamsStub();
+            const picked = await coordinator.ResolveAssigneeUserID(
+                { type: 'List', listID: LIST_ID, listStrategy: 'LeastBusy' },
+                caller
+            );
+            expect(picked).toBe(USER_2);
+
+            const countViews = mockRunViews.mock.calls[2][0];
+            expect(countViews).toEqual([
+                {
+                    EntityName: 'MJ: AI Agent Requests',
+                    ExtraFilter: `RequestForUserID = '${USER_1}' AND Status = 'Requested'`,
+                    ResultType: 'count_only',
+                },
+                {
+                    EntityName: 'MJ: AI Agent Requests',
+                    ExtraFilter: `RequestForUserID = '${USER_2}' AND Status = 'Requested'`,
+                    ResultType: 'count_only',
+                },
+            ]);
+            expect(mockRunViews.mock.calls[2][1]).toBe(caller.contextUser);
+            const rowReads = mockRunViews.mock.calls.flatMap((call) => call[0]).filter((view) => view.ResultType !== 'count_only');
+            expect(rowReads.some((view) => String(view.ExtraFilter).includes("Status = 'Requested'"))).toBe(false);
+            expect(rowReads.some((view) => view.IgnoreMaxRows === true)).toBe(false);
+        });
+
+        it('should fall back to the first active list member when a LeastBusy open-request count fails', async () => {
+            mockRunViews
+                .mockResolvedValueOnce([
+                    makeViewResult([{ ID: LIST_ID, EntityID: 'e-users', Entity: 'MJ: Users' }]),
+                    makeViewResult([
+                        { ID: 'ld-1', RecordID: USER_2, Sequence: 1, Status: 'Pending' },
+                        { ID: 'ld-2', RecordID: USER_3, Sequence: 2, Status: 'Pending' },
+                    ]),
+                ])
+                .mockResolvedValueOnce([
+                    makeViewResult([
+                        { ID: USER_2, IsActive: true },
+                        { ID: USER_3, IsActive: true },
+                    ]),
+                    makeViewResult([]),
+                ])
+                .mockResolvedValueOnce([makeCountResult(5), makeViewResult([], false)]);
 
             const picked = await coordinator.ResolveAssigneeUserID(
                 { type: 'List', listID: LIST_ID, listStrategy: 'LeastBusy' },
                 createParamsStub()
             );
             expect(picked).toBe(USER_2);
-
-            const secondBatchViews = mockRunViews.mock.calls[1][0];
-            expect(secondBatchViews[1].ExtraFilter).toBe(
-                `RequestForUserID IN ('${USER_1}', '${USER_2}') AND Status = 'Requested'`
+            expect(LogError).toHaveBeenCalledWith(
+                expect.stringContaining(`Failed to load agent requests for list ${LIST_ID} (LeastBusy): Simulated view failure`)
             );
-            expect(secondBatchViews[1].OrderBy).toBe('RequestedAt DESC, ID DESC');
-            expect(secondBatchViews[1].IgnoreMaxRows).toBe(true);
-            expect(secondBatchViews[1].MaxRows).toBeUndefined();
         });
 
         it('should use the injected RandomInt function in Random mode and exclude inactive users', async () => {

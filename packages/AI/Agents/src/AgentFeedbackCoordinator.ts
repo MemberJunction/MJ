@@ -38,7 +38,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { EscapeSQLString, GroupByUUID, IndexByUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, GroupByUUID, IndexByUUID, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Injectable random-integer generator returning an integer in `[0, maxExclusive)`.
@@ -602,8 +602,10 @@ export class AgentFeedbackCoordinator {
 
     /**
      * Reads which candidates are active users, together with the request rows the mode needs, in one
-     * batch, then picks among the active members. A failed user read falls back to the caller; a failed
-     * request read falls back to the first active member, so the request still lands on the list.
+     * batch, then picks among the active members. `LeastBusy` also counts each candidate's open
+     * requests, in a second batch run alongside the first. A failed user read falls back to the caller;
+     * a failed request read or count falls back to the first active member, so the request still lands
+     * on the list.
      */
     private async selectFromActiveListMembers(
         rv: RunView,
@@ -613,10 +615,14 @@ export class AgentFeedbackCoordinator {
         params: ExecuteAgentParams
     ): Promise<string | null> {
         const modeViews = this.buildListModeViews(mode, candidateUserIDs, params);
-        const [usersResult, ...modeResults] = await rv.RunViews(
-            [this.buildActiveUsersView(candidateUserIDs), ...modeViews],
-            params.contextUser
-        );
+        const countViews = mode === 'LeastBusy' ? this.buildOpenCountViews(candidateUserIDs) : [];
+        // The counts are a batch of their own: a RunViews batch made only of count_only views runs as ONE
+        // COUNT statement (GenericDatabaseProvider coalesces it); mixed into the selection batch, each
+        // count would run as its own query.
+        const [[usersResult, ...modeResults], countResults] = await Promise.all([
+            rv.RunViews([this.buildActiveUsersView(candidateUserIDs), ...modeViews], params.contextUser),
+            countViews.length > 0 ? rv.RunViews(countViews, params.contextUser) : Promise.resolve<RunViewResult[]>([]),
+        ]);
         if (!usersResult?.Success) {
             LogError(`Failed to load active users for list ${listId}: ${usersResult?.ErrorMessage || 'unknown error'}`);
             return params.contextUser?.ID ?? null;
@@ -628,14 +634,18 @@ export class AgentFeedbackCoordinator {
             return params.contextUser?.ID ?? null;
         }
 
-        const failedRead = this.findFailedRead(modeViews.length, modeResults);
+        const failedRead =
+            this.findFailedRead(modeViews.length, modeResults) ?? this.findFailedRead(countViews.length, countResults);
         if (failedRead !== null) {
             LogError(
                 `Failed to load agent requests for list ${listId} (${mode}): ${failedRead}; falling back to first active list member`
             );
             return activeUserIDs[0];
         }
-        return this.pickListMember(mode, activeUserIDs, modeResults);
+        const openCounts = new UUIDMap<number>(
+            candidateUserIDs.map((id, i): [string, number] => [id, countResults[i]?.TotalRowCount ?? 0])
+        );
+        return this.pickListMember(mode, activeUserIDs, modeResults, openCounts);
     }
 
     /** The list row and its member rows (members in a disqualifying status are left out). */
@@ -673,9 +683,9 @@ export class AgentFeedbackCoordinator {
     }
 
     /**
-     * The `MJ: AI Agent Requests` reads a mode needs: none for `Random`; the agent's latest assignment to a
-     * member for `RoundRobin` (also used for an unrecognised mode); for `LeastBusy`, every open request of the
-     * members plus their newest assignments for the tie-break.
+     * The `MJ: AI Agent Requests` rows a mode needs: none for `Random`; the agent's latest assignment to a
+     * member for `RoundRobin` (also used for an unrecognised mode); the members' newest assignments for the
+     * `LeastBusy` tie-break (its open-request counts come from {@link buildOpenCountViews}).
      */
     private buildListModeViews(
         mode: ListAssignmentMode,
@@ -687,21 +697,11 @@ export class AgentFeedbackCoordinator {
             return [];
         }
         if (mode === 'LeastBusy') {
+            // Tie-break: each member's latest assignment of any status. The cap is safe here: a member
+            // with no row among the newest assignments was last assigned before all of them, so they
+            // already rank as the oldest assignment; only their order among themselves falls back to
+            // list sequence.
             return [
-                // Load: every open ('Requested') row with no row cap, so a high volume of recent closed
-                // rows never pushes older open requests out of the count.
-                {
-                    EntityName: 'MJ: AI Agent Requests',
-                    ExtraFilter: `RequestForUserID IN (${userInListClause}) AND Status = '${OPEN_AGENT_REQUEST_STATUS}'`,
-                    OrderBy: 'RequestedAt DESC, ID DESC',
-                    IgnoreMaxRows: true,
-                    Fields: ['ID', 'RequestForUserID', 'Status', 'RequestedAt'],
-                    ResultType: 'simple',
-                },
-                // Tie-break: each member's latest assignment of any status. The cap is safe here: a member
-                // with no row among the newest assignments was last assigned before all of them, so they
-                // already rank as the oldest assignment; only their order among themselves falls back to
-                // list sequence.
                 {
                     EntityName: 'MJ: AI Agent Requests',
                     ExtraFilter: `RequestForUserID IN (${userInListClause})`,
@@ -725,6 +725,18 @@ export class AgentFeedbackCoordinator {
         ];
     }
 
+    /**
+     * One `count_only` view per candidate: how many open (`'Requested'`) requests each one holds. A count
+     * returns no rows, so a long history of open requests costs nothing to read.
+     */
+    private buildOpenCountViews(candidateUserIDs: string[]): RunViewParams[] {
+        return candidateUserIDs.map((id) => ({
+            EntityName: 'MJ: AI Agent Requests',
+            ExtraFilter: `RequestForUserID = '${EscapeSQLString(id)}' AND Status = '${OPEN_AGENT_REQUEST_STATUS}'`,
+            ResultType: 'count_only',
+        }));
+    }
+
     /** The candidates the user read returned as active, in list order. */
     private filterActiveUserIDs(candidateUserIDs: string[], activeUserRows: UserActiveSummaryRow[]): string[] {
         const activeUserSet = new UUIDSet(activeUserRows.filter((u) => u.IsActive !== false).map((u) => u.ID));
@@ -742,7 +754,12 @@ export class AgentFeedbackCoordinator {
         return null;
     }
 
-    private pickListMember(mode: ListAssignmentMode, activeUserIDs: string[], modeResults: RunViewResult[]): string {
+    private pickListMember(
+        mode: ListAssignmentMode,
+        activeUserIDs: string[],
+        modeResults: RunViewResult[],
+        openCounts: UUIDMap<number>
+    ): string {
         const rowsOf = (result: RunViewResult | undefined): AgentRequestSummaryRow[] =>
             (result?.Results as AgentRequestSummaryRow[] | undefined) ?? [];
         if (mode === 'Random') {
@@ -750,7 +767,7 @@ export class AgentFeedbackCoordinator {
             return activeUserIDs[Math.max(0, Math.min(activeUserIDs.length - 1, index))];
         }
         if (mode === 'LeastBusy') {
-            return this.pickLeastBusyMember(activeUserIDs, rowsOf(modeResults[0]), rowsOf(modeResults[1]));
+            return this.pickLeastBusyMember(activeUserIDs, openCounts, rowsOf(modeResults[0]));
         }
         return this.pickRoundRobinMember(activeUserIDs, rowsOf(modeResults[0]));
     }
@@ -782,19 +799,16 @@ export class AgentFeedbackCoordinator {
      */
     private pickLeastBusyMember(
         activeUserIDs: string[],
-        openRequestRows: AgentRequestSummaryRow[],
+        openCounts: UUIDMap<number>,
         recentAssignmentRows: AgentRequestSummaryRow[]
     ): string {
-        const openByUser = GroupByUUID(openRequestRows, (req) => req.RequestForUserID);
         const recentByUser = GroupByUUID(recentAssignmentRows, (req) => req.RequestForUserID);
         let bestUserID = activeUserIDs[0];
         let bestOpenCount = Number.POSITIVE_INFINITY;
         let bestLastAssignedMs = Number.POSITIVE_INFINITY;
 
         for (const candidateUserID of activeUserIDs) {
-            const openCount = (openByUser.Get(candidateUserID) ?? []).filter(
-                (req) => req.Status === OPEN_AGENT_REQUEST_STATUS
-            ).length;
+            const openCount = openCounts.Get(candidateUserID) ?? 0;
             let lastAssignedMs = Number.NEGATIVE_INFINITY;
             for (const req of recentByUser.Get(candidateUserID) ?? []) {
                 const ts = req.RequestedAt ? new Date(req.RequestedAt).getTime() : Number.NaN;
