@@ -1349,8 +1349,9 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * the scope's dimension rules and row-level security still apply. Server code sets it; it is never read from `data`.
      *
      * What it covers: the Scoped Search action, in this run and in every agent it starts (sub-agents, `Execute Agent`,
-     * realtime delegation, runtime actions). The plain Search action refuses in such a run, and the run is not offered
-     * task graphs (a graph's nodes run without it). Pre-execution RAG still uses only the agent's own `PreExecution`
+     * realtime delegation, runtime actions). The plain Search action refuses in such a run. A task graph the run submits
+     * carries them in its security envelope (`TaskSecurityEnvelope.RunScope.SearchScopeIDs`) to every node; on a host
+     * whose submitter does not enforce envelopes the run is not offered graphs. Pre-execution RAG still uses only the agent's own `PreExecution`
      * scopes. It is not written to the run row, so a continuation (`lastRunId`) must pass it again, as with `actionChanges`.
      *
      * An empty list means not assigned: the agent's own search access applies. To forbid search in a run, remove Scoped
@@ -1554,8 +1555,9 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      *   and is locked out for the run (the model is told it is unavailable in a shared conversation), so an
      *   agent with other actions is limited to search in a shared room. A malformed audience on an action
      *   call refuses every action;
-     * - task graphs are not offered, and one the model writes anyway is refused (they are withheld in a
-     *   tenant-scoped run too: a graph runs outside the run's scope);
+     * - a task graph the run submits carries the audience (and a tenant-scoped run's scope) in its security
+     *   envelope to every node; where the registered submitter does not enforce envelopes
+     *   (`TaskGraphSubmitter.SupportsSecurityEnvelope`), graphs are not offered and one the model writes is refused;
      * - client tools are not offered and a client-tools step is refused (they run in the caller's browser),
      *   and the caller's app context (`data.appContext`) is not injected into the prompt;
      * - memory writes are not saved (a write's reply is read against the caller's own notes);
@@ -2047,8 +2049,9 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      *
      * This is how a host fixes *which record* an action acts on (a space's chapter, a tenant, a folder)
      * so the model can neither see nor choose it, within these **limits**. Server-side only: no GraphQL
-     * input reaches this field. A run with bindings has task graphs withheld (`enableTaskGraphs` is
-     * ignored), because a graph's action nodes are dispatched outside the agent's binding gate. A run
+     * input reaches this field. A task graph the run submits carries the bindings in its security envelope
+     * and every action node applies them; where the registered submitter does not enforce envelopes, a run
+     * with bindings has task graphs withheld (`enableTaskGraphs` is ignored). A run
      * stores its bindings on `MJ: AI Agent Runs.BoundActionParams`, and a run that continues another
      * (`lastRunId`, including a resume from a stored request) applies them when its caller passes none;
      * a prior run that cannot be read (missing, hidden from the context user, or holding bindings that do
