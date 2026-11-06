@@ -5,12 +5,18 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockActions, runAction } = vi.hoisted(() => ({
+const { mockActions, runAction, cachedUsers } = vi.hoisted(() => ({
     mockActions: [] as Array<{ ID: string; Name: string; Config_Object: { disallowWhenTainted?: boolean; outputTrustLevel?: 'Trusted' | 'SemiTrusted' | 'Untrusted' } | null }>,
     runAction: vi.fn(),
+    cachedUsers: [] as Array<{ ID: string; UserRoles: Array<{ Role: string }> }>,
+}));
+
+vi.mock('@memberjunction/generic-database-provider', () => ({
+    UserCache: { Instance: { get Users() { return cachedUsers; }, Refresh: vi.fn() } },
 }));
 
 vi.mock('@memberjunction/actions', () => ({
+    BaseAction: class BaseAction {},
     ActionEngineServer: { Instance: { Config: vi.fn(), get Actions() { return mockActions; }, RunAction: runAction } },
 }));
 
@@ -81,6 +87,23 @@ describe('TaskGraphActionRunner security envelope', () => {
         const runner = new TaskGraphActionRunner();
         expect((await runner.RunActionForTask(runParams(WEB_FETCH))).IsOutputTainted).toBe(true);
         expect((await runner.RunActionForTask(runParams(SCOPED_SEARCH))).IsOutputTainted).toBe(false);
+    });
+
+    it("hands the action the audience's hydrated users, found the way a run's audience is", async () => {
+        const reader = { ID: 'READER-1', UserRoles: [{ Role: 'UI' }] };
+        cachedUsers.splice(0, cachedUsers.length, reader);
+        await new TaskGraphActionRunner().RunActionForTask(runParams(SCOPED_SEARCH, { Version: 1, IsRunTainted: false, Audience: { ReaderUserIDs: ['reader-1'] } }));
+        expect(runAction.mock.calls[0][0].Audience).toEqual({ Readers: [reader] });
+    });
+
+    it('refuses a node whose audience names a user that does not exist, instead of running with a stand-in (M3)', async () => {
+        cachedUsers.splice(0, cachedUsers.length, { ID: 'READER-1', UserRoles: [] });
+        const result = await new TaskGraphActionRunner().RunActionForTask(
+            runParams(SCOPED_SEARCH, { Version: 1, IsRunTainted: false, Audience: { ReaderUserIDs: ['reader-1', 'ghost-reader'] } }),
+        );
+        expect(runAction).not.toHaveBeenCalled();
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('match no user');
     });
 
     it('copies the scope rather than sharing arrays with the envelope', () => {

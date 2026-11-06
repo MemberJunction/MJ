@@ -12,9 +12,10 @@
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionParam, type ActionRunAudience, type ActionRunScope, type MJActionEntityExtended } from '@memberjunction/actions-base';
 import { ApplyTaskSecurityEnvelopeToParams, BuildActionOutputObject, TAINTED_EGRESS_BLOCKED, type TaskRunScope, type TaskSecurityEnvelope } from '@memberjunction/ai-core-plus';
-import { LogError, UserInfo } from '@memberjunction/core';
+import { MatchAudienceUsers } from '@memberjunction/ai-agents';
+import { DatabaseProviderBase, LogError, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { IndexByUUID, UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual } from '@memberjunction/global';
 import type { TaskActionRunner, TaskActionRunParams, TaskActionRunResult } from '@memberjunction/task-graph';
 
 /**
@@ -41,11 +42,13 @@ export class TaskGraphActionRunner implements TaskActionRunner {
                 return { Success: false, ErrorMessage: taintRefusal, ResultCode: TAINTED_EGRESS_BLOCKED, IsOutputTainted: true };
             }
 
-            const readerIds = envelope?.Audience?.ReaderUserIDs;
-            const audience: ActionRunAudience | undefined =
-                readerIds && readerIds.length > 0
-                    ? { Readers: this.resolveAudienceReaders(readerIds) }
-                    : undefined;
+            const readerIds = envelope?.Audience?.ReaderUserIDs ?? [];
+            const readers = readerIds.length > 0 ? await this.resolveAudienceReaders(readerIds, params.Provider) : { Readers: [] };
+            if ('Refusal' in readers) {
+                LogError(`[TaskGraphActionRunner] Task ${params.TaskID}: ${readers.Refusal}`);
+                return { Success: false, ErrorMessage: readers.Refusal };
+            }
+            const audience: ActionRunAudience | undefined = readers.Readers.length > 0 ? { Readers: readers.Readers } : undefined;
 
             const result = await ActionEngineServer.Instance.RunAction({
                 Action: action,
@@ -173,23 +176,29 @@ export class TaskGraphActionRunner implements TaskActionRunner {
         return level === 'SemiTrusted' || level === 'Untrusted';
     }
 
-    private resolveAudienceReaders(readerIds: ReadonlyArray<string>): UserInfo[] {
-        let cachedUsers: UserInfo[] = [];
-        try {
-            cachedUsers = UserCache.Instance?.Users ?? UserCache.Users ?? [];
-        } catch {
-            cachedUsers = [];
+    /**
+     * The hydrated user (with roles) for each reader the envelope's audience names, resolved as `BaseAgent`
+     * resolves a run's audience: from the `UserCache`, refreshed once when an ID is missing. An ID no user has
+     * refuses the node. A stand-in `UserInfo` with only an ID has no roles, so every permission check it took
+     * part in measured nothing, and the action ran as though the reader were not there.
+     */
+    private async resolveAudienceReaders(
+        readerIds: ReadonlyArray<string>,
+        provider: IMetadataProvider,
+    ): Promise<{ Readers: UserInfo[] } | { Refusal: string }> {
+        const ids = [...readerIds];
+        let match = MatchAudienceUsers(ids, UserCache.Instance.Users);
+        if (match.MissingIDs.length > 0 && provider instanceof DatabaseProviderBase) {
+            await UserCache.Instance.Refresh(provider);
+            match = MatchAudienceUsers(ids, UserCache.Instance.Users);
         }
-        const byId = IndexByUUID(cachedUsers, (u) => u.ID);
-        return readerIds.map((id) => {
-            const matched = byId.Get(id);
-            if (matched) {
-                return matched;
-            }
-            const placeholder = new UserInfo();
-            placeholder.ID = id;
-            return placeholder;
-        });
+        if (match.MissingIDs.length > 0) {
+            return {
+                Refusal: `The workflow's audience names ${match.MissingIDs.length} user ID(s) that match no user, so the step was ` +
+                    'refused rather than run without them.',
+            };
+        }
+        return { Readers: match.Readers };
     }
 }
 
