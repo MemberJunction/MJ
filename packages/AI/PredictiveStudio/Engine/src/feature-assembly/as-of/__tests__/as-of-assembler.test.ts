@@ -757,6 +757,35 @@ describe('AsOfFeatureAssembler — a stored value changed after the decision by 
     expect(excluded.Status === 'assembled' && excluded.UncoveredRowsExcluded).toEqual([{ entity: 'People', field: 'Status', rows: 1 }]);
   });
 
+  it('reads a stored field of a parent hard-deleted after the decision date from its Delete row, and excludes it when deleted before', async () => {
+    const deletedAfter = { People: [rc('c0', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }), rc('d1', 'P1', 'Delete', '2025-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' })] };
+    const withoutP1 = { ...data, People: data.People.filter((p) => p.ID !== 'P1') };
+    const out = await new AsOfFeatureAssembler().Assemble(input([stored], { Rows: one, Tables: withoutP1, Changes: deletedAfter }));
+    expect(out.Status === 'assembled' && out.Rows[0].Values).toEqual(['Lapsed']);
+    expect(out.Status === 'assembled' && out.Rows[0].Provenance[0]).toMatchObject({ source: 'immutable-field', sourceRef: 'People/p1/Status', sourceVersion: 'd1', computedAt: '2025-01-01T00:00:00.000Z' });
+    const deletedBefore = { People: [deletedAfter.People[0], rc('d1', 'P1', 'Delete', '2022-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' })] };
+    const excluded = await new AsOfFeatureAssembler().Assemble(input([stored], { Rows: one, Tables: withoutP1, Changes: deletedBefore, Unit: { ...unit, history: { ...unit.history, onUncoveredRow: 'exclude-and-count' } } }));
+    expect(excluded.Status === 'assembled' && excluded.UncoveredRowsExcluded).toEqual([{ entity: 'People', field: 'Status', rows: 1 }]);
+  });
+
+  it('refuses a stored read of a parent with no row and no Delete in its history as a truncated read', async () => {
+    const withoutP1 = { ...data, People: data.People.filter((p) => p.ID !== 'P1') };
+    const out = await new AsOfFeatureAssembler().Assemble(input([stored], { Rows: one, Tables: withoutP1, Changes: { People: [rc('c0', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' })] } }));
+    expect(out).toEqual({ Status: 'refused', Refusal: { kind: 'truncated-read', entity: 'People', rowsExpected: 1, rowsRead: 0 } });
+  });
+
+  it('makes a row decided on the assembly day uncovered (deleted) when its parent was hard-deleted before it', async () => {
+    const replayed: FeatureColumnSpec = { ...stored, source: { kind: 'record-changes', entity: 'People', field: 'Status', keyField: 'PersonID' } };
+    const onAssemblyDay: AssemblyRowRef[] = [{ RowID: 'y1', EntityKey: 'y1', DecisionDate: new Date('2026-10-12T00:00:00Z'), Period: null }];
+    const withoutP1 = { ...data, People: data.People.filter((p) => p.ID !== 'P1') };
+    const deleted = { People: [rc('c0', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }), rc('d1', 'P1', 'Delete', '2025-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' })] };
+    const counting: PredictionUnitSpec = { ...unit, history: { ...unit.history, onUncoveredRow: 'exclude-and-count' } };
+    for (const feature of [replayed, stored]) {
+      const out = await new AsOfFeatureAssembler().Assemble(input([feature], { Rows: onAssemblyDay, Tables: withoutP1, Changes: deleted, Unit: counting }));
+      expect(out.Status === 'assembled' ? out.UncoveredRowsExcluded : out).toEqual([{ entity: 'People', field: 'Status', rows: 1 }]);
+    }
+  });
+
   it('keeps the stored value when a later Snapshot or Create row carries the same value of the field', async () => {
     const out = await new AsOfFeatureAssembler().Assemble(input([stored], { Rows: one, Tables: data, Changes: { People: [
       rc('s0', 'P1', 'Snapshot', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }),
@@ -849,6 +878,15 @@ describe('replay reader — creation rule', () => {
     const { out, spy } = await assemble(storedNull, snapshotStart);
     expect(out).toMatchObject({ Status: 'refused', Refusal: { kind: 'decision-date-before-change-history', entity: 'Tiers', field: 'Tier' } });
     expect(spy.CreatedAtReads).toBe(1);
+  });
+
+  it('reads the __mj_CreatedAt of a hard-deleted record from its Delete row, so one created after the decision reads as missing', async () => {
+    const deleted: Record<string, RecordChangeRow[]> = { ...changes, Tiers: [
+      rc('ts-2', 'y2', 'Snapshot', '2024-02-01T00:00:00Z', { ID: 'y2', Tier: 'Silver', __mj_CreatedAt: '2024-01-01T00:00:00.000Z' }),
+      rc('td-2', 'y2', 'Delete', '2025-01-01T00:00:00Z', { ID: 'y2', Tier: 'Silver', __mj_CreatedAt: '2024-01-01T00:00:00.000Z' }),
+    ] };
+    const { out } = await assemble({ ...tables, Tiers: [] }, deleted);
+    expect(out.Status === 'assembled' ? out.Rows[0].Provenance[0] : out).toMatchObject({ sourceRef: 'Tiers/y2/Tier', sourceVersion: 'created-after-decision' });
   });
 
   /** A store whose key collation is case-sensitive: an `IN` list matches a key only in its stored spelling. */

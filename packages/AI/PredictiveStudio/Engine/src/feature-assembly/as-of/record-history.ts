@@ -33,6 +33,17 @@ export type HistoryValue =
   | { readonly Status: 'value'; readonly Value: CellValue; readonly ChangeID: string; readonly ChangedAt: Date }
   | { readonly Status: 'uncovered'; readonly Reason: 'no-history' | 'before-history-start' | 'continuity-mismatch' | 'deleted' | 'external-ineligible' };
 
+/** A hard-deleted record as a read of its stored value sees it at one instant (see {@link EntityHistory.DeletedRecordAt}). */
+export interface DeletedRecordRead {
+  /** `held` when the Delete is at or after the instant, so the record still stood then; `deleted` when it is before. */
+  readonly Status: 'held' | 'deleted';
+  /** The record as its Delete row recorded it (the row's FullRecordJSON; a non-scalar value reads as null). */
+  readonly Row: Readonly<Record<string, CellValue>>;
+  /** The Delete change row. */
+  readonly ChangeID: string;
+  readonly ChangedAt: Date;
+}
+
 export interface EntityHistory {
   readonly Coverage: ChangeHistoryCoverage;
   /** The field's value in force strictly before `before`. */
@@ -40,7 +51,9 @@ export interface EntityHistory {
   /**
    * Change rows at or after `after` that changed `field` or replaced the record: an Update that lists the field, a
    * Delete, and a row of any type whose recorded value of the field differs from the row before it (a Create or
-   * Snapshot written after an untracked change carries the new value without listing it).
+   * Snapshot written after an untracked change carries the new value without listing it). The final Delete of a
+   * hard-deleted record (see {@link DeletedRecordAt}) is where its stored value is read from, so it counts only when it
+   * records a different value of the field.
    */
   ChangesAfter(recordKey: string, field: string, after: Date): number;
   /**
@@ -53,6 +66,14 @@ export interface EntityHistory {
    * it. Null when the history starts with a Snapshot (the record is older than its history) or there is no history.
    */
   CreatedAt(recordKey: string): Date | null;
+  /**
+   * A hard-deleted record — its change rows end in a Delete ({@link RecordHistory.KeysDeletedByHistory}) and the
+   * history was built with no current row for it — as a read of its stored value sees it at `before`: the record as
+   * its Delete row recorded it, `held` when the Delete is at or after `before` (not in force before `before`, as
+   * {@link ValueAt} reads an instant), `deleted` when it is before. Null for a record that is not hard-deleted, so a caller holding
+   * no current row for a key with a null here has a short read.
+   */
+  DeletedRecordAt(recordKey: string, before: Date): DeletedRecordRead | null;
 }
 
 export interface IRecordHistoryReader {
@@ -95,9 +116,7 @@ export class RecordHistory {
    * were deleted, so a missing current row is explained rather than a short read.
    */
   public static KeysDeletedByHistory(changes: readonly RecordChangeRow[]): ReadonlySet<string> {
-    const deleted = new Set<string>();
-    for (const [k, list] of RecordHistory.indexByKey(changes)) if (list[list.length - 1].Type === 'Delete') deleted.add(k);
-    return deleted;
+    return RecordHistory.endingInDelete(RecordHistory.indexByKey(changes));
   }
 
   /**
@@ -119,6 +138,7 @@ export class RecordHistory {
     const start = RecordHistory.historyStarts(byKey);
     const created = RecordHistory.creationInstants(byKey);
     const continuity = RecordHistory.checkContinuity(scope, byKey, start, current, fields);
+    const hardDeleted = new Set([...RecordHistory.endingInDelete(byKey)].filter((k) => !current.has(k)));
     const allCovered = [...current.keys()].every((k) => start.has(k));
     const historyStart = allCovered && start.size > 0 ? new Date(Math.max(...[...start.values()].map((d) => d.getTime()))).toISOString() : null;
     return {
@@ -130,9 +150,10 @@ export class RecordHistory {
         onUncoveredRow: policy.onUncoveredRow,
       },
       ValueAt: (recordKey, field, before) => RecordHistory.valueAt(byKey, start, continuity.Mismatched, policy, recordKey, field, before),
-      ChangesAfter: (recordKey, field, after) => RecordHistory.changesAfter(scope, byKey.get(recordKey.toLowerCase()) || [], field, after),
+      ChangesAfter: (recordKey, field, after) => RecordHistory.changesAfter(scope, byKey.get(recordKey.toLowerCase()) || [], field, after, hardDeleted.has(recordKey.toLowerCase())),
       RowsBefore: (recordKey, before) => RecordHistory.rowsBefore(byKey.get(recordKey.toLowerCase()) || [], before),
       CreatedAt: (recordKey) => created.get(recordKey.toLowerCase()) || null,
+      DeletedRecordAt: (recordKey, before) => RecordHistory.deletedRecordAt(byKey, hardDeleted, recordKey, before),
     };
   }
 
@@ -232,6 +253,13 @@ export class RecordHistory {
     return byKey;
   }
 
+  /** The keys of `byKey` whose last row is a Delete. */
+  private static endingInDelete(byKey: ReadonlyMap<string, readonly RecordChangeRow[]>): Set<string> {
+    const deleted = new Set<string>();
+    for (const [k, list] of byKey) if (list[list.length - 1].Type === 'Delete') deleted.add(k);
+    return deleted;
+  }
+
   /** A record's history starts at its earliest Create or Snapshot row; a record without one has no history. */
   private static historyStarts(byKey: ReadonlyMap<string, readonly RecordChangeRow[]>): Map<string, Date> {
     const start = new Map<string, Date>();
@@ -271,17 +299,37 @@ export class RecordHistory {
     return { Mismatched: mismatched, Replayed: replayed, RecordsMismatched: new Set([...mismatched].map((x) => x.split('|')[0])).size };
   }
 
-  /** See {@link EntityHistory.ChangesAfter}; `list` is one record's rows in ChangedAt order. */
-  private static changesAfter(scope: ComparisonScope, list: readonly RecordChangeRow[], field: string, after: Date): number {
+  /**
+   * See {@link EntityHistory.ChangesAfter}; `list` is one record's rows in ChangedAt order, and `hardDeleted` says the
+   * record's last row is the Delete its stored value is read from, which then counts only for a moved value.
+   */
+  private static changesAfter(scope: ComparisonScope, list: readonly RecordChangeRow[], field: string, after: Date, hardDeleted: boolean): number {
     let n = 0;
     list.forEach((c, i) => {
       if (c.ChangedAt.getTime() < after.getTime()) return;
       const listsField = c.Type === 'Update' && RecordHistory.changedFields(c.ChangesJSON).has(field);
       const valueMoved = i > 0
         && RecordHistory.comparable(RecordHistory.fieldOf(c.FullRecordJSON, field), scope, field) !== RecordHistory.comparable(RecordHistory.fieldOf(list[i - 1].FullRecordJSON, field), scope, field);
-      if (listsField || c.Type === 'Delete' || valueMoved) n++;
+      const replacesRecord = c.Type === 'Delete' && !(hardDeleted && i === list.length - 1);
+      if (listsField || replacesRecord || valueMoved) n++;
     });
     return n;
+  }
+
+  /** See {@link EntityHistory.DeletedRecordAt}; `hardDeleted` holds the lower-cased keys deleted with no current row. */
+  private static deletedRecordAt(
+    byKey: ReadonlyMap<string, readonly RecordChangeRow[]>, hardDeleted: ReadonlySet<string>, recordKey: string, before: Date,
+  ): DeletedRecordRead | null {
+    const k = recordKey.toLowerCase();
+    const list = byKey.get(k);
+    if (!hardDeleted.has(k) || !list) return null;
+    const del = list[list.length - 1];
+    return {
+      Status: del.ChangedAt.getTime() >= before.getTime() ? 'held' : 'deleted',
+      Row: RecordHistory.recordOf(del.FullRecordJSON),
+      ChangeID: del.ID,
+      ChangedAt: del.ChangedAt,
+    };
   }
 
   /** The number of rows of `list` (ChangedAt order) strictly before `before`, by binary search. */
@@ -314,6 +362,15 @@ export class RecordHistory {
       return { Status: 'uncovered', Reason: 'external-ineligible' };
     }
     return { Status: 'value', Value: RecordHistory.fieldOf(last.FullRecordJSON, field), ChangeID: last.ID, ChangedAt: last.ChangedAt };
+  }
+
+  /** The scalar fields of a FullRecordJSON snapshot; a malformed snapshot reads as no fields, a non-scalar value as null. */
+  private static recordOf(json: string): Readonly<Record<string, CellValue>> {
+    const parsed: ParseResult<JsonValue> = JsonParse.ParseJsonText(json, 'FullRecordJSON');
+    if (parsed.Ok === false || !JsonParse.IsJsonObject(parsed.Value)) return {};
+    const out: Record<string, CellValue> = {};
+    for (const [f, v] of Object.entries(parsed.Value)) out[f] = typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' ? v : null;
+    return out;
   }
 
   /** A field of a FullRecordJSON snapshot; a malformed snapshot or a non-scalar value reads as null. */

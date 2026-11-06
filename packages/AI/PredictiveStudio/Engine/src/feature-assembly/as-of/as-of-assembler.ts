@@ -479,11 +479,11 @@ export class AsOfFeatureAssembler {
     const join = await this.keyResolver(source.keyField, input, (row) => row.RowID, state);
     const keyOf = join.KeyOf;
     if (source.kind === 'immutable-field') return AsOfFeatureAssembler.throughJoin(spec, join, await this.currentValueReader(spec, source, entity, keyOf, input, state), input);
-    if (entity.Fields.some((f) => f.Name === source.field && f.IsVirtual)) return AsOfFeatureAssembler.throughJoin(spec, join, await AsOfFeatureAssembler.virtualFieldReader(spec, source, entity, keyOf, input), input);
+    if (entity.Fields.some((f) => f.Name === source.field && f.IsVirtual)) return AsOfFeatureAssembler.throughJoin(spec, join, await AsOfFeatureAssembler.virtualFieldReader(spec, source, entity, keyOf, input, state), input);
     const today = input.Rows.filter((r) => AsOfFeatureAssembler.onAssemblyDayOrLater(r, input));
     const keysOf = (rs: readonly AssemblyRowRef[]): string[] => rs.map((r) => keyOf(r)).filter((k): k is string => k !== null);
     const history = await AsOfFeatureAssembler.loadHistory(entity, keysOf(input.Rows), [source.field], input, state);
-    const stored = today.length > 0 ? await AsOfFeatureAssembler.storedValues(entity, keysOf(today), source.field, input) : new Map<string, SourceRow>();
+    const stored = today.length > 0 ? await AsOfFeatureAssembler.storedValues(entity, keysOf(today), source.field, input, async () => history) : new Map<string, SourceRow>();
     const createdAt = await AsOfFeatureAssembler.storedCreatedAts(entity, history, keysOf(input.Rows), input);
     return AsOfFeatureAssembler.throughJoin(spec, join, this.replayReader(spec, source, entity, keyOf, { History: history, Stored: stored, CreatedAt: createdAt }, input), input);
   }
@@ -491,17 +491,17 @@ export class AsOfFeatureAssembler {
   /**
    * `__mj_CreatedAt` of the records whose history gives no creation instant (it starts with a Snapshot, or is empty),
    * read by key in one read; empty, with no read, when the entity does not list the column or every history starts
-   * with a Create row. The keys go to the read as given (ReadByKeys matches case-insensitively and keys its rows
-   * lower-cased); a lower-cased key would miss a mixed-case key on a case-sensitive collation.
+   * with a Create row. A hard-deleted record's is the one its Delete row recorded (null when it recorded none). The keys
+   * go to the read as given (the keyed read matches case-insensitively and keys its rows lower-cased); a lower-cased key
+   * would miss a mixed-case key on a case-sensitive collation.
    */
   private static async storedCreatedAts(entity: AssemblyEntityInfo, history: EntityHistory, keys: readonly string[], input: AsOfAssemblyInput): Promise<ReadonlyMap<string, CellValue>> {
     const none = new Map<string, CellValue>();
     if (!AsOfFeatureAssembler.hasField(entity, '__mj_CreatedAt')) return none;
     const unknown = AsOfFeatureAssembler.uniqueKeys(keys).filter((k) => history.CreatedAt(k) === null);
     if (unknown.length === 0) return none;
-    const read = await KeyedReader.ReadByKeys(input.DataAccess, entity.Name, entity.PrimaryKey, unknown, ['__mj_CreatedAt']);
-    if (read.Status === 'refused') throw new AssemblyRefused(read.Refusal);
-    return new Map([...read.Rows].map(([k, row]) => [k, row.__mj_CreatedAt] as const));
+    const rows = await AsOfFeatureAssembler.presentOrDeleted(entity, unknown, ['__mj_CreatedAt'], input, async () => history);
+    return new Map(AsOfFeatureAssembler.uniqueKeys(unknown).map((k) => [k.toLowerCase(), AsOfFeatureAssembler.storedRowOf(rows, history, k, input)?.__mj_CreatedAt ?? null] as const));
   }
 
   /**
@@ -510,21 +510,58 @@ export class AsOfFeatureAssembler {
    * later (the stored value is the value on that day); a row decided earlier refuses the whole read (`virtual-field`),
    * since nothing can say what the joined value was then.
    */
-  private static async virtualFieldReader(spec: FeatureColumnSpec, source: FieldSource, entity: AssemblyEntityInfo, keyOf: KeyOf, input: AsOfAssemblyInput): Promise<FeatureReader> {
+  private static async virtualFieldReader(spec: FeatureColumnSpec, source: FieldSource, entity: AssemblyEntityInfo, keyOf: KeyOf, input: AsOfAssemblyInput, state: AssemblyState): Promise<FeatureReader> {
     if (input.Rows.some((r) => !AsOfFeatureAssembler.onAssemblyDayOrLater(r, input))) throw new AssemblyRefused({ kind: 'virtual-field', entity: entity.Name, field: source.field });
     const keys = input.Rows.map((r) => keyOf(r)).filter((k): k is string => k !== null);
-    const stored = keys.length > 0 ? await AsOfFeatureAssembler.storedValues(entity, keys, source.field, input) : new Map<string, SourceRow>();
+    // The history is read only to explain a key with no stored row (a hard-deleted record); nothing replays the field.
+    let history: EntityHistory | null = null;
+    const historyOf = async (): Promise<EntityHistory | null> => {
+      history = entity.TrackRecordChanges ? await AsOfFeatureAssembler.loadHistory(entity, keys, [source.field], input, state) : null;
+      return history;
+    };
+    const stored = keys.length > 0 ? await AsOfFeatureAssembler.storedValues(entity, keys, source.field, input, historyOf) : new Map<string, SourceRow>();
     return (row) => {
       const key = keyOf(row);
-      return key === null ? AsOfFeatureAssembler.missingValue(spec, 'none', 'none', input) : AsOfFeatureAssembler.storedOnDecisionDay(spec, source, entity, key, stored, input);
+      return key === null ? AsOfFeatureAssembler.missingValue(spec, 'none', 'none', input) : AsOfFeatureAssembler.storedOnDecisionDay(spec, source, entity, key, row, stored, history, input);
     };
   }
 
-  /** The stored rows of `keys` (key lower-cased), read by key for the rows decided on the assembly's day or later. */
-  private static async storedValues(entity: AssemblyEntityInfo, keys: readonly string[], field: string, input: AsOfAssemblyInput): Promise<ReadonlyMap<string, SourceRow>> {
-    const read = await KeyedReader.ReadByKeys(input.DataAccess, entity.Name, entity.PrimaryKey, keys, [field]);
-    if (read.Status === 'refused') throw new AssemblyRefused(read.Refusal);
+  /**
+   * The stored rows of `keys` (key lower-cased), read by key for the rows decided on the assembly's day or later; a key
+   * with no row must be a hard-deleted record (see {@link presentOrDeleted}).
+   */
+  private static async storedValues(
+    entity: AssemblyEntityInfo, keys: readonly string[], field: string, input: AsOfAssemblyInput, historyOf: () => Promise<EntityHistory | null>,
+  ): Promise<ReadonlyMap<string, SourceRow>> {
+    return AsOfFeatureAssembler.presentOrDeleted(entity, keys, [field], input, historyOf);
+  }
+
+  /**
+   * The stored rows of `keys` with `fields`, by lower-cased key. A key with no row is explained only when the entity's
+   * history says the record was hard-deleted (`EntityHistory.DeletedRecordAt` is not null), and its stored values are
+   * then read through that history; any other key with no row is a short read. `historyOf` is asked only when a key
+   * has no row, and gives null for an entity without change history, which explains no missing key.
+   *
+   * @throws AssemblyRefused `truncated-read` when a key with no row is not a hard-deleted record
+   */
+  private static async presentOrDeleted(
+    entity: AssemblyEntityInfo, keys: readonly string[], fields: readonly string[], input: AsOfAssemblyInput, historyOf: () => Promise<EntityHistory | null>,
+  ): Promise<ReadonlyMap<string, SourceRow>> {
+    const read = await KeyedReader.ReadPresentByKeys(input.DataAccess, entity.Name, entity.PrimaryKey, keys, fields);
+    if (read.MissingKeys.length === 0) return read.Rows;
+    const history = await historyOf();
+    if (read.MissingKeys.some((k) => history === null || history.DeletedRecordAt(k, input.AssembledAt) === null)) {
+      throw new AssemblyRefused({ kind: 'truncated-read', entity: entity.Name, rowsExpected: read.Rows.size + read.MissingKeys.length, rowsRead: read.Rows.size });
+    }
     return read.Rows;
+  }
+
+  /**
+   * The record of `key` as stored: its current row, else the record a hard-deleted record's Delete row recorded (the
+   * instant does not change the recorded row), else undefined.
+   */
+  private static storedRowOf(rows: ReadonlyMap<string, SourceRow>, history: EntityHistory | null, key: string, input: AsOfAssemblyInput): Readonly<Record<string, CellValue>> | undefined {
+    return rows.get(key.toLowerCase()) ?? history?.DeletedRecordAt(key, input.AssembledAt)?.Row;
   }
 
   /**
@@ -581,7 +618,7 @@ export class AsOfFeatureAssembler {
       const hv = history.ValueAt(key, source.field, asOf);
       if (hv.Status === 'uncovered') {
         const unreached = hv.Reason === 'no-history' || hv.Reason === 'before-history-start';
-        if (unreached && AsOfFeatureAssembler.onAssemblyDayOrLater(row, input)) return AsOfFeatureAssembler.storedOnDecisionDay(spec, source, entity, key, reads.Stored, input);
+        if (unreached && AsOfFeatureAssembler.onAssemblyDayOrLater(row, input)) return AsOfFeatureAssembler.storedOnDecisionDay(spec, source, entity, key, row, reads.Stored, history, input);
         if (AsOfFeatureAssembler.createdAfter(history, key, asOf, reads.CreatedAt.get(key.toLowerCase()) ?? null)) return AsOfFeatureAssembler.missingValue(spec, AsOfFeatureAssembler.fieldRef(entity, key, source.field), 'created-after-decision', input);
         return { Uncovered: true, Entity: entity.Name, Field: source.field, HistoryStart: history.Coverage.historyStart };
       }
@@ -592,42 +629,63 @@ export class AsOfFeatureAssembler {
     };
   }
 
-  /** The stored value of a replayed field for a row decided on the assembly's day or later (missing when the record is gone). */
+  /**
+   * The stored value of a field for a row decided on the assembly's day or later. A hard-deleted record (no stored row)
+   * reads the value its Delete row recorded when the Delete is not before the row's as-of instant, and is uncovered
+   * (`deleted`) when it is; a record that is simply gone reads as missing.
+   */
   private static storedOnDecisionDay(
-    spec: FeatureColumnSpec, source: FieldSource, entity: AssemblyEntityInfo, key: string, stored: ReadonlyMap<string, SourceRow>, input: AsOfAssemblyInput,
-  ): RawValue {
+    spec: FeatureColumnSpec, source: FieldSource, entity: AssemblyEntityInfo, key: string, row: AssemblyRowRef, stored: ReadonlyMap<string, SourceRow>,
+    history: EntityHistory | null, input: AsOfAssemblyInput,
+  ): RawValue | Uncovered {
     const rec = stored.get(key.toLowerCase());
     const sourceRef = AsOfFeatureAssembler.fieldRef(entity, key, source.field);
-    if (rec === undefined) return AsOfFeatureAssembler.missingValue(spec, sourceRef, 'no-record', input);
-    return { Value: rec[source.field], Provenance: { column: spec.name, source: 'record-changes', sourceRef, sourceVersion: 'stored-on-decision-day', computedAt: input.AssembledAt.toISOString() } };
+    if (rec !== undefined) return { Value: rec[source.field], Provenance: { column: spec.name, source: 'record-changes', sourceRef, sourceVersion: 'stored-on-decision-day', computedAt: input.AssembledAt.toISOString() } };
+    const deleted = history?.DeletedRecordAt(key, AsOfFeatureAssembler.asOfInstant(row.DecisionDate));
+    if (!deleted || history === null) return AsOfFeatureAssembler.missingValue(spec, sourceRef, 'no-record', input);
+    if (deleted.Status === 'deleted') return { Uncovered: true, Entity: entity.Name, Field: source.field, HistoryStart: history.Coverage.historyStart };
+    return { Value: deleted.Row[source.field] ?? null, Provenance: { column: spec.name, source: 'record-changes', sourceRef, sourceVersion: deleted.ChangeID, computedAt: deleted.ChangedAt.toISOString() } };
   }
 
   /**
    * The stored value of a field the stable-value rule admits. A record created after a row's decision day (by the one
    * creation rule, `creationInstant`) reads as missing, never as its stored value; a record the rule excludes makes its
-   * row uncovered. The provenance carries the creation instant when it is known.
+   * row uncovered. The provenance carries the creation instant when it is known. A hard-deleted record (no stored row)
+   * is read from its Delete row: the value that row recorded when the Delete is not before the row's as-of instant
+   * (provenance naming the Delete row), uncovered (`deleted`) when it is.
    */
   private async currentValueReader(spec: FeatureColumnSpec, source: FieldSource, entity: AssemblyEntityInfo, keyOf: KeyOf, input: AsOfAssemblyInput, state: AssemblyState): Promise<FeatureReader> {
     const reads = AsOfFeatureAssembler.rowReads(input.Rows, keyOf);
+    const keys = reads.map((r) => r.Key);
     const hasCreatedAt = AsOfFeatureAssembler.hasField(entity, '__mj_CreatedAt');
-    // Read first: a key with no record is a short read, whatever the history of the records that exist.
-    const current = await KeyedReader.ReadByKeys(input.DataAccess, entity.Name, entity.PrimaryKey, reads.map((r) => r.Key), hasCreatedAt ? [source.field, '__mj_CreatedAt'] : [source.field]);
-    if (current.Status === 'refused') throw new AssemblyRefused(current.Refusal);
-    const storedCreatedAt = (key: string): CellValue => (hasCreatedAt ? current.Rows.get(key.toLowerCase())?.__mj_CreatedAt : null);
+    // Read first: a key with no record is a short read, whatever the history of the records that exist, unless the
+    // history says the record was deleted (the same load the stable-value rule then reuses).
+    let history: EntityHistory | null = null;
+    const historyOf = async (): Promise<EntityHistory | null> => {
+      history = entity.TrackRecordChanges ? await AsOfFeatureAssembler.loadHistory(entity, keys, [source.field], input, state) : null;
+      return history;
+    };
+    const current = await AsOfFeatureAssembler.presentOrDeleted(entity, keys, hasCreatedAt ? [source.field, '__mj_CreatedAt'] : [source.field], input, historyOf);
+    const storedCreatedAt = (key: string): CellValue => (hasCreatedAt ? AsOfFeatureAssembler.storedRowOf(current, history, key, input)?.__mj_CreatedAt ?? null : null);
     const stable = await this.assertStableCurrentValue(entity, source.field, reads, storedCreatedAt, input, state);
     const outcomes = AsOfFeatureAssembler.outcomesByRow(reads, stable);
     return (row) => {
       const key = keyOf(row);
       if (outcomes.get(row.RowID) === 'excluded') return { Uncovered: true, Entity: entity.Name, Field: source.field, HistoryStart: stable.HistoryStart };
-      const rec = key === null ? undefined : current.Rows.get(key.toLowerCase());
+      const asOf = AsOfFeatureAssembler.asOfInstant(row.DecisionDate);
+      const rec = key === null ? undefined : current.get(key.toLowerCase());
+      const deleted = key === null || rec !== undefined || stable.History === null ? null : stable.History.DeletedRecordAt(key, asOf);
+      if (deleted?.Status === 'deleted') return { Uncovered: true, Entity: entity.Name, Field: source.field, HistoryStart: stable.HistoryStart };
       const created = key === null ? null : AsOfFeatureAssembler.creationInstant(stable.History, key, storedCreatedAt(key));
-      const createdAfter = !AsOfFeatureAssembler.existedBefore(created, AsOfFeatureAssembler.asOfInstant(row.DecisionDate));
-      const version = createdAfter ? 'created-after-decision' : created !== null ? `created:${created.toISOString()}` : 'immutable-after-create';
+      const createdAfter = !AsOfFeatureAssembler.existedBefore(created, asOf);
+      const fromDeleteRow = deleted !== null && !createdAfter;
+      const version = createdAfter ? 'created-after-decision' : fromDeleteRow ? deleted.ChangeID : created !== null ? `created:${created.toISOString()}` : 'immutable-after-create';
+      const value = createdAfter ? null : rec ? rec[source.field] : deleted ? deleted.Row[source.field] ?? null : null;
       return {
-        Value: rec && !createdAfter ? rec[source.field] : null,
+        Value: value,
         Provenance: {
           column: spec.name, source: 'immutable-field', sourceRef: AsOfFeatureAssembler.fieldRef(entity, key, source.field), sourceVersion: version,
-          computedAt: created !== null ? created.toISOString() : input.AssembledAt.toISOString(),
+          computedAt: fromDeleteRow ? deleted.ChangedAt.toISOString() : created !== null ? created.toISOString() : input.AssembledAt.toISOString(),
         },
       };
     };
@@ -782,13 +840,6 @@ export class AsOfFeatureAssembler {
     const found = instants.get(rows);
     if (found === undefined) throw new Error('AsOfFeatureAssembler: no decision instants for a read; the instants were built from other reads');
     return found;
-  }
-
-  /** The number of distinct unit rows the reads stand for. */
-  private static distinctRows(reads: readonly StableRead[]): number {
-    const ids = new Set<string>();
-    for (const rows of new Set(reads.map((r) => r.Rows))) for (const row of rows) ids.add(row.RowID);
-    return ids.size;
   }
 
   /** The number of distinct unit rows the reads stand for whose decision day is before the assembly's day. */

@@ -169,6 +169,31 @@ describe('RunViewRecordHistoryReader', () => {
   });
 });
 
+describe('BuildEntityHistory — a hard-deleted record', () => {
+  const policy = { onUncoveredRow: 'exclude-and-count', externalSourceRows: 'ineligible' } as const;
+  const now = new Date('2026-10-12T00:00:00Z');
+  const deletedRows = [rc('c1', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' }), rc('d1', 'P1', 'Delete', '2024-06-01T00:00:00Z', { ID: 'P1', Status: 'Active' })];
+
+  it('reads it from its Delete row: held while the Delete is not in force, deleted once it is', () => {
+    const h = RecordHistory.BuildEntityHistory(PEOPLE, deletedRows, new Map(), ['Status'], policy, now);
+    expect(h.DeletedRecordAt('P1', new Date('2024-06-01T00:00:00Z'))).toEqual({ Status: 'held', Row: { ID: 'P1', Status: 'Active' }, ChangeID: 'd1', ChangedAt: new Date('2024-06-01T00:00:00Z') });
+    expect(h.DeletedRecordAt('p1', new Date('2024-06-02T00:00:00Z'))).toMatchObject({ Status: 'deleted', ChangeID: 'd1' });
+  });
+  it('does not count its final Delete as a change unless the Delete recorded a different value', () => {
+    expect(RecordHistory.BuildEntityHistory(PEOPLE, deletedRows, new Map(), ['Status'], policy, now).ChangesAfter('P1', 'Status', new Date('2022-01-01T00:00:00Z'))).toBe(0);
+    const moved = [deletedRows[0], rc('d1', 'P1', 'Delete', '2024-06-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' })];
+    expect(RecordHistory.BuildEntityHistory(PEOPLE, moved, new Map(), ['Status'], policy, now).ChangesAfter('P1', 'Status', new Date('2022-01-01T00:00:00Z'))).toBe(1);
+  });
+  it('is not hard-deleted when a current row exists, so its Delete still counts as replacing the record', () => {
+    const h = RecordHistory.BuildEntityHistory(PEOPLE, deletedRows, new Map([['p1', { ID: 'P1', Status: 'Active' }]]), ['Status'], policy, now);
+    expect(h.DeletedRecordAt('P1', new Date('2022-01-01T00:00:00Z'))).toBeNull();
+    expect(h.ChangesAfter('P1', 'Status', new Date('2022-01-01T00:00:00Z'))).toBe(1);
+  });
+  it('lists the keys whose last change row is a Delete', () => {
+    expect([...RecordHistory.KeysDeletedByHistory([...deletedRows, rc('c3', 'P2', 'Snapshot', '2022-06-01T00:00:00Z', { ID: 'P2', Status: 'Active' })])]).toEqual(['p1']);
+  });
+});
+
 describe('BuildEntityHistory — values shaped like timestamps', () => {
   const policy = { onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' } as const;
   const build = (value: string) => () =>
