@@ -55,10 +55,25 @@ export function MakeUser(id: string, roles: string[] = ['Analyst'], type: 'User'
     } as unknown as UserInfo;
 }
 
-/** Entity read rule for the fake: which roles may read, and whether reads are row-filtered (RLS). */
+/**
+ * Entity read rule for the fake: which roles may read, whether reads are row-filtered (RLS), and which
+ * fields each role is denied (field-level security: the row still comes back, without those columns).
+ */
 export interface FakeEntityRule {
     ReadRoles?: string[] | 'all';
     RowFiltered?: boolean;
+    DeniedReadFieldsByRole?: Record<string, string[]>;
+}
+
+/** Lower-cased field names `user` may not read on an entity with `rule`. */
+function deniedReadFields(rule: FakeEntityRule, user: UserInfo): Set<string> {
+    const denied = new Set<string>();
+    for (const role of roleNames(user)) {
+        for (const field of rule.DeniedReadFieldsByRole?.[role] ?? []) {
+            denied.add(field.toLowerCase());
+        }
+    }
+    return denied;
 }
 
 export interface FakeEntitySpec {
@@ -94,6 +109,9 @@ function makeEntity(spec: FakeEntitySpec): EntityInfo {
         AlternateBaseViews: spec.AlternateBaseViews ?? [],
         GetUserPermisions: (user: UserInfo) => ({ CanRead: canRead(user), CanCreate: false, CanUpdate: false, CanDelete: false }),
         UserExemptFromRowLevelSecurity: (user: UserInfo) => canRead(user) && rule.RowFiltered !== true,
+        FieldLevelSecurityApplies: rule.DeniedReadFieldsByRole !== undefined,
+        GetDeniedReadFields: (user: UserInfo) => deniedReadFields(rule, user),
+        IsFieldReadableByUser: (fieldName: string, user: UserInfo) => !deniedReadFields(rule, user).has(fieldName.trim().toLowerCase()),
     };
     return entity as unknown as EntityInfo;
 }
@@ -212,6 +230,11 @@ export class FakeGraphProvider {
         const hidden = new Set((user ? this.HiddenFor[user.ID] ?? [] : []).map((k) => k.toLowerCase()));
         let rows = (this.Rows[entityName] ?? []).filter((r) => !hidden.has(`${entityName}|${String(r['ID'])}`.toLowerCase()));
         rows = ApplyKnownFilters(rows, params.ExtraFilter ?? '');
+        const denied = entity && user ? entity.GetDeniedReadFields(user) : new Set<string>();
+        if (denied.size > 0) {
+            // The provider drops a denied column but still returns the row.
+            rows = rows.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => !denied.has(k.toLowerCase()))));
+        }
         if (params.MaxRows && params.MaxRows > 0) {
             rows = rows.slice(0, params.MaxRows);
         }

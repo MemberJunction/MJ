@@ -108,6 +108,12 @@ const STORED_EDGE_FIELDS: Array<keyof StoredEdgeRow> = [
     'Confidence',
 ];
 
+/** Which stored-edge text columns every principal may read. */
+interface StoredEdgeTextReadability {
+    Description: boolean;
+    Attributes: boolean;
+}
+
 /** Options for {@link GraphEngine.FilterNodesForUser}. */
 export interface GraphNodeFilterOptions {
     /** When `true`, `Proposed` concepts are visible alongside `Approved` ones (`false` by default). */
@@ -629,8 +635,9 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
 
         const storedRows = await this.loadStoredEdges(graph, normalizedFrontier, frontierKeys, options, principals, provider);
         const edgeTypesById = IndexByUUID(this.EdgeTypes);
+        const textReadable = this.storedEdgeTextReadable(principals, provider);
         for (const row of storedRows) {
-            const view = this.toStoredEdgeView(row, graph, options, frontierKeys, provider, edgeTypesById);
+            const view = this.toStoredEdgeView(row, graph, options, frontierKeys, provider, edgeTypesById, textReadable);
             if (view) {
                 results.set(view.ID, view);
             }
@@ -673,6 +680,7 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         frontierKeys: Set<string>,
         provider: GraphDataProvider,
         edgeTypesById: UUIDMap<MJGraphEdgeTypeEntity>,
+        textReadable: StoredEdgeTextReadability,
     ): GraphEdgeView | null {
         if (!UUIDsEqual(row.GraphID, graph.ID) || row.Status === 'Rejected') {
             return null;
@@ -714,11 +722,24 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
             Target: target,
             IsDirected: isDirected,
             Weight: weight,
-            Description: row.Description ?? null,
-            Attributes: parseJsonObject(row.Attributes),
+            Description: textReadable.Description ? (row.Description ?? null) : null,
+            Attributes: textReadable.Attributes ? parseJsonObject(row.Attributes) : null,
             Origin: row.Origin,
             Status: row.Status,
             Confidence: row.Confidence ?? null,
+        };
+    }
+
+    /**
+     * Whether every principal may read a stored edge's `Description` and `Attributes`. A field-level
+     * denial still returns the row (only the column is dropped), and the preload cache holds every
+     * column, so an edge's text is shown only when no principal is denied it.
+     */
+    private storedEdgeTextReadable(principals: UserInfo[], provider: GraphDataProvider): StoredEdgeTextReadability {
+        const edgeEntity = provider.EntityByName(GRAPH_EDGES_ENTITY);
+        return {
+            Description: edgeEntity != null && FieldReadableByAll(edgeEntity, 'Description', principals),
+            Attributes: edgeEntity != null && FieldReadableByAll(edgeEntity, 'Attributes', principals),
         };
     }
 
@@ -891,7 +912,9 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
     /**
      * Derived edges every principal derives. Data-scale providers read as the user they run for, so an
      * edge one principal derives from a row another cannot read (a membership, a link) would reveal that
-     * row; each principal runs the providers and only edges all of them produce are kept.
+     * row; each principal runs the providers and only edges all of them produce are kept. Each read
+     * also applied that principal's field-level security, so an edge keeps only the text every
+     * principal's version carries (see {@link sharedEdgeText}).
      */
     private async derivedEdgesForEveryPrincipal(
         graph: MJGraphEntity,
@@ -905,8 +928,15 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         if (others.length === 0) {
             return callerEdges;
         }
-        const otherIds = others.map((edges) => new Set(edges.map((e) => e.ID)));
-        return callerEdges.filter((e) => otherIds.every((ids) => ids.has(e.ID)));
+        const otherById = others.map((edges) => new Map(edges.map((e) => [e.ID, e])));
+        const shared: GraphEdgeView[] = [];
+        for (const edge of callerEdges) {
+            const versions = otherById.map((byId) => byId.get(edge.ID));
+            if (versions.every((v) => v !== undefined)) {
+                shared.push(sharedEdgeText(edge, versions.filter((v): v is GraphEdgeView => v !== undefined)));
+            }
+        }
+        return shared;
     }
 
     /** Derived edges from the graph's active providers, read as `caller`. */
@@ -961,7 +991,46 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
                 }
             }
         }
+        if (principals.length > 1) {
+            this.neutralizeUnsharedText(visible, principals, provider);
+        }
         return visible;
+    }
+
+    /**
+     * Data-node labels and descriptions come from the caller's read. Field-level security drops a
+     * denied column but still returns the row, so a reader denied the name field still counts the node
+     * as visible; its label and description are shown only when EVERY principal may read the field,
+     * and otherwise replaced by the neutral `<entity name> <record ID>` label and no description.
+     * (Metadata nodes take their text from metadata, which entity permissions already gate.)
+     */
+    private neutralizeUnsharedText(visible: Map<string, GraphNodeView>, principals: UserInfo[], provider: GraphDataProvider): void {
+        const readableByEntity = new Map<string, { Name: boolean; Description: boolean }>();
+        for (const [key, view] of visible) {
+            if (metadataNodeKind(view.EntityName)) {
+                continue;
+            }
+            const entity = provider.EntityByName(view.EntityName);
+            if (!entity) {
+                continue;
+            }
+            let readable = readableByEntity.get(entity.Name);
+            if (!readable) {
+                const nameField = entity.NameField?.Name;
+                readable = {
+                    Name: nameField != null && FieldReadableByAll(entity, nameField, principals),
+                    Description: FieldReadableByAll(entity, 'Description', principals),
+                };
+                readableByEntity.set(entity.Name, readable);
+            }
+            if (!readable.Name || !readable.Description) {
+                visible.set(key, {
+                    ...view,
+                    Label: readable.Name ? view.Label : NeutralGraphNodeLabel(entity.Name, view.RecordID),
+                    Description: readable.Description ? view.Description : null,
+                });
+            }
+        }
     }
 
     /**
@@ -1128,7 +1197,7 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
             if (isConcept && !IsGraphConceptStatusVisible(row['Status'], includeProposed)) {
                 continue; // an unreviewed (Draft/Proposed) or Deprecated concept is not canon
             }
-            const label = nameField && row[nameField] != null ? String(row[nameField]) : `${bucket.Entity.Name} ${item.Ref.RecordID}`;
+            const label = nameField && row[nameField] != null ? String(row[nameField]) : NeutralGraphNodeLabel(bucket.Entity.Name, item.Ref.RecordID);
             const description = row['Description'];
             visible.set(item.Key, {
                 Key: item.Key,
@@ -1161,6 +1230,38 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         const normalized = this.normalizeNodeRef(node, provider);
         return FormatGraphNodeKey(normalized.EntityID ?? normalized.EntityName, normalized.RecordID);
     }
+}
+
+/** The label a node gets when its name field may not be shown: the entity name and the record key. */
+export function NeutralGraphNodeLabel(entityName: string, recordId: string): string {
+    return `${entityName} ${recordId}`;
+}
+
+/** True when every principal may read `fieldName` on `entity` (MJ field-level security). */
+function FieldReadableByAll(entity: EntityInfo, fieldName: string, principals: readonly UserInfo[]): boolean {
+    return principals.every((p) => entity.IsFieldReadableByUser(fieldName, p));
+}
+
+/**
+ * `edge` (the caller's version of a derived edge) with only the text every principal's version
+ * carries: its `Description` when every version has the same one, and the `Attributes` keys whose
+ * values every version shares. A value a principal's field-level security dropped is missing from
+ * that principal's version, so it is dropped here too.
+ */
+function sharedEdgeText(edge: GraphEdgeView, others: readonly GraphEdgeView[]): GraphEdgeView {
+    const description = others.every((o) => o.Description === edge.Description) ? edge.Description : null;
+    let attributes: Record<string, unknown> | null = null;
+    if (edge.Attributes) {
+        const kept: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(edge.Attributes)) {
+            const serialized = JSON.stringify(value);
+            if (others.every((o) => o.Attributes != null && key in o.Attributes && JSON.stringify(o.Attributes[key]) === serialized)) {
+                kept[key] = value;
+            }
+        }
+        attributes = Object.keys(kept).length > 0 ? kept : null;
+    }
+    return { ...edge, Description: description, Attributes: attributes };
 }
 
 function isConceptEntity(entity: EntityInfo): boolean {

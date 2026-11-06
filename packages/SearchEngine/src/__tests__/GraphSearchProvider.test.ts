@@ -186,6 +186,7 @@ describe('GraphSearchProvider over CanonGraphEngine', () => {
             AlternateBaseViews: [],
             GetUserPermisions: () => ({ CanRead: true }),
             UserExemptFromRowLevelSecurity: () => true,
+            IsFieldReadableByUser: () => true,
         }) as unknown as EntityInfo;
 
     const entities: EntityInfo[] = [

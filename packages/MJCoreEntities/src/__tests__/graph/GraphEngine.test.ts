@@ -11,13 +11,46 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
 import { StartupManager, WellKnownUserSource, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { GraphEngine, ClampGraphDepth, ClampGraphMaxNodes, CanUserReadEntity, GRAPH_MAX_STORED_EDGES_PER_STEP } from '../../graph/GraphEngine';
-import { LoadGraphEdgeProviders } from '../../graph';
+import { BaseGraphEdgeProvider, LoadGraphEdgeProviders, type GraphEdgeRequest, type GraphEdgeView, type GraphProviderContext } from '../../graph';
 import { QueryEngine } from '../../engines/QueryEngine';
 import type { MJQueryEntityExtended } from '../../custom/MJQueryEntityExtended';
 import { CanonMetadataRows, FakeGraphProvider, IDS, MakeUser, NODE, StoredEdge, StandardEntitySpecs, type FakeRow } from './graphTestFixtures';
 
 const analyst = MakeUser('u-analyst', ['Analyst']);
 const executive = MakeUser('u-exec', ['Analyst', 'Executive']);
+
+const PER_USER_PROVIDER = 'GraphEngineTestPerUserEdgeProvider';
+
+/**
+ * A derived-edge provider whose output depends on the user it runs as, the way a data-scale provider's
+ * read does under field-level security: an Intern's read lacks the salary and the description.
+ */
+class PerUserEdgeProvider extends BaseGraphEdgeProvider {
+    public async GetEdges(request: GraphEdgeRequest, ctx: GraphProviderContext): Promise<GraphEdgeView[]> {
+        const seed = request.Nodes.find((n) => n.RecordID === IDS.ConceptOpenAr);
+        if (!seed) {
+            return [];
+        }
+        const isIntern = (ctx.User.UserRoles ?? []).some((r) => r.Role === 'Intern');
+        return [
+            {
+                ID: `derived:${PER_USER_PROVIDER}:${IDS.ConceptOpenAr}:acc-1`,
+                GraphName: ctx.Graph.Name,
+                TypeName: 'Related To',
+                Source: { EntityName: 'MJ: Graph Concepts', EntityID: IDS.ConceptMeta, RecordID: IDS.ConceptOpenAr },
+                Target: { EntityName: 'Accounts', EntityID: IDS.Accounts, RecordID: 'acc-1' },
+                IsDirected: true,
+                Weight: 0.9,
+                Description: isIntern ? null : 'Owner of the salary band',
+                Attributes: isIntern ? { Shared: 'yes' } : { Shared: 'yes', Salary: 120000 },
+                Origin: 'Derived',
+                Status: 'Approved',
+                Confidence: null,
+            },
+        ];
+    }
+}
+MJGlobal.Instance.ClassFactory.Register(BaseGraphEdgeProvider, PerUserEdgeProvider, PER_USER_PROVIDER);
 
 function fakeQuery(id: string, name: string, canRun: boolean): MJQueryEntityExtended {
     return {
@@ -222,6 +255,66 @@ describe('GraphEngine', () => {
             expect(labels).not.toContain('Project Falcon');
             const asExec = await GraphEngine.Instance.Subgraph('MJ Canon', canonSeed, { Depth: 1 }, executive);
             expect(asExec.Nodes.map((n) => n.Label)).toContain('Project Falcon');
+        });
+    });
+
+    describe('field-level security on labels and edge text', () => {
+        const intern = MakeUser('u-intern', ['Intern']);
+        const specs = (): ReturnType<typeof StandardEntitySpecs> =>
+            StandardEntitySpecs({
+                Accounts: { ReadRoles: 'all', DeniedReadFieldsByRole: { Intern: ['Name'] } },
+                'MJ: Graph Edges': { ReadRoles: 'all', DeniedReadFieldsByRole: { Intern: ['Description', 'Attributes'] } },
+            });
+        const secretEdge = (): FakeRow => ({
+            ...StoredEdge(IDS.GraphCanon, IDS.EdgeTypeRelated, 'Related To', NODE.Concept(IDS.ConceptOpenAr), NODE.Account('acc-1'), 0.9),
+            Description: 'Board-approved merger rationale',
+            Attributes: JSON.stringify({ DealCode: 'FALCON' }),
+        });
+
+        it('shows a node label only when every principal may read the name field; otherwise a neutral label', async () => {
+            const provider = providerWith({ 'MJ: Graph Edges': [secretEdge()], Accounts: [{ ID: 'acc-1', Name: 'Acme Corp' }] }, specs());
+            const engine = await configure(provider);
+            const alone = await engine.Subgraph('MJ Canon', canonSeed, { Depth: 1 }, analyst);
+            expect(alone.Nodes.find((n) => n.RecordID === 'acc-1')?.Label).toBe('Acme Corp');
+
+            const withIntern = await engine.Subgraph('MJ Canon', canonSeed, { Depth: 1, AudienceReaders: [intern] }, analyst);
+            const node = withIntern.Nodes.find((n) => n.RecordID === 'acc-1');
+            expect(node?.Label).toBe('Accounts acc-1'); // the intern reads the row, so the node stays, unnamed
+            expect(JSON.stringify(withIntern)).not.toContain('Acme Corp');
+            expect(engine.DescribeForPrompt(withIntern)).not.toContain('Acme Corp');
+            expect((await engine.FilterNodesForUser([NODE.Account('acc-1')], analyst, [intern])).get(engine.GetNodeKey(NODE.Account('acc-1')))?.Label).toBe('Accounts acc-1');
+        });
+
+        it('shows a stored edge\'s Description and Attributes only when every principal may read them, cache path included', async () => {
+            const provider = providerWith({ 'MJ: Graph Edges': [secretEdge()], Accounts: [{ ID: 'acc-1', Name: 'Acme Corp' }] }, specs());
+            const engine = await configure(provider);
+            const alone = await engine.Subgraph('MJ Canon', canonSeed, { Depth: 1 }, analyst);
+            expect(alone.Edges[0].Description).toBe('Board-approved merger rationale');
+            expect(alone.Edges[0].Attributes).toEqual({ DealCode: 'FALCON' });
+
+            const withIntern = await engine.Subgraph('MJ Canon', canonSeed, { Depth: 1, AudienceReaders: [intern] }, analyst);
+            expect(withIntern.Edges).toHaveLength(1);
+            expect(withIntern.Edges[0].Description).toBeNull();
+            expect(withIntern.Edges[0].Attributes).toBeNull();
+
+            // The intern alone is served from the preload cache (loaded with every column): still no text.
+            const internAlone = await engine.Subgraph('MJ Canon', canonSeed, { Depth: 1 }, intern);
+            expect(JSON.stringify(internAlone)).not.toContain('merger rationale');
+            expect(JSON.stringify(internAlone)).not.toContain('FALCON');
+        });
+
+        it('keeps only the derived-edge text every principal\'s own provider read produced', async () => {
+            const provider = providerWith({
+                'MJ: Graph Edge Providers': [{ ID: 'p-1', GraphID: IDS.GraphCanon, Name: 'Per-user', DriverClass: PER_USER_PROVIDER, Configuration: null, Sequence: 1, IsActive: true }],
+                Accounts: [{ ID: 'acc-1', Name: 'Acme Corp' }],
+            });
+            const engine = await configure(provider);
+            const withIntern = await engine.Subgraph('MJ Canon', canonSeed, { Depth: 1, AudienceReaders: [intern] }, analyst);
+            const derived = withIntern.Edges.find((e) => e.ID.startsWith('derived:'));
+            expect(derived?.Description).toBeNull();
+            expect(derived?.Attributes).toEqual({ Shared: 'yes' });
+            const alone = await engine.Subgraph('MJ Canon', canonSeed, { Depth: 1 }, analyst);
+            expect(alone.Edges.find((e) => e.ID.startsWith('derived:'))?.Attributes).toEqual({ Shared: 'yes', Salary: 120000 });
         });
     });
 
