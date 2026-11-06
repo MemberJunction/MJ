@@ -54,7 +54,7 @@ The `RedisProviderConfig` object supports the following options:
 | `keyPrefix` | `string` | `'mj'` | Prefix for all Redis keys. Useful for isolating MJ data in a shared Redis instance. |
 | `defaultTTLSeconds` | `number` | `3600` | Default time-to-live for all cached entries. `0` means keys persist until explicitly removed. |
 | `maxRetries` | `number` | `10` | Maximum reconnection attempts with exponential backoff before giving up. |
-| `readTimeoutMs` | `number` | `2000` | Longest a cache read (`GetItem`, `GetItems`, `GetIndexGroupKeys`, `GetCategoryKeys`) waits before it is answered as a cache miss. Writes, removals and invalidations have no limit. `0` waits without a limit. |
+| `readTimeoutMs` | `number` | `2000` | Longest a cache read (`GetItem`, `GetItems`, `GetIndexGroupKeys`, `GetCategoryKeys`) waits before it is answered as a cache miss. Writes, removals and invalidations have no limit. When `GetIndexGroupKeys` (asked on save) times out, the slots it returns are removed once Redis answers. `0` waits without a limit. |
 | `enableLogging` | `boolean` | `true` | Whether to log connection events via MJ's `LogStatus`/`LogError`. |
 
 ### Connection Examples

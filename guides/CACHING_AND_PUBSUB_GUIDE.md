@@ -2262,8 +2262,11 @@ can be stale because nothing is cached yet.
 above, but a Redis that stays connected and answers slowly is not. Reads (`GetItem`, `GetItems`,
 `GetIndexGroupKeys`, `GetCategoryKeys`) are raced against `readTimeoutMs` (default 2000 ms) and
 answered as a cache miss when they lose, logged at most once per ten seconds. Writes, removals and
-invalidations are not timed out, so an invalidation is never dropped; that is also why this is not
-ioredis's client-wide `commandTimeout`.
+invalidations are not timed out; that is also why this is not ioredis's client-wide `commandTimeout`.
+`GetIndexGroupKeys` is asked by saves to find the slots peer servers wrote, so when it times out the
+command is left running and the slots it returns are removed once Redis answers: a stall delays that
+invalidation rather than dropping it. A command that fails outright answers "none", and those peer
+slots last until their TTL.
 
 **Reconnection never gives up.** The ceiling is on the delay between attempts
 (`maxRetryDelayMs`, default 30s), not on the number of attempts. Setting `maxRetries` reinstates a

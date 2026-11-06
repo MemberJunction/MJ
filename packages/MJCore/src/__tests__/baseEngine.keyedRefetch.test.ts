@@ -53,6 +53,10 @@ class TestEngine extends BaseEngine<TestEngine> {
         return this.HandleRemoteInvalidateEvent(event);
     }
 
+    public Reload(): Promise<void> {
+        return this.LoadSingleConfig(this.configs[0], {} as UserInfo, true);
+    }
+
     protected override AutoRefreshConfigsForEntity(entityName: string): BaseEnginePropertyConfig[] {
         return this.configs.filter(c => c.EntityName?.toLowerCase() === entityName.toLowerCase());
     }
@@ -66,6 +70,8 @@ class TestEngine extends BaseEngine<TestEngine> {
 let database: Row[] = [];
 let calls: RunViewParams[] = [];
 let failKeyedRead = false;
+/** Runs once when the next keyed read is asked for, before it answers. */
+let beforeKeyedAnswer: (() => Promise<void>) | null = null;
 
 function ok(rows: Row[]): RunViewResult {
     return { Success: true, Results: rows.map(r => ({ ...r })), RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
@@ -114,8 +120,16 @@ beforeEach(() => {
     ];
     calls = [];
     failKeyedRead = false;
+    beforeKeyedAnswer = null;
     vi.spyOn(RunView.prototype, 'RunView').mockImplementation(async (params: RunViewParams) => {
         calls.push(params);
+        if (beforeKeyedAnswer && /ID IN \(/.test(params.ExtraFilter ?? '')) {
+            const hook = beforeKeyedAnswer;
+            beforeKeyedAnswer = null;
+            const stale = answer(params); // read before the reload below lands
+            await hook();
+            return stale;
+        }
         return answer(params);
     });
 });
@@ -234,5 +248,26 @@ describe('BaseEngine keyed re-fetch on a no-row-data invalidation', () => {
         expect(fullCalls()).toHaveLength(0);
         expect(keyedCalls()).toHaveLength(1);
         expect(engine.Rows.map(r => r.ID)).toEqual(['a', 'c']);
+    });
+
+    it('does not write over a full reload that began while the keyed read ran', async () => {
+        const engine = await loadedEngine();
+        database[0].Version = 2;
+        beforeKeyedAnswer = async () => {
+            database[0].Version = 3;
+            await engine.Reload();
+        };
+        await engine.Handle(event('a'));
+        expect(engine.Rows.find(r => r.ID === 'a')?.Version).toBe(3);
+    });
+
+    it('applies the rows when the held array is frozen', async () => {
+        const engine = await loadedEngine();
+        Object.freeze(engine.Rows);
+        database[0].Version = 2;
+        await engine.Handle(event('a'));
+        expect(keyedCalls()).toHaveLength(1);
+        expect(fullCalls()).toHaveLength(0);
+        expect(engine.Rows.find(r => r.ID === 'a')?.Version).toBe(2);
     });
 });

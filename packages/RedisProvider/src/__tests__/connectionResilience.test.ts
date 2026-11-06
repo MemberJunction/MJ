@@ -790,6 +790,27 @@ describe('RedisLocalStorageProvider — a connected but saturated Redis', () => 
         }
     });
 
+    it('removes the slots a timed-out index-group read finds once Redis answers', async () => {
+        vi.useFakeTimers();
+        try {
+            const { provider, client } = connected({ readTimeoutMs: 50 });
+            let release: (v: unknown) => void = () => undefined;
+            client.eval.mockImplementation(() => new Promise<unknown>(r => { release = r; }));
+
+            const group = provider.GetIndexGroupKeys('RunViewCache', 'Users');
+            await vi.advanceTimersByTimeAsync(50);
+            await expect(group).resolves.toEqual([]);
+            expect(client.del).not.toHaveBeenCalled();
+
+            release(['peer-a', 'peer-b']);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(client.del).toHaveBeenCalledWith('mj:RunViewCache:peer-a');
+            expect(client.del).toHaveBeenCalledWith('mj:RunViewCache:peer-b');
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it('waits without a limit when readTimeoutMs is 0', async () => {
         vi.useFakeTimers();
         try {

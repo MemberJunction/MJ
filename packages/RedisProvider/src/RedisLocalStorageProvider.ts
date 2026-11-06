@@ -127,7 +127,10 @@ export interface RedisProviderConfig {
      * as a cache miss, so the caller reads the database instead of waiting.
      *
      * Applies to `GetItem`, `GetItems`, `GetIndexGroupKeys` and `GetCategoryKeys`. Writes,
-     * removals and invalidations have no timeout, so an invalidation is never dropped. A Redis
+     * removals and invalidations have no timeout. `GetIndexGroupKeys` runs on the save path, so
+     * when it times out the slots it returns are removed once Redis answers: a stall delays the
+     * invalidation rather than dropping it. A command that fails outright still answers "none"
+     * and leaves peer slots to the TTL. A Redis
      * that is connected but saturated otherwise leaves every cached read waiting with no bound;
      * a lost connection is already answered as a miss without this setting.
      *
@@ -1297,16 +1300,29 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
             this.noteMutationWhileDisconnected();
             return [];
         }
+        const cat = category || DEFAULT_CATEGORY;
+        let command: Promise<unknown> | undefined;
         try {
-            const cat = category || DEFAULT_CATEGORY;
             const groupSetKey = this.buildGroupSetKey(cat, group);
-            const alive = await this.withReadTimeout('index group read', this._client.eval(PRUNE_GROUP_SCRIPT, 1, groupSetKey, this.buildKey('', cat)));
+            command = this._client.eval(PRUNE_GROUP_SCRIPT, 1, groupSetKey, this.buildKey('', cat));
+            const alive = await this.withReadTimeout('index group read', command);
             return Array.isArray(alive) ? alive.map(m => String(m)) : [];
         } catch (err) {
             if (err instanceof RedisReadTimeoutError) {
-                // The caller still has this process's own index; only slots peers wrote that this
-                // process has not seen are missed, and they expire under the TTL.
+                // Only the save/delete path asks this, and peers do not clean up their own slots, so
+                // answering "none" alone would leave peer slots stale until the TTL. The caller is
+                // answered now; the slots are removed once Redis answers, and reload from the database.
                 this.noteReadTimeout(err);
+                command?.then(
+                    (alive) => {
+                        if (Array.isArray(alive)) {
+                            for (const key of alive) {
+                                void this.Remove(String(key), cat);
+                            }
+                        }
+                    },
+                    () => undefined,
+                );
                 return [];
             }
             if (this._enableLogging) {

@@ -914,9 +914,10 @@ function num(v: number | null | undefined): number {
 /**
  * Run-weighted latency across one model's AIUsageByModel rows.
  *
- * The query computes exact percentiles per (vendor, model, currency). A model normally has one such
- * row; when it has several (more than one vendor or currency), their percentiles are weighted by
- * runs. That is an approximation, but it never averages per-hour medians.
+ * The query computes exact percentiles per (vendor, model, currency). Unpriced runs have no currency,
+ * so a model with both priced and unpriced runs has at least two rows, as does one with more than one
+ * vendor or currency. Several rows' percentiles are weighted by runs. That is an approximation, but it
+ * never averages per-hour medians.
  */
 function weightedLatency(rows: AIUsageByModelRow[], pick: (r: AIUsageByModelRow) => number | null): number | null {
   let weighted = 0;

@@ -3713,6 +3713,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             CacheLocal: false,
         };
 
+        const generationBefore = this._configRefreshGeneration.get(config.PropertyName) ?? 0;
         let result: RunViewResult;
         try {
             result = await new RunView(this.RunViewProviderToUse).RunView(params, this._contextUser);
@@ -3725,11 +3726,20 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             return false;
         }
 
-        // The config may have been reloaded or dropped while the read ran.
-        const held = this.getHeldRowsForDelta(config);
-        if (!held) {
+        // The config may have been reloaded or dropped while the read ran. A reload that began
+        // meanwhile may hold newer rows than this read, so do not write over it.
+        if (
+            (this._configRefreshGeneration.get(config.PropertyName) ?? 0) !== generationBefore ||
+            (this._inFlightFullRefreshCount.get(config.PropertyName) ?? 0) > 0
+        ) {
             return false;
         }
+        const heldNow = this.getHeldRowsForDelta(config);
+        if (!heldNow) {
+            return false;
+        }
+        // Write to a copy: the held array can be frozen when it is shared with a cache.
+        const held = [...heldNow];
         const pkFields = [pkField.Name];
         const isUuidPk = [Boolean(pkField.IsUniqueIdentifier)];
         const requested = new Set<string>();
@@ -3769,6 +3779,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         for (const index of removals) {
             const [removed] = held.splice(index, 1);
             this.NotifyDataChange(config, held, 'delete', removed instanceof BaseEntity ? removed : undefined);
+        }
+        if (config.AddToObject !== false) {
+            Reflect.set(this, config.PropertyName, held);
         }
         this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: held, loadedSuccessfully: true });
         return true;
