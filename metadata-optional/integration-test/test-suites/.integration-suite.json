@@ -1922,7 +1922,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT164 - Graph Runtime Permissions",
-            "Sequence": 50,
+            "Sequence": 49,
             "Status": "Active"
           },
           "primaryKey": {
@@ -1933,7 +1933,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT165 - Task Graph Security and Saga",
-            "Sequence": 51,
+            "Sequence": 49,
             "Status": "Active"
           },
           "primaryKey": {
