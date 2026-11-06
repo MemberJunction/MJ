@@ -59,7 +59,7 @@ import {
     type TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
 import { DatabaseProviderBase, IMetadataProvider, IRunQueryProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
-import { EscapeSQLString, IShutdownable, IndexByUUID, ShutdownRegistry, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, GroupByUUID, IShutdownable, IndexByUUID, ShutdownRegistry, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity, MJAIAgentRequestEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 import type { MJActionExecutionLogEntity, MJRecordChangeEntity } from '@memberjunction/core-entities';
 import type { MJTaskEntity_ITaskStepConfiguration, MJTaskEntity_ITaskLoopIteration } from '@memberjunction/core-entities';
@@ -438,6 +438,12 @@ type GraphState = {
     parent: MJTaskEntity | null;
     parentMetadata: TaskGraphParentMetadata;
     rawDependencies: MJTaskDependencyEntity[];
+    /**
+     * `rawDependencies` grouped by the task that depends (`TaskID`), built once on first use by
+     * `dependencyRowsOf`, so finding one task's prerequisites inside a per-task loop is a lookup, not
+     * a scan of every edge.
+     */
+    dependenciesByTask?: UUIDMap<MJTaskDependencyEntity[]>;
     nodes: TaskGraphNode[];
     edges: TaskGraphEdge[];
     entityById: Map<string, MJTaskEntity>;
@@ -3702,12 +3708,20 @@ export class TaskGraphDispatcher implements IShutdownable {
     /** The task rows `taskID` depends on, from the loaded graph (no query). */
     private upstreamTasksInGraph(taskID: string, graph: GraphState): MJTaskEntity[] {
         const upstream: MJTaskEntity[] = [];
-        for (const dep of graph.rawDependencies ?? []) {
-            if (!UUIDsEqual(dep.TaskID, taskID)) continue;
+        for (const dep of this.dependencyRowsOf(taskID, graph)) {
             const row = graph.entityById.get(dep.DependsOnTaskID);
             if (row) upstream.push(row);
         }
         return upstream;
+    }
+
+    /**
+     * The graph's dependency rows of `taskID`. Indexed once per graph load: callers ask for every
+     * claimable task in turn, and scanning all edges per task made a pass O(tasks × edges).
+     */
+    private dependencyRowsOf(taskID: string, graph: GraphState): MJTaskDependencyEntity[] {
+        graph.dependenciesByTask ??= GroupByUUID(graph.rawDependencies ?? [], (dep) => dep.TaskID);
+        return graph.dependenciesByTask.Get(taskID) ?? [];
     }
 
     /**
@@ -3769,9 +3783,7 @@ export class TaskGraphDispatcher implements IShutdownable {
      */
     private extractDependencyOutputsFromGraph(taskID: string, graph: GraphState): Map<string, unknown> {
         const outputs = new Map<string, unknown>();
-        const deps = graph.rawDependencies ?? [];
-        for (const dep of deps) {
-            if (!UUIDsEqual(dep.TaskID, taskID)) continue;
+        for (const dep of this.dependencyRowsOf(taskID, graph)) {
             const upstream = graph.entityById.get(dep.DependsOnTaskID);
             if (!upstream?.OutputPayload) continue;
             try {
