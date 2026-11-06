@@ -3280,7 +3280,7 @@ export class BaseAgent {
     /**
      * What this run carries that a graph would have to carry too, or null when nothing: an audience that adds a
      * reader, host-assigned search scopes, a tenant or secondary dimension (`ActionRunScopeIsBounded`), bound
-     * action parameters, or the caller's tenant context. A graph runs outside the run — its nodes are claimed later
+     * action parameters, the caller's tenant context, or taint. A graph runs outside the run — its nodes are claimed later
      * by a dispatcher, as a background worker — so each of these is lost unless the graph's security envelope
      * carries it.
      */
@@ -3298,7 +3298,12 @@ export class BaseAgent {
         if (this.hasBoundActionParams(params.boundActionParams)) {
             return 'a run with bound action parameters';
         }
-        return params.contextUser?.TenantContext ? 'a run with a tenant context' : null;
+        if (params.contextUser?.TenantContext) {
+            return 'a run with a tenant context';
+        }
+        // Taint alone is a constraint too: a graph is the run's work continued elsewhere, and only an
+        // envelope-carrying submitter takes the taint along, so its nodes still refuse egress actions.
+        return this.IsRunTainted || params.SecurityEnvelope?.IsRunTainted === true ? 'a run that ingested untrusted content' : null;
     }
 
     /**

@@ -36,6 +36,7 @@ type AgentInternals = {
     promptWithholding: (p: ExecuteAgentParams) => { TaskGraphs: boolean };
     executeTasksStep: (p: ExecuteAgentParams, prev: unknown) => Promise<{ step: string; errorMessage?: string }>;
     seedTaintFromSecurityEnvelope: (p: ExecuteAgentParams) => void;
+    recordTaintedSource: (stepNumber: number, sourceName: string, trustLevel: 'Untrusted') => void;
     createStepEntity: ReturnType<typeof vi.fn>;
     finalizeStepEntity: ReturnType<typeof vi.fn>;
 };
@@ -74,6 +75,7 @@ const CONSTRAINED_RUNS: Array<[string, Partial<ExecuteAgentParams> & { contextUs
     ['host-assigned search scopes', { SearchScopeIDs: [SEARCH_SCOPE_ID] }],
     ['bound parameters', { boundActionParams: { [ACTION_ID]: { OrganizationID: 'org-1' } } }],
     ["the caller's tenant context", { contextUser: userWithTenant({ TenantID: 'org-1', Source: 'header' }) }],
+    ['tainted input from its task-graph node', { SecurityEnvelope: { Version: TASK_SECURITY_ENVELOPE_VERSION, IsRunTainted: true } }],
 ];
 
 describe('BaseAgent task-graph gate (S1)', () => {
@@ -109,6 +111,14 @@ describe('BaseAgent task-graph gate (S1)', () => {
         const p = params(extra);
         expect(internals.taskGraphWithholdingReason(p)).toBeNull();
         expect(internals.promptWithholding(p).TaskGraphs).toBe(false);
+    });
+
+    it('withholds graphs from a run that became tainted when the submitter would drop the taint (M2)', async () => {
+        RegisterTaskGraphSubmitter(new RecordingSubmitter());
+        const { internals } = agentInternals();
+        internals.recordTaintedSource(1, 'Web Page Fetch', 'Untrusted');
+        expect(internals.taskGraphWithholdingReason(params())).toBe('a run that ingested untrusted content');
+        expect((await internals.executeTasksStep(params(), TASKS_STEP)).step).toBe('Failed');
     });
 
     it('still withholds graphs when the tenant context cannot travel in an envelope', () => {
