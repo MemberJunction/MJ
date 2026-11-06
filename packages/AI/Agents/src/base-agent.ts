@@ -149,6 +149,7 @@ import {
     type TaskGraphSpecNode,
     BuildTaskSecurityEnvelope,
     MergeTaskSecurityEnvelopes,
+    TAINTED_EGRESS_BLOCKED,
     TASK_SECURITY_ENVELOPE_VERSION,
     TenantContextCarryProblem,
     type TaskSecurityEnvelope,
@@ -13687,6 +13688,12 @@ The context is now within limits. Please retry your request with the recovered c
             return policyBlocked;
         }
 
+        // A run under a task-graph envelope refuses egress once tainted, whenever the taint arrived.
+        const taintBlocked = this.checkTaintedEgress(params, action, actionEntity, contextUser ?? params.contextUser);
+        if (taintBlocked) {
+            return taintBlocked;
+        }
+
         // The run's audience, hydrated once per run — lazily here, since this method is also called outside
         // Execute (the pipeline executor, tests). An unusable audience refuses the call: nothing is dispatched.
         const audience = await this.audienceReadersFor(params);
@@ -13722,6 +13729,37 @@ The context is now within limits. Please retry your request with the recovered c
             });
             throw new Error(`Error executing actions: ${error.message}`);
         }
+    }
+
+    /**
+     * Refuses a `disallowWhenTainted` action (`Action.Config_Object`) in a run that executes under a
+     * task-graph security envelope (`ExecuteAgentParams.SecurityEnvelope`: a graph's agent node, its
+     * continuation turn, or a sub-agent of either) once the run is tainted — checked on every call against
+     * the run's current taint. The node's runner takes those actions away from a run that starts tainted;
+     * this is what stops one that becomes tainted mid-run (it read a web page, then tries to send mail).
+     */
+    private checkTaintedEgress(
+        params: ExecuteAgentParams,
+        action: AgentAction,
+        actionEntity: MJActionEntityExtended,
+        contextUser?: UserInfo
+    ): ActionResult | null {
+        if (!params.SecurityEnvelope || !this.IsRunTainted || actionEntity.Config_Object?.disallowWhenTainted !== true) {
+            return null;
+        }
+        return {
+            Success: false,
+            ResultCode: TAINTED_EGRESS_BLOCKED,
+            Message: `Action "${actionEntity.Name}" was not run: this workflow step has read untrusted content, and the action ` +
+                'sends data out or cannot be undone. A person must review the content in a Human step before it can run.',
+            Params: [],
+            RunParams: {
+                Action: actionEntity,
+                Params: this.toActionParams({ Params: action.params ?? {}, Bound: [] }, actionEntity),
+                ContextUser: contextUser,
+                Filters: [],
+            },
+        };
     }
 
     /**

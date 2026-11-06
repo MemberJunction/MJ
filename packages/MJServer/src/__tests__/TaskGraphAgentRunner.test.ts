@@ -63,6 +63,7 @@ vi.mock('@memberjunction/core-entities', () => ({
 vi.mock('@memberjunction/ai-core-plus', () => ({
     MJAIAgentEntityExtended: class {},
     MJAIAgentRunEntityExtended: class {},
+    TASK_SECURITY_ENVELOPE_VERSION: 1,
 }));
 vi.mock('@memberjunction/ai', () => ({ ChatMessageRole: { user: 'user' } }));
 
@@ -588,6 +589,14 @@ describe('TaskGraphAgentRunner security envelope (S1, S2, S7)', () => {
         } finally {
             cached.length = 0;
         }
+    });
+
+    it('runs a step of an unconstrained graph under a clean envelope, so taint gained mid-run still gates egress (M1)', async () => {
+        await new TaskGraphAgentRunner().RunAgentForTask(makeParams());
+        const runParams = mockRunAgent.mock.calls[0][0];
+        expect(runParams.SecurityEnvelope).toEqual({ Version: 1, IsRunTainted: false });
+        expect(runParams.actionChanges).toBeUndefined();
+        expect(runParams.Audience).toBeUndefined();
     });
 
     it('lists no change when no action is gated', () => {

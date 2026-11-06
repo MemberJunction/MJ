@@ -3,12 +3,15 @@
  *
  * - S2: a sub-agent starts tainted when its parent is (the same `SecurityEnvelope.IsRunTainted` seed a graph's
  *   agent node uses), keeps the parent's node envelope, and the parent absorbs the child's taint back.
+ * - M1: a run under a task-graph envelope refuses a `disallowWhenTainted` action once it is tainted, whenever the
+ *   taint arrived — not only when it started tainted.
  *
  * The BaseAgent logic is real; the action engine and the sub-agent runner are the boundaries.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { UserInfo } from '@memberjunction/core';
 import {
+    TAINTED_EGRESS_BLOCKED,
     TASK_SECURITY_ENVELOPE_VERSION,
     type AgentAction,
     type AgentSubAgentRequest,
@@ -134,5 +137,37 @@ describe('BaseAgent sub-agents and taint (S2)', () => {
         await parent.CallSubAgent(paramsWith());
         expect(parent.IsRunTainted).toBe(true);
         expect(parent.TaintedSources.map((s) => s.sourceName)).toEqual(['sub-agent:Child/Web Search']);
+    });
+});
+
+describe('BaseAgent egress gate on taint gained mid-run (M1)', () => {
+    beforeEach(() => {
+        h.dispatched.length = 0;
+    });
+
+    const send = (agent: BaseAgent, params: ExecuteAgentParams, entity: MJActionEntityExtended = SEND_EMAIL) =>
+        agent.ExecuteSingleAction(params, EMAIL, entity, CALLER, { skipCircuitBreaker: true });
+
+    it('refuses a disallowWhenTainted action once a graph node becomes tainted, without dispatching it', async () => {
+        const agent = new TaintableAgent();
+        expect((await send(agent, paramsWith({ SecurityEnvelope: CLEAN_NODE }))).Success).toBe(true);
+        agent.ReadUntrusted();
+        const refused = await send(agent, paramsWith({ SecurityEnvelope: CLEAN_NODE }));
+        expect(refused.Success).toBe(false);
+        expect(refused.ResultCode).toBe(TAINTED_EGRESS_BLOCKED);
+        expect(h.dispatched).toHaveLength(1);
+    });
+
+    it('still runs an action that is not disallowWhenTainted', async () => {
+        const agent = new TaintableAgent();
+        agent.ReadUntrusted();
+        expect((await send(agent, paramsWith({ SecurityEnvelope: CLEAN_NODE }), SEARCH)).Success).toBe(true);
+        expect(h.dispatched).toHaveLength(1);
+    });
+
+    it('leaves a run outside any task graph to its own policies', async () => {
+        const agent = new TaintableAgent();
+        agent.ReadUntrusted();
+        expect((await send(agent, paramsWith())).Success).toBe(true);
     });
 });
