@@ -12,6 +12,7 @@ export type FeedbackAnswer = 'Bug' | 'Intended' | 'TestFault' | 'AuthorChangedPR
 export type RuleKind = 'Drop' | 'Boost';
 export type Vendor = 'Anthropic' | 'OpenAI' | 'Gemini';
 
+/** InputTokens = uncached input + cache-creation tokens; CacheReadTokens = cache reads (priced as cached input). */
 export interface TokenUsage { Model: string; InputTokens: number; OutputTokens: number; CacheReadTokens: number; CostUSD: number; }
 
 export interface Run {
@@ -73,7 +74,7 @@ export interface JudgeScore { Judge: string; Model: string; Score: number; Bucke
 
 export interface GenerationLimits {
     TestsPerPackage: number; RisksPerPackage: number; TestsPerRisk: number; PackagesPerPR: number; ParallelSessions: number;
-    TurnsPerSession: number; TokensPerSession: number;
+    TurnsPerSession: number; TokensPerSession: number; UsdPerSession: number;
 }
 export interface GenerationRequest {
     Run: Run; Analysis: ChangeAnalysis; Package: string; PackageDir: string; BaseRootDir: string; Method: GenerationMethod;
