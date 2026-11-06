@@ -1,6 +1,6 @@
 import type { DiffHunk } from '../types';
 
-const FILE_RE = /^\+\+\+ (?:b\/(.+)|\/dev\/null)$/;
+const FILE_RE = /^\+\+\+ (?:b\/(.+?)\t?|\/dev\/null)$/;
 const HUNK_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 
 /** Parses `git diff` output into hunks. Lines keep their leading `+`, `-` or space. */
