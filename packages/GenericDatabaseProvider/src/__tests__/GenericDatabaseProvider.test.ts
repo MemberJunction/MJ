@@ -1075,6 +1075,20 @@ describe('GenericDatabaseProvider', () => {
             it('returns null for an empty string', () => {
                 expect(RLS().TryExtractSimpleFilterColumns('')).toBeNull();
             });
+
+            it('accepts string, number and NULL literals on the right side', () => {
+                expect(RLS().TryExtractSimpleFilterColumns("A = N'x' AND B >= -2.5 AND C <> 0 AND D LIKE 'a%' AND E = NULL")).toEqual(['a', 'b', 'c', 'd', 'e']);
+            });
+
+            it('returns null when the right side is a column', () => {
+                expect(RLS().TryExtractSimpleFilterColumns('OwnerID = ManagerID')).toBeNull();
+                expect(RLS().TryExtractSimpleFilterColumns("OrgID = 'a' AND [TeamID] = [ParentTeamID]")).toBeNull();
+            });
+
+            it('returns null for subtraction or modulo on the right side', () => {
+                expect(RLS().TryExtractSimpleFilterColumns('Score = Base - 5')).toBeNull();
+                expect(RLS().TryExtractSimpleFilterColumns('Score = 7 % 2')).toBeNull();
+            });
         });
 
         describe('BuildRLSSyntheticRowProjections', () => {
