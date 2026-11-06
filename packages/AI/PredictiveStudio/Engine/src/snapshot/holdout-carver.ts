@@ -110,8 +110,8 @@ export class DateCarvedCarver implements IHoldoutCarver {
 }
 
 /**
- * The seeded row-hash carve for units whose rows share one fixed decision date (no date to carve on): a row is held
- * out when the protocol seed's hash of its row id falls below the fraction, whatever the order the rows were read in.
+ * The seeded group-hash carve for units whose rows share one fixed decision date (no date to carve on): a row is held
+ * out when the protocol seed's hash of its group key (the entity key when the unit declares no group field) falls below the fraction, so a group is never split across the holdout, whatever the order the rows were read in.
  * A carve that leaves either side empty is refused.
  */
 export class SeededRandomCarver implements IHoldoutCarver {
@@ -123,7 +123,7 @@ export class SeededRandomCarver implements IHoldoutCarver {
 
   /** @throws TrainingRefusedError (`carve` stage, `seeded-random-side-empty`) when the carve leaves no holdout or no development row */
   public AssignRoles(rows: readonly CarvedRowRef[], unitRows: ReadonlyMap<string, UnitRow>): HoldoutCarveOutcome {
-    const carve = HoldoutCarve.SeededRandomCarve(rows.map((r) => r.RowID), this.fraction, this.seed);
+    const carve = HoldoutCarve.SeededRandomCarve(rows.map((r) => ({ RowID: r.RowID, GroupKey: HoldoutCarvers.UnitRowOf(unitRows, r.RowID).GroupKey })), this.fraction, this.seed);
     this.refuseEmptySide(carve.HoldoutRowIDs.length, carve.DevelopmentRowIDs.length);
     const summary: HoldoutCarveSummary = {
       kind: 'seeded-random', cutoff: null, holdoutEnd: null, developmentRowCount: carve.DevelopmentRowIDs.length, holdoutRowCount: carve.HoldoutRowIDs.length,

@@ -6,7 +6,7 @@
  * - date-carved: rows whose carve date is on or after the cutoff (and before `holdoutEnd`, when set) are the holdout,
  *   earlier rows are development, rows on or after `holdoutEnd` are left out and counted. An optional new-entity report
  *   holds out the newest entities whole.
- * - seeded-random: a row-hash holdout for units with one fixed decision date (no date to carve on).
+ * - seeded-random: a group-hash holdout for units with one fixed decision date (no date to carve on).
  * - rolling-origin: the last `origins × horizonPeriods` periods of a forecast series.
  *
  * Every carve depends only on dates, keys and the protocol, never on the order the rows were read in or on the host's
@@ -117,6 +117,12 @@ export type CarveResult =
   | { readonly Ok: true; readonly Deployment: DeploymentCarve; readonly NewEntity: NewEntityCarve | null }
   | { readonly Ok: false; readonly Refusal: CarveRefusal };
 
+/** A row to place in a seeded-random carve: its id, and the group key whose hash decides its side. */
+export interface SeededCarveRow {
+  readonly RowID: string;
+  readonly GroupKey: string;
+}
+
 /** The result of a seeded-random carve: every row is in exactly one of the two lists, each sorted by row id. */
 export interface SeededRandomCarveResult {
   /** The rows whose seeded hash falls below the fraction. */
@@ -207,13 +213,17 @@ export class HoldoutCarve {
   }
 
   /**
-   * The holdout is every row whose hash of `<seed>:<rowId>`, read as a fraction of 2^32, is below `fraction`. A row's
-   * role depends only on the seed and its own id, so it never changes with the read order or with other rows.
+   * The holdout is every row whose group key's hash of `<seed>:<groupKey>`, read as a fraction of 2^32, is below
+   * `fraction`. Rows that share a group key (one person's several rows) share one hash, so a group is wholly held out or
+   * wholly in development and never straddles the split. A row's role depends only on the seed and its group key, so it
+   * never changes with the read order or with other rows. Both id lists are sorted by row id.
    */
-  public static SeededRandomCarve(rowIds: readonly string[], fraction: number, seed: number): SeededRandomCarveResult {
+  public static SeededRandomCarve(rows: readonly SeededCarveRow[], fraction: number, seed: number): SeededRandomCarveResult {
     const hold: string[] = [];
     const dev: string[] = [];
-    for (const id of [...rowIds].sort(OrdinalCompare)) (HoldoutCarve.seededRowHash(seed, id) / 4294967296 < fraction ? hold : dev).push(id);
+    for (const row of [...rows].sort((a, b) => OrdinalCompare(a.RowID, b.RowID))) {
+      (HoldoutCarve.seededRowHash(seed, row.GroupKey) / 4294967296 < fraction ? hold : dev).push(row.RowID);
+    }
     return { HoldoutRowIDs: hold, DevelopmentRowIDs: dev };
   }
 
@@ -391,8 +401,8 @@ export class HoldoutCarve {
   }
 
   /**
-   * The 32-bit hash that places a row in or out of a seeded-random holdout: FNV-1a over the UTF-16 code units of
-   * `<seed>:<rowId>`, then the murmur3 `fmix32` finalizer.
+   * The 32-bit hash that places a group in or out of a seeded-random holdout: FNV-1a over the UTF-16 code units of
+   * `<seed>:<groupKey>`, then the murmur3 `fmix32` finalizer.
    *
    * Why the finalizer: FNV-1a mixes its last input bytes only into the low bits, so on short ids that differ in their
    * last characters (`r1`, `r2`, … or sequential integer keys) the high bits, which decide the comparison with
@@ -400,8 +410,8 @@ export class HoldoutCarve {
    * under seed 42 and 847 under seed 1 (expected 1,000). `fmix32` spreads every input bit over all 32 output bits, so the share matches the fraction for
    * any key shape. Changing this function re-carves every stored seeded-random holdout.
    */
-  private static seededRowHash(seed: number, rowId: string): number {
-    const text = `${seed}:${rowId}`;
+  private static seededRowHash(seed: number, groupKey: string): number {
+    const text = `${seed}:${groupKey}`;
     let h = 0x811c9dc5;
     for (let i = 0; i < text.length; i++) {
       h ^= text.charCodeAt(i);

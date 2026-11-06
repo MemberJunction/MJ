@@ -33,6 +33,9 @@ saved before search, a trainer that reports proper scores, baselines and interva
 Predictive Studio decides what a training run ships with a three-outcome gate (the model, a simple baseline, or no
 signal), stores that decision with its reason on the run, and renders the trust verdict from it.
 
+The seeded-random holdout carves by the unit row's group key, so every row of one group lands on the same side of the
+holdout.
+
 - `@memberjunction/predictive-studio-core`: `GateRules` (the gate decision table, proven equal to the reference
   pipeline's and to the sidecar's on seeded cases, plus two guards: a holdout minority class below
   `MinMinorityClassRows` and a binary AUC interval that contains 0.5 never ship) and `GateRecords` (the stored gate

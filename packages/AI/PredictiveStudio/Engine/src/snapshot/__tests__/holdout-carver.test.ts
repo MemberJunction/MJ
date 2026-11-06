@@ -86,10 +86,18 @@ describe('SeededRandomCarver', () => {
     expect([...rolesA].sort()).toEqual([...rolesB].sort());
     expect(rolesA.size).toBe(400);
     const held = [...rolesA].filter(([, role]) => role === 'locked-holdout').map(([id]) => id);
-    expect(held).toEqual(HoldoutCarve.SeededRandomCarve(rows.map((r) => r.RowID), 0.25, 7).HoldoutRowIDs);
+    expect(held).toEqual(HoldoutCarve.SeededRandomCarve(rows.map((r) => ({ RowID: r.RowID, GroupKey: r.GroupKey })), 0.25, 7).HoldoutRowIDs);
     expect(summary).toMatchObject({ kind: 'seeded-random', cutoff: null, holdoutEnd: null, holdoutRowCount: held.length, developmentRowCount: 400 - held.length, excludedAfterHoldoutEnd: 0, holdoutPeriods: [], newEntity: null });
     const classes = summary.holdoutClassCounts || {};
     expect((classes['0'] || 0) + (classes['1'] || 0)).toBe(held.length);
+  });
+
+  it('carves by the unit row group key, so a person with six rows is wholly in or out', () => {
+    const rows = Array.from({ length: 60 }, (_, i) => unitRow(`r${i}`, '2024-01-01', null, `p${Math.floor(i / 6)}`));
+    const { Roles: roles } = new SeededRandomCarver(0.3, 11).AssignRoles(rows.map((r) => assembled(r.RowID)), byId(rows));
+    const byGroup = new Map<string, Set<string>>();
+    for (const r of rows) byGroup.set(r.GroupKey, (byGroup.get(r.GroupKey) || new Set()).add(roles.get(r.RowID) || 'missing'));
+    expect([...byGroup.values()].every((s) => s.size === 1)).toBe(true);
   });
 
   it('refuses a carve that leaves no holdout row, and one that leaves no development row, at the carve stage', () => {
@@ -147,7 +155,7 @@ describe('HoldoutCarvers', () => {
     const seeded = HoldoutCarvers.CarverForProtocol(protocol({ kind: 'seeded-random', fraction: 0.25 }), unit);
     expect(seeded).toBeInstanceOf(SeededRandomCarver);
     const rows = Array.from({ length: 40 }, (_, i) => unitRow(`r${i}`, '2024-01-01', null));
-    expect(seeded.AssignRoles(rows.map((r) => assembled(r.RowID)), byId(rows)).Summary.holdoutRowCount).toBe(HoldoutCarve.SeededRandomCarve(rows.map((r) => r.RowID), 0.25, 7).HoldoutRowIDs.length);
+    expect(seeded.AssignRoles(rows.map((r) => assembled(r.RowID)), byId(rows)).Summary.holdoutRowCount).toBe(HoldoutCarve.SeededRandomCarve(rows.map((r) => ({ RowID: r.RowID, GroupKey: r.GroupKey })), 0.25, 7).HoldoutRowIDs.length);
   });
 
   it('refuses an assembled row that is not a unit row', () => {

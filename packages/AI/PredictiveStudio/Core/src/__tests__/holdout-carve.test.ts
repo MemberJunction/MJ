@@ -129,7 +129,8 @@ const SEED_42_HOLDOUT = 997;
 const SEED_7_EIGHT_ROWS: readonly string[] = ['r3', 'r5', 'r6', 'r7'];
 
 describe('HoldoutCarve.SeededRandomCarve', () => {
-  const ids = Array.from({ length: 4000 }, (_, i) => `r${i}`);
+  const ids = Array.from({ length: 4000 }, (_, i) => ({ RowID: `r${i}`, GroupKey: `r${i}` }));
+  const keyed = (list: readonly string[]) => list.map((id) => ({ RowID: id, GroupKey: id }));
   it('assigns the same rows whatever the read order, at about the declared fraction', () => {
     const a = HoldoutCarve.SeededRandomCarve(ids, 0.25, 42);
     const b = HoldoutCarve.SeededRandomCarve([...ids].reverse(), 0.25, 42);
@@ -147,12 +148,22 @@ describe('HoldoutCarve.SeededRandomCarve', () => {
   });
   it('keeps the assignment of a seed fixed across releases (a stored holdout is never silently re-carved)', () => {
     expect(HoldoutCarve.SeededRandomCarve(ids, 0.25, 42).HoldoutRowIDs.length).toBe(SEED_42_HOLDOUT);
-    expect(HoldoutCarve.SeededRandomCarve(['r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7'], 0.5, 7).HoldoutRowIDs).toEqual(SEED_7_EIGHT_ROWS);
+    expect(HoldoutCarve.SeededRandomCarve(keyed(['r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7']), 0.5, 7).HoldoutRowIDs).toEqual(SEED_7_EIGHT_ROWS);
   });
   it('draws a different holdout under a different seed', () => {
     const a = new Set(HoldoutCarve.SeededRandomCarve(ids, 0.25, 1).HoldoutRowIDs);
     const b = HoldoutCarve.SeededRandomCarve(ids, 0.25, 2).HoldoutRowIDs;
     expect(b.filter((id) => a.has(id)).length).toBeLessThan(b.length / 2);
+  });
+  it('keeps every row of a group on one side (300 groups of 6 rows, none straddle)', () => {
+    const rows = Array.from({ length: 1800 }, (_, i) => ({ RowID: `r${i}`, GroupKey: `g${Math.floor(i / 6)}` }));
+    const carve = HoldoutCarve.SeededRandomCarve(rows, 0.25, 42);
+    const held = new Set(carve.HoldoutRowIDs);
+    const sides = new Map<string, Set<boolean>>();
+    for (const r of rows) sides.set(r.GroupKey, (sides.get(r.GroupKey) || new Set()).add(held.has(r.RowID)));
+    expect([...sides.values()].filter((s) => s.size === 2)).toHaveLength(0);
+    expect(carve.HoldoutRowIDs.length).toBeGreaterThan(300);
+    expect(carve.HoldoutRowIDs.length).toBeLessThan(600);
   });
 });
 
