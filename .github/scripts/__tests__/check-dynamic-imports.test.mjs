@@ -127,6 +127,18 @@ describe('ScanTree', () => {
     expect(violations).toEqual([]);
     expect(dynamic).toHaveLength(1);
   });
+
+  it('reports files with import() that have no enclosing package.json', () => {
+    const root = fixture({
+      'loose/x.ts': "await import('missing');",
+      'a/package.json': { name: 'a' },
+      'a/src/y.ts': 'export const y = 1;',
+    });
+    const { violations, unowned, scanned } = ScanTree(root);
+    expect(violations).toEqual([]);
+    expect(scanned).toBe(0);
+    expect(unowned).toEqual([join(root, 'loose', 'x.ts')]);
+  });
 });
 
 describe('CLI', () => {

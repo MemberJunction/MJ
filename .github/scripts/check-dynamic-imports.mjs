@@ -141,12 +141,14 @@ function isSourceFile(name) {
 
 /**
  * Scans `root` recursively. Each file is checked against its nearest package.json.
- * Returns `{ violations, dynamic, scanned }`.
+ * Returns `{ violations, dynamic, scanned, unowned }`; `unowned` lists files with import() that have no
+ * enclosing package.json and so cannot be checked.
  */
 export function ScanTree(root) {
   const violations = [];
   const dynamic = [];
   let scanned = 0;
+  const unowned = [];
   const walk = (dir, owner) => {
     const pkgPath = join(dir, 'package.json');
     if (existsSync(pkgPath)) {
@@ -161,10 +163,14 @@ export function ScanTree(root) {
         if (!SKIP_DIRS.has(entry.name)) walk(join(dir, entry.name), owner);
         continue;
       }
-      if (!entry.isFile() || !isSourceFile(entry.name) || !owner) continue;
+      if (!entry.isFile() || !isSourceFile(entry.name)) continue;
       const file = join(dir, entry.name);
       const text = readFileSync(file, 'utf8');
       if (!text.includes('import(')) continue;
+      if (!owner) {
+        unowned.push(file);
+        continue;
+      }
       scanned++;
       for (const hit of FindDynamicImports(text, entry.name)) {
         if (hit.exempt) continue;
@@ -180,15 +186,20 @@ export function ScanTree(root) {
     }
   };
   walk(root, null);
-  return { violations, dynamic, scanned };
+  return { violations, dynamic, scanned, unowned };
 }
 
 function main() {
   const args = process.argv.slice(2);
   const rootIdx = args.indexOf('--root');
   const root = rootIdx >= 0 ? resolve(args[rootIdx + 1]) : join(REPO_ROOT, 'packages');
-  const { violations, dynamic, scanned } = ScanTree(root);
+  const { violations, dynamic, scanned, unowned } = ScanTree(root);
   const rel = (p) => relative(REPO_ROOT, p);
+
+  if (unowned.length > 0) {
+    console.warn(`⚠️  check:dynamic-imports — skipped ${unowned.length} file(s) with import() and no enclosing package.json:`);
+    for (const f of unowned) console.warn(`  ${rel(f)}`);
+  }
 
   if (args.includes('--report-dynamic')) {
     console.log(`Non-literal import() specifiers without a "${EXEMPTION_MARKER}" comment (${dynamic.length}):`);
