@@ -139,6 +139,7 @@ stubs (`DatabaseProviderStub`, `EntitiesOnlyProvider`, `TestLLM`); `@vitest/cove
 | D34 | Gate 2 | Counts label and nightly catches (nightly ones sent to authors directly); reports the answer rate; 8 weeks at most, with a defined outcome if not reached | Label runs alone cannot reach 15 answered catches |
 | D35 | Host fetch | The host fetches head's dependencies with a copy of head's lockfile from which a script removes the `patchedDependencies:` block and every `(patch_hash=…)` segment; the sandbox installs offline with the real lockfile and `patches/` and applies the patches; each run has its own store; a failed host fetch is an infrastructure failure for that PR, never retried with network | With `patches/` present, `pnpm fetch` applies PR-supplied diffs on the host and follows symlinks out of `patches/`; without it, the real lockfile fails (`ERR_PNPM_PATCH_NOT_FOUND`). The stripped copy works and the sandbox applies the patch (spike §8, option (b)). The sandbox writes patched files into the store, so a store is not shared |
 | D36 | Agent tool limits | SDK `tools` lists `Read`, `Grep`, `Glob`; `permissionMode: 'default'`; `disallowedTools` as a second layer; `allowedTools` holds only `run_test`, so reads and writes reach the permission check; read and write paths are checked after `realpath` | In the spike, `allowedTools` auto-approved the plan's `Write` and an outside write went through; a bare name there skips `canUseTool`; an omitted `permissionMode` can be `auto` (spike §2) |
+| D37 | Agent token budget | The host counts tokens once per message `id`, with cache-read and cache-creation tokens as input, aborts at the budget, and estimates the cost of an aborted session from its own count; `maxBudgetUsd` is a second cap | The SDK repeats `usage` on every block of a message, `input_tokens` excludes cached tokens, per-message output counts run low, and an aborted session has no `result` message (spike §2) |
 
 ---
 
@@ -426,6 +427,11 @@ is flagged as matching the risk. The rule filter boosts these (§9.1).
   reached the SDK sends its `result` message (subtype `error_max_turns`) and then throws; the runner reads the `result`
   and treats the throw as the end of the session. `num_turns` there is the limit plus one, so the runner counts turns
   itself as distinct assistant message ids.
+- **Token budget**: the runner keeps its own count, because an aborted session gets no `result` message and so no cost
+  from the SDK. One API message arrives as several SDK messages with the same `id`, so each `id` counts once; input is
+  `input_tokens + cache_read_input_tokens + cache_creation_input_tokens`. Per-message output counts run far below the
+  final figure, so exact totals come from the `result` message when there is one, and an aborted session's cost is
+  estimated from the host count. The SDK's `maxBudgetUsd` is a second cap (D37, spike §2).
 - **Model**: chosen in gate 1 (§13.2).
 
 **Prompt content that prevents false alarms:** the package's existing tests as style examples; the
@@ -656,7 +662,8 @@ During gate 2, running every eligible PR (~14 a working day) instead of 10 costs
 
 ### 13.3 Controls (all settings)
 
-Per session: turn limit and token budget. Per PR: at most 3 packages. Nightly: at most 10 PRs, by risk score. Label runs:
+Per session: turn limit, token budget (counted by the host, cache tokens included) and a dollar cap (`maxBudgetUsd`).
+Per PR: at most 3 packages. Nightly: at most 10 PRs, by risk score. Label runs:
 daily limit. Monthly spend limit: when reached, nightly runs stop and the summary says why.
 
 ---
