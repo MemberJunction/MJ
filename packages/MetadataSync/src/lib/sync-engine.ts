@@ -1506,7 +1506,8 @@ export class SyncEngine {
 
   /**
    * Loads a record by primary key straight from the database, using the record's provider when one
-   * is passed so the read joins that provider's transaction. Returns `null` when no row exists.
+   * is passed so the read joins that provider's transaction. Returns `null` only when the lookup
+   * succeeds and finds no row; a failed lookup throws, because it has not shown the row is absent.
    * `cacheResult` controls whether a hit is added to the preload cache.
    */
   private async loadFromDatabase(
@@ -1569,8 +1570,11 @@ export class SyncEngine {
       SkipTotalRowCount: true
     }, this.contextUser);
     
-    // If no record found, return null without attempting to load
-    if (!result.Success || result.Results.length === 0) {
+    // A failed query is not "no row": callers would create a duplicate or report a delete as done
+    if (!result.Success) {
+      throw this.primaryKeyLookupError(entityName, filters, result.ErrorMessage);
+    }
+    if (result.Results.length === 0) {
       return null;
     }
     
@@ -1579,12 +1583,22 @@ export class SyncEngine {
     const compositeKey = new CompositeKey();
     compositeKey.LoadFromSimpleObject(primaryKey);
     const loaded = await entity.InnerLoad(compositeKey);
-    
-    const loadedEntity = loaded ? entity : null;
-    if (loadedEntity && cacheResult && this.syncMetadataEngine) {
-      this.syncMetadataEngine.addEntityToCache(entityName, loadedEntity);
+    if (!loaded) {
+      // The row was found above, so a failed load is a read failure, not absence
+      throw this.primaryKeyLookupError(entityName, filters, entity.LatestResult?.CompleteMessage ?? 'the record was found but could not be loaded');
     }
-    return loadedEntity;
+    
+    if (cacheResult && this.syncMetadataEngine) {
+      this.syncMetadataEngine.addEntityToCache(entityName, entity);
+    }
+    return entity;
+  }
+
+  /** The error for a primary-key lookup that failed, with `@env:` values masked out of the key. */
+  private primaryKeyLookupError(entityName: string, keyFilters: string[], reason: string | undefined): Error {
+    const mask = EnvDisplayMask.ForVariables(this.ResolvedEnvVariables);
+    const key = mask.MaskText(keyFilters.join(' AND '));
+    return new Error(`Lookup of ${entityName} (${key}) failed: ${mask.MaskText(reason || 'unknown error')}. The record's existence could not be confirmed.`);
   }
 
   /**

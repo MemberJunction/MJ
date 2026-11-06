@@ -238,4 +238,34 @@ describe('RexRecommendationsProvider', () => {
       expect(captured[0].BypassCache).toBe(true);
     });
   });
+
+  describe('GetRecommendations error list (#4221)', () => {
+    type ErrorListSpyTarget = { addRecordToErrorsList: (listID: string, recordID: string, message: string) => Promise<void> };
+
+    it('writes the source record key, not the vector id, to the error list', async () => {
+      mockHttpPost.mockRejectedValueOnce({ Data: { error: 'bad' } });
+      mockIsHttpError.mockReturnValueOnce(true);
+      const spy = vi.spyOn(provider as unknown as ErrorListSpyTarget, 'addRecordToErrorsList').mockResolvedValue(undefined);
+
+      await provider['GetRecommendations']({
+        AccessToken: 't', VectorID: 'vec-1', ErrorListID: 'list-1', SourceEntityRecordID: 'rec-1',
+        Options: { type: 'x', filters: [] } as never,
+      });
+
+      expect(spy).toHaveBeenCalledWith('list-1', 'rec-1', expect.any(String), undefined);
+    });
+
+    it('adds nothing to the error list when no source record id is given', async () => {
+      mockHttpPost.mockRejectedValueOnce({ Data: { error: 'bad' } });
+      mockIsHttpError.mockReturnValueOnce(true);
+      const spy = vi.spyOn(provider as unknown as ErrorListSpyTarget, 'addRecordToErrorsList').mockResolvedValue(undefined);
+
+      await provider['GetRecommendations']({
+        AccessToken: 't', VectorID: 'vec-1', ErrorListID: 'list-1',
+        Options: { type: 'x', filters: [] } as never,
+      });
+
+      expect(spy).not.toHaveBeenCalled();
+    });
+  });
 });

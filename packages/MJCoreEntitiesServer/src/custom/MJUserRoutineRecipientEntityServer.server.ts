@@ -1,5 +1,5 @@
 import { BaseEntity, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { FinalizeValidation, RegisterClass } from '@memberjunction/global';
 import { MJUserRoutineRecipientEntity } from '@memberjunction/core-entities';
 
 /**
@@ -27,7 +27,6 @@ export class MJUserRoutineRecipientEntityServer extends MJUserRoutineRecipientEn
                 ValidationErrorType.Failure
             ));
         }
-        result.Success = result.Success && result.Errors.length === 0;
-        return result;
+        return FinalizeValidation(result);
     }
 }

@@ -1,4 +1,5 @@
 import { Subject } from "rxjs";
+import { UUIDsEqual } from "@memberjunction/global";
 import { BaseEntity } from "./baseEntity";
 import { CrossEntityPolicyEngine, type CrossEntityBatchItem } from "./crossEntityPolicyEngine";
 import { DocumentNumberingEngine } from "./documentNumberingEngine";
@@ -220,9 +221,66 @@ export abstract class TransactionGroupBase {
 
     /**
      * Adds a new variable to the transaction group.
+     *
+     * A `Use` variable writes its field at `Submit()`, after the item's `Save()` checks and `Validate()`
+     * have passed, so it is limited to what it exists for: pointing a row at a record created earlier
+     * in the group. Its field must be a foreign key to the entity of the `Define` item with the same
+     * name, and never a primary key (#5622). A variable that breaks this is refused here, before any
+     * write, whichever of the pair is added first.
      */
     public AddVariable(newVariable: TransactionVariable) {
+        if (newVariable.Type === 'Use') {
+            TransactionGroupBase.assertUseFieldWritable(newVariable);
+            const defineVar = this.findDefineVariable(newVariable.Name);
+            if (defineVar) {
+                TransactionGroupBase.assertUseMatchesDefine(newVariable, defineVar);
+            }
+        }
+        else {
+            for (const useVar of this._variables) {
+                if (useVar.Type === 'Use' && TransactionGroupBase.sameVariableName(useVar.Name, newVariable.Name)) {
+                    TransactionGroupBase.assertUseMatchesDefine(useVar, newVariable);
+                }
+            }
+        }
         this._variables.push(newVariable);
+    }
+
+    /** The `Define` variable a `Use` variable of this name reads from, matched trimmed and in any case. */
+    private findDefineVariable(name: string): TransactionVariable | undefined {
+        return this._variables.find(v => v.Type === 'Define' && TransactionGroupBase.sameVariableName(v.Name, name));
+    }
+
+    private static sameVariableName(a: string, b: string): boolean {
+        return a.trim().toLowerCase() === b.trim().toLowerCase();
+    }
+
+    /** Refuses a `Use` variable on a field that is missing, a primary key, or not a foreign key. */
+    private static assertUseFieldWritable(useVar: TransactionVariable): void {
+        const entityName = useVar.EntityObject?.EntityInfo?.Name ?? 'unknown entity';
+        const field = useVar.EntityObject?.GetFieldByName(useVar.FieldName)?.EntityFieldInfo;
+        if (!field) {
+            throw new Error(`Transaction variable '${useVar.Name}' names field '${useVar.FieldName}', which '${entityName}' does not have`);
+        }
+        if (field.IsPrimaryKey) {
+            throw new Error(`Transaction variable '${useVar.Name}' may not set '${entityName}.${field.Name}': a variable cannot set a primary key`);
+        }
+        if (!field.RelatedEntityID) {
+            throw new Error(`Transaction variable '${useVar.Name}' may not set '${entityName}.${field.Name}': a variable can set only a foreign key`);
+        }
+    }
+
+    /** Refuses a `Use` variable whose foreign key does not point at the entity of its `Define` item. */
+    private static assertUseMatchesDefine(useVar: TransactionVariable, defineVar: TransactionVariable): void {
+        const field = useVar.EntityObject?.GetFieldByName(useVar.FieldName)?.EntityFieldInfo;
+        const defineEntity = defineVar.EntityObject?.EntityInfo;
+        if (!field || !defineEntity || !UUIDsEqual(field.RelatedEntityID, defineEntity.ID)) {
+            const entityName = useVar.EntityObject?.EntityInfo?.Name ?? 'unknown entity';
+            throw new Error(
+                `Transaction variable '${useVar.Name}' may not set '${entityName}.${field?.Name ?? useVar.FieldName}': ` +
+                `it is not a foreign key to '${defineEntity?.Name ?? 'unknown entity'}', the entity that defines the variable`
+            );
+        }
     }
 
     // RxJS Subject to notify about transaction status
@@ -301,7 +359,34 @@ export abstract class TransactionGroupBase {
      * @param transaction 
      */
     public AddTransaction(transaction: TransactionItem): void {
+        // A settled group is never submitted again (a failed one only re-sends what it already holds),
+        // so an item added now would report success and write nothing (#4701). While a submit runs,
+        // only an entity the group is waiting on (see RegisterPreprocessing) may still enrol.
+        const waitedOn = this._status === 'In Progress' && !!this._enrollingDuringSubmit?.has(transaction.BaseEntity);
+        if (this._status !== 'Pending' && !waitedOn) {
+            const entityName = transaction.BaseEntity?.EntityInfo?.Name ?? 'unknown entity';
+            throw new Error(
+                `Cannot add a ${transaction.OperationType} of '${entityName}' to a transaction group whose status is ` +
+                `'${this._status}'. Detach the record (set its TransactionGroup to null) or use a new group.`
+            );
+        }
         this._pendingTransactions.push(transaction);
+    }
+
+    /** The entities a running `Submit()` waits on, which may still enrol while it is in progress. */
+    private _enrollingDuringSubmit: Set<BaseEntity> | null = null;
+
+    /**
+     * Detaches every entity enrolled in this group once it has settled, so the next `Save()` or
+     * `Delete()` on one of them runs on its own rather than into a group that will not be sent again.
+     */
+    private detachParticipants(): void {
+        for (const transaction of this._pendingTransactions) {
+            const entity = transaction.BaseEntity;
+            if (entity && entity.TransactionGroup === this) {
+                entity.TransactionGroup = null;
+            }
+        }
     }
 
     /**
@@ -347,7 +432,13 @@ export abstract class TransactionGroupBase {
         this._status = 'In Progress';
         try {
             // Wait for all preprocessing to be complete
-            await this.waitForPreprocessing();
+            this._enrollingDuringSubmit = new Set(this._preprocessingItems.map(i => i.entity));
+            try {
+                await this.waitForPreprocessing();
+            }
+            finally {
+                this._enrollingDuringSubmit = null;
+            }
 
             if (this._pendingTransactions.length > 0) {
                 await this.preEvaluateCrossEntityPolicies();
@@ -367,6 +458,7 @@ export abstract class TransactionGroupBase {
                     await this.completeSubmittedResults(results, true);
                     await this.CommitGroupTransaction();
                     this._status = 'Complete';
+                    this.detachParticipants();
                     return true;
                 } else {
                     try {
@@ -379,6 +471,7 @@ export abstract class TransactionGroupBase {
                         }
                         this.revertPendingTransactions();
                         this._status = 'Failed';
+                        this.detachParticipants();
                     }
                     return false;
                 }
@@ -401,6 +494,7 @@ export abstract class TransactionGroupBase {
 
             this.notifyTransactionStatus(false, undefined, err);
             this._status = 'Failed';
+            this.detachParticipants();
             return false;
         }
         finally {
@@ -571,6 +665,10 @@ export abstract class TransactionGroupBase {
                 // get the value from the variable that matches the NAME that has Type === 'Define'
                 const defineVar = this.Variables.find(v => v.Name.trim().toLowerCase() === varItem.Name.trim().toLowerCase() && v.Type === 'Define');
                 if (defineVar) {
+                    // Checked again here as well as in AddVariable(): Variables is a public array, so a
+                    // variable can reach the group without passing through AddVariable().
+                    TransactionGroupBase.assertUseFieldWritable(varItem);
+                    TransactionGroupBase.assertUseMatchesDefine(varItem, defineVar);
                     if (defineVar.IsProcessed) {
                         // found the variable definition, now get the value from that BaseEntity from the variable's source field name
                         const value = defineVar.ProcessedValue;

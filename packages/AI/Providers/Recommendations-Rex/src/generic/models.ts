@@ -72,6 +72,11 @@ export type GetRecommendationParams = {
     AccessToken: string, 
     VectorID: string,
     ErrorListID: string,
+    /**
+     * The source record's key as `ListDetail.RecordID` stores it (the compact CompositeKey
+     * segment). Written to the error list when the request fails; the vector id is not a record key.
+     */
+    SourceEntityRecordID?: string,
     CurrentUser?: UserInfo
 };
 

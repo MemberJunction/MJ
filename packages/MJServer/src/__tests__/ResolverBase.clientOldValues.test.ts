@@ -70,9 +70,15 @@ describe('ResolverBase.ClientOldValueToFieldValue', () => {
     it('types numbers and booleans like the field', () => {
         expect(probe.Convert({ Name: 'N', TSType: EntityFieldTSType.Number, Type: 'int' }, '42')).toBe(42);
         expect(probe.Convert({ Name: 'B', TSType: EntityFieldTSType.Boolean, Type: 'bit' }, 'false')).toBe(false);
-        expect(probe.Convert({ Name: 'B', TSType: EntityFieldTSType.Boolean, Type: 'bit', AllowsNull: true }, null)).toBe(false);
         expect(probe.Convert({ Name: 'B', TSType: EntityFieldTSType.Boolean, Type: 'bit' }, '1')).toBe(true);
         expect(probe.Convert({ Name: 'M', TSType: EntityFieldTSType.Number, Type: 'money' }, '1.5')).toBe(1.5);
+    });
+
+    it('keeps a NULL nullable bit as null, and still reads a NULL non-nullable bit as false (#6023)', () => {
+        expect(probe.Convert({ Name: 'B', TSType: EntityFieldTSType.Boolean, Type: 'bit', AllowsNull: true, DefaultValue: null }, null)).toBeNull();
+        expect(probe.Convert({ Name: 'B', TSType: EntityFieldTSType.Boolean, Type: 'bit', AllowsNull: true, DefaultValue: null }, undefined)).toBeNull();
+        expect(probe.Convert({ Name: 'B', TSType: EntityFieldTSType.Boolean, Type: 'bit', AllowsNull: false, DefaultValue: null }, null)).toBe(false);
+        expect(probe.Convert({ Name: 'B', TSType: EntityFieldTSType.Boolean, Type: 'bit', AllowsNull: false, DefaultValue: '1' }, null)).toBe(true);
     });
 });
 
@@ -588,5 +594,60 @@ describe('ResolverBase.TestAndSetClientOldValuesToDBValues — encrypted fields'
             error.mockRestore();
             log.mockRestore();
         }
+    });
+});
+
+describe('ResolverBase.TestAndSetClientOldValuesToDBValues — NULL nullable bit (#6023)', () => {
+    const entityId = 'E0000000-0000-4000-8000-000000000060';
+    const flagEntityInfo = new EntityInfo({
+        ID: entityId,
+        Name: 'MJ: Tags',
+        BaseTable: 'Tag',
+        BaseView: 'vwTags',
+        SchemaName: '__mj',
+        Status: 'Active',
+        EntityFields: [
+            { ID: 'B-1', EntityID: entityId, Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, Sequence: 1, Status: 'Active' },
+            { ID: 'B-2', EntityID: entityId, Name: 'Name', Type: 'nvarchar', IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, Sequence: 2, Status: 'Active' },
+            { ID: 'B-3', EntityID: entityId, Name: 'IsFlagged', Type: 'bit', IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, Sequence: 3, Status: 'Active' },
+        ],
+    });
+
+    it('logs no save inconsistency when the client and the database both hold NULL', async () => {
+        const errorLogSaves: Array<Record<string, unknown>> = [];
+        const fakeProvider = {
+            Entities: [flagEntityInfo],
+            GetEntityObject: async () => {
+                const errEntity: Record<string, unknown> = {
+                    Save: async () => {
+                        errorLogSaves.push({ ...errEntity });
+                        return true;
+                    },
+                    LatestResult: null,
+                };
+                return errEntity;
+            },
+        } as unknown as IMetadataProvider;
+        const entity = new BaseEntity(flagEntityInfo, fakeProvider);
+        entity.LoadFromData({ ID: '11111111-2222-3333-4444-555555555555', Name: 'Original', IsFlagged: null });
+        const user = new UserInfo(null, { ID: 'u-1', Name: 'Probe', Email: 'probe@example.test', IsActive: true, UserRoles: [] });
+
+        await probe.TestAndSet(
+            entity,
+            {
+                ID: '11111111-2222-3333-4444-555555555555',
+                Name: 'Renamed',
+                OldValues___: [
+                    { Key: 'ID', Value: '11111111-2222-3333-4444-555555555555' },
+                    { Key: 'Name', Value: 'Original' },
+                    { Key: 'IsFlagged', Value: null },
+                ],
+            },
+            user
+        );
+
+        expect(errorLogSaves).toHaveLength(0);
+        expect(entity.Get('Name')).toBe('Renamed');
+        expect(entity.Get('IsFlagged')).toBeNull();
     });
 });

@@ -101,6 +101,8 @@ interface FakeEntityOptions {
      * `ResultsJSON` could not tell an empty payload from a correct one.
      */
     loadedValues?: Record<string, unknown>;
+    /** True when the key names no row (or one hidden from this user): `InnerLoad()` returns false. */
+    missing?: boolean;
 }
 
 /**
@@ -119,7 +121,14 @@ class FakeEntity {
     public SetMany(values: Record<string, unknown>): void {
         this.values = { ...this.values, ...values };
     }
+    public WriteCalls = 0;
+    public RegisterResultHistoryEntry(result: BaseEntityResult): void {
+        this.LatestResult = result;
+    }
     public async InnerLoad(): Promise<boolean> {
+        if (this.options.missing) {
+            return false;
+        }
         if (this.options.loadedValues) {
             this.values = { ...this.options.loadedValues };
         }
@@ -140,6 +149,7 @@ class FakeEntity {
     public async Delete(): Promise<boolean> { return this.write(); }
 
     private write(): boolean {
+        this.WriteCalls++;
         if (!this.options.accepts) {
             this.LatestResult = refusalResult(this.options.refusalMessage ?? 'refused by a server-side guard');
             return false;
@@ -319,6 +329,28 @@ describe('ExecuteTransactionGroup — rows refused server-side (issue #4309)', (
         expect(result.Success).toBe(true);
         expect(variablesAtSave).toEqual([2, 2]);
     });
+
+    for (const operation of [TransactionOperationType.Update, TransactionOperationType.Delete]) {
+        it(`refuses a group whose ${operation} names a missing row, writing nothing (issue #4446)`, async () => {
+            // Before the fix, a failed InnerLoad() was ignored: an Update's Save() saw a new record and
+            // INSERTED it, and a Delete reported a row it never removed.
+            const entities = [
+                new FakeEntity('MJ: User Roles', { accepts: true }),
+                new FakeEntity('MJ: User Roles', { accepts: true, missing: true }),
+            ];
+            const { context, group } = buildContext(entities);
+            const input = buildGroupInput(2);
+            input.Items[1].OperationType = operation;
+
+            const result = await new TransactionResolver().ExecuteTransactionGroup(input, context);
+
+            expect(result.Success).toBe(false);
+            expect(group.SubmitCalled).toBe(false);
+            expect(entities[1].WriteCalls).toBe(0);
+            expect(result.ErrorMessages[1]).toContain('Record not found or access denied');
+            expect(logErrorCalls.join('\n')).toContain(`[1] ${operation} 'MJ: User Roles': Record not found or access denied`);
+        });
+    }
 
     it('returns delta-only ResultsJSON on Update (PK, client-sent fields, datestamps, and server-changed fields), omitting unchanged columns', async () => {
         const preLoadedRow: Record<string, unknown> = {

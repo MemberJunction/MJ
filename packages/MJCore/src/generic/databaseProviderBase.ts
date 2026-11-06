@@ -1972,8 +1972,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
     /**
      * The primary key field each pair of a record-name key names, in key order. Names match
-     * case-insensitively. Null, after logging, when the key is empty or names a field that is not
-     * one of the entity's primary keys.
+     * case-insensitively. Null, after logging, when the key is empty, names a field that is not
+     * one of the entity's primary keys, names one twice, or leaves one out: a repeated or partial
+     * key would make the lookup fail as "not found" or match on part of the key (#5625).
      */
     protected RecordNameKeyFieldsOf(entity: EntityInfo, compositeKey: CompositeKey): EntityFieldInfo[] | null {
         const pairs = compositeKey?.KeyValuePairs ?? [];
@@ -1989,7 +1990,16 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 LogError(`Record name lookup on ${entity.Name}: ${JSON.stringify(pair.FieldName)} is not a primary key field`);
                 return null;
             }
+            if (keyFields.includes(field)) {
+                LogError(`Record name lookup on ${entity.Name}: the key names ${JSON.stringify(field.Name)} more than once`);
+                return null;
+            }
             keyFields.push(field);
+        }
+        const missing = entity.PrimaryKeys.filter(pk => !keyFields.includes(pk));
+        if (missing.length > 0) {
+            LogError(`Record name lookup on ${entity.Name}: the key leaves out primary key field(s) ${missing.map(m => JSON.stringify(m.Name)).join(', ')}`);
+            return null;
         }
         return keyFields;
     }

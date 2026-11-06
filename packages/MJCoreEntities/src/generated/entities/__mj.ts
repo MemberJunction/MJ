@@ -31095,7 +31095,7 @@ export const MJQueueTaskSchema = z.object({
         * * Display Name: Queue ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Queues (vwQueues.ID)`),
-    Status: z.union([z.literal('Completed'), z.literal('Failed'), z.literal('In Progress')]).describe(`
+    Status: z.union([z.literal('Completed'), z.literal('Failed'), z.literal('In Progress'), z.literal('Pending')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nchar(10)
@@ -31104,7 +31104,8 @@ export const MJQueueTaskSchema = z.object({
     * * Possible Values 
     *   * Completed
     *   * Failed
-    *   * In Progress`),
+    *   * In Progress
+    *   * Pending`),
     StartedAt: z.date().nullable().describe(`
         * * Field Name: StartedAt
         * * Display Name: Started At
@@ -128574,11 +128575,12 @@ export class MJQueueTaskEntity extends BaseEntity<MJQueueTaskEntityType> {
     *   * Completed
     *   * Failed
     *   * In Progress
+    *   * Pending
     */
-    get Status(): 'Completed' | 'Failed' | 'In Progress' {
+    get Status(): 'Completed' | 'Failed' | 'In Progress' | 'Pending' {
         return this.Get('Status');
     }
-    set Status(value: 'Completed' | 'Failed' | 'In Progress') {
+    set Status(value: 'Completed' | 'Failed' | 'In Progress' | 'Pending') {
         this.Set('Status', value);
     }
 

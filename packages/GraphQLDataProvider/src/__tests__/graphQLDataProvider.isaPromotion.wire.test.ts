@@ -269,6 +269,26 @@ describe('GraphQLDataProvider Save — IS-A promotion carries the shared primary
         expect(input['Name']).toBe('Pretzel');
     });
 
+    it('whole-chain create through BaseEntity.Save(): sends the parent fields the caller set, not the untouched ones (#5972)', async () => {
+        // The parent's short-circuited save finalizes it before the leaf mutation is built, setting
+        // every parent field; the pre-save snapshot is what still says which ones the caller set.
+        const animal = new TestIsaEntity(animalInfo, provider);
+        const dog = new TestIsaEntity(dogInfo, provider);
+        dog.WireParent(animal);
+        dog.NewRecord();
+        dog.Set('Name', 'Pretzel');
+        dog.Set('IsHouseTrained', true);
+        GraphQLWire.EnqueueResponse({ CreateShelterDog: { ID: 'SERVER-MINTED', Name: 'Pretzel', IsHouseTrained: true } });
+
+        const chainKey = dog.Get('ID');
+
+        expect(await dog.Save()).toBe(true);
+
+        // The finalized parent counts as saved, so the shared key rides along as on a promotion.
+        // MicrochipNumber was never set and stays off the wire.
+        expect(lastInputRecord()).toEqual({ ID: chainKey, Name: 'Pretzel', IsHouseTrained: true });
+    });
+
     it('non-IS-A create is unchanged: the primary key is still NOT sent', async () => {
         // A standalone entity's PK is the server's to mint — the existing contract must hold.
         const animal = new TestIsaEntity(animalInfo, provider);

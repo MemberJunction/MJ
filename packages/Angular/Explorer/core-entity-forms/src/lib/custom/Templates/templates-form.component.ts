@@ -513,7 +513,7 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
                         }
                     } else {
                         console.error('Delete returned false');
-                        MJNotificationService.Instance.CreateSimpleNotification(`Failed to delete template content. ${contentToDelete.LatestResult.CompleteMessage}`, 'error');
+                        MJNotificationService.Instance.CreateSimpleNotification(`Failed to delete template content. ${contentToDelete.LatestResult?.CompleteMessage ?? ''}`, 'error');
                     }
                 } catch (error) {
                     console.error('Error deleting template content:', error);

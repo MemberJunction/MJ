@@ -26,6 +26,7 @@ import { DatabasePlatform, PlatformSQL, IsPlatformSQL } from "./platformSQL";
 import { Observable, Subscription } from "rxjs";
 import { GetDataHooks, PreRunViewHook, PostRunViewHook } from "./dataHooks";
 import { TransformSimpleObjectToEntityObject } from "./util";
+import { FreezeSharedMetadata, IsMetadataFreezeEnabled } from "./metadataFreeze";
 import { LoadRelatedRecordsBatched } from "./relatedRecordBatchLoader";
 import { ContextToken, GetLocalTimeZone } from "./contextTokens";
 import { FindQueryContextTokens, QueryContextCacheValues } from "./queryTemplateContext";
@@ -172,6 +173,9 @@ export const AllMetadataArrays = [
     { key: 'AllExplorerNavigationItems', class: ExplorerNavigationItem }
 ];
 
+/** The collection property names of {@link AllMetadataArrays}, for {@link FreezeSharedMetadata}. */
+const AllMetadataArrayKeys: readonly string[] = AllMetadataArrays.map(m => m.key);
+
 
 /**
  * Raw entity-metadata row shapes flowing into `PostProcessEntityMetadata` from the
@@ -306,6 +310,14 @@ type RowProjectionPlans = {
  */
 type SavedViewSortSource = BaseEntity & { OrderByClause?: string | null };
 
+/** One caller's RunViews waiting in the coalesce window, settled with only its own slice of results. */
+type CoalesceQueueEntry = {
+    params: RunViewParams[];
+    contextUser?: UserInfo;
+    resolve: (results: RunViewResult[]) => void;
+    reject: (err: unknown) => void;
+};
+
 /**
  * Base class for all metadata providers in MemberJunction.
  * Implements common functionality for metadata caching, refresh, and dataset management.
@@ -434,12 +446,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Each entry tracks the original params, contextUser, and a resolver
      * so the caller's promise resolves with only their slice of results.
      */
-    private _coalesceQueue: Array<{
-        params: RunViewParams[];
-        contextUser?: UserInfo;
-        resolve: (results: RunViewResult[]) => void;
-        reject: (err: unknown) => void;
-    }> = [];
+    private _coalesceQueue: CoalesceQueueEntry[] = [];
 
     /** Timer handle for the coalesce flush */
     private _coalesceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1804,18 +1811,27 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         this._coalesceTimer = null;
 
         // Grab and clear the queue atomically
-        const queue = this._coalesceQueue.splice(0);
-        if (queue.length === 0) return;
+        const allEntries = this._coalesceQueue.splice(0);
+        if (allEntries.length === 0) return;
 
-        // If only one caller, no merging needed
-        if (queue.length === 1) {
-            const entry = queue[0];
-            try {
-                const results = await this.runViewsUncoalesced(entry.params, entry.contextUser);
-                entry.resolve(results);
-            } catch (err) {
-                entry.reject(err);
+        // A caller naming an entity this provider does not know would fail the whole merged batch
+        // (#6278, #6061). Run such callers on their own so only they see the error.
+        const queue: CoalesceQueueEntry[] = [];
+        const isolated: Promise<void>[] = [];
+        for (const entry of allEntries) {
+            if (this.namesUnknownEntity(entry.params)) {
+                isolated.push(this.runCoalesceEntryAlone(entry));
+            } else {
+                queue.push(entry);
             }
+        }
+
+        // If at most one caller remains, no merging needed
+        if (queue.length <= 1) {
+            if (queue.length === 1) {
+                isolated.push(this.runCoalesceEntryAlone(queue[0]));
+            }
+            await Promise.all(isolated);
             return;
         }
 
@@ -1881,11 +1897,32 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         } catch (err) {
             TelemetryManager.Instance.EndEvent(eventId, { success: false, error: String(err) });
 
-            // If the mega-batch fails, reject all callers
+            // The merged batch failed as a whole, which says nothing about which caller caused it.
+            // Re-run each caller on its own so each gets its own result or its own error (#6278).
             for (const entry of queue) {
-                entry.reject(err);
+                isolated.push(this.runCoalesceEntryAlone(entry));
             }
         }
+        await Promise.all(isolated);
+    }
+
+    /** Runs one coalesce-queue caller's params as their own batch and settles that caller's promise. */
+    private async runCoalesceEntryAlone(entry: CoalesceQueueEntry): Promise<void> {
+        try {
+            const results = await this.runViewsUncoalesced(entry.params, entry.contextUser);
+            entry.resolve(results);
+        } catch (err) {
+            entry.reject(err);
+        }
+    }
+
+    /**
+     * True when any param names an `EntityName` this provider has no metadata for — the same lookup
+     * `EntityStatusCheck` fails on. Params resolved only through a view are not checked here (that
+     * needs a query); a failure they cause is handled by re-running each caller on its own.
+     */
+    private namesUnknownEntity(params: RunViewParams[]): boolean {
+        return params.some(p => !!p.EntityName && !this.EntityByName(p.EntityName));
     }
 
     /**
@@ -3190,6 +3227,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
          * projection eligible to populate the Fields-agnostic cache slot in PostRunView.
          */
         populateCache?: boolean;
+        /**
+         * {@link LocalCacheManager.CaptureReadFence} taken as PreRunView began. PostRunView
+         * passes it with the cache write, so rows from a read that a save overtook are not
+         * stored (#3059).
+         */
+        readFence?: number;
     };
 
     /**
@@ -3229,6 +3272,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
          * already-parsed results for 'current' items without a second IndexedDB read.
          */
         preResolvedCache?: Map<string, CachedRunViewResult | null>;
+        /**
+         * {@link LocalCacheManager.CaptureReadFence} taken as PreRunViews began; passed with
+         * every cache write the batch makes. See `_preRunViewResultType.readFence`.
+         */
+        readFence?: number;
         /**
          * Views the field-security predicate gate refused, keyed by their index in the caller's
          * batch, each with its `Success: false` result. Present only when at least one view was
@@ -3814,6 +3862,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     protected async PreRunView(params: RunViewParams, contextUser?: UserInfo): Promise<typeof this._preRunViewResultType> {
         const preViewStart = performance.now();
+        // Before anything that awaits: a save from here on keeps this read's rows out of the cache.
+        const readFence = LocalCacheManager.Instance.CaptureReadFence();
 
         // Resolve any PlatformSQL values to plain strings for the active platform
         this.ResolvePlatformSQLInParams(params);
@@ -3985,6 +4035,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // PostRunView to project cache-miss DB results back to the caller's shape
             callerRequestedFields: callerRequestedFieldsForPost,
             populateCache: willPopulateCache,
+            readFence,
         };
     }
 
@@ -3998,6 +4049,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns Pre-processing result with cache status for each admitted view
      */
     protected async PreRunViews(params: RunViewParams[], contextUser?: UserInfo): Promise<typeof this._preRunViewsResultType> {
+        // Before anything that awaits: a save from here on keeps this batch's rows out of the cache.
+        const readFence = LocalCacheManager.Instance.CaptureReadFence();
+
         // Resolve any PlatformSQL values to plain strings for the active platform
         for (const p of params) {
             this.ResolvePlatformSQLInParams(p);
@@ -4051,7 +4105,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // A refused view never reaches a cache lookup, the smart cache check or the database.
         const admitted = refusedResults ? params.filter((_, i) => !refusedResults.has(i)) : params;
         const preResult = await this.lookUpAdmittedViews(admitted, telemetryEventId, contextUser);
-        return refusedResults ? { ...preResult, refusedResults } : preResult;
+        return refusedResults ? { ...preResult, refusedResults, readFence } : { ...preResult, readFence };
     }
 
     /**
@@ -4393,7 +4447,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Process all results in parallel — 'current' entries now read from the
         // pre-resolved map instead of issuing their own GetRunViewResult calls.
         const processingPromises = params.map((param, i) =>
-            this.processSingleSmartCacheResult<T>(param, i, serverResultsByViewIndex.get(i), preResolvedCache, contextUser)
+            this.processSingleSmartCacheResult<T>(param, i, serverResultsByViewIndex.get(i), preResolvedCache, contextUser, preResult.readFence)
         );
 
         const processedResults = await Promise.all(processingPromises);
@@ -4440,13 +4494,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      *   `GetRunViewResults` call in `executeSmartCacheCheck`. Lookups for
      *   'current' items hit this map instead of issuing per-param IDB reads,
      *   amortizing IndexedDB transaction overhead across the whole batch.
+     * @param readFence - The batch's {@link LocalCacheManager.CaptureReadFence}, passed with the
+     *   cache write for a 'stale' item (#3059).
      */
     private async processSingleSmartCacheResult<T>(
         param: RunViewParams,
         index: number,
         checkResult: RunViewWithCacheCheckResult<T> | undefined,
         preResolvedCache: Map<string, CachedRunViewResult | null>,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        readFence?: number
     ): Promise<{ result: RunViewResult<T>; cacheHit: boolean; cacheMiss: boolean; alreadyTransformed?: boolean }> {
         if (!checkResult) {
             return {
@@ -4614,7 +4671,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     checkResult.maxUpdatedAt,
                     checkResult.aggregateResults, // Include aggregate results in cache
                     checkResult.rowCount,
-                    this
+                    this,
+                    undefined,
+                    { ReadFence: readFence }
                 ).catch(e => LogError(`Failed to update cache: ${e}`));
             }
 
@@ -4763,7 +4822,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 maxUpdatedAt,
                 result.AggregateResults,
                 result.TotalRowCount,
-                this
+                this,
+                undefined,
+                { ReadFence: preResult.readFence }
             );
         } else if (this.shouldAutoCache(params, result, contextUser)) {
             // Server-side auto-cache: small, unfiltered, unsorted results are
@@ -4778,7 +4839,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 maxUpdatedAt,
                 result.AggregateResults,
                 result.TotalRowCount,
-                this
+                this,
+                undefined,
+                { ReadFence: preResult.readFence }
             );
             LogStatusEx({ message: `  📦 [Auto-Cache] RunView "${params.EntityName || params.ViewName || 'unknown'}" — ${result.Results.length} rows auto-cached (small + unfiltered)`, verboseOnly: true });
         }
@@ -4887,7 +4950,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     maxUpdatedAt,
                     results[i].AggregateResults,
                     results[i].TotalRowCount,
-                    this
+                    this,
+                    undefined,
+                    { ReadFence: preResult.readFence }
                 ));
             } else if (this.shouldAutoCache(params[i], results[i], contextUser)) {
                 const maxUpdatedAt = this.extractMaxUpdatedAt(results[i].Results);
@@ -4898,7 +4963,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     maxUpdatedAt,
                     results[i].AggregateResults,
                     results[i].TotalRowCount,
-                    this
+                    this,
+                    undefined,
+                    { ReadFence: preResult.readFence }
                 ));
                 LogStatusEx({ message: `    📦 [Auto-Cache] RunViews "${params[i].EntityName || params[i].ViewName || 'unknown'}" — ${results[i].Results.length} rows auto-cached (small + unfiltered)`, verboseOnly: true });
             }
@@ -6357,7 +6424,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * in-place mutation of those is process-wide. Property writes on the shared
      * Info objects themselves are likewise visible process-wide (as they always
      * were on the client's global provider): treat Info objects and everything
-     * they own as read-only; copy before sorting.
+     * they own as read-only; copy before sorting. Outside production (or with
+     * `MJ_FREEZE_METADATA` set) the shared graph is frozen the first time it is
+     * shared, so such a write throws (see {@link FreezeSharedMetadata}, #3095).
      *
      * Owning provider: the shared Info objects deliberately keep the
      * {@link BaseInfo.OwningProvider} of the provider that built them (the source
@@ -6415,6 +6484,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 const adopted = subclassOverridesClone
                     ? this.CloneAllMetadata(globalMetadata)
                     : this.CreateSharedMetadataShell(globalMetadata);
+                // From here on the global provider's Info objects are shared with this provider
+                // (unless the adoption copied them). Freeze them in development so a write from
+                // request-scoped code throws instead of changing metadata for every request (#3095).
+                if (adopted.AllEntities?.[0] === globalMetadata.AllEntities[0] && IsMetadataFreezeEnabled()) {
+                    FreezeSharedMetadata(globalMetadata, AllMetadataArrayKeys);
+                }
                 if (
                     !subclassOverridesClone &&
                     globalProvider instanceof ProviderBase &&

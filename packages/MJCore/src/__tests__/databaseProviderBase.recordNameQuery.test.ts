@@ -213,6 +213,28 @@ describe('DatabaseProviderBase record-name query', () => {
             expect(onlyQuery().Parameters).toEqual([PROJECT_ID_VALUE]);
         });
 
+        it('refuses a key that names a primary key field twice, without querying (#5625)', async () => {
+            const name = await provider.GetEntityRecordName('Order Lines', key(['OrderID', ORDER_ID_VALUE], ['orderid', ORDER_ID_VALUE]), admin);
+
+            expect(name).toBe('');
+            expect(provider.Sent).toHaveLength(0);
+        });
+
+        it('refuses a key that leaves out a primary key field, without querying (#5625)', async () => {
+            const name = await provider.GetEntityRecordName('Order Lines', key(['OrderID', ORDER_ID_VALUE]), admin);
+
+            expect(name).toBe('');
+            expect(provider.Sent).toHaveLength(0);
+        });
+
+        it('accepts a complete composite key in any order and case (#5625)', async () => {
+            await provider.GetEntityRecordName('Order Lines', key(['linenumber', 2], ['ORDERID', ORDER_ID_VALUE]), admin);
+
+            expect(onlyQuery().SQL).toContain('[LineNumber]=@p0');
+            expect(onlyQuery().SQL).toContain('[OrderID]=@p1');
+            expect(onlyQuery().Parameters).toEqual([2, ORDER_ID_VALUE]);
+        });
+
         it('applies the same checks to each item of a batch lookup', async () => {
             const results = await provider.GetEntityRecordNames([
                 { EntityName: 'Projects', CompositeKey: key(['ID', PROJECT_ID_VALUE]) },

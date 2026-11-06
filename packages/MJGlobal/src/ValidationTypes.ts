@@ -122,3 +122,61 @@ export function DeserializeValidationErrors(raw: unknown): ValidationErrorInfo[]
     return SerializeValidationErrors(Array.isArray(raw) ? raw : undefined)
         .map(e => new ValidationErrorInfo(e.Source, e.Message, e.Value, e.Type));
 }
+
+/**
+ * Free-function helpers for building a {@link ValidationResult} inside `Validate()` /
+ * `ValidateAsync()` overrides.
+ *
+ * They are functions rather than methods on `ValidationResult` because a result crosses the wire:
+ * once rebuilt from JSON it is a plain object, and a method call on it would throw. A function works
+ * on a class instance and a plain `{ Success, Errors }` object alike.
+ */
+
+/**
+ * Records a blocking error and marks the result unsuccessful.
+ *
+ * `source` should be the field name: forms match errors to controls by `Source`, so an error with
+ * another source still blocks the save but shows on no field.
+ *
+ * @returns The result, for chaining.
+ */
+export function AddValidationError(result: ValidationResult, source: string, message: string, value?: unknown): ValidationResult {
+    result.Errors.push(new ValidationErrorInfo(source, message, value, ValidationErrorType.Failure));
+    result.Success = false;
+    return result;
+}
+
+/**
+ * Records a non-blocking warning. Leaves `Success` unchanged.
+ *
+ * @returns The result, for chaining.
+ */
+export function AddValidationWarning(result: ValidationResult, source: string, message: string, value?: unknown): ValidationResult {
+    result.Errors.push(new ValidationErrorInfo(source, message, value, ValidationErrorType.Warning));
+    return result;
+}
+
+/**
+ * True when the result holds at least one blocking error. An entry counts as blocking unless its
+ * `Type` is `Warning`, so an entry with a missing or unknown type fails closed.
+ */
+export function HasValidationFailures(result: ValidationResult): boolean {
+    return result.Errors.some(e => e?.Type !== ValidationErrorType.Warning);
+}
+
+/**
+ * Recomputes `Success` from the errors present: true when none is blocking. Warnings never fail a
+ * result. Call it at the end of an override, after `super.Validate()` and the subclass's own rules,
+ * in place of `result.Success = result.Success && result.Errors.length === 0` (which lets a warning
+ * block the save). Idempotent.
+ *
+ * `Success` comes only from the entries, so a fresh `new ValidationResult()` (whose `Success`
+ * starts false) finalizes to true when no rule added a blocking error. A rule that fails must
+ * therefore record an entry, which is also what lets a form show why.
+ *
+ * @returns The result, for chaining.
+ */
+export function FinalizeValidation(result: ValidationResult): ValidationResult {
+    result.Success = !HasValidationFailures(result);
+    return result;
+}

@@ -331,8 +331,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   public GetSetting(settingKey: string): string | undefined {
     const pending = this._pendingSettings.get(settingKey);
     if (pending !== undefined) return pending.value;
-    const setting = this.readIfPermitted('_userSettings', () => this.UserSettings).find((s) => s.Setting === settingKey);
-    return setting?.Value ?? undefined;
+    return this.GetSettingEntity(settingKey)?.Value ?? undefined;
   }
 
   /**
@@ -345,7 +344,59 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @returns The MJUserSettingEntity, or undefined if not found
    */
   public GetSettingEntity(settingKey: string): MJUserSettingEntity | undefined {
-    return this.readIfPermitted('_userSettings', () => this.UserSettings).find((s) => s.Setting === settingKey);
+    const matches = this.readIfPermitted('_userSettings', () => this.UserSettings).filter((s) => s.Setting === settingKey);
+    return UserInfoEngine.newestSetting(matches);
+  }
+
+  /**
+   * Picks the most recently updated row. Installs created before `(UserID, Setting)` became
+   * unique can still hold several rows for one key in a stale cache; the newest one is the
+   * value the user last wrote (#4224).
+   */
+  private static newestSetting(settings: MJUserSettingEntity[]): MJUserSettingEntity | undefined {
+    let newest: MJUserSettingEntity | undefined;
+    for (const s of settings) {
+      if (!newest || UserInfoEngine.updatedAtMs(s) > UserInfoEngine.updatedAtMs(newest)) {
+        newest = s;
+      }
+    }
+    return newest;
+  }
+
+  private static updatedAtMs(setting: MJUserSettingEntity): number {
+    const updatedAt = setting.__mj_UpdatedAt;
+    if (!updatedAt) return 0;
+    const ms = new Date(updatedAt).getTime();
+    return Number.isNaN(ms) ? 0 : ms;
+  }
+
+  /**
+   * Looks a setting up in the database by `(UserID, Setting)`. Used when the cache has no row
+   * for the key, so a stale cache (another tab or device wrote the key since it loaded) updates
+   * the existing row instead of minting a duplicate (#4224). Returns `undefined` when there is
+   * no row or the read fails; a failed read falls back to create, and the unique key on
+   * `(UserID, Setting)` refuses a duplicate.
+   */
+  private async findSettingInDatabase(userId: string, settingKey: string, contextUser?: UserInfo): Promise<MJUserSettingEntity | undefined> {
+    try {
+      const rv = new RunView(this.RunViewProviderToUse);
+      const result = await rv.RunView<MJUserSettingEntity>({
+        EntityName: 'MJ: User Settings',
+        ExtraFilter: `UserID='${EscapeSQLString(userId)}' AND Setting='${EscapeSQLString(settingKey)}'`,
+        OrderBy: '__mj_UpdatedAt DESC',
+        MaxRows: 1,
+        ResultType: 'entity_object',
+        BypassCache: true,
+      }, contextUser ?? this.ContextUser);
+      if (!result.Success) {
+        console.warn(`UserInfoEngine.SetSetting: lookup of '${settingKey}' failed: ${result.ErrorMessage}`);
+        return undefined;
+      }
+      return result.Results[0];
+    } catch (error) {
+      console.warn(`UserInfoEngine.SetSetting: lookup of '${settingKey}' failed:`, error instanceof Error ? error.message : String(error));
+      return undefined;
+    }
   }
 
   /**
@@ -403,8 +454,9 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     }
 
     try {
-      // Try to find existing setting
-      let setting = this.GetSettingEntity(settingKey);
+      // Try to find existing setting: the cache first, then the database, so a stale cache
+      // cannot mint a second row for the same (UserID, Setting).
+      let setting = this.GetSettingEntity(settingKey) ?? (await this.findSettingInDatabase(userId, settingKey, contextUser));
 
       if (setting) {
         // Update existing setting

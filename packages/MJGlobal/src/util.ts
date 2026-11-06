@@ -1205,6 +1205,14 @@ const __irregularPlurals: Record<string, string> = {
     thief: 'thieves',
     wife: 'wives',
     wolf: 'wolves',
+    axis: 'axes',
+    basis: 'bases',
+    hypothesis: 'hypotheses',
+    series: 'series',
+    species: 'species',
+    quiz: 'quizzes',
+    status: 'statuses',
+    alias: 'aliases',
 };
 
 /**
@@ -1348,7 +1356,30 @@ function matchTailCase(source: string, pluralLower: string): string {
     return pluralLower;
 }
 
+/** An acronym such as `API` or `URL`: two or more letters, every letter a capital. */
+function isAllCapsToken(word: string): boolean {
+    const letters = [...word].filter(isUnicodeLetter);
+    return letters.length >= 2 && letters.every(isUnicodeUpper);
+}
+
 function pluralizeOneWord(singularName: string, options? : { capitalizeFirstLetterOnly?: boolean, capitalizeEntireWord?: boolean }): string {
+    // The irregular table comes first. The plural check below strips a trailing `s`, so a
+    // singular such as `analysis` or `status` read as "already plural" and came back
+    // unchanged, which left every `-is` / `-us` entry in the table unreachable (#4815).
+    // The irregular map stores lowercase values. Restore the tail's case so
+    // "Person" becomes "People" and "PERSON" becomes "PEOPLE".
+    const irregularPlural = GetIrregularPlural(singularName);
+    if (irregularPlural) {
+        return AdjustCasing(matchTailCase(singularName, irregularPlural), options);
+    }
+
+    // An acronym takes a lowercase `s` (`API` -> `APIs`, `BOX` style rules do not apply).
+    // One that already ends in `S` (`SMS`) is left as is: there is no way to tell a plural
+    // acronym from a singular one, and `SMSs` is never the intended name.
+    if (isAllCapsToken(singularName)) {
+        return AdjustCasing(singularName.endsWith('S') ? singularName : singularName + 's', options);
+    }
+
     // Check if it's already plural
     const detectedSingular = getSingularForm(singularName);
     if (!detectedSingular) {
@@ -1361,13 +1392,6 @@ function pluralizeOneWord(singularName: string, options? : { capitalizeFirstLett
         // function if we are given a plural - like Customers - we want to just throw it back
         // but if we were passed a true singular, then we keep on going
         return AdjustCasing(singularName, options);
-    }
-
-    // The irregular map stores lowercase values. Restore the tail's case so
-    // "Person" becomes "People" and "PERSON" becomes "PEOPLE".
-    const irregularPlural = GetIrregularPlural(singularName);
-    if (irregularPlural) {
-        return AdjustCasing(matchTailCase(singularName, irregularPlural), options);
     }
 
     // Handle common pluralization rules

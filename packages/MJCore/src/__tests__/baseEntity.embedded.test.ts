@@ -12,7 +12,8 @@
  *  7. Two embeds targeting the same entity construct without a false cycle.
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import * as logging from '../generic/logging';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseEntity } from '../generic/baseEntity';
 import { EntityInfo } from '../generic/entityInfo';
@@ -539,6 +540,68 @@ describe('EmbeddedRecord — NewRecord + Load edge cases', () => {
         await deal.InnerLoad(CompositeKey.FromID('deal-reload'));
         expect(deal.OrderID_Object).toBeNull();
         expect(deal.OrderEmb.Dirty).toBe(false);
+    });
+});
+
+describe('EmbeddedRecord — failed peer load (#4739)', () => {
+    async function loadDealPointingAt(orderId: string) {
+        loadedRows['deal-fk'] = { ID: 'deal-fk', Name: 'Deal-1', OrderID: orderId };
+        const { CompositeKey } = await import('../generic/compositeKey');
+        const provider = makeProvider();
+        const deal = new TestDealEntity(dealInfo, provider as unknown as IEntityDataProvider);
+        await deal.InitializeEmbeddedRecords();
+        const loaded = await deal.InnerLoad(CompositeKey.FromID('deal-fk'));
+        return { deal, loaded };
+    }
+
+    it('logs a warning naming the entity and FK value when a nullable peer does not load', async () => {
+        const warnSpy = vi.spyOn(logging, 'LogWarning').mockImplementation(() => undefined);
+        try {
+            const { deal, loaded } = await loadDealPointingAt('missing-order');
+            expect(loaded).toBe(true);
+            expect(deal.OrderID_Object).toBeNull();
+            expect(deal.OrderEmb.LoadFailed).toBe(true);
+            expect(warnSpy).toHaveBeenCalledWith(expect.stringMatching(/could not load Products 'missing-order' \(FK OrderID\)/));
+        } finally {
+            warnSpy.mockRestore();
+        }
+    });
+
+    it('Ensure after a failed peer load throws and leaves the owner FK pointing at the real row', async () => {
+        const warnSpy = vi.spyOn(logging, 'LogWarning').mockImplementation(() => undefined);
+        try {
+            const { deal } = await loadDealPointingAt('missing-order');
+            expect(() => deal.OrderID_EnsureObject()).toThrow(/Products 'missing-order' could not be loaded; refusing to replace it/);
+            expect(deal.Get('OrderID')).toBe('missing-order');
+            expect(deal.OrderID_Object).toBeNull();
+        } finally {
+            warnSpy.mockRestore();
+        }
+    });
+
+    it('Ensure does not mint over a caller-supplied FK that was never loaded', async () => {
+        const { deal } = await newDeal();
+        deal.Set('OrderID', 'existing-order-id');
+        expect(() => deal.OrderID_EnsureObject()).toThrow(/is not loaded; refusing to replace it/);
+        expect(deal.Get('OrderID')).toBe('existing-order-id');
+    });
+
+    it('Ensure with no FK still mints, and Clear() after a failed load allows a new peer', async () => {
+        const { deal: fresh } = await newDeal();
+        expect(fresh.OrderID_EnsureObject()).toBeTruthy();
+        expect(fresh.Get('OrderID')).toBeTruthy();
+
+        const warnSpy = vi.spyOn(logging, 'LogWarning').mockImplementation(() => undefined);
+        try {
+            const { deal } = await loadDealPointingAt('missing-order');
+            deal.OrderEmb.Clear();
+            expect(deal.OrderEmb.LoadFailed).toBe(false);
+            const peer = deal.OrderID_EnsureObject();
+            expect(deal.Get('OrderID')).toBe(peer.Get('ID'));
+            expect(deal.Get('OrderID')).not.toBe('missing-order');
+        } finally {
+            warnSpy.mockRestore();
+        }
     });
 });
 

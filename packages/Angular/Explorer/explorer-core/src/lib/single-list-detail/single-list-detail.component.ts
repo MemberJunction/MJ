@@ -1999,7 +1999,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
       const result = await listDetail.Save();
       if (!result) {
         LogErrorEx({
-          message: listDetail.LatestResult?.CompleteMessage
+          message: listDetail.LatestResult?.CompleteMessage ?? 'Save of list detail failed with no result recorded'
         });
       }
       // Update progress (0-80%)
@@ -2128,32 +2128,49 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
 
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const md = this.ProviderToUse;
+    const sourceEntityInfo = md.EntityByID(this.ListRecord.EntityID);
+    if (!sourceEntityInfo) {
+      LogError(`Add from view: entity ${this.ListRecord.EntityID} of list ${this.ListRecord.ID} is not in metadata`);
+      this.ShowAddFromViewLoader = false;
+      this.FetchingRecordsToSave = false;
+      this.cdr.detectChanges();
+      return;
+    }
+    const primaryKeyFieldNames = sourceEntityInfo.PrimaryKeys.map(pk => pk.Name);
 
-    // Collect all unique record IDs from selected views.
+    // Collect all unique records from selected views.
     // Batch every selected view into a single RunViews call rather than issuing a
     // sequential RunView per view (N round-trips → 1). Each view has a distinct ViewID,
     // so this can't collapse to one query, but RunViews parallelizes the round trips.
-    const recordIdSet = new Set<string>();
+    // ListDetail.RecordID is the compact CompositeKey segment (the raw value for a single-column
+    // key, "F1|v1||F2|v2" for a composite one), so every primary key field is read, not `ID` (#4221).
+    // Keyed by the normalized segment for de-duplication; the value is the segment as written.
+    const recordsBySegment = new Map<string, string>();
 
-    const viewResults = await rv.RunViews(
+    const viewResults = await rv.RunViews<Record<string, unknown>>(
       this.UserViewsToAdd.map(userView => ({
         ViewID: userView.ID,
         ViewEntity: userView,
-        Fields: ["ID"]
+        Fields: primaryKeyFieldNames,
+        ResultType: 'simple' as const
       })),
       md.CurrentUser
     );
 
     for (const runViewResult of viewResults) {
       if (runViewResult.Success) {
-        const records = runViewResult.Results as Array<Record<string, string>>;
-        records.forEach(r => recordIdSet.add(NormalizeUUID(r.ID)));
+        for (const row of runViewResult.Results) {
+          const segment = CompositeKey.FromEntityRecord(sourceEntityInfo, row).ToCompactURLSegment();
+          recordsBySegment.set(NormalizeUUID(segment), segment);
+        }
       }
     }
 
     // Filter out records already in the list
     await this.loadExistingListDetailIds();
-    const recordsToAdd = [...recordIdSet].filter(id => !this.ExistingListDetailIds.has(id));
+    const recordsToAdd = [...recordsBySegment.entries()]
+      .filter(([normalized]) => !this.ExistingListDetailIds.has(normalized))
+      .map(([, segment]) => segment);
 
     this.AddFromViewTotal = recordsToAdd.length;
     this.setAddFromViewProgress(0);
@@ -2182,7 +2199,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
       const result = await listDetail.Save();
       if (!result) {
         LogErrorEx({
-          message: listDetail.LatestResult?.CompleteMessage
+          message: listDetail.LatestResult?.CompleteMessage ?? 'Save of list detail failed with no result recorded'
         });
       }
       // Update progress (0-80%) via the helper so both the counter and the

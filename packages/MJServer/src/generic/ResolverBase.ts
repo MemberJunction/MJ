@@ -2289,8 +2289,9 @@ export class ResolverBase {
     if ((val === null || val === undefined) && field && field.DefaultValue !== null && field.DefaultValue !== undefined && !field.AllowsNull)
       val = field.DefaultValue; // set default value as the field was never set and it does NOT allow nulls
     if (val === undefined) val = null;
-    // A null old value stays null, except a boolean, which the comparison has always read as false.
-    if (field?.TSType === EntityFieldTSType.Boolean && val === null) return false;
+    // A null old value stays null. A non-nullable boolean with no default reads as false; a nullable
+    // bit keeps its NULL, or every update of a row with a NULL bit reports a false inconsistency (#6023).
+    if (field?.TSType === EntityFieldTSType.Boolean && val === null && !field.AllowsNull) return false;
     if (val === null) return null;
     if (!field) {
       // No field metadata to convert by: pass scalars through, stringify anything else.

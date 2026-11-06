@@ -220,7 +220,28 @@ export const MAX_REPORTED_MISCONFIGURATIONS = 64;
  * was added to defend against. The LRU bounds memory the same way but keeps de-duplicating: the
  * worst case is one repeated line after a cold key ages out, not a permanent flood.
  */
-const reportedMisconfigurations = new MJLruCache<string, true>({ maxSize: MAX_REPORTED_MISCONFIGURATIONS });
+/**
+ * How long a reported misconfiguration stays quiet before it is reported again, when the host
+ * does not set `userHandling.misconfigurationReportIntervalMs`. Once per process hid a setting that
+ * stayed wrong for weeks (#4237); every few hours keeps it visible without the per-request flood.
+ */
+export const DEFAULT_MISCONFIGURATION_REPORT_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+function createReportTracker(intervalMs: number): MJLruCache<string, true> {
+    return new MJLruCache<string, true>({ maxSize: MAX_REPORTED_MISCONFIGURATIONS, ttlMs: intervalMs });
+}
+
+let reportedMisconfigurations = createReportTracker(DEFAULT_MISCONFIGURATION_REPORT_INTERVAL_MS);
+
+/**
+ * Sets how often a persistent misconfiguration is reported again (`ms` must be positive; anything
+ * else keeps the default). Called once at server startup from `userHandling.misconfigurationReportIntervalMs`.
+ * Resets what has been reported, so the next lookup of a bad setting logs under the new interval.
+ */
+export function SetMisconfigurationReportInterval(ms: number | undefined): void {
+    const interval = ms !== undefined && Number.isFinite(ms) && ms > 0 ? ms : DEFAULT_MISCONFIGURATION_REPORT_INTERVAL_MS;
+    reportedMisconfigurations = createReportTracker(interval);
+}
 
 /** Entries the tracker currently holds. Exists so the bound above can be asserted, not inferred. */
 export function ReportedMisconfigurationCount(): number {
@@ -244,7 +265,9 @@ export function ResolveConfiguredPrincipal(candidate: string | undefined, purpos
     if (resolution.warning) {
         const key = `${purpose} :: ${candidate ?? ''}`;
         // `Get` rather than `Has`: it refreshes recency, so a setting that keeps being hit stays
-        // suppressed and it is the settings nobody asks about any more that age out first.
+        // suppressed and it is the settings nobody asks about any more that age out first. The
+        // entry's TTL is fixed when it is set, so a setting still wrong after the report interval
+        // is reported again (#4237).
         if (reportedMisconfigurations.Get(key) === undefined) {
             reportedMisconfigurations.Set(key, true);
             LogError(`[${purpose}] ${resolution.warning}`);

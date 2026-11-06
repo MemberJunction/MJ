@@ -499,4 +499,78 @@ describe('FieldMappingEngine', () => {
             expect(result[0].MappedFields['Out']).toBe('');
         });
     });
+
+    describe('absent source property (#6170)', () => {
+        const absentCases: ReadonlyArray<[string, TransformStep[]]> = [
+            ['coerce string', [{ Type: 'coerce', Config: { TargetType: 'string' } }]],
+            ['coerce number', [{ Type: 'coerce', Config: { TargetType: 'number' } }]],
+            ['format date', [{ Type: 'format', Config: { FormatString: 'YYYY-MM-DD', FormatType: 'date' } }]],
+            ['regex', [{ Type: 'regex', Config: { Pattern: '[^0-9]', Replacement: '', Flags: 'g' } }]],
+            ['substring', [{ Type: 'substring', Config: { Start: 0, Length: 3 } }]],
+            ['no pipeline', []],
+        ];
+
+        it.each(absentCases)('a missing property with a %s pipeline leaves the field unmapped', (_label, pipeline) => {
+            const records = [createExternalRecord({ Other: 'x' })];
+            const fieldMaps = [createFieldMap('Custom__c', 'CustomField', pipeline.length > 0 ? pipeline : null)];
+
+            const result = engine.Apply(records, fieldMaps, 'Contacts');
+
+            expect(Object.hasOwn(result[0].MappedFields, 'CustomField')).toBe(false);
+        });
+
+        it('a present null still runs the pipeline', () => {
+            const records = [createExternalRecord({ Custom__c: null })];
+            const pipeline: TransformStep[] = [{ Type: 'coerce', Config: { TargetType: 'string' } }];
+            const fieldMaps = [createFieldMap('Custom__c', 'CustomField', pipeline)];
+
+            const result = engine.Apply(records, fieldMaps, 'Contacts');
+
+            expect(Object.hasOwn(result[0].MappedFields, 'CustomField')).toBe(true);
+        });
+
+        it('direct with a DefaultValue still applies the default when the property is missing', () => {
+            const records = [createExternalRecord({ Other: 'x' })];
+            const pipeline: TransformStep[] = [{ Type: 'direct', Config: { DefaultValue: 'Unknown' } }];
+            const fieldMaps = [createFieldMap('Custom__c', 'CustomField', pipeline)];
+
+            const result = engine.Apply(records, fieldMaps, 'Contacts');
+
+            expect(result[0].MappedFields['CustomField']).toBe('Unknown');
+        });
+
+        it('direct without a DefaultValue leaves a missing property unmapped', () => {
+            const records = [createExternalRecord({ Other: 'x' })];
+            const pipeline: TransformStep[] = [{ Type: 'direct', Config: {} }];
+            const fieldMaps = [createFieldMap('Custom__c', 'CustomField', pipeline)];
+
+            const result = engine.Apply(records, fieldMaps, 'Contacts');
+
+            expect(Object.hasOwn(result[0].MappedFields, 'CustomField')).toBe(false);
+        });
+
+        it('combine still runs when one of its own source fields is present', () => {
+            const records = [createExternalRecord({ Last: 'Smith' })];
+            const pipeline: TransformStep[] = [
+                { Type: 'combine', Config: { SourceFields: ['First', 'Last'], Separator: ' ' } },
+            ];
+            const fieldMaps = [createFieldMap('First', 'FullName', pipeline)];
+
+            const result = engine.Apply(records, fieldMaps, 'Contacts');
+
+            expect(Object.hasOwn(result[0].MappedFields, 'FullName')).toBe(true);
+        });
+
+        it('a mapped field that is present keeps mapping next to an absent one', () => {
+            const records = [createExternalRecord({ FirstName: 'Alice' })];
+            const fieldMaps = [
+                createFieldMap('FirstName', 'FirstName'),
+                createFieldMap('Custom__c', 'CustomField', [{ Type: 'coerce', Config: { TargetType: 'string' } }]),
+            ];
+
+            const result = engine.Apply(records, fieldMaps, 'Contacts');
+
+            expect(result[0].MappedFields).toEqual({ FirstName: 'Alice' });
+        });
+    });
 });

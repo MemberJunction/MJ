@@ -4949,6 +4949,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         contextUser?: UserInfo,
         callerFields: string[] | null = null,
     ): Promise<RunViewWithCacheCheckResult<T>> {
+        // Taken before the read: a save that overtakes it keeps its rows out of the cache (#3059).
+        const readFence = LocalCacheManager.Instance.CaptureReadFence();
         const result = await this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
         if (result.status !== 'error' && result.results) {
             // Cache the WIDE result (params.Fields was widened by RunViewsWithCacheCheck
@@ -4979,6 +4981,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                         result.rowCount,
                         this,
                         ttlMs,
+                        { ReadFence: readFence },
                     );
                 }
             }

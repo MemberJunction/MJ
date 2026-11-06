@@ -1,4 +1,4 @@
-import { BaseInfo } from "./baseInfo";
+import { BaseInfo, RegisterInfoMemoFields } from "./baseInfo";
 import { EntityInfo } from "./entityInfo";
 import { IMetadataProvider } from "./interfaces";
 import { MetadataProviderFor } from "./infoProviderResolution";
@@ -1120,3 +1120,11 @@ export class QueryDependencyInfo extends BaseInfo {
         }
     }
 }
+
+// Memo fields: `_` fields written after construction to cache a derived value. When a shared
+// metadata graph is frozen (development, #3095) they move to a side map so these getters keep
+// working; see RegisterInfoMemoFields. A new lazily-cached `_` field must be listed here.
+RegisterInfoMemoFields(QueryInfo, [
+    '_configurationObject', '_lastRawConfiguration', '_categoryPath', '_cacheConfig',
+    '_fields', '_parameters', '_entities', '_dependencies', '_parsedVariants',
+]);

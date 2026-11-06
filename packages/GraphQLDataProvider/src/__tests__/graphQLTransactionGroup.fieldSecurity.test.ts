@@ -65,6 +65,7 @@ async function sentPayload(roleId: string, record: object = newRecord(employees(
         ExecuteGQL: executeGQL,
         CurrentUser: user(roleId),
         IsFieldDirtyOnChain: (_entity: unknown, field: { Dirty: boolean }) => field.Dirty,
+        IsFieldSentOnCreate: (_entity: unknown, field: { Dirty: boolean }) => field.Dirty,
         ClearISAParentPreSaveSnapshots: () => {},
     };
     const group = new GraphQLTransactionGroup(provider as never);
@@ -87,15 +88,20 @@ describe('GraphQLTransactionGroup: payloads omit the fields their user may not r
         expect(payload).toEqual({ ID: 'emp-1', Name: 'Ada', Salary: null });
     });
 
-    it('with nothing to leave out, a create or delete is serialized without reading the field objects', async () => {
-        for (const operation of ['Create', 'Delete']) {
-            const record = newRecord(employees());
-            let fieldReads = 0;
-            const fields = record.Fields;
-            Object.defineProperty(record, 'Fields', { get: () => { fieldReads++; return fields; } });
-            const payload = await sentPayload(HR, record, operation);
-            expect(payload).toEqual({ ID: 'emp-1', Name: 'Ada', Salary: null });
-            expect(fieldReads).toBe(0); // reading Fields builds every field object of a raw-mode record
-        }
+    it('with nothing to leave out, a delete is serialized without reading the field objects', async () => {
+        const record = newRecord(employees());
+        let fieldReads = 0;
+        const fields = record.Fields;
+        Object.defineProperty(record, 'Fields', { get: () => { fieldReads++; return fields; } });
+        const payload = await sentPayload(HR, record, 'Delete');
+        expect(payload).toEqual({ ID: 'emp-1', Name: 'Ada', Salary: null });
+        expect(fieldReads).toBe(0); // reading Fields builds every field object of a raw-mode record
+    });
+
+    it('a create leaves out the fields its caller did not set, even ones the user may read (#5972)', async () => {
+        const record = newRecord(employees());
+        record.Fields = record.Fields.map(f => ({ ...f, Dirty: f.Name !== 'Salary' }));
+        const payload = await sentPayload(HR, record);
+        expect(payload).toEqual({ ID: 'emp-1', Name: 'Ada' });
     });
 });
