@@ -183,7 +183,7 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
             { Type: 'entity', EntityName: 'MJ: Graph Concept Types', PropertyName: '_conceptTypes', CacheLocal: true },
             { Type: 'entity', EntityName: 'MJ: Graph Authority Tiers', PropertyName: '_authorityTiers', CacheLocal: true },
         ];
-        await this.Load(configs, provider ?? this.ProviderToUse, forceRefresh, contextUser);
+        await this.Load(configs, provider, forceRefresh, contextUser);
     }
 
     /**
