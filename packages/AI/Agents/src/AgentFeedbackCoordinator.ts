@@ -608,6 +608,15 @@ export class AgentFeedbackCoordinator {
         }
 
         const requestsResult = batchResults[1];
+        if (mode !== 'Random' && !requestsResult?.Success) {
+            // Query-level failure on MJ: AI Agent Requests when active list members are already
+            // known: log the failure and deterministically fall back to the first active list
+            // member (activeUserIDs[0]) so the request still lands on an eligible list member.
+            LogError(
+                `Failed to load agent requests for list ${listId} (${mode}): ${requestsResult?.ErrorMessage || 'unknown error'}; falling back to first active list member`
+            );
+            return activeUserIDs[0];
+        }
         const requestRows = requestsResult?.Success
             ? ((requestsResult.Results as AgentRequestSummaryRow[]) ?? [])
             : [];
@@ -627,6 +636,12 @@ export class AgentFeedbackCoordinator {
         }
     }
 
+    // ponytail: Concurrent RoundRobin selections read the same latest `MaxRows: 1` request row
+    // before either caller inserts its new `MJ: AI Agent Requests` record, so simultaneous
+    // creations can collide and pick the same next user. The WS-4.5b spec intentionally uses a
+    // stateless query cursor rather than a schema lock; the upgrade path when strict
+    // non-colliding rotation is required is a persisted cursor/reservation column (or dedicated
+    // cursor table) updated atomically via `UPDATE ... OUTPUT` / `UPDLOCK, HOLDLOCK`.
     private pickRoundRobinMember(
         activeUserIDs: string[],
         recentRequests: AgentRequestSummaryRow[]

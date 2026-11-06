@@ -14,7 +14,14 @@ import type {
     MJAIAgentRequestEntity,
     MJAIAgentRequestTypeEntity,
 } from '@memberjunction/core-entities';
-import type { IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
+import {
+    LogError,
+    LogStatus,
+    type IMetadataProvider,
+    type RunViewParams,
+    type RunViewResult,
+    type UserInfo,
+} from '@memberjunction/core';
 
 const mockRunViews = vi.fn<(views: RunViewParams[], contextUser?: UserInfo) => Promise<RunViewResult[]>>();
 const mockGetEntityObject = vi.fn<(entityName: string, contextUser?: UserInfo) => Promise<MJAIAgentRequestEntity>>();
@@ -520,6 +527,33 @@ describe('AgentFeedbackCoordinator', () => {
                 createParamsStub({ contextUser: undefined })
             );
             expect(fallbackSharedInbox).toBeNull();
+        });
+
+        it('should log an error via LogError and fall back to the first active list member when the RoundRobin or LeastBusy request query fails', async () => {
+            mockRunViews
+                .mockResolvedValueOnce([
+                    makeViewResult([{ ID: LIST_ID, EntityID: 'e-users', Entity: 'MJ: Users' }]),
+                    makeViewResult([
+                        { ID: 'ld-1', RecordID: USER_2, Sequence: 1, Status: 'Pending' },
+                        { ID: 'ld-2', RecordID: USER_3, Sequence: 2, Status: 'Pending' },
+                    ]),
+                ])
+                .mockResolvedValueOnce([
+                    makeViewResult([
+                        { ID: USER_2, IsActive: true },
+                        { ID: USER_3, IsActive: true },
+                    ]),
+                    makeViewResult([], false),
+                ]);
+
+            const picked = await coordinator.ResolveAssigneeUserID(
+                { type: 'List', listID: LIST_ID, listStrategy: 'RoundRobin' },
+                createParamsStub()
+            );
+            expect(picked).toBe(USER_2);
+            expect(LogError).toHaveBeenCalledWith(
+                expect.stringContaining(`Failed to load agent requests for list ${LIST_ID} (RoundRobin): Simulated view failure`)
+            );
         });
     });
 
