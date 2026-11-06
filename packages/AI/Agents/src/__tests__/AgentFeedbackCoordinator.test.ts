@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AgentFeedbackCoordinator } from '../AgentFeedbackCoordinator';
+import { BaseAgent } from '../base-agent';
 import {
     ParseAssignmentStrategy,
     type BaseAgentNextStep,
@@ -22,6 +23,19 @@ import {
     type RunViewResult,
     type UserInfo,
 } from '@memberjunction/core';
+
+class TestFeedbackBaseAgent extends BaseAgent {
+    public async InvokeCreateFeedbackRequest(
+        params: ExecuteAgentParams,
+        stepEntity: MJAIAgentRunStepEntityExtended,
+        decision: BaseAgentNextStep,
+        agentRun?: MJAIAgentRunEntityExtended
+    ): Promise<string | null> {
+        this._agentRun = agentRun;
+        await this.createFeedbackRequest(params, stepEntity, decision);
+        return this._feedbackRequestId;
+    }
+}
 
 const mockRunViews = vi.fn<(views: RunViewParams[], contextUser?: UserInfo) => Promise<RunViewResult[]>>();
 const mockGetEntityObject = vi.fn<(entityName: string, contextUser?: UserInfo) => Promise<MJAIAgentRequestEntity>>();
@@ -269,13 +283,21 @@ describe('AgentFeedbackCoordinator', () => {
             );
             expect(picked).toBe(USER_1);
             const firstBatchViews = mockRunViews.mock.calls[0][0];
+            expect(firstBatchViews[0].EntityName).toBe('MJ: Lists');
+            expect(firstBatchViews[0].ExtraFilter).toBe(`ID = '${LIST_ID}'`);
+            expect(firstBatchViews[1].EntityName).toBe('MJ: List Details');
             expect(firstBatchViews[1].ExtraFilter).toBe(
                 `ListID = '${LIST_ID}' AND (Status IS NULL OR Status NOT IN ('Disabled', 'Error', 'Rejected'))`
             );
+            expect(firstBatchViews[1].OrderBy).toBe('Sequence ASC, ID ASC');
             const secondBatchViews = mockRunViews.mock.calls[1][0];
+            expect(secondBatchViews[0].EntityName).toBe('MJ: Users');
             expect(secondBatchViews[0].ExtraFilter).toBe(
                 `ID IN ('${USER_1}', '${USER_2}', '${USER_3}', '${user4}', '${user5}') AND IsActive = 1`
             );
+            expect(secondBatchViews[1].EntityName).toBe('MJ: AI Agent Requests');
+            expect(secondBatchViews[1].OrderBy).toBe('RequestedAt DESC, ID DESC');
+            expect(secondBatchViews[1].MaxRows).toBe(1);
         });
 
         it('should rotate through active list members in RoundRobin order and wrap around', async () => {
@@ -311,6 +333,23 @@ describe('AgentFeedbackCoordinator', () => {
                 params
             );
             expect(pick1).toBe(USER_2);
+
+            const roundRobinBatch1 = mockRunViews.mock.calls[0][0];
+            expect(roundRobinBatch1[0].ExtraFilter).toBe(`ID = '${LIST_ID}'`);
+            expect(roundRobinBatch1[1].ExtraFilter).toBe(
+                `ListID = '${LIST_ID}' AND (Status IS NULL OR Status NOT IN ('Disabled', 'Error', 'Rejected'))`
+            );
+            expect(roundRobinBatch1[1].OrderBy).toBe('Sequence ASC, ID ASC');
+
+            const roundRobinBatch2 = mockRunViews.mock.calls[1][0];
+            expect(roundRobinBatch2[0].ExtraFilter).toBe(
+                `ID IN ('${USER_1.toUpperCase()}', '${USER_2}', '${USER_3}') AND IsActive = 1`
+            );
+            expect(roundRobinBatch2[1].ExtraFilter).toBe(
+                `AgentID = '${AGENT_ID}' AND RequestForUserID IN ('${USER_1.toUpperCase()}', '${USER_2}', '${USER_3}')`
+            );
+            expect(roundRobinBatch2[1].OrderBy).toBe('RequestedAt DESC, ID DESC');
+            expect(roundRobinBatch2[1].MaxRows).toBe(1);
 
             // Second call: last assigned was USER_3 (last in sequence) -> wraps around to USER_1
             mockRunViews
@@ -403,6 +442,17 @@ describe('AgentFeedbackCoordinator', () => {
                 createParamsStub()
             );
             expect(picked).toBe(USER_3);
+
+            const leastBusyBatch2 = mockRunViews.mock.calls[1][0];
+            expect(leastBusyBatch2[0].ExtraFilter).toBe(
+                `ID IN ('${USER_1}', '${USER_2}', '${USER_3}') AND IsActive = 1`
+            );
+            expect(leastBusyBatch2[1].ExtraFilter).toBe(
+                `RequestForUserID IN ('${USER_1}', '${USER_2}', '${USER_3}') AND Status = 'Requested'`
+            );
+            expect(leastBusyBatch2[1].OrderBy).toBe('RequestedAt DESC, ID DESC');
+            expect(leastBusyBatch2[1].IgnoreMaxRows).toBe(true);
+            expect(leastBusyBatch2[1].MaxRows).toBeUndefined();
         });
 
         it('should count a user with 10 older open Requested rows beyond 500 newer closed rows in LeastBusy mode', async () => {
@@ -467,6 +517,7 @@ describe('AgentFeedbackCoordinator', () => {
             expect(secondBatchViews[1].ExtraFilter).toBe(
                 `RequestForUserID IN ('${USER_1}', '${USER_2}') AND Status = 'Requested'`
             );
+            expect(secondBatchViews[1].OrderBy).toBe('RequestedAt DESC, ID DESC');
             expect(secondBatchViews[1].IgnoreMaxRows).toBe(true);
             expect(secondBatchViews[1].MaxRows).toBeUndefined();
         });
@@ -486,9 +537,10 @@ describe('AgentFeedbackCoordinator', () => {
                     ]),
                 ])
                 .mockResolvedValueOnce([
-                    // USER_2 is inactive (excluded from query result), so active users are [USER_1, USER_3]
+                    // USER_2 is returned with IsActive: false; in-memory filter must exclude USER_2 so active users are [USER_1, USER_3]
                     makeViewResult([
                         { ID: USER_1, IsActive: true },
+                        { ID: USER_2, IsActive: false },
                         { ID: USER_3, IsActive: true },
                     ]),
                 ]);
@@ -497,8 +549,21 @@ describe('AgentFeedbackCoordinator', () => {
                 { type: 'List', listID: LIST_ID, listStrategy: 'Random' },
                 createParamsStub()
             );
-            // Index 1 of [USER_1, USER_3] is USER_3
+            // Index 1 of [USER_1, USER_3] is USER_3 (would be USER_2 if inactive filtering were omitted)
             expect(picked).toBe(USER_3);
+
+            const firstBatchViews = mockRunViews.mock.calls[0][0];
+            expect(firstBatchViews[1].ExtraFilter).toBe(
+                `ListID = '${LIST_ID}' AND (Status IS NULL OR Status NOT IN ('Disabled', 'Error', 'Rejected'))`
+            );
+            expect(firstBatchViews[1].OrderBy).toBe('Sequence ASC, ID ASC');
+
+            const secondBatchViews = mockRunViews.mock.calls[1][0];
+            expect(secondBatchViews).toHaveLength(1);
+            expect(secondBatchViews[0].EntityName).toBe('MJ: Users');
+            expect(secondBatchViews[0].ExtraFilter).toBe(
+                `ID IN ('${USER_1}', '${USER_2}', '${USER_3}') AND IsActive = 1`
+            );
         });
 
         it('should fall back to contextUser.ID or null (unassigned) when list has no member rows, zero active users, or is not an MJ: Users list', async () => {
@@ -632,6 +697,83 @@ describe('AgentFeedbackCoordinator', () => {
             expect(savedRecord.Priority).toBe(90);
             expect(savedRecord.ExpiresAt).toBeInstanceOf(Date);
             expect(savedRecord.Status).toBe('Requested');
+            expect(savedRecord.Save).toHaveBeenCalledOnce();
+        });
+
+        it('should drive BaseAgent.createFeedbackRequest end to end with a List (RoundRobin) strategy through the real BaseAgent wrapper', async () => {
+            mockRunViews
+                .mockResolvedValueOnce([
+                    makeViewResult([{ ID: LIST_ID, EntityID: 'e-users', Entity: 'MJ: Users' }]),
+                    makeViewResult([
+                        { ID: 'ld-1', RecordID: USER_1, Sequence: 1, Status: 'Pending' },
+                        { ID: 'ld-2', RecordID: USER_2, Sequence: 2, Status: 'Pending' },
+                    ]),
+                ])
+                .mockResolvedValueOnce([
+                    makeViewResult([
+                        { ID: USER_1, IsActive: true },
+                        { ID: USER_2, IsActive: true },
+                    ]),
+                    makeViewResult([
+                        {
+                            ID: 'req-prev',
+                            AgentID: AGENT_ID,
+                            RequestForUserID: USER_1,
+                            RequestedAt: '2026-11-05T10:00:00Z',
+                        },
+                    ]),
+                ]);
+
+            const savedRecord: Partial<MJAIAgentRequestEntity> & {
+                Save: () => Promise<boolean>;
+                NewRecord: () => boolean;
+            } = {
+                ID: 'eeeeeeee-eeee-4eee-8eee-000000000002',
+                NewRecord: () => true,
+                Save: vi.fn(async () => true),
+            };
+            mockGetEntityObject.mockResolvedValueOnce(savedRecord as MJAIAgentRequestEntity);
+            mockResolveAgentRequestTypeID.mockResolvedValueOnce('dddddddd-dddd-4ddd-8ddd-000000000001');
+
+            const providerStub: Partial<IMetadataProvider> = {
+                GetEntityObject: async <T>(entityName: string, contextUser?: UserInfo): Promise<T> =>
+                    (await mockGetEntityObject(entityName, contextUser)) as T,
+            };
+
+            const params = createParamsStub({
+                provider: providerStub as IMetadataProvider,
+                assignmentStrategy: {
+                    type: 'List',
+                    listID: LIST_ID,
+                    listStrategy: 'RoundRobin',
+                    priority: 75,
+                },
+            });
+            const agentRun: Partial<MJAIAgentRunEntityExtended> = {
+                ID: 'ffffffff-ffff-4fff-8fff-000000000002',
+            };
+            const step: Partial<MJAIAgentRunStepEntityExtended> = {
+                ID: '99999999-9999-4999-8999-000000000002',
+            };
+            const decision: BaseAgentNextStep = {
+                step: 'Chat',
+                terminate: true,
+                message: 'Please review the findings.',
+            };
+
+            const agent = new TestFeedbackBaseAgent();
+            const feedbackRequestId = await agent.InvokeCreateFeedbackRequest(
+                params,
+                step as MJAIAgentRunStepEntityExtended,
+                decision,
+                agentRun as MJAIAgentRunEntityExtended
+            );
+
+            expect(feedbackRequestId).toBe('eeeeeeee-eeee-4eee-8eee-000000000002');
+            expect(savedRecord.RequestForUserID).toBe(USER_2);
+            expect(savedRecord.Priority).toBe(75);
+            expect(savedRecord.OriginatingAgentRunID).toBe('ffffffff-ffff-4fff-8fff-000000000002');
+            expect(savedRecord.OriginatingAgentRunStepID).toBe('99999999-9999-4999-8999-000000000002');
             expect(savedRecord.Save).toHaveBeenCalledOnce();
         });
     });
