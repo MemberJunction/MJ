@@ -672,7 +672,7 @@ export function ConvertIIF(sql: string): string {
     const parenStart = sql.indexOf('(', startPos);
     if (parenStart < 0) break;
 
-    const parenEnd = findMatchingParen(sql, parenStart);
+    const parenEnd = FindMatchingParen(sql, parenStart);
     if (parenEnd < 0) break;
 
     const argsStr = sql.slice(parenStart + 1, parenEnd);
@@ -700,7 +700,7 @@ export function convertIIF(sql: string): string {
 }
 
 /** Find the position of the matching closing parenthesis, respecting nesting and string literals */
-function findMatchingParen(sql: string, openPos: number): number {
+export function FindMatchingParen(sql: string, openPos: number): number {
   let depth = 0;
   let inSingleQuote = false;
 
