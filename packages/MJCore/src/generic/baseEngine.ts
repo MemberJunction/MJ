@@ -1770,8 +1770,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         // any entity is denied (marking the engine as permission-constrained).
         const entityConfigsToLoad = this.CheckPermissionsOrSkipAll(entityConfigs, contextUser);
 
-        await Promise.all([...datasetConfigs.map(c => this.LoadSingleDatasetConfig(c, contextUser, bypassCache)),
-                           this.LoadMultipleEntityConfigs(entityConfigsToLoad, contextUser, bypassCache)]);
+        try {
+            await Promise.all([...datasetConfigs.map(c => this.LoadSingleDatasetConfig(c, contextUser, bypassCache)),
+                               this.LoadMultipleEntityConfigs(entityConfigsToLoad, contextUser, bypassCache)]);
+        } finally {
+            // Runs even when a read threw, so a failed load still starts (or stops) the timed refresh.
+            this.ReconcileExpirationTimers();
+        }
 
         // Register cross-server cache change callbacks for entity configs
         this.RegisterCacheChangeCallbacks(entityConfigs);
@@ -2328,12 +2333,35 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
+     * Makes the running timers match the loaded configs: a config with an Expiration and no timer
+     * gets one, and a timer whose config no longer has an Expiration is stopped.
+     *
+     * A successful load arms its own timer from {@link HandleSingleViewResult}, but a failed one does
+     * not — without this a failed first load would leave that property with no refresh until restart.
+     * And a reload that drops the Expiration (an interval set to 0) must stop the timer, which
+     * {@link runExpirationRefresh} would otherwise keep re-arming at the old interval.
+     */
+    private ReconcileExpirationTimers(): void {
+        for (const c of this._metadataConfigs) {
+            if (c.Expiration && !this._expirationTimers.has(c.PropertyName)) {
+                this.SetExpirationTimer(c.PropertyName, c.Expiration);
+            } else if (!c.Expiration && this._expirationTimers.has(c.PropertyName)) {
+                clearTimeout(this._expirationTimers.get(c.PropertyName));
+                this._expirationTimers.delete(c.PropertyName);
+            }
+        }
+    }
+
+    /**
      * Runs one timed refresh and keeps the timer alive. A successful load re-arms the timer from
      * {@link HandleSingleViewResult}; a failed one (an unsuccessful result, or a thrown connection
      * error) does not, so without this the refresh would stop for good after a single failed read
      * and the property would keep its last rows indefinitely.
-     * @param timer - The handle that fired; if the map no longer holds it, a successful load or a
-     *                {@link RemoveDynamicConfig} already decided what happens next.
+     * The re-arm uses the config as it is now, so a reload that dropped the Expiration while this
+     * tick was running stops the timer instead of keeping it at the old interval.
+     * @param timer - The handle that fired; if the map no longer holds it, a successful load, a
+     *                {@link ReconcileExpirationTimers} or a {@link RemoveDynamicConfig} already
+     *                decided what happens next.
      */
     private async runExpirationRefresh(propertyName: string, expiration: number, timer: number): Promise<void> {
         try {
@@ -2341,8 +2369,14 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         } catch (e) {
             LogError(`${this.constructor.name}: timed refresh of ${propertyName} failed — ${(e as Error).message}. Retrying in ${expiration} ms.`);
         }
-        if (this._expirationTimers.get(propertyName) === timer) {
-            this.SetExpirationTimer(propertyName, expiration);
+        if (this._expirationTimers.get(propertyName) !== timer) {
+            return;
+        }
+        const config = this._metadataConfigs.find(c => c.PropertyName === propertyName) || this._dynamicConfigs.get(propertyName);
+        if (config?.Expiration) {
+            this.SetExpirationTimer(propertyName, config.Expiration);
+        } else {
+            this._expirationTimers.delete(propertyName);
         }
     }
 

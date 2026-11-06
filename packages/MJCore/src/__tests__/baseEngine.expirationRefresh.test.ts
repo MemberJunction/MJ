@@ -12,7 +12,9 @@ import { RunViewResult } from '../generic/interfaces';
  *   1. the tick reading through the server cache, whose slot never expires and never hears
  *      about out-of-process changes — so every tick must bypass the cache;
  *   2. one failed tick ending the refresh for good, since only a successful load re-arms the
- *      timer — so a failed or thrown tick must re-arm it.
+ *      timer — so a failed or thrown tick must re-arm it, and a failed first load must still
+ *      start it.
+ * And setting the interval to 0 must stop the timers, which the re-arm must not undo.
  */
 class TestEngine extends BaseEngine<TestEngine> {
     public _items: unknown[] = [];
@@ -27,6 +29,29 @@ class TestEngine extends BaseEngine<TestEngine> {
 
     public SetConfigsForTest(configs: BaseEnginePropertyConfig[]): void {
         (this as unknown as { _metadataConfigs: BaseEnginePropertyConfig[] })._metadataConfigs = configs;
+    }
+
+    /** Runs the real LoadConfigs (with the reads stubbed below), as Config does. */
+    public async LoadForTest(configs: BaseEnginePropertyConfig[]): Promise<void> {
+        await this.LoadConfigs(configs, undefined as unknown as UserInfo);
+    }
+
+    protected override CheckPermissionsOrSkipAll(configs: BaseEnginePropertyConfig[]): BaseEnginePropertyConfig[] {
+        return configs;
+    }
+
+    protected override async LoadMultipleEntityConfigs(
+        configs: BaseEnginePropertyConfig[],
+        contextUser: UserInfo,
+        bypassCache: boolean = false,
+    ): Promise<void> {
+        for (const c of configs) {
+            await this.LoadSingleConfig(c, contextUser, bypassCache);
+        }
+    }
+
+    protected override RegisterCacheChangeCallbacks(): void {
+        // no provider in these tests
     }
 
     /** Stands in for the first successful load, which arms the timer. */
@@ -140,6 +165,57 @@ describe('BaseEngine timed refresh (Expiration)', () => {
         // Only the metadata config's tick ran; the removed dynamic one did not re-arm.
         expect(engine.BypassCacheArgs.length - before).toBe(1);
         expect(vi.getTimerCount()).toBe(1);
+    });
+
+    describe('when the load that arms the timer fails', () => {
+        let fresh: TestEngine;
+
+        beforeEach(() => {
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            vi.clearAllTimers();
+            fresh = new (TestEngine as unknown as new () => TestEngine)();
+        });
+
+        it('still starts the refresh after a read that returns Success false', async () => {
+            fresh.Outcomes = ['fail'];
+            await fresh.LoadForTest([makeConfig(EXPIRATION_MS)]);
+            expect(vi.getTimerCount()).toBe(1);
+            await tick();
+            await tick();
+            expect(fresh.BypassCacheArgs).toEqual([false, true, true]);
+        });
+
+        it('still starts the refresh after a read that throws', async () => {
+            fresh.Outcomes = ['throw'];
+            await expect(fresh.LoadForTest([makeConfig(EXPIRATION_MS)])).rejects.toThrow('connection reset');
+            expect(vi.getTimerCount()).toBe(1);
+            await tick();
+            expect(fresh.BypassCacheArgs).toEqual([false, true]);
+        });
+    });
+
+    describe('when the interval is disabled', () => {
+        it('stops the timer on the reload that drops the Expiration', async () => {
+            await engine.LoadForTest([makeConfig()]);
+            expect(vi.getTimerCount()).toBe(0);
+            const before = engine.BypassCacheArgs.length;
+            for (let i = 0; i < 4; i++) {
+                await tick();
+            }
+            expect(engine.BypassCacheArgs.length).toBe(before);
+        });
+
+        it('does not re-arm from a tick that was running when the Expiration was dropped', async () => {
+            // The tick's refresh runs against a config that no longer has an Expiration, and no
+            // reload ran to clear the timer — only the re-arm check stands between it and forever.
+            engine.SetConfigsForTest([makeConfig()]);
+            await tick();
+            expect(vi.getTimerCount()).toBe(0);
+            const before = engine.BypassCacheArgs.length;
+            await tick();
+            await tick();
+            expect(engine.BypassCacheArgs.length).toBe(before);
+        });
     });
 
     it('unrefs the timer so it does not keep a Node process alive', () => {
