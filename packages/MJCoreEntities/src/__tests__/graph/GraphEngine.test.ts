@@ -282,6 +282,41 @@ describe('GraphEngine', () => {
         });
     });
 
+    describe('derived edges under an audience', () => {
+        it('keeps a derived edge only when every principal derives it (a reader who cannot read the join rows loses it)', async () => {
+            const specs = StandardEntitySpecs({ AccountContacts: { ReadRoles: ['Analyst'] } });
+            const rows = CanonMetadataRows();
+            const provider = providerWith(
+                {
+                    'MJ: Graph Edge Providers': [
+                        {
+                            ID: 'prov-join',
+                            GraphID: IDS.GraphNetwork,
+                            Name: 'Contacts',
+                            DriverClass: 'JoinEntityEdgeProvider',
+                            Configuration: JSON.stringify({ JoinEntity: 'AccountContacts', SourceField: 'AccountID', SourceEntity: 'Accounts', TargetField: 'ContactID', TargetEntity: 'Contacts', EdgeTypeName: 'Has Contact' }),
+                            Sequence: 1,
+                            IsActive: true,
+                        },
+                    ],
+                    'MJ: Graph Edges': rows['MJ: Graph Edges'],
+                    AccountContacts: [{ ID: 'ac-1', AccountID: 'acc-1', ContactID: 'con-1' }],
+                    Accounts: [{ ID: 'acc-1', Name: 'Acme' }],
+                    Contacts: [{ ID: 'con-1', FullName: 'Pat' }],
+                },
+                specs,
+            );
+            const engine = await configure(provider);
+            const seed = [{ EntityName: 'Accounts', RecordID: 'acc-1' }];
+            const alone = await engine.Subgraph('Member Network', seed, { Depth: 1 }, analyst);
+            expect(alone.Nodes.map((n) => n.RecordID)).toEqual(['acc-1', 'con-1']);
+
+            const guest = MakeUser('u-guest', ['Guest']); // reads Accounts and Contacts, not AccountContacts
+            const withGuest = await engine.Subgraph('Member Network', seed, { Depth: 1, AudienceReaders: [guest] }, analyst);
+            expect(withGuest.Nodes.map((n) => n.RecordID)).toEqual(['acc-1']);
+        });
+    });
+
     describe('caps, cycles and determinism', () => {
         function chainProvider(): FakeGraphProvider {
             const ids = ['n1', 'n2', 'n3', 'n4', 'n5'];

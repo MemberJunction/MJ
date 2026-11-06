@@ -612,7 +612,7 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
             }
         }
 
-        const derived = await this.runDerivedProviders(graph, normalizedFrontier, options, principals[0], provider);
+        const derived = await this.derivedEdgesForEveryPrincipal(graph, normalizedFrontier, options, principals, provider);
         for (const edge of derived) {
             if (edge.Weight < minWeight || !MatchesEdgeTypeFilter(edge.TypeName, options.EdgeTypes)) {
                 continue;
@@ -864,7 +864,28 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         }
     }
 
-    /** Derived edges from the graph's active providers, read as the caller. */
+    /**
+     * Derived edges every principal derives. Data-scale providers read as the user they run for, so an
+     * edge one principal derives from a row another cannot read (a membership, a link) would reveal that
+     * row; each principal runs the providers and only edges all of them produce are kept.
+     */
+    private async derivedEdgesForEveryPrincipal(
+        graph: MJGraphEntity,
+        frontier: GraphNodeRef[],
+        options: GraphTraversalOptions,
+        principals: UserInfo[],
+        provider: GraphDataProvider,
+    ): Promise<GraphEdgeView[]> {
+        const perPrincipal = await Promise.all(principals.map((p) => this.runDerivedProviders(graph, frontier, options, p, provider)));
+        const [callerEdges, ...others] = perPrincipal;
+        if (others.length === 0) {
+            return callerEdges;
+        }
+        const otherIds = others.map((edges) => new Set(edges.map((e) => e.ID)));
+        return callerEdges.filter((e) => otherIds.every((ids) => ids.has(e.ID)));
+    }
+
+    /** Derived edges from the graph's active providers, read as `caller`. */
     private async runDerivedProviders(
         graph: MJGraphEntity,
         frontier: GraphNodeRef[],
