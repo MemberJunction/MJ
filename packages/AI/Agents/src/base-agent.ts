@@ -149,6 +149,7 @@ import {
     type TaskGraphSpecNode,
     BuildTaskSecurityEnvelope,
     MergeTaskSecurityEnvelopes,
+    TASK_SECURITY_ENVELOPE_VERSION,
     TenantContextCarryProblem,
     type TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
@@ -14107,6 +14108,7 @@ The context is now within limits. Please retry your request with the recovered c
                 companyId: params.companyId,
                 SecondaryScopes: params.SecondaryScopes,
                 SearchScopeIDs: params.SearchScopeIDs, // the host's search scopes bound the sub-agent too
+                SecurityEnvelope: this.subAgentSecurityEnvelope(params), // a tainted parent's sub-agent starts tainted
                 conversationDetailId: params.conversationDetailId, // propagate conversationDetailId so sub-agent task graphs attach to the chat message
                 onAgentRunCreated: async (agentRunId: string) => {
                     stepEntity.TargetLogID = agentRunId;
@@ -14116,6 +14118,10 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             });
             
+            // Every sub-agent path (child, related, parallel) comes through here, so the child's taint reaches
+            // the parent whichever path ran it.
+            this.absorbSubAgentTaint(subAgentRequest.name, result, stepEntity?.StepNumber ?? (stepCount + 1));
+
             // Check if execution was successful
             if (result.success) {
                 this.logStatus(`✅ Sub-agent '${subAgentRequest.name}' completed successfully`, true, params);
@@ -16866,8 +16872,6 @@ The context is now within limits. Please retry your request with the recovered c
                 undefined, // No context message for child sub-agents
                 stepCount
             );
-            
-            this.absorbSubAgentTaint(subAgentRequest.name, subAgentResult, stepEntity?.StepNumber ?? (stepCount + 1));
 
             let mergedPayload = previousDecision.newPayload; // Start with the original payload
             let currentStepPayloadChangeResult: PayloadChangeResultSummary | undefined = undefined;
@@ -19885,6 +19889,21 @@ The context is now within limits. Please retry your request with the recovered c
             previousPayload: previousDecision.previousPayload,
             newPayload: previousDecision.newPayload || previousDecision.previousPayload
         };
+    }
+
+    /**
+     * The envelope a sub-agent run starts under (S2): this run's own envelope (`params.SecurityEnvelope`, when it
+     * runs as a task-graph node), with `IsRunTainted` set when this run is tainted now. A sub-agent works from
+     * this run's context, so it starts tainted exactly as an agent node does (`seedTaintFromSecurityEnvelope`),
+     * refuses egress while tainted, and carries the taint into any graph it submits. `undefined` when this run
+     * has neither an envelope nor taint.
+     */
+    private subAgentSecurityEnvelope(params: ExecuteAgentParams): TaskSecurityEnvelope | undefined {
+        const tainted = this.IsRunTainted || params.SecurityEnvelope?.IsRunTainted === true;
+        if (!params.SecurityEnvelope && !tainted) {
+            return undefined;
+        }
+        return { ...(params.SecurityEnvelope ?? { Version: TASK_SECURITY_ENVELOPE_VERSION }), IsRunTainted: tainted };
     }
 
     /**
