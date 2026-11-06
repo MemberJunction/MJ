@@ -71,12 +71,23 @@ export interface CreateFeedbackRequestInput {
 }
 
 type ListSummaryRow = Pick<MJListEntity, 'ID' | 'EntityID' | 'Entity'>;
+type ListDetailStatus = MJListDetailEntity['Status'];
 type ListDetailSummaryRow = Pick<MJListDetailEntity, 'ID' | 'ListID' | 'RecordID' | 'Sequence' | 'Status'>;
 type UserActiveSummaryRow = Pick<MJUserEntity, 'ID' | 'IsActive'>;
 type AgentRequestSummaryRow = Pick<
     MJAIAgentRequestEntity,
     'ID' | 'AgentID' | 'RequestForUserID' | 'Status' | 'RequestedAt'
 >;
+
+/**
+ * `MJ: List Details` statuses that disqualify a row from list membership.
+ * Standard rows created with the SQL default (`Status = 'Pending'`), as well as
+ * `'Active'`, `'Complete'`, `'Other'`, or `null`, remain eligible candidates.
+ */
+const EXCLUDED_LIST_DETAIL_STATUSES: readonly ListDetailStatus[] = ['Disabled', 'Error', 'Rejected'];
+const EXCLUDED_LIST_DETAIL_SQL_LIST = EXCLUDED_LIST_DETAIL_STATUSES.map(
+    (status) => `'${EscapeSQLString(status)}'`
+).join(', ');
 
 /**
  * Coordinates creation of persistent `MJ: AI Agent Requests` rows, response-form
@@ -421,7 +432,7 @@ export class AgentFeedbackCoordinator {
                     },
                     {
                         EntityName: 'MJ: List Details',
-                        ExtraFilter: `ListID = '${escapedListId}' AND (Status IS NULL OR Status = 'Active')`,
+                        ExtraFilter: `ListID = '${escapedListId}' AND (Status IS NULL OR Status NOT IN (${EXCLUDED_LIST_DETAIL_SQL_LIST}))`,
                         OrderBy: 'Sequence ASC, ID ASC',
                         Fields: ['ID', 'ListID', 'RecordID', 'Sequence', 'Status'],
                         ResultType: 'simple',
@@ -485,10 +496,17 @@ export class AgentFeedbackCoordinator {
         return false;
     }
 
+    private isMemberListDetailStatus(status: ListDetailStatus | null | undefined): boolean {
+        if (status == null) {
+            return true;
+        }
+        return !EXCLUDED_LIST_DETAIL_STATUSES.includes(status);
+    }
+
     private extractOrderedCandidateUserIDs(detailRows: ListDetailSummaryRow[]): string[] {
         const activeRows = detailRows.filter(
             (row) =>
-                (row.Status == null || row.Status === 'Active') &&
+                this.isMemberListDetailStatus(row.Status) &&
                 typeof row.RecordID === 'string' &&
                 row.RecordID.trim().length > 0
         );

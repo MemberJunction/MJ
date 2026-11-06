@@ -111,7 +111,7 @@ describe('AgentFeedbackCoordinator', () => {
     let coordinator: AgentFeedbackCoordinator;
 
     beforeEach(() => {
-        vi.clearAllMocks();
+        vi.resetAllMocks();
         mockAgentTypes.length = 0;
         mockAgentCategories.length = 0;
         mockAgentRequestTypes.length = 0;
@@ -228,15 +228,58 @@ describe('AgentFeedbackCoordinator', () => {
     });
 
     describe('ResolveAssigneeUserID — List strategy modes', () => {
-        it('should rotate through active list members in RoundRobin order and wrap around', async () => {
-            // First call: last assigned was USER_1 -> should pick USER_2
+        it('should include Pending, Active, Complete, Other, and null list detail statuses while excluding Disabled, Error, and Rejected', async () => {
+            const user4 = '66666666-6666-4666-8666-000000000006';
+            const user5 = '77777777-7777-4777-8777-000000000007';
             mockRunViews
                 .mockResolvedValueOnce([
                     makeViewResult([{ ID: LIST_ID, EntityID: 'e-users', Entity: 'MJ: Users' }]),
                     makeViewResult([
-                        { ID: 'ld-2', RecordID: USER_2, Sequence: 2, Status: 'Active' },
-                        { ID: 'ld-1', RecordID: USER_1.toUpperCase(), Sequence: 1, Status: 'Active' },
-                        { ID: 'ld-3', RecordID: USER_3, Sequence: 3, Status: 'Active' },
+                        { ID: 'ld-disabled', RecordID: OWNER_ID, Sequence: 1, Status: 'Disabled' },
+                        { ID: 'ld-error', RecordID: CALLER_ID, Sequence: 2, Status: 'Error' },
+                        { ID: 'ld-rejected', RecordID: '88888888-8888-4888-8888-000000000008', Sequence: 3, Status: 'Rejected' },
+                        { ID: 'ld-pending', RecordID: USER_1, Sequence: 4, Status: 'Pending' },
+                        { ID: 'ld-active', RecordID: USER_2, Sequence: 5, Status: 'Active' },
+                        { ID: 'ld-complete', RecordID: USER_3, Sequence: 6, Status: 'Complete' },
+                        { ID: 'ld-other', RecordID: user4, Sequence: 7, Status: 'Other' },
+                        { ID: 'ld-null', RecordID: user5, Sequence: 8, Status: null },
+                    ]),
+                ])
+                .mockResolvedValueOnce([
+                    makeViewResult([
+                        { ID: USER_1, IsActive: true },
+                        { ID: USER_2, IsActive: true },
+                        { ID: USER_3, IsActive: true },
+                        { ID: user4, IsActive: true },
+                        { ID: user5, IsActive: true },
+                    ]),
+                    makeViewResult([]),
+                ]);
+
+            const picked = await coordinator.ResolveAssigneeUserID(
+                { type: 'List', listID: LIST_ID, listStrategy: 'RoundRobin' },
+                createParamsStub()
+            );
+            expect(picked).toBe(USER_1);
+            const firstBatchViews = mockRunViews.mock.calls[0][0];
+            expect(firstBatchViews[1].ExtraFilter).toBe(
+                `ListID = '${LIST_ID}' AND (Status IS NULL OR Status NOT IN ('Disabled', 'Error', 'Rejected'))`
+            );
+            const secondBatchViews = mockRunViews.mock.calls[1][0];
+            expect(secondBatchViews[0].ExtraFilter).toBe(
+                `ID IN ('${USER_1}', '${USER_2}', '${USER_3}', '${user4}', '${user5}') AND IsActive = 1`
+            );
+        });
+
+        it('should rotate through active list members in RoundRobin order and wrap around', async () => {
+            // First call: last assigned was USER_1 -> should pick USER_2 (rows use default 'Pending' status)
+            mockRunViews
+                .mockResolvedValueOnce([
+                    makeViewResult([{ ID: LIST_ID, EntityID: 'e-users', Entity: 'MJ: Users' }]),
+                    makeViewResult([
+                        { ID: 'ld-2', RecordID: USER_2, Sequence: 2, Status: 'Pending' },
+                        { ID: 'ld-1', RecordID: USER_1.toUpperCase(), Sequence: 1, Status: 'Pending' },
+                        { ID: 'ld-3', RecordID: USER_3, Sequence: 3, Status: 'Pending' },
                     ]),
                 ])
                 .mockResolvedValueOnce([
@@ -267,9 +310,9 @@ describe('AgentFeedbackCoordinator', () => {
                 .mockResolvedValueOnce([
                     makeViewResult([{ ID: LIST_ID, EntityID: 'e-users', Entity: 'MJ: Users' }]),
                     makeViewResult([
-                        { ID: 'ld-1', RecordID: USER_1, Sequence: 1, Status: 'Active' },
-                        { ID: 'ld-2', RecordID: USER_2, Sequence: 2, Status: 'Active' },
-                        { ID: 'ld-3', RecordID: USER_3, Sequence: 3, Status: 'Active' },
+                        { ID: 'ld-1', RecordID: USER_1, Sequence: 1, Status: 'Pending' },
+                        { ID: 'ld-2', RecordID: USER_2, Sequence: 2, Status: 'Pending' },
+                        { ID: 'ld-3', RecordID: USER_3, Sequence: 3, Status: 'Pending' },
                     ]),
                 ])
                 .mockResolvedValueOnce([
@@ -300,9 +343,9 @@ describe('AgentFeedbackCoordinator', () => {
                 .mockResolvedValueOnce([
                     makeViewResult([{ ID: LIST_ID, EntityID: 'e-users', Entity: 'MJ: Users' }]),
                     makeViewResult([
-                        { ID: 'ld-1', RecordID: USER_1, Sequence: 1, Status: 'Active' },
-                        { ID: 'ld-2', RecordID: USER_2, Sequence: 2, Status: 'Active' },
-                        { ID: 'ld-3', RecordID: USER_3, Sequence: 3, Status: 'Active' },
+                        { ID: 'ld-1', RecordID: USER_1, Sequence: 1, Status: 'Pending' },
+                        { ID: 'ld-2', RecordID: USER_2, Sequence: 2, Status: 'Pending' },
+                        { ID: 'ld-3', RecordID: USER_3, Sequence: 3, Status: 'Pending' },
                     ]),
                 ])
                 .mockResolvedValueOnce([
@@ -364,9 +407,9 @@ describe('AgentFeedbackCoordinator', () => {
                 .mockResolvedValueOnce([
                     makeViewResult([{ ID: LIST_ID, EntityID: 'e-users', Entity: 'MJ: Users' }]),
                     makeViewResult([
-                        { ID: 'ld-1', RecordID: USER_1, Sequence: 1, Status: 'Active' },
-                        { ID: 'ld-2', RecordID: USER_2, Sequence: 2, Status: 'Active' },
-                        { ID: 'ld-3', RecordID: USER_3, Sequence: 3, Status: 'Active' },
+                        { ID: 'ld-1', RecordID: USER_1, Sequence: 1, Status: 'Pending' },
+                        { ID: 'ld-2', RecordID: USER_2, Sequence: 2, Status: 'Pending' },
+                        { ID: 'ld-3', RecordID: USER_3, Sequence: 3, Status: 'Pending' },
                     ]),
                 ])
                 .mockResolvedValueOnce([
@@ -389,7 +432,7 @@ describe('AgentFeedbackCoordinator', () => {
             // Non-Users list
             mockRunViews.mockResolvedValueOnce([
                 makeViewResult([{ ID: LIST_ID, EntityID: 'e-contacts', Entity: 'MJ: Contacts' }]),
-                makeViewResult([{ ID: 'ld-1', RecordID: USER_1, Sequence: 1, Status: 'Active' }]),
+                makeViewResult([{ ID: 'ld-1', RecordID: USER_1, Sequence: 1, Status: 'Pending' }]),
             ]);
 
             const fallbackCaller = await coordinator.ResolveAssigneeUserID(
@@ -402,7 +445,7 @@ describe('AgentFeedbackCoordinator', () => {
             mockRunViews
                 .mockResolvedValueOnce([
                     makeViewResult([{ ID: LIST_ID, EntityID: 'e-users', Entity: 'MJ: Users' }]),
-                    makeViewResult([{ ID: 'ld-1', RecordID: USER_1, Sequence: 1, Status: 'Active' }]),
+                    makeViewResult([{ ID: 'ld-1', RecordID: USER_1, Sequence: 1, Status: 'Pending' }]),
                 ])
                 .mockResolvedValueOnce([makeViewResult([])]);
 
