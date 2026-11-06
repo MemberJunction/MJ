@@ -1,4 +1,5 @@
 export * from './BaseGraphEdgeProvider';
+export * from './GraphExpansion';
 export * from './GraphEngine';
 export * from './providers/ForeignKeyEdgeProvider';
 export * from './providers/JoinEntityEdgeProvider';

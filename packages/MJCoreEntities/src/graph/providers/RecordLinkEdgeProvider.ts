@@ -4,6 +4,7 @@ import type { MJRecordLinkEntityType } from '../../generated/entities/__mj';
 import {
     BaseGraphEdgeProvider,
     FormatGraphNodeKey,
+    ResolveMaxRowsPerStep,
     MatchesEdgeTypeFilter,
     type GraphEdgeRequest,
     type GraphEdgeView,
@@ -27,15 +28,11 @@ export interface RecordLinkEdgeProviderConfig {
  */
 @RegisterClass(BaseGraphEdgeProvider, 'RecordLinkEdgeProvider')
 export class RecordLinkEdgeProvider extends BaseGraphEdgeProvider<RecordLinkEdgeProviderConfig> {
-    public override get SupportsEnumeration(): boolean {
-        return false;
-    }
-
     public override async GetEdges(
         request: GraphEdgeRequest,
         ctx: GraphProviderContext<RecordLinkEdgeProviderConfig>,
     ): Promise<GraphEdgeView[]> {
-        if (!request.Nodes || request.Nodes.length === 0) {
+        if (request.Nodes.length === 0) {
             return [];
         }
         const config = ctx.Config ?? {};
@@ -112,6 +109,7 @@ export class RecordLinkEdgeProvider extends BaseGraphEdgeProvider<RecordLinkEdge
             extraFilter += ` AND ([LinkType] IN (${quotedTypes}))`;
         }
 
+        const maxRows = ResolveMaxRowsPerStep(config.MaxRowsPerStep);
         const rv = RunView.FromMetadataProvider(ctx.Provider);
         const runResult = await rv.RunView<
             Pick<
@@ -141,14 +139,18 @@ export class RecordLinkEdgeProvider extends BaseGraphEdgeProvider<RecordLinkEdge
                     'LinkType',
                     'Metadata',
                 ],
+                OrderBy: '[ID]',
                 ResultType: 'simple',
-                MaxRows: config.MaxRowsPerStep ?? 200,
+                MaxRows: maxRows,
             },
             ctx.User,
         );
 
         if (!runResult.Success || !Array.isArray(runResult.Results)) {
             return [];
+        }
+        if (runResult.Results.length >= maxRows) {
+            this.LogTruncation('RecordLinkEdgeProvider', 'MJ: Record Links', maxRows, ctx.Graph.Name);
         }
 
         const defaultWeight = typeof config.DefaultWeight === 'number' ? config.DefaultWeight : 0.65;

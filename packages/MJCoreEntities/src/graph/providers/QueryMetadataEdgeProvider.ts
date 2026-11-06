@@ -24,10 +24,6 @@ export interface QueryMetadataEdgeProviderConfig {
  */
 @RegisterClass(BaseGraphEdgeProvider, 'QueryMetadataEdgeProvider')
 export class QueryMetadataEdgeProvider extends BaseGraphEdgeProvider<QueryMetadataEdgeProviderConfig> {
-    public override get SupportsEnumeration(): boolean {
-        return true;
-    }
-
     public override async GetEdges(
         request: GraphEdgeRequest,
         ctx: GraphProviderContext<QueryMetadataEdgeProviderConfig>,
@@ -41,20 +37,20 @@ export class QueryMetadataEdgeProvider extends BaseGraphEdgeProvider<QueryMetada
         const frontierQueryIds = new UUIDSet();
         const frontierEntityIds = new UUIDSet();
         const frontierAbvIds = new UUIDSet();
-        const hasFrontier = Boolean(request.Nodes && request.Nodes.length > 0);
-        if (hasFrontier && request.Nodes) {
-            for (const n of request.Nodes) {
-                const nameLower = n.EntityName.trim().toLowerCase();
-                if (nameLower === 'mj: queries' || nameLower === 'queries') {
-                    frontierQueryIds.Add(n.RecordID);
-                } else if (nameLower === 'mj: entities' || nameLower === 'entities') {
-                    frontierEntityIds.Add(n.RecordID);
-                } else if (
-                    nameLower === 'mj: entity alternate base views' ||
-                    nameLower === 'entity alternate base views'
-                ) {
-                    frontierAbvIds.Add(n.RecordID);
-                }
+        if (request.Nodes.length === 0) {
+            return [];
+        }
+        for (const n of request.Nodes) {
+            const nameLower = n.EntityName.trim().toLowerCase();
+            if (nameLower === 'mj: queries' || nameLower === 'queries') {
+                frontierQueryIds.Add(n.RecordID);
+            } else if (nameLower === 'mj: entities' || nameLower === 'entities') {
+                frontierEntityIds.Add(n.RecordID);
+            } else if (
+                nameLower === 'mj: entity alternate base views' ||
+                nameLower === 'entity alternate base views'
+            ) {
+                frontierAbvIds.Add(n.RecordID);
             }
         }
 
@@ -73,7 +69,6 @@ export class QueryMetadataEdgeProvider extends BaseGraphEdgeProvider<QueryMetada
 
                 if (qe.AlternateBaseViewID) {
                     const matchFrontier =
-                        !hasFrontier ||
                         (wantOut && frontierQueryIds.Has(qe.QueryID)) ||
                         (wantIn && frontierAbvIds.Has(qe.AlternateBaseViewID));
                     if (!matchFrontier) {
@@ -103,7 +98,6 @@ export class QueryMetadataEdgeProvider extends BaseGraphEdgeProvider<QueryMetada
                     });
                 } else if (qe.EntityID) {
                     const matchFrontier =
-                        !hasFrontier ||
                         (wantOut && frontierQueryIds.Has(qe.QueryID)) ||
                         (wantIn && frontierEntityIds.Has(qe.EntityID));
                     if (!matchFrontier) {
@@ -142,7 +136,6 @@ export class QueryMetadataEdgeProvider extends BaseGraphEdgeProvider<QueryMetada
                     continue;
                 }
                 const matchFrontier =
-                    !hasFrontier ||
                     (wantOut && frontierQueryIds.Has(dep.QueryID)) ||
                     (wantIn && frontierQueryIds.Has(dep.DependsOnQueryID));
                 if (!matchFrontier) {

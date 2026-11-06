@@ -21,10 +21,6 @@ export type AlternateBaseViewEdgeProviderConfig = Record<string, unknown>;
  */
 @RegisterClass(BaseGraphEdgeProvider, 'AlternateBaseViewEdgeProvider')
 export class AlternateBaseViewEdgeProvider extends BaseGraphEdgeProvider<AlternateBaseViewEdgeProviderConfig> {
-    public override get SupportsEnumeration(): boolean {
-        return true;
-    }
-
     public override async GetEdges(
         request: GraphEdgeRequest,
         ctx: GraphProviderContext<AlternateBaseViewEdgeProviderConfig>,
@@ -38,18 +34,18 @@ export class AlternateBaseViewEdgeProvider extends BaseGraphEdgeProvider<Alterna
 
         const frontierEntityIds = new UUIDSet();
         const frontierAbvIds = new UUIDSet();
-        const hasFrontier = Boolean(request.Nodes && request.Nodes.length > 0);
-        if (hasFrontier && request.Nodes) {
-            for (const n of request.Nodes) {
-                const nameLower = n.EntityName.trim().toLowerCase();
-                if (nameLower === 'mj: entities' || nameLower === 'entities') {
-                    frontierEntityIds.Add(n.RecordID);
-                } else if (
-                    nameLower === 'mj: entity alternate base views' ||
-                    nameLower === 'entity alternate base views'
-                ) {
-                    frontierAbvIds.Add(n.RecordID);
-                }
+        if (request.Nodes.length === 0) {
+            return [];
+        }
+        for (const n of request.Nodes) {
+            const nameLower = n.EntityName.trim().toLowerCase();
+            if (nameLower === 'mj: entities' || nameLower === 'entities') {
+                frontierEntityIds.Add(n.RecordID);
+            } else if (
+                nameLower === 'mj: entity alternate base views' ||
+                nameLower === 'entity alternate base views'
+            ) {
+                frontierAbvIds.Add(n.RecordID);
             }
         }
 
@@ -70,7 +66,6 @@ export class AlternateBaseViewEdgeProvider extends BaseGraphEdgeProvider<Alterna
                 const sKey = FormatGraphNodeKey(abvNode.EntityID ?? abvNode.EntityName, abvNode.RecordID);
 
                 const matchEntityFrontier =
-                    !hasFrontier ||
                     (wantOut && frontierAbvIds.Has(abv.ID)) ||
                     (wantIn && frontierEntityIds.Has(entity.ID));
                 if (matchEntityFrontier) {
@@ -100,7 +95,6 @@ export class AlternateBaseViewEdgeProvider extends BaseGraphEdgeProvider<Alterna
 
                 if (abv.ParentID) {
                     const matchParentFrontier =
-                        !hasFrontier ||
                         (wantOut && frontierAbvIds.Has(abv.ID)) ||
                         (wantIn && frontierAbvIds.Has(abv.ParentID));
                     if (matchParentFrontier) {

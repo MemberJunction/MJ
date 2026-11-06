@@ -3,6 +3,7 @@ import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/glob
 import {
     BaseGraphEdgeProvider,
     FormatGraphNodeKey,
+    ResolveMaxRowsPerStep,
     MatchesEdgeTypeFilter,
     type GraphEdgeRequest,
     type GraphEdgeView,
@@ -31,10 +32,6 @@ export interface ForeignKeyEdgeProviderConfig {
  */
 @RegisterClass(BaseGraphEdgeProvider, 'ForeignKeyEdgeProvider')
 export class ForeignKeyEdgeProvider extends BaseGraphEdgeProvider<ForeignKeyEdgeProviderConfig> {
-    public override get SupportsEnumeration(): boolean {
-        return false;
-    }
-
     public override async GetEdges(
         request: GraphEdgeRequest,
         ctx: GraphProviderContext<ForeignKeyEdgeProviderConfig>,
@@ -109,20 +106,25 @@ export class ForeignKeyEdgeProvider extends BaseGraphEdgeProvider<ForeignKeyEdge
         }
 
         const filter = `([${fkField.Name}] IS NOT NULL) AND (${predicates.join(' OR ')})`;
+        const maxRows = ResolveMaxRowsPerStep(config.MaxRowsPerStep);
         const rv = RunView.FromMetadataProvider(ctx.Provider);
         const runResult = await rv.RunView<Record<string, unknown>>(
             {
                 EntityName: sourceEntityInfo.Name,
                 ExtraFilter: filter,
                 Fields: [pkFieldName, fkField.Name],
+                OrderBy: `[${fkField.Name}], [${pkFieldName}]`,
                 ResultType: 'simple',
-                MaxRows: config.MaxRowsPerStep ?? 200,
+                MaxRows: maxRows,
             },
             ctx.User,
         );
 
         if (!runResult.Success || !Array.isArray(runResult.Results)) {
             return [];
+        }
+        if (runResult.Results.length >= maxRows) {
+            this.LogTruncation('ForeignKeyEdgeProvider', sourceEntityInfo.Name, maxRows, ctx.Graph.Name);
         }
 
         const weight = typeof config.Weight === 'number' ? config.Weight : 0.6;

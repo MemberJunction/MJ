@@ -4,6 +4,7 @@ import { QueryEngine } from '../../engines/QueryEngine';
 import {
     BaseGraphEdgeProvider,
     FormatGraphNodeKey,
+    ResolveMaxRowsPerStep,
     MatchesEdgeTypeFilter,
     type GraphEdgeRequest,
     type GraphEdgeView,
@@ -18,29 +19,34 @@ export interface QueryEdgeProviderConfig {
     QueryName: string;
     CategoryPath?: string;
     Parameters?: Record<string, string | number | boolean>;
+    /**
+     * Name of a query parameter that receives the frontier's record IDs (an array) on every
+     * expansion step, so the query reads only the frontier's edges — e.g. a parameter `NodeIDs` used as
+     * `WHERE SourceRecordID IN {{ NodeIDs | sqlIn }}`. Without it the query is not frontier-scoped and
+     * every step runs it whole (still capped at `MaxRowsPerStep`); set it for any data-scale query.
+     */
+    FrontierParameter?: string;
     DefaultEdgeType?: string;
     EdgeTypeName?: string;
     DefaultWeight?: number;
     IsDirected?: boolean;
+    MaxRowsPerStep?: number;
 }
 
 /**
  * Projects derived edges from any saved MJ Query returning `SourceEntity`, `SourceRecordID`,
  * `TargetEntity`, `TargetRecordID` (and optional `EdgeType`, `Weight`, `Description`).
- * Runs through `RunQuery` under `ctx.User` so query permissions (`UserCanRun`) apply.
+ * Runs through `RunQuery` under `ctx.User` so query permissions (`UserCanRun`) apply, receives the
+ * frontier through `FrontierParameter` when configured, and is capped at `MaxRowsPerStep` rows per step.
  */
 @RegisterClass(BaseGraphEdgeProvider, 'QueryEdgeProvider')
 export class QueryEdgeProvider extends BaseGraphEdgeProvider<QueryEdgeProviderConfig> {
-    public override get SupportsEnumeration(): boolean {
-        return true;
-    }
-
     public override async GetEdges(
         request: GraphEdgeRequest,
         ctx: GraphProviderContext<QueryEdgeProviderConfig>,
     ): Promise<GraphEdgeView[]> {
         const config = ctx.Config;
-        if (!config?.QueryName) {
+        if (!config?.QueryName || request.Nodes.length === 0) {
             return [];
         }
 
@@ -50,13 +56,18 @@ export class QueryEdgeProvider extends BaseGraphEdgeProvider<QueryEdgeProviderCo
             return [];
         }
 
-        const rq = new RunQuery(ctx.Provider);
-
-        const queryResult = await rq.RunQuery(
+        const parameters: Record<string, string | number | boolean | string[]> = { ...(config.Parameters ?? {}) };
+        const frontierParameter = config.FrontierParameter?.trim();
+        if (frontierParameter) {
+            parameters[frontierParameter] = Array.from(new Set(request.Nodes.map((n) => n.RecordID))).sort();
+        }
+        const maxRows = ResolveMaxRowsPerStep(config.MaxRowsPerStep);
+        const queryResult = await new RunQuery(ctx.Provider).RunQuery(
             {
                 QueryName: config.QueryName,
                 CategoryPath: config.CategoryPath,
-                Parameters: config.Parameters ? { ...config.Parameters } : undefined,
+                Parameters: Object.keys(parameters).length > 0 ? parameters : undefined,
+                MaxRows: maxRows,
             },
             ctx.User,
         );
@@ -64,16 +75,16 @@ export class QueryEdgeProvider extends BaseGraphEdgeProvider<QueryEdgeProviderCo
         if (!queryResult?.Success || !Array.isArray(queryResult.Results)) {
             return [];
         }
+        if (queryResult.Results.length >= maxRows) {
+            this.LogTruncation('QueryEdgeProvider', config.QueryName, maxRows, ctx.Graph.Name);
+        }
 
-        const frontierKeys =
-            request.Nodes && request.Nodes.length > 0
-                ? new Set(
-                      request.Nodes.map((n) => {
-                          const entityInfo = ctx.Provider.EntityByName(n.EntityName);
-                          return FormatGraphNodeKey(entityInfo?.ID ?? n.EntityID ?? n.EntityName, n.RecordID);
-                      }),
-                  )
-                : null;
+        const frontierKeys = new Set(
+            request.Nodes.map((n) => {
+                const entityInfo = ctx.Provider.EntityByName(n.EntityName);
+                return FormatGraphNodeKey(entityInfo?.ID ?? n.EntityID ?? n.EntityName, n.RecordID);
+            }),
+        );
 
         const wantOut = request.Direction === 'Out' || request.Direction === 'Both';
         const wantIn = request.Direction === 'In' || request.Direction === 'Both';
@@ -116,13 +127,11 @@ export class QueryEdgeProvider extends BaseGraphEdgeProvider<QueryEdgeProviderCo
             const sourceKey = FormatGraphNodeKey(fromNode.EntityID ?? fromNode.EntityName, fromNode.RecordID);
             const targetKey = FormatGraphNodeKey(toNode.EntityID ?? toNode.EntityName, toNode.RecordID);
 
-            if (frontierKeys) {
-                const matchOut = wantOut && frontierKeys.has(sourceKey);
-                const matchIn = wantIn && frontierKeys.has(targetKey);
-                const matchUndirected = !isDirected && (frontierKeys.has(sourceKey) || frontierKeys.has(targetKey));
-                if (!matchOut && !matchIn && !matchUndirected) {
-                    continue;
-                }
+            const matchOut = wantOut && frontierKeys.has(sourceKey);
+            const matchIn = wantIn && frontierKeys.has(targetKey);
+            const matchUndirected = !isDirected && (frontierKeys.has(sourceKey) || frontierKeys.has(targetKey));
+            if (!matchOut && !matchIn && !matchUndirected) {
+                continue;
             }
 
             const rawWeight = row['Weight'] != null ? Number(row['Weight']) : NaN;

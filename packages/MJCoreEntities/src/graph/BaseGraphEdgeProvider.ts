@@ -4,6 +4,7 @@ import type {
     IRunViewProvider,
     UserInfo,
 } from '@memberjunction/core';
+import { LogStatus } from '@memberjunction/core';
 import { NormalizeUUID } from '@memberjunction/global';
 import type { MJGraphEntity } from '../generated/entity_subclasses';
 
@@ -18,6 +19,9 @@ export interface GraphNodeRef {
 
 /**
  * Resolved view of a semantic graph node with display label, icon, and description.
+ *
+ * `Hop`, `PathWeight`, `ParentKey` and `ViaEdgeID` are set by {@link GraphEngine.Subgraph}: they
+ * record the best path that reached the node, so a caller can explain how it got there.
  */
 export interface GraphNodeView {
     /** Canonical node key (`<normalizedEntityID>|<recordID>` or `<normalizedEntityName>|<recordID>`). */
@@ -28,6 +32,14 @@ export interface GraphNodeView {
     Icon: string | null;
     Description: string | null;
     EntityID?: string;
+    /** Hops from the nearest seed (`0` for a seed). */
+    Hop?: number;
+    /** Best-first path score: product of edge weights, decayed per hop (`1` for a seed). */
+    PathWeight?: number;
+    /** Key of the node this one was reached from (`null` for a seed). */
+    ParentKey?: string | null;
+    /** ID of the edge this node was reached through (`null` for a seed). */
+    ViaEdgeID?: string | null;
 }
 
 /**
@@ -65,14 +77,20 @@ export interface GraphTraversalOptions {
     EdgeTypes?: string[];
     /** Minimum edge weight in `[0, 1]`. */
     MinWeight?: number;
-    /** When `true`, include `'Proposed'` edges alongside `'Approved'` and `'Derived'` edges (`false` by default). */
+    /** When `true`, include `'Proposed'` stored edges alongside `'Approved'` ones (`false` by default). */
     IncludeProposed?: boolean;
-    /** Maximum hop depth (`2` by default, capped at `4`). */
+    /** Maximum hop depth (`2` by default, clamped to `1..4`). */
     Depth?: number;
     /** Alias for {@link Depth} used by RAG/pipeline callers. */
     MaxDepth?: number;
-    /** Maximum expanded nodes (`50` by default; hard-capped at `200`). */
+    /** Maximum expanded nodes (`50` by default, clamped to `1..200`). */
     MaxNodes?: number;
+    /**
+     * Everyone besides the caller who will see the result (a run's audience). A node is admitted only
+     * when the caller AND every reader may see it, checked during traversal, so a node reachable only
+     * through a node some reader cannot see is never reached.
+     */
+    AudienceReaders?: readonly UserInfo[];
 }
 
 /**
@@ -81,14 +99,16 @@ export interface GraphTraversalOptions {
 export interface GraphSubgraph {
     Nodes: GraphNodeView[];
     Edges: GraphEdgeView[];
+    /** Why the result is empty or partial: an unknown or inactive graph, or a cap that was reached. */
+    Message?: string;
 }
 
 /**
- * Request passed to a {@link BaseGraphEdgeProvider} during preload enumeration or on-demand step expansion.
+ * Request passed to a {@link BaseGraphEdgeProvider} for one expansion step.
  */
 export interface GraphEdgeRequest {
-    /** Frontier nodes to expand around; `undefined` means enumerate all edges (for `Preload` graphs only). */
-    Nodes?: GraphNodeRef[];
+    /** Frontier nodes to expand around. Providers return only edges incident to these nodes. */
+    Nodes: GraphNodeRef[];
     Direction: 'Out' | 'In' | 'Both';
     EdgeTypes?: string[];
 }
@@ -125,9 +145,13 @@ export function IsGraphDataProvider(candidate: object | null | undefined): candi
 export interface GraphProviderContext<TConfig = Record<string, unknown>> {
     Graph: MJGraphEntity;
     Config: TConfig;
+    /** The caller. Every data read runs as this user so entity permissions and row-level security apply. */
     User: UserInfo;
     Provider: GraphDataProvider;
 }
+
+/** Default per-step row cap for data-scale providers (`MaxRowsPerStep` in their configuration). */
+export const DEFAULT_GRAPH_PROVIDER_MAX_ROWS_PER_STEP = 200;
 
 /**
  * Build a canonical, case-normalized key for a `(EntityID/EntityName, RecordID)` pair.
@@ -156,78 +180,13 @@ export function MatchesEdgeTypeFilter(typeName: string, allowedTypes?: readonly 
 }
 
 /**
- * Minimal node shape consumed by {@link ComputeGraphNodeAttenuatedScore} and {@link FormatGraphNodeBreadcrumb}.
- */
-export interface GraphNodeProvenanceInput {
-    readonly EntityName: string;
-    readonly RecordID: string;
-    readonly Title: string;
-    readonly NodeKind?: 'Record' | 'View' | 'Query' | 'Concept';
-    readonly Score?: number;
-    readonly SeedScore?: number;
-    readonly SeedTitle?: string;
-    readonly Breadcrumb?: string;
-    readonly PathEdges?: readonly {
-        readonly EdgeType: string;
-        readonly Weight: number;
-        readonly Label?: string;
-    }[];
-}
-
-/**
- * Compute the path-attenuated score for an expanded graph node:
- * `seedScore * product(edge.Weight)` clamped to `[0, 1]`.
- */
-export function ComputeGraphNodeAttenuatedScore(node: GraphNodeProvenanceInput): number {
-    if (typeof node.Score === 'number' && Number.isFinite(node.Score)) {
-        return Math.max(0, Math.min(1, node.Score));
-    }
-    const seedScore =
-        typeof node.SeedScore === 'number' && Number.isFinite(node.SeedScore)
-            ? Math.max(0, Math.min(1, node.SeedScore))
-            : 1.0;
-    const edges = node.PathEdges ?? [];
-    let product = seedScore;
-    for (const edge of edges) {
-        const weight = Number.isFinite(edge.Weight) ? Math.max(0, Math.min(1, edge.Weight)) : 0;
-        product *= weight;
-    }
-    return Math.max(0, Math.min(1, product));
-}
-
-/**
- * Format a human-readable provenance breadcrumb for an expanded graph node, e.g.:
- * `"Open AR" --[Defined By (0.95)]--> View "Invoices.Open"`.
- */
-export function FormatGraphNodeBreadcrumb(node: GraphNodeProvenanceInput): string {
-    if (node.Breadcrumb && node.Breadcrumb.trim().length > 0) {
-        return node.Breadcrumb;
-    }
-    const seedLabel = node.SeedTitle ? `"${node.SeedTitle}"` : `"${node.EntityName}:${node.RecordID}"`;
-    const kindPrefix = node.NodeKind && node.NodeKind !== 'Record' ? `${node.NodeKind} ` : '';
-    const targetLabel = `${kindPrefix}"${node.Title}"`;
-    const edges = node.PathEdges ?? [];
-    if (edges.length === 0) {
-        return `${seedLabel} --> ${targetLabel}`;
-    }
-    const hops = edges.map((edge) => {
-        const edgeLabel = edge.Label ?? edge.EdgeType;
-        const formattedWeight = edge.Weight.toFixed(2);
-        return `--[${edgeLabel} (${formattedWeight})]-->`;
-    });
-    return `${seedLabel} ${hops.join(' ')} ${targetLabel}`;
-}
-
-/**
  * Abstract base class for derived semantic graph edge providers (`@RegisterClass(BaseGraphEdgeProvider, '<DriverClass>')`).
+ *
+ * Providers are called once per expansion step with the step's frontier and must return only edges
+ * incident to it. Metadata-scale providers read loaded metadata and `QueryEngine` caches (no I/O);
+ * data-scale providers batch one bounded, ordered read per step.
  */
 export abstract class BaseGraphEdgeProvider<TConfig = Record<string, unknown>> {
-    /**
-     * `true` when the provider can enumerate every edge cheaply at preload time (metadata-scale);
-     * `false` when the provider only expands around given frontier `Nodes` (data-scale).
-     */
-    public abstract get SupportsEnumeration(): boolean;
-
     /**
      * Project derived edges for `request`. Every data read must go through `RunView` or `RunQuery`
      * with `ctx.User` so entity permissions and row-level security apply.
@@ -236,5 +195,27 @@ export abstract class BaseGraphEdgeProvider<TConfig = Record<string, unknown>> {
         request: GraphEdgeRequest,
         ctx: GraphProviderContext<TConfig>,
     ): Promise<GraphEdgeView[]>;
+
+    /**
+     * Log that a per-step read hit its row cap, so a truncated neighborhood is visible rather than
+     * silently partial.
+     */
+    protected LogTruncation(providerName: string, source: string, maxRows: number, graphName: string): void {
+        LogStatus(
+            `${providerName}: the per-step read of "${source}" in graph "${graphName}" reached its ${maxRows}-row cap; ` +
+                'this expansion step may be missing edges. Raise MaxRowsPerStep or narrow the frontier.',
+        );
+    }
 }
 
+/** Hard ceiling on any provider's per-step row cap. */
+export const MAX_GRAPH_PROVIDER_ROWS_PER_STEP = 1000;
+
+/**
+ * A provider's per-step row cap from its configuration: `DEFAULT_GRAPH_PROVIDER_MAX_ROWS_PER_STEP`
+ * when unset, clamped to `1..MAX_GRAPH_PROVIDER_ROWS_PER_STEP`.
+ */
+export function ResolveMaxRowsPerStep(configured: number | undefined): number {
+    const value = configured != null && Number.isFinite(configured) ? Math.floor(configured) : DEFAULT_GRAPH_PROVIDER_MAX_ROWS_PER_STEP;
+    return Math.max(1, Math.min(MAX_GRAPH_PROVIDER_ROWS_PER_STEP, value));
+}

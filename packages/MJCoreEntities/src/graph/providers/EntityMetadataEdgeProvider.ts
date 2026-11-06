@@ -22,10 +22,6 @@ export interface EntityMetadataEdgeProviderConfig {
  */
 @RegisterClass(BaseGraphEdgeProvider, 'EntityMetadataEdgeProvider')
 export class EntityMetadataEdgeProvider extends BaseGraphEdgeProvider<EntityMetadataEdgeProviderConfig> {
-    public override get SupportsEnumeration(): boolean {
-        return true;
-    }
-
     public override async GetEdges(
         request: GraphEdgeRequest,
         ctx: GraphProviderContext<EntityMetadataEdgeProviderConfig>,
@@ -38,15 +34,15 @@ export class EntityMetadataEdgeProvider extends BaseGraphEdgeProvider<EntityMeta
 
         const frontierEntityIds = new UUIDSet();
         const frontierFieldIds = new UUIDSet();
-        const hasFrontier = Boolean(request.Nodes && request.Nodes.length > 0);
-        if (hasFrontier && request.Nodes) {
-            for (const n of request.Nodes) {
-                const nameLower = n.EntityName.trim().toLowerCase();
-                if (nameLower === 'mj: entities' || nameLower === 'entities') {
-                    frontierEntityIds.Add(n.RecordID);
-                } else if (nameLower === 'mj: entity fields' || nameLower === 'entity fields') {
-                    frontierFieldIds.Add(n.RecordID);
-                }
+        if (request.Nodes.length === 0) {
+            return [];
+        }
+        for (const n of request.Nodes) {
+            const nameLower = n.EntityName.trim().toLowerCase();
+            if (nameLower === 'mj: entities' || nameLower === 'entities') {
+                frontierEntityIds.Add(n.RecordID);
+            } else if (nameLower === 'mj: entity fields' || nameLower === 'entity fields') {
+                frontierFieldIds.Add(n.RecordID);
             }
         }
 
@@ -64,7 +60,6 @@ export class EntityMetadataEdgeProvider extends BaseGraphEdgeProvider<EntityMeta
             // 1. Is A (Entity -> ParentEntity)
             if (includeSet.has('IsA') && entity.ParentID && MatchesEdgeTypeFilter('Is A', request.EdgeTypes)) {
                 const matchFrontier =
-                    !hasFrontier ||
                     (wantOut && frontierEntityIds.Has(entity.ID)) ||
                     (wantIn && frontierEntityIds.Has(entity.ParentID));
                 if (matchFrontier) {
@@ -101,7 +96,6 @@ export class EntityMetadataEdgeProvider extends BaseGraphEdgeProvider<EntityMeta
                     MatchesEdgeTypeFilter('References', request.EdgeTypes)
                 ) {
                     const matchFrontier =
-                        !hasFrontier ||
                         (wantOut && frontierEntityIds.Has(entity.ID)) ||
                         (wantIn && frontierEntityIds.Has(field.RelatedEntityID));
                     if (matchFrontier) {
@@ -140,7 +134,6 @@ export class EntityMetadataEdgeProvider extends BaseGraphEdgeProvider<EntityMeta
                 if (
                     includeSet.has('FieldOf') &&
                     MatchesEdgeTypeFilter('Field Of', request.EdgeTypes) &&
-                    hasFrontier &&
                     ((wantOut && frontierFieldIds.Has(field.ID)) ||
                         (wantIn && frontierFieldIds.Size > 0 && frontierEntityIds.Has(entity.ID)))
                 ) {
