@@ -67,6 +67,13 @@ export function IsWhiteboardHexColor(value: string): boolean {
 }
 
 /**
+ * The user pen palette (tuned for MJ's dark board). Never includes violet: violet ink is the
+ * agent's. Lives here, not in the toolbar, so the Angular-free state engine can default an ink
+ * stroke whose persisted `Color` is not a hex color.
+ */
+export const WHITEBOARD_PEN_COLORS: readonly string[] = ['#cbd5e1', '#fbbf24', '#5cc0ed', '#4ade80', '#f87171'];
+
+/**
  * Font family choices for text labels / stickies. The keys are mapped to token-friendly
  * font stacks in the board CSS (`wb-font-serif`, `wb-font-mono`; sans is the default).
  */
@@ -2143,7 +2150,10 @@ export class WhiteboardState {
    * Coerce the closed-set item fields of persisted items so hostile values from a shared
    * board never enter state: `Author` becomes `'agent'` or `'user'`, and a `FontWeight` /
    * `FontFamily` outside its literal set is dropped (the item falls back to the CSS
-   * default). Non-object entries are dropped (restore would skip them anyway).
+   * default). A `Color` that is not a hex color ({@link IsWhiteboardHexColor}) is dropped,
+   * or for ink (where it is required) replaced with the first user pen color, because it is
+   * painted into style and SVG attributes where a `url(...)` would be fetched. Non-object
+   * entries are dropped (restore would skip them anyway).
    */
   private static normalizePersistedItems(entries: unknown[]): WhiteboardItem[] {
     const items: WhiteboardItem[] = [];
@@ -2158,6 +2168,14 @@ export class WhiteboardState {
       }
       if ('FontFamily' in item && !IsWhiteboardFontFamily(item['FontFamily'])) {
         delete item['FontFamily'];
+      }
+      const color = item['Color'];
+      if (item['Kind'] === 'ink') {
+        if (typeof color !== 'string' || !IsWhiteboardHexColor(color)) {
+          item['Color'] = WHITEBOARD_PEN_COLORS[0];
+        }
+      } else if ('Color' in item && (typeof color !== 'string' || !IsWhiteboardHexColor(color))) {
+        delete item['Color'];
       }
       items.push(item as unknown as WhiteboardItem);
     }
