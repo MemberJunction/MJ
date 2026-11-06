@@ -280,7 +280,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['encrypted-read-client', EncryptedReadClientChecks, 4], // ER1-ER4 encrypted field plaintext over GraphQL, miss and hit (IT160)
         ['ciphertext-cache', CiphertextCacheChecks, 5], // CT0-CT4 ciphertext at rest in the RunViewCache, plaintext to the caller (IT161)
         ['semantic-graph', SemanticGraphChecks, 7], // SG1-SG7 Semantic Graph substrate, Content Pipeline GraphStage overlay, and Executable Canon DAG similarity & telemetry (IT162)
-        ['graph-runtime', GraphRuntimeChecks, 4], // GR1-GR4 MJ Canon traversal, per-caller query visibility, the edge approval gate, Get Graph Context (IT164)
+        ['graph-runtime', GraphRuntimeChecks, 6], // GR1-GR6 MJ Canon traversal, per-caller query visibility, the edge approval gate on a real Save, Get Graph Context, JoinEntity and QueryEdgeProvider fixtures (IT164)
         ['task-graph-security', TaskGraphSecurityChecks, 3], // TGS1-TGS3 envelope on every row and immutable, one compensation per step, A2A store row boundary (IT165)
     ];
 
@@ -407,7 +407,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'fp-gate-c2-3': 3,
         'fp-gate-c2-5': 3,
         'fp-live-jobtitle': 1,
-        'graph-runtime': 4,
+        'graph-runtime': 6,
         'jsontype-live-sync': 9,
         'jsontype-live-sync-client': 9,
         'layered-base-views': 6,
@@ -735,6 +735,8 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'fp-gate-c2-5.G1',
         'fp-gate-c2-5.G2',
         'fp-gate-c2-5.G3',
+        'graph-runtime.GR5',
+        'graph-runtime.GR6',
         'jsontype-live-sync-client.JL1',
         'jsontype-live-sync-client.JL2',
         'jsontype-live-sync-client.JL3',
