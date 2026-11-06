@@ -152,6 +152,78 @@ describe('restarLayeredOuterView', () => {
             }),
         ).toThrow(LayeredOuterRestarError);
     });
+
+    it('restars an unaliased alternate base view with a WHERE clause without treating WHERE as an alias', () => {
+        const def = `
+ SELECT "ID",
+    "Name",
+    "Status"
+   FROM __mj."vwOrganizations"
+  WHERE (("Status")::text = 'Active'::text)
+        `.trim();
+
+        const result = RestarLayeredOuterView({
+            viewDefinition: def,
+            innerViewName: 'vwOrganizations',
+            innerColumns: ORG_INNER,
+        });
+
+        expect(result.startsWith('SELECT *\nFROM __mj."vwOrganizations"')).toBe(true);
+        expect(result).toContain('WHERE (("Status")::text = \'Active\'::text)');
+        expect(result).not.toContain('"WHERE".*');
+    });
+
+    it('restars an aliased alternate base view with a WHERE clause and preserves the alias', () => {
+        const def = `
+ SELECT v."ID",
+    v."Name",
+    v."Status"
+   FROM __mj."vwOrganizations" v
+  WHERE ((v."Status")::text = 'Active'::text)
+        `.trim();
+
+        const result = RestarLayeredOuterView({
+            viewDefinition: def,
+            innerViewName: 'vwOrganizations',
+            innerColumns: ORG_INNER,
+        });
+
+        expect(result.startsWith('SELECT "v".*\nFROM __mj."vwOrganizations" v')).toBe(true);
+        expect(result).toContain('WHERE ((v."Status")::text = \'Active\'::text)');
+    });
+
+    it('restars a pg_get_viewdef output with parenthesized FROM (schema.view alias JOIN ...) and unaliased JOINs', () => {
+        const parenthesizedJoinDef = `
+ SELECT u."ID",
+    u."Name",
+    u."Status"
+   FROM ((__mj."vwOrganizations" u
+     JOIN __mj."OrganizationRole" r ON ((r."OrganizationID" = u."ID"))))
+  WHERE ((u."Status")::text = 'Active'::text)
+        `.trim();
+
+        const resAliased = RestarLayeredOuterView({
+            viewDefinition: parenthesizedJoinDef,
+            innerViewName: 'vwOrganizations',
+            innerColumns: ORG_INNER,
+        });
+        expect(resAliased.startsWith('SELECT "u".*\nFROM ((__mj."vwOrganizations" u')).toBe(true);
+
+        const unaliasedJoinDef = `
+ SELECT "vwOrganizations"."ID",
+    "vwOrganizations"."Name",
+    "vwOrganizations"."Status"
+   FROM (__mj."vwOrganizations"
+     JOIN __mj."OrganizationRole" r ON ((r."OrganizationID" = "vwOrganizations"."ID")))
+        `.trim();
+
+        const resUnaliased = RestarLayeredOuterView({
+            viewDefinition: unaliasedJoinDef,
+            innerViewName: 'vwOrganizations',
+            innerColumns: ORG_INNER,
+        });
+        expect(resUnaliased.startsWith('SELECT "vwOrganizations".*\nFROM (__mj."vwOrganizations"')).toBe(true);
+    });
 });
 
 describe('buildCreateOrReplaceLayeredOuterViewSQL', () => {

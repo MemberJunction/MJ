@@ -16,6 +16,7 @@ import {
     AgentSpec,
     AgentActionSpec,
     AgentStep,
+    AgentStepPath,
     SubAgentSpec
 } from '@memberjunction/ai-core-plus';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -624,6 +625,7 @@ export class AgentSpecSync {
             // Other config
             DefaultPromptEffortLevel: agent.DefaultPromptEffortLevel || undefined,
             ChatHandlingOption: agent.ChatHandlingOption || undefined,
+            MaxSubAgentConsultRounds: agent.MaxSubAgentConsultRounds ?? undefined,
             DefaultArtifactTypeID: agent.DefaultArtifactTypeID || undefined,
             OwnerUserID: agent.OwnerUserID || undefined,
             InvocationMode: agent.InvocationMode,
@@ -711,7 +713,9 @@ export class AgentSpecSync {
             AgentRelationshipID: relationship.ID,
             SubAgentInputMapping: this.parseJsonField<Record<string, string>>(relationship.SubAgentInputMapping),
             SubAgentOutputMapping: this.parseJsonField<Record<string, string>>(relationship.SubAgentOutputMapping),
-            SubAgentContextPaths: this.parseJsonField<Record<string, string>>(relationship.SubAgentContextPaths)
+            SubAgentContextPaths: this.parseJsonField<Record<string, string>>(relationship.SubAgentContextPaths),
+            ChatHandlingOption: relationship.ChatHandlingOption || undefined,
+            ConfigurationPresetID: relationship.ConfigurationPresetID || undefined
         };
     }
 
@@ -748,7 +752,9 @@ export class AgentSpecSync {
     }
 
     /**
-     * Map MJAIAgentStepEntity to AgentStep format.
+     * Map MJAIAgentStepEntity to AgentStep format, preserving execution policy
+     * (`TimeoutSeconds`, `RetryCount`, `OnErrorBehavior`) and canvas geometry
+     * (`PositionX`, `PositionY`, `Width`, `Height`) across save/load round trips.
      *
      * @private
      * @param step - The agent step entity
@@ -770,25 +776,34 @@ export class AgentSpecSync {
             LoopBodyType: step.LoopBodyType || undefined,
             Configuration: step.Configuration || undefined,
             ActionInputMapping: this.parseJsonField<Record<string, unknown>>(step.ActionInputMapping),
-            ActionOutputMapping: this.parseJsonField<Record<string, unknown>>(step.ActionOutputMapping)
+            ActionOutputMapping: this.parseJsonField<Record<string, unknown>>(step.ActionOutputMapping),
+            TimeoutSeconds: step.TimeoutSeconds ?? undefined,
+            RetryCount: step.RetryCount ?? undefined,
+            OnErrorBehavior: step.OnErrorBehavior || undefined,
+            PositionX: step.PositionX ?? undefined,
+            PositionY: step.PositionY ?? undefined,
+            Width: step.Width ?? undefined,
+            Height: step.Height ?? undefined
         };
     }
 
     /**
-     * Map MJAIAgentStepPathEntity to AgentStepPath format.
+     * Map MJAIAgentStepPathEntity to AgentStepPath format, preserving canvas routing
+     * (`PathPoints`) across save/load round trips.
      *
      * @private
      * @param path - The agent step path entity
      * @returns Mapped path spec
      */
-    private mapPathEntityToSpec(path: MJAIAgentStepPathEntity): any {
+    private mapPathEntityToSpec(path: MJAIAgentStepPathEntity): AgentStepPath {
         return {
             ID: path.ID,
             OriginStepID: path.OriginStepID,
             DestinationStepID: path.DestinationStepID,
             Condition: path.Condition || undefined,
             Description: path.Description || undefined,
-            Priority: path.Priority
+            Priority: path.Priority,
+            PathPoints: path.PathPoints || undefined
         };
     }
 
@@ -969,6 +984,7 @@ export class AgentSpecSync {
         // Other config
         agentEntity.DefaultPromptEffortLevel = this.Spec.DefaultPromptEffortLevel || null;
         agentEntity.ChatHandlingOption = this.Spec.ChatHandlingOption || null;
+        agentEntity.MaxSubAgentConsultRounds = this.Spec.MaxSubAgentConsultRounds ?? null;
         agentEntity.DefaultArtifactTypeID = this.Spec.DefaultArtifactTypeID || null;
 
         // Set OwnerUserID - always use contextUser if available (user creating/modifying the agent)
@@ -1186,6 +1202,8 @@ export class AgentSpecSync {
         relationshipEntity.AgentID = agentId;
         relationshipEntity.SubAgentID = SubAgentSpec.SubAgent.ID;
         relationshipEntity.Status = 'Active';
+        relationshipEntity.ChatHandlingOption = SubAgentSpec.ChatHandlingOption ?? null;
+        relationshipEntity.ConfigurationPresetID = SubAgentSpec.ConfigurationPresetID ?? null;
 
         // Serialize mapping fields
         if (SubAgentSpec.SubAgentInputMapping) {
@@ -1692,6 +1710,7 @@ export class AgentSpecSync {
             StartingPayloadValidationMode: partial.StartingPayloadValidationMode || 'Fail',
             DefaultPromptEffortLevel: partial.DefaultPromptEffortLevel,
             ChatHandlingOption: partial.ChatHandlingOption,
+            MaxSubAgentConsultRounds: partial.MaxSubAgentConsultRounds,
             DefaultArtifactTypeID: partial.DefaultArtifactTypeID,
             OwnerUserID: partial.OwnerUserID,
             InvocationMode: partial.InvocationMode || 'Any',

@@ -1,0 +1,212 @@
+[
+  {
+    "fields": {
+      "Name": "Render Architecture Diagram",
+      "Description": "Renders an interactive workflow, lifecycle, sequence, or dataflow diagram from an MJ Diagram Spec JSON object via @memberjunction/ai-diagrams. Validates the spec and computes deterministic layout + self-contained SVG implementing the MJ Diagram Data Contract (data-mj-diagram=\"1\") for interactive rendering in <mj-markdown> and <mj-svg-artifact-viewer>. On validation failure, returns VALIDATION_FAILED with structured diagnostics (JSON path, message, closest ID suggestions, and fix instructions) so you can repair the spec and retry. Call Get Architecture Diagram Reference first to read the spec schema for the desired DiagramType.",
+      "DriverClass": "__RenderArchitectureDiagram",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-sitemap",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data"
+    },
+    "primaryKey": {
+      "ID": "42FC2391-612C-4336-9D80-C53948EDBA6D"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DiagramType",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Diagram kind to render: workflow (actor swimlanes, tasks, decisions, exception paths), lifecycle (state groups, status transitions, step badges), sequence (participants, chronological messages, phase bands), or dataflow (left-to-right processing stages and data-labeled flows). Optional if SpecJSON includes a top-level kind field; when both are given they must match.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5A9D9D99-544B-473E-A6BA-E6E780B8A99C"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:46:06.922Z",
+            "checksum": "a30adcc9d827b109c7075f8118847649d961d2c4c4d6066c3659c49dcc465ad8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SpecJSON",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "The MJ Diagram Spec as a JSON string or object (containing kind, title, lanes/stages/participants, nodes/states, edges/transitions/flows/messages, and optional mainPath/phases/cards).",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "664ADAD1-2798-4AB3-A2D3-431F0235F90A"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:46:06.942Z",
+            "checksum": "0717cb216ef979ee2d06b9e9c9a915400b971dc48af7cdfe28644c2ef3c5ba27"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SVG",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Self-contained interactive SVG markup (with data-mj-diagram=\"1\" contract attributes).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8FB409F3-5652-49E8-B5C0-40EF9A7BEBD5"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:46:06.963Z",
+            "checksum": "9c80f2427483aa0e54d9dbf0ccc69459f85d96f742f66e2683e9e6655d91595f"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The diagram validated and rendered. Both the Message and the SVG output parameter contain the self-contained interactive SVG."
+          },
+          "primaryKey": {
+            "ID": "2E1AC8E3-9D93-4B63-8DCC-DAEA91AF184F"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:46:07.006Z",
+            "checksum": "05046a0052b13d135fd5100925265639cc47b55f29c465aaf3a0cbe5689b7d18"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_FAILED",
+            "IsSuccess": false,
+            "Description": "The spec failed validation. The Message is a JSON object { error, diagnostics: [{ Code, Severity, Path, Message, Fix }] }. Apply the suggested fixes and call again."
+          },
+          "primaryKey": {
+            "ID": "64F8CBD0-9A0D-4815-B302-B7FAB17898D6"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:46:07.016Z",
+            "checksum": "d269fd8f7c472543626c8d81ec80d3b551e1653ff986a70122ac9d76ea7e2abe"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_INPUT",
+            "IsSuccess": false,
+            "Description": "SpecJSON is missing or not a valid JSON object, or the diagram kind is missing, unknown, or conflicts with DiagramType."
+          },
+          "primaryKey": {
+            "ID": "E3479E8F-8908-4ABB-A94B-269EB6877ED7"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:46:07.026Z",
+            "checksum": "68f449e69556fbf002baaec614d71f985452fc1bbd37f0ff13a17c36419871fa"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "RENDER_FAILED",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred during layout or SVG rendering."
+          },
+          "primaryKey": {
+            "ID": "84A63FF9-F5E2-4AFD-9438-06A344817D4A"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:46:07.035Z",
+            "checksum": "73685f17e1bc1a8232532272432443b3f953bde1d51ecd08ea07eabd3c246eff"
+          }
+        }
+      ]
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:06.840Z",
+      "checksum": "81ce240fc45fbd2f2c8e1cc9fbee26d49a9f997f36e36e2b2827d1891569c612"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Architecture Diagram Reference",
+      "Description": "Returns the MJ Diagram Spec authoring guide and required fields for Render Architecture Diagram (workflow, lifecycle, sequence, or dataflow).",
+      "DriverClass": "__GetArchitectureDiagramReference",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-book-open",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data"
+    },
+    "primaryKey": {
+      "ID": "4CEB029C-B252-4649-9E10-BDE31BB4A7B1"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DiagramType",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Which diagram kind to retrieve the spec reference for: workflow, lifecycle, sequence, dataflow, or all (default: all).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "DB4B4A25-F4A7-40C0-80D3-97558936DBFC"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:46:07.055Z",
+            "checksum": "a400459e21dc2ce36ce2b91e9b91403411f870822efd4378b8c62db72da30be3"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The Message holds the requested diagram spec reference guide."
+          },
+          "primaryKey": {
+            "ID": "55087815-96B4-444E-BFAF-A3DEFB4E0BBB"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:46:07.066Z",
+            "checksum": "d39188bd919c71131812c1d02034d461e3d7b3e7d7bf7e6d25306403e7bc4328"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "DiagramType is not one of workflow, lifecycle, sequence, dataflow, or all."
+          },
+          "primaryKey": {
+            "ID": "0904A8DE-F33B-4B5E-983A-36F73D0F14DE"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:46:07.075Z",
+            "checksum": "ab1bc954fa0b45b27aec11396ade17f024533955cba0b8861f7304409aab50f6"
+          }
+        }
+      ]
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:06.866Z",
+      "checksum": "7eb4be504cf5549e2a6b6f933270ad2716a9633396f4a9350a78dc0726197602"
+    }
+  }
+]

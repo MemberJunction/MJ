@@ -20,7 +20,8 @@ import type {
 } from '@memberjunction/core-entities';
 import type { AIBridgeEngineBase } from '@memberjunction/ai-bridge-base';
 import { CalendarWatcher, CalendarWatcherConfig } from '../calendar-watcher';
-import { ICalendarSource, NormalizedCalendarInvite } from '../calendar-source';
+import { GraphCalendarSource, ICalendarSource, NormalizedCalendarInvite } from '../calendar-source';
+import type { ProviderCredentialsBase, SyncEventsParams, SyncEventsResult } from '@memberjunction/communication-types';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Test doubles.
@@ -343,5 +344,66 @@ describe('CalendarWatcher — tolerance + filtering', () => {
         const result = await watcher.Sweep();
         expect(result.IdentitiesScanned).toBe(1); // only the active Email identity
         expect(result.BridgesCreated).toBe(1);
+    });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('CalendarWatcher — polling a Graph calendar through the Communication provider', () => {
+    /** What MSGraphProvider.SyncEvents returns for an invite in the agent's calendar. */
+    const invited: SyncEventsResult = {
+        Success: true,
+        NextSyncToken: 'delta-2',
+        Changes: [
+            {
+                Kind: 'Upserted',
+                ExternalEventID: 'graph-evt-1',
+                Event: {
+                    ExternalEventID: 'graph-evt-1',
+                    SeriesID: null,
+                    ICalUID: 'uid-1',
+                    Subject: 'Strategy sync',
+                    Body: '',
+                    Start: new Date(FIXED_NOW + 60 * 60 * 1000),
+                    End: new Date(FIXED_NOW + 2 * 60 * 60 * 1000),
+                    IsAllDay: false,
+                    Location: null,
+                    Organizer: { Email: 'human@org.com' },
+                    Attendees: [
+                        { Email: 'Sage@Org.com', Type: 'Required', Response: 'None' },
+                        { Email: 'human@org.com', Type: 'Required', Response: 'Accepted' },
+                    ],
+                    IsCancelled: false,
+                    OnlineMeetingUrl: 'https://us02web.zoom.us/j/123',
+                    LastModified: null,
+                },
+            },
+        ],
+    };
+
+    it('creates the scheduled bridge from the provider sync, then polls on with the stored token', async () => {
+        const calls: SyncEventsParams[] = [];
+        const passedCredentials: (ProviderCredentialsBase | undefined)[] = [];
+        const graph = {
+            SyncEvents: vi.fn(async (params: SyncEventsParams, credentials?: ProviderCredentialsBase): Promise<SyncEventsResult> => {
+                calls.push(params);
+                passedCredentials.push(credentials);
+                return calls.length === 1 ? invited : { Success: true, Changes: [], NextSyncToken: 'delta-3' };
+            }),
+        };
+        const botCredentials = { accessToken: 'bot-token', disableEnvironmentFallback: true };
+        const source = new GraphCalendarSource(graph, botCredentials, { Now: () => FIXED_NOW });
+        const { provider, bridges } = makeProvider();
+        const watcher = makeWatcher(source, [makeIdentity()], [makeZoomProvider()], provider);
+
+        const first = await watcher.Sweep();
+        expect(first.BridgesCreated).toBe(1);
+        expect(bridges[0].ExternalConnectionID).toBe('graph-evt-1');
+        expect(bridges[0].Address).toBe('https://us02web.zoom.us/j/123');
+        expect(calls[0]).toMatchObject({ Target: { Identifier: 'sage@org.com' }, SyncToken: undefined });
+
+        await watcher.Sweep();
+        expect(calls[1].SyncToken).toBe('delta-2');
+        expect(passedCredentials).toEqual([botCredentials, botCredentials]);
     });
 });

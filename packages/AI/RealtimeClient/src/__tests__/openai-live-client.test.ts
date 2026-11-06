@@ -668,6 +668,24 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         });
     });
 
+    it('RequestSpokenTurn sends the same commentary and response.create but tags the reply normal (MJ#4591)', async () => {
+        await client.Connect(makeConfig(), micStream);
+        client.Channel.Open();
+        client.Channel.Sent = [];
+        const transcripts: RealtimeClientTranscript[] = [];
+        client.OnTranscript((t) => transcripts.push(t));
+
+        client.RequestSpokenTurn('Greet the participant.');
+
+        const sent = client.Channel.SentEvents();
+        expect(sent).toEqual([
+            { type: 'session.commentary.append', content: 'Greet the participant.', delegation_id: null },
+            { type: 'response.create' },
+        ]);
+        client.Channel.EmitServer({ type: 'session.output_transcript.delta', delta: 'Hello, welcome.' });
+        expect(transcripts[0].Kind).toBe('normal');
+    });
+
     it('RequestSpokenUpdate tags narration and sends commentary with response.create', async () => {
         await client.Connect(makeConfig(), micStream);
         client.Channel.Open();

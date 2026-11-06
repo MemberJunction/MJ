@@ -2,7 +2,7 @@
  * @fileoverview BGE local-model re-ranker (P2D.5).
  *
  * Self-hosted reranker for deployments that don't want to send candidate documents
- * to a third-party API. Wraps `@xenova/transformers`' `pipeline('text-classification')`
+ * to a third-party API. Wraps `@huggingface/transformers`' `pipeline('text-classification')`
  * loaded with a Xenova-converted BGE reranker model (e.g. `Xenova/bge-reranker-base`,
  * `Xenova/bge-reranker-large`, `Xenova/bge-reranker-v2-m3`).
  *
@@ -14,7 +14,7 @@
  *   - `ScopeConfig.reRanker.config.model` — HuggingFace ID or local path
  *   - `ScopeConfig.reRanker.config.cacheDir` — override TRANSFORMERS_CACHE_DIR
  *
- * **Optional peer dep.** `@xenova/transformers` is in `optionalDependencies`. Loaded
+ * **Optional peer dep.** `@huggingface/transformers` is in `optionalDependencies`. Loaded
  * via dynamic import per CLAUDE.md rule #8 case 2 — consumers who don't want a
  * local-model reranker don't pay the bundle cost.
  *
@@ -36,7 +36,7 @@ interface TransformersModule {
     pipeline: (
         task: string,
         model: string,
-        options?: { quantized?: boolean; cache_dir?: string },
+        options?: { dtype?: string; cache_dir?: string },
     ) => Promise<RerankPipeline>;
     env: { allowLocalModels: boolean; cacheDir: string; allowRemoteModels?: boolean };
 }
@@ -53,11 +53,11 @@ function loadTransformers(): Promise<TransformersModule> {
                 // SearchEngine is ESM (`"type": "module"`), so a real dynamic import is
                 // safe here — no need for the `eval('import(...)')` workaround that
                 // packages-as-CJS use. This is also what allows tests to vi.mock().
-                const mod = await import('@xenova/transformers' as string) as unknown as TransformersModule;
+                const mod = await import('@huggingface/transformers' as string) as unknown as TransformersModule;
                 return mod;
             } catch (err) {
                 throw new Error(
-                    `BGEReRanker: '@xenova/transformers' is not installed. Add it to your project's dependencies if you intend to use the BGE local reranker. Underlying error: ${err instanceof Error ? err.message : String(err)}`
+                    `BGEReRanker: '@huggingface/transformers' is not installed. Add it to your project's dependencies if you intend to use the BGE local reranker. Underlying error: ${err instanceof Error ? err.message : String(err)}`
                 );
             }
         })();
@@ -78,7 +78,7 @@ async function getPipeline(modelId: string, cacheDir: string | undefined): Promi
         cached = (async () => {
             const transformers = await loadTransformers();
             if (cacheDir) transformers.env.cacheDir = cacheDir;
-            return transformers.pipeline('text-classification', modelId, { quantized: true });
+            return transformers.pipeline('text-classification', modelId, { dtype: 'q8' });
         })();
         pipelineCache.set(key, cached);
     }

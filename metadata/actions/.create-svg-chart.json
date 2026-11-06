@@ -19,14 +19,24 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Type of chart to generate: 'bar', 'line', 'pie', 'scatter', 'area'. Required.",
-            "IsRequired": true
+            "IsRequired": true,
+            "ValueSchema": {
+              "type": "string",
+              "enum": [
+                "bar",
+                "line",
+                "pie",
+                "scatter",
+                "area"
+              ]
+            }
           },
           "primaryKey": {
             "ID": "588CFAFD-1EA3-478E-935A-33932113B44A"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:14.745Z",
-            "checksum": "caa29d8b6da169916884441d0a2924a3d77eb6330532de7d86d4c75a3eaaa1fa"
+            "lastModified": "2026-10-20T23:18:47.799Z",
+            "checksum": "4d3814bd48a93424face92b1aeab3bf26d55e3f88e3dcba83aa915906bbc3616"
           }
         },
         {
@@ -37,14 +47,34 @@
             "ValueType": "Other",
             "IsArray": true,
             "Description": "Array of data objects (can be passed as object or JSON string). For bar charts: {label, value} or {x, y}. For line/area/scatter: {x, y}. For pie: {label, value}. Required.",
-            "IsRequired": true
+            "IsRequired": true,
+            "ValueSchema": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "number"
+                },
+                "x": {
+                  "type": [
+                    "string",
+                    "number"
+                  ]
+                },
+                "y": {
+                  "type": "number"
+                }
+              }
+            }
           },
           "primaryKey": {
             "ID": "71FD517A-B020-4D93-A543-67ABE3BD48BD"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:14.747Z",
-            "checksum": "cff308fa2f9dd095fb1a426600804b1c35a6ff009d3256a297f0b388b89f58ea"
+            "lastModified": "2026-10-20T23:18:47.805Z",
+            "checksum": "04d040c3ba9ec41b6914a298ffc06c3c02b884eff83d3126aa0d8ed2dd44c38e"
           }
         },
         {
@@ -110,14 +140,17 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Chart width in pixels. Default: 800.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "integer"
+            }
           },
           "primaryKey": {
             "ID": "5BA494B6-E742-441F-AA15-BD7587EB8B26"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:14.753Z",
-            "checksum": "025b88dcda26c34b936e6305717e6c94798bda94abf442ce2fc5587767fbf534"
+            "lastModified": "2026-10-20T23:18:47.811Z",
+            "checksum": "1f42ad34e02e26776e315eed4c35d5450c74dbcafa85a3a2dacdb932dcf16fda"
           }
         },
         {
@@ -129,14 +162,17 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Chart height in pixels. Default: 600.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "integer"
+            }
           },
           "primaryKey": {
             "ID": "DD01BD72-1555-43C5-A7C1-0B1199E0E298"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:14.755Z",
-            "checksum": "6e3f1c967a30c924ecc53c575bd0ed4fa67a1f0234f192dcef8fcc65c8b74633"
+            "lastModified": "2026-10-20T23:18:47.816Z",
+            "checksum": "faeb3cd327e1aa19653492f8e2385196d6f984fde287ad1f7e461f73d88d6539"
           }
         },
         {
@@ -148,14 +184,23 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Color palette name (optional). Options: 'mjDefault', 'gray', 'pastel', 'highContrast'. Default: 'mjDefault'.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "string",
+              "enum": [
+                "mjDefault",
+                "gray",
+                "pastel",
+                "highContrast"
+              ]
+            }
           },
           "primaryKey": {
             "ID": "C3D4E5F6-A789-0123-CDEF-234567890123"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:14.757Z",
-            "checksum": "6895063138387825450706f18d84efc50e4e772a951acbe80c30a0589703c8ec"
+            "lastModified": "2026-10-20T23:18:47.821Z",
+            "checksum": "7295506a6f15f1628cfa2e69d8081ba32a86bff1e79a6b8fb9172f93272a7680"
           }
         },
         {
@@ -167,14 +212,17 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Show grid lines (optional). 'true' or 'false'. Default: 'false'.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "boolean"
+            }
           },
           "primaryKey": {
             "ID": "D4E5F6A7-8901-2345-DEF0-345678901234"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:14.758Z",
-            "checksum": "88d45b57a41b448ee6c6519f63c7f2bafed831aa8e4c8ebbb7b689c464abcb4b"
+            "lastModified": "2026-10-20T23:18:47.826Z",
+            "checksum": "536deeac710ef0278c8761fd4f11b03dafbbea162a1b4596c657a5a116894d79"
           }
         },
         {
@@ -186,14 +234,17 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Show legend (optional). 'true' or 'false'. Default: 'false'. Currently only supported for pie charts.",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "boolean"
+            }
           },
           "primaryKey": {
             "ID": "E5F6A789-0123-4567-EF01-456789012345"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:14.760Z",
-            "checksum": "8ef972dc28c62d50a59ca1f4c29867d889fe7346221fdf6585d6626cdabb6167"
+            "lastModified": "2026-10-20T23:18:47.831Z",
+            "checksum": "008a19782b53d4eb9e60eb1eaeba2c6c84b531d5513d75348ee8b965768583d3"
           }
         },
         {

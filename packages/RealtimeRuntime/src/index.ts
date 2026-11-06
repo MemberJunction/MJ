@@ -29,7 +29,7 @@
  */
 
 // The session runtime itself — the orchestration a host subclasses or composes.
-export { RealtimeSessionRuntime } from './session/RealtimeSessionRuntime';
+export { RealtimeSessionRuntime, RealtimeSessionAlreadyActiveError, type SessionEndReason, type ClientCloseReason } from './session/RealtimeSessionRuntime';
 
 // Session-facing types a host or UI binds to.
 export {
@@ -68,7 +68,7 @@ export {
     type RealtimeSessionStreamEvent,
     type RealtimeSessionVerificationSnapshot,
 } from './session/session-event-hub';
-export { ClientSessionDeadline } from './session/client-session-deadline';
+export { ClientSessionDeadline, type SessionDeadlineOptions } from './session/client-session-deadline';
 export { DescribeCallEnd, REALTIME_CALL_TIME_LIMIT_END, type RealtimeCallEndDescription } from './session/call-end';
 export {
     REALTIME_CAPTURES_OFF,

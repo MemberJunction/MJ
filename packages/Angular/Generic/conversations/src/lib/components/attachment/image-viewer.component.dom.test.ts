@@ -89,4 +89,19 @@ describe('ImageViewerComponent (DOM)', () => {
     (query(f, '.image-viewer-backdrop') as HTMLElement).click();
     expect(spy).toHaveBeenCalled();
   });
+
+  it('downloads through a link that cannot replace the app when the URL is cross-origin', () => {
+    const f = render({ imageUrl: 'https://api.example.test/media/F1?token=t' });
+    const clicked: HTMLAnchorElement[] = [];
+    const spy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      clicked.push(this);
+    });
+    (query(f, 'button[title="Download"]') as HTMLButtonElement).click();
+    spy.mockRestore();
+    expect(clicked).toHaveLength(1);
+    expect(clicked[0].href).toBe('https://api.example.test/media/F1?token=t');
+    expect(clicked[0].download).toBe('pic.png');
+    expect(clicked[0].target).toBe('_blank');
+    expect(clicked[0].rel).toBe('noopener noreferrer');
+  });
 });

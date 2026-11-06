@@ -24,6 +24,32 @@
           "handler"
         ]
       }
+    },
+    "polymorphic-fk": {
+      "Severity": "error",
+      "Roots": [
+        "packages",
+        "metadata"
+      ]
+    },
+    "migration-existence-guards": {
+      "Severity": "error",
+      "Roots": [
+        "migrations"
+      ],
+      "Options": {
+        "FromVersion": "202610221306"
+      }
+    },
+    "readable-status-values": {
+      "Severity": "warn",
+      "Roots": [
+        "migrations"
+      ],
+      "Options": {
+        "FromVersion": "202610221306",
+        "AllowedValues": []
+      }
     }
   }
 }

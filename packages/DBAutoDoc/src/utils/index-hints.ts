@@ -8,7 +8,7 @@
  */
 
 import type { AutoDocIndex } from '../types/driver.js';
-import type { TableDefinition } from '../types/state.js';
+import type { SchemaDefinition, TableDefinition } from '../types/state.js';
 
 /** One existing index, trimmed to what a prompt needs. */
 export interface IndexHint {
@@ -78,6 +78,22 @@ export function AttachIndexesToTables(tables: TableDefinition[], indexes: AutoDo
   for (const table of tables) {
     table.indexes = exact.get(table.name) ?? folded.get(table.name.toLowerCase()) ?? [];
   }
+}
+
+/**
+ * Decides which schemas still need their indexes read, honoring `analysis.useExistingIndexes`.
+ * When it is off, indexes left in a resumed state by an earlier run are dropped, so neither the prompt
+ * hints nor index-backed PK candidates use them, and nothing is returned to load. Otherwise returns the
+ * schemas with at least one table whose indexes were never read.
+ */
+export function PrepareIndexesForRun(schemas: SchemaDefinition[], useExistingIndexes: boolean | undefined): SchemaDefinition[] {
+  if (useExistingIndexes === false) {
+    for (const table of schemas.flatMap((s) => s.tables)) {
+      delete table.indexes;
+    }
+    return [];
+  }
+  return schemas.filter((s) => s.tables.some((t) => t.indexes === undefined));
 }
 
 function hintRank(ix: AutoDocIndex): number {

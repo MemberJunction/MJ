@@ -12,6 +12,8 @@ import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
 import { EntityTransactionScope } from "./entityTransactionScope";
 import type { EntitySaveReturnMode } from "./entityConfiguration";
+import type { GetRecordDependenciesOptions } from "./databaseProviderBase";
+export type { GetRecordDependenciesOptions } from "./databaseProviderBase";
 
 /**
  * Base configuration class for data providers.
@@ -297,6 +299,21 @@ export interface IEntityDataProvider {
     FindISAChildEntities?(entityInfo: EntityInfo, recordPKValue: string, contextUser?: UserInfo): Promise<{ ChildEntityName: string }[]>;
 
     /**
+     * Batch-discovers IS-A child entity types for multiple parent primary keys in a single
+     * UNION ALL SQL query (chunked automatically for large batches).
+     *
+     * @param entityInfo The parent entity's EntityInfo (whose `ChildEntities` are probed)
+     * @param recordPKValues Primary key values to probe across child views
+     * @param contextUser Optional context user for server-side operations
+     * @returns Map keyed by canonical lowercased primary-key string to ordered matching child entity names
+     */
+    FindISAChildEntitiesBatch?(
+        entityInfo: EntityInfo,
+        recordPKValues: string[],
+        contextUser?: UserInfo
+    ): Promise<Map<string, string[]>>;
+
+    /**
      * Whether this provider can execute a multi-record unit of work atomically, in-process.
      *
      * `true` for server-side database providers (`DatabaseProviderBase` and subclasses); `false`
@@ -326,6 +343,25 @@ export interface IEntityDataProvider {
      *          `RunInEntityTransaction()` which does that for you.
      */
     BeginEntityTransaction?(): Promise<EntityTransactionScope>;
+
+    /**
+     * Runs `fn` as if the caller were in no transaction on this provider, even when its async scope
+     * belongs to an open one: statements `fn` issues run on the pool and commit on their own.
+     *
+     * For fire-and-forget writes (see `BaseEntitySaveQueue`'s `detachFromTransaction`): the caller
+     * never awaits them, so it cannot order them before its transaction's COMMIT. Bound to the
+     * transaction, such a write either reaches SQL behind the COMMIT and is rejected, or is rolled back
+     * with work it merely observed.
+     *
+     * Limit: if `fn` itself begins a transaction (an IS-A save, a save with companions, a save that
+     * enlists a Durable After* binding) while the caller's transaction is still open on this instance,
+     * that begin joins the open transaction as a foreign savepoint (logged once per transaction) rather
+     * than opening its own. Detaching only keeps `fn`'s plain statements off the transaction.
+     *
+     * Implemented by `GenericDatabaseProvider`, which tracks which async scope owns its transaction.
+     * Absent on providers with no in-process transaction (e.g. `GraphQLDataProvider`): nothing to leave.
+     */
+    RunOutsideAmbientTransaction?<T>(fn: () => Promise<T>): Promise<T>;
 }
 
 /**
@@ -337,7 +373,7 @@ export class EntitySaveOptions {
     /**
      * If set to true, the record will be saved to the database even if nothing is detected to be "dirty" or changed since the prior load.
      */
-    IgnoreDirtyState: boolean = false;
+    IgnoreDirtyState?: boolean = false;
     /**
      * If set to true, an AI actions associated with the entity will be skipped during the save operation
      */
@@ -789,6 +825,19 @@ export interface LocalStorageWriteOptions {
      * {@link ILocalStorageProvider.GetIndexGroupKeys} without listing the whole category.
      */
     IndexGroup?: string;
+
+    /**
+     * Optional override for the pub/sub notification action emitted by distributed storage
+     * providers (such as `RedisLocalStorageProvider` in `'full'` publish mode). When set to
+     * `'row_delta'` alongside {@link pubSubData}, the storage key still stores the full `value`,
+     * while pub/sub broadcasts only the compact row-delta payload.
+     */
+    pubSubAction?: 'set' | 'row_delta';
+
+    /**
+     * Compact JSON payload broadcast over pub/sub when {@link pubSubAction} is `'row_delta'`.
+     */
+    pubSubData?: string;
 }
 
 /**
@@ -946,8 +995,10 @@ export interface IMetadataProvider {
      * you can use the utility method GetEntityDependencies(), which doesn't check for dependencies on a specific record, but rather gets the metadata in one shot that can be used for dependency checking.
      * @param entityName the name of the entity to check
      * @param CompositeKey the compositeKey for the record to check
+     * @param options optional filtering options for dependency discovery
      */
-    GetRecordDependencies(entityName: string, CompositeKey: CompositeKey): Promise<RecordDependency[]>  
+    GetRecordDependencies(entityName: string, CompositeKey: CompositeKey, options?: GetRecordDependenciesOptions): Promise<RecordDependency[]>
+    GetRecordDependencies(entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo, options?: GetRecordDependenciesOptions): Promise<RecordDependency[]>  
 
     /**
      * Returns a list of record IDs that are possible duplicates of the specified record. 
@@ -1211,8 +1262,12 @@ export type RunViewResult<T = any> = {
      * Total number of rows that match the view criteria, not just the number returned in the Results[] array
      * This number will only be different when the view is configured to have a UserViewMaxRows value and the criteria of the view in question
      * has more than that # of rows. Otherwise it will be the same value as RowCount.
+     *
+     * A number here is always a real total. It is `undefined` only when the caller passed
+     * `SkipTotalRowCount: true`, which asks the provider not to count; a call without that flag
+     * always gets a number. `ResultType: 'count_only'` ignores the flag and always counts.
      */
-    TotalRowCount: number;
+    TotalRowCount?: number;
     /**
      * Time elapsed in executing the view (in milliseconds)
      */
@@ -1535,6 +1590,15 @@ export type RunViewCacheStatus = {
      * Used to detect if any records have been deleted.
      */
     rowCount: number;
+    /**
+     * A hash of the client's field-security key for this request (what it may read on the entity,
+     * and for a saved view its denials everywhere), computed from the client's metadata, or ''
+     * when the user is denied nothing. When it differs from the key the server computes for the
+     * same user, the server answers `stale` with fresh rows even though no row changed: that is
+     * how a browser learns it lost a column. Omitted by older clients, for which the server skips
+     * the check.
+     */
+    fieldSecurityKey?: string;
 }
 
 /**
@@ -1897,6 +1961,30 @@ export interface RemoteOpInvokeOptions {
      * client loudly instead of mis-deserializing. Usually derived from the operation definition.
      */
     contractFingerprint?: string;
+    /**
+     * Optional opaque handle for an existing backing run (e.g. a `ProcessRunID`) forwarded into
+     * {@link RemoteOpServerContext.handle} during server-side dispatch.
+     */
+    handle?: string;
+    /**
+     * Normalized HTTP `Origin` header from the inbound request (e.g. `https://app.example.com`),
+     * populated by the server transport when invoked over HTTP/GraphQL. Undefined for in-process
+     * server calls or requests without an `Origin` header.
+     */
+    requestOrigin?: string;
+    /**
+     * Caller's network IP address as resolved by the HTTP host (`req.ip`), populated by the server
+     * transport for rate-limiting and forensic audit trails. Never use as an identity assertion.
+     */
+    clientIp?: string;
+    /**
+     * Caller's authenticated session identifier, populated by the server transport when available.
+     */
+    sessionId?: string;
+    /**
+     * SHA-256 hash of the caller's MJ API key when authenticated via `mj_sk_*` API key / MCP.
+     */
+    apiKeyHash?: string;
 }
 
 /**

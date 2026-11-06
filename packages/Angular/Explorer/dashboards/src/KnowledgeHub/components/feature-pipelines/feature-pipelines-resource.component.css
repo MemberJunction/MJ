@@ -125,6 +125,19 @@
   overflow: hidden;
 }
 
+/* A failed or refused last run's reason: two lines, the full text on hover */
+.fp-card__error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--mj-status-error-text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .fp-card__meta {
   display: flex;
   flex-direction: column;

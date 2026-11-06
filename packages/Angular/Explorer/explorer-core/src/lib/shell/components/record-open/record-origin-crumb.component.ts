@@ -1,5 +1,5 @@
 import { Component, Input, inject, ChangeDetectorRef } from '@angular/core';
-import { NavigationService, RecordSourceContext, RecordSourceHasReturnTarget } from '@memberjunction/ng-shared';
+import { NavigationService, RecordSourceContext, RecordSourceHasReturnTarget, FormatEntityRecordDisplayTitle, IsRawUUIDString } from '@memberjunction/ng-shared';
 import { CompositeKey, Metadata } from '@memberjunction/core';
 
 /**
@@ -139,13 +139,13 @@ export class RecordOriginCrumbComponent {
       const key = CompositeKey.FromURLSegment(entity, this.Origin.sourceRecordId);
       const cached = md ? md.GetCachedRecordNameOnlyIfCached(this.Origin.sourceRecordEntity, key) : undefined;
       if (cached) {
-        return cached;
+        return FormatEntityRecordDisplayTitle(entity, this.Origin.sourceRecordEntity, key.KeyValuePairs?.length ? key : this.Origin.sourceRecordId, cached);
       }
       const fallbackEntityLabel = entity?.DisplayName || entity?.Name || this.Origin.sourceRecordEntity;
-      if (this.Origin.sourceLabel && !this.Origin.sourceLabel.includes(this.Origin.sourceRecordId)) {
+      if (this.Origin.sourceLabel && !this.Origin.sourceLabel.includes(this.Origin.sourceRecordId) && !IsRawUUIDString(this.Origin.sourceLabel)) {
         return this.Origin.sourceLabel;
       }
-      return fallbackEntityLabel;
+      return FormatEntityRecordDisplayTitle(entity, this.Origin.sourceRecordEntity, key.KeyValuePairs?.length ? key : this.Origin.sourceRecordId, null);
     }
     return this.Origin?.sourceLabel;
   }
@@ -155,17 +155,21 @@ export class RecordOriginCrumbComponent {
     if (this.Origin?.sourceRecordEntity && this.Origin?.sourceRecordId && md) {
       const entity = md.EntityByName(this.Origin.sourceRecordEntity);
       const key = CompositeKey.FromURLSegment(entity, this.Origin.sourceRecordId);
+      const keySource = key.KeyValuePairs?.length ? key : this.Origin.sourceRecordId;
       const cached = md.GetCachedRecordNameOnlyIfCached(this.Origin.sourceRecordEntity, key);
       if (cached) {
-        this.asyncResolvedLabel = cached;
+        this.asyncResolvedLabel = FormatEntityRecordDisplayTitle(entity, this.Origin.sourceRecordEntity, keySource, cached);
         return;
       }
       const entityName = this.Origin.sourceRecordEntity;
       if (typeof md.GetEntityRecordName === 'function') {
         md.GetEntityRecordName(entityName, key).then(name => {
-          if (name && this.Origin?.sourceRecordEntity === entityName) {
-            this.asyncResolvedLabel = name;
-            this.cdr.markForCheck();
+          if (this.Origin?.sourceRecordEntity === entityName) {
+            const formatted = FormatEntityRecordDisplayTitle(entity, entityName, keySource, name);
+            if (formatted) {
+              this.asyncResolvedLabel = formatted;
+              this.cdr.markForCheck();
+            }
           }
         }).catch(() => {
           // Silently ignore async name fetch error, fallback will remain active

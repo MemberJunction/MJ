@@ -66,6 +66,18 @@ describe('ExecBlockRule', () => {
       expect(result).toMatch(/n\.nspname = '__mj'/);
     });
 
+    it('lower-cases an unquoted schema, which is how PostgreSQL stores it (#5864)', () => {
+      const sql = execBlock('UpdateEntity', 5).replace('[__mj]', '[__mj_BizAppsSales]');
+      expect(convert(sql)).toMatch(/n\.nspname = '__mj_bizappssales'/);
+    });
+
+    it('keeps the case of a quoted schema (#5864)', () => {
+      const sql = execBlock('UpdateEntity', 5).replace('[__mj]', '"MixedCase"');
+      const result = convert(sql);
+      expect(result).toMatch(/n\.nspname = 'MixedCase'/);
+      expect(result).toMatch(/PERFORM "MixedCase"\."spUpdateEntity"/);
+    });
+
     it('emits JSON-arg unconditionally when the CALL ALONE exceeds the limit', () => {
       // Above the limit no typed-arg function can exist on PostgreSQL at all, so there is
       // nothing to resolve -- emitting the lookup would be dead weight.
@@ -161,5 +173,114 @@ describe('ExecBlockRule — mj-sync create-or-update (IF NOT EXISTS … ELSE …
     expect(out).toMatch(/THEN[\s\S]*PERFORM __mj\."spCreateAIVendor"\([\s\S]*ELSE[\s\S]*PERFORM __mj\."spUpdateAIVendor"\([\s\S]*END IF;/);
     expect(out).not.toMatch(/\[__mj\]|\bEXEC\b|\bBEGIN\s*\n\s*EXEC/);
     expect(out).not.toContain('SKIPPED');
+  });
+
+  /** A create-or-update block whose guard is not the `[c] = @v` shape the rule converts. */
+  const unconvertibleGuard = upsert.replace('[ID] = @ID_af78', '[ID] = @ID_af78 OR [Name] = @Name_af78');
+
+  describe('comments after the closing END (#6337)', () => {
+    const footer = [
+      '',
+      '',
+      '-- End of SQL Logging Session',
+      '-- Session ID: d342985b-e1d0-4880-9a4c-d62a692eba26',
+      '-- Total Statements: 14',
+      '',
+    ].join('\n');
+
+    it('converts a last save followed by the session footer, and keeps the footer', () => {
+      const out = convert(`${upsert}\n${footer}`);
+      expect(out).toMatch(/THEN[\s\S]*PERFORM __mj\."spCreateAIVendor"\([\s\S]*ELSE[\s\S]*PERFORM __mj\."spUpdateAIVendor"\([\s\S]*END IF;/);
+      expect(out).not.toMatch(/\bEXEC\b|SKIPPED/);
+      expect(out).toContain('-- End of SQL Logging Session');
+    });
+
+    it('converts a save whose closing END carries a comment on the same line', () => {
+      const out = convert(`${upsert} -- last save`);
+      expect(out).toMatch(/PERFORM __mj\."spUpdateAIVendor"\(/);
+      expect(out).not.toMatch(/\bEXEC\b|SKIPPED/);
+    });
+
+    it('stays linear on a dashed comment after the END when a statement follows it', () => {
+      const started = performance.now();
+      const out = convert(`${upsert}\n-- ${'-'.repeat(46)}\nSELECT 1`);
+      expect(performance.now() - started).toBeLessThan(2000);
+      expect(out).toContain('-- SKIPPED: EXEC block (unparseable upsert)');
+    });
+
+    it('leaves a batch of comments alone', () => {
+      expect(convert('-- End of SQL Logging Session\n-- Duration: 5833ms')).toBe('-- End of SQL Logging Session\n-- Duration: 5833ms');
+    });
+
+    it('leaves a block comment alone, with line comments around it or a save after it', () => {
+      const banner = '/*****\n* BEGIN METADATA SYNC\n*****/';
+      expect(convert(`-- before\n${banner}\n-- after`)).toBe(`-- before\n${banner}\n-- after`);
+
+      const out = convert(`${banner}\n\n${upsert}`);
+      expect(out).toContain(banner);
+      expect(out).toMatch(/PERFORM __mj\."spUpdateAIVendor"\(/);
+      expect(out).not.toContain('SKIPPED');
+    });
+
+    it('does not take an unterminated block comment for a comment', () => {
+      expect(convert('/* never closed\nSELECT 1')).toContain('-- SKIPPED: EXEC block');
+    });
+  });
+
+  describe('a block that is not convertible as a whole (#6337)', () => {
+    it('skips it instead of emitting a DO block holding raw T-SQL', () => {
+      const out = convert(unconvertibleGuard);
+      expect(out).toContain('-- SKIPPED: EXEC block (unparseable upsert)');
+      expect(out).not.toMatch(/^DO \$/m);
+      expect(out).not.toMatch(/^\s*BEGIN\s*$/m);
+    });
+
+    it('skips a parsed create-or-update that uses an undeclared variable', () => {
+      const out = convert(upsert.replace('@ID_af78 UNIQUEIDENTIFIER,\n', ''));
+      expect(out).toContain('-- SKIPPED: EXEC block (unparseable upsert)');
+      expect(out).not.toMatch(/^DO \$/m);
+    });
+
+    it('does not mistake the guard text inside a string value for a guard', () => {
+      const out = convert([
+        'DECLARE @ID_ab12 UNIQUEIDENTIFIER,',
+        '@Notes_ab12 NVARCHAR(MAX)',
+        'SET',
+        "  @ID_ab12 = '5F935B01-EC5F-4409-AADC-8063A94936D6'",
+        'SET',
+        "  @Notes_ab12 = N'Wrap it: IF NOT EXISTS (SELECT 1 FROM t) BEGIN x END' EXEC [__mj].spUpdateWidget @ID = @ID_ab12,",
+        '  @Notes = @Notes_ab12',
+      ].join('\n'));
+      expect(out).toMatch(/PERFORM __mj\."spUpdateWidget"\(/);
+      expect(out).not.toContain('SKIPPED');
+    });
+  });
+});
+
+/**
+ * mj sync push logs a lookup-keyed ID as a subquery on the natural key (#6069). The SET value is
+ * converted inside the `DO $mj$` block, where the PostProcessor's bracket pass never reaches, so
+ * the rule converts its identifiers itself (#6074).
+ */
+describe('ExecBlockRule — SET value holding a subquery (#6074)', () => {
+  const SUBQUERY_BLOCK = [
+    'DECLARE @ID_ab12 UNIQUEIDENTIFIER,',
+    '  @Name_ab12 NVARCHAR(MAX)',
+    'SET',
+    "  @ID_ab12 = (SELECT [ID] FROM [__mj].[Widget] WHERE LOWER([Name]) = LOWER(N'Widgets') AND [EntityID] = (SELECT [ID] FROM [${mjSchema}].[Entity] WHERE LOWER([Name]) = LOWER(N'MJ: Widgets')))",
+    'SET',
+    "  @Name_ab12 = N'see [__mj].[Widget]' EXEC [__mj].spUpdateWidget @ID = @ID_ab12,",
+    '  @Name = @Name_ab12',
+  ].join('\n');
+
+  it('converts the bracket identifiers of the subquery', () => {
+    const out = convert(SUBQUERY_BLOCK);
+    expect(out).toContain(
+      `p_ID_ab12 := (SELECT "ID" FROM __mj."Widget" WHERE LOWER("Name") = LOWER('Widgets') AND "EntityID" = (SELECT "ID" FROM \${mjSchema}."Entity" WHERE LOWER("Name") = LOWER('MJ: Widgets')));`
+    );
+  });
+
+  it('leaves brackets inside a string literal alone', () => {
+    expect(convert(SUBQUERY_BLOCK)).toContain("p_Name_ab12 := 'see [__mj].[Widget]';");
   });
 });

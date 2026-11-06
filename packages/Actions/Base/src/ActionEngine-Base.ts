@@ -1,6 +1,6 @@
 import { BaseEngine, BaseEntity, IMetadataProvider, UserInfo, RunView, BaseEnginePropertyConfig } from "@memberjunction/core";
 import { EntityChangeContext } from './EntityChangeContext';
-import { MJActionCategoryEntity, MJActionEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJEntityActionEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
+import { MJActionCategoryEntity, MJActionEntity, MJActionEntity_IActionConfiguration, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJEntityActionEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { MJActionEntityExtended } from "./MJActionEntityExtended";
 import type { ActionRunAudience } from "./ActionAudience";
 
@@ -81,6 +81,40 @@ export interface AIDirective {
 }
 
 /**
+ * Trust classification for an action's output when returned to an AI agent, derived from
+ * the generated `MJActionEntity_IActionConfiguration['outputTrustLevel']` type in `@memberjunction/core-entities`.
+ * - `'Trusted'`: Internal structured data or platform-validated output (default).
+ * - `'SemiTrusted'`: Output that may contain user-authored or partner content and should be wrapped in a data envelope.
+ * - `'Untrusted'`: External content (web pages, search results, emails, webhooks, MCP tools) that must be wrapped in
+ *   `<untrusted_external_data>`, have `AIDirectives` stripped, and mark the agent run as tainted.
+ */
+export type ActionOutputTrustLevel = NonNullable<MJActionEntity_IActionConfiguration['outputTrustLevel']>;
+
+/**
+ * Structured recovery guidance returned by an action when it fails, enabling an AI agent
+ * to self-heal on retryable parameter errors or stop immediately on non-retryable failures.
+ */
+export interface ActionErrorRecovery {
+    /** Whether retrying the action with modified parameters can succeed in this run. */
+    Retryable: boolean;
+    /** Actionable human/LLM-readable explanation of how to recover or why retry is futile. */
+    RecoverySuggestion: string;
+    /** Optional fuzzy-matched candidate values (e.g., closest entity or field names). */
+    SuggestedValues?: string[];
+    /** Optional breakdown of specific parameters that failed validation. */
+    InvalidParams?: Array<{
+        ParamName: string;
+        Reason: string;
+        ExpectedFormat?: string;
+        AllowedValues?: string[];
+    }>;
+    /** Optional example of a valid parameter payload. */
+    ValidParameterExample?: Record<string, unknown>;
+    /** Optional names of alternative actions to call instead or beforehand. */
+    SuggestedNextActions?: string[];
+}
+
+/**
  * Class that has the result of the individual action execution and used by the engine or other caller
  */
 
@@ -112,6 +146,11 @@ export class ActionResultSimple {
     * (instruction, constraint, context, suggestion) and priority level.
     */
    public AIDirectives?: AIDirective[];
+
+   /**
+    * Optional structured error recovery guidance when `Success` is `false`.
+    */
+   public ErrorRecovery?: ActionErrorRecovery;
 }
 
 /**
@@ -147,6 +186,16 @@ export class ActionResult {
    public LogEntry?: MJActionExecutionLogEntity;
 
    /**
+    * Resolves once every write queued so far for {@link LogEntry} has settled, so a dependent row (one with
+    * a foreign key to the log row) can be inserted safely. The engine writes the log row fire-and-forget,
+    * so `LogEntry.ID` is valid before the row exists. Absent when there is no `LogEntry`.
+    *
+    * Never rejects: a failed log write is already logged by the engine's save queue, and the awaiter must
+    * not throw because of it.
+    */
+   public LogEntryPersisted?: Promise<void>;
+
+   /**
     * Optional, a message an action can include that describes the outcome of the action. This is typically used to display a message to the user.
     */
    public Message?: string;
@@ -161,6 +210,12 @@ export class ActionResult {
     * Propagated from ActionResultSimple.AIDirectives returned by the action implementation.
     */
    public AIDirectives?: AIDirective[];
+
+   /**
+    * Optional structured error recovery guidance when `Success` is `false`.
+    * Propagated from ActionResultSimple.ErrorRecovery returned by the action implementation.
+    */
+   public ErrorRecovery?: ActionErrorRecovery;
 }
 
 /**
@@ -179,6 +234,12 @@ export class ActionParam {
     * The type of the Action parameter. Input parameters are used to pass data into the action while output parameters are used to return data from the action.
     */
    public Type: 'Input' | 'Output' | 'Both';
+   /**
+    * True when the value was fixed by the caller of an agent run rather than chosen by the model
+    * (`ExecuteAgentParams.boundActionParams`). The marker is written into the execution log's `Params`
+    * so an audit can tell a bound value from a chosen one. Absent on every other parameter.
+    */
+   public Bound?: boolean;
 }
 
 /**
@@ -800,6 +861,13 @@ export interface ActionRunScope {
    PrimaryScopeRecordID: string | null;
    /** The run's secondary dimensions (with the agent's configured defaults applied), or `null` when it has none. */
    SecondaryScopes?: Record<string, ActionRunScopeValue> | null;
+   /**
+    * The search scopes the run's host assigned (`ExecuteAgentParams.SearchScopeIDs`); absent when it assigned none.
+    * When set, Scoped Search searches only these, and the host's assignment stands in for the calling agent's own
+    * `SearchScopeAccess` and assigned-scope list, and the plain Search action refuses. The user's own permission on the
+    * scope still applies.
+    */
+   SearchScopeIDs?: string[];
 }
 
 /**

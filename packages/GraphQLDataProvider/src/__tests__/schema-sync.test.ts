@@ -197,7 +197,8 @@ const CLIENT_CONTRACTS: Record<string, {
         clientLocation: 'RunViewsWithCacheCheck() cacheStatus mapping',
         fields: [
             'maxUpdatedAt',
-            'rowCount'
+            'rowCount',
+            'fieldSecurityKey'
         ]
     },
     RunViewWithCacheCheckInput: {
@@ -677,6 +678,22 @@ describe('GraphQL Schema Synchronization', () => {
                 expect(field, `${typeName}.IncludeBinaryFields`).toBeDefined();
                 expect(field!.required, `${typeName}.IncludeBinaryFields required`).toBe(false);
                 expect(field!.type, `${typeName}.IncludeBinaryFields type`).toBe('boolean');
+            }
+        });
+
+        it('defines SkipTotalRowCount as an OPTIONAL boolean on every RunView input the client sends', () => {
+            // Forwarded only when the caller set it, so a required field would break every older client.
+            const serverPath = path.join(MJ_ROOT, 'packages/MJServer/src/generic/RunViewResolver.ts');
+            if (!fs.existsSync(serverPath)) {
+                return;
+            }
+
+            const types = extractInputTypesFromFile(serverPath);
+            for (const typeName of ['RunViewByIDInput', 'RunViewByNameInput', 'RunDynamicViewInput', 'RunViewGenericInput']) {
+                const field = types.find(t => t.name === typeName)?.fields.find(f => f.name === 'SkipTotalRowCount');
+                expect(field, `${typeName}.SkipTotalRowCount`).toBeDefined();
+                expect(field!.required, `${typeName}.SkipTotalRowCount required`).toBe(false);
+                expect(field!.type, `${typeName}.SkipTotalRowCount type`).toBe('boolean');
             }
         });
 

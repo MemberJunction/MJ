@@ -19,14 +19,15 @@
 import { Resolver, Mutation, Query, Arg, Ctx, Float, Int, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
-import { MJAIAgentSessionEntity, MJAIAgentEntity, MJConversationEntity } from '@memberjunction/core-entities';
+import { NormalizeUUID } from '@memberjunction/global';
+import { MJAIAgentEntity, MJConversationEntity } from '@memberjunction/core-entities';
 import { NormalizeInstanceKey, RemoteBrowserEngine } from '@memberjunction/remote-browser-server';
 import { BeginBrowserGoalStep, FinalizeBrowserGoalStep, ExtractCoAgentRunID } from '../agentSessions/remoteBrowserGoalEngine.js';
 import { RemoteBrowserGoalRegistry } from '../agentSessions/remoteBrowserGoalRegistry.js';
 import { SessionRunIDVerifier } from '../agentSessions/SessionRunIDVerifier.js';
 import { randomUUID } from 'node:crypto';
 import {
+  IRemoteBrowserSession,
   RemoteBrowserAction,
   RemoteBrowserAudioChunk,
   RemoteBrowserFillFieldInput,
@@ -36,15 +37,32 @@ import {
 } from '@memberjunction/remote-browser-base';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
+import {
+  LoadOwnedRealtimeSession,
+  RealtimeSessionNotFoundError,
+  RealtimeSessionOwnershipError,
+} from '../realtimeSessions/ownedRealtimeSession.js';
+import { AuthorizeSessionAccess, ResolveSessionScopeIdentity } from '../realtimeSessions/sessionAccess.js';
+import { ConversationBrowserLedger, RemoteBrowserRefusedError } from '../agentSessions/conversationBrowsers.js';
+import { configInfo, type ConversationBrowserConfig } from '../config.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 
-/** Entity name — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
-const SESSION_ENTITY = 'MJ: AI Agent Sessions';
 /** Entity name for turn-based text conversations that scope a live Remote Browser session. */
 const CONVERSATION_ENTITY = 'MJ: Conversations';
+/**
+ * What an owned browser scope supplies: an `MJ: AI Agent Sessions` row (a realtime call), or an owned
+ * `MJ: Conversations` row (text chat), which has no agent and no config.
+ */
+export interface OwnedBrowserScope {
+  ID: string;
+  AgentID: string | null;
+  Config_: string | null;
+  /** `true` for a text conversation's browser (the opt-in, capped, private-network-restricted kind). */
+  IsConversation?: boolean;
+}
 /** Entity name for the agent whose `TypeConfiguration` carries the remote-browser provider preference. */
 const AGENT_ENTITY = 'MJ: AI Agents';
 /**
@@ -258,6 +276,12 @@ const MAX_STREAM_ENTRY_AGE_MS = 4 * 60 * 60 * 1000; // 4 hours — generous vs. 
 
 @Resolver()
 export class RemoteBrowserActionResolver extends ResolverBase {
+  constructor() {
+    super();
+    // The idle reaper ends a conversation browser the way EndRemoteBrowserSession does.
+    ConversationBrowserLedger.Instance.EndBrowser = (conversationID) => this.endBrowser(conversationID);
+  }
+
   /**
    * Surfaces whose live CDP screencast this resolver has already started, keyed by
    * {@link RemoteBrowserActionResolver.streamKey} (agent session **plus** instance) so a re-issued
@@ -285,6 +309,14 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   private startedAudioStreams = new Map<string, number>();
 
   /**
+   * The push session each surface's frames and audio go to, by stream key. A reloaded tab starts again
+   * from a new push session while the browser keeps streaming; it takes the frames over here instead of
+   * being told "already streaming" while they still go to the old session. An entry whose streams have
+   * stopped is dropped by {@link sweepStreamEntries}.
+   */
+  private streamTargets = new Map<string, UserPayload>();
+
+  /**
    * Drops any {@link startedScreencasts} / {@link startedAudioStreams} entry older than
    * {@link MAX_STREAM_ENTRY_AGE_MS} — the reclaim path for sessions that never called
    * `StopRemoteBrowserScreencast`/`StopRemoteBrowserAudioStream` (crash, disconnect, timeout). Called
@@ -300,6 +332,12 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     for (const [key, startedAt] of this.startedAudioStreams) {
       if (startedAt < cutoff) {
         this.startedAudioStreams.delete(key);
+      }
+    }
+    // A target outlives its streams only until here (a stop, a failed start, a voice session's end).
+    for (const key of this.streamTargets.keys()) {
+      if (!this.startedScreencasts.has(key) && !this.startedAudioStreams.has(key)) {
+        this.streamTargets.delete(key);
       }
     }
   }
@@ -339,7 +377,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     @Arg('valuesJson', () => String, { nullable: true }) valuesJson?: string,
   ): Promise<RemoteBrowserActionResult> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
-    const session = await this.loadOwnedSession(agentSessionID, contextUser, provider);
+    const session = await this.loadOwnedSession(agentSessionID, contextUser, provider, instanceKey);
 
     const action = this.buildAction({ kind, url, selector, ref, x, y, text, key, deltaX, deltaY, ms, valuesJson });
     if (!action) {
@@ -348,7 +386,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
 
     const providerName = await this.resolveProviderName(session, contextUser, provider);
     try {
-      const liveSession = await RemoteBrowserEngine.Instance.StartSessionForAgentSession(agentSessionID, contextUser, providerName, instanceKey);
+      const liveSession = await this.startBrowser(agentSessionID, session, contextUser, providerName, instanceKey);
       const result = await liveSession.ExecuteAction(action);
       return {
         Success: result.Success,
@@ -421,7 +459,11 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
   ): Promise<RemoteBrowserGoalResultType> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
-    const session = await this.loadOwnedSession(agentSessionID, contextUser, provider);
+    const session = await this.loadOwnedSession(agentSessionID, contextUser, provider, instanceKey);
+    if (session.IsConversation) {
+      // A goal loop clicks and navigates on its own, past the click guard the browser_* tools go through.
+      return { Success: false, Status: 'Error', Detail: 'Goal runs are not available in a text conversation; use the browser_* tools.' };
+    }
     const providerName = await this.resolveProviderName(session, contextUser, provider);
     // Observability: nest this goal's many prompt runs under ONE "Browser goal" step on the realtime
     // co-agent run (when the session has one). Best-effort — a null step just means the goal runs unlinked.
@@ -508,7 +550,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
   ): Promise<RemoteBrowserSnapshot> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
-    await this.loadOwnedSession(agentSessionID, contextUser, provider);
+    await this.loadOwnedSession(agentSessionID, contextUser, provider, instanceKey);
 
     const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey);
     if (!liveSession) {
@@ -591,7 +633,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
   ): Promise<RemoteBrowserInterpretation> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
-    await this.loadOwnedSession(agentSessionID, contextUser, provider);
+    await this.loadOwnedSession(agentSessionID, contextUser, provider, instanceKey);
 
     const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey);
     if (!liveSession) {
@@ -633,21 +675,22 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
   ): Promise<RemoteBrowserScreencastResult> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
-    const session = await this.loadOwnedSession(agentSessionID, contextUser, provider);
+    const session = await this.loadOwnedSession(agentSessionID, contextUser, provider, instanceKey);
 
     // Idempotent PER SURFACE: a re-bind must not stack a second screencast on the one live browser,
     // but a SECOND surface binding for the first time is not a re-bind (#3531).
     this.sweepStreamEntries();
     const streamKey = this.streamKey(agentSessionID, instanceKey);
+    this.streamTargets.set(streamKey, userPayload);
     if (this.startedScreencasts.has(streamKey)) {
       return { Streaming: true };
     }
 
     const providerName = await this.resolveProviderName(session, contextUser, provider);
     try {
-      const liveSession = await RemoteBrowserEngine.Instance.StartSessionForAgentSession(agentSessionID, contextUser, providerName, instanceKey);
+      const liveSession = await this.startBrowser(agentSessionID, session, contextUser, providerName, instanceKey);
       await liveSession.StartScreencast((frame) =>
-        this.publishFrame(pubSub, userPayload, agentSessionID, instanceKey, frame, liveSession.GetCurrentUrl()),
+        this.publishFrame(pubSub, this.streamTargets.get(streamKey) ?? userPayload, agentSessionID, instanceKey, frame, liveSession.GetCurrentUrl()),
       );
       this.startedScreencasts.set(streamKey, Date.now());
       return { Streaming: true };
@@ -655,6 +698,9 @@ export class RemoteBrowserActionResolver extends ResolverBase {
       if (err instanceof RemoteBrowserCapabilityNotSupportedError) {
         // Backend can't stream — the client keeps polling. Not an error condition.
         return { Streaming: false };
+      }
+      if (err instanceof RemoteBrowserRefusedError) {
+        throw err; // the client must stop and say so, not poll for a browser that will never start
       }
       const message = err instanceof Error ? err.message : String(err);
       LogError(`StartRemoteBrowserScreencast failed (provider='${providerName}'): ${message}`);
@@ -677,7 +723,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
   ): Promise<boolean> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
-    await this.loadOwnedSession(agentSessionID, contextUser, provider);
+    await this.loadOwnedSession(agentSessionID, contextUser, provider, instanceKey);
 
     this.startedScreencasts.delete(this.streamKey(agentSessionID, instanceKey));
     const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey);
@@ -691,6 +737,40 @@ export class RemoteBrowserActionResolver extends ResolverBase {
       }
     }
     return true;
+  }
+
+  /**
+   * Ends the browser the caller's own session or conversation started, and forgets its stream
+   * bookkeeping. Ownership-gated. Idempotent: ending a scope that holds no browser resolves `false`.
+   * A text chat calls this when its browser drawer closes, the conversation changes, or the chat is
+   * destroyed, so a closed drawer never leaves a Chromium process (or a billed hosted browser) running.
+   *
+   * @param agentSessionID The `AIAgentSession` id or `Conversation` id.
+   * @returns `true` when a live browser was ended.
+   */
+  @Mutation(() => Boolean)
+  async EndRemoteBrowserSession(
+    @Arg('agentSessionID', () => String) agentSessionID: string,
+    @Ctx() { userPayload, providers }: AppContext,
+    @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
+  ): Promise<boolean> {
+    const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
+    await this.loadOwnedSession(agentSessionID, contextUser, provider, instanceKey);
+    return this.endBrowser(agentSessionID, instanceKey);
+  }
+
+  /**
+   * Ends a scope's browser and everything kept about it: the ledger slot (released first, so an action
+   * landing during teardown is counted again), the stream entries (so the next open streams the next
+   * browser) and the browser itself. The idle reaper ends conversation browsers through here too.
+   */
+  private async endBrowser(agentSessionID: string, instanceKey?: string): Promise<boolean> {
+    ConversationBrowserLedger.Instance.Release(agentSessionID);
+    const streamKey = this.streamKey(agentSessionID, instanceKey);
+    this.startedScreencasts.delete(streamKey);
+    this.startedAudioStreams.delete(streamKey);
+    this.streamTargets.delete(streamKey);
+    return RemoteBrowserEngine.Instance.EndSessionForAgentSession(agentSessionID, instanceKey);
   }
 
   /**
@@ -714,25 +794,29 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
   ): Promise<RemoteBrowserAudioStreamResult> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
-    const session = await this.loadOwnedSession(agentSessionID, contextUser, provider);
+    const session = await this.loadOwnedSession(agentSessionID, contextUser, provider, instanceKey);
 
     // Idempotent PER SURFACE — same reasoning as the screencast map (#3531).
     this.sweepStreamEntries();
     const streamKey = this.streamKey(agentSessionID, instanceKey);
+    this.streamTargets.set(streamKey, userPayload);
     if (this.startedAudioStreams.has(streamKey)) {
       return { Streaming: true };
     }
 
     const providerName = await this.resolveProviderName(session, contextUser, provider);
     try {
-      const liveSession = await RemoteBrowserEngine.Instance.StartSessionForAgentSession(agentSessionID, contextUser, providerName, instanceKey);
-      await liveSession.StartAudioStream((chunk) => this.publishAudioChunk(pubSub, userPayload, agentSessionID, instanceKey, chunk));
+      const liveSession = await this.startBrowser(agentSessionID, session, contextUser, providerName, instanceKey);
+      await liveSession.StartAudioStream((chunk) => this.publishAudioChunk(pubSub, this.streamTargets.get(streamKey) ?? userPayload, agentSessionID, instanceKey, chunk));
       this.startedAudioStreams.set(streamKey, Date.now());
       return { Streaming: true };
     } catch (err) {
       if (err instanceof RemoteBrowserCapabilityNotSupportedError) {
         // Backend can't capture audio — the client plays no audio. Not an error condition.
         return { Streaming: false };
+      }
+      if (err instanceof RemoteBrowserRefusedError) {
+        throw err;
       }
       const message = err instanceof Error ? err.message : String(err);
       LogError(`StartRemoteBrowserAudioStream failed (provider='${providerName}'): ${message}`);
@@ -755,7 +839,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
   ): Promise<boolean> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
-    await this.loadOwnedSession(agentSessionID, contextUser, provider);
+    await this.loadOwnedSession(agentSessionID, contextUser, provider, instanceKey);
 
     this.startedAudioStreams.delete(this.streamKey(agentSessionID, instanceKey));
     const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey);
@@ -811,7 +895,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
   ): Promise<boolean> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
-    await this.loadOwnedSession(agentSessionID, contextUser, provider);
+    await this.loadOwnedSession(agentSessionID, contextUser, provider, instanceKey);
 
     const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey);
     if (!liveSession) {
@@ -858,7 +942,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
   ): Promise<RemoteBrowserSelection> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
-    await this.loadOwnedSession(agentSessionID, contextUser, provider);
+    await this.loadOwnedSession(agentSessionID, contextUser, provider, instanceKey);
 
     const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey);
     if (!liveSession) {
@@ -1098,44 +1182,92 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   }
 
   /**
-   * Loads the owning scope (`MJ: AI Agent Sessions` for realtime sessions, or `MJ: Conversations` for
-   * turn-based text conversations) and enforces inbound ownership: the record's `UserID` must equal the
-   * caller's. Throws when the record is missing or owned by another user.
+   * Loads the owning scope and enforces inbound ownership: an `MJ: AI Agent Sessions` row (a realtime
+   * call, via `LoadOwnedRealtimeSession`) or, failing that, an `MJ: Conversations` row (a text chat's
+   * browser), both under `AuthorizeSessionAccess`. Throws when neither exists or the caller may not use it.
    *
    * @param agentSessionID The `AIAgentSession` id or `Conversation` id.
-   * @returns The loaded, owned session entity (or a synthetic conversation-scoped session descriptor).
+   * @returns The owned scope.
    */
-  protected async loadOwnedSession(agentSessionID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<MJAIAgentSessionEntity> {
-    const session = await provider.GetEntityObject<MJAIAgentSessionEntity>(SESSION_ENTITY, contextUser);
-    if (await session.Load(agentSessionID)) {
-      if (!UUIDsEqual(session.UserID, contextUser.ID)) {
-        throw new Error(`Not authorized: remote-browser session ${agentSessionID} is not owned by you.`);
-      }
-      return session;
-    }
-
-    // Fallback: turn-based text chat scopes its live browser to an owned `MJ: Conversations` record.
+  protected async loadOwnedSession(agentSessionID: string, contextUser: UserInfo, provider: IMetadataProvider, instanceKey?: string): Promise<OwnedBrowserScope> {
     try {
-      const conversation = await provider.GetEntityObject<MJConversationEntity>(CONVERSATION_ENTITY, contextUser);
-      if (conversation && (await conversation.Load(agentSessionID))) {
-        if (!UUIDsEqual(conversation.UserID, contextUser.ID)) {
-          throw new Error(`Not authorized: remote-browser session ${agentSessionID} is not owned by you.`);
-        }
-        return {
-          ID: conversation.ID,
-          UserID: conversation.UserID,
-          AgentID: '',
-          Config_: null,
-        } as unknown as MJAIAgentSessionEntity;
+      return await LoadOwnedRealtimeSession(agentSessionID, contextUser, provider);
+    } catch (err) {
+      if (err instanceof RealtimeSessionOwnershipError) {
+        throw new RemoteBrowserRefusedError(`Not authorized: remote-browser session ${agentSessionID} is not owned by you.`);
       }
-    } catch (convErr) {
-      if (convErr instanceof Error && convErr.message.startsWith('Not authorized:')) {
-        throw convErr;
+      if (!(err instanceof RealtimeSessionNotFoundError)) {
+        throw err;
       }
-      // Entity lookup unsupported or failed in stubbed provider — fall through to not-found below.
     }
+    // Not a realtime session: a text chat scopes its browser to a conversation, which this server must opt
+    // into (each browser is a server Chromium or a billed hosted session), under the same access rule
+    // (owner, and for an anonymous widget guest its scope id), loaded as the caller so its RLS applies too.
+    const settings = this.ConversationBrowserSettings();
+    if (!settings.enabled) {
+      throw new RemoteBrowserRefusedError(`Remote-browser session ${agentSessionID} not found. Conversation browsers are not enabled on this server (realtime.conversationBrowser.enabled).`);
+    }
+    if (contextUser.IsMagicLinkAnonymous && !settings.allowAnonymous) {
+      throw new RemoteBrowserRefusedError(`Not authorized: anonymous users cannot open a conversation browser on this server.`);
+    }
+    // One browser per conversation: an instance key would key a second one past the cap, the network
+    // policy and the reaper (the client never sends one).
+    if (instanceKey?.trim()) {
+      throw new RemoteBrowserRefusedError('A conversation browser has no instances; instanceKey is not accepted.');
+    }
+    const conversation = await provider.GetEntityObject<MJConversationEntity>(CONVERSATION_ENTITY, contextUser);
+    if (!(await conversation.Load(agentSessionID))) {
+      throw new RemoteBrowserRefusedError(`Remote-browser session ${agentSessionID} not found.`);
+    }
+    const access = AuthorizeSessionAccess(
+      { SessionUserID: conversation.UserID, ConversationExternalID: conversation.ExternalID, ConversationReadable: true },
+      contextUser,
+    );
+    if (!access.Allowed) {
+      throw new RemoteBrowserRefusedError(`Not authorized: remote-browser session ${agentSessionID} is not owned by you.`);
+    }
+    // Each use puts off the browser's idle end.
+    ConversationBrowserLedger.Instance.Touch(agentSessionID);
+    return { ID: conversation.ID, AgentID: null, Config_: null, IsConversation: true };
+  }
 
-    throw new Error(`Remote-browser session ${agentSessionID} not found.`);
+  /** This server's conversation-browser settings (a seam for tests). */
+  protected ConversationBrowserSettings(): ConversationBrowserConfig {
+    return configInfo.realtime.conversationBrowser;
+  }
+
+  /**
+   * Starts (or reuses) the scope's browser. A conversation's browser first counts against its owner's
+   * cap, and gives the slot back when it fails to start.
+   */
+  private async startBrowser(
+    agentSessionID: string,
+    scope: OwnedBrowserScope,
+    contextUser: UserInfo,
+    providerName: string | undefined,
+    instanceKey?: string,
+  ): Promise<IRemoteBrowserSession> {
+    if (scope.IsConversation) {
+      const settings = this.ConversationBrowserSettings();
+      // ponytail: an action that joins a launch a concurrent End then tears down keeps this slot until the
+      // reaper frees it (idleMinutes); release it on that teardown if users hit maxPerUser this way.
+      // An anonymous guest's cap is its own: every guest is the one shared Anonymous user.
+      const guestScope = contextUser.IsMagicLinkAnonymous ? ResolveSessionScopeIdentity(contextUser) : undefined;
+      const owner = { Key: guestScope ? `scope:${guestScope}` : `user:${NormalizeUUID(contextUser.ID)}`, Anonymous: Boolean(contextUser.IsMagicLinkAnonymous) };
+      ConversationBrowserLedger.Instance.Claim(agentSessionID, owner, settings);
+      // Set once, before the browser launches; the engine re-applies it to any replacement.
+      if (!RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey)) {
+        await RemoteBrowserEngine.Instance.RestrictPrivateNetworkForAgentSession(agentSessionID, settings.allowedPrivateHosts);
+      }
+    }
+    try {
+      return await RemoteBrowserEngine.Instance.StartSessionForAgentSession(agentSessionID, contextUser, providerName, instanceKey);
+    } catch (err) {
+      if (scope.IsConversation && !RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey)) {
+        ConversationBrowserLedger.Instance.Release(agentSessionID);
+      }
+      throw err;
+    }
   }
 
   /**
@@ -1144,10 +1276,10 @@ export class RemoteBrowserActionResolver extends ResolverBase {
    * config, or unparseable JSON all yield `undefined`, letting the engine fall back to the single Active
    * provider.
    *
-   * @param session The owned session entity (supplies the agent id).
+   * @param session The owned scope (supplies the agent id; a conversation has none).
    * @returns The configured backend name, or `undefined` to let the engine auto-select.
    */
-  protected async resolveProviderName(session: MJAIAgentSessionEntity, contextUser: UserInfo, provider: IMetadataProvider): Promise<string | undefined> {
+  protected async resolveProviderName(session: OwnedBrowserScope, contextUser: UserInfo, provider: IMetadataProvider): Promise<string | undefined> {
     if (!session.AgentID) {
       return undefined;
     }
@@ -1258,49 +1390,22 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   }
 
   /**
-   * Parses the `valuesJson` payload for a `fill` action. Accepts either a JSON array of
-   * `{ Target/target/ref/field, Value/value }` objects or a JSON object map `{ "field-1": "value" }`.
+   * Parses the `valuesJson` payload for a `fill` action: a JSON object mapping a field ref (`f1`) or
+   * label to its value (`string`, or `boolean` for a checkbox). Anything else yields no values.
    */
   private parseFillValues(valuesJson?: string): RemoteBrowserFillFieldInput[] {
-    if (!valuesJson || valuesJson.trim().length === 0) {
-      return [];
-    }
+    let parsed: unknown;
     try {
-      const parsed: unknown = JSON.parse(valuesJson);
-      if (Array.isArray(parsed)) {
-        const result: RemoteBrowserFillFieldInput[] = [];
-        for (const entry of parsed) {
-          if (!entry || typeof entry !== 'object') {
-            continue;
-          }
-          const rec = entry as Record<string, unknown>;
-          const targetRaw = rec.Target ?? rec.target ?? rec.ref ?? rec.Ref ?? rec.field ?? rec.name ?? rec.label;
-          const valueRaw = rec.Value ?? rec.value;
-          if (typeof targetRaw === 'string' && targetRaw.trim().length > 0 && valueRaw !== undefined && valueRaw !== null) {
-            result.push({
-              Target: targetRaw.trim(),
-              Value: typeof valueRaw === 'boolean' ? valueRaw : String(valueRaw),
-            });
-          }
-        }
-        return result;
-      }
-      if (parsed && typeof parsed === 'object') {
-        const result: RemoteBrowserFillFieldInput[] = [];
-        for (const [key, val] of Object.entries(parsed as Record<string, unknown>)) {
-          if (key.trim().length > 0 && val !== undefined && val !== null) {
-            result.push({
-              Target: key.trim(),
-              Value: typeof val === 'boolean' ? val : String(val),
-            });
-          }
-        }
-        return result;
-      }
-      return [];
+      parsed = JSON.parse(valuesJson ?? '');
     } catch {
       return [];
     }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return [];
+    }
+    return Object.entries(parsed as Record<string, unknown>)
+      .filter(([target, value]) => target.trim().length > 0 && value !== undefined && value !== null)
+      .map(([target, value]) => ({ Target: target.trim(), Value: typeof value === 'boolean' ? value : String(value) }));
   }
 
   /**

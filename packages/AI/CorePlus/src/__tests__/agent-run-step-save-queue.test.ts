@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import type { EntitySaveOptions } from '@memberjunction/core';
 import type { MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 import { AgentRunStepSaveQueue } from '../agent-run-steps';
 
@@ -7,46 +8,53 @@ import { AgentRunStepSaveQueue } from '../agent-run-steps';
  * throwing to exercise the failure paths.
  */
 function fakeStep(opts: { result?: boolean; throws?: boolean } = {}) {
-    const calls: { ignoreDirtyState: boolean | undefined; order: number }[] = [];
+    const calls: { ignoreDirtyState: boolean | undefined; saveReturnMode: string | undefined; order: number }[] = [];
     const step = {
         ID: 'step-1',
         calls,
         LatestResult: { CompleteMessage: 'save failed' },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        Save: vi.fn(async (saveOptions?: any) => {
-            calls.push({ ignoreDirtyState: saveOptions?.IgnoreDirtyState, order: calls.length });
+        Save: vi.fn(async (saveOptions?: EntitySaveOptions) => {
+            calls.push({
+                ignoreDirtyState: saveOptions?.IgnoreDirtyState,
+                saveReturnMode: saveOptions?.SaveReturnMode,
+                order: calls.length,
+            });
             if (opts.throws) {
                 throw new Error('db exploded');
             }
             return opts.result ?? true;
         }),
-    } as unknown as MJAIAgentRunStepEntity & { calls: { ignoreDirtyState: boolean | undefined }[] };
+    } as unknown as MJAIAgentRunStepEntity & { calls: { ignoreDirtyState: boolean | undefined; saveReturnMode: string | undefined }[] };
     return step;
 }
 
 describe('AgentRunStepSaveQueue', () => {
-    it('Insert fires a normal (non-forced) save, awaited by Flush', async () => {
+    it('Insert fires a normal (non-forced) save with datestamps_only return mode, awaited by Flush', async () => {
         const q = new AgentRunStepSaveQueue();
         const step = fakeStep();
         q.Insert(step);
         const result = await q.Flush();
 
         expect(step.Save).toHaveBeenCalledTimes(1);
-        expect((step as unknown as { calls: { ignoreDirtyState: boolean | undefined }[] }).calls[0].ignoreDirtyState).toBeUndefined();
+        const firstCall = (step as unknown as { calls: { ignoreDirtyState: boolean | undefined; saveReturnMode: string | undefined }[] }).calls[0];
+        expect(firstCall.ignoreDirtyState).toBe(false);
+        expect(firstCall.saveReturnMode).toBe('datestamps_only');
         expect(result.failures).toBe(0);
     });
 
-    it('QueueUpdate force-persists (IgnoreDirtyState) and runs AFTER the INSERT', async () => {
+    it('QueueUpdate force-persists (IgnoreDirtyState) with datestamps_only and runs AFTER the INSERT', async () => {
         const q = new AgentRunStepSaveQueue();
         const step = fakeStep();
         q.Insert(step);
         q.QueueUpdate(step);
         await q.Flush();
 
-        const calls = (step as unknown as { calls: { ignoreDirtyState: boolean | undefined }[] }).calls;
+        const calls = (step as unknown as { calls: { ignoreDirtyState: boolean | undefined; saveReturnMode: string | undefined }[] }).calls;
         expect(calls).toHaveLength(2);
-        expect(calls[0].ignoreDirtyState).toBeUndefined(); // insert first, normal
+        expect(calls[0].ignoreDirtyState).toBe(false); // insert first, normal
+        expect(calls[0].saveReturnMode).toBe('datestamps_only');
         expect(calls[1].ignoreDirtyState).toBe(true); // update second, forced
+        expect(calls[1].saveReturnMode).toBe('datestamps_only');
     });
 
     it('Flush reports failures for saves that resolve false', async () => {

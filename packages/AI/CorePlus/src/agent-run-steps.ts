@@ -290,7 +290,7 @@ export type AgentRunStepInsertPrerequisites =
  * Failures are logged, never thrown — persistence is observability and must not break the run.
  */
 export class AgentRunStepSaveQueue {
-    private readonly queue = new BaseEntitySaveQueue();
+    private readonly queue = new BaseEntitySaveQueue({ saveReturnMode: 'datestamps_only' });
 
     /**
      * Fires a step's "started" INSERT without awaiting (the caller continues immediately). The step's PK

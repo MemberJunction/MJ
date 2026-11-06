@@ -20,7 +20,7 @@
  * const sql = new SqlServerAdapter();
  * const result = await sql.CheckConnectivity('localhost', 1433);
  * if (result.Reachable) {
- *   console.log(`Connected in ${result.LatencyMs}ms`);
+ *   console.log(`Port reachable in ${result.LatencyMs}ms`); // TCP only: no sign-in was attempted
  * } else {
  *   console.error(result.ErrorMessage);
  * }
@@ -100,6 +100,9 @@ export class SqlBatchError extends Error {
 export class SqlServerAdapter {
   /**
    * Test TCP connectivity to a SQL Server instance.
+   *
+   * A port-reachability probe only: it does not sign in, so a reachable result says nothing about
+   * credentials. {@link TryLogin} checks the sign-in.
    *
    * Opens a raw TCP socket to the specified host and port. If the connection
    * is established within the timeout, returns `{ Reachable: true }`. Otherwise

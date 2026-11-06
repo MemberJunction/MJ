@@ -355,6 +355,24 @@ describe('OpenAIRealtimeClient', () => {
             expect(client.IsBusy).toBe(true);
         });
 
+        it('RequestSpokenTurn sends the same response.create but tags the reply normal (MJ#4591)', () => {
+            client.RequestSpokenUpdate('Open the conversation now: greet them.');
+            const updateFrames = channel.SentEvents();
+            // Back to idle so the turn is not skipped by the collision rule.
+            channel.EmitServer({ type: 'response.created' });
+            channel.EmitServer({ type: 'response.done' });
+            channel.Sent = [];
+
+            const { transcripts } = collect(client);
+            client.RequestSpokenTurn('Open the conversation now: greet them.');
+            expect(channel.SentEvents()).toEqual(updateFrames);
+            expect(client.IsBusy).toBe(true);
+
+            channel.EmitServer({ type: 'response.created' });
+            channel.EmitServer({ type: 'response.output_audio_transcript.done', transcript: 'Hello there.' });
+            expect(transcripts).toEqual([{ Role: 'Assistant', Text: 'Hello there.', IsFinal: true, Kind: 'normal' }]);
+        });
+
         it('should keep the session instructions on a spoken update — OpenAI treats response.instructions as a REPLACEMENT', () => {
             // Seen live: the opener ("greet them, introduce yourself…") was spoken with no persona at all,
             // as "Hi, I'm ChatGPT", because the per-response instructions displaced the session's.
@@ -713,6 +731,24 @@ describe('OpenAIRealtimeClient', () => {
             expect(log).toContain('userSpeechStart');
             expect(log).toContain('interruption');
             expect(log.indexOf('userSpeechStart')).toBeLessThan(log.indexOf('state:listening'));
+        });
+
+        it('forwards item_id from input_audio_buffer.speech_started to OnUserSpeechStart and carries it as ItemId on the completed user transcript', () => {
+            const startedIds: Array<string | undefined> = [];
+            const { transcripts } = collect(client);
+            client.OnUserSpeechStart((itemId) => startedIds.push(itemId));
+
+            channel.EmitServer({ type: 'input_audio_buffer.speech_started', item_id: 'item_abc' });
+            channel.EmitServer({
+                type: 'conversation.item.input_audio_transcription.completed',
+                transcript: 'Hello from item abc',
+                item_id: 'item_abc',
+            });
+
+            expect(startedIds).toEqual(['item_abc']);
+            expect(transcripts).toEqual([
+                { Role: 'User', Text: 'Hello from item abc', IsFinal: true, Kind: 'normal', ItemId: 'item_abc' },
+            ]);
         });
 
         it('should NOT emit on the cleared frame that follows a self-initiated cancel', () => {

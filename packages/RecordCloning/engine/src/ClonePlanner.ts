@@ -63,7 +63,7 @@ interface CompositeKeyLike {
  * The mapper leaves them out, so a clone never copies a value its user couldn't see or set.
  */
 function fieldLevelDenials(entity: EntityInfo, user: UserInfo): { DeniedReadFields: string[]; DeniedCreateFields: string[] } | undefined {
-    if (!entity.EnableFieldLevelSecurity) return undefined;
+    if (!entity.FieldLevelSecurityApplies) return undefined;
     const deniedRead = entity.GetDeniedReadFields(user);
     const deniedCreate = entity.GetDeniedCreateFields(user);
     const names = (denied: Set<string>) => entity.Fields.filter((f) => denied.has(f.Name.toLowerCase())).map((f) => f.Name);
@@ -917,7 +917,7 @@ export class ClonePlanner {
      */
     private async isTemplateSource(entityName: string, key: CompositeKey, field: string, contextUser: UserInfo): Promise<boolean> {
         const res = await RunView.FromMetadataProvider(this.Provider).RunView<Record<string, unknown>>(
-            { EntityName: entityName, Fields: [field], ExtraFilter: key.ToWhereClause(), ResultType: 'simple', MaxRows: 1 },
+            { EntityName: entityName, Fields: [field], ExtraFilter: key.ToWhereClause(), ResultType: 'simple', MaxRows: 1, SkipTotalRowCount: true },
             contextUser
         );
         const value = res?.Success ? res.Results?.[0]?.[field] : undefined;

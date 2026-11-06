@@ -3,6 +3,7 @@ import { RealtimeSessionRuntime } from '@memberjunction/realtime-runtime';
 import {
     LoadAssemblyAIRealtimeClient,
     LoadElevenLabsRealtimeClient,
+    LoadElevenRealtimeClient,
     LoadGeminiRealtimeClient,
     LoadHuggingFaceRealtimeClient,
     LoadOpenAILiveClient,
@@ -25,6 +26,7 @@ LoadGeminiRealtimeClient();
 LoadElevenLabsRealtimeClient();
 LoadAssemblyAIRealtimeClient();
 LoadxAIRealtimeClient();
+LoadElevenRealtimeClient();
 LoadHuggingFaceRealtimeClient();
 
 /**

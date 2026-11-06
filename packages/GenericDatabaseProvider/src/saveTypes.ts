@@ -94,6 +94,40 @@ export interface SaveSQLFragment {
     literalSQL?: string;
 }
 
+/**
+ * Resolved return-shape context computed by `GenericDatabaseProvider.ResolveSaveReturnContext`
+ * and passed to dialect-specific save-wrapping hooks (`WrapSaveCallForResult`,
+ * `ProjectSaveCallToDatestamps`, and `WrapSaveCallWithRecordChange`).
+ *
+ * Centralizes the `SaveReturnMode` decision logic and quoted column-list construction in
+ * `GenericDatabaseProvider` so dialect subclasses only supply dialect-specific SQL grammar.
+ */
+export interface SaveReturnContext {
+    /** The return mode compiled into the entity's generated SP/function (`EntityInfo.SaveReturnMode`). */
+    spReturnMode: 'full' | 'datestamps_only';
+    /** The effective return mode requested for this save call (`options?.SaveReturnMode ?? spReturnMode`). */
+    effectiveReturnMode: 'full' | 'datestamps_only';
+    /** True when the compiled SP/function already returns only PK + datestamps (`spReturnMode === 'datestamps_only'`). */
+    spReturnsDatestampsOnly: boolean;
+    /**
+     * True when runtime options requested `'datestamps_only'` on an entity whose compiled
+     * SP/function returns the full row (`!spReturnsDatestampsOnly && effectiveReturnMode === 'datestamps_only'`).
+     */
+    needsDatestampProjection: boolean;
+    /** Comma-separated, dialect-quoted column list for `EntityInfo.DatestampReturnFields` (built via `QuoteIdentifier`). */
+    datestampSelectColumnsSQL: string;
+    /**
+     * Column list to select directly from the routine call when the dialect selects from the routine
+     * (`datestampSelectColumnsSQL` when `needsDatestampProjection` is true, otherwise `'*'`).
+     */
+    routineSelectColumnsSQL: string;
+    /**
+     * Column list to select from an intermediate result capture table or CTE
+     * (`datestampSelectColumnsSQL` when `effectiveReturnMode === 'datestamps_only'`, otherwise `'*'`).
+     */
+    finalSelectColumnsSQL: string;
+}
+
 // Re-export `RecordChangePayload` from `@memberjunction/core` for convenience.
 // The canonical definition lives there alongside `BaseEntity` and
 // `BuildRecordChangePayload` — we don't duplicate it.

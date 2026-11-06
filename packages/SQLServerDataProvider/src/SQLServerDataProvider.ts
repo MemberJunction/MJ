@@ -40,6 +40,7 @@ import {
   EntityRecordNameResult,
   RecordDependency,
   EntityDependency,
+  GetRecordDependenciesOptions,
   LogStatus,
   LogStatusEx,
   CompositeKey,
@@ -58,12 +59,29 @@ import {
   RecordChangeSource,
   RecordChangePayload,
   EntityDeleteOptions,
+  GetDiagnosticContext,
 } from '@memberjunction/core';
 import { NodeFileSystemProvider } from './NodeFileSystemProvider';
 
 import { EntityAIActionParams } from '@memberjunction/aiengine';
 import { QueueManager } from '@memberjunction/queue';
-import { GenericDatabaseProvider, ExecuteSQLBatchOptions, SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '@memberjunction/generic-database-provider';
+import {
+  GenericDatabaseProvider,
+  ExecuteSQLBatchOptions,
+  SaveCoercedValue,
+  SaveCallBinding,
+  SaveSQLFragment,
+  SaveReturnContext,
+  IsTypedQueryParameterList,
+  IsNamedQueryParameterList,
+  TypedQueryParameter,
+  DescribeStatementFailure,
+  SummarizeSqlParameters,
+  FormatSqlParameterTypesForError,
+} from '@memberjunction/generic-database-provider';
+import type { DatabasePoolStats, DescribeStatementResult } from '@memberjunction/generic-database-provider';
+import { BindTypedParameters } from './typedParameters';
+import { MapSQLServerDescribeRows, SQLSERVER_DESCRIBE_SQL, type SQLServerDescribeRow } from './statementDescription';
 import { MJQueryEntityExtended } from '@memberjunction/core-entities';
 
 import sql from 'mssql';
@@ -128,7 +146,11 @@ function isStaleConnectionError(error: { message?: string; code?: string }): boo
 }
 
 /**
- * Builds a sql.Request, binds parameters, and processes positional placeholders.
+ * Builds a sql.Request and binds `parameters`:
+ * - a SaveParameter list, a TypedQueryParameter list or a NamedQueryParameter list binds each by name;
+ * - a plain object binds each key by name (`{ name: v }` for `@name`);
+ * - a plain array is the LEGACY positional form: `@p0..@pN`, with every `?` in the statement rewritten,
+ *   including one inside a string literal, quoted identifier or comment. Prefer a named form.
  */
 function buildRequest(
   connectionSource: sql.ConnectionPool | sql.Transaction,
@@ -152,11 +174,26 @@ function buildRequest(
     }
     return { request, processedQuery: query };
   }
+  if (IsTypedQueryParameterList(parameters)) {
+    // Named inputs declared with the types of the columns they are compared with (typedParameters.ts).
+    BindTypedParameters(request, parameters);
+    return { request, processedQuery: query };
+  }
+  if (IsNamedQueryParameterList(parameters)) {
+    // Named inputs whose type the driver infers; the statement already references them by name.
+    for (const p of parameters) {
+      request.input(p.Name, p.Value);
+    }
+    return { request, processedQuery: query };
+  }
 
   let processedQuery = query;
   if (parameters) {
     if (Array.isArray(parameters)) {
-      // Handle positional parameters (legacy TypeORM style)
+      // LEGACY positional form: values bind as @p0..@pN and EVERY `?` in the text is rewritten to the
+      // next @pN, a `?` inside a string literal, quoted identifier or comment included. Kept for
+      // existing callers; MJ's own SQL passes named parameters (an object, NamedQueryParameter or
+      // TypedQueryParameter lists), which leave the text alone.
       parameters.forEach((value, index) => {
         request.input(`p${index}`, value);
       });
@@ -249,15 +286,20 @@ async function executeSQLCore(
     throw error;
   }
 
+  const startTs = Date.now();
+  const startHr = typeof performance !== 'undefined' && performance.now ? performance.now() : startTs;
+  const diagCtx = options?.diagnosticContext ?? GetDiagnosticContext();
+
   try {
     const { request, processedQuery } = buildRequest(connectionSource, query, parameters);
     const queryPromise = options?.timeoutMs
       ? QueryWithTimeout<SQLCoreResult>(request, processedQuery, options.timeoutMs)
       : request.query(processedQuery);
 
+    let result: sql.IResult<any>;
     if (options && !options.ignoreLogging && context.logSqlStatement) {
       const literalSQL = options.literalSQL;
-      const [result] = await Promise.all([
+      [result] = await Promise.all([
         queryPromise,
         context.logSqlStatement(
           literalSQL ?? query,
@@ -269,10 +311,35 @@ async function executeSQLCore(
           options.contextUser
         )
       ]);
-      return result;
+    } else {
+      result = await queryPromise;
     }
 
-    return await queryPromise;
+    if (!options?.ignoreLogging && GenericDatabaseProvider.HasSqlObservers()) {
+      const endHr = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+      const durationMs = Math.round((endHr - startHr) * 100) / 100;
+      const rowCount =
+        Array.isArray(result?.rowsAffected) && result.rowsAffected.length > 0
+          ? result.rowsAffected.reduce((a: number, b: number) => a + b, 0)
+          : Array.isArray(result?.recordset)
+            ? result.recordset.length
+            : 0;
+      GenericDatabaseProvider.NotifySqlObservers({
+        ts: startTs,
+        durationMs,
+        sql: query,
+        description: options?.description,
+        isMutation: !!options?.isMutation,
+        rowCount,
+        parameterSummaries: SummarizeSqlParameters(parameters, !options?.isMutation),
+        sessionId: diagCtx?.sessionId,
+        traceId: diagCtx?.traceId,
+        spanId: diagCtx?.spanId,
+        ignoreLogging: options?.ignoreLogging,
+      });
+    }
+
+    return result;
   } catch (error: any) {
     // Retry once for stale connection errors on non-transactional queries.
     // Transactions cannot be retried because the connection state is already
@@ -285,7 +352,29 @@ async function executeSQLCore(
       return executeSQLCore(query, parameters, context, options, true);
     }
 
-    // Build detailed error message with query and parameters.
+    if (!options?.ignoreLogging && GenericDatabaseProvider.HasSqlObservers()) {
+      const endHr = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+      const durationMs = Math.round((endHr - startHr) * 100) / 100;
+      GenericDatabaseProvider.NotifySqlObservers({
+        ts: startTs,
+        durationMs,
+        sql: query,
+        description: options?.description,
+        isMutation: !!options?.isMutation,
+        parameterSummaries: SummarizeSqlParameters(parameters, false),
+        error: {
+          name: error?.name ? String(error.name) : 'Error',
+          message: error?.message ? String(error.message) : String(error),
+          code: error?.code ? String(error.code) : undefined,
+        },
+        sessionId: diagCtx?.sessionId,
+        traceId: diagCtx?.traceId,
+        spanId: diagCtx?.spanId,
+        ignoreLogging: options?.ignoreLogging,
+      });
+    }
+
+    // Build detailed error message with query and parameter types/lengths (never raw parameter values).
     // mssql RequestError has a precedingErrors array with the actual root-cause
     // SQL Server messages (e.g. "object already exists") that precede the
     // generic "Could not create constraint" wrapper. Always include them.
@@ -299,7 +388,7 @@ async function executeSQLCore(
     const errorMessage = `Error executing SQL
     Error: ${error?.message ? error.message : error}${precedingMsgs}
     Query: ${literalSQL ?? query}
-    Parameters: ${literalSQL || !parameters ? 'None' : JSON.stringify(parameters)}`;
+    Parameters: ${literalSQL || !parameters ? 'None' : FormatSqlParameterTypesForError(parameters)}`;
 
     // Preserve the original error type (ConnectionError vs RequestError) so callers
     // can structurally distinguish infrastructure failures from query-level errors.
@@ -471,19 +560,63 @@ export class SQLServerDataProvider
    * `sys.columns` scan in {@link loadViewColumnOrderCache} ran once or twice on EVERY request
    * (issue #3102 — ~9.6k scans/day in production vs the ~2 needed).
    *
-   * Keyed by the `ConnectionPool` object (NOT by `schema.view` alone) because one process can hold
-   * providers to different databases (RW + RO datasources, multi-DB tooling) where the same
-   * `schema.view` has different physical column orders — a process-global map would serve one
-   * database's column order to another's provider and silently reintroduce the positional
-   * `@ResultTable` mis-routing this cache exists to prevent. A WeakMap lets pools (and their cache)
-   * be collected if a pool is discarded.
+   * Keyed by normalized database target AND login (`user@server:port[/instance]/database`) when
+   * `ConnectionPool.config` exposes them — so pools opened with the same login against the SAME
+   * database (per-request RW providers around the boot-time pool) share one `sys.columns` scan and
+   * one cross-pool invalidation domain, while pools pointing to DIFFERENT databases, or using a
+   * different login (read-only, CodeGen), stay isolated: `sys.columns` only lists objects the login
+   * can see, so one login's scan must never stand in for another's. Pools without `config.user`
+   * (token/integrated auth) share by target alone. Falls back to `_viewColumnOrderCacheByPool`
+   * (`WeakMap`) when a pool object does not expose `config.server` + `config.database` (e.g.
+   * lightweight test doubles).
    *
    * The value is the load PROMISE (not the resolved Map) so concurrent per-request Config() calls
    * de-duplicate onto a single in-flight scan. Invalidated on metadata refresh (see
    * {@link Refresh} / {@link InvalidateViewColumnOrderCache}) so view changes from
-   * migrations/CodeGen are picked up without a server restart.
+   * migrations/CodeGen are picked up across all pools targeting that database without a server restart.
    */
   private static _viewColumnOrderCacheByPool = new WeakMap<sql.ConnectionPool, Promise<Map<string, string[]>>>();
+  private static readonly _viewColumnOrderCacheByDbKey = new Map<string, Promise<Map<string, string[]>>>();
+  private static readonly DEFAULT_SQL_SERVER_PORT = 1433;
+
+  private static viewColumnOrderDbKey(pool: sql.ConnectionPool): string | null {
+    const cfg = (
+      pool as {
+        config?: {
+          server?: string;
+          port?: number;
+          database?: string;
+          user?: string;
+          options?: { instanceName?: string };
+        };
+      } | null | undefined
+    )?.config;
+    if (
+      typeof cfg?.server === 'string' &&
+      cfg.server.trim().length > 0 &&
+      typeof cfg?.database === 'string' &&
+      cfg.database.trim().length > 0
+    ) {
+      const host = cfg.server.trim().toLowerCase();
+      const port =
+        typeof cfg.port === 'number' && cfg.port > 0
+          ? cfg.port
+          : SQLServerDataProvider.DEFAULT_SQL_SERVER_PORT;
+      const instance =
+        typeof cfg.options?.instanceName === 'string' && cfg.options.instanceName.trim().length > 0
+          ? `/${cfg.options.instanceName.trim().toLowerCase()}`
+          : '';
+      const db = cfg.database.trim().toLowerCase();
+      // The login is part of the identity: sys.columns only lists objects the login can see, so a
+      // scan made through the read-only or CodeGen login must never be served to the read-write
+      // pool (or vice versa) — a view missing from the map falls back to metadata order, the very
+      // misrouting this cache exists to prevent (#3102). Pools sharing server, database AND login
+      // still share one scan.
+      const user = typeof cfg.user === 'string' && cfg.user.trim().length > 0 ? cfg.user.trim().toLowerCase() : '';
+      return `mssql://${user}@${host}:${port}${instance}/${db}`;
+    }
+    return null;
+  }
 
   // Instance SQL execution queue for serializing transaction queries
   // Non-transactional queries bypass this queue for maximum parallelism
@@ -506,7 +639,7 @@ export class SQLServerDataProvider
    * ENOTBEGUN on a finished handle. A query on an explicit handle a caller passed in — an IS-A chain
    * sharing its own transaction — is never subject to that check.
    */
-  private _sqlQueue$ = new Subject<SQLQueueItem>();
+  private _sqlQueue$: Subject<SQLQueueItem> | null = null;
   /**
    * Handles whose commit or rollback has run — or whose commit FAILED, which dooms them just the same.
    * The ambient check in runQueueItem consults this as well as `_transaction`, because a failed
@@ -518,8 +651,31 @@ export class SQLServerDataProvider
   // Subscription for the queue processor
   private _queueSubscription: any;
   
-  // Transaction state management
-  private _transactionState$ = new BehaviorSubject<boolean>(false);
+  // Transaction state management — lazy-allocated so read-only per-request providers
+  // avoid allocating RxJS Subject/BehaviorSubject instances when no transaction is opened.
+  private _isTransactionActive = false;
+  private _transactionState$: BehaviorSubject<boolean> | null = null;
+
+  private ensureSqlQueue(): Subject<SQLQueueItem> {
+    if (!this._sqlQueue$) {
+      this._sqlQueue$ = new Subject<SQLQueueItem>();
+    }
+    return this._sqlQueue$;
+  }
+
+  private ensureTransactionStateSubject(): BehaviorSubject<boolean> {
+    if (!this._transactionState$) {
+      this._transactionState$ = new BehaviorSubject<boolean>(this._isTransactionActive);
+    }
+    return this._transactionState$;
+  }
+
+  private setTransactionActiveState(active: boolean): void {
+    this._isTransactionActive = active;
+    if (this._transactionState$) {
+      this._transactionState$.next(active);
+    }
+  }
 
 
   /**
@@ -532,7 +688,7 @@ export class SQLServerDataProvider
    * });
    */
   public get TransactionState$(): Observable<boolean> {
-    return this._transactionState$.asObservable();
+    return this.ensureTransactionStateSubject().asObservable();
   }
 
   /** @deprecated Use {@link TransactionState$}. */
@@ -570,7 +726,7 @@ export class SQLServerDataProvider
   public get IsTransactionActive(): boolean {
     // Always return instance-level state
     // Request-specific state should be accessed via getTransactionContext
-    return this._transactionState$.value;
+    return this._isTransactionActive;
   }
 
   /** @deprecated Use {@link IsTransactionActive}. */
@@ -641,17 +797,29 @@ export class SQLServerDataProvider
    */
   private async loadViewColumnOrderCache(): Promise<void> {
     const pool = this._pool;
-    let scanPromise = SQLServerDataProvider._viewColumnOrderCacheByPool.get(pool);
+    const dbKey = SQLServerDataProvider.viewColumnOrderDbKey(pool);
+    let scanPromise =
+      dbKey !== null
+        ? SQLServerDataProvider._viewColumnOrderCacheByDbKey.get(dbKey)
+        : SQLServerDataProvider._viewColumnOrderCacheByPool.get(pool);
     if (!scanPromise) {
       scanPromise = this.scanViewColumnOrder();
-      SQLServerDataProvider._viewColumnOrderCacheByPool.set(pool, scanPromise);
+      if (dbKey !== null) {
+        SQLServerDataProvider._viewColumnOrderCacheByDbKey.set(dbKey, scanPromise);
+      } else {
+        SQLServerDataProvider._viewColumnOrderCacheByPool.set(pool, scanPromise);
+      }
     }
     try {
       this._viewColumnOrderCache = await scanPromise;
     } catch (e) {
       // best-effort: an empty cache makes getAllEntityColumnsSQL fall back to the metadata-derived order.
       // Drop the shared entry (only if it's still OUR failed promise) so a later Config() can retry.
-      if (SQLServerDataProvider._viewColumnOrderCacheByPool.get(pool) === scanPromise) {
+      if (dbKey !== null) {
+        if (SQLServerDataProvider._viewColumnOrderCacheByDbKey.get(dbKey) === scanPromise) {
+          SQLServerDataProvider._viewColumnOrderCacheByDbKey.delete(dbKey);
+        }
+      } else if (SQLServerDataProvider._viewColumnOrderCacheByPool.get(pool) === scanPromise) {
         SQLServerDataProvider._viewColumnOrderCacheByPool.delete(pool);
       }
       this._viewColumnOrderCache = new Map();
@@ -700,6 +868,10 @@ export class SQLServerDataProvider
    */
   public static InvalidateViewColumnOrderCache(pool: sql.ConnectionPool): void {
     SQLServerDataProvider._viewColumnOrderCacheByPool.delete(pool);
+    const dbKey = SQLServerDataProvider.viewColumnOrderDbKey(pool);
+    if (dbKey !== null) {
+      SQLServerDataProvider._viewColumnOrderCacheByDbKey.delete(dbKey);
+    }
   }
 
   /**
@@ -746,7 +918,7 @@ export class SQLServerDataProvider
     // Each instance gets its own queue processor, but only do this ONCE if we get this method called more than once we don't need to reinit
     // the sub, taht would cause duplicate rprocessing.
     if (!this._queueSubscription) {
-      this._queueSubscription = this._sqlQueue$.pipe(
+      this._queueSubscription = this.ensureSqlQueue().pipe(
         concatMap(item =>
           from(this.runQueueItem(item)).pipe(
             // runQueueItem settles the item's own promise on success; only failure is handled here
@@ -783,6 +955,20 @@ export class SQLServerDataProvider
    */
   public get DatabaseConnection(): any {
     return this._pool;
+  }
+
+  /** Reads the live counts from the mssql connection pool, or `null` before the pool is set. */
+  public override GetPoolStats(): DatabasePoolStats | null {
+    const pool = this._pool;
+    if (!pool) {
+      return null;
+    }
+    return {
+      TotalConnections: pool.size,
+      ActiveConnections: pool.borrowed,
+      IdleConnections: pool.available,
+      WaitingRequests: pool.pending,
+    };
   }
 
   /**
@@ -931,9 +1117,11 @@ export class SQLServerDataProvider
       return results;
     }
 
-    // Build array of SQL statements for batch execution
+    // Build array of SQL statements for batch execution (recording per-item resolution errors
+    // in `results` without aborting valid sibling items in the batch)
     const sqlStatements: string[] = [];
-    for (const { entityInfo, whereSQL, item } of items) {
+    const validItems: Array<{ index: number }> = [];
+    for (const { index, entityInfo, whereSQL, item } of items) {
       // The freshness probe MUST target the same physical view the read targets. For a
       // DataSource:'Materialized' read that's the materialized_vw<CodeName> wrapper (a full SELECT *
       // snapshot of the base view, so it carries __mj_UpdatedAt) — NOT the live base view. Probing the
@@ -943,8 +1131,20 @@ export class SQLServerDataProvider
       // still supplies a materialized cacheStatus.) Use the status-gated resolveEffectiveBaseView (not the
       // unconditional GetEffectiveBaseView) so a Building/DriftHold/Disabled/never-minted snapshot probes the
       // LIVE base view — mirroring the read path — instead of a held or missing materialized_vw wrapper.
-      const effectiveView = await this.resolveEffectiveBaseView(entityInfo, item.params, contextUser);
-      sqlStatements.push(this.BuildCacheStatusSQL(entityInfo, effectiveView, whereSQL));
+      try {
+        const effectiveTarget = await this.resolveEffectiveBaseViewTarget(entityInfo, item.params, contextUser);
+        sqlStatements.push(this.BuildCacheStatusSQL(entityInfo, effectiveTarget.viewName, whereSQL, effectiveTarget.schemaName));
+        validItems.push({ index });
+      } catch (err) {
+        results.set(index, {
+          success: false,
+          errorMessage: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    if (sqlStatements.length === 0) {
+      return results;
     }
 
     try {
@@ -952,8 +1152,8 @@ export class SQLServerDataProvider
       const resultSets = await this.ExecuteSQLBatch(sqlStatements, undefined, undefined, contextUser);
 
       // Process each result set and map to the corresponding item index
-      for (let i = 0; i < items.length; i++) {
-        const { index } = items[i];
+      for (let i = 0; i < validItems.length; i++) {
+        const { index } = validItems[i];
         const resultSet = resultSets[i];
 
         if (resultSet && resultSet.length > 0) {
@@ -989,24 +1189,26 @@ export class SQLServerDataProvider
     whereSQL: string,
     orderBySQL: string,
     user: UserInfo,
+    schemaNameOverride?: string,
   ): Promise<{ executeViewSQL: string; runID: string }> {
     // entityInfo + effectiveBaseView are passed in (no reverse-lookup by base-view name) so the logged
-    // read honors DataSource:'Materialized' — effectiveBaseView is the materialized wrapper view then,
-    // and the entity's live base view otherwise.
+    // read honors DataSource:'Materialized' and AlternateBaseView — effectiveBaseView is the materialized
+    // or alternate view then, and the entity's live base view otherwise.
     //
     // UserViewRunDetail.RecordID is a single NVARCHAR(255) holding ONE bare key value per row, and the
     // read-back below is `<pk> IN (SELECT RecordID ...)` — a one-column predicate. A composite key has
     // no single column to log or match on, so refuse rather than record (and re-read) a truncated key.
     this.assertSingleColumnPrimaryKey(entityInfo, 'SaveViewResults (user view run logging)');
     const pkName = entityInfo.FirstPrimaryKey.Name; // first-pk-ok: guarded above — view-run RecordID holds one bare key value, PrimaryKeys.length === 1 enforced
+    const targetSchema = schemaNameOverride ?? entityInfo.SchemaName;
     const sSQL = `
             DECLARE @ViewIDList TABLE ( ID NVARCHAR(255) );
-            INSERT INTO @ViewIDList (ID) (SELECT ${pkName} FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE (${whereSQL}))
+            INSERT INTO @ViewIDList (ID) (SELECT ${pkName} FROM [${targetSchema}].${effectiveBaseView} WHERE (${whereSQL}))
             EXEC [${this.MJCoreSchemaName}].spCreateUserViewRunWithDetail(${viewId},${user.Email}, @ViewIDLIst)
             `;
     const runIDResult = await this.ExecuteSQL(sSQL, undefined, undefined, user);
     const runID: string = runIDResult[0].UserViewRunID;
-    const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE ${pkName} IN
+    const sRetSQL: string = `SELECT * FROM [${targetSchema}].${effectiveBaseView} WHERE ${pkName} IN
                                     (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE UserViewRunID=${runID})
                                  ${orderBySQL && orderBySQL.length > 0 ? ` ORDER BY ${orderBySQL}` : ''}`;
     return { executeViewSQL: sRetSQL, runID };
@@ -1030,7 +1232,12 @@ export class SQLServerDataProvider
    * @param entityName
    * @param compositeKey
    */
-  protected override BuildSoftLinkDependencySQL(entityName: string, compositeKey: CompositeKey): string {
+  protected override BuildSoftLinkDependencySQL(
+    entityName: string,
+    compositeKey: CompositeKey,
+    options?: GetRecordDependenciesOptions,
+    contextUser?: UserInfo,
+  ): string {
     // we need to go through ALL of the entities in the system and find all of the EntityFields that have a non-null EntityIDFieldName
     // for each of these, we generate a SQL Statement that will return the EntityName, RelatedEntityName, FieldName, and the primary key values of the related entity
     //
@@ -1041,12 +1248,19 @@ export class SQLServerDataProvider
     if (!targetEntity) {
       throw new Error(`Entity ${entityName} not found in metadata`);
     }
-    // The canonical stored encoding of the target record's key - `ID|<guid>` (see CompositeKey.ToRecordID).
-    // A RecordID column holds this, not the bare primary key value.
-    const targetRecordID = compositeKey.ToRecordID();
+    // Single-primary-key records referenced by polymorphic tables may store either the canonical
+    // `ID|<guid>` encoding (`CompositeKey.ToRecordID()`) OR the bare primary key value (`<guid>`).
+    const targetRecordID = this.escapeSQLLiteral(compositeKey.ToRecordID());
+    const bareValue =
+      compositeKey.KeyValuePairs.length === 1
+        ? this.escapeSQLLiteral(String(compositeKey.KeyValuePairs[0].Value ?? ''))
+        : '';
 
     let sSQL = '';
     this.Entities.forEach((entity) => {
+      if (!this.shouldIncludeDependencyEntity(entity, options, contextUser)) {
+        return;
+      }
       // we build a string that will concatenate all of the primary key values into a single string, this is because the primary key could be a composite key
       // we do this in SQL by combining the pirmary key name and value for each row using the default separator defined by the CompositeKey class
       // the output of this should be like the following 'Field1|Value1||Field2|Value2||Field3|Value3' where the || is the CompositeKey.DefaultFieldDelimiter and the | is the CompositeKey.DefaultValueDelimiter
@@ -1056,6 +1270,12 @@ export class SQLServerDataProvider
       entity.Fields.filter((f) => f.EntityIDFieldName && f.EntityIDFieldName.length > 0).forEach((f) => {
         // each field in f must be processed
         if (sSQL.length > 0) sSQL += ' UNION ALL ';
+
+        const sourceObject = this.resolveDependencySourceObject(entity, [f.Name, f.EntityIDFieldName]);
+        const recordIDPredicate =
+          bareValue && bareValue !== targetRecordID
+            ? `[${f.Name}] IN ('${targetRecordID}', '${bareValue}')`
+            : `[${f.Name}] = '${targetRecordID}'`;
 
         // there is a layer of indirection here because each ROW in each of the entity records for this entity/field combination could point to a DIFFERENT
         // entity. We find out which entity it is pointed to via the EntityIDFieldName in the field definition, so we have to filter the rows in the entity
@@ -1072,10 +1292,10 @@ export class SQLServerDataProvider
                             1 AS IsSoftLink,
                             '${f.EntityIDFieldName}' AS EntityIDFieldName
                         FROM
-                            [${entity.SchemaName}].[${entity.BaseView}]
+                            [${entity.SchemaName}].[${sourceObject}]
                         WHERE
                             [${f.EntityIDFieldName}] = '${targetEntity.ID}' AND
-                            [${f.Name}] = '${this.escapeSQLLiteral(targetRecordID)}'`;
+                            ${recordIDPredicate}`;
       });
     });
     return sSQL;
@@ -1090,13 +1310,26 @@ export class SQLServerDataProvider
     return value.replace(/'/g, "''");
   }
 
-  protected override BuildHardLinkDependencySQL(entityDependencies: EntityDependency[], compositeKey: CompositeKey): string {
+  protected override BuildHardLinkDependencySQL(
+    entityDependenciesOrName: EntityDependency[] | string,
+    compositeKey: CompositeKey,
+    options?: GetRecordDependenciesOptions,
+    contextUser?: UserInfo,
+  ): string {
+    const entityDependencies = this.resolveEntityDependencies(entityDependenciesOrName);
     let sSQL = '';
     for (const entityDependency of entityDependencies) {
       const entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.EntityName?.trim().toLowerCase());
-      const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
       const relatedEntityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.RelatedEntityName?.trim().toLowerCase());
-      const primaryKeySelectString = `CONCAT(${entityInfo.PrimaryKeys.map((pk) => `'${pk.Name}|', CAST([${pk.Name}] AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
+      if (!entityInfo || !relatedEntityInfo) continue;
+      if (!this.shouldIncludeDependencyEntity(relatedEntityInfo, options, contextUser)) continue;
+
+      const fkField = relatedEntityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === entityDependency.FieldName?.trim().toLowerCase());
+      if (fkField?.EntityIDFieldName && fkField.EntityIDFieldName.trim().length > 0) continue;
+
+      const pksToProject = relatedEntityInfo.PrimaryKeys?.length ? relatedEntityInfo.PrimaryKeys : entityInfo.PrimaryKeys;
+      const primaryKeySelectString = `CONCAT(${pksToProject.map((pk) => `'${pk.Name}|', CAST([${pk.Name}] AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
+      const sourceObject = this.resolveDependencySourceObject(relatedEntityInfo, [entityDependency.FieldName]);
 
       if (sSQL.length > 0) sSQL += ' UNION ALL ';
       sSQL += `SELECT
@@ -1107,7 +1340,7 @@ export class SQLServerDataProvider
                         0 AS IsSoftLink,
                         NULL AS EntityIDFieldName
                     FROM
-                        [${relatedEntityInfo.SchemaName}].[${relatedEntityInfo.BaseView}]
+                        [${relatedEntityInfo.SchemaName}].[${sourceObject}]
                     WHERE
                         [${entityDependency.FieldName}] = ${this.GetRecordDependencyLinkSQL(entityDependency, entityInfo, relatedEntityInfo, compositeKey)}`;
     }
@@ -1120,7 +1353,8 @@ export class SQLServerDataProvider
       throw new Error(`Field ${dep.FieldName} not found in Entity ${relatedEntity.Name}`);
     }
 
-    if (f.RelatedEntityFieldName?.trim().toLowerCase() === 'id') {
+    const relFieldName = f.RelatedEntityFieldName?.trim().toLowerCase();
+    if (!relFieldName || relFieldName === 'id' || relFieldName === entity.FirstPrimaryKey?.Name?.trim().toLowerCase()) { // first-pk-ok: a foreign key targets a single column; default FK target is the first primary key
       // simple link to first primary key, most common scenario for linkages
       // Key values arrive from remote callers — render through the shared sanitizer.
       return SQLServerDataProvider.RenderKeyValueLiteral(CompositeKey.GetValueByIndex(0), entity.FirstPrimaryKey.NeedsQuotes, entity.FirstPrimaryKey.Name, entity.Name); // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
@@ -1177,20 +1411,23 @@ export class SQLServerDataProvider
    * @param bNewRecord - Whether this is a new record (create) or existing record (update)
    * @param spName - The stored procedure name to call
    * @param user - The user context for the operation
+   * @param transaction - The transaction the save will run in, when one is already open. A read
+   *   the save's Record Change snapshot needs runs in it, so it sees that transaction's earlier
+   *   writes and never waits on the locks they hold.
    * @returns The full SQL statement for the save operation
    *
    * @security This method handles field-level encryption transparently.
    *           Fields marked with Encrypt=true will have their values encrypted
    *           before being included in the SQL statement.
    */
-  public async GetSaveSQL(entity: BaseEntity, bNewRecord: boolean, _spName: string, user: UserInfo): Promise<string> {
+  public async GetSaveSQL(entity: BaseEntity, bNewRecord: boolean, _spName: string, user: UserInfo, transaction?: sql.Transaction): Promise<string> {
     // SQLServerTransactionGroup-batched saves regenerate per-item SQL when
     // transaction variables get rebound. `_spName` is preserved for back-compat
     // with that caller; the dialect-driven pipeline derives it from entity
     // metadata via `GetCreateUpdateSPName`. Outside a TransactionGroup,
     // `fullSQL` holds `@p$0` parameter placeholders, so return `literalSQL`
     // for standalone callers.
-    const result = await this.GenerateSaveSQL(entity, bNewRecord, user);
+    const result = await this.GenerateSaveSQLReadingOn(entity, bNewRecord, user, transaction);
     return result.literalSQL ?? result.fullSQL;
   }
 
@@ -1299,16 +1536,18 @@ export class SQLServerDataProvider
    */
   private getDatestampEntityColumnsSQL(entityInfo: EntityInfo): string {
     return entityInfo.DatestampReturnFields
-      .map((f) => `[${f.Name}] ${f.SQLFullType} ${f.AllowsNull || f.IsVirtual ? 'NULL' : 'NOT NULL'}`)
+      .map((f) => `${this.QuoteIdentifier(f.Name)} ${f.SQLFullType} ${f.AllowsNull || f.IsVirtual ? 'NULL' : 'NOT NULL'}`)
       .join(',\n');
   }
 
   /**
-   * Returns the comma-separated bracketed column list for {@link EntityInfo.DatestampReturnFields},
-   * used when selecting only primary key(s) and datestamp columns from `@ResultTable`.
+   * Selects the `@ResultTable` column declarations matching the compiled stored procedure's
+   * return shape (`returnContext.spReturnsDatestampsOnly`).
    */
-  private getDatestampSelectColumnsSQL(entityInfo: EntityInfo): string {
-    return entityInfo.DatestampReturnFields.map((f) => `[${f.Name}]`).join(', ');
+  private getSaveResultTableColumnsSQL(entityInfo: EntityInfo, returnContext: SaveReturnContext): string {
+    return returnContext.spReturnsDatestampsOnly
+      ? this.getDatestampEntityColumnsSQL(entityInfo)
+      : this.getAllEntityColumnsSQL(entityInfo);
   }
 
   /** Entities already warned about base-after-virtual field-order skew — so we warn once, not every save. */
@@ -1502,25 +1741,48 @@ export class SQLServerDataProvider
     const execParams: string[] = [];
     let simpleParams = '';
     let bFirst = true;
+    const needsSimpleParams =
+      this.HasActiveSqlLoggingSessions ||
+      !!entity.TransactionGroup ||
+      Object.prototype.hasOwnProperty.call(this, '_logSqlStatement') ||
+      Object.getPrototypeOf(this) !== SQLServerDataProvider.prototype;
 
     for (const [f, value] of fieldValues) {
       const varName = `@${f.CodeName}${uniqueSuffix}`;
       declarations.push(`${varName} ${f.SQLFullType.toUpperCase()}`);
 
-      // A binary value is rendered to its hex literal ONCE and reused below: the literal is twice
-      // the size of the bytes, and the SET block and the simple-params form both carry it.
       const hasValue = value !== null && value !== undefined;
-      const binaryLiteral = hasValue && f.IsBinaryFieldType ? this.FormatBinaryLiteral(f, value) : undefined;
-      if (hasValue) {
-        setStatements.push(`SET ${varName} = ${params.AddField(f, binaryLiteral ?? this.generateSetStatementValue(f, value))}`);
+      if (hasValue && f.IsBinaryFieldType) {
+        const binaryBytes = this.decodeBinaryFieldBytes(f, value);
+        let cachedHexLiteral: string | undefined;
+        const getHexLiteral = (): string => {
+          if (cachedHexLiteral === undefined) {
+            cachedHexLiteral = this.FormatBinaryLiteral(f, binaryBytes);
+          }
+          return cachedHexLiteral;
+        };
+        setStatements.push(`SET ${varName} = ${params.AddBinaryField(f, binaryBytes, getHexLiteral)}`);
+        execParams.push(`@${f.CodeName}=${varName}`);
+        if (needsSimpleParams) {
+          simpleParams += this.generateSingleSPParam(f, value as string, bFirst, getHexLiteral());
+        }
+        bFirst = false;
+      } else {
+        if (hasValue) {
+          setStatements.push(`SET ${varName} = ${params.AddField(f, this.generateSetStatementValue(f, value))}`);
+        }
+        execParams.push(`@${f.CodeName}=${varName}`);
+        if (needsSimpleParams) {
+          simpleParams += this.generateSingleSPParam(f, value as string, bFirst);
+        }
+        bFirst = false;
       }
-      execParams.push(`@${f.CodeName}=${varName}`);
-      simpleParams += this.generateSingleSPParam(f, value as string, bFirst, binaryLiteral);
-      bFirst = false;
 
       if ((value === null || value === undefined) && f.NeedsClearCompanion) {
         execParams.push(`@${f.CodeName}_Clear=1`);
-        simpleParams += `, @${f.CodeName}_Clear=1`;
+        if (needsSimpleParams) {
+          simpleParams += `, @${f.CodeName}_Clear=1`;
+        }
       }
     }
 
@@ -1637,16 +1899,44 @@ export class SQLServerDataProvider
    * shape: `DECLARE ... ; SET ... ; EXEC [schema].sp callArgs`. When
    * record-change tracking is on, this output is further wrapped by
    * `WrapSaveCallWithRecordChange`.
+   *
+   * When `returnContext.needsDatestampProjection` is true (either passed by
+   * `GenericDatabaseProvider.GenerateSaveSQL` or resolved from `options`),
+   * delegates to {@link ProjectSaveCallToDatestamps}.
    */
   protected override WrapSaveCallForResult(
     binding: SaveCallBinding,
     entity: BaseEntity,
     spName: string,
-    _options?: EntitySaveOptions,
+    options?: EntitySaveOptions,
+    returnContext?: SaveReturnContext,
   ): SaveSQLFragment {
+    const resolvedReturn = returnContext ?? this.ResolveSaveReturnContext(entity, options);
+    if (resolvedReturn.needsDatestampProjection) {
+      return this.ProjectSaveCallToDatestamps(binding, entity, spName, resolvedReturn);
+    }
     const saveBinding = this.asSaveBinding(binding, 'WrapSaveCallForResult');
     const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${saveBinding.callArgsSQL}`;
     return this.toSaveFragment(entity, `${this.renderDeclareSetHead(saveBinding)}${execSQL}`, saveBinding.parameters, saveBinding.recordSuffix);
+  }
+
+  /**
+   * Captures the stored procedure's output into `@ResultTable` and projects only
+   * `returnContext.datestampSelectColumnsSQL` (`SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM @ResultTable;`)
+   * when a caller requests `SaveReturnMode: 'datestamps_only'` at runtime on an entity whose
+   * compiled stored procedure returns the full row.
+   */
+  protected override ProjectSaveCallToDatestamps(
+    binding: SaveCallBinding,
+    entity: BaseEntity,
+    spName: string,
+    returnContext: SaveReturnContext,
+  ): SaveSQLFragment {
+    const saveBinding = this.asSaveBinding(binding, 'ProjectSaveCallToDatestamps');
+    const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${saveBinding.callArgsSQL}`;
+    const resultTableColumnsSQL = this.getSaveResultTableColumnsSQL(entity.EntityInfo, returnContext);
+    const sql = `${this.renderDeclareSetHead(saveBinding)}DECLARE @ResultTable TABLE (\n    ${resultTableColumnsSQL}\n);\n\nINSERT INTO @ResultTable\n${execSQL};\n\nSELECT ${returnContext.datestampSelectColumnsSQL} FROM @ResultTable;`;
+    return this.toSaveFragment(entity, sql, saveBinding.parameters, saveBinding.recordSuffix);
   }
 
   /**
@@ -1654,10 +1944,10 @@ export class SQLServerDataProvider
    * `spCreateRecordChange_Internal` EXEC pattern. The CONCAT-built `@ID`
    * inline supports composite-key entities.
    *
-   * When `entity.EntityInfo.SaveReturnMode === 'datestamps_only'`, `@ResultTable` is declared
-   * with only the PK + datestamp columns emitted by the stored procedure. When the effective
-   * return mode (`options?.SaveReturnMode ?? entity.EntityInfo.SaveReturnMode`) is
-   * `'datestamps_only'`, the final `SELECT` from `@ResultTable` returns only those columns.
+   * Consumes {@link SaveReturnContext} resolved by `GenericDatabaseProvider`:
+   * - `@ResultTable` column declarations match the compiled stored procedure's return mode
+   *   (`returnContext.spReturnsDatestampsOnly`).
+   * - The final `SELECT` from `@ResultTable` uses `returnContext.finalSelectColumnsSQL`.
    */
   protected override WrapSaveCallWithRecordChange(
     _saveSQL: SaveSQLFragment,
@@ -1665,6 +1955,7 @@ export class SQLServerDataProvider
     payload: RecordChangePayload,
     entity: BaseEntity,
     options?: EntitySaveOptions,
+    returnContext?: SaveReturnContext,
   ): SaveSQLFragment {
     const saveBinding = this.asSaveBinding(binding, 'WrapSaveCallWithRecordChange');
     const params = new SaveParameterCollector(saveBinding.parameters);
@@ -1679,14 +1970,9 @@ export class SQLServerDataProvider
     const recordChangeEXEC = this.renderRecordChangeEXEC(entity.EntityInfo.Name, '@ID', payload, params);
 
     const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${saveBinding.callArgsSQL}`;
-    const spReturnsDatestampsOnly = entity.EntityInfo.SaveReturnMode === 'datestamps_only';
-    const effectiveReturnMode = options?.SaveReturnMode ?? entity.EntityInfo.SaveReturnMode;
-    const resultTableColumnsSQL = spReturnsDatestampsOnly
-      ? this.getDatestampEntityColumnsSQL(entity.EntityInfo)
-      : this.getAllEntityColumnsSQL(entity.EntityInfo);
-    const finalSelectSQL = effectiveReturnMode === 'datestamps_only'
-      ? `SELECT ${this.getDatestampSelectColumnsSQL(entity.EntityInfo)} FROM @ResultTable;`
-      : 'SELECT * FROM @ResultTable;';
+    const resolvedReturn = returnContext ?? this.ResolveSaveReturnContext(entity, options);
+    const resultTableColumnsSQL = this.getSaveResultTableColumnsSQL(entity.EntityInfo, resolvedReturn);
+    const finalSelectSQL = `SELECT ${resolvedReturn.finalSelectColumnsSQL} FROM @ResultTable;`;
 
     const sql = `
                     ${saveBinding.preambleSQL}
@@ -1885,7 +2171,7 @@ export class SQLServerDataProvider
    */
   public static MaxInlineBinaryBytes: number = 32 * 1024 * 1024;
 
-  protected FormatBinaryLiteral(field: EntityFieldInfo, value: unknown): string {
+  private decodeBinaryFieldBytes(field: EntityFieldInfo, value: unknown): Buffer {
     const bytes = IsByteArray(value) ? value : TryBase64ToBytes(typeof value === 'string' ? value : null);
     if (!bytes) {
       throw new Error(`Field "${field.Name}" is binary (${field.Type}); its value must be a base64 string, but it is not valid base64`);
@@ -1897,7 +2183,11 @@ export class SQLServerDataProvider
         `or raise the limit if the batch size and Record Changes cost are acceptable.`,
       );
     }
-    return `0x${Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('hex').toUpperCase()}`;
+    return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  }
+
+  protected FormatBinaryLiteral(field: EntityFieldInfo, value: unknown): string {
+    return `0x${this.decodeBinaryFieldBytes(field, value).toString('hex').toUpperCase()}`;
   }
 
   /**
@@ -2049,7 +2339,7 @@ export class SQLServerDataProvider
     let sSQL: string;
     if (entity.EntityInfo.TrackRecordChanges && !skipRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') {
       // don't track changes for the record changes entity
-      const oldData = entity.GetAll(true); // get all the OLD values
+      const oldData = this.RecordChangeDeleteSnapshot(entity, entity.GetAll(true)); // the OLD values, full width
       const sTableDeclare: string = entity.PrimaryKeys.map((pk) => {
         return `${pk.CodeName} ${pk.EntityFieldInfo.SQLFullType}`;
       }).join(', ');
@@ -2320,13 +2610,18 @@ export class SQLServerDataProvider
     // For transactional queries, use the instance queue to ensure serialization
     // This prevents EREQINPROG errors when multiple queries try to use the same transaction
     this.initializeQueueProcessor();
+    const queue = this.ensureSqlQueue();
+    const enqueuedDiagnosticContext = options?.diagnosticContext ?? GetDiagnosticContext();
+    const effectiveOptions: InternalSQLOptions | undefined = enqueuedDiagnosticContext
+      ? { ...options, diagnosticContext: enqueuedDiagnosticContext }
+      : options;
     return new Promise<sql.IResult<any>>((resolve, reject) => {
-      this._sqlQueue$.next({
+      queue.next({
         kind: 'query',
         query,
         parameters,
         context,
-        options,
+        options: effectiveOptions,
         // Ours if it is the ambient handle now, or was one that has since ended: a caller holding
         // the old handle after its commit must be told so, not sent to mssql for ENOTBEGUN.
         ambient: context.transaction === this._transaction || (!!context.transaction && this._endedHandles.has(context.transaction)),
@@ -2455,7 +2750,10 @@ export class SQLServerDataProvider
    * This method can be used to execute raw SQL statements outside of the MJ infrastructure.
    * *CAUTION* - use this method with great care.
    * @param query
-   * @param parameters
+   * @param parameters - Named parameters: an object (`{ name: value }`, referenced `@name`), or a list of
+   *   `NamedQueryParameter` / `TypedQueryParameter`. A plain array of values is the LEGACY positional form:
+   *   it binds `@p0..@pN` and rewrites every `?` in `query`, a `?` inside a string literal, quoted
+   *   identifier or comment included, so it is only safe for statement text with no other `?`.
    * @returns
    */
   public async ExecuteSQL(
@@ -2488,6 +2786,26 @@ export class SQLServerDataProvider
     } catch (e) {
       // Error already logged by _internalExecuteSQL
       throw e; // force caller to handle
+    }
+  }
+
+  /**
+   * Describes the first result set of `sqlText` with `sys.dm_exec_describe_first_result_set` (mode 2):
+   * names, order, exact types, nullability and the view or table column each pass-through column
+   * comes from. SQL Server compiles the statement without executing it. A statement the server
+   * cannot compile gives a failure carrying the server's message.
+   */
+  public override async DescribeStatement(sqlText: string, contextUser?: UserInfo): Promise<DescribeStatementResult> {
+    try {
+      const rows: SQLServerDescribeRow[] = await this.ExecuteSQL(
+        SQLSERVER_DESCRIBE_SQL,
+        [new TypedQueryParameter('tsql', 'nvarchar(max)', sqlText)],
+        { description: 'DescribeStatement', ignoreLogging: true },
+        contextUser,
+      );
+      return MapSQLServerDescribeRows(rows);
+    } catch (e) {
+      return DescribeStatementFailure(e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -2911,11 +3229,36 @@ export class SQLServerDataProvider
     const unionParts = childEntities
       .filter(child => child.PrimaryKeys.length > 0)
       .map(child => {
-        const schema = child.SchemaName || '__mj';
+        const schema = child.SchemaName || this.MJCoreSchemaName || '__mj';
         const sourceRef = dialect.QuoteSchema(schema, child.BaseView);
         const pkRef = dialect.QuoteIdentifier(child.FirstPrimaryKey.Name); // first-pk-ok: IS-A child shares its parent's single-column key by design
         const nameLit = dialect.QuoteStringLiteral(child.Name);
         return `SELECT ${nameLit} AS ${aliasName} FROM ${sourceRef} WHERE ${pkRef} = ${pkValueLit}`;
+      });
+
+    if (unionParts.length === 0) return '';
+    return unionParts.join(' UNION ALL ');
+  }
+
+  protected override BuildChildDiscoveryBatchSQL(
+    childEntities: EntityInfo[],
+    recordPKValues: string[]
+  ): string {
+    if (recordPKValues.length === 0) return '';
+    const dialect = this.getDialect();
+    const inList = recordPKValues.map(v => dialect.QuoteStringLiteral(v)).join(', ');
+    const aliasEntityName = dialect.QuoteColumnAlias('EntityName');
+    const aliasRecordPK = dialect.QuoteColumnAlias('RecordPK');
+    const aliasPriority = dialect.QuoteColumnAlias('Priority');
+
+    const unionParts = childEntities
+      .filter(child => child.PrimaryKeys.length > 0)
+      .map((child, idx) => {
+        const schema = child.SchemaName || this.MJCoreSchemaName || '__mj';
+        const sourceRef = dialect.QuoteSchema(schema, child.BaseView);
+        const pkRef = dialect.QuoteIdentifier(child.FirstPrimaryKey.Name); // first-pk-ok: IS-A shared key
+        const nameLit = dialect.QuoteStringLiteral(child.Name);
+        return `SELECT ${nameLit} AS ${aliasEntityName}, CAST(${pkRef} AS NVARCHAR(255)) AS ${aliasRecordPK}, ${idx + 1} AS ${aliasPriority} FROM ${sourceRef} WHERE ${pkRef} IN (${inList})`;
       });
 
     if (unionParts.length === 0) return '';
@@ -3006,7 +3349,7 @@ IF ${varName} IS NOT NULL
     const transaction = new sql.Transaction(this._pool);
     await transaction.begin();
     this._transaction = transaction;
-    this._transactionState$.next(true);
+    this.setTransactionActiveState(true);
   }
 
   /**
@@ -3046,8 +3389,9 @@ IF ${varName} IS NOT NULL
    */
   private enqueueTransactionAction(description: string, handle: sql.Transaction, run: () => Promise<void>): Promise<void> {
     this.initializeQueueProcessor();
+    const queue = this.ensureSqlQueue();
     return new Promise<void>((resolve, reject) => {
-      this._sqlQueue$.next({ kind: 'action', description, handle, run, resolve, reject });
+      queue.next({ kind: 'action', description, handle, run, resolve, reject });
     });
   }
 
@@ -3072,14 +3416,14 @@ IF ${varName} IS NOT NULL
       // AbandonPhysicalTransaction can roll the doomed handle back — nulling it first, as the old
       // `finally` did, made that abandon a no-op and leaked the server-side transaction (#4447).
       this._transaction = null;
-      this._transactionState$.next(false);
+      this.setTransactionActiveState(false);
     });
   }
 
   protected override async AbandonPhysicalTransaction(): Promise<void> {
     const stale = this._transaction;
     this._transaction = null;
-    this._transactionState$.next(false);
+    this.setTransactionActiveState(false);
     if (stale) {
       try {
         // Through the queue, like commit and rollback: the handle is already nulled above, so any
@@ -3111,7 +3455,7 @@ IF ${varName} IS NOT NULL
       });
     } finally {
       this._transaction = null;
-      this._transactionState$.next(false);
+      this.setTransactionActiveState(false);
     }
   }
 
@@ -3145,8 +3489,48 @@ IF ${varName} IS NOT NULL
     return this._fileSystemProvider;
   }
 
-        public async CreateTransactionGroup(): Promise<TransactionGroupBase> {
-    return new SQLServerTransactionGroup();
+  /**
+   * Returns the currently active physical `mssql.Transaction` handle managed by this provider,
+   * or `null` when no physical transaction is open.
+   */
+  public get ActiveTransactionHandle(): sql.Transaction | null {
+    return this._transaction ?? null;
+  }
+
+  /**
+   * Executes a `mssql` request callback against `transaction`, serialized through this provider's
+   * transaction SQL queue when `transaction` is the provider's active transaction handle.
+   */
+  public async ExecuteOnTransactionHandle<TRow>(
+    transaction: sql.Transaction,
+    description: string,
+    run: (tx: sql.Transaction) => Promise<sql.IResult<TRow>>,
+  ): Promise<sql.IResult<TRow>> {
+    if (this._endedHandles.has(transaction)) {
+      throw new Error(
+        'The ambient transaction ended before this TransactionGroup request ran. ' +
+        'Await every query issued on the transaction before committing or rolling back.'
+      );
+    }
+    if (transaction !== this._transaction) {
+      return run(transaction);
+    }
+    let result!: sql.IResult<TRow>;
+    await this.enqueueTransactionAction(description, transaction, async () => {
+      await this.waitForActiveRequest();
+      if (this._endedHandles.has(transaction) || transaction !== this._transaction) {
+        throw new Error(
+          'The ambient transaction ended before this TransactionGroup request ran. ' +
+          'Await every query issued on the transaction before committing or rolling back.'
+        );
+      }
+      result = await run(transaction);
+    });
+    return result;
+  }
+
+  public async CreateTransactionGroup(): Promise<TransactionGroupBase> {
+    return new SQLServerTransactionGroup(this);
   }
 
   /**************************************************************************/

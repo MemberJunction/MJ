@@ -27,7 +27,12 @@ function contextFor(user: Partial<UserInfo> & { ID: string }): RealtimeSessionEv
 
 const named = (id: string) => contextFor({ ID: id });
 const guest = (id: string, scope?: string) =>
-    contextFor({ ID: id, IsMagicLinkAnonymous: true, MagicLinkScope: scope ? { ResourceID: scope } : undefined } as Partial<UserInfo> & { ID: string });
+    contextFor({
+        ID: id,
+        IsMagicLinkAnonymous: true,
+        AnonymousVisitorID: scope,
+        MagicLinkScope: scope ? { ResourceID: scope } : undefined,
+    } as Partial<UserInfo> & { ID: string });
 
 function event(over: Partial<RealtimeSessionEventTopicPayload> = {}): RealtimeSessionEventTopicPayload {
     return {
@@ -75,6 +80,18 @@ describe('RealtimeSessionEventsFilter (per-event gate)', () => {
         });
     });
 
+    describe('a named user holding a resource-scoped magic link (#4931)', () => {
+        const namedScoped = (scope: string) => contextFor({ ID: OWNER, MagicLinkScope: { ResourceID: scope } } as Partial<UserInfo> & { ID: string });
+
+        it('delivers its own session\'s events when the conversation carries no scope stamp', () => {
+            expect(filter(event({ ScopeKey: null }), SESSION_ID, namedScoped('res-1'))).toBe(true);
+        });
+
+        it('does not deliver events of a session stamped with its other link\'s scope', () => {
+            expect(filter(event({ ScopeKey: 'res-2' }), SESSION_ID, namedScoped('res-1'))).toBe(false);
+        });
+    });
+
     it('fails closed on a missing connection identity, owner or argument', () => {
         expect(filter(event(), SESSION_ID, undefined)).toBe(false);
         expect(filter(event(), SESSION_ID, { userPayload: undefined })).toBe(false);
@@ -96,6 +113,17 @@ describe('AuthorizeRealtimeSessionSubscription (subscribe-time gate)', () => {
         const d = deps({ UserID: OWNER, ExternalID: null });
         await expect(AuthorizeRealtimeSessionSubscription({ agentSessionId: SESSION_ID }, named(OWNER), d)).resolves.toBe(SESSION_ID);
         expect(d.LoadSession).toHaveBeenCalledWith(SESSION_ID, expect.objectContaining({ ID: OWNER }), expect.anything());
+    });
+
+    it('lets a named scoped owner subscribe to its session on a readable, unstamped conversation, and refuses it when unreadable (#4931)', async () => {
+        const namedScoped = contextFor({ ID: OWNER, MagicLinkScope: { ResourceID: 'res-1' } } as Partial<UserInfo> & { ID: string });
+        const load = (readable: boolean): SubscriptionAuthorizationDeps => ({
+            LoadSession: vi.fn(async () =>
+                ({ Session: { ID: SESSION_ID, UserID: OWNER }, ConversationExternalID: null, ConversationReadable: readable } as unknown as LoadedSessionForAccess)),
+            GetProvider: () => ({}) as IMetadataProvider,
+        });
+        await expect(AuthorizeRealtimeSessionSubscription({ agentSessionId: SESSION_ID }, namedScoped, load(true))).resolves.toBe(SESSION_ID);
+        await expect(AuthorizeRealtimeSessionSubscription({ agentSessionId: SESSION_ID }, namedScoped, load(false))).rejects.toThrow('Realtime session not found.');
     });
 
     it('refuses a non-owner with the uniform not-found message', async () => {

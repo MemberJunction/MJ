@@ -16,7 +16,9 @@ describe('mj queue commands and the AWS transport', () => {
         const factory = MJGlobal.Instance.ClassFactory.TryCreateInstance<BaseTransportDriverFactory>(BaseTransportDriverFactory, 'AWS');
         expect(factory.Resolved).toBe(true);
         expect(ManifestEnricherRegistry.Instance.Has('AWS')).toBe(true);
-    });
+    // The first import of a queue command module loads the AWS transport cold; on a loaded
+    // CI runner that takes over 30 s (v6.2.0-edge.6 release gate: 30.3 s), so allow 120 s.
+    }, 120_000);
 
     it.each(NEEDS_AWS)('%s imports the engine ./aws subpath statically', (name) => {
         expect(readFileSync(join(QUEUE_COMMANDS, `${name}.ts`), 'utf8')).toMatch(AWS_IMPORT);

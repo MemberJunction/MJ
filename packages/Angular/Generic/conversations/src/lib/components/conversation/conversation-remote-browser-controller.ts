@@ -1,145 +1,190 @@
 import { Subscription } from 'rxjs';
 import { JSONObject, JSONValue } from '@memberjunction/ai';
+import { ClientToolMetadata } from '@memberjunction/ai-core-plus';
 import { UUIDsEqual } from '@memberjunction/global';
-import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { GraphQLDataProvider, SafeGraphQLError } from '@memberjunction/graphql-dataprovider';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
-import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { RealtimeChannelContext } from '@memberjunction/realtime-runtime';
 import { RemoteBrowserChannel } from '../realtime/remote-browser/remote-browser-channel';
 import { RemoteBrowserSurfaceComponent } from '../realtime/remote-browser/remote-browser-surface.component';
 import { REMOTE_BROWSER_TOOL_DEFINITIONS, REMOTE_BROWSER_TOOL_NAMES } from '../realtime/remote-browser/remote-browser-tools';
-import { RemoteBrowserAudioChunkInput } from '../realtime/remote-browser/remote-browser-audio-player';
 
-const TEXT_BROWSER_TOOL_DEFINITIONS = REMOTE_BROWSER_TOOL_DEFINITIONS.filter(
-  (def) => def.Name !== REMOTE_BROWSER_TOOL_NAMES.AchieveGoal,
-);
-
-const BROWSER_TOOL_METADATA = TEXT_BROWSER_TOOL_DEFINITIONS.map((def) => ({
-  Name: def.Name,
-  Description: def.Description,
-  Category: 'Navigation',
-  InputSchema: (def.ParametersSchema ?? { type: 'object', properties: {} }) as JSONObject,
-}));
-
-/**
- * Snapshot of the conversation's live Remote Browser state, injected into `appContext.remoteBrowser`
- * so turn-based text agents (Sage, Betty, etc.) know whether the browser drawer is open and what page
- * and elements are currently visible.
- */
+/** What a text agent is told about the conversation's browser, as `appContext.AdditionalContext.RemoteBrowser`. */
 export interface ConversationRemoteBrowserContextSnapshot {
-  open: boolean;
-  conversationId: string | null;
-  currentUrl: string | null;
-  lastDetail: string | null;
-  lastObservation: JSONValue | null;
-  lastFilled: JSONValue | null;
+  Open: boolean;
+  CurrentUrl: string | null;
 }
 
 /**
  * Options for constructing a {@link ConversationRemoteBrowserController}.
  */
 export interface ConversationRemoteBrowserControllerOptions {
-  /** Returns the active conversation ID (used as the server-side `agentSessionID` scope). */
-  GetConversationId: () => string | null;
-  /** Returns whether the browser drawer is currently open in the UI. */
-  IsSurfaceOpen: () => boolean;
-  /** Invoked when a `browser_*` tool runs so the UI can automatically open the browser drawer. */
+  /** Invoked when an agent's `browser_*` tool runs, so the UI can show the browser drawer. */
   OnAutoOpenSurface?: () => void;
-  /** Invoked whenever browser state (`CurrentUrl`, `LastObservation`, etc.) changes. */
+  /** Invoked when the browser opens or closes, or its URL changes. */
   OnStateChange?: () => void;
-  /** Optional custom GraphQL executor (used by unit tests; defaults to `GraphQLDataProvider.ExecuteGQL`). */
+  /**
+   * Invoked once when the server refuses this conversation a browser (not enabled, not the caller's, over
+   * the cap). The controller has already closed it, which stops the live view's polling.
+   */
+  OnSessionRefused?: (message: string) => void;
+  /** Optional custom GraphQL executor (used by unit tests; defaults to the provider's `ExecuteGQL`). */
   ExecuteServerAction?: <T>(query: string, variables: Record<string, JSONValue>) => Promise<T | null>;
 }
 
 /**
- * Bridges MemberJunction's {@link RemoteBrowserChannel} + {@link RemoteBrowserSurfaceComponent} to
- * turn-based text conversations (`MJ: Conversations`).
+ * The `extensions.code` the server sets on a refusal that asking again cannot change (browsers not enabled,
+ * not the caller's, over a cap): MJServer's `RemoteBrowserRefusedError`.
+ */
+const REMOTE_BROWSER_REFUSED = 'REMOTE_BROWSER_REFUSED';
+
+const END_REMOTE_BROWSER_SESSION_MUTATION = `
+  mutation EndRemoteBrowserSession($agentSessionID: String!) {
+    EndRemoteBrowserSession(agentSessionID: $agentSessionID)
+  }
+`;
+
+/**
+ * The `browser_*` tools a text conversation's agents get: all but AchieveGoal, whose goal loop clicks
+ * and navigates on its own, past the click guard (the server refuses goal runs for a conversation too).
+ */
+const TEXT_BROWSER_TOOLS = REMOTE_BROWSER_TOOL_DEFINITIONS.filter((def) => def.Name !== REMOTE_BROWSER_TOOL_NAMES.AchieveGoal);
+
+/** The text browser tools in the shape an agent run reads from `appContext.Capabilities.Tools`. */
+const BROWSER_TOOL_METADATA: ClientToolMetadata[] = TEXT_BROWSER_TOOLS.map((def) => ({
+  Name: def.Name,
+  Description: def.Description,
+  InputSchema: (def.ParametersSchema ?? {}) as Record<string, unknown>,
+}));
+
+type ClientToolHandler = ReturnType<AgentClientService['GetRegisteredTools']>[number]['Handler'];
+
+/**
+ * Gives one text conversation (`MJ: Conversations`) a live Remote Browser its agents can drive.
  *
- * Responsibilities:
- * 1. Registers all `browser_*` client tools (`REMOTE_BROWSER_TOOL_DEFINITIONS`) with both
- *    `AgentClientService` and `ConversationsRuntime.Instance.Tools` so any server-side agent in a
- *    standard text conversation can invoke `browser_OpenUrl`, `browser_Inspect`, `browser_Fill`,
- *    `browser_Click`, etc. via the `ClientToolRequest` pub/sub loop.
- * 2. Delegates tool execution and surface binding (`BindSurface` / `UnbindSurface`) to an internal
- *    {@link RemoteBrowserChannel} scoped to the active `ConversationId`.
- * 3. Subscribes to `GraphQLDataProvider.PushStatusUpdates()` to forward `RemoteBrowserScreencastFrame`
- *    and `RemoteBrowserAudioChunk` events for the active `ConversationId` to the channel's live canvas
- *    and audio player.
- * 4. Tracks structured observation state (`CurrentUrl`, `LastObservation`, `LastFilled`, `LastDetail`)
- *    for `appContext.remoteBrowser`.
+ * The browser belongs to the conversation that opened it ({@link Open}); the controller captures that
+ * ID, so a later conversation switch still stops and ends the right browser ({@link Close}).
+ *
+ * Agents reach the browser through the `browser_*` client tools. Their handlers live in
+ * `AgentClientService`, whose registry is app-wide, so they are registered only while this
+ * controller's browser is open, and removed on close only if this controller still owns them (a chat
+ * area that opened a browser later takes them over). The tools are advertised to this conversation's
+ * agent runs alone, through `appContext.Capabilities.Tools` ({@link WithBrowserContext}).
  */
 export class ConversationRemoteBrowserController {
   private readonly channel = new RemoteBrowserChannel();
   private readonly options: ConversationRemoteBrowserControllerOptions;
+  private readonly handlers = new Map<string, ClientToolHandler>();
   private agentClient: AgentClientService | null = null;
   private provider: GraphQLDataProvider | null = null;
   private pushSub: Subscription | null = null;
+  private conversationId: string | null = null;
+  private standbyConversationId: string | null = null;
   private currentUrl: string | null = null;
-  private lastDetail: string | null = null;
-  private lastObservation: JSONValue | null = null;
-  private lastFilled: JSONValue | null = null;
-  private registeredTools = false;
+  private stateVersion = 0;
+  private disposed = false;
 
-  constructor(options: ConversationRemoteBrowserControllerOptions) {
+  constructor(options: ConversationRemoteBrowserControllerOptions = {}) {
     this.options = options;
     this.channel.Initialize(this.createChannelContext());
   }
 
-  /** The underlying {@link RemoteBrowserChannel} instance driving the server browser. */
-  public get Channel(): RemoteBrowserChannel {
-    return this.channel;
+  /** The conversation whose browser is open, or `null` when none is. */
+  public get ConversationId(): string | null {
+    return this.conversationId;
   }
 
-  /** The last URL reported by the server browser or observed from a frame/snapshot. */
+  /** The browser's last known URL. */
   public get CurrentUrl(): string | null {
     return this.currentUrl;
   }
 
-  /** The last human-readable detail returned by a browser action. */
-  public get LastDetail(): string | null {
-    return this.lastDetail;
+  /** Bumps on every open, close and URL change, so a host can cache what it derives from the state. */
+  public get StateVersion(): number {
+    return this.stateVersion;
   }
 
-  /** The most recent structured DOM observation returned by `browser_Inspect`. */
-  public get LastObservation(): JSONValue | null {
-    return this.lastObservation;
+  /** Whether the app-wide registry holds THIS controller's `browser_*` handlers. */
+  public get OwnsTools(): boolean {
+    const registered = this.agentClient?.GetRegisteredTools() ?? [];
+    return this.handlers.size > 0 && Array.from(this.handlers).every(([name, handler]) => registered.find((t) => t.Name === name)?.Handler === handler);
   }
 
-  /** The most recent per-field verification array returned by `browser_Fill`. */
-  public get LastFilled(): JSONValue | null {
-    return this.lastFilled;
-  }
-
-  /** Whether `browser_*` client tools are currently registered with the runtime and agent client. */
-  public get IsClientWiringActive(): boolean {
-    return this.registeredTools;
-  }
-
-  /**
-   * Connects the controller to the Angular `AgentClientService` and `GraphQLDataProvider`,
-   * registering all `browser_*` client tools and subscribing to server-pushed screencast frames.
-   */
-  public InitializeClientWiring(agentClient: AgentClientService, provider: GraphQLDataProvider | null): void {
+  /** Connects the controller to the agent client (tool dispatch) and the provider (server calls, pushed frames). */
+  public Initialize(agentClient: AgentClientService, provider: GraphQLDataProvider | null): void {
     this.agentClient = agentClient;
     this.provider = provider;
-    this.registerBrowserTools();
-    this.subscribeToPushUpdates();
-  }
-
-  /**
-   * Unregisters all `browser_*` client tools and unsubscribes from server-pushed screencast frames
-   * without destroying the underlying channel (used when `AllowRemoteBrowser` is toggled off).
-   */
-  public TeardownClientWiring(): void {
-    this.unregisterBrowserTools();
     this.pushSub?.unsubscribe();
-    this.pushSub = null;
+    this.pushSub = provider?.PushStatusUpdates().subscribe((raw: string) => this.HandlePushMessage(raw)) ?? null;
   }
 
   /**
-   * Binds the live `<mj-realtime-remote-browser-surface>` component to the underlying channel,
-   * starting screencast/audio streaming (with 700ms snapshot polling fallback) and human takeover.
+   * Registers the `browser_*` tools for `conversationId` in standby mode when `AllowRemoteBrowser` is enabled,
+   * so an agent turn can call `browser_OpenUrl` (auto-opening the browser drawer) before the user manually
+   * opens the drawer. Does not start a server browser or light the header button until {@link Open} or
+   * {@link ExecuteBrowserTool} runs.
    */
+  public SetConversation(conversationId: string | null): void {
+    const nextId = conversationId?.trim() || null;
+    if (!nextId) {
+      if (!this.standbyConversationId) {
+        return;
+      }
+      this.standbyConversationId = null;
+      if (!this.conversationId) {
+        this.unregisterBrowserTools();
+      }
+      this.changed();
+      return;
+    }
+    if (this.standbyConversationId && UUIDsEqual(this.standbyConversationId, nextId) && this.OwnsTools) {
+      return;
+    }
+    this.standbyConversationId = nextId;
+    this.registerBrowserTools();
+    this.changed();
+  }
+
+  /**
+   * Opens the browser for `conversationId` and claims the `browser_*` tools. A browser this controller
+   * held for a different conversation is ended first.
+   */
+  public Open(conversationId: string): void {
+    if (this.conversationId && UUIDsEqual(this.conversationId, conversationId)) {
+      this.registerBrowserTools();
+      return;
+    }
+    void this.Close();
+    this.conversationId = conversationId;
+    this.registerBrowserTools();
+    this.changed();
+  }
+
+  /**
+   * Ends the conversation's browser: stops its streams, gives up the tools this controller still owns,
+   * and ends the server browser so no Chromium process (or billed hosted browser) is left running.
+   */
+  public async Close(): Promise<void> {
+    const conversationId = this.conversationId;
+    const hadStandby = this.standbyConversationId !== null;
+    this.standbyConversationId = null;
+    if (!conversationId) {
+      if (hadStandby) {
+        this.unregisterBrowserTools();
+        this.changed();
+      }
+      return;
+    }
+    // Unbinding reads the session ID synchronously, so it must run before the ID is cleared.
+    this.channel.UnbindSurface();
+    this.unregisterBrowserTools();
+    this.conversationId = null;
+    this.currentUrl = null;
+    this.changed();
+    await this.executeServerAction(END_REMOTE_BROWSER_SESSION_MUTATION, { agentSessionID: conversationId });
+  }
+
+  /** Binds the drawer's live surface (starts the screencast, audio and human takeover). */
   public BindSurface(surface: RemoteBrowserSurfaceComponent): void {
     this.channel.BindSurface(surface);
     if (this.currentUrl) {
@@ -147,258 +192,181 @@ export class ConversationRemoteBrowserController {
     }
   }
 
-  /** Unbinds the surface component when the browser drawer closes. */
+  /** Unbinds the surface when the drawer is hidden; the browser itself stays open. */
   public UnbindSurface(): void {
     this.channel.UnbindSurface();
   }
 
-  /** Updates visibility on the bound surface so snapshot polling pauses when hidden. */
-  public SetSurfaceVisible(visible: boolean): void {
-    this.channel.OnSurfaceVisibilityChange(visible);
+  /** Navigates the browser, e.g. from the drawer's URL bar; a refusal or failure comes back in `ErrorMessage`. */
+  public async Navigate(url: string): Promise<{ Success: boolean; ErrorMessage?: string }> {
+    const result = await this.ExecuteBrowserTool(REMOTE_BROWSER_TOOL_NAMES.OpenUrl, { url });
+    return { Success: result.Success, ErrorMessage: result.ErrorMessage };
   }
 
-  /**
-   * Navigates the conversation's remote browser directly (e.g., from a user URL bar or action)
-   * and refreshes the DOM inspection state.
-   */
-  public async NavigateAndInspect(url: string): Promise<void> {
-    await this.ExecuteBrowserTool(REMOTE_BROWSER_TOOL_NAMES.OpenUrl, { url });
-    await this.ExecuteBrowserTool(REMOTE_BROWSER_TOOL_NAMES.Inspect, {});
-  }
-
-  /**
-   * Executes a single `browser_*` tool against the active conversation's remote browser session.
-   */
-  public async ExecuteBrowserTool(
-    toolName: string,
-    params: Record<string, unknown>,
-  ): Promise<{ Success: boolean; Data?: JSONValue; ErrorMessage?: string }> {
-    this.options.OnAutoOpenSurface?.();
-    const rawJson = await this.channel.ApplyAgentTool(toolName, JSON.stringify(params ?? {}));
-    try {
-      const parsed = JSON.parse(rawJson) as {
-        success?: boolean;
-        currentUrl?: string;
-        detail?: string;
-        observation?: JSONValue;
-        filled?: JSONValue;
-        error?: string;
-      };
-      if (typeof parsed.currentUrl === 'string' && parsed.currentUrl.trim().length > 0) {
-        this.currentUrl = parsed.currentUrl.trim();
-      }
-      if (typeof parsed.detail === 'string' && parsed.detail.trim().length > 0) {
-        this.lastDetail = parsed.detail.trim();
-      }
-      if (parsed.observation !== undefined) {
-        this.lastObservation = parsed.observation;
-      }
-      if (parsed.filled !== undefined) {
-        this.lastFilled = parsed.filled;
-      }
-      this.options.OnStateChange?.();
-      if (parsed.success === false) {
-        return {
-          Success: false,
-          Data: parsed as unknown as JSONValue,
-          ErrorMessage: parsed.error ?? parsed.detail ?? 'Browser tool execution failed.',
-        };
-      }
-      return {
-        Success: true,
-        Data: parsed as unknown as JSONValue,
-      };
-    } catch {
-      return {
-        Success: true,
-        Data: { raw: rawJson },
-      };
+  /** Runs one `browser_*` tool against this conversation's browser. */
+  public async ExecuteBrowserTool(toolName: string, params: Record<string, unknown>): Promise<{ Success: boolean; Data?: JSONValue; ErrorMessage?: string }> {
+    if (!this.conversationId && this.standbyConversationId) {
+      this.Open(this.standbyConversationId);
     }
+    if (!this.conversationId) {
+      return { Success: false, ErrorMessage: 'No browser is open for this conversation.' };
+    }
+    this.options.OnAutoOpenSurface?.();
+    const raw = await this.channel.ApplyAgentTool(toolName, JSON.stringify(params ?? {}));
+    let result: { success?: boolean; currentUrl?: string; detail?: string; error?: string };
+    try {
+      result = JSON.parse(raw);
+    } catch {
+      return { Success: true, Data: { raw } };
+    }
+    this.setUrl(result.currentUrl);
+    return result.success === false
+      ? { Success: false, Data: result as JSONObject, ErrorMessage: result.error ?? result.detail ?? 'Browser tool execution failed.' }
+      : { Success: true, Data: result as JSONObject };
   }
 
-  /**
-   * Returns a JSON-serializable snapshot of the conversation's Remote Browser state for `appContext`.
-   */
+  /** What the agent is told about the browser. */
   public GetAppContextSnapshot(): ConversationRemoteBrowserContextSnapshot {
-    return {
-      open: this.options.IsSurfaceOpen(),
-      conversationId: this.options.GetConversationId(),
-      currentUrl: this.currentUrl,
-      lastDetail: this.lastDetail,
-      lastObservation: this.lastObservation,
-      lastFilled: this.lastFilled,
-    };
+    return { Open: this.conversationId !== null, CurrentUrl: this.currentUrl };
   }
 
   /**
-   * Enriches an `AppContext` object with the conversation's live Remote Browser state and
-   * `browser_*` client tool metadata (`Capabilities.Tools`, `remoteBrowser`, and
-   * `AdditionalContext.remoteBrowser`) so server-side turn-based agents know the browser
-   * tools are available even before the user opens the browser drawer.
+   * Adds the browser to an app context while it is open or in standby for an allowed conversation: its state
+   * under `AdditionalContext.RemoteBrowser`, and, while this controller owns them, the `browser_*` tools
+   * under `Capabilities.Tools`, the tier an agent run reads a surface's tools from. Returns `base`
+   * unchanged while no browser is open or in standby.
    */
-  public WithBrowserContext(appContext: Record<string, unknown> | null): Record<string, unknown> {
-    const base = appContext ?? {};
-    const existingCaps =
-      base['Capabilities'] && typeof base['Capabilities'] === 'object' && !Array.isArray(base['Capabilities'])
-        ? (base['Capabilities'] as Record<string, unknown>)
-        : {};
-    const existingTools = Array.isArray(existingCaps['Tools'])
-      ? (existingCaps['Tools'] as Array<Record<string, unknown>>)
-      : [];
-    const existingToolNames = new Set(
-      existingTools
-        .map((t) => (typeof t['Name'] === 'string' ? t['Name'] : typeof t['name'] === 'string' ? t['name'] : ''))
-        .filter((n) => n.length > 0),
-    );
-    const mergedTools = [
-      ...existingTools,
-      ...BROWSER_TOOL_METADATA.filter((t) => !existingToolNames.has(t.Name)),
-    ];
-    const existingAdditional =
-      base['AdditionalContext'] && typeof base['AdditionalContext'] === 'object' && !Array.isArray(base['AdditionalContext'])
-        ? (base['AdditionalContext'] as Record<string, unknown>)
-        : {};
-    const snapshot = this.GetAppContextSnapshot();
+  public WithBrowserContext(base: Record<string, unknown> | null): Record<string, unknown> | null {
+    if (!this.conversationId && !this.standbyConversationId) {
+      return base;
+    }
+    const context = base ?? {};
+    const additional = asRecord(context['AdditionalContext']);
+    const capabilities = asRecord(context['Capabilities']);
+    const tools = Array.isArray(capabilities['Tools']) ? (capabilities['Tools'] as ClientToolMetadata[]) : [];
     return {
-      ...base,
-      Capabilities: {
-        ...existingCaps,
-        Tools: mergedTools,
-      },
-      remoteBrowser: snapshot,
-      AdditionalContext: {
-        ...existingAdditional,
-        remoteBrowser: snapshot,
-        RemoteBrowser: snapshot,
-      },
+      ...context,
+      AdditionalContext: { ...additional, RemoteBrowser: this.GetAppContextSnapshot() },
+      ...(this.OwnsTools ? { Capabilities: { ...capabilities, Tools: [...tools, ...BROWSER_TOOL_METADATA] } } : {}),
     };
   }
 
-  /** Tears down tool registrations, push subscriptions, and the underlying channel. */
+  /** Ends the browser and releases the tools, push subscription and channel. */
   public Dispose(): void {
-    this.unregisterBrowserTools();
+    this.disposed = true;
+    void this.Close();
     this.pushSub?.unsubscribe();
     this.pushSub = null;
     this.channel.Dispose();
   }
 
-  private registerBrowserTools(): void {
-    if (this.registeredTools) {
+  /**
+   * Routes a pushed `RemoteBrowserScreencastFrame` or `RemoteBrowserAudioChunk` to the channel when it
+   * belongs to this controller's browser.
+   */
+  public HandlePushMessage(rawMessage: string): void {
+    if (!this.conversationId || !rawMessage) {
       return;
     }
-    this.registeredTools = true;
-    const runtimeTools = ConversationsRuntime.Instance.Tools;
-
-    for (const def of TEXT_BROWSER_TOOL_DEFINITIONS) {
-      const schema = (def.ParametersSchema ?? { type: 'object', properties: {} }) as JSONObject;
-      const handler = async (params: Record<string, unknown>) => this.ExecuteBrowserTool(def.Name, params);
-
-      this.agentClient?.RegisterTool({
-        Name: def.Name,
-        Description: def.Description,
-        ParameterSchema: schema,
-        Handler: handler,
-      });
-
-      if (runtimeTools.GetTool(def.Name)) {
-        runtimeTools.Unregister(def.Name);
-      }
-      runtimeTools.Register({
-        Name: def.Name,
-        Description: def.Description,
-        ParameterSchema: schema,
-        Handler: handler,
+    let message: {
+      resolver?: string;
+      type?: string;
+      agentSessionID?: string;
+      currentUrl?: string | null;
+      dataBase64?: string;
+      sampleRate?: number;
+      channels?: number;
+      seq?: number;
+    };
+    try {
+      const outer = JSON.parse(rawMessage) as Record<string, unknown>;
+      message = typeof outer['message'] === 'string' ? JSON.parse(outer['message']) : outer;
+    } catch {
+      return; // Not JSON: an unrelated status update.
+    }
+    if (message.resolver !== 'RemoteBrowserActionResolver' || !message.agentSessionID || !UUIDsEqual(message.agentSessionID, this.conversationId)) {
+      return;
+    }
+    if (typeof message.dataBase64 !== 'string') {
+      return;
+    }
+    if (message.type === 'RemoteBrowserScreencastFrame') {
+      this.channel.OnScreencastFrame(message.dataBase64, message.currentUrl ?? null);
+      this.setUrl(message.currentUrl);
+    } else if (message.type === 'RemoteBrowserAudioChunk') {
+      this.channel.OnAudioChunk({
+        dataBase64: message.dataBase64,
+        codec: 'webm-opus',
+        sampleRate: message.sampleRate ?? 48000,
+        channels: message.channels ?? 2,
+        seq: message.seq ?? 0,
       });
     }
+  }
 
-    if (
-      this.provider?.sessionId &&
-      this.agentClient &&
-      (!this.agentClient.IsActive || this.agentClient.SessionId !== this.provider.sessionId)
-    ) {
-      this.agentClient.StartSession(this.provider.sessionId);
+  /** Records a new URL; frames repeat the same one, so only a real change notifies the host. */
+  private setUrl(url: string | null | undefined): void {
+    const next = url?.trim();
+    if (next && next !== this.currentUrl) {
+      this.currentUrl = next;
+      this.changed();
+    }
+  }
+
+  private changed(): void {
+    this.stateVersion++;
+    if (!this.disposed) {
+      this.options.OnStateChange?.();
+    }
+  }
+
+  private registerBrowserTools(): void {
+    const agentClient = this.agentClient;
+    if (!agentClient) {
+      return;
+    }
+    for (const def of TEXT_BROWSER_TOOLS) {
+      let handler = this.handlers.get(def.Name);
+      if (!handler) {
+        handler = (params: Record<string, unknown>) => this.ExecuteBrowserTool(def.Name, params);
+        this.handlers.set(def.Name, handler);
+      }
+      agentClient.RegisterTool({ Name: def.Name, Description: def.Description, ParameterSchema: (def.ParametersSchema ?? {}) as JSONObject, Handler: handler });
+    }
+    const sessionId = this.provider?.sessionId;
+    if (sessionId && (!agentClient.IsActive || agentClient.SessionId !== sessionId)) {
+      agentClient.StartSession(sessionId);
     }
   }
 
   private unregisterBrowserTools(): void {
-    if (!this.registeredTools) {
-      return;
-    }
-    this.registeredTools = false;
-    const runtimeTools = ConversationsRuntime.Instance.Tools;
-    for (const def of TEXT_BROWSER_TOOL_DEFINITIONS) {
-      this.agentClient?.UnregisterTool(def.Name);
-      runtimeTools.Unregister(def.Name);
-    }
-  }
-
-  private subscribeToPushUpdates(): void {
-    this.pushSub?.unsubscribe();
-    this.pushSub = null;
-    if (!this.provider) {
-      return;
-    }
-    this.pushSub = this.provider.PushStatusUpdates().subscribe((rawStatus: string) => {
-      if (!rawStatus) {
-        return;
+    const registered = this.agentClient?.GetRegisteredTools() ?? [];
+    for (const [name, handler] of this.handlers) {
+      if (registered.find((t) => t.Name === name)?.Handler === handler) {
+        this.agentClient?.UnregisterTool(name);
       }
-      this.HandlePushMessage(rawStatus);
-    });
+    }
   }
 
-  /**
-   * Routes a raw `PushStatusUpdates` JSON string for `RemoteBrowserScreencastFrame` or
-   * `RemoteBrowserAudioChunk` when its `agentSessionID` matches the active conversation ID.
-   */
-  public HandlePushMessage(rawMessage: string): void {
-    const activeConversationId = this.options.GetConversationId();
-    if (!activeConversationId) {
-      return;
-    }
+  private async executeServerAction<T>(query: string, variables: Record<string, JSONValue>): Promise<T | null> {
     try {
-      const outer = JSON.parse(rawMessage) as Record<string, unknown>;
-      const innerRaw = typeof outer['message'] === 'string' ? outer['message'] : rawMessage;
-      const parsed = (typeof outer['message'] === 'string' ? JSON.parse(innerRaw) : outer) as {
-        resolver?: string;
-        type?: string;
-        agentSessionID?: string;
-        currentUrl?: string | null;
-        dataBase64?: string;
-        codec?: string;
-        sampleRate?: number;
-        channels?: number;
-        seq?: number;
-      };
-      if (parsed.resolver !== 'RemoteBrowserActionResolver' || !parsed.agentSessionID) {
-        return;
+      if (this.options.ExecuteServerAction) {
+        return await this.options.ExecuteServerAction<T>(query, variables);
       }
-      if (!UUIDsEqual(parsed.agentSessionID, activeConversationId)) {
-        return;
-      }
-      if (parsed.type === 'RemoteBrowserScreencastFrame' && typeof parsed.dataBase64 === 'string') {
-        if (typeof parsed.currentUrl === 'string' && parsed.currentUrl.trim().length > 0) {
-          this.currentUrl = parsed.currentUrl.trim();
+      return this.provider ? (((await this.provider.ExecuteGQL(query, variables)) as T) ?? null) : null;
+    } catch (err) {
+      if (err instanceof SafeGraphQLError && err.Code === REMOTE_BROWSER_REFUSED) {
+        // Asking again gets the same answer: close, so the live view stops polling, and say why once. Only
+        // for the browser still open: a refusal for one already left (its End, after a switch) changes nothing.
+        if (UUIDsEqual(variables['agentSessionID'] as string | null, this.conversationId)) {
+          void this.Close();
+          this.options.OnSessionRefused?.(err.message);
         }
-        this.channel.OnScreencastFrame(parsed.dataBase64, parsed.currentUrl ?? null);
-        this.options.OnStateChange?.();
-      } else if (parsed.type === 'RemoteBrowserAudioChunk' && typeof parsed.dataBase64 === 'string') {
-        const chunk: RemoteBrowserAudioChunkInput = {
-          dataBase64: parsed.dataBase64,
-          codec: parsed.codec === 'webm-opus' ? 'webm-opus' : 'webm-opus',
-          sampleRate: typeof parsed.sampleRate === 'number' ? parsed.sampleRate : 48000,
-          channels: typeof parsed.channels === 'number' ? parsed.channels : 2,
-          seq: typeof parsed.seq === 'number' ? parsed.seq : 0,
-        };
-        this.channel.OnAudioChunk(chunk);
+      } else {
+        console.warn('[ConversationRemoteBrowserController] GraphQL execution failed:', err);
       }
-    } catch {
-      // Ignore non-JSON or unrelated status updates
+      return null;
     }
-  }
-
-  /** @deprecated Use {@link HandlePushMessage}. */
-  public handlePushMessage(rawMessage: string): void {
-    this.HandlePushMessage(rawMessage);
   }
 
   private createChannelContext(): RealtimeChannelContext {
@@ -409,39 +377,21 @@ export class ConversationRemoteBrowserController {
         return self.provider;
       },
       get AgentSessionID(): string | null {
-        return self.options.GetConversationId();
+        return self.conversationId;
       },
+      // The channel narrates page changes as notes; a text conversation only needs the URL out of them.
       SendContextNote: (text: string) => {
-        const prefix = '[browser] current page: ';
-        const changedPrefix = '[browser] the page changed to: ';
-        if (text.startsWith(prefix)) {
-          self.currentUrl = text.slice(prefix.length).trim();
-          self.options.OnStateChange?.();
-        } else if (text.startsWith(changedPrefix)) {
-          const rest = text.slice(changedPrefix.length);
-          const dashIdx = rest.indexOf(' — ');
-          self.currentUrl = (dashIdx >= 0 ? rest.slice(0, dashIdx) : rest).trim();
-          self.options.OnStateChange?.();
-        }
+        const match = /^\[browser\] (?:current page|the page changed to): (\S+)/.exec(text);
+        self.setUrl(match?.[1]);
       },
       RequestSave: () => undefined,
       SetFocusMode: () => undefined,
       SaveAsArtifact: async () => null,
-      ExecuteServerAction: async <T>(query: string, variables: Record<string, JSONValue>): Promise<T | null> => {
-        if (self.options.ExecuteServerAction) {
-          return self.options.ExecuteServerAction<T>(query, variables);
-        }
-        if (!self.provider) {
-          return null;
-        }
-        try {
-          const result = await self.provider.ExecuteGQL(query, variables);
-          return (result as T) ?? null;
-        } catch (err) {
-          console.warn('[ConversationRemoteBrowserController] GraphQL execution failed:', err);
-          return null;
-        }
-      },
+      ExecuteServerAction: <T>(query: string, variables: Record<string, JSONValue>) => self.executeServerAction<T>(query, variables),
     };
   }
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }

@@ -3,12 +3,14 @@ import { AppContext } from '../types.js';
 import { RunViewByIDInput } from '../generic/RunViewResolver.js';
 import { Message } from '@memberjunction/communication-types';
 import { EntityCommunicationsEngine } from '@memberjunction/entity-communications-server';
-import { RunViewParams } from '@memberjunction/core';
+import { DatabaseProviderBase, IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { GraphQLJSONObject } from 'graphql-type-json';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { EntityCommunicationParams } from '@memberjunction/entity-communications-base';
 import { z } from 'zod';
 import { ResolverBase } from '../generic/ResolverBase.js';
+import { GetReadOnlyProvider } from '../util.js';
 
 @InputType()
 export class CommunicationProviderMessageType {
@@ -168,6 +170,11 @@ export class RunEntityCommunicationResultType {
 
 @Resolver(RunEntityCommunicationResultType)
 export class ReportResolver extends ResolverBase {
+  /**
+   * Runs a message against a view of records, as the caller. The recipient and related-entity reads
+   * run as the authenticated user, so a preview returns and a send merges only rows and fields that
+   * user may read. The view's client-supplied clauses get the same screen as a RunView request.
+   */
   @Query(() => RunEntityCommunicationResultType)
   async RunEntityCommunicationByViewID(
     @Arg('entityID', () => String) entityID: string,
@@ -177,25 +184,29 @@ export class ReportResolver extends ResolverBase {
     @Arg('message', () => CommunicationMessageInput) message: CommunicationMessageInput,
     @Arg('previewOnly', () => Boolean) previewOnly: boolean,
     @Arg('includeProcessedMessages', () => Boolean) includeProcessedMessages: boolean,
-    @Ctx() { userPayload }: AppContext
+    @Ctx() { userPayload, providers }: AppContext
   ): Promise<RunEntityCommunicationResultType> {
     // Check API key scope authorization for communication send
     await this.CheckAPIKeyScopeAuthorization('communication:send', entityID, userPayload);
 
     try {
-      await EntityCommunicationsEngine.Instance.Config(false, userPayload.userRecord);
-      const newMessage = new Message(message as unknown as Message);
-      await TemplateEngineServer.Instance.Config(false, userPayload.userRecord);
-      // for the templates, replace the values from the input with the objects from the Template Engine we have here
-      if (newMessage.BodyTemplate) {
-        newMessage.BodyTemplate = TemplateEngineServer.Instance.FindTemplate(newMessage.BodyTemplate.Name);
-      }
-      if (newMessage.HTMLBodyTemplate) {
-        newMessage.HTMLBodyTemplate = TemplateEngineServer.Instance.FindTemplate(newMessage.HTMLBodyTemplate.Name);
-      }
-      if (newMessage.SubjectTemplate) {
-        newMessage.SubjectTemplate = TemplateEngineServer.Instance.FindTemplate(newMessage.SubjectTemplate.Name);
-      }
+      const contextUser = this.GetUserFromPayload(userPayload);
+      if (!contextUser) throw new Error('Unable to determine the acting user for this communication');
+      const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+      this.screenClientViewClauses(
+        {
+          extraFilter: runViewByIDInput.ExtraFilter,
+          orderBy: runViewByIDInput.OrderBy,
+          userSearchString: runViewByIDInput.UserSearchString,
+          overrideExcludeFilter: runViewByIDInput.OverrideExcludeFilter,
+        },
+        provider as unknown as IMetadataProvider,
+        contextUser,
+      );
+      await this.assertViewBelongsToEntity(runViewByIDInput.ViewID, entityID, provider, contextUser);
+
+      await EntityCommunicationsEngine.Instance.Config(false, contextUser);
+      const newMessage = await this.resolveMessageTemplates(message, contextUser);
       const params: EntityCommunicationParams = {
         EntityID: entityID,
         RunViewParams: <RunViewParams>runViewByIDInput,
@@ -204,6 +215,8 @@ export class ReportResolver extends ResolverBase {
         Message: newMessage,
         PreviewOnly: previewOnly,
         IncludeProcessedMessages: includeProcessedMessages,
+        ContextUser: contextUser,
+        Provider: provider,
       };
       const result = await EntityCommunicationsEngine.Instance.RunEntityCommunication(params);
       return {
@@ -221,5 +234,33 @@ export class ReportResolver extends ResolverBase {
         ErrorMessage: message,
       };
     }
+  }
+
+  /**
+   * Refuses a view that is not a view of `entityID`, with the same message as for a view that does
+   * not exist or that the caller cannot load, so the refusal does not reveal which views exist.
+   */
+  private async assertViewBelongsToEntity(viewID: string | undefined, entityID: string, provider: DatabaseProviderBase, contextUser: UserInfo): Promise<void> {
+    if (!viewID) return;
+    const view = await this.resolveUserViewByID(viewID, provider, contextUser);
+    if (!view?.ID || !UUIDsEqual(view.ID, viewID) || !UUIDsEqual(view.EntityID, entityID)) {
+      throw new Error('The requested view does not exist or you do not have access to it');
+    }
+  }
+
+  /** Builds the message, replacing each template the client named with the server's copy of it. */
+  private async resolveMessageTemplates(message: CommunicationMessageInput, contextUser: UserInfo): Promise<Message> {
+    const newMessage = new Message(message as unknown as Message);
+    await TemplateEngineServer.Instance.Config(false, contextUser);
+    if (newMessage.BodyTemplate) {
+      newMessage.BodyTemplate = TemplateEngineServer.Instance.FindTemplate(newMessage.BodyTemplate.Name);
+    }
+    if (newMessage.HTMLBodyTemplate) {
+      newMessage.HTMLBodyTemplate = TemplateEngineServer.Instance.FindTemplate(newMessage.HTMLBodyTemplate.Name);
+    }
+    if (newMessage.SubjectTemplate) {
+      newMessage.SubjectTemplate = TemplateEngineServer.Instance.FindTemplate(newMessage.SubjectTemplate.Name);
+    }
+    return newMessage;
   }
 }

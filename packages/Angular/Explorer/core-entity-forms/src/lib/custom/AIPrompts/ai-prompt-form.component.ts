@@ -12,15 +12,45 @@ import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { AIPromptManagementService } from './ai-prompt-management.service';
 import { MJAIModelEntityExtended, MJAIPromptCategoryEntityExtended, MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { DedupePendingRecordsByEntity } from './pending-records';
+import { JoinHeroSummary, CountLabel } from '../../shared/phone-hero';
+import { PhoneSectionsState } from '../../shared/phone-sections-state';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Prompts')
 @Component({
   standalone: false,
     selector: 'mj-ai-prompt-form',
     templateUrl: './ai-prompt-form.component.html',
-    styleUrls: ['./ai-prompt-form.component.css']
+    styleUrls: ['./ai-prompt-form.component.css', '../../shared/phone-hero.css']
 })
 export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent implements OnInit {
+
+    /** Phone width shows the stacked accordions as sections behind one picker (design call 7A). */
+    public Phone = new PhoneSectionsState(() => this.cdr.markForCheck());
+
+    ngOnDestroy() {
+        super.ngOnDestroy();
+        this.Phone.Stop();
+    }
+
+    /** Phone hero (6A): whether the summary line is expanded to show the rest of the hero. */
+    public HeroDetailsOpen = false;
+
+    /** Toggles the phone hero between its compact identity row and the full hero. */
+    public ToggleHeroDetails(): void {
+        this.HeroDetailsOpen = !this.HeroDetailsOpen;
+        this.cdr.markForCheck();
+    }
+
+    /** The phone hero's one-line summary of what the compact hero leaves out. */
+    public get HeroSummary(): string {
+        return JoinHeroSummary([
+            this.record.TypeID ? this.getPromptTypeDisplayName(this.record.TypeID) : null,
+            `Parallel: ${this.getParallelizationModeDisplay()}`,
+            `Output: ${this.getOutputTypeDisplay()}`,
+            this.record.EnableCaching ? 'Caching on' : null,
+            this.record.EffortLevel != null ? `Effort ${this.record.EffortLevel}` : null,
+        ]);
+    }
     private testHarnessService = inject(AITestHarnessDialogService);
     private viewContainerRef = inject(ViewContainerRef);
     private promptManagementService = inject(AIPromptManagementService);
@@ -35,6 +65,9 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
 
     /** Custom-layout AI Prompt form looks best full-width on first open. */
     public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
+
+    /** Custom-layout form owns its entire body; suppress auto-filled relationship sections. */
+    public override get OwnsEntireFormBody(): boolean { return true; }
     public Template: MJTemplateEntity | null = null;
 
     /** @deprecated Use {@link Template}. */
@@ -2046,7 +2079,25 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
             const result = await rv.RunView<MJAIPromptRunEntityExtended>({
                 EntityName: 'MJ: AI Prompt Runs',
                 ExtraFilter: `PromptID='${this.record.ID}'`,
-                OrderBy: 'RunAt DESC' 
+                OrderBy: 'RunAt DESC',
+                MaxRows: 200,
+                Fields: [
+                    'ID',
+                    'PromptID',
+                    'RunAt',
+                    'CompletedAt',
+                    'ExecutionTimeMS',
+                    'Success',
+                    'Model',
+                    'ModelID',
+                    'TokensUsed',
+                    'TokensPrompt',
+                    'TokensCompletion',
+                    'Cost',
+                    'TotalCost',
+                    'RunType'
+                ],
+                ResultType: 'simple'
             });
             
             this.ExecutionHistory = result.Results;

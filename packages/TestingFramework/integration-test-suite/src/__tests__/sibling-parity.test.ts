@@ -2,8 +2,9 @@
  * sibling-parity.test.ts — the bundle↔metadata drift-check.
  *
  * The check *logic* for an integration suite lives ONCE, in a registry bundle (this package).
- * Its single sibling is a metadata `Test` record (metadata-optional/integration-test/tests/
- * integration) that the `mj test` driver dispatches. This test enforces that every bundle keeps
+ * Its single sibling is a metadata `Test` record under metadata-optional/integration-test/tests/
+ * (`integration/` for the integration tiers, `gates/` for the gate suites) that the `mj test`
+ * driver dispatches. This test enforces that every bundle keeps
  * its sibling in sync, so a bundle can never be added — or an IT record pointed at a bundle
  * that doesn't exist — without a red build.
  *
@@ -14,7 +15,7 @@
  * published CLI uses to find these bundles; without it every IT record dispatches to an
  * "Unknown integration check bundle" failure).
  *
- * When you add a new bundle: add its IT record and join it to the integration suite. That's it.
+ * When you add a new bundle: add its IT record and join it to a suite under test-suites/. That's it.
  */
 import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs';
@@ -49,26 +50,101 @@ const NON_SUITE_BUNDLES = new Set<string>([
 const ROOT = repoRoot();
 // The integration test/suite metadata was relocated OUT of the default-pushed metadata/ tree into
 // the optional sibling root metadata-optional/integration-test/ (test-only records, never production).
-const META_DIR = path.join(ROOT, 'metadata-optional/integration-test/tests/integration');
-const SUITE_FILE = path.join(ROOT, 'metadata-optional/integration-test/test-suites/.integration-suite.json');
+const TESTS_ROOT = path.join(ROOT, 'metadata-optional/integration-test/tests');
+const SUITES_DIR = path.join(ROOT, 'metadata-optional/integration-test/test-suites');
+
+/**
+ * A directory of test records and the suite files its records belong to — and only those: the gate records need
+ * bizapps-common, so they must never reach the integration (CI) suite.
+ */
+interface DirSuitePair {
+    Dir: string;
+    IsOwnSuiteFile: (file: string) => boolean;
+    /** A missing directory is a failure. */
+    Required: boolean;
+}
+
+const DIR_SUITE_PAIRS: DirSuitePair[] = [
+    { Dir: 'integration', IsOwnSuiteFile: f => f === '.integration-suite.json', Required: true },
+    { Dir: 'gates', IsOwnSuiteFile: f => /^\.ps-gates-.*\.json$/.test(f), Required: false },
+];
+
+/** Every directory of test records. */
+const TEST_DIRS = DIR_SUITE_PAIRS.map(p => path.join(TESTS_ROOT, p.Dir));
 const MJ_CONFIG = path.join(ROOT, 'mj.config.cjs');
 
 interface ItRecord {
-    fields: {
+    fields?: {
         Name?: string;
         Configuration?: { checks?: Array<{ type?: string }> };
     };
 }
 
+interface SuiteRecord {
+    fields?: { Name?: string };
+    relatedEntities?: { 'MJ: Test Suite Tests'?: Array<{ fields?: { TestID?: string } }> };
+}
+
+/** The records of one metadata file (one record or an array of them), narrowed by {@link isMetadataRecord}. */
+function fileRecords(file: string): unknown[] {
+    const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    return Array.isArray(parsed) ? parsed : [parsed];
+}
+
+/** A metadata record: an object (its `fields`/`relatedEntities` are read optionally). */
+function isMetadataRecord(value: unknown): value is ItRecord & SuiteRecord {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** The records of one test directory (none when it does not exist; {@link PairingProblems} judges that). */
+function dirRecords(dir: string): ItRecord[] {
+    return fs.existsSync(dir)
+        ? fs.readdirSync(dir).filter(f => f.endsWith('.json')).map(f => path.join(dir, f)).flatMap(fileRecords).filter(isMetadataRecord)
+        : [];
+}
+
 function itRecords(): ItRecord[] {
-    const records: ItRecord[] = [];
-    for (const file of fs.readdirSync(META_DIR).filter(f => f.endsWith('.json'))) {
-        const parsed = JSON.parse(fs.readFileSync(path.join(META_DIR, file), 'utf-8'));
-        for (const rec of Array.isArray(parsed) ? parsed : [parsed]) {
-            records.push(rec as ItRecord);
+    return TEST_DIRS.flatMap(dirRecords);
+}
+
+/** Test names per test directory (`undefined` for a directory that does not exist). */
+function recordNamesByDir(): Map<string, string[] | undefined> {
+    return new Map(DIR_SUITE_PAIRS.map(p => {
+        const dir = path.join(TESTS_ROOT, p.Dir);
+        const names = dirRecords(dir).map(r => r.fields?.Name).filter((n): n is string => !!n);
+        return [p.Dir, fs.existsSync(dir) ? names : undefined];
+    }));
+}
+
+/** Member test names per suite file under test-suites/. */
+function membersBySuiteFile(): Map<string, Set<string>> {
+    return new Map(fs.readdirSync(SUITES_DIR)
+        .filter(f => f.endsWith('.json') && f !== '.mj-sync.json')
+        .map(f => [f, suiteMembers(fileRecords(path.join(SUITES_DIR, f)).filter(isMetadataRecord))]));
+}
+
+/** A missing required directory, a record joined to none of its own suites, or one joined to another directory's suite. */
+function PairingProblems(pairs: DirSuitePair[], namesByDir: Map<string, string[] | undefined>, members: Map<string, Set<string>>): string[] {
+    const problems: string[] = [];
+    for (const pair of pairs) {
+        const names = namesByDir.get(pair.Dir);
+        if (!names) {
+            if (pair.Required) {
+                problems.push(`tests/${pair.Dir} is missing`);
+            }
+            continue;
+        }
+        for (const name of names) {
+            const joined = [...members.entries()].filter(([, m]) => m.has(name)).map(([f]) => f);
+            if (!joined.some(pair.IsOwnSuiteFile)) {
+                problems.push(`${name} (tests/${pair.Dir}) is joined to none of its own suites`);
+            }
+            for (const foreign of joined.filter(f => !pair.IsOwnSuiteFile(f))) {
+                problems.push(`${name} (tests/${pair.Dir}) is joined to ${foreign}, another directory's suite`);
+            }
         }
     }
-    return records;
+    return problems;
 }
 
 /** bundle type → IT record Name, from every record's Configuration.checks[].type. */
@@ -84,11 +160,8 @@ function metadataBundles(): Map<string, string> {
     return map;
 }
 
-function suiteMemberTestNames(): Set<string> {
-    const parsed = JSON.parse(fs.readFileSync(SUITE_FILE, 'utf-8')) as Array<{
-        fields?: { Name?: string };
-        relatedEntities?: { 'MJ: Test Suite Tests'?: Array<{ fields?: { TestID?: string } }> };
-    }>;
+/** The test names a suite file's suites join (`@lookup:MJ: Tests.Name=…`). */
+function suiteMembers(parsed: SuiteRecord[]): Set<string> {
     const names = new Set<string>();
     for (const suite of parsed) {
         for (const member of suite.relatedEntities?.['MJ: Test Suite Tests'] ?? []) {
@@ -112,7 +185,7 @@ describe('bundle↔metadata sibling parity (drift-check)', () => {
 
     it('every registered bundle has an IT metadata record', () => {
         const missing = bundles.filter(b => !metaMap.has(b));
-        expect(missing, `bundles with no IT record (add one under ${META_DIR}): ${missing.join(', ') || 'none'}`).toEqual([]);
+        expect(missing, `bundles with no IT record (add one under ${TEST_DIRS.join(' or ')}): ${missing.join(', ') || 'none'}`).toEqual([]);
     });
 
     it('every IT record type resolves to a registered bundle', () => {
@@ -121,13 +194,17 @@ describe('bundle↔metadata sibling parity (drift-check)', () => {
         expect(dangling, `IT records pointing at non-existent bundles: ${dangling.map(([t, n]) => `${n}→${t}`).join(', ') || 'none'}`).toEqual([]);
     });
 
-    it('every IT metadata record is joined to the integration suite (MJ: Test Suite Tests)', () => {
-        const members = suiteMemberTestNames();
-        const unjoined = itRecords()
-            .map(r => r.fields?.Name)
-            .filter((n): n is string => !!n)
-            .filter(n => !members.has(n));
-        expect(unjoined, `IT records not joined to any suite: ${unjoined.join(', ') || 'none'}`).toEqual([]);
+    it('every test record is joined to its own directory\'s suites, and to no other directory\'s', () => {
+        const problems = PairingProblems(DIR_SUITE_PAIRS, recordNamesByDir(), membersBySuiteFile());
+        expect(problems, `test records in the wrong suites: ${problems.join('; ') || 'none'}`).toEqual([]);
+    });
+
+    it('the pairing fails an integration record joined only to a gate suite', () => {
+        const members = new Map([['.integration-suite.json', new Set(['IT01'])], ['.ps-gates-x.json', new Set(['IT02'])]]);
+        expect(PairingProblems(DIR_SUITE_PAIRS, new Map([['integration', ['IT01', 'IT02']], ['gates', []]]), members)).toEqual([
+            'IT02 (tests/integration) is joined to none of its own suites',
+            'IT02 (tests/integration) is joined to .ps-gates-x.json, another directory\'s suite',
+        ]);
     });
 
     it('mj.config.cjs loads this package via testing.checkModules (the mj-test runtime seam)', () => {

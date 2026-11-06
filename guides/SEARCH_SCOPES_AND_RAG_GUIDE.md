@@ -125,7 +125,7 @@ Set `StartAt` / `EndAt` to auto-activate a scope for a specific window:
     "driverClass": "CohereReRanker",
     "inputTopN": 100,
     "outputTopN": 20,
-    "config": { "model": "rerank-v3.5" }
+    "config": { "model": "rerank-v5.0-fast" }
   },
   "permissionOverfetchFactor": 3
 }
@@ -427,7 +427,7 @@ Add to `SearchScope.ScopeConfig`:
     "driverClass": "CohereReRanker",
     "inputTopN": 100,
     "outputTopN": 20,
-    "config": { "model": "rerank-v3.5" }
+    "config": { "model": "rerank-v5.0-fast" }
   }
 }
 ```
@@ -690,7 +690,7 @@ Five rerankers ship today:
 | Driver Class | Provider | Cost model | Notes |
 |---|---|---|---|
 | `NoopReRanker` | n/a | $0 | Default pass-through; preserves RRF order |
-| `CohereReRanker` | Cohere `rerank-v3.5` (or `rerank-multilingual-v3.0`) | $2.00 / 1k searches (1 search = up to 100 docs) | Most accurate for English; multilingual variant via `config.model` |
+| `CohereReRanker` | Cohere `rerank-v5.0-fast` by default (or `rerank-v5.0-pro`, `rerank-v4.0-fast`, `rerank-v4.0-pro`, `rerank-v3.5`, `rerank-multilingual-v3.0`) | Per search (1 search = up to 100 docs); MJ estimates 0.2¢ per search for every model | Model via `config.model`; optional Context Focus spans (`relevantSpans`) with Rerank 5 |
 | `VoyageReRanker` | Voyage `rerank-2` (or `rerank-2-lite`) | $0.05 / 1M tokens (`rerank-2`); $0.02 / 1M tokens (`rerank-2-lite`) | Per-token billing; exact `usage.total_tokens` reported |
 | `OpenAIReRanker` | gpt-4o-mini chat-judge (no first-party endpoint as of 2026-04) | $0.15 / 1M input + $0.60 / 1M output (`gpt-4o-mini`) | Override model via `config.model`; revisit when OpenAI ships first-party rerank |
 | `BGEReRanker` | Local `Xenova/bge-reranker-base` (or `-large`, `-v2-m3`) | $0 — local model | Lazy-loads weights via `@xenova/transformers`; never bundle weights |
@@ -699,6 +699,8 @@ Five rerankers ship today:
 
 Set `SearchScope.ScopeConfig.reRanker.driverClass = 'CohereReRanker'` (etc.).
 Optional `config.model` overrides the default model for the chosen driver.
+For `CohereReRanker`, `relevantSpans` (Context Focus) needs a Rerank 5 model
+(`rerank-v5.0-fast` or `rerank-v5.0-pro`); don't set it with an older model.
 
 ### Cost tracking + budget guard
 

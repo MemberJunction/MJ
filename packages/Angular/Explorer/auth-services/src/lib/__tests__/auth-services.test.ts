@@ -362,6 +362,22 @@ describe('logout and cache clearing', () => {
     expect(removeItem).not.toHaveBeenCalledWith('mj-theme-overlay');
   });
 
+  it('should preserve the persisted overlay CSS (mj-theme-overlay-css) so the sign-in cold load is branded', async () => {
+    // The overlay id survives logout for the pre-paint attribute; the CSS persisted beside it
+    // (ThemeService.ApplyBrandOverlay) must survive too, or the next cold load has the
+    // attribute with no stylesheet behind it and the sign-in page / loading screen flash stock.
+    const { removeItem } = stubLocalStorage({
+      'mj-theme-overlay': '64A6B519-CFBA-4F25-98D4-8398D397E21C',
+      'mj-theme-overlay-css': '{"id":"64A6B519-CFBA-4F25-98D4-8398D397E21C","css":"x{}"}',
+      'mj-session-id': 'abc',
+    });
+    stubIndexedDB();
+    await makeProvider().logout();
+    expect(removeItem).toHaveBeenCalledWith('mj-session-id');
+    expect(removeItem).not.toHaveBeenCalledWith('mj-theme-overlay');
+    expect(removeItem).not.toHaveBeenCalledWith('mj-theme-overlay-css');
+  });
+
   it("sends then deletes the signed-in user's stored call-recording shards before the provider logout", async () => {
     // Live smoke B1/B2: a user's unsent call audio stayed in the browser after logout and the next
     // user's session re-sent it.

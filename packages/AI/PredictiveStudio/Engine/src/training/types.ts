@@ -19,6 +19,11 @@ import type {
   TrainResponse,
   ProblemType,
   MatrixData,
+  SourceBinding,
+  FeatureStepGraph,
+  AsOfStrategy,
+  OutcomeConfig,
+  EvaluationRecord,
 } from '@memberjunction/predictive-studio-core';
 import type {
   MJMLTrainingPipelineEntity,
@@ -54,9 +59,9 @@ export interface IRecordLoader {
    *
    * @param pipelineId pipeline primary-key value
    * @param contextUser request user
-   * @param provider optional provider for multi-provider correctness
+   * @param provider the provider the read runs on (no global fallback)
    */
-  loadPipeline(pipelineId: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<MJMLTrainingPipelineEntity | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  loadPipeline(pipelineId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<MJMLTrainingPipelineEntity | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Compute the next monotonic model version under a pipeline — `max(Version)+1`,
@@ -65,9 +70,9 @@ export interface IRecordLoader {
    *
    * @param pipelineId pipeline primary-key value
    * @param contextUser request user
-   * @param provider optional provider for multi-provider correctness
+   * @param provider the provider the read runs on (no global fallback)
    */
-  nextModelVersion(pipelineId: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<number>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  nextModelVersion(pipelineId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<number>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Resolve the sidecar **driver key** for an algorithm from its
@@ -84,10 +89,10 @@ export interface IRecordLoader {
    *
    * @param algorithmId `MJ: ML Algorithms` primary-key value
    * @param contextUser request user
-   * @param provider optional provider for multi-provider correctness
+   * @param provider the provider the read runs on (no global fallback)
    * @returns the `DriverClass` driver key, or `null` when not found
    */
-  resolveAlgorithmDriverKey?(algorithmId: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<string | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  resolveAlgorithmDriverKey?(algorithmId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<string | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -149,8 +154,9 @@ export interface TrainModelInput {
    */
   experimentSessionIterationId?: string;
   /**
-   * Optional per-record label-event dates (keyed by record primary key),
-   * required when the pipeline's `AsOfStrategy.Mode` is `offset` (plan §6.3).
+   * Optional per-record label-event dates (keyed by record primary key). Feature assembly's `offset` as-of mode
+   * reads them, but training refuses every as-of mode other than `none` before assembly
+   * (`AsOfSettingHasNoEffectError`), so training does not use them today.
    */
   labelEventDates?: Record<string, Date>;
   /** Optional primary-key field on the target entity (defaults to `ID`). */
@@ -177,9 +183,9 @@ export interface TrainingDeps {
   /** Artifact-storage seam. */
   artifactStore: IArtifactStore;
   /** Request user — threaded through every entity op for isolation/audit. */
-  contextUser?: UserInfo;
-  /** Optional provider for multi-provider correctness. */
-  provider?: IMetadataProvider;
+  contextUser: UserInfo;
+  /** The provider every training read runs on; required because the training reads have no global fallback. */
+  provider: IMetadataProvider;
 }
 
 /**
@@ -191,6 +197,35 @@ export interface TrainModelResult {
   model: MJMLModelEntity;
   /** The `MJ: ML Training Runs` row recording this attempt. */
   run: MJMLTrainingRunEntity;
+}
+
+/**
+ * The provenance blob training writes to `MJ: ML Models.Lineage` (§4.3). Self-contained enough for the scoring path to
+ * re-assemble features when the pipeline row is not loaded.
+ */
+// case-violation-ok-legacy-back-compat: the members are the stored Lineage JSON keys that scoring, the UI and the truth-suite judges read; renaming them breaks every stored model
+export interface ModelTrainingLineage {
+  pipelineId: string;
+  pipelineVersion: number;
+  targetEntityName: string;
+  sourceBindings: SourceBinding[];
+  featureSteps: FeatureStepGraph;
+  asOfStrategy: AsOfStrategy;
+  outcomeConfig: OutcomeConfig;
+  sidecarVersion: string | null;
+  /** Rows in the locked holdout scored once into `HoldoutMetrics`. */
+  lockedHoldoutRowCount: number;
+  /**
+   * Locked-holdout rows per label (label as text → row count) for a classification model; `{}` for regression. Lets a
+   * reader compute the holdout's majority-class rate without re-reading the rows.
+   */
+  lockedHoldoutClassCounts: Record<string, number>;
+  /** Rows sent to the sidecar for training (holdout excluded). */
+  trainingRowCount: number;
+  /** ISO timestamp the matrix was assembled. */
+  assembledAt: string;
+  /** How the stored metrics were measured (`EvaluationLineage.Key`). */
+  evaluation: EvaluationRecord;
 }
 
 /** Re-export for downstream training consumers without reaching into core. */

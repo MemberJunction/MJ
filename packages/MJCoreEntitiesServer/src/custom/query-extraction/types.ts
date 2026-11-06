@@ -1,6 +1,7 @@
 import type { IMetadataProvider, IRunViewProvider, UserInfo, DatabasePlatform } from "@memberjunction/core";
 import type { MJQueryEntityExtended } from "@memberjunction/core-entities";
 import type { MJParameterInfo, MJParseResult, SQLSelectColumn, SQLTableReference } from "@memberjunction/sql-parser";
+import type { DeclaredQueryChildren } from "./declared";
 
 // ═══════════════════════════════════════════════════
 // Shared types for the query extraction pipeline
@@ -83,6 +84,10 @@ export interface EntityMetadataEntry {
     SchemaName: string;
     BaseView: string;
     Fields: Array<{ name: string; type: string; isPrimaryKey: boolean }>;
+    /** Populated when the SQL references a registered EntityAlternateBaseView instead of the canonical BaseView/BaseTable. */
+    AlternateBaseViewID?: string | null;
+    /** Logical Name of the matched EntityAlternateBaseView, when applicable. */
+    AlternateBaseViewName?: string | null;
 }
 
 /**
@@ -130,4 +135,7 @@ export interface QuerySyncContext {
     /** Skip the LLM enrichment stage, so the deterministic extraction alone decides parameters
      *  and fields (with heuristic descriptions). Set from the save's `SkipEntityAIActions`. */
     SkipAIEnrichment?: boolean;
+    /** Child rows the same save declared through the query's collections. Extraction leaves them
+     *  as the caller wrote them (see {@link DeclaredQueryChildren}). Absent means none. */
+    DeclaredChildren?: DeclaredQueryChildren;
 }

@@ -8,8 +8,10 @@ import { EnsureArray } from "../utils/ensureArray.js";
 import type { BaseAutoDocDriver } from "../drivers/BaseAutoDocDriver.js";
 import { CheckPKProposal } from "./PKProposalGate.js";
 import { BuildIndexHints, FormatIndexHint, IsUniquelyIndexed } from "../utils/index-hints.js";
+import { SeedContextExcerpt } from "../utils/seed-context.js";
 import { TableNode, BackpropagationTrigger, TableAnalysisContext, TableGroundTruthContext, EnumCandidateContext } from '../types/analysis.js';
 import { EnumCandidateGate } from '../discovery/EnumCandidateGate.js';
+import { KeyVerifier, StampFor, JoinProbeResult } from '../discovery/JoinProbe.js';
 import {
   TableAnalysisPromptResult,
   ColumnDescriptionPromptResult,
@@ -37,6 +39,23 @@ export class AnalysisEngine {
   private currentRun?: AnalysisRun;
 
   private onProgress: (message: string, data?: Record<string, unknown>) => void;
+
+  /**
+   * Verifies a proposed key against the data before it is confirmed. Optional: when
+   * absent, LLM-proposed FKs are still emitted but stamped `Unprobed` rather than
+   * silently presented as though someone had checked them.
+   */
+  private keyVerifier: KeyVerifier | null = null;
+
+  /**
+   * Supply the probe used to verify LLM-proposed foreign keys. Injected rather than
+   * constructed here because the engine has no driver of its own; the orchestrator owns
+   * the connection and passes ONE verifier so the per-run probe budget is shared with
+   * the organic-key path instead of each path getting its own allowance.
+   */
+  public SetKeyVerifier(verifier: KeyVerifier | null): void {
+    this.keyVerifier = verifier;
+  }
 
   constructor(
     private config: DBAutoDocConfig,
@@ -203,7 +222,7 @@ export class AnalysisEngine {
       const [schemaName, tableName] = tableKey.split('.');
       const table = this.stateManager.findTable(state, schemaName, tableName);
       const candidates = tablePKs.map(pk => ({ columns: pk.columnNames, confidence: pk.confidence, locked: pk.status === 'confirmed' }));
-      const context = { sourceSchema: schemaName, sourceTable: tableName, tableDescription: table?.description || '', allTables, candidates, existingIndexes: this.indexHintLines(table), seedContext: state.seedContext ?? this.config.seedContext };
+      const context = { sourceSchema: schemaName, sourceTable: tableName, tableDescription: table?.description || '', allTables, candidates, existingIndexes: this.indexHintLines(table), seedContext: state.seedContext ?? this.config.seedContext, seedExcerpt: SeedContextExcerpt(state.seedContext ?? this.config.seedContext, [tableName]) };
 
       const result = await this.promptEngine.executePrompt<import('../types/prompts.js').PKPruningProposal[]>(
         'pk-pruning-table', context,
@@ -226,7 +245,7 @@ export class AnalysisEngine {
     if (allProposals.length === 0) return { removed: 0, kept: allPKs.length };
 
     this.onProgress('PK pruning pass 2: holistic review', { proposals: allProposals.length, model: effectiveModel });
-    const holisticContext = { allTables, proposals: allProposals.map(p => ({ sourceSchema: p.sourceSchema, sourceTable: p.sourceTable, columns: p.columns, confidence: p.confidence, reasoning: p.reasoning })), seedContext: state.seedContext ?? this.config.seedContext };
+    const holisticContext = { allTables, proposals: allProposals.map(p => ({ sourceSchema: p.sourceSchema, sourceTable: p.sourceTable, columns: p.columns, confidence: p.confidence, reasoning: p.reasoning })), seedContext: state.seedContext ?? this.config.seedContext, seedExcerpt: SeedContextExcerpt(state.seedContext ?? this.config.seedContext, []) };
 
     const holisticResult = await this.promptEngine.executePrompt<import('../types/prompts.js').PKPruningProposal[]>(
       'pk-pruning-holistic', holisticContext,
@@ -351,7 +370,8 @@ export class AnalysisEngine {
         allTables,
         candidates,
         existingIndexes: this.indexHintLines(table),
-        seedContext: state.seedContext ?? this.config.seedContext
+        seedContext: state.seedContext ?? this.config.seedContext,
+        seedExcerpt: SeedContextExcerpt(state.seedContext ?? this.config.seedContext, [tableName])
       };
 
       const result = await this.promptEngine.executePrompt<import('../types/prompts.js').FKPruningProposal[]>(
@@ -418,7 +438,8 @@ export class AnalysisEngine {
         confidence: p.confidence,
         reasoning: p.reasoning
       })),
-      seedContext: state.seedContext ?? this.config.seedContext
+      seedContext: state.seedContext ?? this.config.seedContext,
+      seedExcerpt: SeedContextExcerpt(state.seedContext ?? this.config.seedContext, [])
     };
 
     const holisticResult = await this.promptEngine.executePrompt<import('../types/prompts.js').FKPruningFinalDecision[]>(
@@ -633,7 +654,7 @@ export class AnalysisEngine {
 
       // Process structured FK insights from LLM and feed back to discovery phase
       if (state.phases.keyDetection && result.result.foreignKeys) {
-        this.processFKInsightsFromLLM(
+        await this.processFKInsightsFromLLM(
           state,
           tableNode.schema,
           tableNode.table,
@@ -815,7 +836,7 @@ export class AnalysisEngine {
    * Persist enum/value-list verdicts from LLM response onto ColumnDefinition.
    * Keeps the highest-confidence verdict across multiple iterations.
    */
-  private persistEnumVerdicts(
+  protected persistEnumVerdicts(
     table: TableDefinition,
     columnDescriptions: ColumnDescriptionPromptResult[] | undefined,
     modelUsed: string
@@ -834,11 +855,16 @@ export class AnalysisEngine {
       // If sanitization drops all values below 2, skip the verdict
       if (sanitizedValues.length < 2 && vl.isEnum) continue;
 
+      // The prompt asks for a verdict only on enum candidates; enforce that here, and keep only
+      // values observed in the column, so a verdict on a non-candidate or an invented value is dropped.
+      const keptValues = this.enumCandidateGate.FilterVerdictValues(column, table.rowCount, sanitizedValues);
+      if (keptValues === null && vl.isEnum) continue;
+
       const newVerdict: ValueListVerdict = {
         isEnum: vl.isEnum,
         type: vl.type,
         confidence: vl.confidence,
-        values: sanitizedValues,
+        values: keptValues ?? sanitizedValues,
         reasoning: vl.reasoning,
         source: 'llm',
         cardinalityAtDecision: column.statistics
@@ -1469,12 +1495,52 @@ export class AnalysisEngine {
    * Uses the foreignKeys array from table-analysis prompt response instead of brittle regex parsing.
    * Per architectural decision: use LLM for language understanding, deterministic code for processing.
    */
-  private processFKInsightsFromLLM(
+  /**
+   * Probe an LLM-proposed foreign key.
+   *
+   * Returns `Unprobed` rather than throwing for every reason a probe can fail to run —
+   * no verifier injected, no such table or column in the analysed state, or the driver
+   * reporting that it could not evaluate the join. `Refuted` is reserved for a probe
+   * that RAN and measured containment below the floor, because only that is evidence
+   * the key is wrong.
+   */
+  private async verifyProposedFK(
+    childSchema: string,
+    childTable: string,
+    childColumn: string,
+    parentSchema: string,
+    parentTable: string,
+    parentColumn: string
+  ): Promise<JoinProbeResult> {
+    const now = new Date().toISOString();
+    if (!this.keyVerifier) {
+      return {
+        Status: 'Unprobed',
+        Containment: null,
+        Reason: 'no key verifier configured for this run',
+        ProbedAt: now
+      };
+    }
+    if (!parentColumn || !parentTable || !parentSchema) {
+      return {
+        Status: 'Unprobed',
+        Containment: null,
+        Reason: 'LLM did not name a complete target column',
+        ProbedAt: now
+      };
+    }
+    return this.keyVerifier.Verify({
+      Child: { Schema: childSchema, Table: childTable, Column: childColumn },
+      Parent: { Schema: parentSchema, Table: parentTable, Column: parentColumn }
+    });
+  }
+
+  private async processFKInsightsFromLLM(
     state: DatabaseDocumentation,
     schemaName: string,
     tableName: string,
     foreignKeys: import('../types/prompts.js').ForeignKeyPromptResult[]
-  ): void {
+  ): Promise<void> {
     const discoveryPhase = state.phases.keyDetection;
     if (!discoveryPhase || !foreignKeys || foreignKeys.length === 0) return;
 
@@ -1523,6 +1589,47 @@ export class AnalysisEngine {
         continue;
       }
 
+      // ── Verify the proposed join before anything is confirmed ────────────────
+      //
+      // This is the gate that was missing. The statistical path (FKDetector) probes
+      // and rejects below 75% containment at its GATE 6; this path never probed at
+      // all — it wrote a literal `valueOverlap: 0` placeholder, set
+      // `status: 'confirmed'`, and stamped `column.isForeignKey = true`. The
+      // additionalSchemaInfo generator then emits from BOTH
+      // `discovered.foreignKeys` (gated on confidence + status, never on overlap)
+      // and `column.foreignKeyReferences` (gated on nothing at all), so an
+      // LLM-proposed key reached the output through two independent unchecked doors.
+      //
+      // The shape this catches: a connector schema whose parent key is namespaced
+      // `<product>:<id>` while children store the bare id. "A foreign key points at
+      // the parent's primary key" is correct almost everywhere and unfalsifiable
+      // from schema shape, so the LLM proposes it for every child table and every
+      // one of them matches zero rows.
+      const probe = await this.verifyProposedFK(
+        schemaName, tableName, columnName,
+        referencesSchema, referencesTable, referencesColumn
+      );
+
+      if (probe.Status === 'Refuted') {
+        // Measured, not assumed: the probe ran and the join matches (near) nothing.
+        // Dropping it here is the only place it can be dropped — once the column is
+        // stamped, the introspected-FK path emits it with no gate to fail. It runs
+        // before the PK block below, so a refuted proposal is not evidence against a
+        // PK candidate either.
+        console.log(`[AnalysisEngine] Rejecting LLM FK — probe refuted: ${schemaName}.${tableName}.${columnName} -> ${referencesSchema}.${referencesTable}.${referencesColumn} (${probe.Reason})`);
+        this.onProgress(
+          `Rejected LLM-proposed FK ${schemaName}.${tableName}.${columnName} → ${referencesTable}.${referencesColumn}: ${probe.Reason}`,
+          { refutedKey: `${schemaName}.${tableName}.${columnName}` }
+        );
+        continue;
+      }
+
+      // Verified or Unprobed both proceed. Unprobed proceeds deliberately: refusing
+      // whenever the probe cannot run turns a permissions or timeout problem into
+      // total key loss with no signal. It proceeds STAMPED, so a consumer can tell a
+      // checked key from an unchecked one.
+      const verificationStamp = StampFor('LLM', probe);
+
       if (existingPK && existingPK.status !== 'confirmed') {
         // PK exists but isn't confirmed — LLM suggesting it's an FK is evidence
         // that the PK detection was wrong. Reject the PK.
@@ -1544,6 +1651,7 @@ export class AnalysisEngine {
         existingFK.validatedByLLM = true;
         existingFK.status = 'confirmed';
         existingFK.confidence = Math.min(existingFK.confidence + 20, 100);
+        existingFK.verification = verificationStamp;
         feedback.type = 'confidence_change';
         feedback.newConfidence = existingFK.confidence;
         feedback.affectedCandidates.push(`FK:${schemaName}.${tableName}.${columnName}`);
@@ -1575,17 +1683,26 @@ export class AnalysisEngine {
           confidence: Math.round(confidence * 100),
           evidence: {
             namingMatch: 0.9,
-            valueOverlap: 0,
+            // Real measurements where the probe ran. These were hardcoded 0 / 0 / 0,
+            // which is indistinguishable from a probe that ran and found nothing —
+            // the exact conflation that let a schema of zero-match keys be emitted
+            // with the same apparent confidence as a correct one.
+            valueOverlap: probe.Containment ? probe.Containment.Containment : 0,
             cardinalityRatio: 0,
             dataTypeMatch: true,
             nullPercentage: 0,
-            sampleSize: 0,
-            orphanCount: 0,
-            warnings: ['Created from structured LLM output']
+            sampleSize: probe.Containment ? probe.Containment.SampledValues : 0,
+            orphanCount: probe.Containment
+              ? probe.Containment.SampledValues - probe.Containment.MatchedValues
+              : 0,
+            warnings: probe.Status === 'Unprobed'
+              ? ['Created from structured LLM output', `Join NOT verified: ${probe.Reason}`]
+              : ['Created from structured LLM output', `Join verified: ${probe.Reason}`]
           },
           discoveredInIteration: 1,
           validatedByLLM: true,
-          status: 'confirmed'
+          status: 'confirmed',
+          verification: verificationStamp
         };
 
         discoveryPhase.discovered.foreignKeys.push(newFK);

@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { MJGlobal } from "@memberjunction/global";
-import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
+import { EntityInfo, IMetadataProvider, LogError, Metadata, RunView, RunViewParams, UserInfo } from "@memberjunction/core";
 import type { IRunViewProvider } from "@memberjunction/core";
 
 /**
@@ -78,6 +78,7 @@ export class GetEntityDetailsAction extends BaseAction {
             const sampleRowCount = Math.min(Math.max(0, requestedSampleRows), GetEntityDetailsAction.MAX_SAMPLE_ROWS);
             const includeRelatedEntityInfo = this.getBooleanParam(params, "includerelatedentityinfo", true);
             const useSemanticSearch = this.getBooleanParam(params, "usesemanticsearch", false);
+            const alternateBaseView = this.getStringParam(params, "alternatebaseview");
 
             // Get entity metadata
             const md = params.Provider ?? new Metadata();
@@ -112,15 +113,17 @@ export class GetEntityDetailsAction extends BaseAction {
             }));
 
             // Get sample data and total count using RunView
-            let sampleData: any[] = [];
+            let sampleData: Record<string, unknown>[] = [];
             let totalRowCount = undefined;
             if (sampleRowCount && sampleRowCount > 0) {
-                const rv = new RunView();
-                const result = await rv.RunView({
+                const rv = params.Provider ? RunView.FromMetadataProvider(params.Provider) : new RunView();
+                const rvParams: RunViewParams = {
                     EntityName: entity.Name,
                     MaxRows: sampleRowCount,
-                    ResultType: 'simple'
-                }, params.ContextUser);
+                    ResultType: 'simple',
+                    ...(alternateBaseView ? { AlternateBaseView: alternateBaseView } : {}),
+                };
+                const result = await rv.RunView<Record<string, unknown>>(rvParams, params.ContextUser);
 
                 if (!result.Success) {
                     return {
@@ -162,6 +165,20 @@ export class GetEntityDetailsAction extends BaseAction {
                 }));
             }
 
+            const alternateBaseViews = (entity.AlternateBaseViews ?? [])
+                .filter(abv => (abv.IsUsable ?? abv.Status !== 'Disabled') && !(abv.IsDeprecated ?? abv.Status === 'Deprecated'))
+                .map(abv => ({
+                    ID: abv.ID,
+                    Name: abv.Name,
+                    DisplayName: abv.EffectiveDisplayName,
+                    ViewName: abv.ViewName,
+                    SchemaName: abv.EffectiveSchemaName,
+                    Description: abv.Description || '',
+                    ParentID: abv.ParentID,
+                    CachePolicy: abv.CachePolicy,
+                    Status: abv.Status
+                }));
+
             const executionTimeMs = Date.now() - startTime;
 
             // Build detailed message
@@ -171,7 +188,8 @@ export class GetEntityDetailsAction extends BaseAction {
                 sampleData,
                 totalRowCount,
                 primaryKeyFields,
-                relatedEntities
+                relatedEntities,
+                alternateBaseViews
             );
 
             return {
@@ -187,6 +205,7 @@ export class GetEntityDetailsAction extends BaseAction {
                 SchemaName: entity.SchemaName,
                 Description: entity.Description,
                 BaseView: entity.BaseView,
+                AlternateBaseViews: alternateBaseViews,
                 IsVirtual: entity.VirtualEntity,
                 Fields: fields,
                 PrimaryKeyFields: primaryKeyFields,
@@ -307,12 +326,38 @@ export class GetEntityDetailsAction extends BaseAction {
      * Build detailed message with entity information for agent consumption
      */
     private buildDetailedMessage(
-        entity: any,
-        fields: any[],
-        sampleData: any[],
-        totalRowCount: number,
+        entity: EntityInfo,
+        fields: Array<{
+            Name: string;
+            DisplayName: string | null;
+            Type: string;
+            SQLFullType: string;
+            Description: string;
+            IsPrimaryKey: boolean;
+            IsNameField: boolean;
+            AllowsNull: boolean;
+            DefaultValue: string | null;
+            RelatedEntity: string | null;
+            RelatedEntityFieldName: string | null;
+            ValueListType: string;
+            HasValueList: boolean;
+            ValueListValues: string | null;
+        }>,
+        sampleData: Record<string, unknown>[],
+        totalRowCount: number | undefined,
         primaryKeyFields: string[],
-        relatedEntities: any[]
+        relatedEntities: Array<{ ID: string | null; Name: string; FieldsReferencingThis: string[] }>,
+        alternateBaseViews: Array<{
+            ID: string;
+            Name: string;
+            DisplayName: string;
+            ViewName: string;
+            SchemaName: string;
+            Description: string;
+            ParentID: string | null;
+            CachePolicy: string;
+            Status: string;
+        }> = []
     ): string {
         const lines: string[] = [];
 
@@ -325,8 +370,18 @@ export class GetEntityDetailsAction extends BaseAction {
             lines.push(`**Description:** ${entity.Description}`);
         }
         lines.push(`**Virtual Entity:** ${entity.VirtualEntity ? 'Yes' : 'No'}`);
-        lines.push(`**Total Rows:** ${totalRowCount.toLocaleString()}`);
+        lines.push(`**Total Rows:** ${(totalRowCount ?? 0).toLocaleString()}`);
         lines.push(`\n---\n`);
+
+        // Alternate Base Views
+        if (alternateBaseViews.length > 0) {
+            lines.push(`## Alternate Base Views (${alternateBaseViews.length})`);
+            for (const abv of alternateBaseViews) {
+                const descSuffix = abv.Description ? ` — ${abv.Description}` : '';
+                lines.push(`- **${abv.Name}** (${abv.DisplayName}) → \`[${abv.SchemaName}].[${abv.ViewName}]\`${descSuffix}`);
+            }
+            lines.push('');
+        }
 
         // Primary Keys
         if (primaryKeyFields.length > 0) {

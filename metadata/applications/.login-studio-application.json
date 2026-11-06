@@ -21,5 +21,9 @@
   },
   "primaryKey": {
     "ID": "AEE03C0A-86DA-4852-8C71-635AF9C8F71E"
+  },
+  "sync": {
+    "lastModified": "2026-10-20T23:19:50.608Z",
+    "checksum": "e523a98b199a5eb5eceb901ba018e04e1e04d7231e10ede27189ff696450a348"
   }
 }

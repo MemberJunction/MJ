@@ -1,5 +1,6 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
-import { NormalizeUUID } from "@memberjunction/global";
+import { NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
+import type { BoundActionParams } from "@memberjunction/ai-core-plus";
 import { BaseAction } from "@memberjunction/actions";
 import { AIEngine } from "@memberjunction/aiengine";
 import { RunView } from "@memberjunction/core";
@@ -23,6 +24,19 @@ export abstract class BaseFindActionsAction extends BaseAction {
     protected get entityName(): string { return 'MJ: Actions'; }
     /** Verb used in error messages (e.g. "find best action"). */
     protected abstract get actionLabel(): string;
+
+    /**
+     * The action's parameters minus any the calling agent run binds (`Context.BoundActionParams`): keys are
+     * Action IDs compared as UUIDs, names compare case-insensitively. The same rule `@memberjunction/ai-agents`
+     * applies to its catalog, `UnboundParams(params, BindingsForAction(bound, actionID))` in
+     * `packages/AI/Agents/src/bound-action-params.ts`; it is kept inline so this action module does not load the agent
+     * runtime. `__tests__/bound-params-parity.test.ts` runs both on the same inputs: change them together.
+     */
+    private visibleParams(definitions: MJActionParamEntity[], bound: BoundActionParams | undefined, actionID: string): MJActionParamEntity[] {
+        const key = bound ? Object.keys(bound).find(id => UUIDsEqual(id, actionID)) : undefined;
+        const hidden = bound && key ? Object.keys(bound[key]).map(n => n.trim().toLowerCase()) : [];
+        return hidden.length === 0 ? definitions : definitions.filter(p => !hidden.includes((p.Name ?? '').trim().toLowerCase()));
+    }
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
@@ -93,6 +107,10 @@ export abstract class BaseFindActionsAction extends BaseAction {
                 }
             }
 
+            // A parameter the calling agent run binds (ExecuteAgentParams.boundActionParams, stamped on the
+            // action Context as BoundActionParams) is left out, exactly as the agent's own catalog leaves it out:
+            // this action is where a model is sent to learn an action's parameters, so it must hide the same names.
+            const bound = (params.Context as { BoundActionParams?: BoundActionParams } | undefined)?.BoundActionParams;
             const actionsWithParams = matched.map(m => ({
                 actionId: m.action.ID,
                 actionName: m.action.Name,
@@ -101,7 +119,7 @@ export abstract class BaseFindActionsAction extends BaseAction {
                 categoryName: m.action.Category,
                 status: m.action.Status,
                 driverClass: m.action.DriverClass,
-                parameters: (paramsByActionId.get(m.action.ID) || []).map(p => ({
+                parameters: this.visibleParams(paramsByActionId.get(m.action.ID) || [], bound, m.action.ID).map(p => ({
                     name: p.Name,
                     type: p.Type,
                     valueType: p.ValueType,

@@ -122,7 +122,9 @@ function allJobs() {
 
 /** Does this job actually shell out to turbo? */
 function invokesTurbo(job) {
-    return job.runScript.some((l) => /(^|[\s;&|(])(npx\s+)?turbo\b/.test(l));
+    // `turbo` followed by whitespace or end of line, so a path like `turbo.json` in a path list
+    // is not mistaken for an invocation.
+    return job.runScript.some((l) => /(^|[\s;&|(])(npx\s+)?turbo(?=\s|$)/.test(l));
 }
 
 const JOBS = allJobs();
@@ -169,12 +171,18 @@ describe('turbo remote cache — env coverage', () => {
 });
 
 // This guard only protects anything if it actually RUNS when one of the workflows it checks is
-// edited. test.yml is path-filtered, so a workflow absent from that list is a workflow whose
-// cache wiring can be broken by a PR that never triggers this suite.
+// edited. test.yml's `changes` job skips the lanes for PRs outside its path list, so a workflow
+// absent from that list is a workflow whose cache wiring can be broken by a PR that never runs
+// this suite.
 describe('turbo remote cache — the guard runs when it matters', () => {
     it('test.yml triggers on every workflow whose cache wiring this file asserts', () => {
         const testYml = readFileSync(resolve(WORKFLOW_DIR, 'test.yml'), 'utf8');
-        const triggerPaths = [...testYml.matchAll(/^ {6}- '(.+?)'\s*$/gm)].map((m) => m[1]);
+        const pathsBlock = testYml.match(/<<'PATHS'\n([\s\S]*?)\n\s*PATHS\n/);
+        expect(pathsBlock, "test.yml's changes job must keep its <<'PATHS' list").not.toBeNull();
+        const triggerPaths = pathsBlock[1]
+            .split('\n')
+            .map((l) => l.trim())
+            .filter((l) => l && !l.startsWith('#'));
 
         const needsTrigger = readdirSync(WORKFLOW_DIR)
             .filter((f) => f.endsWith('.yml'))

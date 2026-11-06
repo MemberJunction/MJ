@@ -89,7 +89,7 @@ covered in [§4](#4-the-four-work-types); `FunctionRecordProcessor` wraps an arb
 
 ### What the engine owns (so no consumer re-invents it)
 Batching · bounded concurrency within a batch (`maxConcurrency`) · optional token-bucket **rate limiting** ·
-an **error-rate circuit breaker** · a **budget gate** (`onAfterBatch`) · **progress events** per batch · a
+an **error-rate circuit breaker** (over *attempted* records: a record skipped on its watermark does not count) · a **budget gate** (`onAfterBatch`) · **progress events** per batch · a
 **pause/cancel handshake** (the tracker re-reads its cancellation flag at each checkpoint) · **resume** from an
 offset or keyset cursor · and **per-record error isolation** — one bad record never aborts its batch.
 
@@ -129,7 +129,7 @@ A **Record Process** (`MJ: Record Processes`) is a saved operation. Its columns 
 | `ScheduleEnabled` + `CronExpression` + `Timezone` | trigger on a schedule |
 | `OnDemandEnabled` | runnable from the UI / API |
 | `BatchSize` / `MaxConcurrency` | substrate knobs |
-| `SkipUnchanged` | don't write (or count) records the work left unchanged |
+| `SkipUnchanged` + `WatermarkStrategy` | skip a record whose input is unchanged since it was last processed (`Checksum`, the default, or `UpdatedAt`), unless the run overwrites human values. A real `Checksum` run without `SkipUnchanged` (such as a version backfill) skips nothing but writes the watermark of each record whose processor computes a basis hash (`Infer`) |
 
 The **`RecordProcessExecutor`** facade turns a row into a substrate run:
 
@@ -300,6 +300,9 @@ graph LR
 - The **run header** tracks status (`Running → Completed / Failed / Paused / Cancelled`), the counts
   (`Processed / Success / Error / Skipped`), the `DryRun` flag, the resume cursor (`LastProcessedOffset` /
   `LastProcessedKey`), and `CancellationRequested`.
+- When a processor implements `BuildRunSummary`, `ResultSummary` holds its JSON summary (and `WouldRefuse` on a dry run
+  when a real run would be refused). Processors that set `FailRunOnRecordError = true` mark the run `Failed` whenever
+  any record failed or was rejected by output constraints; other work types keep their status rules.
 - Each **detail** is one terminal record outcome plus its `ResultPayload` (for FieldRules, the field diff that
   was — or would be — applied). Details are written **fire-and-forget** by the tracker's `BaseEntitySaveQueue`
   and flushed before the run finalizes.

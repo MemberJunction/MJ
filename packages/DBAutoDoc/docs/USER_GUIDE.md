@@ -1285,6 +1285,10 @@ Confidence = (
 contents to `customInstructions`, separated by `---`. Paths are relative to the config file. A file that
 cannot be read fails configuration loading with the setting name and resolved path in the error.
 
+The key-inference passes also receive this text: the discovery validator and the per-table PK/FK pruning
+prompts get the paragraphs that name their table, and the holistic pruning prompts get the full text, each
+capped at `seedContext.keyPassMaxChars` characters (default 6000; `0` disables it).
+
 ### Iteration Tracking
 
 Each table tracks description iterations:

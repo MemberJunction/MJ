@@ -75,9 +75,9 @@ export const FieldRulesBulkUpdateChecks: NamedCheck[] = [
             const ids = Ids;
             const records = Ids.map((id) => ({ EntityID, RecordID: id }));
             const result = await RecordSetProcessor.Instance.Process({
-                source: new ArraySource(records, entityID, 'SingleRecord'),
-                processor: new FieldRulesProcessor({ RuleSet: RULE_SET, DryRun: true }),
-                contextUser: user, entityID, triggeredBy: 'OnDemand',
+                Source: new ArraySource(records, entityID, 'SingleRecord'),
+                Processor: new FieldRulesProcessor({ RuleSet: RULE_SET, DryRun: true }),
+                ContextUser: user, EntityID: entityID, TriggeredBy: 'OnDemand',
             });
             AssertEqual(result.Processed, 3, 'processed');
             // nothing persisted — every Description is still null
@@ -98,9 +98,9 @@ export const FieldRulesBulkUpdateChecks: NamedCheck[] = [
             const ids = Ids;
             const records = Ids.map((id) => ({ EntityID, RecordID: id }));
             const result = await RecordSetProcessor.Instance.Process({
-                source: new ArraySource(records, entityID, 'SingleRecord'),
-                processor: new FieldRulesProcessor({ RuleSet: RULE_SET, DryRun: false }),
-                contextUser: user, entityID, triggeredBy: 'OnDemand',
+                Source: new ArraySource(records, entityID, 'SingleRecord'),
+                Processor: new FieldRulesProcessor({ RuleSet: RULE_SET, DryRun: false }),
+                ContextUser: user, EntityID: entityID, TriggeredBy: 'OnDemand',
             });
             AssertEqual(result.Success, 3, 'all three updated');
             await settle(400);

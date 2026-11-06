@@ -18,6 +18,8 @@ export interface FormSectionIndicators {
   ErrorCount: number;
   /** Fields carrying a warning-level validation result and no failure. */
   WarningCount: number;
+  /** Open anchored comment threads inside this section or its fields (when > 0). */
+  CommentCount?: number;
 }
 
 export const EMPTY_SECTION_INDICATORS: Readonly<FormSectionIndicators> = Object.freeze({
@@ -33,11 +35,16 @@ export function SumSectionIndicators(
   let DirtyCount = 0;
   let ErrorCount = 0;
   let WarningCount = 0;
+  let CommentCount = 0;
   for (const set of sets) {
     if (!set) continue;
     DirtyCount += CountOrZero(set.DirtyCount);
     ErrorCount += CountOrZero(set.ErrorCount);
     WarningCount += CountOrZero(set.WarningCount);
+    CommentCount += CountOrZero(set.CommentCount);
+  }
+  if (CommentCount > 0) {
+    return { DirtyCount, ErrorCount, WarningCount, CommentCount };
   }
   return { DirtyCount, ErrorCount, WarningCount };
 }
@@ -45,7 +52,12 @@ export function SumSectionIndicators(
 /** True when nothing in the set would render. */
 export function SectionIndicatorsAreEmpty(set: Partial<FormSectionIndicators> | null | undefined): boolean {
   if (!set) return true;
-  return CountOrZero(set.DirtyCount) === 0 && CountOrZero(set.ErrorCount) === 0 && CountOrZero(set.WarningCount) === 0;
+  return (
+    CountOrZero(set.DirtyCount) === 0 &&
+    CountOrZero(set.ErrorCount) === 0 &&
+    CountOrZero(set.WarningCount) === 0 &&
+    CountOrZero(set.CommentCount) === 0
+  );
 }
 
 function CountOrZero(value: number | undefined): number {
@@ -201,4 +213,10 @@ export function DescribeSectionWarnings(count: number, where = 'this section'): 
 export function DescribeSectionDirty(count: number, where = 'this section'): string {
   if (count <= 0) return '';
   return count === 1 ? `1 unsaved change in ${where}` : `${count} unsaved changes in ${where}`;
+}
+
+/** Tooltip / screen-reader text for an open-comments badge on a section or rail group. */
+export function DescribeSectionComments(count: number, where = 'this section'): string {
+  if (count <= 0) return '';
+  return count === 1 ? `1 open comment in ${where}` : `${count} open comments in ${where}`;
 }

@@ -9,6 +9,7 @@ import {
     ProviderType,
     CompositeKey,
     EntityDependency,
+    GetRecordDependenciesOptions,
     BaseEntity,
     BaseEntityResult,
     SaveSQLResult,
@@ -23,10 +24,26 @@ import {
     RecordChangePayload,
     EntityDeleteOptions,
     EntitySaveOptions,
+    GetDiagnosticContext,
+    IsDiagnosticCaptureSuppressed,
 } from '@memberjunction/core';
 
 
-import { GenericDatabaseProvider, SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '@memberjunction/generic-database-provider';
+import {
+    GenericDatabaseProvider,
+    SaveCoercedValue,
+    SaveCallBinding,
+    SaveSQLFragment,
+    SaveReturnContext,
+    DescribeStatementFailure,
+    SummarizeSqlParameters,
+    FormatSqlParameterTypesForError,
+} from '@memberjunction/generic-database-provider';
+import type { DatabasePoolStats, DescribeStatementResult } from '@memberjunction/generic-database-provider';
+import {
+    DescribeCatalogParameters, DescribeWrapperSQL, FieldDescriptionOf, MapPostgreSQLDescribeFields, POSTGRESQL_DESCRIBE_CATALOG_SQL, POSTGRESQL_DESCRIBE_TIMEOUT_MS,
+    type PostgreSQLDescribeCatalogRow,
+} from './statementDescription.js';
 import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
 import { BytesToBase64, EscapeSQLString, IsByteArray, TryBase64ToBytes } from '@memberjunction/global';
 import { PostgreSQLDialect, AutoQuotePostgreSQLIdentifiers } from '@memberjunction/sql-dialect';
@@ -150,7 +167,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         const unionParts = childEntities
             .filter(child => child.PrimaryKeys.length > 0)
             .map(child => {
-                const schema = child.SchemaName || '__mj';
+                const schema = child.SchemaName || this.MJCoreSchemaName || '__mj';
                 const sourceRef = pgDialect.QuoteSchema(schema, child.BaseView);
                 const pkRef = pgDialect.QuoteIdentifier(child.FirstPrimaryKey.Name); // first-pk-ok: IS-A child shares its parent's single-column key by design
                 const nameLit = pgDialect.QuoteStringLiteral(child.Name);
@@ -160,19 +177,52 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         return unionParts.join(' UNION ALL ');
     }
 
-    protected override BuildHardLinkDependencySQL(entityDependencies: EntityDependency[], compositeKey: CompositeKey): string {
+    protected override BuildChildDiscoveryBatchSQL(childEntities: EntityInfo[], recordPKValues: string[]): string {
+        if (recordPKValues.length === 0) return '';
+        const inList = recordPKValues.map(v => pgDialect.QuoteStringLiteral(v)).join(', ');
+        const aliasEntityName = pgDialect.QuoteColumnAlias('EntityName');
+        const aliasRecordPK = pgDialect.QuoteColumnAlias('RecordPK');
+        const aliasPriority = pgDialect.QuoteColumnAlias('Priority');
+        const unionParts = childEntities
+            .filter(child => child.PrimaryKeys.length > 0)
+            .map((child, idx) => {
+                const schema = child.SchemaName || this.MJCoreSchemaName || '__mj';
+                const sourceRef = pgDialect.QuoteSchema(schema, child.BaseView);
+                const pkRef = pgDialect.QuoteIdentifier(child.FirstPrimaryKey.Name); // first-pk-ok: IS-A shared key
+                const nameLit = pgDialect.QuoteStringLiteral(child.Name);
+                return `SELECT ${nameLit} AS ${aliasEntityName}, CAST(${pkRef} AS TEXT) AS ${aliasRecordPK}, ${idx + 1} AS ${aliasPriority} FROM ${sourceRef} WHERE ${pkRef} IN (${inList})`;
+            });
+        if (unionParts.length === 0) return '';
+        return unionParts.join(' UNION ALL ');
+    }
+
+    protected override BuildHardLinkDependencySQL(
+        entityDependenciesOrName: EntityDependency[] | string,
+        compositeKey: CompositeKey,
+        options?: GetRecordDependenciesOptions,
+        contextUser?: UserInfo,
+    ): string {
+        const entityDependencies = this.resolveEntityDependencies(entityDependenciesOrName);
         let sSQL = '';
         for (const dep of entityDependencies) {
             const entityInfo = this.Entities.find(e => e.Name.trim().toLowerCase() === dep.EntityName?.trim().toLowerCase());
             const relatedEntityInfo = this.Entities.find(e => e.Name.trim().toLowerCase() === dep.RelatedEntityName?.trim().toLowerCase());
             if (!entityInfo || !relatedEntityInfo) continue;
+            if (!this.shouldIncludeDependencyEntity(relatedEntityInfo, options, contextUser)) continue;
+
+            const fkField = relatedEntityInfo.Fields.find(f => f.Name.trim().toLowerCase() === dep.FieldName?.trim().toLowerCase());
+            if (fkField?.EntityIDFieldName && fkField.EntityIDFieldName.trim().length > 0) continue;
 
             const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
+            const pksToProject = relatedEntityInfo.PrimaryKeys?.length ? relatedEntityInfo.PrimaryKeys : entityInfo.PrimaryKeys;
             const pkParts: string[] = [];
-            for (const pk of entityInfo.PrimaryKeys) {
+            for (const pk of pksToProject) {
                 pkParts.push("'" + pk.Name + "' || '|' || CAST(" + pgDialect.QuoteIdentifier(pk.Name) + " AS TEXT)");
             }
             const primaryKeySelectString = pkParts.join(" || '" + CompositeKey.DefaultFieldDelimiter + "' || ");
+            const sourceObject = this.resolveDependencySourceObject(relatedEntityInfo, [dep.FieldName]);
+            const rawVal = String(compositeKey.GetValueByIndex(0) ?? '');
+            const escapedVal = quotes.length > 0 ? rawVal.replace(/'/g, "''") : rawVal;
 
             if (sSQL.length > 0) sSQL += ' UNION ALL ';
             sSQL += 'SELECT '
@@ -182,13 +232,18 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
                 + "'" + dep.FieldName + '\' AS "FieldName", '
                 + 'false AS "IsSoftLink", '
                 + 'NULL AS "EntityIDFieldName" '
-                + 'FROM ' + pgDialect.QuoteSchema(relatedEntityInfo.SchemaName, relatedEntityInfo.BaseView) + ' '
-                + 'WHERE ' + pgDialect.QuoteIdentifier(dep.FieldName) + ' = ' + quotes + compositeKey.GetValueByIndex(0) + quotes;
+                + 'FROM ' + pgDialect.QuoteSchema(relatedEntityInfo.SchemaName, sourceObject) + ' '
+                + 'WHERE ' + pgDialect.QuoteIdentifier(dep.FieldName) + ' = ' + quotes + escapedVal + quotes;
         }
         return sSQL;
     }
 
-    protected override BuildSoftLinkDependencySQL(entityName: string, compositeKey: CompositeKey): string {
+    protected override BuildSoftLinkDependencySQL(
+        entityName: string,
+        compositeKey: CompositeKey,
+        options?: GetRecordDependenciesOptions,
+        contextUser?: UserInfo,
+    ): string {
         // The entity we are finding dependents OF is `entityName` - the target. Every WHERE clause below
         // filters on THAT entity's ID and THAT record's key; `entity` in the loop is the *holder* of the
         // link, which is a different thing entirely.
@@ -196,11 +251,19 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         if (!targetEntity) {
             throw new Error(`Entity ${entityName} not found in metadata`);
         }
-        // The canonical stored encoding of the target record's key - `ID|<guid>` (see CompositeKey.ToRecordID).
+        // Single-primary-key records referenced by polymorphic tables may store either the canonical
+        // `ID|<guid>` encoding (`CompositeKey.ToRecordID()`) OR the bare primary key value (`<guid>`).
         const targetRecordID = compositeKey.ToRecordID().replace(/'/g, "''");
+        const bareValue =
+            compositeKey.KeyValuePairs.length === 1
+                ? String(compositeKey.KeyValuePairs[0].Value ?? '').replace(/'/g, "''")
+                : '';
 
         let sSQL = '';
         this.Entities.forEach(entity => {
+            if (!this.shouldIncludeDependencyEntity(entity, options, contextUser)) {
+                return;
+            }
             const pkParts: string[] = [];
             for (const pk of entity.PrimaryKeys) {
                 pkParts.push("'" + pk.Name + "' || '|' || CAST(" + pgDialect.QuoteIdentifier(pk.Name) + " AS TEXT)");
@@ -209,6 +272,11 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
 
             entity.Fields.filter(f => f.EntityIDFieldName && f.EntityIDFieldName.length > 0).forEach(f => {
                 if (sSQL.length > 0) sSQL += ' UNION ALL ';
+                const sourceObject = this.resolveDependencySourceObject(entity, [f.Name, f.EntityIDFieldName]);
+                const recordIDPredicate =
+                    bareValue && bareValue !== targetRecordID
+                        ? pgDialect.QuoteIdentifier(f.Name) + " IN ('" + targetRecordID + "', '" + bareValue + "')"
+                        : pgDialect.QuoteIdentifier(f.Name) + " = '" + targetRecordID + "'";
                 // Both literals are always quoted regardless of any primary key type: the discriminator
                 // column is a uuid FK to __mj.Entity and the payload column is text. Deriving quoting from
                 // the holder's primary key type emitted unquoted literals for an integer-keyed holder.
@@ -219,9 +287,9 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
                     + "'" + f.Name + '\' AS "FieldName", '
                     + 'true AS "IsSoftLink", '
                     + "'" + f.EntityIDFieldName + '\' AS "EntityIDFieldName" '
-                    + 'FROM ' + pgDialect.QuoteSchema(entity.SchemaName, entity.BaseView) + ' '
+                    + 'FROM ' + pgDialect.QuoteSchema(entity.SchemaName, sourceObject) + ' '
                     + 'WHERE ' + pgDialect.QuoteIdentifier(f.EntityIDFieldName) + " = '" + targetEntity.ID + "'"
-                    + ' AND ' + pgDialect.QuoteIdentifier(f.Name) + " = '" + targetRecordID + "'";
+                    + ' AND ' + recordIDPredicate;
             });
         });
         return sSQL;
@@ -247,6 +315,20 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
 
     get DatabaseConnection(): pg.Pool {
         return this._connectionManager.Pool;
+    }
+
+    /** Reads the live counts from the pg pool, or `null` before the pool is initialized. */
+    public override GetPoolStats(): DatabasePoolStats | null {
+        if (!this._connectionManager.IsConnected) {
+            return null;
+        }
+        const pool = this._connectionManager.Pool;
+        return {
+            TotalConnections: pool.totalCount,
+            ActiveConnections: pool.totalCount - pool.idleCount,
+            IdleConnections: pool.idleCount,
+            WaitingRequests: pool.waitingCount,
+        };
     }
 
     get InstanceConnectionString(): string {
@@ -362,11 +444,77 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
 
     // ─── SQL Execution ───────────────────────────────────────────────
 
+    /**
+     * Executes a query on the given PostgreSQL queryable source while notifying
+     * registered `ISqlObserver` listeners and active SQL logging sessions.
+     */
+    public async ExecuteObservedQuery<T = Record<string, unknown>>(
+        source: { query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[]; rowCount?: number | null }> },
+        sqlText: string,
+        params?: unknown[],
+        options?: ExecuteSQLOptions,
+        contextUser?: UserInfo,
+    ): Promise<Array<T>> {
+        const startTime = performance.now();
+        try {
+            const result = await source.query(sqlText, params);
+            const durationMs = performance.now() - startTime;
+            const rows = (result?.rows ?? []) as Array<T>;
+            const rowCount = Array.isArray(result?.rows)
+                ? result.rows.length
+                : typeof result?.rowCount === 'number'
+                  ? result.rowCount
+                  : 0;
+            if (!options?.ignoreLogging && !IsDiagnosticCaptureSuppressed() && GenericDatabaseProvider.HasSqlObservers()) {
+                GenericDatabaseProvider.NotifySqlObservers({
+                    ts: Date.now(),
+                    sql: sqlText,
+                    parameterSummaries: SummarizeSqlParameters(params, !(options?.isMutation ?? false)),
+                    durationMs,
+                    rowCount,
+                    isMutation: options?.isMutation ?? false,
+                    description: options?.description,
+                    diagnosticContext: GetDiagnosticContext(),
+                    ignoreLogging: options?.ignoreLogging,
+                });
+            }
+            if (!options?.ignoreLogging && this.HasActiveSqlLoggingSessions) {
+                await this._logSqlStatement(
+                    sqlText,
+                    params,
+                    options?.description,
+                    options?.ignoreLogging ?? false,
+                    options?.isMutation ?? false,
+                    undefined,
+                    contextUser,
+                );
+            }
+            return rows;
+        } catch (err) {
+            const durationMs = performance.now() - startTime;
+            if (!options?.ignoreLogging && !IsDiagnosticCaptureSuppressed() && GenericDatabaseProvider.HasSqlObservers()) {
+                GenericDatabaseProvider.NotifySqlObservers({
+                    ts: Date.now(),
+                    sql: sqlText,
+                    parameterSummaries: SummarizeSqlParameters(params, false),
+                    durationMs,
+                    rowCount: 0,
+                    isMutation: options?.isMutation ?? false,
+                    errorMessage: err instanceof Error ? err.message : String(err),
+                    description: options?.description,
+                    diagnosticContext: GetDiagnosticContext(),
+                    ignoreLogging: options?.ignoreLogging,
+                });
+            }
+            throw err;
+        }
+    }
+
     async ExecuteSQL<T>(
         query: string,
         parameters?: unknown[],
         options?: ExecuteSQLOptions,
-        _contextUser?: UserInfo
+        contextUser?: UserInfo
     ): Promise<Array<T>> {
         const processedParams = PGQueryParameterProcessor.ProcessParameters(parameters);
         // Auto-quote PascalCase identifiers in raw SQL. MJ has lots of hand-written
@@ -381,10 +529,9 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         try {
             if (options?.connectionSource) {
                 const bypass = options.connectionSource as {
-                    query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }>;
+                    query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[]; rowCount?: number | null }>;
                 };
-                const bypassResult = await bypass.query(quotedQuery, processedParams);
-                return bypassResult.rows as T[];
+                return await this.ExecuteObservedQuery<T>(bypass, quotedQuery, processedParams, options, contextUser);
             }
             const timeoutMs = this.effectiveTimeoutMs(options?.timeoutMs);
             // Both protections are skipped only for a statement that will run inside the caller's own
@@ -395,19 +542,20 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             const readOnly = !!options?.readOnlyTransaction && !joinsCallerTransaction;
             const timed = timeoutMs !== undefined && !joinsCallerTransaction;
             if (readOnly || timed) {
-                return await this.executeOnOwnConnection<T>(quotedQuery, processedParams, readOnly, timeoutMs);
+                return await this.executeOnOwnConnection<T>(quotedQuery, processedParams, readOnly, timeoutMs, options, contextUser);
             }
             if (options?.ignoreAmbientTransaction) {
                 // A read that does not join the ambient transaction: straight to the pool (#4514).
-                const poolResult = await this._connectionManager.Pool.query(quotedQuery, processedParams);
-                return poolResult.rows as T[];
+                return await this.ExecuteObservedQuery<T>(this._connectionManager.Pool, quotedQuery, processedParams, options, contextUser);
             }
             const source = this.resolveQuerySource();
-            const result = await source.query(quotedQuery, processedParams);
-            return result.rows as T[];
+            return await this.ExecuteObservedQuery<T>(source, quotedQuery, processedParams, options, contextUser);
         } catch (err) {
             const desc = options?.description ? ` [${options.description}]` : '';
-            LogError(`PostgreSQLDataProvider.ExecuteSQL failed${desc}: ${err instanceof Error ? err.message : String(err)}`);
+            const paramSummary = processedParams && processedParams.length > 0
+                ? ` (Parameters: ${FormatSqlParameterTypesForError(processedParams)})`
+                : '';
+            LogError(`PostgreSQLDataProvider.ExecuteSQL failed${desc}${paramSummary}: ${err instanceof Error ? err.message : String(err)}`);
             throw err;
         }
     }
@@ -454,6 +602,8 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         params: unknown[] | undefined,
         readOnly: boolean,
         timeoutMs: number | undefined,
+        options?: ExecuteSQLOptions,
+        contextUser?: UserInfo,
     ): Promise<Array<T>> {
         const client = await this._connectionManager.AcquireClient();
         try {
@@ -462,15 +612,50 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
                 if (timeoutMs !== undefined) {
                     await client.query(`SET LOCAL statement_timeout = ${timeoutMs}`);
                 }
-                const result = await client.query(sql, params);
+                const rows = await this.ExecuteObservedQuery<T>(client, sql, params, options, contextUser);
                 await client.query(readOnly ? 'ROLLBACK' : 'COMMIT');
-                return result.rows as T[];
+                return rows;
             } catch (err) {
                 await client.query('ROLLBACK').catch(() => undefined);
                 throw err;
             }
         } finally {
             await this.releaseOwnConnection(client);
+        }
+    }
+
+    /**
+     * Describes the result set of `sqlText`: it runs as `SELECT * FROM (<sql>) _q LIMIT 0` on a
+     * connection of its own, inside a read-only transaction that is always rolled back, with JIT
+     * off and a statement timeout, so no row is read and nothing it does persists. The sources
+     * come from the row description's table and column numbers. The SQL is auto-quoted as
+     * {@link ExecuteSQL} would quote it, so the description is of the statement that would run.
+     */
+    public override async DescribeStatement(sqlText: string, _contextUser?: UserInfo): Promise<DescribeStatementResult> {
+        let client: pg.PoolClient | null = null;
+        try {
+            client = await this._connectionManager.AcquireClient();
+            return await this.describeInReadOnlyTransaction(client, DescribeWrapperSQL(this.AutoQuoteIdentifiers(sqlText)));
+        } catch (e) {
+            return DescribeStatementFailure(e instanceof Error ? e.message : String(e));
+        } finally {
+            if (client) await this.releaseOwnConnection(client);
+        }
+    }
+
+    /** Runs the describe wrapper and its catalog lookup in a read-only transaction that is rolled back. */
+    private async describeInReadOnlyTransaction(client: pg.PoolClient, wrapper: string): Promise<DescribeStatementResult> {
+        await client.query('BEGIN READ ONLY');
+        try {
+            await client.query('SET LOCAL jit = off');
+            await client.query(`SET LOCAL statement_timeout = ${this.effectiveTimeoutMs(POSTGRESQL_DESCRIBE_TIMEOUT_MS) ?? POSTGRESQL_DESCRIBE_TIMEOUT_MS}`);
+            const fields = (await client.query(wrapper)).fields.map(FieldDescriptionOf);
+            const catalog = fields.length === 0
+                ? { rows: [] as PostgreSQLDescribeCatalogRow[] }
+                : await client.query<PostgreSQLDescribeCatalogRow>(POSTGRESQL_DESCRIBE_CATALOG_SQL, DescribeCatalogParameters(fields));
+            return MapPostgreSQLDescribeFields(fields, catalog.rows);
+        } finally {
+            await client.query('ROLLBACK').catch(() => undefined);
         }
     }
 
@@ -497,8 +682,12 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      */
     public async RunColocatedSQL<T = Record<string, unknown>>(sql: string, params?: ReadonlyArray<unknown>): Promise<T[]> {
         const source = this.resolveQuerySource();
-        const result = await source.query(sql, params ? [...params] : undefined);
-        return result.rows as T[];
+        return await this.ExecuteObservedQuery<T>(
+            source,
+            sql,
+            params ? [...params] : undefined,
+            { description: 'RunColocatedSQL' },
+        );
     }
 
     /**
@@ -604,8 +793,16 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         } catch { /* swallow — surfacing the primary error */ }
     }
 
+    /**
+     * Returns the currently active `pg.PoolClient` transaction handle managed by this provider,
+     * or `null` when no physical transaction is open.
+     */
+    public get ActiveTransactionClient(): pg.PoolClient | null {
+        return this._transaction;
+    }
+
     async CreateTransactionGroup(): Promise<TransactionGroupBase> {
-        return new PostgreSQLTransactionGroup();
+        return new PostgreSQLTransactionGroup(this);
     }
 
     protected override BuildPaginationSQL(maxRows: number, startRow: number): string {
@@ -828,9 +1025,13 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
     /**
      * Public wrapper for GenerateSaveSQL used by PostgreSQLTransactionGroup
      * when transaction variables require regenerating the SQL instruction.
+     *
+     * @param client - The client whose transaction the save will run in, when one is already
+     *   open. A read the save's Record Change snapshot needs runs on it, so it sees that
+     *   transaction's earlier writes.
      */
-    public async GetSaveSQL(entity: BaseEntity, isNew: boolean, user: UserInfo): Promise<SaveSQLResult> {
-        return this.GenerateSaveSQL(entity, isNew, user);
+    public async GetSaveSQL(entity: BaseEntity, isNew: boolean, user: UserInfo, client?: pg.PoolClient): Promise<SaveSQLResult> {
+        return this.GenerateSaveSQLReadingOn(entity, isNew, user, client);
     }
 
     // GenerateSaveSQL is now inherited from GenericDatabaseProvider — the
@@ -951,27 +1152,47 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      * result-capture pattern. PG returns the row directly; no
      * @ResultTable equivalent.
      *
-     * When the caller passes a per-save `options.SaveReturnMode = 'datestamps_only'`
-     * override on an entity whose generated function returns the full view, projects
-     * only the PK + datestamp columns (`EntityInfo.DatestampReturnFields`) over the wire.
+     * When `returnContext.needsDatestampProjection` is true (either passed by
+     * `GenericDatabaseProvider.GenerateSaveSQL` or resolved from `options`),
+     * delegates to {@link ProjectSaveCallToDatestamps}.
      */
     protected override WrapSaveCallForResult(
         binding: SaveCallBinding,
         entity: BaseEntity,
         spName: string,
         options?: EntitySaveOptions,
+        returnContext?: SaveReturnContext,
     ): SaveSQLFragment {
+        const resolvedReturn = returnContext ?? this.ResolveSaveReturnContext(entity, options);
+        if (resolvedReturn.needsDatestampProjection) {
+            return this.ProjectSaveCallToDatestamps(binding, entity, spName, resolvedReturn);
+        }
         if (binding.kind !== 'pg-positional' && binding.kind !== 'pg-json-arg') {
             throw new Error(`PostgreSQLDataProvider.WrapSaveCallForResult: unexpected binding kind '${binding.kind}'`);
         }
-        const effectiveReturnMode = options?.SaveReturnMode ?? entity.EntityInfo.SaveReturnMode;
-        const selectCols = (effectiveReturnMode === 'datestamps_only' && entity.EntityInfo.SaveReturnMode !== 'datestamps_only')
-            ? entity.EntityInfo.DatestampReturnFields.map((f) => pgDialect.QuoteIdentifier(f.Name)).join(', ')
-            : '*';
         // CRUD functions live in the entity's OWN schema (e.g. hubspot.spCreatecontacts),
         // not the MJ core schema. Codegen emits them via QuoteSchema(entity.SchemaName, fn),
         // so the runtime must resolve the same schema or the function is "does not exist".
-        const sql = `SELECT ${selectCols} FROM ${pgDialect.QuoteSchema(entity.EntityInfo.SchemaName, spName)}(${binding.callArgsSQL})`;
+        const sql = `SELECT * FROM ${pgDialect.QuoteSchema(entity.EntityInfo.SchemaName, spName)}(${binding.callArgsSQL})`;
+        return { sql, parameters: [...binding.values] };
+    }
+
+    /**
+     * Projects a PG save function call down to `returnContext.datestampSelectColumnsSQL`
+     * (`SELECT "ID", "__mj_CreatedAt", "__mj_UpdatedAt" FROM schema."fn"(...)`) when
+     * `options.SaveReturnMode === 'datestamps_only'` is passed at runtime on an entity
+     * whose compiled function returns the full view.
+     */
+    protected override ProjectSaveCallToDatestamps(
+        binding: SaveCallBinding,
+        entity: BaseEntity,
+        spName: string,
+        returnContext: SaveReturnContext,
+    ): SaveSQLFragment {
+        if (binding.kind !== 'pg-positional' && binding.kind !== 'pg-json-arg') {
+            throw new Error(`PostgreSQLDataProvider.ProjectSaveCallToDatestamps: unexpected binding kind '${binding.kind}'`);
+        }
+        const sql = `SELECT ${returnContext.datestampSelectColumnsSQL} FROM ${pgDialect.QuoteSchema(entity.EntityInfo.SchemaName, spName)}(${binding.callArgsSQL})`;
         return { sql, parameters: [...binding.values] };
     }
 
@@ -979,18 +1200,21 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      * Wraps a PG save SQL with the record-change CTE chain. The
      * `save_result` CTE captures the inserted/updated row; `record_change`
      * inserts the audit row with the SQL-side `RecordID` expression
-     * derived from `save_result`'s PK column(s).
+     * derived from `save_result`'s PK column(s), and the outer `SELECT`
+     * returns `returnContext.finalSelectColumnsSQL` from `save_result`.
      */
     protected override WrapSaveCallWithRecordChange(
         saveSQL: SaveSQLFragment,
         binding: SaveCallBinding,
         payload: RecordChangePayload,
         entity: BaseEntity,
-        _options?: EntitySaveOptions,
+        options?: EntitySaveOptions,
+        returnContext?: SaveReturnContext,
     ): SaveSQLFragment {
         if (binding.kind !== 'pg-positional' && binding.kind !== 'pg-json-arg') {
             throw new Error(`PostgreSQLDataProvider.WrapSaveCallWithRecordChange: unexpected binding kind '${binding.kind}'`);
         }
+        const resolvedReturn = returnContext ?? this.ResolveSaveReturnContext(entity, options);
         const baseValues = saveSQL.parameters ?? [];
         const recordIDExpr = this.buildRecordIDFromCTE(entity.EntityInfo, 'save_result');
         const s = baseValues.length + 1;
@@ -1005,7 +1229,7 @@ record_change AS (
     FROM save_result
     RETURNING "ID"
 )
-SELECT * FROM save_result`;
+SELECT ${resolvedReturn.finalSelectColumnsSQL} FROM save_result`;
         const parameters = [
             ...baseValues,
             payload.entityID,
@@ -1039,7 +1263,7 @@ SELECT * FROM save_result`;
         const simpleSQL = `SELECT * FROM ${pgDialect.QuoteSchema(entityInfo.SchemaName, fnName)}(${paramPlaceholders})`;
 
         if (this.ShouldTrackRecordChanges(entityInfo) && options?.SkipRecordChanges !== true) {
-            const oldData = entity.GetAll(false);
+            const oldData = this.RecordChangeDeleteSnapshot(entity, entity.GetAll(true)); // the OLD values, full width
             const recordID = this.buildRecordIDFromEntity(entity);
             // Delete: newData is null so the payload renders Source/lineage from
             // the entity's RestoreContext (usually NULL — supported for symmetry).

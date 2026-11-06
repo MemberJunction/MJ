@@ -4,6 +4,7 @@ import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
 import type { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
+import { ExperimentSessions } from '@memberjunction/predictive-studio-core';
 import { PSExperimentsComponent } from './ps-experiments.component';
 
 try {
@@ -15,9 +16,8 @@ try {
 /**
  * DOM coverage for <ps-experiments> — the kanban + leaderboard for the active experiment session. The
  * engine is an @Input; a minimal fake supplies `Sessions` + `IterationRowsForSession`. The active
- * session is the first Running one (else most recent), so we drive: the empty state (no sessions), the
- * populated header/kanban (a Running session → Pause + Cancel visible), and a Paused session (Resume
- * visible). Clicking a control opens the shared <ps-confirm-modal> (no Remote Op runs). Standalone.
+ * session is the first Running one (else most recent). Experiment sessions are switched off, so the
+ * panel shows earlier sessions read-only with an unavailable notice and offers no start or control action.
  */
 
 type Row = ReturnType<PredictiveStudioEngine['IterationRowsForSession']>[number];
@@ -46,29 +46,26 @@ describe('PSExperimentsComponent (DOM)', () => {
     expect(query(fixture, '[data-testid="ps-kanban-col-pruned"]')).not.toBeNull();
   });
 
-  it('shows Pause + Cancel (not Resume) for a Running session', () => {
-    const fixture = render(makeEngine([{ ID: 's1', Name: 'Run', Status: 'Running', Budget: null }]));
-    expect(query(fixture, '[data-testid="ps-experiments-pause"]')).not.toBeNull();
-    expect(query(fixture, '[data-testid="ps-experiments-cancel"]')).not.toBeNull();
-    expect(query(fixture, '[data-testid="ps-experiments-resume"]')).toBeNull();
+  it('offers no New Experiment, Pause, Resume or Cancel while sessions are switched off', () => {
+    for (const status of ['Running', 'Paused']) {
+      const fixture = render(makeEngine([{ ID: 's1', Name: 'Run', Status: status, Budget: null }]));
+      for (const id of ['ps-experiments-new-btn', 'ps-experiments-pause', 'ps-experiments-resume', 'ps-experiments-cancel']) {
+        expect(query(fixture, `[data-testid="${id}"]`)).toBeNull();
+      }
+      expect(query(fixture, '[data-testid="ps-experiments-unavailable"]')).not.toBeNull();
+      expect(query(fixture, '[data-testid="ps-experiments-unavailable-reason"]')?.textContent?.trim()).toBe(ExperimentSessions.DisabledReason);
+    }
   });
 
-  it('shows Resume (not Pause) for a Paused session', () => {
-    const fixture = render(makeEngine([{ ID: 's1', Name: 'Run', Status: 'Paused', Budget: null }]));
-    expect(query(fixture, '[data-testid="ps-experiments-resume"]')).not.toBeNull();
-    expect(query(fixture, '[data-testid="ps-experiments-pause"]')).toBeNull();
+  it('explains why in the empty state and offers no New Experiment', () => {
+    const fixture = render(makeEngine([]));
+    expect(query(fixture, '[data-testid="ps-experiments-new-btn-empty"]')).toBeNull();
+    expect(query(fixture, '[data-testid="ps-experiments-empty"]')?.textContent).toContain(ExperimentSessions.DisabledReason);
+    expect(query(fixture, '[data-testid="ps-experiments-disabled-reason"]')?.textContent?.trim()).toBe(ExperimentSessions.DisabledReason);
   });
 
   it('shows the empty-leaderboard note when the session has no scored iterations', () => {
     const fixture = render(makeEngine([{ ID: 's1', Name: 'Run', Status: 'Running', Budget: null }]));
     expect(query(fixture, '[data-testid="ps-experiments-leaderboard"]')?.textContent).toContain('No scored iterations yet');
-  });
-
-  it('opens the confirm modal when Pause is clicked', () => {
-    const fixture = render(makeEngine([{ ID: 's1', Name: 'Run', Status: 'Running', Budget: null }]));
-    expect(query(fixture, '[data-testid="ps-confirm-modal"]')).toBeNull();
-    (query(fixture, '[data-testid="ps-experiments-pause"]') as HTMLElement).click();
-    fixture.detectChanges();
-    expect(query(fixture, '[data-testid="ps-confirm-modal"]')).not.toBeNull();
   });
 });

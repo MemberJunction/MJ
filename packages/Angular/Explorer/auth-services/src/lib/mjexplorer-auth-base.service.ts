@@ -234,7 +234,11 @@ export abstract class MJAuthBase implements IAngularAuthProvider {
     // 'mj-theme-overlay' mirrors the active org brand overlay id for the same
     // pre-paint script — the org brand persists across logout (ThemeService.Reset
     // deliberately keeps the overlay), so its pre-paint mirror must too.
-    return new Set(['mj-theme', 'mj-theme-overlay']);
+    // 'mj-theme-overlay-css' is the overlay's emitted CSS persisted beside that id
+    // (ThemeService.ApplyBrandOverlay) so a cold load can re-inject it before first
+    // paint. Wiping it at logout leaves the next sign-in with the attribute and no
+    // stylesheet behind it: the sign-in page and the loading screen flash stock.
+    return new Set(['mj-theme', 'mj-theme-overlay', 'mj-theme-overlay-css']);
   }
 
   /**

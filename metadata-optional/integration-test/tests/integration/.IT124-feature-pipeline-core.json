@@ -1,0 +1,12 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT124 - Feature Pipeline Key, Cache and Versions (core)",
+    "Description": "Deterministic server-side bundle 'feature-pipeline-core', sequence 49, ahead of the client-transport tests. Runs a Feature Pipeline against MJ core tables only (no bizapps-common) on a stub driver that answers from a table, so no model is called. FP1 the first run activates version 1 and writes one Feature Value per record; FP2 an identical second run changes nothing (upsert on the Feature Value key); FP3 two spellings of one value share one Dedup Cache row and one computation; FP4 an expired cache entry is recomputed once and refreshed in place; FP5 a version change holds scheduled runs until an on-demand run backfills it (v1 Retired, v2 Active); FP6 a dry run writes no cache, value, watermark or version rows; FP7 25 records skipped on their watermark plus 2 failures trip the error-rate breaker, because it counts attempted records only. Requires RUN_MUTATION_TESTS: every check writes a scratch pipeline (names and record IDs start with it124-), deleted at setup and teardown.",
+    "Status": "Active",
+    "InputDefinition": {},
+    "ExpectedOutcomes": { "summary": "Seven checks pass: version 1 activates on the first run, an identical run is unchanged, two spellings share one cache row, an expired entry is refreshed in place, a version change holds scheduled runs until an on-demand backfill, a dry run writes nothing, and the breaker fails a run on its attempted records." },
+    "Configuration": { "tier": "mutation", "transport": "server", "checks": [ { "type": "feature-pipeline-core" } ] }
+  },
+  "primaryKey": { "ID": "0F283596-E1C9-4CF1-B55D-17CDCD446CE9" }
+}

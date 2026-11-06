@@ -12,42 +12,79 @@
       <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
     </button>
     @if (fieldDropdownOpen) {
-      <div class="dropdown-menu" [class.multi-source]="isMultiSource" [ngStyle]="dropdownMenuStyle">
-        @if (isMultiSource) {
-          <div class="source-pane">
-            @for (src of sources; track src.key) {
-              <button
-                type="button"
-                class="source-item"
-                [class.selected]="src.key === activeSourceKey"
-                (click)="selectSource(src.key); $event.stopPropagation()">
-                {{ src.label }}
-              </button>
-            }
+      <div
+        class="dropdown-menu field-dropdown-menu"
+        [class.multi-source]="isMultiSource"
+        [class.drop-up]="DropdownDropUp"
+        [ngStyle]="dropdownMenuStyle">
+        @if (fields.length > 5) {
+          <div class="dropdown-search-wrap" (click)="$event.stopPropagation()">
+            <i class="fa-solid fa-magnifying-glass dropdown-search-icon"></i>
+            <input
+              type="text"
+              class="dropdown-search-input"
+              placeholder="Search fields by name or description..."
+              [value]="FieldSearchText"
+              (input)="OnFieldSearchInputEvent($event)"
+              (keydown)="OnFieldSearchKeydown($event)"
+            />
           </div>
-          <div class="field-pane">
-            @for (field of fieldsForSource(activeSourceKey); track field.name) {
-              <div
-                class="dropdown-item"
-                [class.selected]="field.name === filter.field"
-                (click)="selectField(field.name)">
-                {{ field.displayName }}
-              </div>
-            }
+        }
+        @if (isMultiSource) {
+          <div class="multi-source-body">
+            <div class="source-pane">
+              @for (src of sources; track src.key) {
+                <button
+                  type="button"
+                  class="source-item"
+                  [class.selected]="src.key === activeSourceKey"
+                  (click)="selectSource(src.key); $event.stopPropagation()">
+                  {{ src.label }}
+                </button>
+              }
+            </div>
+            <div class="field-pane">
+              @for (field of FilteredFields(activeSourceKey); track field.name; let i = $index) {
+                <div
+                  class="dropdown-item field-option-item"
+                  [class.selected]="field.name === filter.field"
+                  [class.highlighted]="i === fieldHighlightIndex"
+                  (click)="selectField(field.name)">
+                  <div class="field-option-header">
+                    <span class="field-option-name">{{ field.displayName }}</span>
+                    <span class="field-option-type">{{ field.sqlType || field.type }}</span>
+                  </div>
+                  @if (field.description) {
+                    <div class="field-option-desc">{{ field.description }}</div>
+                  }
+                </div>
+              }
+              @if (FilteredFields(activeSourceKey).length === 0) {
+                <div class="dropdown-empty">No matching fields</div>
+              }
+            </div>
           </div>
         } @else {
-          @for (field of fields; track field.name; let i = $index) {
-            <div
-              class="dropdown-item"
-              [class.selected]="field.name === filter.field"
-              [class.highlighted]="i === fieldHighlightIndex"
-              (click)="selectField(field.name)">
-              {{ field.displayName }}
-            </div>
-          }
-        }
-        @if (fields.length === 0) {
-          <div class="dropdown-empty">No fields available</div>
+          <div class="field-options-scroll">
+            @for (field of FilteredFields(null); track field.name; let i = $index) {
+              <div
+                class="dropdown-item field-option-item"
+                [class.selected]="field.name === filter.field"
+                [class.highlighted]="i === fieldHighlightIndex"
+                (click)="selectField(field.name)">
+                <div class="field-option-header">
+                  <span class="field-option-name">{{ field.displayName }}</span>
+                  <span class="field-option-type">{{ field.sqlType || field.type }}</span>
+                </div>
+                @if (field.description) {
+                  <div class="field-option-desc">{{ field.description }}</div>
+                }
+              </div>
+            }
+            @if (FilteredFields(null).length === 0) {
+              <div class="dropdown-empty">No matching fields</div>
+            }
+          </div>
         }
       </div>
     }

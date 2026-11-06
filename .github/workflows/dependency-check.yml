@@ -4,16 +4,55 @@ on:
   pull_request:
     branches:
       - next
-    paths:
-      - 'packages/**/*.ts'
-      - 'packages/**/*.tsx'
-      - 'packages/**/package.json'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
+    # No `paths:` filter, on purpose: `Detect missing and unused dependencies` is a required check
+    # in next-protect, and a workflow skipped by a paths filter never reports its checks, so the PR
+    # would wait forever. The `changes` job applies the same filter; a job skipped by its `if`
+    # reports as passing.
+
+# Cancel superseded runs for the same ref. Without this a second push to a PR leaves the
+# first run burning a runner for a commit nobody will merge; 108 such runner-minutes were
+# measured across this repo in a single 23-hour window (2026-10-27).
+concurrency:
+  group: dependency-check-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect dependency-relevant changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      relevant: ${{ steps.filter.outputs.relevant }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+      - name: Check changed paths
+        id: filter
+        env:
+          PR_BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch --no-tags origin "$PR_BASE_REF"
+          CHANGED="$(git diff --name-only "origin/$PR_BASE_REF...HEAD")"
+          # The old paths filter: packages/**/*.ts, packages/**/*.tsx, packages/**/package.json,
+          # package.json, pnpm-lock.yaml.
+          if echo "$CHANGED" | grep -qE '^packages/(.*/)?[^/]*\.tsx?$|^packages/(.*/)?package\.json$|^(package\.json|pnpm-lock\.yaml)$'; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+          fi
+
   check-dependencies:
     name: Detect missing and unused dependencies
+    needs: changes
+    # Fail closed: a skipped required check counts as passing, so if change detection itself
+    # failed, run the real check rather than skip it.
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.relevant == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

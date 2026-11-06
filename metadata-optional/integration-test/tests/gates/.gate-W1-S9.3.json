@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W1 -> S9.3",
+    "Description": "Gate G0.6 (owner PR 2, phase 0, dataset W1, criterion S9.3): the user-facing strings of the Predictive Studio dashboard UI, Core and the story prompt templates make no causal claims, and 10 of 10 stories generated for the W1-signal s42 model make none. An LLM judge (the llm-judge oracle, strict) grades both against three criteria: features described only as associated or weighted, no claim that changing a feature changes the outcome, no advice to act on a feature. The judge is calibrated first on a full-size chunk of the real texts with one causal sentence planted in it, which it must fail on a criterion. Needs AI_VENDOR_API_KEY__GeminiLLM (the story generator) and a judge model key. The check trains and promotes the W1 s42 fixture model, so it is mutation-gated (RUN_MUTATION_TESTS=1) as well as live-model. Pending: an LLM judge's verdict can differ between runs on the same text (one run failed the grid header \"Top Drivers\", another passed it), so it cannot block a merge. Run it by hand from the suite \"Predictive Studio Gates — Pending\".",
+    "Status": "Pending",
+    "Tags": "[\"gate\",\"G0.6\",\"owner:PR2\",\"phase:0\",\"dataset:W1\",\"criterion:S9.3\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 1200000,
+    "ExpectedOutcomes": {
+      "summary": "The judge passes the UI/prompt strings and all 10 generated stories against the no-causal-claims criteria."
+    },
+    "Configuration": {
+      "tier": "live-model",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w1-s9-3"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "B0118760-0C95-4132-B7DE-E1FE2E4BCA63"
+  }
+}

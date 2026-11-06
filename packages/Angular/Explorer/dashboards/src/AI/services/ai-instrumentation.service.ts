@@ -446,7 +446,8 @@ export class AIInstrumentationService {
         ExtraFilter: `ID = '${promptRunId}'`,
         Fields: PROMPT_RUN_FIELDS,
         ResultType: 'simple',
-        MaxRows: 1
+        MaxRows: 1,
+        SkipTotalRowCount: true
       },
       ...(loadChildren ? [{
         EntityName: 'MJ: AI Prompt Runs',
@@ -503,7 +504,8 @@ export class AIInstrumentationService {
         ExtraFilter: `ID = '${agentRunId}'`,
         Fields: AGENT_RUN_FIELDS,
         ResultType: 'simple',
-        MaxRows: 1
+        MaxRows: 1,
+        SkipTotalRowCount: true
       },
       ...(loadChildren ? [{
         EntityName: 'MJ: AI Agent Runs',

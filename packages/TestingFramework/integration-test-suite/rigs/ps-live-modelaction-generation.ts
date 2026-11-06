@@ -53,6 +53,7 @@
  *   npx tsx packages/MJServer/integration-test-scripts/ps-live-modelaction-generation.ts
  */
 import { LoadEnv, LoadClientConfig } from './lib/harness';
+import { PromoteModel } from './lib/ps-promote';
 import { Metadata, RunView, UserInfo, BaseEntity, CompositeKey, IMetadataProvider } from '@memberjunction/core';
 import { GraphQLProviderConfigData, setupGraphQLClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import '@memberjunction/core-entities';
@@ -64,7 +65,6 @@ import {
   MJActionEntity,
   MJActionParamEntity,
   PredictiveStudioTrainModelOperation,
-  PredictiveStudioPromoteModelOperation,
 } from '@memberjunction/core-entities';
 
 const DRIVER_KEY = 'logistic_regression';
@@ -211,32 +211,6 @@ async function createPipeline(md: Metadata, user: UserInfo, algorithmId: string)
     throw new Error(`Failed to create pipeline: ${p.LatestResult?.CompleteMessage}`);
   }
   return p;
-}
-
-/**
- * Promote the model one lifecycle step over the wire. Passes signOff=true + a reason defensively
- * so a (possibly) leakage-flagged model still reaches the target status. Returns the new status.
- */
-async function promote(
-  route: IMetadataProvider, user: UserInfo, modelId: string,
-  targetStatus: 'Validated' | 'Published' | 'Archived',
-): Promise<string> {
-  const result = await new PredictiveStudioPromoteModelOperation().Execute(
-    {
-      modelId,
-      targetStatus,
-      signOff: true, // ignored for clean models; required to override a leakage-flagged one
-      reason: `${TAG}: stepwise promotion to ${targetStatus} for PS2-2 action-generation proof`,
-    },
-    { provider: route, user },
-  );
-  if (!result.Success || !result.Output) {
-    throw new Error(`Promote → ${targetStatus} failed: ${result.ErrorMessage}`);
-  }
-  if (!result.Output.promoted) {
-    throw new Error(`Promote → ${targetStatus} did not promote (status=${result.Output.status}).`);
-  }
-  return result.Output.status;
 }
 
 /** Re-read the model row (BypassCache) for its authoritative denormalized Pipeline + Version + Status. */
@@ -416,10 +390,10 @@ async function main(): Promise<void> {
     // The gate enforces ALLOWED_TRANSITIONS — no Draft→Published jump — so step through Validated.
     // signOff=true + reason are passed defensively in case the model is leakage-flagged.
     banner('4. PROMOTE STEPWISE → Published (PredictiveStudio.PromoteModel)');
-    const s1 = await promote(route, user, out.modelId, 'Validated');
+    const s1 = await PromoteModel(route, user, out.modelId, 'Validated', `${TAG}: stepwise promotion for PS2-2 action-generation proof`);
     console.log(`  Draft → Validated: promoted, status=${s1}`);
     check(s1 === 'Validated', `step 1 status = Validated (got '${s1}')`);
-    const s2 = await promote(route, user, out.modelId, 'Published');
+    const s2 = await PromoteModel(route, user, out.modelId, 'Published', `${TAG}: stepwise promotion for PS2-2 action-generation proof`);
     console.log(`  Validated → Published: promoted, status=${s2}`);
     check(s2 === 'Published', `step 2 status = Published (got '${s2}')`);
 

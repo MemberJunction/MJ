@@ -1,0 +1,38 @@
+{
+    "taskComplete": true,
+    "message": "Creative brief completed with a 25s video generation request exceeding the Draft cap.",
+    "payloadChangeRequest": {
+        "newElements": {
+            "Archetype": {
+                "Name": "Social Short"
+            },
+            "Film": {
+                "OneSentence": "In Q3, platform architecture unified metadata and agent execution.",
+                "Audience": "Engineering and product leadership",
+                "Purpose": "Explain unified platform execution",
+                "DurationSeconds": 18,
+                "Formats": [
+                    "16:9"
+                ],
+                "Language": "en-US"
+            },
+            "Assets": {
+                "Required": [],
+                "NeverInvent": [
+                    "Customer logos not provided in the brief"
+                ],
+                "Generate": [
+                    {
+                        "Key": "over_cap_clip",
+                        "Kind": "Video",
+                        "Prompt": "Abstract geometric data particles flowing on dark navy canvas",
+                        "Purpose": "Extended background texture",
+                        "Format": "16:9",
+                        "DurationSeconds": 25
+                    }
+                ]
+            },
+            "DataBindings": []
+        }
+    }
+}

@@ -89,6 +89,9 @@ export function CacheManagerConfigFromSettings(settings: CacheSettingsConfig | u
     return {
         maxSizeBytes: (settings?.maxMemoryMB ?? 150) * 1024 * 1024,
         maxPercentOfCachePerEntity: settings?.maxPercentOfCachePerEntity ?? 50,
+        // Passed through so the per-entry ceiling is reachable from mj.config.cjs at all. It was
+        // not, which is what made it a hardcoded fraction in every deployment.
+        maxEntryPercentOfCache: settings?.maxEntryPercentOfCache ?? 'auto',
         defaultTTLMs: (settings?.defaultTTLSeconds ?? 0) * 1000,
         evictionSweepIntervalMs: (settings?.evictionSweepIntervalSeconds ?? 300) * 1000,
         verboseLogging: settings?.verboseLogging ?? false,
@@ -235,7 +238,7 @@ function relayRunViewChangeToBrowsers(event: CacheChangedEvent): void {
     PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
         entityName,
         primaryKeyValues: null, // entity-level invalidation
-        action: event.Action,
+        action: event.Action === 'row_delta' ? 'set' : event.Action,
         sourceServerId: event.SourceServerId || 'unknown',
         timestamp: new Date(),
     });

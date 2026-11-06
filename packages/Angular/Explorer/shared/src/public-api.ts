@@ -13,6 +13,7 @@ export * from './lib/moved-nav-items';
 export * from './lib/record-open-style';
 export * from './lib/record-delete';
 export * from './lib/record-tab-icon';
+export * from './lib/record-tab-title';
 export * from './lib/explorer-breakpoint.service';
 export * from './lib/safe-detect-changes';
 export * from './lib/navigation.interfaces';

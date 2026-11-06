@@ -1,5 +1,305 @@
 # @memberjunction/integration-schema-builder
 
+## 6.2.0
+
+### Minor Changes
+
+- 6770aad: CodeGen keeps EntityField metadata in step with the views and procedures it regenerates, and fails the run when a step fails instead of reporting success.
+  - Custom and layered base views are refreshed live, inner view first, before fields are synced; orphaned EntityField rows are pruned across every entity once per run, and the Sequence renumber no longer collides on them (#4050, #4336, #4737, #5976, #6028).
+  - Self-referencing keys that still have `Root*` fields or a `GetRootID` function keep their hierarchy after the 6.1 opt-in change (#5976).
+  - IS-A child entities keep the foreign-key metadata of inherited fields (#4569).
+  - Stale create/update/delete procedures are found by comparing them with what CodeGen generates (#3343); expression column defaults no longer produce procedures that fail to compile (#4000).
+  - `spDeleteEntityWithCoreDependencies` handles every reference to an entity from a checked-in policy and runs in one transaction (#3546).
+  - The runtime schema update path resolves `additionalSchemaInfo` from the config file's folder and fails when CodeGen creates no entity for a table (#5858).
+  - Batch, script and step failures are collected and the run exits non-zero listing all of them.
+
+### Patch Changes
+
+- Updated dependencies [1419ba7]
+- Updated dependencies [39b35f1]
+- Updated dependencies [e97d95c]
+- Updated dependencies [6c36fb6]
+- Updated dependencies [cc36de5]
+- Updated dependencies [9cb815b]
+- Updated dependencies [709de1a]
+- Updated dependencies [c159e2f]
+- Updated dependencies [d2db108]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [a3539d2]
+- Updated dependencies [db39145]
+- Updated dependencies [41274aa]
+- Updated dependencies [29b16ee]
+- Updated dependencies [c671f85]
+- Updated dependencies [49f26d9]
+- Updated dependencies [5e4205c]
+- Updated dependencies [6770aad]
+- Updated dependencies [7be1684]
+- Updated dependencies [21f9e15]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [f2248d5]
+- Updated dependencies [81aea34]
+- Updated dependencies [5465489]
+- Updated dependencies [3bace5a]
+- Updated dependencies [88e6902]
+- Updated dependencies [c87f87a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [4248fb3]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [59e32e0]
+- Updated dependencies [b1295d2]
+- Updated dependencies [420fc02]
+- Updated dependencies [f68e17b]
+- Updated dependencies [0a7c255]
+- Updated dependencies [0adaf76]
+- Updated dependencies [0ff7523]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [794660a]
+- Updated dependencies [a1a7e2c]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [f65fec7]
+- Updated dependencies [9b5b489]
+- Updated dependencies [cb205de]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [683f652]
+- Updated dependencies [914e6ff]
+- Updated dependencies [2274f42]
+- Updated dependencies [0fb3649]
+- Updated dependencies [d659bb2]
+- Updated dependencies [477b49b]
+- Updated dependencies [2c38278]
+- Updated dependencies [ccfd553]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [705ab4e]
+- Updated dependencies [a7da50b]
+- Updated dependencies [0f04590]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [f26084f]
+- Updated dependencies [db39145]
+- Updated dependencies [f48dffc]
+- Updated dependencies [41c2c08]
+- Updated dependencies [630bb88]
+- Updated dependencies [e69634e]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [17cc774]
+- Updated dependencies [dae1d31]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [80905a1]
+- Updated dependencies [315e8f7]
+- Updated dependencies [397ae9a]
+- Updated dependencies [20650af]
+- Updated dependencies [7e72c86]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [25f7b82]
+- Updated dependencies [104125c]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [d296edd]
+- Updated dependencies [9c2a051]
+- Updated dependencies [66fd011]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [509d2aa]
+- Updated dependencies [196160a]
+- Updated dependencies [5513c2a]
+- Updated dependencies [90829e3]
+- Updated dependencies [5986939]
+- Updated dependencies [c8bbfce]
+- Updated dependencies [effedda]
+- Updated dependencies [14c7719]
+- Updated dependencies [48c974e]
+- Updated dependencies [4d647e6]
+- Updated dependencies [8c120db]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [17a4137]
+- Updated dependencies [e1942c7]
+- Updated dependencies [b4afc13]
+- Updated dependencies [c7d1170]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [60bd774]
+- Updated dependencies [0a348e2]
+- Updated dependencies [ac18db8]
+- Updated dependencies [35da130]
+- Updated dependencies [5b41d48]
+- Updated dependencies [4b9542c]
+- Updated dependencies [28c92e0]
+- Updated dependencies [5f707d1]
+- Updated dependencies [369e229]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [3f92ec2]
+- Updated dependencies [48d2b32]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [94e3a12]
+- Updated dependencies [aca4317]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+- Updated dependencies [2c590b0]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [c8fb9d7]
+- Updated dependencies [dc38250]
+- Updated dependencies [5ba9ce9]
+  - @memberjunction/global@6.2.0
+  - @memberjunction/core@6.2.0
+  - @memberjunction/sql-dialect@6.2.0
+  - @memberjunction/schema-engine@6.2.0
+  - @memberjunction/integration-engine@6.2.0
+
+## 6.2.0-edge.8
+
+### Patch Changes
+
+- Updated dependencies [6c36fb6]
+- Updated dependencies [9cb815b]
+- Updated dependencies [d2db108]
+- Updated dependencies [c671f85]
+- Updated dependencies [59e32e0]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [477b49b]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [e69634e]
+- Updated dependencies [ac18db8]
+  - @memberjunction/core@6.2.0-edge.8
+  - @memberjunction/global@6.2.0-edge.8
+  - @memberjunction/integration-engine@6.2.0-edge.8
+  - @memberjunction/schema-engine@6.2.0-edge.8
+  - @memberjunction/sql-dialect@6.2.0-edge.8
+
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [1419ba7]
+- Updated dependencies [29b16ee]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [3bace5a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [794660a]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [0fb3649]
+- Updated dependencies [d659bb2]
+- Updated dependencies [2c38278]
+- Updated dependencies [ccfd553]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [397ae9a]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [509d2aa]
+- Updated dependencies [c8bbfce]
+- Updated dependencies [effedda]
+- Updated dependencies [14c7719]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [3f92ec2]
+- Updated dependencies [48d2b32]
+- Updated dependencies [94e3a12]
+- Updated dependencies [aca4317]
+- Updated dependencies [c8fb9d7]
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+  - @memberjunction/integration-engine@6.2.0-edge.7
+  - @memberjunction/schema-engine@6.2.0-edge.7
+  - @memberjunction/sql-dialect@6.2.0-edge.7
+
+## 6.2.0-edge.6
+
+### Minor Changes
+
+- 6770aad: CodeGen keeps EntityField metadata in step with the views and procedures it regenerates, and fails the run when a step fails instead of reporting success.
+  - Custom and layered base views are refreshed live, inner view first, before fields are synced; orphaned EntityField rows are pruned across every entity once per run, and the Sequence renumber no longer collides on them (#4050, #4336, #4737, #5976, #6028).
+  - Self-referencing keys that still have `Root*` fields or a `GetRootID` function keep their hierarchy after the 6.1 opt-in change (#5976).
+  - IS-A child entities keep the foreign-key metadata of inherited fields (#4569).
+  - Stale create/update/delete procedures are found by comparing them with what CodeGen generates (#3343); expression column defaults no longer produce procedures that fail to compile (#4000).
+  - `spDeleteEntityWithCoreDependencies` handles every reference to an entity from a checked-in policy and runs in one transaction (#3546).
+  - The runtime schema update path resolves `additionalSchemaInfo` from the config file's folder and fails when CodeGen creates no entity for a table (#5858).
+  - Batch, script and step failures are collected and the run exits non-zero listing all of them.
+
+### Patch Changes
+
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [6770aad]
+- Updated dependencies [f2248d5]
+- Updated dependencies [b1295d2]
+- Updated dependencies [420fc02]
+- Updated dependencies [f68e17b]
+- Updated dependencies [0ff7523]
+- Updated dependencies [a1a7e2c]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [dae1d31]
+- Updated dependencies [315e8f7]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [48c974e]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [0a348e2]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+- Updated dependencies [5ba9ce9]
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/sql-dialect@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/schema-engine@6.2.0-edge.6
+  - @memberjunction/integration-engine@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [39b35f1]
+- Updated dependencies [c159e2f]
+- Updated dependencies [db39145]
+- Updated dependencies [5e4205c]
+- Updated dependencies [81aea34]
+- Updated dependencies [5465489]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [2274f42]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [7e72c86]
+- Updated dependencies [9c2a051]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [c7d1170]
+- Updated dependencies [5f707d1]
+- Updated dependencies [dc38250]
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/integration-engine@6.2.0-edge.5
+  - @memberjunction/sql-dialect@6.2.0-edge.5
+  - @memberjunction/schema-engine@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Patch Changes

@@ -58,7 +58,7 @@ export default class PromptsRun extends Command {
   };
 
   async run(): Promise<void> {
-    const { PromptService, OutputFormatter } = await import('@memberjunction/ai-cli');
+    const { PromptService, OutputFormatter, CloseMJProvider } = await import('@memberjunction/ai-cli');
 
     const { flags, metadata } = await this.parse(PromptsRun);
     const service = new PromptService();
@@ -106,8 +106,11 @@ export default class PromptsRun extends Command {
       if (!result.success) {
         this.exit(1);
       }
+      setImmediate(() => process.exit(0));
     } catch (error) {
       this.error(error as Error);
+    } finally {
+      await CloseMJProvider().catch(() => {});
     }
   }
 }

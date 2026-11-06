@@ -125,11 +125,21 @@ export class InstallerEngine {
   }
 
   /**
-   * Concrete release tag resolved by the scaffold phase this run. Pinned into
-   * `mj.config.cjs` by the configure phase so later `mj migrate` runs target the
-   * same version as the installed code. Undefined when scaffold was skipped (resume).
+   * Concrete release tag resolved by the scaffold phase. Persisted in the
+   * install state, so a resumed install restores it. Pinned into
+   * `mj.config.cjs` by the configure phase and used by the dependency, migrate
+   * and codegen phases so they all target the same version as the installed code.
    */
   private resolvedVersion?: string;
+
+  /**
+   * The one tag every post-scaffold phase uses: the tag the scaffold resolved,
+   * else the plan's explicit tag. `undefined` only when neither is known (the
+   * plan still says `'latest'` and scaffold never recorded a resolution).
+   */
+  private effectiveTag(plan: InstallPlan): string | undefined {
+    return this.resolvedVersion ?? (plan.Tag !== 'latest' ? plan.Tag : undefined);
+  }
 
   // -------------------------------------------------------------------------
   // Public API
@@ -277,6 +287,17 @@ export class InstallerEngine {
 
     const config = MergeConfigs(...configSources);
 
+    // The monorepo is a pnpm workspace and its build fails under any other package
+    // manager, so coerce rather than fail in the dependencies phase (#4562).
+    if (config.InstallMode === 'monorepo' && config.PackageManager && config.PackageManager !== 'pnpm') {
+      this.emitter.Emit('warn', {
+        Type: 'warn',
+        Phase: 'preflight',
+        Message: `PackageManager "${config.PackageManager}" is not supported for a monorepo install; using pnpm instead.`,
+      });
+      config.PackageManager = 'pnpm';
+    }
+
     // ── Prompt safety net (non-interactive mode) ──────────────────────────
     // In --yes mode, install a catch-all listener that auto-resolves any
     // unexpected prompt with its default value. This prevents indefinite
@@ -311,6 +332,8 @@ export class InstallerEngine {
     if (!state) {
       state = new InstallState(plan.Dir, plan.Tag);
     }
+    // Restore the tag a previous run's scaffold resolved (undefined on a fresh install).
+    this.resolvedVersion = state.ResolvedTag;
 
     // Iterate through phases
     for (const phaseInfo of plan.Phases) {
@@ -352,6 +375,9 @@ export class InstallerEngine {
         }
 
         state.MarkCompleted(phaseInfo.Id);
+        if (phaseInfo.Id === 'scaffold' && this.resolvedVersion) {
+          state.SetResolvedTag(this.resolvedVersion);
+        }
         await state.Save();
         phasesCompleted.push(phaseInfo.Id);
 
@@ -651,9 +677,8 @@ export class InstallerEngine {
     yes: boolean,
     overwriteConfig: boolean = false
   ): Promise<PhaseExecutionResult> {
-    // Prefer the tag resolved this run; on resume (scaffold skipped) fall back to
-    // the plan's explicit tag, but never pin the placeholder 'latest'.
-    const resolvedVersion = this.resolvedVersion ?? (plan.Tag !== 'latest' ? plan.Tag : undefined);
+    // Never pin the placeholder 'latest'.
+    const resolvedVersion = this.effectiveTag(plan);
 
     const result = await this.configure.Run({
       Dir: plan.Dir,
@@ -697,7 +722,7 @@ export class InstallerEngine {
       Config: this.resolvedConfig,
       PackageManager: this.packageManager.Name,
       Emitter: this.emitter,
-      VersionTag: plan.Tag,
+      VersionTag: this.effectiveTag(plan),
     });
 
     return { Warnings: [] };
@@ -723,7 +748,7 @@ export class InstallerEngine {
   private async executeDependencies(plan: InstallPlan): Promise<PhaseExecutionResult> {
     const result = await this.dependency.Run({
       Dir: plan.Dir,
-      Tag: plan.Tag,
+      Tag: this.effectiveTag(plan) ?? plan.Tag,
       PackageManager: this.packageManager.Name,
       Emitter: this.emitter,
     });
@@ -737,7 +762,7 @@ export class InstallerEngine {
       Dir: plan.Dir,
       Emitter: this.emitter,
       Fast: fast,
-      VersionTag: plan.Tag,
+      VersionTag: this.effectiveTag(plan),
       PackageManager: this.packageManager.Name,
     });
 
@@ -994,6 +1019,16 @@ export class InstallerEngine {
       return;
     }
 
+    // Local Dev auth checks
+    if (authType === 'local') {
+      diagnostics.AddCheck({
+        Name: 'Local Dev Auth',
+        Status: 'pass',
+        Message: 'AUTH_TYPE is "local" (local development mock JWT provider).',
+      });
+      this.emitDiagnostic('Local Dev Auth', 'pass', 'AUTH_TYPE is "local".');
+    }
+
     // MSAL auth checks
     if (authType === 'msal') {
       if (!clientId) {
@@ -1075,6 +1110,26 @@ export class InstallerEngine {
       if (!(await fs.FileExists(envPath))) continue;
 
       const content = await fs.ReadText(envPath);
+
+      if (explorerAuthType === 'local') {
+        const hasLocalDevAuth = /^MJ_DEV_AUTH_ENABLED\s*=\s*['"]?(true|1)['"]?/im.test(content);
+        if (!hasLocalDevAuth) {
+          diagnostics.AddCheck({
+            Name: 'MJAPI auth consistency',
+            Status: 'warn',
+            Message: `Explorer uses local dev auth ("local") but MJAPI .env is missing MJ_DEV_AUTH_ENABLED=true.`,
+            SuggestedFix: 'Add MJ_DEV_AUTH_ENABLED=true to the MJAPI .env file for local development.',
+          });
+          this.emitDiagnostic('MJAPI auth consistency', 'warn', 'MJAPI .env missing MJ_DEV_AUTH_ENABLED=true.');
+        } else {
+          diagnostics.AddCheck({
+            Name: 'MJAPI auth consistency',
+            Status: 'pass',
+            Message: 'MJAPI .env has MJ_DEV_AUTH_ENABLED=true matching Explorer local auth type.',
+          });
+          this.emitDiagnostic('MJAPI auth consistency', 'pass', 'MJAPI .env MJ_DEV_AUTH_ENABLED=true present.');
+        }
+      }
 
       if (explorerAuthType === 'msal') {
         const hasTenantId = /^TENANT_ID\s*=\s*\S+/m.test(content);
@@ -1257,6 +1312,62 @@ export class InstallerEngine {
           Type: 'manual',
         },
       });
+    }
+
+    // 3. Turborepo AI Env Passthrough Check (Scope: 'ai')
+    const turboJsonPath = path.join(targetDir, 'turbo.json');
+    if (await fs.FileExists(turboJsonPath)) {
+      try {
+        const turboRaw = await fs.ReadText(turboJsonPath);
+        const turboParsed = JSON.parse(turboRaw) as {
+          envMode?: string;
+          globalPassThroughEnv?: string[];
+          globalEnv?: string[];
+        };
+        if (turboParsed.envMode !== 'loose') {
+          const allowed = [
+            ...(turboParsed.globalPassThroughEnv ?? []),
+            ...(turboParsed.globalEnv ?? []),
+          ];
+          const passesAiVendorKeys = allowed.some(
+            (pattern) => pattern === 'AI_VENDOR_API_KEY__*' || pattern === '*' || pattern.startsWith('AI_VENDOR_API_KEY__')
+          );
+          if (!passesAiVendorKeys && !turboRaw.includes('AI_VENDOR_API_KEY__')) {
+            this.emitDiagnostic(
+              'Turbo AI env passthrough',
+              'warn',
+              'turbo.json does not include AI_VENDOR_API_KEY__* in globalPassThroughEnv; Turborepo strict mode may strip AI vendor API keys from child processes.',
+              'Add "AI_VENDOR_API_KEY__*" to "globalPassThroughEnv" in turbo.json or pass --env-mode=loose to turbo.'
+            );
+            diagnostics.AddCheck({
+              Name: 'Turbo AI env passthrough',
+              Status: 'warn',
+              Message: 'turbo.json does not pass through AI_VENDOR_API_KEY__* environment variables.',
+              SuggestedFix: 'Add "AI_VENDOR_API_KEY__*" to "globalPassThroughEnv" in turbo.json.',
+              Code: 'TURBO_AI_ENV_STRIPPED',
+              Scope: 'ai',
+              Remediation: {
+                Type: 'manual',
+              },
+            });
+          } else {
+            this.emitDiagnostic(
+              'Turbo AI env passthrough',
+              'pass',
+              'turbo.json passes through AI_VENDOR_API_KEY__* environment variables.'
+            );
+            diagnostics.AddCheck({
+              Name: 'Turbo AI env passthrough',
+              Status: 'pass',
+              Message: 'turbo.json passes through AI_VENDOR_API_KEY__* environment variables.',
+              Code: 'TURBO_AI_ENV_OK',
+              Scope: 'ai',
+            });
+          }
+        }
+      } catch {
+        // Ignore malformed turbo.json
+      }
     }
   }
 

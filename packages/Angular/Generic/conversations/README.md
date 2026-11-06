@@ -145,6 +145,7 @@ Unlike the gates above, these change *how* the surface behaves and default to to
 | Input | Default | Effect when set |
 |---|---|---|
 | `readReplyFromTop` | `false` | A finished turn — the reader's message plus the reply — is scrolled to the top of the pane if it is taller than the pane, so the run ends at the start of the answer instead of its end. A turn that fits stays where it is; a reader who scrolled up during the run is never moved. (Independent of this switch, an in-place message update — progress, status, streamed text — only follows the tail for a reader who is already at the bottom.) |
+| `OpenLinksInNewTab` | `true` | Inline markdown links in messages (external and relative/same-origin URLs, whether bare `https://...` autolinks or `[text](url)` links) open in a new browser tab (`target="_blank"` with `rel="noopener noreferrer"`). In-page fragment links (`#heading`), `mailto:` / `tel:` / `sms:` links, and raw HTML links with an explicit `target` keep their behaviour. Set `false` to open links in the current tab. |
 
 
 ```html
@@ -397,6 +398,12 @@ This package never navigates (no Router): developer links emit a `RealtimeNaviga
   (exported)="onExported($event)">
 </mj-export-modal>
 ```
+
+#### Conversation folders
+
+A folder (`MJ: Projects`) is Private (only its owner sees it, the default), Shared (with chosen users or roles, through `MJ: Resource Permissions`) or Public (`OwnerUserID` null, everyone in the environment). A conversation in a Shared or Public folder appears in the lists of the people the folder is shared with only when its owner turns on folder inheritance (off by default), at the folder's level (View for a Public folder). Each folder is shared on its own; a subfolder does not inherit its parent's grants. Only a conversation's owner can move it or change whether it inherits, and only a folder's owner can change its owner or parent; the server enforces both on save, except for the server itself and the system user (so system-user agent runs are exempt). The server also refuses moving a folder into itself or one of its subfolders.
+
+Folder sharing controls which conversations are listed, not who can read them. Core ships no UI-role row-level security on `MJ: Conversations` or `MJ: Conversation Details`, so a host that needs hard read isolation must add that RLS itself.
 
 ## Component Reference
 

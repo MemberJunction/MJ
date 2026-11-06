@@ -193,10 +193,19 @@ export const TemplatesChecks: NamedCheck[] = [
             const cached = t.GetHighestPriorityContent('Text');
             AssertEqual(cached.TemplateText, f.TemplateText, 'engine-cached TemplateText byte-equals the saved entity text');
 
-            // Round-trip an UPDATE: entity save → forced Config refresh → new text renders
+            // Round-trip an UPDATE: entity save → in-place dataset AutoRefresh (MJ-CORE-5) → render
             const newText = 'Goodbye {{ name }}!';
             f.Content.TemplateText = newText;
             Assert(await f.Content.Save(), `updating fixture TemplateText failed: ${f.Content.LatestResult?.CompleteMessage}`);
+            await Promise.resolve();
+
+            const tAuto = engineTemplate(ctx);
+            const cAuto = tAuto.GetHighestPriorityContent('Text');
+            AssertEqual(cAuto.TemplateText, newText, 'MJ-CORE-5: dataset item AutoRefresh updated TemplateText in-place on Save without requiring Config(true)');
+            const rAuto = await engine.RenderTemplate(tAuto, cAuto, { name: 'X' }, true, true);
+            Assert(rAuto.Success, `post-AutoRefresh render failed: ${rAuto.Message}`);
+            AssertEqual(rAuto.Output, 'Goodbye X!', 'MJ-CORE-5: Nunjucks sourceText validation recompiled and rendered updated text immediately');
+
             await engine.Config(true, ctx.User, ctx.Provider);
 
             const t2 = engineTemplate(ctx);
@@ -205,7 +214,7 @@ export const TemplatesChecks: NamedCheck[] = [
             const r = await engine.RenderTemplate(t2, c2, { name: 'X' }, true, true);
             Assert(r.Success, `post-update render failed: ${r.Message}`);
             AssertEqual(r.Output, 'Goodbye X!', 'render output reflects the updated entity text');
-            console.log('      → save → refresh → render round-trip verified (old text fully replaced)');
+            console.log('      → save → AutoRefresh + Config(true) → render round-trip verified (old text fully replaced)');
         }
     },
     {

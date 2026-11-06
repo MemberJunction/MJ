@@ -86,4 +86,23 @@ describe('AIAgentRunDataHelper start payload', () => {
         expect(steps.map((s) => s.AgentRunID)).toEqual([SUB_RUN_ID, SUB_RUN_ID, SUB_RUN_ID]);
         expect(steps.map((s) => s.PayloadAtStart)).toEqual(['{"step":0}', '{"step":1}', null]);
     });
+
+    it('does not query the current run row redundantly when loading steps and sub-runs', async () => {
+        const seenFilters: string[] = [];
+        const steps = stepsOfRun(RUN_ID);
+        const provider = CreateFakeProvider<StepRow>({
+            runViewResults: (params: RunViewParams) => {
+                const filter = typeof params.ExtraFilter === 'string' ? params.ExtraFilter : '';
+                seenFilters.push(`${params.EntityName}:${filter}`);
+                return params.EntityName === 'MJ: AI Agent Run Steps' ? steps : [];
+            },
+        });
+        const helper = new AIAgentRunDataHelper();
+        helper.Provider = provider;
+
+        await helper.LoadAgentRunData(RUN_ID);
+
+        expect(seenFilters).not.toContain(`MJ: AI Agent Runs:ID='${RUN_ID}'`);
+        expect(seenFilters).toContain(`MJ: AI Agent Runs:ParentRunID='${RUN_ID}'`);
+    });
 });

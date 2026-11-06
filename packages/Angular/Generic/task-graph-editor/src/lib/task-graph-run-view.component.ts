@@ -117,6 +117,8 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
         if (value === this.parentTaskID) return;
         this.parentTaskID = value;
         this.settledEmitted = false;
+        this.SelectedTaskID = null;
+        this.LiveActivity.clear();
         void this.load();
     }
     public get ParentTaskID(): string | null {
@@ -433,6 +435,11 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
         return this.SelectedTaskID ? this.taskByID.get(this.SelectedTaskID) ?? null : null;
     }
 
+    /** All loaded task step entities for the current parent workflow run. */
+    public get Tasks(): MJTaskEntity[] {
+        return [...this.taskByID.values()];
+    }
+
     public OnToggleSelectedBreakpoint(): void {
         if (!this.AllowBreakpointEditing || !this.SelectedTaskID) return;
         this.BreakpointToggled.emit({
@@ -593,6 +600,12 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
     /** Rows → spec + runtime + geometry. */
     private project(taskRows: MJTaskEntity[], depRows: MJTaskDependencyEntity[]): void {
         this.taskByID = new Map(taskRows.map((t) => [t.ID, t]));
+        if (taskRows.length === 0) {
+            this.SelectedTaskID = null;
+        } else if (!this.SelectedTaskID || !this.taskByID.has(this.SelectedTaskID)) {
+            const activeRow = taskRows.find((t) => t.Status === 'In Progress');
+            this.SelectedTaskID = (activeRow ?? taskRows[0]).ID;
+        }
 
         const projection = ProjectTaskRowsToSpec(this.WorkflowName, taskRows, depRows);
         this.Spec = projection.Spec;

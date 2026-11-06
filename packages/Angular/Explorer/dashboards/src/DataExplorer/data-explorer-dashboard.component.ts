@@ -280,6 +280,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   // Currently selected view entity (for view data loading)
   public SelectedViewEntity: MJUserViewEntityExtended | null = null;
 
+  /**
+   * Optional semantic name of an alternate base view selected via deep link (`?abv=<Name>`)
+   * when no saved view is active.
+   */
+  public SelectedAlternateBaseView: string | null = null;
+
   /** @deprecated Use {@link SelectedViewEntity}. */
   public get selectedViewEntity(): MJUserViewEntityExtended | null {
     return this.SelectedViewEntity;
@@ -422,6 +428,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   // Concept D: Application Groups + Search-First
   // ========================================
 
+  private _filteredAppEntityGroupsCache: AppEntityGroup[] = [];
+  private _filteredAppEntityGroupsKey = '';
+
   /**
    * Get app entity groups filtered by current entityFilterText and homeViewMode.
    * When searching, auto-expands groups that contain matches.
@@ -429,10 +438,18 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   get FilteredAppEntityGroups(): AppEntityGroup[] {
     const filterText = this.EntityFilterText.toLowerCase().trim();
     const showFavoritesOnly = this.State.homeViewMode === 'favorites';
+    const expandedSig = this.AppEntityGroups.map(g => `${g.applicationId}:${g.isExpanded ? 1 : 0}:${g.entities.length}`).join('|');
+    const favSig = showFavoritesOnly ? this.State.favoriteEntities.map(f => f.entityId).join(',') : '';
+    const key = `${filterText}::${showFavoritesOnly ? 1 : 0}::${expandedSig}::${favSig}`;
 
-    return this.AppEntityGroups
-      .map(group => this.filterGroupEntities(group, filterText, showFavoritesOnly))
-      .filter(group => group.entities.length > 0);
+    if (key !== this._filteredAppEntityGroupsKey) {
+      this._filteredAppEntityGroupsKey = key;
+      this._filteredAppEntityGroupsCache = this.AppEntityGroups
+        .map(group => this.filterGroupEntities(group, filterText, showFavoritesOnly))
+        .filter(group => group.entities.length > 0);
+    }
+
+    return this._filteredAppEntityGroupsCache;
   }
 
   /** @deprecated Use {@link FilteredAppEntityGroups}. */
@@ -470,27 +487,39 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     };
   }
 
+  private _flatFilteredEntitiesCache: EntityInfo[] = [];
+  private _flatFilteredEntitiesSource: EntityInfo[] | null = null;
+  private _flatFilteredEntitiesKey = '';
+
   /**
    * Get a flat filtered entity list for single-application mode.
    * Used when entityFilter.applicationId is set, bypassing app grouping.
    */
   get FlatFilteredEntities(): EntityInfo[] {
-    let result = this.Entities;
-
-    if (this.State.homeViewMode === 'favorites') {
-      result = result.filter(e => this.IsEntityFavorited(e));
-    }
-
     const filterText = this.EntityFilterText.toLowerCase().trim();
-    if (filterText) {
-      result = result.filter(e =>
-        e.Name.toLowerCase().includes(filterText) ||
-        e.DisplayNameOrName.toLowerCase().includes(filterText) ||
-        (e.Description && e.Description.toLowerCase().includes(filterText))
-      );
+    const showFavoritesOnly = this.State.homeViewMode === 'favorites';
+    const favSig = showFavoritesOnly ? this.State.favoriteEntities.map(f => f.entityId).join(',') : '';
+    const key = `${filterText}::${showFavoritesOnly ? 1 : 0}::${favSig}`;
+
+    if (this._flatFilteredEntitiesSource !== this.Entities || key !== this._flatFilteredEntitiesKey) {
+      this._flatFilteredEntitiesSource = this.Entities;
+      this._flatFilteredEntitiesKey = key;
+
+      let result = this.Entities;
+      if (showFavoritesOnly) {
+        result = result.filter(e => this.IsEntityFavorited(e));
+      }
+      if (filterText) {
+        result = result.filter(e =>
+          e.Name.toLowerCase().includes(filterText) ||
+          e.DisplayNameOrName.toLowerCase().includes(filterText) ||
+          (e.Description && e.Description.toLowerCase().includes(filterText))
+        );
+      }
+      this._flatFilteredEntitiesCache = result;
     }
 
-    return result;
+    return this._flatFilteredEntitiesCache;
   }
 
   /** @deprecated Use {@link FlatFilteredEntities}. */
@@ -499,13 +528,31 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
-   * Total count of entities matching current filters (across all groups or flat list)
+   * Count of DISTINCT entities matching the current filters (across all groups, or the flat
+   * list in single-application mode).
+   *
+   * Distinct is the whole point. `buildAppEntityGroups` deliberately assigns an entity to
+   * EVERY application it belongs to, so summing `group.entities.length` counts a
+   * multi-application entity once per application. On a stock install that made the header
+   * read "2195 entities" while the sibling label eight lines up the page read
+   * "2134 entities available" — two counts of the same set, on the same screen, differing by
+   * the number of multi-app memberships. Neither number was wrong for what it measured; they
+   * were measuring different things while claiming the same words.
+   *
+   * Both labels now count entities. Membership totals, if ever wanted, belong in a label that
+   * says "memberships".
    */
   get FilteredEntityCount(): number {
     if (this.EntityFilter?.applicationId) {
       return this.FlatFilteredEntities.length;
     }
-    return this.FilteredAppEntityGroups.reduce((sum, g) => sum + g.entities.length, 0);
+    const distinct = new Set<string>();
+    for (const group of this.FilteredAppEntityGroups) {
+      for (const entity of group.entities) {
+        distinct.add(entity.ID);
+      }
+    }
+    return distinct.size;
   }
 
   /** @deprecated Use {@link FilteredEntityCount}. */
@@ -607,34 +654,48 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     return this.IsQuickAccessSectionExpanded(sectionId);
   }
 
+  private _uniqueRecentRecordEntitiesCache: { entityId: string; entityName: string; icon: string; count: number }[] = [];
+  private _uniqueRecentRecordEntitiesSource: RecentRecordAccess[] | null = null;
+  private _uniqueRecentRecordEntitiesLength = -1;
+
   /**
    * Get unique entities from recent records for the filter strip.
    * Returns up to 5 entities, sorted by frequency in the recent records.
    */
   get UniqueRecentRecordEntities(): { entityId: string; entityName: string; icon: string; count: number }[] {
-    const entityCounts = new Map<string, { entityId: string; entityName: string; count: number }>();
+    if (
+      this._uniqueRecentRecordEntitiesSource !== this.RecentRecords ||
+      this._uniqueRecentRecordEntitiesLength !== this.RecentRecords.length
+    ) {
+      this._uniqueRecentRecordEntitiesSource = this.RecentRecords;
+      this._uniqueRecentRecordEntitiesLength = this.RecentRecords.length;
 
-    for (const record of this.RecentRecords) {
-      const existing = entityCounts.get(record.entityId);
-      if (existing) {
-        existing.count++;
-      } else {
-        entityCounts.set(record.entityId, {
-          entityId: record.entityId,
-          entityName: record.entityName,
-          count: 1
-        });
+      const entityCounts = new Map<string, { entityId: string; entityName: string; count: number }>();
+
+      for (const record of this.RecentRecords) {
+        const existing = entityCounts.get(record.entityId);
+        if (existing) {
+          existing.count++;
+        } else {
+          entityCounts.set(record.entityId, {
+            entityId: record.entityId,
+            entityName: record.entityName,
+            count: 1
+          });
+        }
       }
+
+      // Convert to array, sort by count (descending), take first 5
+      this._uniqueRecentRecordEntitiesCache = Array.from(entityCounts.values())
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5)
+        .map(e => ({
+          ...e,
+          icon: this.GetEntityIconById(e.entityId)
+        }));
     }
 
-    // Convert to array, sort by count (descending), take first 5
-    return Array.from(entityCounts.values())
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5)
-      .map(e => ({
-        ...e,
-        icon: this.GetEntityIconById(e.entityId)
-      }));
+    return this._uniqueRecentRecordEntitiesCache;
   }
 
   /** @deprecated Use {@link UniqueRecentRecordEntities}. */
@@ -655,6 +716,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     return this.ShowRecentRecordsEntityFilter;
   }
 
+  private _filteredRecentRecordsCache: RecentRecordAccess[] = [];
+  private _filteredRecentRecordsSource: RecentRecordAccess[] | null = null;
+  private _filteredRecentRecordsFilter: string | null = null;
+
   /**
    * Get filtered recent records based on entity filter.
    */
@@ -662,7 +727,15 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     if (!this.RecentRecordsEntityFilter) {
       return this.RecentRecords;
     }
-    return this.RecentRecords.filter(r => r.entityId === this.RecentRecordsEntityFilter);
+    if (
+      this._filteredRecentRecordsSource !== this.RecentRecords ||
+      this._filteredRecentRecordsFilter !== this.RecentRecordsEntityFilter
+    ) {
+      this._filteredRecentRecordsSource = this.RecentRecords;
+      this._filteredRecentRecordsFilter = this.RecentRecordsEntityFilter;
+      this._filteredRecentRecordsCache = this.RecentRecords.filter(r => r.entityId === this.RecentRecordsEntityFilter);
+    }
+    return this._filteredRecentRecordsCache;
   }
 
   /** @deprecated Use {@link FilteredRecentRecords}. */
@@ -867,12 +940,22 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     // etc. without the template ever computing time during change detection. Updating the stored
     // field + running detectChanges here (rather than calling a Date.now()-based method from the
     // template binding) is what prevents the ExpressionChangedAfterItHasBeenCheckedError (NG0100).
-    this.recentTimeRefreshTimer = setInterval(() => {
-      if (this.RecentRecords.length > 0) {
-        this.refreshRecentRecordTimes();
-        this.cdr.detectChanges();
-      }
-    }, 30000);
+    const startTimer = () => {
+      this.recentTimeRefreshTimer = setInterval(() => {
+        if (this.RecentRecords.length > 0 && this.refreshRecentRecordTimes()) {
+          if (this.ngZone) {
+            this.ngZone.run(() => this.cdr.detectChanges());
+          } else {
+            this.cdr.detectChanges();
+          }
+        }
+      }, 30000);
+    };
+    if (this.ngZone) {
+      this.ngZone.runOutsideAngular(startTimer);
+    } else {
+      startTimer();
+    }
 
     // Subscribe to favorite records changes
     this.StateService.FavoriteRecords
@@ -1767,6 +1850,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     this.SelectedEntity = null;
     this.SelectedRecord = null;
     this.DetailPanelEntity = null;
+    this.SelectedAlternateBaseView = null;
     this.StateService.selectEntity(null);
     this.StateService.closeDetailPanel();
     this.cdr.detectChanges();
@@ -1919,7 +2003,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
-   * Load entity IDs associated with a specific application
+   * Load entity IDs associated with a specific application.
+   *
+   * `IgnoreMaxRows` is required, not an optimization. This set is the membership
+   * filter for the whole surface: an entity missing from it is not merely unlisted,
+   * it is unreachable — the tree hides it and the search box cannot find it. Under
+   * the default row cap an application with more than the cap's worth of entities
+   * silently returns a truncated set, and the UI shows the truncation as fact with
+   * nothing to indicate rows were dropped. Read every row or report nothing.
    */
   private async loadApplicationEntityIds(applicationId: string): Promise<void> {
     this.applicationEntityIds.clear();
@@ -1928,7 +2019,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     const result = await rv.RunView<MJApplicationEntityEntity>({
       EntityName: 'MJ: Application Entities',
       ExtraFilter: `ApplicationID = '${applicationId}'`,
-      ResultType: 'entity_object'
+      ResultType: 'entity_object',
+      IgnoreMaxRows: true
     });
 
     if (result.Success && result.Results) {
@@ -1990,6 +2082,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     // state would leak into the new entity's query (e.g., ORDER BY FirstName on Groups).
     // The workspace resets its own view/grid state when its [Entity] input changes.
     this.SelectedViewEntity = null;
+    this.SelectedAlternateBaseView = null;
     this.SelectedEntity = entity;
     this.reconcileViewModeForEntity(entity);
     this.StateService.selectEntity(entity.Name);
@@ -2052,6 +2145,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   public OnWorkspaceViewSelected(view: MJUserViewEntityExtended | null): void {
     this.SelectedViewEntity = view;
+    if (view) {
+      this.SelectedAlternateBaseView = null;
+    }
     this.StateService.selectView(view?.ID ?? null);
 
     if (view && view.SmartFilterEnabled && view.SmartFilterPrompt) {
@@ -2068,6 +2164,15 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /** @deprecated Use {@link OnWorkspaceViewSelected}. */
   public onWorkspaceViewSelected(view: MJUserViewEntityExtended | null): void {
     return this.OnWorkspaceViewSelected(view);
+  }
+
+  /**
+   * Handle an Alternate Base View selection emitted by the workspace's view selector.
+   */
+  public OnWorkspaceAlternateBaseViewChanged(abv: string | null): void {
+    this.SelectedAlternateBaseView = abv;
+    this.pushCurrentStateToUrl();
+    this.cdr.detectChanges();
   }
 
   /**
@@ -2539,7 +2644,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         EntityName: entityName,
         ExtraFilter: CompositeKey.FromURLSegment(entityInfo, recordId).ToWhereClause(),
         ResultType: 'simple',
-        MaxRows: 1
+        MaxRows: 1,
+        SkipTotalRowCount: true
       });
 
       if (result.Success && result.Results.length > 0) {
@@ -2636,6 +2742,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         // Reset counts before setting entity to prevent stale data display
         this.resetRecordCounts();
         this.SelectedEntity = entity;
+        this.SelectedAlternateBaseView = deepLink.abv || null;
         this.StateService.selectEntity(entity.Name);
 
         // Apply filter if specified (to smart filter state, not user search)
@@ -2700,6 +2807,11 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   // HELPERS
   // ========================================
 
+  private _allowedEntityNamesCache: Set<string> | null = null;
+  private _allowedEntityNamesFilterSource: DataExplorerFilter | null = null;
+  private _allowedEntityNamesEntitiesSource: EntityInfo[] | null = null;
+  private _allowedEntityNamesEntitiesLen = -1;
+
   /**
    * Get the set of allowed entity names for filtering favorites/recents.
    * Returns null if no filter is active (all entities allowed).
@@ -2708,7 +2820,18 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     if (!this.EntityFilter) {
       return null;
     }
-    return new Set(this.Entities.map(e => e.Name));
+    if (
+      this._allowedEntityNamesFilterSource !== this.EntityFilter ||
+      this._allowedEntityNamesEntitiesSource !== this.Entities ||
+      this._allowedEntityNamesEntitiesLen !== this.Entities.length ||
+      this._allowedEntityNamesCache === null
+    ) {
+      this._allowedEntityNamesFilterSource = this.EntityFilter;
+      this._allowedEntityNamesEntitiesSource = this.Entities;
+      this._allowedEntityNamesEntitiesLen = this.Entities.length;
+      this._allowedEntityNamesCache = new Set(this.Entities.map(e => e.Name));
+    }
+    return this._allowedEntityNamesCache;
   }
 
   /** @deprecated Use {@link AllowedEntityNames}. */
@@ -2777,8 +2900,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     const record = params['record'] || null;
     const filterParam = params['filter'] || null;
     const viewId = params['viewId'] || null;
+    const abv = params['abv'] || null;
 
-    if (!entity && !record && !filterParam && !viewId) {
+    if (!entity && !record && !filterParam && !viewId && !abv) {
       return null;
     }
 
@@ -2788,7 +2912,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       entity: entity || undefined,
       record: record || undefined,
       filter: filterParam || undefined,
-      viewId: viewId || undefined
+      viewId: viewId || undefined,
+      abv: abv || undefined
     };
   }
 
@@ -2840,7 +2965,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       entity: this.State.selectedEntityName || null,
       record: (this.State.selectedRecordId && hasEntity) ? this.State.selectedRecordId : null,
       filter: null, // Never in URL — filters live in saved views (DB), not query strings
-      viewId: hasViewId ? this.State.selectedViewId : null
+      viewId: hasViewId ? this.State.selectedViewId : null,
+      abv: (!hasViewId && hasEntity && this.SelectedAlternateBaseView) ? this.SelectedAlternateBaseView : null
     };
 
 
@@ -2862,6 +2988,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
       if (entity) {
         const entityChanged = this.SelectedEntity?.Name !== entity.Name;
+        const previousAbv = this.SelectedAlternateBaseView;
+        this.SelectedAlternateBaseView = urlState.viewId ? null : (urlState.abv || null);
 
         if (entityChanged) {
           // Entity changed - reset counts and select new entity
@@ -2886,6 +3014,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
             this.SelectedViewEntity = null;
             this.StateService.selectView(null);
           }
+        }
+
+        if (!entityChanged && previousAbv !== this.SelectedAlternateBaseView) {
+          this.pushCurrentStateToUrl();
         }
 
         // Filters live in saved views (DB), never in URL query strings.
@@ -3311,10 +3443,16 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * CD passes when a minute boundary was crossed); binding a stored field cannot. Called when the
    * record set loads and on a timer so the labels stay current.
    */
-  private refreshRecentRecordTimes(): void {
+  private refreshRecentRecordTimes(): boolean {
+    let changed = false;
     for (const record of this.RecentRecords) {
-      record.relativeTime = this.formatRelativeTime(record.latestAt);
+      const next = this.formatRelativeTime(record.latestAt);
+      if (record.relativeTime !== next) {
+        record.relativeTime = next;
+        changed = true;
+      }
     }
+    return changed;
   }
 
   /**

@@ -172,14 +172,14 @@ export class MJFilesArtifactStore implements IArtifactStore {
  * in dev / on-prem deployments.
  *
  * @param contextUser the acting user (server-side data access is user-scoped)
- * @param provider optional provider for multi-provider correctness
+ * @param provider the provider the read runs on (no global fallback)
  * @returns the active provider id, or `null` when none is active
  */
 export async function ResolveActiveFileStorageProviderId(
-  contextUser?: UserInfo,
-  provider?: IMetadataProvider,
+  contextUser: UserInfo,
+  provider: IMetadataProvider,
 ): Promise<string | null> {
-  const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+  const rv = RunView.FromMetadataProvider(provider);
   const result = await rv.RunView<{ ID: string }>(
     {
       EntityName: 'MJ: File Storage Providers',
@@ -188,6 +188,7 @@ export async function ResolveActiveFileStorageProviderId(
       // Priority is "lower numbers are preferred" — take the most-preferred active provider.
       OrderBy: 'Priority ASC',
       MaxRows: 1,
+      SkipTotalRowCount: true,
       ResultType: 'simple',
     },
     contextUser,
@@ -200,8 +201,8 @@ export async function ResolveActiveFileStorageProviderId(
 
 /** @deprecated Use {@link ResolveActiveFileStorageProviderId}. */
 export async function resolveActiveFileStorageProviderId(
-  contextUser?: UserInfo,
-  provider?: IMetadataProvider,
+  contextUser: UserInfo,
+  provider: IMetadataProvider,
 ): Promise<string | null> {
   return ResolveActiveFileStorageProviderId(contextUser, provider);
 }

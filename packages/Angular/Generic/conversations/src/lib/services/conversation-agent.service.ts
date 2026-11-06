@@ -1,9 +1,9 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { Metadata, IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
-import { GraphQLDataProvider, GraphQLAIClient, type RunDecisionParams, type RunDecisionResult } from '@memberjunction/graphql-dataprovider';
+import { LogStatusEx, Metadata, IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
+import { GraphQLDataProvider, GraphQLAIClient, type RunDecisionParams, type RunDecisionResult, type AgentReplyAcknowledgement } from '@memberjunction/graphql-dataprovider';
 import { ExecuteAgentResult, AgentExecutionProgressCallback, coerceFailedExecuteAgentResult } from '@memberjunction/ai-core-plus';
-import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { AIEngineBase, FindMentionPinnedPresetID } from '@memberjunction/ai-engine-base';
 import {
   ConversationEngine,
   MJConversationDetailEntity,
@@ -24,12 +24,6 @@ import {
   GroupVersionsByArtifact,
   type AgentArtifactSummary
 } from '../utils/agent-artifact-summary';
-
-/**
- * Rows the configuration-preset lookup parses before giving up. The SQL prefilter is a LIKE,
- * so a few candidates may not be real mention blobs; this bounds how many we inspect.
- */
-const CONFIG_PRESET_CANDIDATE_ROWS = 5;
 
 /**
  * Cap on artifact versions listed for the intent classifier.
@@ -80,6 +74,25 @@ export interface IntentCheckResult {
 }
 
 /**
+ * Where a sub-agent's reply sits in the conversation. The server sets it (only the server writes agent replies), from
+ * these checked inputs.
+ */
+export interface SubAgentThreading {
+  /** The message the reply threads under, when not the user's message (a delegate's reply sits under the manager's). */
+  ReplyParentId?: string | null;
+  /**
+   * An agent (the conversation manager) whose line "Continuing with **{agent}** for refinement..." the server posts
+   * before the reply; the reply threads under it.
+   */
+  AnnouncedByAgentId?: string | null;
+  /**
+   * The branch the turn runs on when it forks off an earlier message on another branch (such as Regenerate, which
+   * creates a new fork before running the agent while the user's message stays on its original branch).
+   */
+  ReplyBranchId?: string | null;
+}
+
+/**
  * Angular DI service for conversation-level agent orchestration.
  *
  * After PR 2 of the conversations-runtime extraction, the core
@@ -122,7 +135,7 @@ export class ConversationAgentService {
 
   constructor(
     _bootstrap: ConversationsRuntimeBootstrap,
-    private mentionParser: MentionParserService,
+    _mentionParser: MentionParserService,
     private agentClientService: AgentClientService
   ) {
     // Injecting `_bootstrap` forces the runtime's INotificationAdapter +
@@ -230,17 +243,17 @@ export class ConversationAgentService {
    * Process a message through the conversation manager agent. Delegates to
    * `ConversationsRuntime.Instance.AgentRunner.processMessage(...)`.
    *
-   * Signature is preserved verbatim from the original service so existing
-   * call sites continue to compile. The unused `conversationHistory`
-   * parameter is kept for backwards compatibility (it was already
-   * documented as "kept for backwards compatibility but not used" in the
-   * original).
+   * The unused `conversationHistory` parameter is kept for backwards compatibility (it was already
+   * documented as "kept for backwards compatibility but not used" in the original).
+   *
+   * @param onReplyAccepted Called with the reply row the server creates for the turn (only the server
+   *   writes agent replies), before any progress: key the turn's task and completion by its ID.
    */
   async ProcessMessage(
     conversationId: string,
     message: MJConversationDetailEntity,
     conversationHistory: MJConversationDetailEntity[],
-    conversationDetailId: string,
+    onReplyAccepted: (reply: AgentReplyAcknowledgement) => void,
     onProgress?: AgentExecutionProgressCallback,
     appContext?: Record<string, unknown> | null,
     planMode?: boolean,
@@ -248,7 +261,9 @@ export class ConversationAgentService {
     /** The agents the conversation manager may delegate to. Null or omitted allows every agent. */
     allowedAgentIDs?: readonly string[] | null,
     /** The first moment of the conversation the run may read. Null or omitted reads all of it. */
-    agentHistoryFrom?: Date | null
+    agentHistoryFrom?: Date | null,
+    /** The branch the turn runs on when it forks off an earlier message on another branch. */
+    replyBranchId?: string | null
   ): Promise<ExecuteAgentResult | null> {
     // Warm the cached default-agent name for any synchronous consumers
     // before the runtime resolves on its own.
@@ -258,13 +273,14 @@ export class ConversationAgentService {
     return ConversationsRuntime.Instance.AgentRunner.processMessage({
       conversationId,
       message,
-      conversationDetailId,
+      onReplyAccepted,
       appContext,
       onProgress,
       ...(planMode ? { planMode: true } : {}),
       ...(requestedSkillIDs?.length ? { requestedSkillIDs } : {}),
       ...(allowedAgentIDs != null ? { AllowedAgentIDs: allowedAgentIDs } : {}),
       ...(agentHistoryFrom ? { AgentHistoryFrom: agentHistoryFrom } : {}),
+      ...(replyBranchId ? { ReplyBranchID: replyBranchId } : {}),
     });
   }
 
@@ -273,15 +289,16 @@ export class ConversationAgentService {
     conversationId: string,
     message: MJConversationDetailEntity,
     conversationHistory: MJConversationDetailEntity[],
-    conversationDetailId: string,
+    onReplyAccepted: (reply: AgentReplyAcknowledgement) => void,
     onProgress?: AgentExecutionProgressCallback,
     appContext?: Record<string, unknown> | null,
     planMode?: boolean,
     requestedSkillIDs?: string[],
     allowedAgentIDs?: readonly string[] | null,
-    agentHistoryFrom?: Date | null
+    agentHistoryFrom?: Date | null,
+    replyBranchId?: string | null
   ): Promise<ExecuteAgentResult | null> {
-    return this.ProcessMessage(conversationId, message, conversationHistory, conversationDetailId, onProgress, appContext, planMode, requestedSkillIDs, allowedAgentIDs, agentHistoryFrom);
+    return this.ProcessMessage(conversationId, message, conversationHistory, onReplyAccepted, onProgress, appContext, planMode, requestedSkillIDs, allowedAgentIDs, agentHistoryFrom, replyBranchId);
   }
 
   /**
@@ -307,49 +324,19 @@ export class ConversationAgentService {
     agentId: string,
     branchId?: string | null
   ): Promise<string | undefined> {
-    type MentionRow = Pick<MJConversationDetailEntity, 'ID' | 'Message'>;
-    const pathFilter = await this.branchPathFilter(conversationId, branchId);
-    if (pathFilter == null) {
-      return undefined;
+    const configurationId = await FindMentionPinnedPresetID(
+      conversationId,
+      agentId,
+      branchId,
+      this.Provider.CurrentUser ?? undefined,
+      this.Provider
+    );
+    if (configurationId) {
+      console.log(`\u{1F3AF} Found configuration preset from @mention: ${configurationId}`);
     }
-
-    const rv = RunView.FromMetadataProvider(this.Provider);
-    const result = await rv.RunView<MentionRow>({
-      EntityName: 'MJ: Conversation Details',
-      ExtraFilter: `${pathFilter} AND Role='User'`
-        + ` AND Message LIKE '%"configId"%' AND Message LIKE '%${agentId}%'`,
-      OrderBy: 'Sequence DESC',
-      // >1 because LIKE cannot tell a mention blob from the same id appearing elsewhere in
-      // the prose; the parse below is authoritative and picks the newest genuine match.
-      MaxRows: CONFIG_PRESET_CANDIDATE_ROWS,
-      Fields: ['ID', 'Message'],
-      ResultType: 'simple'
-    }, this.Provider.CurrentUser ?? undefined);
-
-    if (!result.Success) {
-      console.error('Failed to resolve configuration preset:', result.ErrorMessage);
-      return undefined;
-    }
-
-    for (const row of result.Results || []) {
-      const configurationId = this.readAgentConfigFromMention(row.Message, agentId);
-      if (configurationId) {
-        console.log(`\u{1F3AF} Found configuration preset from @mention: ${configurationId}`);
-        return configurationId;
-      }
-    }
-    return undefined;
+    return configurationId;
   }
 
-  /** Returns the configId this message pins for `agentId`, or null when it pins none. */
-  private readAgentConfigFromMention(message: string | null, agentId: string): string | null {
-    if (!message) {
-      return null;
-    }
-    const parsed = this.mentionParser.parseMentions(message, AIEngineBase.Instance.ReadableAgents, []);
-    const mention = parsed.agentMention;
-    return mention?.id === agentId && mention.configurationId ? mention.configurationId : null;
-  }
 
 
   /**
@@ -393,6 +380,9 @@ export class ConversationAgentService {
    *
    * Stays on the Angular shim because it directly uses AgentClientService.
    * Could move to the runtime in a follow-up if needed.
+   *
+   * @param onReplyAccepted Called with the reply row the server creates for the run (only the server
+   *   writes agent replies), before any progress: key the run's task and completion by its ID.
    */
   async InvokeSubAgent(
     agentName: string,
@@ -400,7 +390,7 @@ export class ConversationAgentService {
     message: MJConversationDetailEntity,
     conversationHistory: MJConversationDetailEntity[],
     reasoning: string,
-    conversationDetailId: string,
+    onReplyAccepted: (reply: AgentReplyAcknowledgement) => void,
     payload?: Record<string, unknown> | null,
     onProgress?: AgentExecutionProgressCallback,
     sourceArtifactId?: string,
@@ -410,7 +400,9 @@ export class ConversationAgentService {
     planMode?: boolean,
     requestedSkillIDs?: string[],
     /** The first moment of the conversation the run may read. Null or omitted reads all of it. */
-    agentHistoryFrom?: Date | null
+    agentHistoryFrom?: Date | null,
+    /** Where the reply sits in the conversation. Omitted, it answers `message` directly. */
+    threading?: SubAgentThreading | null
   ): Promise<ExecuteAgentResult | null> {
     try {
       // Ensure AIEngineBase is configured
@@ -430,7 +422,11 @@ export class ConversationAgentService {
         this.warnOnUnacceptedSkills(agent, requestedSkillIDs);
       }
 
-      console.log(`Invoking sub-agent: ${agentName}`, { reasoning, hasPayload: !!payload, hasConfigPreset: !!agentConfigurationPresetId });
+      LogStatusEx({
+        message: `Invoking sub-agent: ${agentName}`,
+        verboseOnly: true,
+        additionalArgs: [{ reasoning, hasPayload: !!payload, hasConfigPreset: !!agentConfigurationPresetId }]
+      });
 
       // Map AIAgentConfiguration preset ID to actual AIConfiguration ID
       let aiConfigurationId: string | undefined = undefined;
@@ -440,20 +436,18 @@ export class ConversationAgentService {
 
         if (preset) {
           aiConfigurationId = preset.AIConfigurationID || undefined;
-          console.log(`Mapped agent configuration preset "${preset.Name}" to AIConfigurationID: ${aiConfigurationId || 'default'}`);
+          LogStatusEx({ message: `Mapped agent configuration preset "${preset.Name}" to AIConfigurationID: ${aiConfigurationId || 'default'}`, verboseOnly: true });
         } else {
           console.warn(`Agent configuration preset ${agentConfigurationPresetId} not found for agent ${agent.ID}`);
         }
       }
 
-      const clientTools = ConversationsRuntime.Instance.Tools.GetAllTools().map(t => ({
-        Name: t.Name,
-        Description: t.Description,
-        InputSchema: t.ParameterSchema,
-      }));
-
       const agentParams: RunAgentFromConversationDetailParams = {
-        ConversationDetailId: conversationDetailId,
+        UserMessageId: message.ID,
+        OnAccepted: onReplyAccepted,
+        ...(threading?.ReplyParentId ? { ReplyParentId: threading.ReplyParentId } : {}),
+        ...(threading?.AnnouncedByAgentId ? { AnnouncedByAgentId: threading.AnnouncedByAgentId } : {}),
+        ...(threading?.ReplyBranchId ? { ReplyBranchId: threading.ReplyBranchId } : {}),
         AgentId: agent.ID,
         MaxHistoryMessages: 20,
         Data: {
@@ -461,7 +455,6 @@ export class ConversationAgentService {
           latestMessageId: message.ID,
           invocationReason: reasoning,
           ...(appContext ? { appContext } : {}),
-          ...(clientTools.length > 0 ? { clientTools } : {}),
         },
         ...(payload ? { Payload: payload } : {}),
         ...(aiConfigurationId ? { ConfigurationId: aiConfigurationId } : {}),
@@ -511,7 +504,7 @@ export class ConversationAgentService {
     message: MJConversationDetailEntity,
     conversationHistory: MJConversationDetailEntity[],
     reasoning: string,
-    conversationDetailId: string,
+    onReplyAccepted: (reply: AgentReplyAcknowledgement) => void,
     payload?: Record<string, unknown> | null,
     onProgress?: AgentExecutionProgressCallback,
     sourceArtifactId?: string,
@@ -520,9 +513,10 @@ export class ConversationAgentService {
     appContext?: Record<string, unknown> | null,
     planMode?: boolean,
     requestedSkillIDs?: string[],
-    agentHistoryFrom?: Date | null
+    agentHistoryFrom?: Date | null,
+    threading?: SubAgentThreading | null
   ): Promise<ExecuteAgentResult | null> {
-    return this.InvokeSubAgent(agentName, conversationId, message, conversationHistory, reasoning, conversationDetailId, payload, onProgress, sourceArtifactId, sourceArtifactVersionId, agentConfigurationPresetId, appContext, planMode, requestedSkillIDs, agentHistoryFrom);
+    return this.InvokeSubAgent(agentName, conversationId, message, conversationHistory, reasoning, onReplyAccepted, payload, onProgress, sourceArtifactId, sourceArtifactVersionId, agentConfigurationPresetId, appContext, planMode, requestedSkillIDs, agentHistoryFrom, threading);
   }
 
   /**
@@ -596,10 +590,14 @@ ${compactHistory}${artifactContext}
 
 **Latest User Message**: "${latestMessage}"`;
 
-      console.log('🔍 Checking agent continuity intent...', {
-        agentName: agent.Name,
-        messagePreview: latestMessage.substring(0, 50),
-        artifactCount: agentArtifacts.length
+      LogStatusEx({
+        message: '🔍 Checking agent continuity intent...',
+        verboseOnly: true,
+        additionalArgs: [{
+          agentName: agent.Name,
+          messagePreview: latestMessage.substring(0, 50),
+          artifactCount: agentArtifacts.length
+        }]
       });
 
       const result = await this._aiClient.RunAIPrompt({
@@ -620,10 +618,14 @@ ${compactHistory}${artifactContext}
           const reasoning = parsed.reasoning || 'No reasoning provided';
           const targetArtifactVersionId = parsed.targetArtifactVersionId || undefined;
 
-          console.log(`✅ Intent check result: ${decision}`, {
-            reasoning,
-            targetArtifactVersionId,
-            latency: result.executionTimeMs || 'unknown'
+          LogStatusEx({
+            message: `✅ Intent check result: ${decision}`,
+            verboseOnly: true,
+            additionalArgs: [{
+              reasoning,
+              targetArtifactVersionId,
+              latency: result.executionTimeMs || 'unknown'
+            }]
           });
 
           if (decision === 'YES' || decision === 'NO' || decision === 'UNSURE') {
@@ -914,6 +916,7 @@ ${compactHistory}${artifactContext}
       ExtraFilter: extraFilter,
       OrderBy: orderBy,
       MaxRows: 1,
+      SkipTotalRowCount: true,
       Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Content'],
       ResultType: 'simple'
     }, this.Provider.CurrentUser ?? undefined);

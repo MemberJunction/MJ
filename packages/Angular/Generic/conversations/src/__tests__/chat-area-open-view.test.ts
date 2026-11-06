@@ -43,6 +43,7 @@ function createHarness(opts: { view?: ConversationOpenView; sessionFor?: string;
     open['reloadWindowForView'] = reload;
     open['RealtimeSession'] = realtime;
     open['isActiveConversation'] = (id: string | null | undefined) => id === 'CONV-1';
+    open['handoffStepsByRunId'] = new Map();
     open['cdr'] = { detectChanges: vi.fn(), markForCheck: vi.fn() };
     return { component, open, reload, realtime, order };
 }
@@ -440,6 +441,35 @@ describe('ConversationChatAreaComponent open view', () => {
             await newer;
 
             expect(h.component.ForkSummaries).toEqual([NEWER]);
+        });
+    });
+
+    describe('template helper memoization (MJ-NG-4)', () => {
+        it('memoizes GetCachedInputs and GetArtifactsArray across repeated reads', () => {
+            const h = createHarness();
+            h.open['messageInputMetadataCache'] = new Map([
+                ['CONV-1', { conversationId: 'CONV-1', conversationName: 'Test Conv' }],
+            ]);
+            h.open['_cachedInputsArray'] = [];
+            h.open['_cachedInputsKey'] = '';
+
+            h.open['ArtifactsByDetailId'] = new Map([
+                ['d1', [{ artifactId: 'a1', artifactVersionId: 'v1', versionNumber: 1, artifactName: 'Doc', visibility: 'Always' }]],
+            ]);
+            h.open['SystemArtifactsByDetailId'] = new Map();
+            h.open['ShowSystemArtifacts'] = false;
+            h.open['_artifactsArrayCache'] = [];
+            h.open['_artifactsArrayKey'] = '';
+
+            const inputs1 = h.component.GetCachedInputs();
+            const inputs2 = h.component.GetCachedInputs();
+            expect(inputs2).toBe(inputs1);
+            expect(inputs1).toHaveLength(1);
+
+            const artifacts1 = h.component.GetArtifactsArray();
+            const artifacts2 = h.component.GetArtifactsArray();
+            expect(artifacts2).toBe(artifacts1);
+            expect(artifacts1).toHaveLength(1);
         });
     });
 });

@@ -241,6 +241,9 @@ async function save(entityName: string, values: Record<string, unknown>, dirty: 
     await internals.HandleIndividualBaseEntityEvent(finished);
 }
 
+/** The shipped settle window, captured once so afterEach can put the global back. */
+const SHIPPED_SETTLE_MS = QueryEngine.DefaultDefinitionEditSettleMs;
+
 describe('QueryEngine deletes cached results after a local edit', () => {
     let invalidate: ReturnType<typeof vi.spyOn>;
 
@@ -254,6 +257,9 @@ describe('QueryEngine deletes cached results after a local edit', () => {
     afterEach(() => {
         vi.useRealTimers();
         vi.restoreAllMocks();
+        // Process-global, so a test that lowers it would otherwise leak into every test after it
+        // — including the ones above that advance timers by exactly 3000ms.
+        QueryEngine.DefaultDefinitionEditSettleMs = SHIPPED_SETTLE_MS;
         delete GetGlobalObjectStore()['___SINGLETON__QueryEngine'];
     });
 
@@ -304,5 +310,41 @@ describe('QueryEngine deletes cached results after a local edit', () => {
         await vi.advanceTimersByTimeAsync(5000);
 
         expect(invalidate).not.toHaveBeenCalled();
+    });
+
+    // The settle window is settable so a harness can collapse it — an integration check that
+    // creates a query then warms a slot has to wait the window out, which at 3s is most of what
+    // that bundle costs. These pin the knob down: the shipped default is unchanged, lowering it
+    // really does move the timer, and coalescing still works at the lowered value (collapsing the
+    // window must speed the behavior up, not change it).
+    describe('DefaultDefinitionEditSettleMs', () => {
+        it('ships as 3000ms', () => {
+            expect(QueryEngine.DefaultDefinitionEditSettleMs).toBe(3000);
+        });
+
+        it('controls the timer: at 250ms the deletion runs well before the shipped window', async () => {
+            QueryEngine.DefaultDefinitionEditSettleMs = 250;
+
+            await save('MJ: Queries', { ID: A }, ['SQL']);
+            await vi.advanceTimersByTimeAsync(100);
+            expect(invalidate).not.toHaveBeenCalled();   // not before its own window
+
+            await vi.advanceTimersByTimeAsync(200);
+            expect(invalidated()).toEqual([A]);          // and well inside the old 3000ms
+        });
+
+        it('still coalesces a burst into one deletion at the lowered value', async () => {
+            QueryEngine.DefaultDefinitionEditSettleMs = 250;
+
+            await save('MJ: Queries', { ID: A }, ['SQL']);
+            await vi.advanceTimersByTimeAsync(100);
+            await save('MJ: Query Parameters', { QueryID: A }, [], false);
+            await vi.advanceTimersByTimeAsync(100);
+            await save('MJ: Queries', { ID: A }, ['UsesTemplate']);
+            expect(invalidate).not.toHaveBeenCalled();   // each save re-armed the timer
+
+            await vi.advanceTimersByTimeAsync(300);
+            expect(invalidate).toHaveBeenCalledTimes(1); // one deletion for the whole burst
+        });
     });
 });

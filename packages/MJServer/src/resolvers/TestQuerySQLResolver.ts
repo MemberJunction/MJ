@@ -151,6 +151,7 @@ export class TestQuerySQLResolver extends ResolverBase {
 
             return {
                 Success: result.Success,
+                // fls-guard: query rows; the SQL is refused before it runs if it reads a field the caller is denied
                 Results: result.Results ? JSON.stringify(result.Results) : undefined,
                 RowCount: result.RowCount,
                 ExecutionTime: result.ExecutionTime,

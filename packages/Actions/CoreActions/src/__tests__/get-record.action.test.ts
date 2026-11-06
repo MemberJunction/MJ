@@ -102,6 +102,82 @@ describe('GetRecordAction', () => {
             expect(r.Message).toMatch(/Primary key field 'ID' not provided/);
         });
 
+        it('accepts a bare scalar PrimaryKey for a single-column key and maps it onto that key column', async () => {
+            const entity = new FakeEntity(['Name'], { WidgetID: 'w-1', Name: 'x' });
+            const provider = makeProvider({ entityInfo: makeEntityInfo(['Name'], ['WidgetID']), entity });
+            const params = makeParams(
+                [
+                    { Name: 'EntityName', Value: 'Widgets' },
+                    { Name: 'PrimaryKey', Value: 'w-1' },
+                ],
+                provider
+            );
+
+            const r = await action.InternalRunAction(params);
+
+            expect(r.Success).toBe(true);
+            expect(entity.loadedKey?.KeyValuePairs).toEqual([{ FieldName: 'WidgetID', Value: 'w-1' }]);
+        });
+
+        it('accepts a JSON-string PrimaryKey object', async () => {
+            const entity = new FakeEntity(['Name'], { ID: '1', Name: 'x' });
+            const provider = makeProvider({ entityInfo: makeEntityInfo(['Name']), entity });
+            const params = makeParams(
+                [
+                    { Name: 'EntityName', Value: 'Widgets' },
+                    { Name: 'PrimaryKey', Value: '{"ID":"1"}' },
+                ],
+                provider
+            );
+
+            const r = await action.InternalRunAction(params);
+
+            expect(r.Success).toBe(true);
+            expect(entity.loadedKey?.KeyValuePairs).toEqual([{ FieldName: 'ID', Value: '1' }]);
+        });
+
+        it('accepts the CompositeKey KeyValuePairs shape', async () => {
+            const entity = new FakeEntity(['Name'], { UserID: 'u-1', RoleID: 'r-2' });
+            const provider = makeProvider({ entityInfo: makeEntityInfo(['Name'], ['UserID', 'RoleID'], 'User Roles'), entity });
+            const params = makeParams(
+                [
+                    { Name: 'EntityName', Value: 'User Roles' },
+                    {
+                        Name: 'PrimaryKey',
+                        Value: { KeyValuePairs: [{ FieldName: 'UserID', Value: 'u-1' }, { FieldName: 'RoleID', Value: 'r-2' }] },
+                    },
+                ],
+                provider
+            );
+
+            const r = await action.InternalRunAction(params);
+
+            expect(r.Success).toBe(true);
+            expect(entity.loadedKey?.KeyValuePairs).toEqual([
+                { FieldName: 'UserID', Value: 'u-1' },
+                { FieldName: 'RoleID', Value: 'r-2' },
+            ]);
+        });
+
+        it('rejects a scalar PrimaryKey for a composite key and lists the required key columns', async () => {
+            const entity = new FakeEntity(['Name']);
+            const provider = makeProvider({ entityInfo: makeEntityInfo(['Name'], ['UserID', 'RoleID'], 'User Roles'), entity });
+            const params = makeParams(
+                [
+                    { Name: 'EntityName', Value: 'User Roles' },
+                    { Name: 'PrimaryKey', Value: 'u-1' },
+                ],
+                provider
+            );
+
+            const r = await action.InternalRunAction(params);
+
+            expect(r.Success).toBe(false);
+            expect(r.ResultCode).toBe('VALIDATION_ERROR');
+            expect(r.Message).toMatch(/UserID, RoleID/);
+            expect(entity.loadedKey).toBeUndefined();
+        });
+
         it('fails with ENTITY_NOT_FOUND when the entity is not in metadata', async () => {
             const provider = makeProvider({ entityInfo: undefined, entity: new FakeEntity(['Name']) });
             const params = makeParams(

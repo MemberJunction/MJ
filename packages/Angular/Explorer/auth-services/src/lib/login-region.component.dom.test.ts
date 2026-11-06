@@ -42,8 +42,11 @@ describe('MJLoginRegionComponent (DOM)', () => {
     expect(commands).toEqual([{ Kind: 'up', ID: 'b-links' }]);
   });
 
-  it('in the editor, shows the selected block\'s toolbar and an empty region\'s drop hint', () => {
-    expect(query(render({ Editable: true, SelectedID: 'b-head' }), '.lr__tools')).not.toBeNull();
+  it('in the editor, the selected block\'s toolbar asks for its commands, and an empty region shows a drop hint', () => {
+    const fixture = render({ Editable: true, SelectedID: 'b-head' });
+    const commands = capture(fixture.componentInstance.CommandRequested);
+    (query(fixture, '.lr__tools button.mj-btn--icon[aria-label="Delete"]') as HTMLElement).click();
+    expect(commands).toEqual([{ Kind: 'delete', ID: 'b-head' }]);
     expect(query(render({ Editable: true, Blocks: [] }), '.lr__hint')).not.toBeNull();
   });
 });

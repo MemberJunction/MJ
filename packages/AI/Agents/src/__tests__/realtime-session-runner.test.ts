@@ -488,6 +488,34 @@ describe('RealtimeSessionRunner', () => {
             expect(h.checkpointSpy.mock.calls[1][0]).toEqual({ InputTokens: 6, OutputTokens: 3 });
             expect(result.FinalUsage).toEqual({ InputTokens: 6, OutputTokens: 3 });
         });
+
+        it('accumulates VideoTokens and VideoSeconds in InputTokenDetails and OutputTokenDetails', async () => {
+            vi.useFakeTimers();
+            const h = buildHarness();
+            const runner = new RealtimeSessionRunner(h.deps);
+            await runner.Start();
+
+            h.session.fireUsage({
+                InputTokens: 100,
+                OutputTokens: 200,
+                InputTokenDetails: { TextTokens: 40, VideoTokens: 60 },
+                OutputTokenDetails: { AudioTokens: 50, VideoTokens: 150, VideoSeconds: 2.5 },
+            });
+            h.session.fireUsage({
+                InputTokens: 50,
+                OutputTokens: 100,
+                InputTokenDetails: { VideoTokens: 50 },
+                OutputTokenDetails: { VideoTokens: 100, VideoSeconds: 1.5 },
+            });
+
+            const result = await runner.Stop();
+            expect(result.FinalUsage).toEqual({
+                InputTokens: 150,
+                OutputTokens: 300,
+                InputTokenDetails: { TextTokens: 40, VideoTokens: 110 },
+                OutputTokenDetails: { AudioTokens: 50, VideoTokens: 250, VideoSeconds: 4 },
+            });
+        });
     });
 
     // ── Failure containment ───────────────────────────────────────────

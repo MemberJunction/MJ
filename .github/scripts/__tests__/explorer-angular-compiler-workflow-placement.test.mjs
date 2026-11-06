@@ -35,6 +35,8 @@ describe('test.yml — MJExplorer @angular/compiler guard placement', () => {
     // packages/MJExplorer/package.json is already covered by `packages/**`; the script is not.
     // Without this entry a PR weakening only the guard would not run it.
     it('triggers the workflow on an edit to the guard script alone', () => {
-        expect(readWorkflow()).toContain(`- '${SCRIPT}'`);
+        const pathsBlock = readWorkflow().match(/<<'PATHS'\n([\s\S]*?)\n\s*PATHS\n/);
+        expect(pathsBlock, "test.yml's changes job must keep its <<'PATHS' list").not.toBeNull();
+        expect(pathsBlock[1].split('\n').map((l) => l.trim())).toContain(SCRIPT);
     });
 });

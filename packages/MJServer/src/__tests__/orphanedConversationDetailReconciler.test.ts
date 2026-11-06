@@ -74,6 +74,7 @@ function writable(saveResult = true, loadedStatus = 'In-Progress') {
         ID: DETAIL_ID,
         Status: loadedStatus,
         Message: '',
+        MarkServerAuthoredReply: vi.fn(),
         Load: vi.fn(async () => true),
         Save: vi.fn(async () => saveResult),
         LatestResult: { CompleteMessage: 'denied' },
@@ -243,6 +244,15 @@ describe('ReconcileOrphanedConversationDetails', () => {
             'MJ: Conversation Details',
             expect.objectContaining({ ID: 'OWNER-1' })
         );
+    });
+
+    it("marks the close as the server's write: the reply gate refuses an unmarked change to a reply's status", async () => {
+        script([detail()], [{ ConversationDetailID: DETAIL_ID, Status: 'Failed', CompletedAt: longAgo() }]);
+
+        await ReconcileOrphanedConversationDetails(PROVIDER, USER);
+
+        expect(writableStore.last?.MarkServerAuthoredReply).toHaveBeenCalledOnce();
+        expect(writableStore.last?.Save).toHaveBeenCalled();
     });
 
     it('leaves the detail alone when no owner can be resolved', async () => {

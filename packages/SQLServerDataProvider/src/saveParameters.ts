@@ -19,6 +19,8 @@ export type SQLServerSaveValue = string | number | boolean | bigint | Date | Buf
 
 /** One typed input of a save or delete statement. */
 export class SQLServerSaveParameter {
+  private _literal: string | (() => string);
+
   constructor(
     /** Name without the `@`, as the statement references it. */
     public readonly Name: string,
@@ -26,8 +28,17 @@ export class SQLServerSaveParameter {
     public readonly Type: sql.ISqlType,
     public readonly Value: SQLServerSaveValue,
     /** The literal the batch wrote for this value; {@link RenderSaveSQL} puts it back. */
-    public readonly Literal: string,
-  ) {}
+    literal: string | (() => string),
+  ) {
+    this._literal = literal;
+  }
+
+  public get Literal(): string {
+    if (typeof this._literal === 'function') {
+      this._literal = this._literal();
+    }
+    return this._literal;
+  }
 }
 
 /**
@@ -78,6 +89,19 @@ export class SaveParameterCollector {
     const { Type, Value } = SaveParameterFromLiteral(field, literal);
     const name = `p$${this.parameters.length}`;
     this.parameters.push(new SQLServerSaveParameter(name, Type, Value, literal));
+    return `@${name}`;
+  }
+
+  /**
+   * Adds a binary parameter directly from a decoded Buffer without eagerly formatting
+   * a 2× hex literal string unless `RenderSaveSQL` later requests `.Literal`.
+   */
+  public AddBinaryField(field: EntityFieldInfo, bytes: Buffer, lazyLiteral: () => string): string {
+    if (IsKeptAsInlineLiteral(field)) {
+      return lazyLiteral();
+    }
+    const name = `p$${this.parameters.length}`;
+    this.parameters.push(new SQLServerSaveParameter(name, SaveParameterType(field), bytes, lazyLiteral));
     return `@${name}`;
   }
 }

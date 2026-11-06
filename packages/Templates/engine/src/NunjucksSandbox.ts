@@ -278,10 +278,11 @@ function guardRegistryLookup(registry: 'filters' | 'tests' | 'globals'): (origin
 
 /**
  * `obj.key` and `obj[key]`. The key is converted to a string once, so a computed key cannot change
- * between the check and the read. The member is checked before nunjucks reads it again; templates
- * cannot define accessors (the accessor helpers are restricted names), so both reads see the same value.
+ * between the check and the read. The member is read once (`memberVal`), checked against restricted/nunjucks
+ * values, and returned directly (or bound to `obj` when it is a method, matching nunjucks' `memberLookup`
+ * without evaluating `obj[key]` a second time).
  */
-function guardMemberLookup(original: NunjucksRuntimeHooks['memberLookup']): NunjucksRuntimeHooks['memberLookup'] {
+function guardMemberLookup(_original: NunjucksRuntimeHooks['memberLookup']): NunjucksRuntimeHooks['memberLookup'] {
     return (obj, val) => {
         if (obj === undefined || obj === null || typeof val === 'symbol') {
             return undefined;
@@ -300,7 +301,12 @@ function guardMemberLookup(original: NunjucksRuntimeHooks['memberLookup']): Nunj
         if (isRestrictedOrNunjucksValue(memberVal)) {
             throw new TemplateSandboxError(`Templates may not access the member "${key}"`);
         }
-        return original(obj, key);
+        if (typeof memberVal === 'function') {
+            return function (...args: unknown[]): unknown {
+                return (memberVal as (...callArgs: unknown[]) => unknown).apply(obj, args);
+            };
+        }
+        return memberVal;
     };
 }
 

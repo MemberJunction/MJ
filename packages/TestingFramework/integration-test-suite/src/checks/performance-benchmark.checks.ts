@@ -56,6 +56,7 @@ import {
     AssertEqual,
     IntegrationCheckRegistry,
     Settle,
+    SkipCheck,
     verifyAgentRun,
     type IntegrationCheckContext,
     type NamedCheck,
@@ -197,13 +198,13 @@ function buildRealisticAgentPayload(extraFields: Record<string, unknown> = {}): 
 }
 
 /**
- * Resolves a shipped agent by name, returning null with a clean skip message if absent or inactive.
+ * Resolves a shipped agent by name; skips the running check (SkipCheck) if it is absent or inactive.
  */
 async function resolveShippedAgent(
     name: string,
     provider: IMetadataProvider,
     user: UserInfo
-): Promise<MJAIAgentEntityExtended | null> {
+): Promise<MJAIAgentEntityExtended> {
     const r = await RunView.FromMetadataProvider(provider).RunView<MJAIAgentEntityExtended>(
         {
             EntityName: 'MJ: AI Agents',
@@ -215,12 +216,10 @@ async function resolveShippedAgent(
     );
     const agent = r.Success && r.Results.length === 1 ? r.Results[0] : null;
     if (!agent) {
-        console.log(`      → SKIPPED: shipped agent '${name}' not found in metadata`);
-        return null;
+        SkipCheck(`shipped agent '${name}' not found in metadata`);
     }
     if (agent.Status !== 'Active') {
-        console.log(`      → SKIPPED: '${name}' is ${agent.Status} (not runnable)`);
-        return null;
+        SkipCheck(`shipped agent '${name}' is ${agent.Status} (not runnable); it must be Active`);
     }
     return agent;
 }
@@ -419,14 +418,11 @@ async function runDeterministicScriptedAgent(
     userMessage: string,
     initialPayload: Record<string, unknown>,
     scriptedReplies: Array<Record<string, unknown>>
-): Promise<AgentRunTreeMetrics | null> {
+): Promise<AgentRunTreeMetrics> {
     await AIEngine.Instance.Config(false, ctx.User);
     await ActionEngineServer.Instance.Config(false, ctx.User);
 
     const agent = await resolveShippedAgent(agentName, ctx.Provider, ctx.User);
-    if (!agent) {
-        return null;
-    }
 
     const fx = requireFixture();
     const llm = new TestLLM();
@@ -984,9 +980,6 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 initialPayload,
                 scriptedReplies
             );
-            if (!metrics) {
-                return;
-            }
             Assert(metrics.TotalStepsInTree >= 7, `PB7: expected >= 7 steps in Sage run, got ${metrics.TotalStepsInTree}`);
             Assert(metrics.PromptSteps >= 4, `PB7: expected >= 4 Prompt steps, got ${metrics.PromptSteps}`);
             Assert(metrics.ActionSteps >= 3, `PB7: expected >= 3 Action steps, got ${metrics.ActionSteps}`);
@@ -1071,9 +1064,6 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 initialPayload,
                 scriptedReplies
             );
-            if (!metrics) {
-                return;
-            }
             Assert(
                 metrics.TotalRunsInTree >= 2,
                 `PB8: expected >= 2 runs in Query Builder tree (parent + child), got ${metrics.TotalRunsInTree}`
@@ -1150,9 +1140,6 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 initialPayload,
                 scriptedReplies
             );
-            if (!metrics) {
-                return;
-            }
             Assert(
                 metrics.TotalRunsInTree >= 2,
                 `PB9: expected >= 2 runs in Research Agent tree (parent + child), got ${metrics.TotalRunsInTree}`
@@ -1166,9 +1153,6 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
             const sage = await resolveShippedAgent('Sage', ctx.Provider, ctx.User);
-            if (!sage) {
-                return;
-            }
             const fx = requireFixture();
 
             // Create conversation + user turn to benchmark full conversation-linked Sage execution
@@ -1228,9 +1212,6 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
             const qb = await resolveShippedAgent('Query Builder', ctx.Provider, ctx.User);
-            if (!qb) {
-                return;
-            }
             const fx = requireFixture();
 
             const prompt = 'How many users are in the system? Give the number only.';
@@ -1268,9 +1249,6 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
             const research = await resolveShippedAgent('Research Agent', ctx.Provider, ctx.User);
-            if (!research) {
-                return;
-            }
             const fx = requireFixture();
 
             const prompt =
@@ -1370,6 +1348,82 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
             } finally {
                 for (const id of createdIds) {
                     await DeleteById('MJ: Error Logs', id, ctx.Provider, ctx.User);
+                }
+            }
+        },
+    },
+    {
+        Id: `${BUNDLE}.PB14`,
+        Name: 'PB14: Phase 2 Regression Guards — Lazy BaseEntity _raw hydration on RunView entity_object & runtime options.SaveReturnMode datestamps_only on full-SP entities',
+        Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+            const fx = requireFixture();
+            const rv = RunView.FromMetadataProvider(ctx.Provider);
+
+            // 1. Verify RunView({ ResultType: 'entity_object' }) keeps _fieldsHydrated === false during read-only access
+            const agentsRes = await rv.RunView<MJAIAgentEntityExtended>(
+                {
+                    EntityName: 'MJ: AI Agents',
+                    MaxRows: 10,
+                    ResultType: 'entity_object',
+                    BypassCache: true,
+                },
+                ctx.User
+            );
+            const agents = RequireRows(agentsRes, 'PB14: MJ: AI Agents entity_object load');
+            Assert(agents.length > 0, 'PB14: expected at least 1 AI Agent row');
+
+            for (const ag of agents) {
+                const nameVal = ag.Name;
+                const statusVal = ag.Status;
+                const allObj = ag.GetAll();
+                Assert(typeof nameVal === 'string' && nameVal.length > 0, 'PB14: expected Name via getter in _raw mode');
+                Assert(typeof statusVal === 'string', 'PB14: expected Status via getter in _raw mode');
+                AssertEqual(allObj.Name, nameVal, 'PB14: GetAll() returns Name in _raw mode');
+                const hydratedAfterRead = (ag as unknown as { _fieldsHydrated: boolean })._fieldsHydrated;
+                AssertEqual(
+                    hydratedAfterRead,
+                    false,
+                    `PB14: expected BaseEntity._fieldsHydrated to stay false after read-only Get()/GetAll() on '${nameVal}'`
+                );
+            }
+
+            // Trigger lazy hydration on the first entity via Set() and verify _fieldsHydrated flips to true
+            const firstAgent = agents[0];
+            const originalDesc = firstAgent.Description;
+            firstAgent.Set('Description', originalDesc);
+            const hydratedAfterSet = (firstAgent as unknown as { _fieldsHydrated: boolean })._fieldsHydrated;
+            AssertEqual(hydratedAfterSet, true, 'PB14: expected Set() to lazily hydrate EntityFields');
+
+            // 2. Verify runtime options.SaveReturnMode='datestamps_only' on an entity whose compiled SP is SaveReturnMode='full'
+            const conv = await ctx.Provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', ctx.User);
+            AssertEqual(
+                conv.EntityInfo.SaveReturnMode,
+                'full',
+                'PB14: expected MJ: Conversations to have compiled SaveReturnMode="full"'
+            );
+            conv.NewRecord();
+            conv.Name = `PB14 Runtime DatestampsOnly (${fx.Marker})`;
+            conv.Description = 'Initial description';
+            conv.UserID = ctx.User.ID;
+
+            try {
+                const createSaved = await conv.Save({ SaveReturnMode: 'datestamps_only' });
+                Assert(createSaved, `PB14: Conversations create with runtime SaveReturnMode='datestamps_only' failed: ${conv.LatestResult?.CompleteMessage}`);
+                Assert(conv.IsSaved, 'PB14: conv.IsSaved should be true after create');
+                Assert(!!conv.__mj_CreatedAt, 'PB14: conv.__mj_CreatedAt populated from DB');
+                Assert(!!conv.__mj_UpdatedAt, 'PB14: conv.__mj_UpdatedAt populated from DB');
+                AssertEqual(conv.Name, `PB14 Runtime DatestampsOnly (${fx.Marker})`, 'PB14: in-memory Name preserved');
+                AssertEqual(conv.Dirty, false, 'PB14: conv.Dirty reset to false after create');
+
+                // Update with runtime SaveReturnMode='datestamps_only'
+                conv.Description = 'Updated description via datestamps_only';
+                const updateSaved = await conv.Save({ SaveReturnMode: 'datestamps_only' });
+                Assert(updateSaved, `PB14: Conversations update with runtime SaveReturnMode='datestamps_only' failed: ${conv.LatestResult?.CompleteMessage}`);
+                AssertEqual(conv.Description, 'Updated description via datestamps_only', 'PB14: updated Description preserved');
+                AssertEqual(conv.Dirty, false, 'PB14: conv.Dirty reset to false after update');
+            } finally {
+                if (conv.IsSaved && conv.ID) {
+                    await DeleteById('MJ: Conversations', conv.ID, ctx.Provider, ctx.User);
                 }
             }
         },
