@@ -6,7 +6,7 @@
  * The coordinator and BaseAgent are real; RunView, the AI engine and the provider's entity factory are the boundaries.
  * The coordinator's own behaviour (strategy chain, List modes, who saves the row) is in AgentFeedbackCoordinator.test.ts.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BaseAgent } from '../base-agent';
 import type {
     BaseAgentNextStep,
@@ -16,7 +16,9 @@ import type {
     MJAIAgentRunStepEntityExtended,
 } from '@memberjunction/ai-core-plus';
 import type { MJAIAgentCategoryEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAIAgentTypeEntity } from '@memberjunction/core-entities';
-import type { IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
+import { UserInfo, type IMetadataProvider, type RunViewParams, type RunViewResult } from '@memberjunction/core';
+import { UserCache } from '@memberjunction/generic-database-provider';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /** BaseAgent's private feedback-request members, reached the way the other BaseAgent suites reach private members. */
 interface FeedbackRequestInternals {
@@ -108,12 +110,25 @@ function makeViewResult<T>(results: T[]): RunViewResult<T> {
 }
 
 describe('BaseAgent.createFeedbackRequest', () => {
+    const SYSTEM_USER = new UserInfo(undefined, { ID: UserCache.Instance.SYSTEM_USER_ID, Name: 'System', Type: 'Owner', UserRoles: [] });
+    const UI_CALLER = new UserInfo(undefined, { ID: CALLER_ID, Name: 'Caller User', Type: 'User', UserRoles: [] });
+
     beforeEach(() => {
         vi.resetAllMocks();
         mockAgentTypes.length = 0;
+        UserCache.Instance.SetUsers([SYSTEM_USER, UI_CALLER]);
     });
 
-    it('should drive BaseAgent.createFeedbackRequest end to end with a List (RoundRobin) strategy through the real BaseAgent wrapper', async () => {
+    afterEach(() => {
+        UserCache.Instance.SetUsers([]);
+    });
+
+    it("should keep the request ID of a List (RoundRobin) assignment the agent type's metadata routes to another member, for a non-Owner caller", async () => {
+        const agentType: Partial<MJAIAgentTypeEntity> = {
+            ID: AGENT_TYPE_ID,
+            AssignmentStrategy: JSON.stringify({ type: 'List', listID: LIST_ID, listStrategy: 'RoundRobin', priority: 75 }),
+        };
+        mockAgentTypes.push(agentType as MJAIAgentTypeEntity);
         mockRunViews
             .mockResolvedValueOnce([
                 makeViewResult([{ ID: LIST_ID, EntityID: 'e-users', Entity: 'MJ: Users' }]),
@@ -137,6 +152,8 @@ describe('BaseAgent.createFeedbackRequest', () => {
                 ]),
             ]);
 
+        // The row's Save() applies MJAIAgentRequestEntityServer's ownership rule to the user it was created for:
+        // a non-Owner-type user may save a request only for themselves.
         const savedRecord: Partial<MJAIAgentRequestEntity> & {
             Save: () => Promise<boolean>;
             NewRecord: () => boolean;
@@ -145,7 +162,14 @@ describe('BaseAgent.createFeedbackRequest', () => {
             NewRecord: () => true,
             Save: vi.fn(async () => true),
         };
-        mockGetEntityObject.mockResolvedValueOnce(savedRecord as MJAIAgentRequestEntity);
+        let savedAs: UserInfo | undefined;
+        mockGetEntityObject.mockImplementationOnce(async (_entityName: string, user?: UserInfo) => {
+            savedAs = user;
+            savedRecord.Save = vi.fn(async () =>
+                !user || user.Type?.trim().toLowerCase() === 'owner' || !savedRecord.RequestForUserID || UUIDsEqual(savedRecord.RequestForUserID, user.ID)
+            );
+            return savedRecord as MJAIAgentRequestEntity;
+        });
         mockResolveAgentRequestTypeID.mockResolvedValueOnce('dddddddd-dddd-4ddd-8ddd-000000000001');
 
         const providerStub: Partial<IMetadataProvider> = {
@@ -153,18 +177,11 @@ describe('BaseAgent.createFeedbackRequest', () => {
         };
 
         const agent: Partial<MJAIAgentEntityExtended> = { ID: AGENT_ID, Name: 'WrapperTestAgent', TypeID: AGENT_TYPE_ID, CategoryID: null };
-        const caller: Partial<UserInfo> = { ID: CALLER_ID, Name: 'Caller User' };
         const params: ExecuteAgentParams = {
             agent: agent as MJAIAgentEntityExtended,
             conversationMessages: [],
-            contextUser: caller as UserInfo,
+            contextUser: UI_CALLER,
             provider: providerStub as IMetadataProvider,
-            assignmentStrategy: {
-                type: 'List',
-                listID: LIST_ID,
-                listStrategy: 'RoundRobin',
-                priority: 75,
-            },
         };
         const agentRun: Partial<MJAIAgentRunEntityExtended> = {
             ID: 'ffffffff-ffff-4fff-8fff-000000000002',
@@ -187,6 +204,7 @@ describe('BaseAgent.createFeedbackRequest', () => {
 
         expect(feedbackRequestId).toBe('eeeeeeee-eeee-4eee-8eee-000000000002');
         expect(savedRecord.RequestForUserID).toBe(USER_2);
+        expect(savedAs).toBe(SYSTEM_USER);
         expect(savedRecord.Priority).toBe(75);
         expect(savedRecord.OriginatingAgentRunID).toBe('ffffffff-ffff-4fff-8fff-000000000002');
         expect(savedRecord.OriginatingAgentRunStepID).toBe('99999999-9999-4999-8999-000000000002');

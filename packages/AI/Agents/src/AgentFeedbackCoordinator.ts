@@ -36,6 +36,7 @@ import {
     ParseAssignmentStrategy,
 } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { EscapeSQLString, GroupByUUID, IndexByUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 
 /**
@@ -68,6 +69,14 @@ export interface CreateFeedbackRequestInput {
     AgentRun?: MJAIAgentRunEntityExtended | null;
     Provider: IMetadataProvider;
     NowMs?: number;
+}
+
+/**
+ * Who a new request is for, and the user that saves it. See {@link AgentFeedbackCoordinator.CreateFeedbackRequest}.
+ */
+interface RequestPlacement {
+    AssigneeUserID: string | null;
+    SaveUser: UserInfo | undefined;
 }
 
 type ListSummaryRow = Pick<MJListEntity, 'ID' | 'EntityID' | 'Entity'>;
@@ -351,6 +360,21 @@ export class AgentFeedbackCoordinator {
     /**
      * Creates and saves a persistent `MJ: AI Agent Requests` row for a Chat or Plan step,
      * returning the new request's `ID` when saved or `null` on failure.
+     *
+     * **Who saves the row.** `MJAIAgentRequestEntityServer.Validate` keeps requests private: a
+     * non-Owner-type user may save a request only for themselves, and Owner-type users (the
+     * scheduler's system user among them) are exempt. That rule guards direct saves, such as a
+     * GraphQL create where the caller types in `RequestForUserID`, and this method leaves it
+     * untouched. The assignee here comes from one of two places, held to different standards:
+     * - **Metadata** (agent type, agent category, request type): an administrator configured the
+     *   strategy and the caller cannot change it. When it picks someone other than a non-Owner
+     *   caller, the row is saved as the system user, the cross-user path the rule exempts (the
+     *   same way `AgentWakeTriggerService` saves a wake routine for another user). Saving it as
+     *   the caller would fail validation and lose the request: no inbox row, no resume.
+     * - **The caller** (`ExecuteAgentParams.assignmentStrategy`): held to the rule a direct save
+     *   meets. A non-Owner caller who names someone else gets the request assigned to themselves
+     *   (logged), and the row is saved as the caller, so the entity rule still backs this up.
+     * The reads that choose the assignee (list members, open counts) run as the caller either way.
      */
     public async CreateFeedbackRequest(input: CreateFeedbackRequestInput): Promise<string | null> {
         const {
@@ -368,18 +392,22 @@ export class AgentFeedbackCoordinator {
                 params.contextUser
             );
             const resolvedStrategy = await this.ResolveAssignmentStrategy(params, requestTypeId);
-            const requestForUserId = await this.ResolveAssigneeUserID(
+            const resolvedAssigneeUserId = await this.ResolveAssigneeUserID(
                 resolvedStrategy,
                 params,
                 agentRun,
                 provider
+            );
+            const { AssigneeUserID: requestForUserId, SaveUser: saveUser } = this.placeRequest(
+                resolvedAssigneeUserId,
+                params
             );
             const priority = resolvedStrategy?.priority ?? 50;
             const expirationMinutes = resolvedStrategy?.expirationMinutes;
 
             const request = await provider.GetEntityObject<MJAIAgentRequestEntity>(
                 'MJ: AI Agent Requests',
-                params.contextUser
+                saveUser
             );
             request.NewRecord();
             request.AgentID = params.agent.ID;
@@ -418,6 +446,37 @@ export class AgentFeedbackCoordinator {
             LogError(`Error creating feedback request: ${message}`);
             return null;
         }
+    }
+
+    /**
+     * Applies the ownership rule described on {@link CreateFeedbackRequest} to a resolved assignee.
+     * A request for the caller, for nobody (a shared inbox), with no caller, or from an Owner-type
+     * caller is saved as the caller unchanged.
+     */
+    private placeRequest(assigneeUserID: string | null, params: ExecuteAgentParams): RequestPlacement {
+        const caller = params.contextUser;
+        if (!caller || !assigneeUserID || UUIDsEqual(assigneeUserID, caller.ID) || this.isOwnerType(caller)) {
+            return { AssigneeUserID: assigneeUserID, SaveUser: caller };
+        }
+        if (params.assignmentStrategy) {
+            LogStatus(
+                `⚠️ Agent ${params.agent.Name}: the run's assignmentStrategy picked user ${assigneeUserID}, but a non-Owner caller may only assign a request to themselves; assigning it to the caller`
+            );
+            return { AssigneeUserID: caller.ID, SaveUser: caller };
+        }
+        const systemUser = UserCache.Instance.GetSystemUser();
+        if (!systemUser) {
+            LogStatus(
+                `⚠️ Agent ${params.agent.Name}: no system user in UserCache to save a request for user ${assigneeUserID}; assigning it to the caller`
+            );
+            return { AssigneeUserID: caller.ID, SaveUser: caller };
+        }
+        return { AssigneeUserID: assigneeUserID, SaveUser: systemUser };
+    }
+
+    /** The Owner-type test `MJAIAgentRequestEntityServer.validateOwnership` applies. */
+    private isOwnerType(user: UserInfo): boolean {
+        return user.Type?.trim().toLowerCase() === 'owner';
     }
 
     private describeListFallbackTarget(params: ExecuteAgentParams): string {

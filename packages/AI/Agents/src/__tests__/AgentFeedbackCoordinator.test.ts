@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AgentFeedbackCoordinator } from '../AgentFeedbackCoordinator';
 import {
     ParseAssignmentStrategy,
@@ -19,11 +19,13 @@ import type {
 import {
     LogError,
     LogStatus,
+    UserInfo,
     type IMetadataProvider,
     type RunViewParams,
     type RunViewResult,
-    type UserInfo,
 } from '@memberjunction/core';
+import { UserCache } from '@memberjunction/generic-database-provider';
+import { UUIDsEqual } from '@memberjunction/global';
 
 const mockRunViews = vi.fn<(views: RunViewParams[], contextUser?: UserInfo) => Promise<RunViewResult[]>>();
 const mockGetEntityObject = vi.fn<(entityName: string, contextUser?: UserInfo) => Promise<MJAIAgentRequestEntity>>();
@@ -677,59 +679,186 @@ describe('AgentFeedbackCoordinator', () => {
     });
 
     describe('CreateFeedbackRequest', () => {
-        it('should create and save an MJ: AI Agent Requests record with resolved strategy, user, priority, and expiration', async () => {
-            const savedRecord: Partial<MJAIAgentRequestEntity> & {
-                Save: () => Promise<boolean>;
-                NewRecord: () => boolean;
-            } = {
-                ID: 'eeeeeeee-eeee-4eee-8eee-000000000001',
-                NewRecord: () => true,
-                Save: vi.fn(async () => true),
-            };
-            mockGetEntityObject.mockResolvedValueOnce(savedRecord as MJAIAgentRequestEntity);
-            mockResolveAgentRequestTypeID.mockResolvedValueOnce('dddddddd-dddd-4ddd-8ddd-000000000001');
+        const SYSTEM_USER = new UserInfo(undefined, {
+            ID: UserCache.Instance.SYSTEM_USER_ID,
+            Name: 'System',
+            Type: 'Owner',
+            UserRoles: [],
+        });
+        const UI_CALLER = new UserInfo(undefined, { ID: CALLER_ID, Name: 'Caller User', Type: 'User', UserRoles: [] });
+        const OWNER_CALLER = new UserInfo(undefined, { ID: CALLER_ID, Name: 'Admin Caller', Type: 'Owner', UserRoles: [] });
+        const REQUEST_TYPE_ID = 'dddddddd-dddd-4ddd-8ddd-000000000001';
+        const agentRun: Partial<MJAIAgentRunEntityExtended> = { ID: 'ffffffff-ffff-4fff-8fff-000000000001' };
+        const step: Partial<MJAIAgentRunStepEntityExtended> = { ID: '99999999-9999-4999-8999-000000000001' };
+        const decision: BaseAgentNextStep = { step: 'Chat', terminate: true, message: 'Please review.' };
+        const providerStub: Partial<IMetadataProvider> = { GetEntityObject: providerGetEntityObject };
 
-            const params = createParamsStub({
-                assignmentStrategy: {
-                    type: 'SpecificUser',
-                    userID: USER_2,
-                    priority: 90,
-                    expirationMinutes: 30,
-                },
+        type RequestRow = Partial<MJAIAgentRequestEntity> & {
+            Save: () => Promise<boolean>;
+            NewRecord: () => boolean;
+        };
+        /** Every request row the provider created, with the user it was created for. */
+        let created: Array<{ Row: RequestRow; User: UserInfo | undefined }>;
+
+        /**
+         * The provider hands out request rows whose Save() applies MJAIAgentRequestEntityServer's ownership rule to
+         * the user the row was created for: a non-Owner-type user may save a request only for themselves.
+         */
+        function provideOwnershipCheckedRows(): void {
+            mockGetEntityObject.mockImplementation(async (_entityName: string, user?: UserInfo) => {
+                const row: RequestRow = {
+                    ID: `eeeeeeee-eeee-4eee-8eee-00000000000${created.length + 1}`,
+                    NewRecord: () => true,
+                    Save: vi.fn(async () => {
+                        if (!user || user.Type?.trim().toLowerCase() === 'owner') {
+                            return true;
+                        }
+                        return !row.RequestForUserID || UUIDsEqual(row.RequestForUserID, user.ID);
+                    }),
+                };
+                created.push({ Row: row, User: user });
+                return row as MJAIAgentRequestEntity;
             });
-            const agentRun: Partial<MJAIAgentRunEntityExtended> = {
-                ID: 'ffffffff-ffff-4fff-8fff-000000000001',
-            };
-            const step: Partial<MJAIAgentRunStepEntityExtended> = {
-                ID: '99999999-9999-4999-8999-000000000001',
-            };
-            const decision: BaseAgentNextStep = {
-                step: 'Chat',
-                terminate: true,
-                message: 'Please approve the plan.',
-                responseForm: coordinator.BuildPlanApprovalForm('Step 1: Execute'),
-            };
-            const providerStub: Partial<IMetadataProvider> = {
-                GetEntityObject: providerGetEntityObject,
-            };
+        }
 
-            const requestId = await coordinator.CreateFeedbackRequest({
+        async function create(params: ExecuteAgentParams): Promise<string | null> {
+            return coordinator.CreateFeedbackRequest({
                 Params: params,
                 AgentRun: agentRun as MJAIAgentRunEntityExtended,
                 StepEntity: step as MJAIAgentRunStepEntityExtended,
                 Decision: decision,
                 Provider: providerStub as IMetadataProvider,
+                NowMs: Date.parse('2026-11-06T12:00:00Z'),
             });
+        }
 
-            expect(requestId).toBe('eeeeeeee-eeee-4eee-8eee-000000000001');
-            expect(savedRecord.OriginatingAgentRunID).toBe('ffffffff-ffff-4fff-8fff-000000000001');
-            expect(savedRecord.OriginatingAgentRunStepID).toBe('99999999-9999-4999-8999-000000000001');
-            expect(savedRecord.RequestForUserID).toBe(USER_2);
-            expect(savedRecord.RequestTypeID).toBe('dddddddd-dddd-4ddd-8ddd-000000000001');
-            expect(savedRecord.Priority).toBe(90);
-            expect(savedRecord.ExpiresAt).toBeInstanceOf(Date);
-            expect(savedRecord.Status).toBe('Requested');
-            expect(savedRecord.Save).toHaveBeenCalledOnce();
+        function useAgentTypeStrategy(strategy: AgentRequestAssignmentStrategy): void {
+            const agentType: Partial<MJAIAgentTypeEntity> = { ID: AGENT_TYPE_ID, AssignmentStrategy: JSON.stringify(strategy) };
+            mockAgentTypes.push(agentType as MJAIAgentTypeEntity);
+        }
+
+        beforeEach(() => {
+            created = [];
+            UserCache.Instance.SetUsers([SYSTEM_USER, UI_CALLER]);
+            provideOwnershipCheckedRows();
+            mockResolveAgentRequestTypeID.mockResolvedValue(REQUEST_TYPE_ID);
+        });
+
+        afterEach(() => {
+            UserCache.Instance.SetUsers([]);
+        });
+
+        it('should save the request with the resolved strategy, assignee, priority, and expiration (an Owner-type caller may assign another user)', async () => {
+            const requestId = await create(
+                createParamsStub({
+                    contextUser: OWNER_CALLER,
+                    assignmentStrategy: { type: 'SpecificUser', userID: USER_2, priority: 90, expirationMinutes: 30 },
+                })
+            );
+
+            const [{ Row: row, User: saveUser }] = created;
+            expect(requestId).toBe(row.ID);
+            expect(saveUser).toBe(OWNER_CALLER);
+            expect(row.OriginatingAgentRunID).toBe(agentRun.ID);
+            expect(row.OriginatingAgentRunStepID).toBe(step.ID);
+            expect(row.RequestForUserID).toBe(USER_2);
+            expect(row.RequestTypeID).toBe(REQUEST_TYPE_ID);
+            expect(row.Priority).toBe(90);
+            expect(row.ExpiresAt).toEqual(new Date(Date.parse('2026-11-06T12:30:00Z')));
+            expect(row.Status).toBe('Requested');
+            expect(row.Save).toHaveBeenCalledOnce();
+        });
+
+        it('should save a metadata List assignment to another member, as the system user, when the caller is not Owner-type', async () => {
+            useAgentTypeStrategy({ type: 'List', listID: LIST_ID, listStrategy: 'RoundRobin' });
+            mockRunViews
+                .mockResolvedValueOnce([
+                    makeViewResult([{ ID: LIST_ID, EntityID: 'e-users', Entity: 'MJ: Users' }]),
+                    makeViewResult([
+                        { ID: 'ld-1', RecordID: USER_1, Sequence: 1, Status: 'Pending' },
+                        { ID: 'ld-2', RecordID: USER_2, Sequence: 2, Status: 'Pending' },
+                    ]),
+                ])
+                .mockResolvedValueOnce([
+                    makeViewResult([
+                        { ID: USER_1, IsActive: true },
+                        { ID: USER_2, IsActive: true },
+                    ]),
+                    makeViewResult([{ ID: 'req-prev', AgentID: AGENT_ID, RequestForUserID: USER_1, RequestedAt: '2026-11-05T10:00:00Z' }]),
+                ]);
+
+            const requestId = await create(createParamsStub({ contextUser: UI_CALLER }));
+
+            const [{ Row: row, User: saveUser }] = created;
+            expect(requestId).toBe(row.ID);
+            expect(row.RequestForUserID).toBe(USER_2);
+            expect(saveUser).toBe(SYSTEM_USER);
+            expect(row.Save).toHaveBeenCalledOnce();
+            // The reads that chose the member ran as the caller, not the system user.
+            expect(mockRunViews.mock.calls.map((call) => call[1])).toEqual([UI_CALLER, UI_CALLER]);
+        });
+
+        it.each([
+            ['agent category', 'SpecificUser', USER_3],
+            ['request type', 'AgentOwner', OWNER_ID],
+        ] as const)(
+            'should save a strategy from the %s (%s) that picks another user, as the system user',
+            async (source, type, expectedAssignee) => {
+                const strategy = JSON.stringify(type === 'SpecificUser' ? { type, userID: USER_3 } : { type });
+                if (source === 'agent category') {
+                    const category: Partial<MJAIAgentCategoryEntity> = { ID: 'cccccccc-cccc-4ccc-8ccc-000000000009', ParentID: null, AssignmentStrategy: strategy };
+                    mockAgentCategories.push(category as MJAIAgentCategoryEntity);
+                } else {
+                    const requestType: Partial<MJAIAgentRequestTypeEntity> = { ID: REQUEST_TYPE_ID, DefaultAssignmentStrategy: strategy };
+                    mockAgentRequestTypes.push(requestType as MJAIAgentRequestTypeEntity);
+                }
+                const agent = createAgentStub({ CategoryID: source === 'agent category' ? 'cccccccc-cccc-4ccc-8ccc-000000000009' : null });
+
+                const requestId = await create(createParamsStub({ agent, contextUser: UI_CALLER }));
+
+                const [{ Row: row, User: saveUser }] = created;
+                expect(requestId).toBe(row.ID);
+                expect(row.RequestForUserID).toBe(expectedAssignee);
+                expect(saveUser).toBe(SYSTEM_USER);
+            }
+        );
+
+        it("should hold a caller's own assignmentStrategy to the ownership rule: a non-Owner caller who names another user gets the request", async () => {
+            const requestId = await create(
+                createParamsStub({ contextUser: UI_CALLER, assignmentStrategy: { type: 'SpecificUser', userID: USER_2, priority: 70 } })
+            );
+
+            const [{ Row: row, User: saveUser }] = created;
+            expect(requestId).toBe(row.ID);
+            expect(row.RequestForUserID).toBe(CALLER_ID);
+            expect(row.Priority).toBe(70);
+            expect(saveUser).toBe(UI_CALLER);
+            expect(LogStatus).toHaveBeenCalledWith(
+                `⚠️ Agent CoordinatorTestAgent: the run's assignmentStrategy picked user ${USER_2}, but a non-Owner caller may only assign a request to themselves; assigning it to the caller`
+            );
+        });
+
+        it('should save a request for the caller themselves as the caller, never the system user', async () => {
+            useAgentTypeStrategy({ type: 'RunUser' });
+
+            const requestId = await create(createParamsStub({ contextUser: UI_CALLER }));
+
+            const [{ Row: row, User: saveUser }] = created;
+            expect(requestId).toBe(row.ID);
+            expect(row.RequestForUserID).toBe(CALLER_ID);
+            expect(saveUser).toBe(UI_CALLER);
+        });
+
+        it('should assign a cross-user metadata request to the caller when no system user is cached, so the request is not lost', async () => {
+            UserCache.Instance.SetUsers([UI_CALLER]);
+            useAgentTypeStrategy({ type: 'SpecificUser', userID: USER_2 });
+
+            const requestId = await create(createParamsStub({ contextUser: UI_CALLER }));
+
+            const [{ Row: row, User: saveUser }] = created;
+            expect(requestId).toBe(row.ID);
+            expect(row.RequestForUserID).toBe(CALLER_ID);
+            expect(saveUser).toBe(UI_CALLER);
         });
     });
 
