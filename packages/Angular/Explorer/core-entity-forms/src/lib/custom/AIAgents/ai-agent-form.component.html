@@ -10,9 +10,9 @@
     <form class="record-form" #form="ngForm">
       <!-- Agent Header — expanded view -->
       @if (!HeaderCollapsed) {
-        <div class="agent-header">
+        <div class="agent-header phone-hero" [class.hero-view]="!EditMode" [class.hero-compact]="!EditMode && !HeroDetailsOpen">
           <div class="agent-header-content">
-            <button class="agent-header-toggle" (click)="ToggleHeaderCollapsed()"
+            <button class="agent-header-toggle phone-hero-hide" (click)="ToggleHeaderCollapsed()"
               title="Minimize header">
               <i class="fa-solid fa-chevron-up"></i>
             </button>
@@ -41,12 +41,12 @@
                     </span>
                   }
                   @if (record.Type) {
-                    <span class="execution-mode">
+                    <span class="execution-mode phone-hero-detail">
                       Agent Type: {{ record.Type }}
                     </span>
                   }
                   @if (record.Parent) {
-                    <span class="parent-agent clickable"
+                    <span class="parent-agent clickable phone-hero-detail"
                       (click)="navigateToParentAgent()"
                       title="Open parent agent: {{ record.Parent }}">
                       <i class="fa-solid fa-sitemap"></i>
@@ -59,13 +59,13 @@
             </div>
             <div class="agent-actions">
               @if (record.ID) {
-                <button mjButton variant="primary" size="lg"
+                <button mjButton variant="primary" size="lg" class="phone-hero-run"
                   (click)="openTestHarness()"
                   [disabled]="record.Status !== 'Active'"
                   title="Run this AI agent">
                   <i class="fa-solid fa-play"></i> Run
                 </button>
-                <button mjButton size="lg"
+                <button mjButton size="lg" class="phone-hero-detail"
                   (click)="openPermissionsDialog()"
                   [title]="IsOpenToEveryone ? 'Open to everyone — click to manage permissions' : 'Restricted — click to manage permissions'">
                   <i class="fa-solid" [class.fa-lock-open]="IsOpenToEveryone" [class.fa-lock]="!IsOpenToEveryone"
@@ -73,11 +73,17 @@
                   {{ IsOpenToEveryone ? 'Open' : 'Restricted' }}
                 </button>
               }
-              <button mjButton variant="outline" size="sm" (click)="refreshRelatedData()" title="Refresh all data">
+              <button mjButton variant="outline" size="sm" class="phone-hero-detail" (click)="refreshRelatedData()" title="Refresh all data">
                 <i class="fa-solid fa-refresh"></i>
               </button>
             </div>
           </div>
+          @if (!EditMode && HeroSummary) {
+            <button type="button" class="phone-hero-summary" [attr.aria-expanded]="HeroDetailsOpen" (click)="ToggleHeroDetails()">
+              <span class="phone-hero-summary-text">{{ HeroSummary }}</span>
+              <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+            </button>
+          }
         </div>
       }
       <!-- Agent Header — minimized floating bar -->
@@ -128,6 +134,11 @@
              I'm not looking?" is a question you can ask of any of them. -->
         @if (FormTabs.length > 1) {
           <div class="agent-tabbar">
+            <!-- Phone: the tabs become one button that opens the Sections sheet -->
+            <mj-section-picker class="phone-section-picker"
+                               [Items]="SectionPickerItems"
+                               [ActiveKey]="ActiveFormTab || ''"
+                               (ActiveKeyChange)="OnSectionPicked($event)"></mj-section-picker>
             <mj-tab-nav [Tabs]="FormTabs" [ActiveKey]="ActiveFormTab || ''" (TabChange)="OnFormTabChange($event)"></mj-tab-nav>
           </div>
         }

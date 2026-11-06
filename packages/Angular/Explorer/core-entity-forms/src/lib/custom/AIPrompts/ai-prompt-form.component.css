@@ -192,3 +192,211 @@ mj-empty-state.invalid-template-state {
         font-size: 0.7em !important;
     }
 }
+
+/* Hero header row: title block left, actions right; on a phone the actions drop under the title. */
+.hero-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 20px;
+}
+
+.action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-end;
+}
+
+@media (max-width: 768px) {
+    .hero-header-row {
+        flex-direction: column;
+    }
+
+    .action-buttons {
+        width: 100%;
+        align-items: stretch;
+    }
+
+    .action-buttons > div {
+        display: flex;
+        gap: 8px;
+    }
+
+    .action-buttons > div > button {
+        flex: 1;
+    }
+}
+
+/* Phone (375px): side-by-side grids stack. */
+@media (max-width: 768px) {
+    .related-grid-pair {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+/* ============================================
+   PHONE (375px): Models as cards, Execution History as cards.
+   The model rows and details rows set their grids inline, hence !important.
+   ============================================ */
+.history-cards {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    /* Models: view mode reads "#1  Gemini 3.5 Flash" over "Google · Default" */
+    .model-management .model-header,
+    .model-management .model-created {
+        display: none !important;
+    }
+
+    .model-management .model-row {
+        grid-template-columns: 32px auto minmax(0, 1fr) auto !important;
+        grid-template-areas:
+            "prio model model actions"
+            "prio vendor config actions";
+        column-gap: 8px !important;
+        row-gap: 2px !important;
+        padding: 10px 12px !important;
+        align-items: center !important;
+    }
+
+    /* Edit mode: each dropdown gets the full width, one per line */
+    .model-management .model-row:has(mj-dropdown) {
+        grid-template-columns: 32px minmax(0, 1fr) auto !important;
+        grid-template-areas:
+            "prio model actions"
+            "prio vendor actions"
+            "prio config actions";
+        row-gap: 8px !important;
+    }
+
+    .model-row > .drag-handle { grid-area: prio; }
+    .model-row > .model-select { grid-area: model; min-width: 0; }
+    .model-row > .model-vendor { grid-area: vendor; min-width: 0; }
+    .model-row > .model-configuration { grid-area: config; min-width: 0; }
+    .model-row > .model-actions { grid-area: actions; }
+
+    .model-row:not(:has(mj-dropdown)) > .model-vendor,
+    .model-row:not(:has(mj-dropdown)) > .model-configuration {
+        font-size: var(--mj-text-xs);
+        color: var(--mj-text-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .model-row:not(:has(mj-dropdown)) > .model-configuration::before {
+        content: '·';
+        margin-right: 6px;
+    }
+
+    .model-management .model-details-row {
+        grid-template-columns: minmax(0, 1fr) !important;
+        padding: 8px 12px !important;
+    }
+
+    .model-management .model-details-row > div:first-child {
+        display: none;
+    }
+
+    .model-management .model-parallel-grid {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    /* Execution History: the table gives way to one card per run */
+    .history-table-wrap {
+        display: none !important;
+    }
+
+    .history-cards {
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--mj-border-default);
+        border-radius: var(--mj-radius-md);
+        overflow: hidden;
+    }
+
+    .history-card {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        column-gap: 8px;
+        row-gap: 2px;
+        min-height: 44px;
+        padding: 10px 12px;
+        border: 0;
+        border-bottom: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-primary);
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+
+    .history-card:last-child {
+        border-bottom: 0;
+    }
+
+    .history-card:hover {
+        background: var(--mj-bg-surface-hover);
+    }
+
+    .history-card:focus-visible {
+        outline: none;
+        box-shadow: var(--mj-focus-ring);
+    }
+
+    .history-card-main {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        font-size: var(--mj-text-sm);
+    }
+
+    .history-card-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        flex-shrink: 0;
+        font-weight: var(--mj-font-semibold);
+    }
+
+    .history-card-model {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--mj-text-secondary);
+    }
+
+    .history-card-meta {
+        grid-column: 1;
+        font-size: var(--mj-text-xs);
+        color: var(--mj-text-muted);
+        overflow-wrap: anywhere;
+    }
+
+    .history-card-open {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+        color: var(--mj-text-muted);
+        font-size: var(--mj-text-xs);
+    }
+}
+
+/* Phone: sections sit on the page's 12px gutter, so the container and the inline-padded body
+   wrappers drop their side padding (they would indent every section twice). */
+@media (max-width: 768px) {
+    .configuration-sections {
+        padding: 12px 0 !important;
+        border-top: 0 !important;
+        background: transparent !important;
+    }
+
+    .phone-flush-x {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+}
