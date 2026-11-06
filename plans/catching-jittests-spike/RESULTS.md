@@ -5,14 +5,14 @@ Each section answers one question with the command run, the raw numbers, and the
 
 | # | Question | Answer | Design change needed? |
 |---|---|---|---|
-| 1 | Time and disk of the designed build path (job 1 base with remote cache, job 2 head with no token) | On 5 PRs: base install 40–49 s (cold store) + base build 3–10 s, all tasks `HIT/REMOTE`. Head: fetch 9–16 s after a failed lockfile-only try of 32–42 s (§8), sandbox offline install + rebuild + build 52–246 s. Designed path uses 14.0–14.2 GB of disk; 71 GB stays free. Head builds of 80–154 tasks missed 54–117 tasks although the PR reaches only 2–7 of them (cause not found). See §1 | No for time and disk. Open: find why the sandbox build misses tasks the PR does not reach (§1) |
+| 1 | Time and disk of the designed build path (job 1 base with remote cache, job 2 head with no token) | On 5 PRs: base install 40–49 s (cold store) + base build 3–10 s, all tasks `HIT/REMOTE`. Head: fetch 9–16 s after a failed lockfile-only try of 32–42 s (§8), sandbox offline install + rebuild + build 52–246 s. Designed path uses 14.0–14.2 GB of disk; 71 GB stays free. Head builds of 80–154 tasks missed 54–117 tasks although the PR reaches only 2–7 of them (cause not found; a lockfile change is ruled out). See §1 | No for time and disk. Open: find why the sandbox build misses tasks the PR does not reach (§1) |
 | 2 | Agent SDK: restrict tools, enforce write path, add `run_test`, cap turns and tokens, report usage | Yes, all six, on `@anthropic-ai/claude-agent-sdk` 0.3.318. Restrict built-ins with `tools` (`allowedTools` only auto-approves); keep `Write`/`Edit` out of `allowedTools`, or `canUseTool` is skipped and the write guard does nothing. Per-message `output_tokens` were far below the final count; budget on input + cache tokens. The runs used no API key (`apiKeySource: "none"`, the parent session's login), so the helper's `ANTHROPIC_API_KEY` was not tested. See §2 | No fallback. Yes (small): use `tools` + `permissionMode: 'default'`, keep `Write`/`Edit` out of `allowedTools`, catch the throw after max-turns and abort; the package needs zod 4 (SDK peer `zod@^4`; 24 `packages/` manifests pin `^3.25`); CI must confirm `apiKeySource: "ANTHROPIC_API_KEY"` (§2) |
-| 3 | Sandbox holds on `ubuntu-latest` (key, /proc, network, cache token) | Yes. All 10 probes held on `ubuntu-24.04` (2 runs, same output) and on Docker Desktop for Mac: no key in env or /proc, no network, no DNS, no docker socket, no runner vars, read-only mount held, uid 1001 with no sudo inside. Probe 10: host `pnpm fetch` did not run the head's `.pnpmfile.cjs` and the host pnpm stayed 10.33.0; the control (host install) did run it; in the sandbox the pnpmfile ran without the key and pnpm stayed 10.33.0. The runner user itself has passwordless sudo (host only). See §3 | No |
+| 3 | Sandbox holds on `ubuntu-latest` (key, /proc, network, cache token) | Inside, yes: probes 1–9 held on `ubuntu-24.04` (3 runs) and on Docker Desktop for Mac (no key in env or /proc, no network, no DNS, no docker socket, no runner vars, read-only mount held, uid 1001 with no sudo). Probe 10 shows only that pnpm does not read a sibling folder; it did not attack the lockfile. Host side, **no**: probe 10b (lockfile + `patches/`, runner and local, pnpm 10.33.0) shows `pnpm fetch` follows a symlink out of `patches/` and applies the diff on the host. A git dependency's `prepare` did not run (refused, no allowlist), and the head's pnpmfile did not run. The runner user has passwordless sudo (host only). See §3 | **Yes (DESIGN CHANGE)**: the host fetch must not read or apply PR-supplied patches as copied now; see §3 and §8 |
 | 4 | Provider classes work with no database (Anthropic, OpenAI with logprobs, Gemini) | Partly. All three classes import and construct from a bare key with no database and no warnings. Gemini `gemini-3.5-flash-lite` answered `"Yes"`. Anthropic reached the API but got 401 `invalid x-api-key` on two runs (the same key gets 401 from a direct `curl`, so the key is bad, not MJ); model id `claude-haiku-5-5` not yet confirmed. OpenAI: `gpt-5.1-mini` does not exist (404, and `OpenAILLM` throws instead of returning `success: false`); `gpt-4o-mini` and `gpt-4.1-mini` return 5 `top_logprobs` on the first token; `gpt-5.4-nano` returns only 1 although 5 were asked. Imports resolve only from a scratch package, not from the repo root (§4) | Yes (proposed): the TP Prob judge model must be one that returns 5 `top_logprobs` (`gpt-4o-mini` or `gpt-4.1-mini`), not `gpt-5.1-mini`. Callers must handle both a thrown error (`OpenAILLM`) and `success: false` (`AnthropicLLM`). The real package must declare the provider packages as dependencies. Open: re-run Anthropic with a valid key |
 | 5 | `INTEGRATION_LIVE_MODEL_KEYS` includes an OpenAI key | pending — the secret is not readable from a branch; to be asked by the user at the phase-0 exit (date 2026-11-06). The local developer `.env` had no OpenAI key either (§5) | If no OpenAI key: design Q2 becomes a request for a new `OPENAI_API_KEY` secret |
 | 6 | vitest JSON reporter gives assertion, expected, actual, stack | Partly. vitest 4.0.18 `--reporter=json` gives one string per failure (`failureMessages[0]` = `error.stack`): assertion line and stack yes; no `expected`/`actual` fields and no diff; a timeout reads `Error: STACK_TRACE_ERROR`, not `Test timed out`. The error object in a custom reporter has all of them as fields. See §6 | Yes (proposed): Task 1.10 reads a small custom reporter, not `--reporter=json` (§6) |
 | 7 | File-swap path gives the same verdicts as two worktrees | Same results on 3 one-package PRs where all tests passed (1207/627/1275 tests, 0 differences each); no failing test compared (§7) | No |
-| 8 | Host `pnpm fetch` (lockfile only) + sandbox `pnpm install --offline` + `pnpm rebuild` builds on the real lockfile; copy-import time and disk; install-container fallback if fetch fails; turbo `--cache=local:rw,remote:r` works | Partly. Lockfile-only fetch fails on all 5 PRs: `ERR_PNPM_PATCH_NOT_FOUND` for `patches/type-graphql@2.0.0-beta.3.patch` (the lockfile's `patchedDependencies`). With `patches/` copied too, fetch works (store 3251 MB), the offline install prints `INSTALLED` (copy import 32–57 s), `pnpm rebuild` works offline (4–8 s) and the build exits 0. The install-container fallback also works (install 65–111 s). `remote:r` gave remote hits on every base task. See §8 | Yes (small): the host fetch folder gets the lockfile plus the patch files the lockfile names, each path checked to be inside `patches/`. Fallback not needed |
+| 8 | Host `pnpm fetch` (lockfile only) + sandbox `pnpm install --offline` + `pnpm rebuild` builds on the real lockfile; copy-import time and disk; install-container fallback if fetch fails; turbo `--cache=local:rw,remote:r` works | Partly. Lockfile-only fetch fails on all 5 PRs: `ERR_PNPM_PATCH_NOT_FOUND` for `patches/type-graphql@2.0.0-beta.3.patch` (the lockfile's `patchedDependencies`). With `patches/` copied too, fetch works (store 3251 MB), the offline install prints `INSTALLED` (copy import 32–57 s), `pnpm rebuild` works offline (4–8 s) and the build exits 0. The install-container fallback also works (install 65–111 s). `remote:r` gave remote hits on every base task. See §8 | Yes, open design item: the `patches/` retry makes the host read and apply PR-supplied diffs (probe 10b, §3). Options in §8: copy only named regular files under `patches/` and accept host patching; strip `patchedDependencies` and patch in the sandbox (untested); or use the install-container fallback (+30–80 s) |
 
 ## 1. Build path time and disk
 
@@ -56,7 +56,12 @@ fallback cache statuses: {"MISS":117,"HIT/LOCAL":37}
 total disk: 22816MB; free: 62385MB
 ```
 
-**Head cache misses.** The head build seeds its local cache with the base's turbo cache. In 3 PRs it missed far more tasks than the PR can change. Counted from the `package.json` files at the merge commit, the tasks in the filter that depend (directly or not) on a changed package are: #6362 2 of 105 (85 missed), #6122 4 of 153 (117 missed), #6280 7 of 81 (54 missed). #6357 and #6368 missed exactly the changed package. The fallback (a separate head worktree) gave the same counts, so the result repeats. Not investigated. One candidate: inside the sandbox the head worktree's `.git` file points to a host path that is not mounted, so turbo hashes without git; another: the remote hits are not all written to the local cache that seeds the head. The next step is to save both turbo run summaries and compare task hashes.
+**Head cache misses.** The head build seeds its local cache (`TURBO_CACHE_DIR`) with a copy of the base's local turbo cache and runs with no token. A `MISS` means turbo found no artifact with the task's hash in that seeded cache, so it built the task. In 3 PRs it missed far more tasks than the PR can change. Turbo task counts (from the run summaries): #6362 105, #6122 154, #6280 80. A walk of the `package.json` files at each merge commit finds 105, 153 and 81 packages in the same filters (the walk is a rough count, not turbo's graph; the one-package differences were not traced). By that walk, the packages that depend (directly or not) on a changed package are: #6362 2 (85 tasks missed), #6122 4 (117 missed), #6280 7 (54 missed). #6357 and #6368 missed exactly the changed package. The names of the missed tasks are not known: the turbo run summaries stayed on the runner and were not kept. Candidates:
+- The PR changed `pnpm-lock.yaml`. **Ruled out**: `git diff --stat M^1 M -- pnpm-lock.yaml` is empty for all 5 merges.
+- Inside the sandbox the head worktree's `.git` file points to a host path that is not mounted, so turbo hashes the files without git, and some hashes differ from the base's git-based hashes. Not checked.
+- The seeding: remote hits on the base are not all written to the base's local cache, so the copy that seeds the head lacks them. Not checked.
+
+The fallback (a separate head worktree, the same seed, on the same machine) gave the same counts. That shows the result repeats. It does not rule out the seeding candidate, because both head builds used the same seed. The next step is to keep both turbo run summaries and compare the task hashes and the seed folder's contents.
 
 **Decision:** the time and disk fit a hosted runner: about 1 minute for job 1 and 1–5 minutes for job 2, 14 GB of disk with 71 GB free. Open item: the head misses above. They cost 150–204 s of build in 3 of 5 PRs.
 
@@ -172,9 +177,13 @@ In this one run, one more API message (`hZMhUZG7`) streamed after `abort()` befo
 
 ## 3. Sandbox attack (inside and host side)
 
-**Setup.** [`q3-sandbox-attack.sh`](q3-sandbox-attack.sh) with the image from [`Dockerfile.sandbox`](Dockerfile.sandbox) (used as is). Every container: `--network none --pids-limit 256 --user <runner uid:gid> --cap-drop ALL --security-opt no-new-privileges -e HOME=/tmp`, the work folder mounted read-only. The script exports a fake `ANTHROPIC_API_KEY=sk-ant-SPIKE-<time>` and `ACTIONS_RUNTIME_TOKEN` in its own environment; the container must not see either. Probe 10 makes a head with `.pnpmfile.cjs` (it writes a marker file next to itself, with the key as content if it can read it) and `packageManager: pnpm@10.30.0`.
+**Setup.** [`q3-sandbox-attack.sh`](q3-sandbox-attack.sh) with the image from [`Dockerfile.sandbox`](Dockerfile.sandbox) (used as is). Every container: `--network none --pids-limit 256 --user <runner uid:gid> --cap-drop ALL --security-opt no-new-privileges -e HOME=/tmp`, the work folder mounted read-only. The script exports a fake `ANTHROPIC_API_KEY=sk-ant-SPIKE-<time>` and `ACTIONS_RUNTIME_TOKEN` in its own environment; the container must not see either. Probes 1–9 attack from inside the container; each has a `LEAK` check (probe 7 only prints what is visible). Probe 10 and probe 10b test the host step.
 
-Runs: job `q3-sandbox` in runs 42286827095 (job 128129693502) and 42287623326 (job 128132434919), output identical; and locally on Docker Desktop for Mac (uid 502), same result except the uid. Runner output, verbatim (run 42287623326):
+**What probe 10 proves.** Probe 10 makes a head folder with `.pnpmfile.cjs` and `packageManager: pnpm@10.30.0`, then runs the designed host step: `pnpm fetch` in a **separate** folder that holds only the head's lockfile. The pnpmfile did not run, so pnpm does not read a sibling folder. The `host pnpm still 10.33.0` line runs `pnpm --version` from the script's working folder (the repo root), not in a head folder, so it only shows that the fetch did not change the installed pnpm. The control (a host install inside the head folder) shows that the pnpmfile can run when pnpm works in that folder. Probe 10 does not attack the lockfile content: its lockfile names only `is-odd@3.0.1`.
+
+**What probe 10b tests.** The host surface is the head's lockfile, plus the patch files it names when `patches/` is copied (§8). Probe 10b makes a head whose lockfile names (i) a git-hosted dependency (`git+file://` to a local bare repo) whose `prepare`, `preinstall`, `install` and `postinstall` scripts write marker files; (ii) a `patchedDependencies` entry for `is-odd@3.0.1` whose file under `patches/` is a symlink to a diff outside `patches/` (the diff adds a file with a unique string); (iii) a `pnpmfileChecksum` line (pnpm wrote one, as the head has a `.pnpmfile.cjs`). The head allowlists its own git dependency (`onlyBuiltDependencies` in its `pnpm-workspace.yaml`); the set-up makes the lockfile with `pnpm install --lockfile-only` in the head folder, as probe 10 does, then deletes the markers. Then the designed host step: copy the lockfile and `patches/` (`cp -R`, which keeps the symlink) into an empty folder and run `pnpm fetch --store-dir <empty store>`. Part A uses that lockfile. Part B removes the git dependency and makes a new lockfile, so the fetch cannot stop on the git dependency before it reaches the patch; B runs once with the diff readable and once with it unreadable (`chmod 000`).
+
+**Runner output, verbatim.** Run 42291477076, job 128145717169, script at commit `96b0f70c2b` (`ubuntu-24.04`, host pnpm 10.33.0). The job ended with exit 1 (`SANDBOX LEAKED`):
 
 ```
 == 1 environment
@@ -195,11 +204,29 @@ boot
 dev
 etc
 home
+lib
+lib64
+media
+mnt
+opt
+proc
+root
+run
+sbin
+srv
+sys
+tmp
+usr
+var
+work
+node
+774f276124d8
 == 8 write to ro mount
 touch: cannot touch '/work/x': Read-only file system
 ro holds
 == 9 sudo / root
 uid=1001 gid=1001 groups=1001
+uid=1001
 sh: 1: sudo: not found
 no sudo
 == 10 host side: pnpmfile + packageManager in head
@@ -208,20 +235,85 @@ host pnpm still 10.33.0
 control: host install ran .pnpmfile.cjs (expected, this is why the host never installs head)
 sandbox pnpmfile marker: ran
 sandbox pnpm: 10.33.0 (must be 10.33.0, not 10.30.0)
-SANDBOX HELD
+== 10b host side: lockfile content + patches/ (git dependency with prepare, symlinked patch, pnpmfileChecksum)
+lockfile has: 2 git-dep lines, 1 patchedDependencies, 1 pnpmfileChecksum (host pnpm 10.33.0)
+-- A: git dependency + symlinked patch: fetch folder patches/: lrwxrwxrwx is-odd@3.0.1.patch -> /tmp/tmp.QlWtLYBNnZ/outside/target.patch
+   fetch exit: 1
+   fetch: Importing packages to virtual store
+   fetch: Already up to date
+   fetch:  ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED  Failed to prepare git-hosted package fetched from "file:///tmp/tmp.QlWtLYBNnZ/gitdep.git": The git-hosted package "evil-git-dep@1.0.0" needs to execute build scripts but is not in the "onlyBuiltDependencies" allowlist.
+   fetch: 
+   fetch: Add the package to "onlyBuiltDependencies" in your project's pnpm-workspace.yaml to allow it to run scripts. For example:
+   fetch: onlyBuiltDependencies:
+   fetch:   - "evil-git-dep"
+no head code ran (no markers)
+symlinked patch content not found in fetch folder or store
+lockfile B has: 0 git-dep lines, 1 patchedDependencies, 1 pnpmfileChecksum
+-- B: symlinked patch only, readable target: fetch folder patches/: lrwxrwxrwx is-odd@3.0.1.patch -> /tmp/tmp.QlWtLYBNnZ/outside/target.patch
+   fetch exit: 0
+   fetch: Importing packages to virtual store
+   fetch: Already up to date
+no head code ran (no markers)
+LEAK host: symlinked patch target applied on the host: /tmp/tmp.QhV3lFNWRv/node_modules/.pnpm/is-odd@3.0.1_patch_hash=a53dc68ca77c6b02d2e14d450401b53db89cfb9b9a119c2f99808295b3ad133b/node_modules/is-odd/spike-marker.js
+/tmp/tmp.qKIxqN1K0i/v10/files/57/0ab3b425019951cd4020918cc76ff61c89323cd6ecc068cf9ac269c26d7e1aab1f7882239c608e5758b336c58b8ce9dae53773f17b17361ae1dfb397532898
+-- B: symlinked patch only, unreadable target (an error naming the target means fetch reads it): fetch folder patches/: lrwxrwxrwx is-odd@3.0.1.patch -> /tmp/tmp.QlWtLYBNnZ/outside/target.patch
+   fetch exit: 1
+   fetch: Importing packages to virtual store
+   fetch: Already up to date
+   fetch:  ERR_PNPM_INVALID_PATCH  Applying patch "/tmp/tmp.LfUhW51G8M/patches/is-odd@3.0.1.patch" failed: EACCES: permission denied, open '/tmp/tmp.LfUhW51G8M/patches/is-odd@3.0.1.patch'
+no head code ran (no markers)
+symlinked patch content not found in fetch folder or store
+SANDBOX LEAKED
 runner uid: 1001; sudo: yes; docker: Docker version 28.0.4, build b8034c0
 ACTIONS_RUNTIME_TOKEN set on host: no
 ```
 
+The first runner paste (runs 42286827095 job 128129693502 and 42287623326 job 128132434919, identical) came from the script at commit `7c9bf82b2c`. That version had probes 1–10 only, no `LEAK` check on probes 5, 8 and 9, and probe 7 showed only the first 5 lines. Its probe 1–10 results were the same as above.
+
+**Local output (probe 10b).** Docker Desktop for Mac, the same script (`96b0f70c2b`), pnpm 10.33.0 first on `PATH` (the Mac's global pnpm is 11.24.0 outside the repo, so an earlier local run of probe 10 had used 11.24.0 for its fetch). Same result as the runner:
+
+```
+== 10b host side: lockfile content + patches/ (git dependency with prepare, symlinked patch, pnpmfileChecksum)
+lockfile has: 2 git-dep lines, 1 patchedDependencies, 1 pnpmfileChecksum (host pnpm 10.33.0)
+-- A: git dependency + symlinked patch: fetch folder patches/: lrwxr-xr-x@ is-odd@3.0.1.patch -> /var/folders/2_/fc7_0ghs52n4w25hh3b8hw180000gp/T/tmp.5jWvatj1uM/outside/target.patch
+   fetch exit: 1
+   fetch: Importing packages to virtual store
+   fetch: Already up to date
+   fetch:  ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED  Failed to prepare git-hosted package fetched from "file:///var/folders/2_/fc7_0ghs52n4w25hh3b8hw180000gp/T/tmp.5jWvatj1uM/gitdep.git": The git-hosted package "evil-git-dep@1.0.0" needs to execute build scripts but is not in the "onlyBuiltDependencies" allowlist.
+   fetch: 
+   fetch: Add the package to "onlyBuiltDependencies" in your project's pnpm-workspace.yaml to allow it to run scripts. For example:
+   fetch: onlyBuiltDependencies:
+   fetch:   - "evil-git-dep"
+no head code ran (no markers)
+symlinked patch content not found in fetch folder or store
+lockfile B has: 0 git-dep lines, 1 patchedDependencies, 1 pnpmfileChecksum
+-- B: symlinked patch only, readable target: fetch folder patches/: lrwxr-xr-x@ is-odd@3.0.1.patch -> /var/folders/2_/fc7_0ghs52n4w25hh3b8hw180000gp/T/tmp.5jWvatj1uM/outside/target.patch
+   fetch exit: 0
+   fetch: Importing packages to virtual store
+   fetch: Already up to date
+no head code ran (no markers)
+LEAK host: symlinked patch target applied on the host: /var/folders/2_/fc7_0ghs52n4w25hh3b8hw180000gp/T/tmp.4SnljcWMQI/node_modules/.pnpm/is-odd@3.0.1_patch_hash=2cc4cc9002a8a231f5caf98297e67a90cba720ae6efdef5c08e01e9e53133da5/node_modules/is-odd/spike-marker.js
+/var/folders/2_/fc7_0ghs52n4w25hh3b8hw180000gp/T/tmp.vPfV1lYILd/v10/files/26/408b3c560642a0e6720ec6115454aee7fc6b1cb16bc34aa2197521043a2cce4c6afd60fd5b5310f79a099a792f80975e49c13b1f5f6b7d06360003e8feb9bb
+-- B: symlinked patch only, unreadable target (an error naming the target means fetch reads it): fetch folder patches/: lrwxr-xr-x@ is-odd@3.0.1.patch -> /var/folders/2_/fc7_0ghs52n4w25hh3b8hw180000gp/T/tmp.5jWvatj1uM/outside/target.patch
+   fetch exit: 1
+   fetch: Importing packages to virtual store
+   fetch: Already up to date
+   fetch:  ERR_PNPM_INVALID_PATCH  Applying patch "/private/var/folders/2_/fc7_0ghs52n4w25hh3b8hw180000gp/T/tmp.WIkqZyRAp8/patches/is-odd@3.0.1.patch" failed: EACCES: permission denied, open '/private/var/folders/2_/fc7_0ghs52n4w25hh3b8hw180000gp/T/tmp.WIkqZyRAp8/patches/is-odd@3.0.1.patch'
+no head code ran (no markers)
+symlinked patch content not found in fetch folder or store
+SANDBOX LEAKED
+```
+
 Notes:
+- **Probe 10b, git dependency: held.** `pnpm fetch` refused to prepare the git dependency (`ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`, exit 1): the fetch folder has no `pnpm-workspace.yaml`, so the head's allowlist does not apply. No marker appeared. A PR that adds a git dependency with build scripts makes the host fetch fail.
+- **Probe 10b, patch: LEAK (DESIGN CHANGE).** `pnpm fetch` applies patches on the host. It followed the symlink in `patches/` and applied the outside diff: its unique string is in the fetch folder's `node_modules/.pnpm/is-odd@3.0.1_patch_hash=…/node_modules/is-odd/spike-marker.js` and in the store. With the target unreadable, the fetch failed with `EACCES` when it opened the patch through the symlink. So the patch files are read **and** applied on the host. Not tested: whether a diff can write outside the patched package's folder.
+- **Probe 10b, pnpmfile and `pnpmfileChecksum`: held.** The fetch folder has no `.pnpmfile.cjs`; the fetch did not run the head's pnpmfile and did not fail on the checksum line.
 - Probe 6: a `run:` step on the runner has no `ACTIONS_RUNTIME_TOKEN` (`set on host: no`), so the probe used the script's fake value. It shows that the host environment does not reach the container, not that a real runtime token is safe.
 - Probe 9: inside the sandbox the user is uid 1001 and the image has no `sudo`. The runner user outside the sandbox has passwordless sudo (`sudo: yes`). The tool must never give the sandbox anything the host user can reach (docker socket, host paths).
-- Probe 10, host: `pnpm fetch` in a folder with only the lockfile did not run the head's `.pnpmfile.cjs`, and `pnpm --version` stayed 10.33.0 although head names 10.30.0. The control, a host `pnpm install --frozen-lockfile --ignore-scripts` in the head folder, ran the pnpmfile, so the test can tell the two cases apart.
-- Probe 10, sandbox: the offline install ran the pnpmfile (marker `ran`), but it had no key to write, and pnpm stayed 10.33.0 (`manage-package-manager-versions=false`, no network).
-- Seen in an early local run (before the script fix listed in the task report): `pnpm --version` run in the sandbox's `/work`, which held the head's `.pnpmfile.cjs`, printed that pnpmfile's error and no version. So pnpm loads `.pnpmfile.cjs` even for `--version`, and the host must not run any pnpm command, not even `--version`, inside a head folder.
-- The fake key does not appear in any job log of either run.
+- Seen in an early local run (before a script fix listed in the task report): `pnpm --version` run in the sandbox's `/work`, which held the head's `.pnpmfile.cjs`, printed that pnpmfile's error and no version. So pnpm loads `.pnpmfile.cjs` even for `--version`, and the host must not run any pnpm command, not even `--version`, inside a head folder.
+- The fake key does not appear in any job log of the three runs.
 
-**Decision:** the sandbox held on both. No design change.
+**Decision:** the sandbox held (probes 1–10). The host step does not: with `patches/` copied, `pnpm fetch` reads and applies PR-supplied diffs on the host and follows symlinks out of `patches/`. This is a design change; the options are in §8.
 
 ## 4. Provider classes with no database
 
@@ -506,13 +598,29 @@ PRs where all tests passed; no failing test compared. No design change. Keep the
 
 **Setup.** Same runs and script as §1. Job 2 of the script, per PR: (1) host `pnpm fetch --store-dir <store>` in a folder that holds only the head's `pnpm-lock.yaml`; (2) if that fails, the same fetch with the head's `patches/` folder copied in too; (3) sandbox offline `pnpm install --offline --frozen-lockfile --ignore-scripts`, then `pnpm rebuild`, then `turbo run build --cache=local:rw,remote:r` with no token; (4) because (1) failed, the brief's fallback once: a new head worktree, `pnpm install --frozen-lockfile --ignore-scripts` in a container with network (still non-root, `--cap-drop ALL`, no environment), then `pnpm rebuild` + build with `--network none`.
 
-**Lockfile-only fetch: fails** on all 5 PRs, after downloading the store:
+**Lockfile-only fetch: fails** on all 5 PRs, after downloading the store. Run 42287623326, job 128132434882 (PR #6122), verbatim:
 
 ```
-
+ ERR_PNPM_PATCH_NOT_FOUND  Patch file not found: /home/runner/work/_temp/jit-q1/fetch/patches/type-graphql@2.0.0-beta.3.patch
 ```
 
-The lockfile has `patchedDependencies: type-graphql@2.0.0-beta.3: { path: patches/type-graphql@2.0.0-beta.3.patch }`, and `pnpm fetch` needs that file. With `patches/` copied into the fetch folder, the fetch works on all 5 (9–16 s on the warm store; store 3251 MB). The host fetch ran no dependency build scripts: with no `pnpm-workspace.yaml` there is no `onlyBuiltDependencies` allowlist, so pnpm listed every one under `Ignored build scripts`.
+The lockfile has `patchedDependencies: type-graphql@2.0.0-beta.3: { path: patches/type-graphql@2.0.0-beta.3.patch }`, and `pnpm fetch` needs that file. With `patches/` copied into the fetch folder, the fetch works on all 5 (9–16 s on the warm store; store 3251 MB). The host fetch ran no dependency build scripts: with no `pnpm-workspace.yaml` there is no `onlyBuiltDependencies` allowlist, so pnpm listed every one under `Ignored build scripts`. The same job, from the retry with `patches/`, verbatim:
+
+```
+╭ Warning ─────────────────────────────────────────────────────────────────────╮
+│                                                                              │
+│   Ignored build scripts: @apollo/protobufjs@1.2.7, @google/genai@2.16.0,     │
+│   @parcel/watcher@2.5.6, @zoom/rtms@1.1.0, browser-tabs-lock@1.3.0,          │
+│   core-js-pure@3.48.0, core-js@3.48.0, esbuild@0.25.12, esbuild@0.26.0,      │
+│   esbuild@0.27.3, esbuild@0.28.1, esbuild@0.28.2, isolated-vm@6.0.2,         │
+│   lmdb@3.5.1, lz4@0.6.5, msgpackr-extract@3.0.3, onnxruntime-node@1.30.0,    │
+│   oracledb@6.10.0, protobufjs@7.5.4, puppeteer@25.16.0, rete@2.0.6,          │
+│   tesseract.js@6.0.1, usearch@2.26.2.                                        │
+│   Run "pnpm approve-builds" to pick which dependencies should be allowed     │
+│   to run scripts.                                                            │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+```
 
 | Item | Result |
 |---|---|
@@ -524,4 +632,8 @@ The lockfile has `patchedDependencies: type-graphql@2.0.0-beta.3: { path: patche
 | `--cache=local:rw,remote:r` remote hits | Yes on the base (host, token): every task `HIT/REMOTE` (4, 105, 154, 3, 80). The head (sandbox, no token) got only `HIT/LOCAL` from the seeded cache, as designed |
 | Disk | Head worktree after install + build 5231–5363 MB; store 3251 MB |
 
-**Decision:** design change (small). The host fetch folder needs the lockfile **and** each patch file the lockfile names under `patchedDependencies`. A patch is a diff that pnpm applies; it is not run. The lockfile comes from the PR, so copy only the paths it names, and reject any path that is not inside `patches/` after it is resolved (a PR could name `../../x` and make the host read a file outside the worktree). The fallback works but costs 30–80 s more per run, so it is not needed.
+**What the host now reads.** With the `patches/` retry, the host step reads the head's lockfile **and** the patch files the lockfile names. Both come from the PR. Probe 10 did not cover a patched dependency. Probe 10b (§3) did, locally on pnpm 10.33.0: `pnpm fetch` **applies** the patches on the host. It writes the patched package into the fetch folder's `node_modules/.pnpm/<pkg>_patch_hash=…/` and into the store. It also follows a symlink in `patches/` to a file outside it. So a patch is a write surface on the host (a diff that pnpm applies), not only a hashed input. Probe 10b did not test whether a diff can write outside the patched package's folder (for example with `../` paths).
+
+**Decision:** open design item (DESIGN CHANGE, see §3 probe 10b). The lockfile-only fetch does not work on the real lockfile, and the `patches/` retry makes the host apply PR-supplied diffs. Options for the design: (a) keep the host fetch, but copy only the patch files the lockfile names, each one a regular file whose `realpath` is inside `patches/` (reject symlinks), and accept that pnpm applies them on the host; (b) take `patchedDependencies` out of the copied lockfile so the host does not apply anything, and patch in the sandbox (not tested); (c) use the install-container fallback, which works here and costs 30–80 s more per run. The choice is not made here.
+
+The temporary workflow `.github/workflows/jit-catch-spike.yml` is deleted at the end of phase 0. Its `pull_request` trigger would run it on any PR that touches `plans/catching-jittests-spike/**`.
