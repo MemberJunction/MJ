@@ -281,7 +281,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['ciphertext-cache', CiphertextCacheChecks, 5], // CT0-CT4 ciphertext at rest in the RunViewCache, plaintext to the caller (IT161)
         ['semantic-graph', SemanticGraphChecks, 7], // SG1-SG7 Semantic Graph substrate, Content Pipeline GraphStage overlay, and Executable Canon DAG similarity & telemetry (IT162)
         ['graph-runtime', GraphRuntimeChecks, 6], // GR1-GR6 MJ Canon traversal, per-caller query visibility, the edge approval gate on a real Save, Get Graph Context, JoinEntity and QueryEdgeProvider fixtures (IT164)
-        ['task-graph-security', TaskGraphSecurityChecks, 3], // TGS1-TGS3 envelope on every row and immutable, one compensation per step, A2A store row boundary (IT165)
+        ['task-graph-security', TaskGraphSecurityChecks, 4], // TGS1-TGS4 envelope on every row and immutable, one compensation per step, A2A store row boundary, dispatcher taint gate & compensation (IT165)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -494,7 +494,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'systemone-kev': 10,
         'task-graph-execution': 27,
         'task-graph-orchestration': 18,
-        'task-graph-security': 3,
+        'task-graph-security': 4,
         'templates': 8,
         'trailing-runtime-state': 6,
         'transaction-groups': 6,
@@ -936,6 +936,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'task-graph-security.TGS1',
         'task-graph-security.TGS2',
         'task-graph-security.TGS3',
+        'task-graph-security.TGS4',
         'transaction-groups-batched.TGB1',
         'transaction-groups-batched.TGB2',
         'transaction-groups-batched.TGB3',

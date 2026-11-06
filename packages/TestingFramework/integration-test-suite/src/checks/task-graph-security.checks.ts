@@ -1,6 +1,7 @@
 /**
- * @fileoverview IT165 — task-graph security envelopes, saga compensation claims and the A2A store's row
- * boundary, against a live database (deterministic, mutating, server transport).
+ * @fileoverview IT165 — task-graph security envelopes, saga compensation claims, the A2A store's row
+ * boundary, and live dispatcher taint gating with compensation, against a live database (deterministic,
+ * mutating, server transport).
  *
  * - TGS1: a submitted graph's parent and every child carry the submitting run's envelope in
  *   `Task.SecurityEnvelope`, and an edit to it on an existing row is refused (`MJTaskEntityServer`).
@@ -9,6 +10,9 @@
  *   compensation a claim across dispatchers.
  * - TGS3: the durable A2A task store reads a task-graph step's ID as "not found" and will not write over
  *   or cancel it, while an A2A task saves under the `A2A Task` type and reads back.
+ * - TGS4: runs a small graph through the real dispatcher on the test DB, asserting that taint from an
+ *   untrusted action propagates through a Decision step to gate a downstream action, failing the graph
+ *   and triggering saga compensation of completed compensatable steps.
  *
  * Fixtures: one start-paused Human-only graph (so no dispatcher picks it up) and the rows the checks
  * create, all removed in teardown, rows that reference another first.
@@ -16,19 +20,31 @@
  * @module @memberjunction/integration-test-suite
  */
 import { randomUUID } from 'crypto';
-import { RunView } from '@memberjunction/core';
+import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { MJEnvironmentEntityExtended, MJTaskDependencyEntity, MJTaskEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
 import {
     ParseTaskSecurityEnvelope,
+    TAINTED_EGRESS_BLOCKED,
     TASK_SECURITY_ENVELOPE_VERSION,
     type TaskGraphSpec,
     type TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
-import { TaskGraphService } from '@memberjunction/task-graph';
+import {
+    TaskGraphDispatcher,
+    TaskGraphService,
+    type ProviderFactory,
+    type TaskActionRunner,
+    type TaskActionRunParams,
+    type TaskActionRunResult,
+    type TaskAgentRunner,
+    type TaskAgentRunResult,
+    type TaskDecisionRunner,
+} from '@memberjunction/task-graph';
+import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 // The store's own entry: the package root also starts the A2A server's config load on import.
 import { A2A_TASK_TYPE_NAME, DurableEntityA2ATaskStore, type Task } from '@memberjunction/a2aserver/task-store';
 import { UUIDsEqual } from '@memberjunction/global';
-import { Assert, AssertEqual, IntegrationCheckRegistry, SkipCheck } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, SkipCheck, settle } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
 import { MUTATION_TIER_OFF_REASON, MutationTierOn } from './fixture-gates';
 
@@ -218,10 +234,277 @@ async function checkA2AStoreSeesOnlyA2ARows(ctx: IntegrationCheckContext): Promi
     AssertEqual((await new DurableEntityA2ATaskStore().LoadTaskForUser(a2aID, ctx.User, ctx.Provider))?.id, a2aID, 'TGS3: the A2A task read back');
 }
 
+function providerFactory(ctx: IntegrationCheckContext): ProviderFactory {
+    const pool = ctx.Pool;
+    if (!pool) return { CreateProvider: async () => ctx.Provider };
+    return {
+        CreateProvider: async (): Promise<IMetadataProvider> => {
+            const config = new SQLServerProviderConfigData(pool, ctx.Schema ?? '__mj', 0, undefined, undefined, false);
+            const provider = new SQLServerDataProvider();
+            await provider.Config(config);
+            return provider;
+        },
+    };
+}
+
+class NoopAgentRunner implements TaskAgentRunner {
+    public readonly EnforcesSecurityEnvelope = true;
+    public async RunAgentForTask(): Promise<TaskAgentRunResult> {
+        return { Success: true };
+    }
+}
+
+/** TGS4 — a tainted graph through the real dispatcher is gated on taint at a Decision-downstream action, failing the graph and triggering saga compensation. */
+async function checkDispatcherTaintGateAndCompensation(ctx: IntegrationCheckContext): Promise<void> {
+    if (!MutationTierOn(ctx)) {
+        SkipCheck(MUTATION_TIER_OFF_REASON);
+        return;
+    }
+
+    const actionsResult = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string; Name: string }>(
+        { EntityName: 'MJ: Actions', Fields: ['ID', 'Name'], MaxRows: 3, ResultType: 'simple' },
+        ctx.User,
+    );
+    Assert(actionsResult.Success && (actionsResult.Results?.length ?? 0) >= 1, 'TGS4: failed to query actions from MJ: Actions');
+    const actionPrimary = actionsResult.Results![0];
+    const actionComp = actionsResult.Results!.length > 1 ? actionsResult.Results![1] : actionPrimary;
+
+    const promptResult = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string; Name: string }>(
+        { EntityName: 'MJ: AI Prompts', Fields: ['ID', 'Name'], MaxRows: 1, ResultType: 'simple' },
+        ctx.User,
+    );
+    const decisionPromptName = promptResult.Success && (promptResult.Results?.length ?? 0) > 0
+        ? promptResult.Results![0].Name
+        : undefined;
+
+    const spec: TaskGraphSpec = {
+        workflowName: `it165-taint-saga-${Date.now()} (mj-integration-test — safe to delete)`,
+        continuation: 'none',
+        failurePolicy: 'CompensateCompleted',
+        tasks: [
+            {
+                tempId: 'forward',
+                name: 'it165 forward step',
+                description: 'fixture forward step with compensation',
+                kind: 'Action',
+                configuration: {
+                    actionName: actionPrimary.Name,
+                    compensation: {
+                        compensationActionId: actionComp.ID,
+                    },
+                },
+                dependsOn: [],
+            },
+            {
+                tempId: 'fetch',
+                name: 'it165 fetch step',
+                description: 'fixture fetch step returning untrusted output',
+                kind: 'Action',
+                configuration: {
+                    actionName: actionPrimary.Name,
+                },
+                dependsOn: ['forward'],
+            },
+            {
+                tempId: 'decide',
+                name: 'it165 decide step',
+                description: 'fixture decision step downstream of tainted fetch',
+                kind: 'Decision',
+                configuration: {
+                    ...(decisionPromptName ? { promptName: decisionPromptName } : {}),
+                    questions: {
+                        route: {
+                            kind: 'Choice',
+                            instructions: 'Route decision',
+                            options: [
+                                { value: 'send', description: 'Send' },
+                                { value: 'skip', description: 'Skip' },
+                            ],
+                            minConfidence: 0.5,
+                        },
+                    },
+                },
+                dependsOn: ['fetch'],
+            },
+            {
+                tempId: 'send',
+                name: 'it165 send step',
+                description: 'fixture send step downstream of decision',
+                kind: 'Action',
+                configuration: {
+                    actionName: actionPrimary.Name,
+                },
+                dependsOn: ['decide'],
+            },
+        ],
+    };
+
+    const submitted = await new TaskGraphService().Submit(spec, {
+        EnvironmentID: MJEnvironmentEntityExtended.DefaultEnvironmentID,
+        Provider: ctx.Provider,
+        ContextUser: ctx.User,
+        SecurityEnvelope: {
+            Version: TASK_SECURITY_ENVELOPE_VERSION,
+            IsRunTainted: false,
+        },
+        Debug: { paused: false },
+    });
+    Assert(submitted.Success && !!submitted.ParentTaskID, `TGS4: failed to submit graph: ${submitted.ErrorMessage ?? ''}`);
+    const parentID = submitted.ParentTaskID!;
+
+    if (fixture) {
+        fixture.ExtraTaskIDs.push(parentID);
+    }
+
+    const cleanup = async () => {
+        try {
+            const childrenRes = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>(
+                { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${parentID}'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true },
+                ctx.User,
+            );
+            const childIDs = (childrenRes.Results ?? []).map((r) => r.ID);
+            if (childIDs.length > 0) {
+                const deps = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJTaskDependencyEntity>(
+                    { EntityName: 'MJ: Task Dependencies', ExtraFilter: `TaskID IN (${childIDs.map((id) => `'${id}'`).join(',')})`, ResultType: 'entity_object', BypassCache: true },
+                    ctx.User,
+                );
+                for (const dep of deps.Results ?? []) {
+                    await dep.Delete().catch(() => false);
+                }
+                for (const cid of childIDs) {
+                    const child = await ctx.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', ctx.User);
+                    if (await child.Load(cid).catch(() => false)) await child.Delete().catch(() => false);
+                }
+            }
+            const parent = await ctx.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', ctx.User);
+            if (await parent.Load(parentID).catch(() => false)) await parent.Delete().catch(() => false);
+        } catch {
+            // best-effort cleanup
+        }
+    };
+
+    let sendSawTaintedEnvelope = false;
+    let forwardRan = false;
+    let fetchRan = false;
+    let compensationRan = false;
+
+    const actionRunner: TaskActionRunner = {
+        EnforcesSecurityEnvelope: true,
+        RunActionForTask: async (params: TaskActionRunParams): Promise<TaskActionRunResult> => {
+            const task = await params.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', params.ContextUser);
+            await task.Load(params.TaskID);
+
+            if (task.CompensatesTaskID != null || task.Name.startsWith('Compensate:')) {
+                compensationRan = true;
+                return { Success: true, Output: { compensated: true } };
+            }
+            if (task.Name.includes('forward')) {
+                forwardRan = true;
+                return { Success: true, Output: { forwardResult: 'ok' } };
+            }
+            if (task.Name.includes('fetch')) {
+                fetchRan = true;
+                return { Success: true, Output: { page: 'untrusted-data' }, IsOutputTainted: true };
+            }
+            if (task.Name.includes('send')) {
+                if (params.SecurityEnvelope?.IsRunTainted === true) {
+                    sendSawTaintedEnvelope = true;
+                    return {
+                        Success: false,
+                        ResultCode: TAINTED_EGRESS_BLOCKED,
+                        ErrorMessage: 'Refused: action cannot run with tainted input',
+                    };
+                }
+                return { Success: true, Output: { sent: true } };
+            }
+            return { Success: true, Output: {} };
+        },
+    };
+
+    let decideRan = false;
+    const decisionRunner: TaskDecisionRunner = {
+        RunDecisionForTask: async () => {
+            decideRan = true;
+            return {
+                Success: true,
+                Answers: {
+                    route: {
+                        kind: 'Choice',
+                        value: 'send',
+                        confidence: 0.9,
+                    },
+                },
+            };
+        },
+    };
+
+    const dispatcher = new TaskGraphDispatcher(
+        providerFactory(ctx),
+        new NoopAgentRunner(),
+        ctx.User as UserInfo,
+        {
+            InstanceID: `it165-disp-${randomUUID().slice(0, 8)}`,
+            PollIntervalSeconds: 0.1,
+            ClaimTTLSeconds: 300,
+            ReconciliationIntervalSeconds: 3600,
+            MaxConcurrentTasks: 4,
+        },
+        undefined,
+        undefined,
+        actionRunner,
+        undefined,
+        decisionRunner,
+    );
+
+    try {
+        await dispatcher.Start();
+        const deadline = Date.now() + 30_000;
+        let settledParent: MJTaskEntity | null = null;
+        while (Date.now() < deadline) {
+            await settle(200);
+            const p = await loadTask(ctx, parentID);
+            if (p.Status === 'Complete' || p.Status === 'Failed' || p.Status === 'Cancelled' || p.Status === 'Blocked') {
+                settledParent = p;
+                break;
+            }
+        }
+        Assert(settledParent != null, `TGS4: graph ${parentID} did not settle within 30s`);
+        AssertEqual(settledParent!.Status, 'Failed', 'TGS4: parent graph status after taint failure');
+
+        Assert(forwardRan, 'TGS4: forward step did not run');
+        Assert(fetchRan, 'TGS4: fetch step did not run');
+        Assert(decideRan, 'TGS4: decision step did not run');
+        Assert(sendSawTaintedEnvelope, 'TGS4: send step did not see tainted SecurityEnvelope');
+        Assert(compensationRan, 'TGS4: compensation action did not run');
+
+        const childrenRes = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJTaskEntity>(
+            { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${parentID}'`, ResultType: 'entity_object', BypassCache: true },
+            ctx.User,
+        );
+        const children = childrenRes.Results ?? [];
+        const forwardTask = children.find((c) => c.Name.includes('forward'));
+        const sendTask = children.find((c) => c.Name.includes('send'));
+        const compTask = children.find((c) => c.CompensatesTaskID != null && forwardTask != null && UUIDsEqual(c.CompensatesTaskID, forwardTask.ID));
+
+        Assert(forwardTask != null, 'TGS4: forward task row not found');
+        AssertEqual(forwardTask!.Status, 'Complete', 'TGS4: forward task status');
+
+        Assert(sendTask != null, 'TGS4: send task row not found');
+        AssertEqual(sendTask!.Status, 'Failed', 'TGS4: send task status');
+
+        Assert(compTask != null, 'TGS4: compensation task row not found');
+        AssertEqual(compTask!.Status, 'Complete', 'TGS4: compensation task status');
+    } finally {
+        await dispatcher.Stop();
+        await cleanup();
+    }
+}
+
 export const TaskGraphSecurityChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.TGS1`, Name: 'TGS1: every row of a submitted graph carries its envelope, and the envelope cannot be edited', Fn: checkEnvelopeOnEveryRowAndImmutable, RequiresMutation: true },
     { Id: `${BUNDLE}.TGS2`, Name: 'TGS2: of two concurrent compensation rows for one forward step, exactly one lands', Fn: checkOneCompensationPerForwardStep, RequiresMutation: true },
     { Id: `${BUNDLE}.TGS3`, Name: 'TGS3: the A2A task store refuses task-graph steps and files A2A tasks under their own type', Fn: checkA2AStoreSeesOnlyA2ARows, RequiresMutation: true },
+    { Id: `${BUNDLE}.TGS4`, Name: 'TGS4: a tainted graph through the real dispatcher is gated on taint at a Decision-downstream action, failing the graph and triggering saga compensation', Fn: checkDispatcherTaintGateAndCompensation, RequiresMutation: true },
 ];
 
 for (const check of TaskGraphSecurityChecks) {
