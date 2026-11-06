@@ -7,6 +7,6 @@ export class RunnerInfrastructure extends BaseCatchRule {
     public Evaluate(c: CatchContext): RuleOutcome {
         const msg = c.Head[0]?.Failure?.Message ?? '';
         const hit = PATTERNS.find((p) => p.test(msg));
-        return hit ? { Fired: true, Reason: `runner problem: ${hit.source}` } : { Fired: false, Reason: '' };
+        return hit ? { Fired: true, Reason: `runner problem: ${hit.source}` } : { Fired: false, Reason: 'no runner problem in the head failure' };
     }
 }

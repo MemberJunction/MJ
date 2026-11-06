@@ -10,9 +10,19 @@ export class BrokenMock extends BaseCatchRule {
         return { Fired: false, Reason: 'failure is in a test body' };
     }
 }
+/** Matches `<test file name>:<line>:<col>` where the name is not the tail of a longer file name. */
+function testFramePattern(c: CatchContext): RegExp {
+    const file = c.Test.FilePath.split('/').pop() ?? '';
+    return new RegExp(`(?:^|[\\s/(])${file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:(\\d+):\\d+`);
+}
 /** Line number of the first stack frame that points into the test file, or null. Shared by BrokenMock and TestOwnError. */
 export function FailingTestLine(c: CatchContext): number | null {
-    const frame = c.Head[0]?.Failure?.StackExcerpt ?? ''; const file = c.Test.FilePath.split('/').pop() ?? '';
-    const m = new RegExp(`${file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:(\\d+):\\d+`).exec(frame);
+    const m = testFramePattern(c).exec(c.Head[0]?.Failure?.StackExcerpt ?? '');
+    return m ? Number(m[1]) : null;
+}
+/** Line number of the first `❯` stack frame when that frame is in the test file; null when it is elsewhere or missing. */
+export function FirstFrameTestLine(c: CatchContext): number | null {
+    const first = (c.Head[0]?.Failure?.StackExcerpt ?? '').split('\n').find((l) => l.includes('❯'));
+    const m = first ? testFramePattern(c).exec(first) : null;
     return m ? Number(m[1]) : null;
 }
