@@ -1,0 +1,211 @@
+import { NgTemplateOutlet } from '@angular/common';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, Output, ViewChild, inject } from '@angular/core';
+import { MJBottomSheetComponent } from '../bottom-sheet/bottom-sheet.component';
+
+/** One selectable section in an {@link MJSectionPickerComponent}. */
+export interface SectionPickerItem {
+  /** Stable identity, emitted on selection. */
+  Key: string;
+  /** Visible label on the button and in the sheet. */
+  Title: string;
+  /** Font Awesome class string, e.g. `fa-solid fa-table-columns`. */
+  Icon?: string;
+  /** Row count shown as a trailing pill when positive. */
+  Count?: number | null;
+  /** Validation errors in this section; shown as a red pill when positive. */
+  ErrorCount?: number;
+  /** Warnings in this section; shown as an amber pill when positive and there are no errors. */
+  WarningCount?: number;
+  /** Unsaved edits in this section; shown as a dot when positive. */
+  DirtyCount?: number;
+}
+
+/** A headed group of sections listed after the first-class items (a form's "More" folder, say). */
+export interface SectionPickerGroup {
+  Title: string;
+  Items: SectionPickerItem[];
+}
+
+/**
+ * The phone replacement for a section rail, tab strip or icon rail: one full-width button that
+ * names the current section and opens a searchable "Sections" bottom sheet listing every
+ * section, first-class items first, then each {@link SectionPickerGroup} under its heading.
+ *
+ * Pure chrome with no breakpoint logic: the caller decides when a picker is the right
+ * presentation (`@if (IsPhone) { <mj-section-picker …> } @else { <the rail> }`). Selection is
+ * emitted, never applied; the caller sets `ActiveKey` back.
+ *
+ * ```html
+ * <mj-section-picker [Items]="sections" [Groups]="[{ Title: 'More', Items: more }]"
+ *                    [ActiveKey]="active" (ActiveKeyChange)="activate($event)">
+ * </mj-section-picker>
+ * ```
+ */
+@Component({
+  standalone: true,
+  selector: 'mj-section-picker',
+  imports: [NgTemplateOutlet, MJBottomSheetComponent],
+  templateUrl: './section-picker.component.html',
+  styleUrls: ['./section-picker.component.css'],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class MJSectionPickerComponent {
+  private static nextInstance = 0;
+  private readonly cdr = inject(ChangeDetectorRef);
+  @ViewChild('searchInput') private searchInput?: ElementRef<HTMLInputElement>;
+
+  /** Id of the search box's hidden description, which says what Enter does. */
+  public readonly SearchHintId = `mj-section-picker-hint-${++MJSectionPickerComponent.nextInstance}`;
+
+  /** First-class sections, in display order. */
+  @Input() Items: SectionPickerItem[] = [];
+  /** Headed groups listed after {@link Items}. */
+  @Input() Groups: SectionPickerGroup[] = [];
+  /** Key of the current section. Falls back to the first item when it matches nothing. */
+  @Input() ActiveKey = '';
+  /** Sheet header. */
+  @Input() SheetTitle = 'Sections';
+  /** Whether the sheet shows a search box. */
+  @Input() Searchable = true;
+  @Input() SearchPlaceholder = 'Search sections...';
+
+  /** Emitted with the chosen section's key; the sheet closes and the search clears. */
+  @Output() ActiveKeyChange = new EventEmitter<string>();
+
+  /** Whether the sheet is open. */
+  public SheetOpen = false;
+  /** The current search text; a way to find a row, cleared on every selection. */
+  public Query = '';
+
+  /** The section the button names. */
+  public get ActiveItem(): SectionPickerItem | null {
+    const all = this.allItems();
+    return all.find((i) => i.Key === this.ActiveKey) ?? all[0] ?? null;
+  }
+
+  public get FilteredItems(): SectionPickerItem[] {
+    return this.Items.filter((i) => this.matches(i));
+  }
+
+  /** Groups with their matching items; a group whose items all drop out is left out. */
+  public get FilteredGroups(): SectionPickerGroup[] {
+    return this.Groups
+      .map((g) => ({ Title: g.Title, Items: g.Items.filter((i) => this.matches(i)) }))
+      .filter((g) => g.Items.length > 0);
+  }
+
+  public get HasMatches(): boolean {
+    return this.FilteredItems.length > 0 || this.FilteredGroups.length > 0;
+  }
+
+  /**
+   * The row Enter opens: the first match in display order, once a search is typed. Null with an
+   * empty search (the list is not narrowed, so the first row is not a choice) or no matches.
+   */
+  public get FirstMatch(): SectionPickerItem | null {
+    if (this.Query.trim() === '') return null;
+    return this.FilteredItems[0] ?? this.FilteredGroups[0]?.Items[0] ?? null;
+  }
+
+  public IsFirstMatch(item: SectionPickerItem): boolean {
+    return this.FirstMatch?.Key === item.Key;
+  }
+
+  /**
+   * Enter in the search box opens the first match. Its default is always blocked: the sheet renders
+   * in place, so inside a host `<form>` Enter would click the form's first submit button (implicit
+   * submission), even a hidden one such as Run or Regenerate.
+   */
+  public OnSearchKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    if (event.isComposing) return; // Enter confirming an IME composition, not a pick
+    const match = this.FirstMatch;
+    if (match) this.Select(match.Key);
+  }
+
+  public OpenSheet(): void {
+    this.SheetOpen = true;
+    this.cdr.markForCheck();
+  }
+
+  public OnSheetVisibleChange(visible: boolean): void {
+    this.SheetOpen = visible;
+    if (!visible) this.clearSearch();
+    this.cdr.markForCheck();
+  }
+
+  public OnSearch(value: string): void {
+    this.Query = value;
+    this.cdr.markForCheck();
+  }
+
+  public OnSearchInput(event: Event): void {
+    const input = event.target as HTMLInputElement | null;
+    this.OnSearch(input?.value ?? '');
+  }
+
+  public Select(key: string): void {
+    this.SheetOpen = false;
+    this.clearSearch();
+    this.ActiveKeyChange.emit(key);
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Empties the search, in the box as well as in Query. The box's [value] binding only writes when
+   * Query differs from what it last rendered, and Enter can land before the typed query was ever
+   * rendered (a fast typist, a paste, a hardware keyboard): Query goes '' to '' and the old text
+   * would stay in the box for the next open.
+   */
+  private clearSearch(): void {
+    this.Query = '';
+    if (this.searchInput) this.searchInput.nativeElement.value = '';
+  }
+
+  public IsActive(item: SectionPickerItem): boolean {
+    return item.Key === this.ActiveKey;
+  }
+
+  /**
+   * The button's accessible name. An aria-label replaces the button's content for screen readers,
+   * so the indicator spans inside it are never announced: the name has to carry their status itself,
+   * in the order they appear (unsaved, then error or warning).
+   */
+  public get TriggerLabel(): string {
+    const active = this.ActiveItem;
+    if (!active) return 'Change section';
+    const parts = [active.Title];
+    const dirty = active.DirtyCount ?? 0;
+    const errors = active.ErrorCount ?? 0;
+    const warnings = active.WarningCount ?? 0;
+    if (dirty > 0) parts.push(`${dirty} unsaved ${dirty === 1 ? 'change' : 'changes'}`);
+    if (errors > 0) parts.push(`${errors} ${errors === 1 ? 'error' : 'errors'}`);
+    else if (warnings > 0) parts.push(`${warnings} ${warnings === 1 ? 'warning' : 'warnings'}`);
+    return 'Change section — ' + parts.join(', ');
+  }
+
+  public ErrorLabel(item: SectionPickerItem): string {
+    const n = item.ErrorCount ?? 0;
+    return `${n} ${n === 1 ? 'error' : 'errors'} in ${item.Title}`;
+  }
+
+  public WarningLabel(item: SectionPickerItem): string {
+    const n = item.WarningCount ?? 0;
+    return `${n} ${n === 1 ? 'warning' : 'warnings'} in ${item.Title}`;
+  }
+
+  public DirtyLabel(item: SectionPickerItem): string {
+    const n = item.DirtyCount ?? 0;
+    return `${n} unsaved ${n === 1 ? 'change' : 'changes'} in ${item.Title}`;
+  }
+
+  private allItems(): SectionPickerItem[] {
+    return [...this.Items, ...this.Groups.flatMap((g) => g.Items)];
+  }
+
+  private matches(item: SectionPickerItem): boolean {
+    const q = this.Query.trim().toLowerCase();
+    return q === '' || item.Title.toLowerCase().includes(q);
+  }
+}
