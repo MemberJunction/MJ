@@ -14,9 +14,15 @@ async function probe(name, envVar, LLMClass, model, extra = {}) {
   }
   const llm = new LLMClass(key);
   const t0 = Date.now();
-  const r = await llm.ChatCompletion({
-    model, messages: [{ role: 'user', content: ask }], temperature: 0, maxOutputTokens: 5, ...extra,
-  });
+  let r;
+  try {
+    r = await llm.ChatCompletion({
+      model, messages: [{ role: 'user', content: ask }], temperature: 0, maxOutputTokens: 5, ...extra,
+    });
+  } catch (e) {
+    console.log(name, '| model:', model, '| threw:', e.status ?? '', e.message, '| ms:', Date.now() - t0);
+    return;
+  }
   const c = r.data?.choices?.[0];
   console.log(name, '| model:', model, '| success:', r.success, '| text:', JSON.stringify(c?.message?.content), '| usage:', r.data?.usage, '| ms:', Date.now() - t0);
   if (c?.logprobs) console.log(name, '| first token top_logprobs:', JSON.stringify(c.logprobs.content?.[0]?.top_logprobs));
