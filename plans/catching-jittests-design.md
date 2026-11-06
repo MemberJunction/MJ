@@ -140,6 +140,7 @@ stubs (`DatabaseProviderStub`, `EntitiesOnlyProvider`, `TestLLM`); `@vitest/cove
 | D35 | Host fetch | The host fetches head's dependencies with a copy of head's lockfile from which a script removes the `patchedDependencies:` block and every `(patch_hash=…)` segment; the sandbox installs offline with the real lockfile and `patches/` and applies the patches; each run has its own store; a failed host fetch is an infrastructure failure for that PR, never retried with network | With `patches/` present, `pnpm fetch` applies PR-supplied diffs on the host and follows symlinks out of `patches/`; without it, the real lockfile fails (`ERR_PNPM_PATCH_NOT_FOUND`). The stripped copy works and the sandbox applies the patch (spike §8, option (b)). The sandbox writes patched files into the store, so a store is not shared |
 | D36 | Agent tool limits | SDK `tools` lists `Read`, `Grep`, `Glob`; `permissionMode: 'default'`; `disallowedTools` as a second layer; `allowedTools` holds only `run_test`, so reads and writes reach the permission check; read and write paths are checked after `realpath` | In the spike, `allowedTools` auto-approved the plan's `Write` and an outside write went through; a bare name there skips `canUseTool`; an omitted `permissionMode` can be `auto` (spike §2) |
 | D37 | Agent token budget | The host counts tokens once per message `id`, with cache-read and cache-creation tokens as input, aborts at the budget, and estimates the cost of an aborted session from its own count; `maxBudgetUsd` is a second cap | The SDK repeats `usage` on every block of a message, `input_tokens` excludes cached tokens, per-message output counts run low, and an aborted session has no `result` message (spike §2) |
+| D38 | Agent credential | The agent runner never runs inside a Claude Code session, passes the SDK child only `PATH`, an empty `HOME` and `ANTHROPIC_API_KEY`, and requires `apiKeySource: "ANTHROPIC_API_KEY"` in the init message | Inside a Claude Code session the SDK child used that session's login (`apiKeySource: "none"`); in a clean environment it used the key (spike §2) |
 
 ---
 
@@ -598,6 +599,10 @@ run directly on the runner. Keys exist only in the orchestrating processes of jo
   path other than the worktree, the per-run store and the generated-test folders the tool mounts.
 - Checkouts that the sandbox mounts use `persist-credentials: false`, so the container holds no token.
 - The same sandbox applies to `jit-catch run` and `backtest` on a developer machine (§5.1).
+- The agent uses only `ANTHROPIC_API_KEY`. Inside a Claude Code session the SDK child process used that session's login
+  instead (`apiKeySource: "none"`), so the runner refuses to start inside one, gives the SDK child only `PATH`, an
+  empty `HOME` and the key, and stops unless the SDK's init message reports `apiKeySource: "ANTHROPIC_API_KEY"`
+  (D38, spike §2).
 - Job 1 holds the Anthropic key and `TURBO_TOKEN` in its orchestrating process. Generated tests come from an agent that
   read untrusted PR text, so they run only in the sandbox, which cannot see that process.
 - Jobs 1 and 3 check out the `jit-catch` tool from `next`, never from the PR head. `next` is the default branch, so the

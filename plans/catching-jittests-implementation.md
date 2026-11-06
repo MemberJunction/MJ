@@ -2745,11 +2745,15 @@ The `.vite` tmpfs mountpoint creation line is awkward; replace it with a small p
   function ResolveNearest(path: string): string                                          // realpath of the path or of its nearest existing parent
   function IsInside(root: string, target: string): boolean                                // both sides through ResolveNearest
   function ReadAllowed(tool: string, input: Record<string, unknown>, root: string): boolean // Read / Grep / Glob inside the base worktree only
-  function BuildSdkOptions(o: AgentRunOptions, x: { System: string; McpServer: McpServer; Abort: AbortController; CanUseTool: CanUseTool }): SdkOptions
+  function AgentEnv(env: NodeJS.ProcessEnv, emptyHome: string): Record<string, string>    // PATH, an empty HOME and ANTHROPIC_API_KEY; throws inside a Claude Code session
+  function AssertApiKeySource(source: string | undefined): void                           // throws unless 'ANTHROPIC_API_KEY'
+  function BuildSdkOptions(o: AgentRunOptions, x: { System: string; McpServer: McpServer; Abort: AbortController; CanUseTool: CanUseTool; Env: Record<string, string> }): SdkOptions
   class UsageCounter { Add(messageId: string, usage: ApiUsage | undefined): void; InputTokens: number; CacheReadTokens: number; OutputTokens: number; Turns: number; BudgetTokens: number; EstimateCostUSD(price: Price | null): number }
   ```
 
 SDK option rules (spike §2, design §8.3, D36): `tools: ['Read', 'Grep', 'Glob']` restricts the built-in tools (`allowedTools` does not restrict; it auto-approves). `allowedTools` holds only `mcp__jit__run_test`: a bare name there skips `canUseTool`, so `Read`, `Grep`, `Glob` and `write_test` stay out of it and every call of theirs reaches `canUseTool`. `permissionMode: 'default'` (when omitted the mode can be `auto`, where a classifier decides). `disallowedTools` lists `Bash`, `Write`, `Edit`, `MultiEdit`, `NotebookEdit`, `WebFetch`, `WebSearch`, `Task` and `Agent` as a second layer. After `error_max_turns` the SDK sends the `result` message and then the iterator throws; the runner reads the `result` and catches the throw. `num_turns` in that `result` is `maxTurns + 1`, so turns are the number of distinct assistant message ids the runner counted.
+
+Credential (spike §2 "Environment-key run", design §12, D38): inside a Claude Code session the SDK child used that session's login (`apiKeySource: "none"`), not `ANTHROPIC_API_KEY`. The runner therefore refuses to start when `CLAUDECODE` is set, passes the SDK an `env` that holds only `PATH`, a new empty `HOME` and `ANTHROPIC_API_KEY` (the SDK's `env` replaces the child environment, it does not merge), and checks the `system`/`init` message: anything other than `apiKeySource: 'ANTHROPIC_API_KEY'` aborts the session with an error.
 
 Token budget (spike §2 (e), (f), design §8.3, D37): one API message arrives as several SDK messages with the same `id` and `usage`, so `UsageCounter` counts each `id` once. Input is `input_tokens + cache_read_input_tokens + cache_creation_input_tokens` (`input_tokens` alone is only the uncached part). Per-message `output_tokens` run far below the final figure, so the exact totals come from the `result` message when there is one. The runner keeps its own count and aborts when it passes `TokensPerSession`; `maxBudgetUsd: UsdPerSession` is a second cap inside the SDK. An aborted session gets no `result` message, so the runner yields one itself (`Subtype: 'aborted_token_budget'`) with the host count and a cost estimated from `Settings.Prices`.
 
@@ -2792,7 +2796,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, mkdirSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { IsInside, ReadAllowed } from '../generator/AgentGuards';
+import { AgentEnv, AssertApiKeySource, IsInside, ReadAllowed } from '../generator/AgentGuards';
 import { BuildSdkOptions } from '../generator/ClaudeAgentGenerator';
 
 function tree() {
@@ -2829,12 +2833,24 @@ describe('ReadAllowed', () => {
   });
 });
 
+describe('AgentEnv and AssertApiKeySource', () => {
+  it('gives the SDK child only PATH, an empty HOME and the key, and refuses to run inside a Claude Code session', () => {
+    expect(AgentEnv({ PATH: '/bin', HOME: '/Users/me', ANTHROPIC_API_KEY: 'k', OPENAI_API_KEY: 'o' }, '/tmp/h')).toEqual({ PATH: '/bin', HOME: '/tmp/h', ANTHROPIC_API_KEY: 'k' });
+    expect(() => AgentEnv({ PATH: '/bin', ANTHROPIC_API_KEY: 'k', CLAUDECODE: '1' }, '/tmp/h')).toThrow(/Claude Code session/);
+    expect(() => AgentEnv({ PATH: '/bin' }, '/tmp/h')).toThrow(/ANTHROPIC_API_KEY/);
+  });
+  it('accepts only the environment key as the credential', () => {
+    expect(() => AssertApiKeySource('ANTHROPIC_API_KEY')).not.toThrow();
+    for (const s of ['none', '/login managed key', 'apiKeyHelper', undefined]) expect(() => AssertApiKeySource(s)).toThrow(/ANTHROPIC_API_KEY/);
+  });
+});
+
 describe('BuildSdkOptions', () => {
   it('restricts built-ins with tools, keeps reads and writes out of allowedTools, and uses the default permission mode', () => {
-    const o = BuildSdkOptions({ Cwd: '/w', Model: 'm', MaxTurns: 30, TokenBudget: 1, BudgetUsd: 2, Price: null, Hooks: {} as never }, { System: 's', McpServer: {} as never, Abort: new AbortController(), CanUseTool: async () => ({ behavior: 'deny', message: 'x' }) });
+    const o = BuildSdkOptions({ Cwd: '/w', Model: 'm', MaxTurns: 30, TokenBudget: 1, BudgetUsd: 2, Price: null, Hooks: {} as never }, { System: 's', McpServer: {} as never, Abort: new AbortController(), CanUseTool: async () => ({ behavior: 'deny', message: 'x' }), Env: { PATH: '/bin', HOME: '/tmp/h', ANTHROPIC_API_KEY: 'k' } });
     expect(o.tools).toEqual(['Read', 'Grep', 'Glob']); expect(o.permissionMode).toBe('default'); expect(o.allowedTools).toEqual(['mcp__jit__run_test']);
     expect(o.disallowedTools).toEqual(expect.arrayContaining(['Bash', 'Write', 'Edit', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Task', 'Agent']));
-    expect(o.settingSources).toEqual([]); expect(o.maxTurns).toBe(30); expect(o.maxBudgetUsd).toBe(2);
+    expect(o.settingSources).toEqual([]); expect(o.maxTurns).toBe(30); expect(o.maxBudgetUsd).toBe(2); expect(o.env).toEqual({ PATH: '/bin', HOME: '/tmp/h', ANTHROPIC_API_KEY: 'k' });
   });
 });
 ```
@@ -3003,6 +3019,18 @@ export function ReadAllowed(tool: string, input: Record<string, unknown>, root: 
     if (path === undefined) return tool !== 'Read';
     return typeof path === 'string' && IsInside(root, resolve(root, path));
 }
+
+/** Environment for the SDK child: PATH, an empty HOME and the key, so no Claude Code login or config is in reach. */
+export function AgentEnv(env: NodeJS.ProcessEnv, emptyHome: string): Record<string, string> {
+    if (env.CLAUDECODE) throw new Error('the JiT agent must not run inside a Claude Code session: its login would replace ANTHROPIC_API_KEY');
+    if (!env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not set');
+    return { PATH: env.PATH ?? '/usr/bin:/bin', HOME: emptyHome, ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY };
+}
+
+/** The SDK's init message must name the environment key as the credential the session uses. */
+export function AssertApiKeySource(source: string | undefined): void {
+    if (source !== 'ANTHROPIC_API_KEY') throw new Error(`agent credential is ${source ?? 'unknown'}, expected ANTHROPIC_API_KEY`);
+}
 ```
 
 ```ts
@@ -3037,7 +3065,7 @@ export class UsageCounter {
 
 ```ts
 // ClaudeAgentGenerator.ts
-import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync, mkdtempSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { z } from 'zod';
 import { query, tool, createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
@@ -3049,7 +3077,8 @@ import type { Settings } from '../settings';
 import { NewID } from '../ids';
 import { RunTestTool, type RunTestInput, type RunTestOutput } from './RunTestTool';
 import { BuildSystemPrompt, BuildTaskPrompt, type PromptContext } from './prompts';
-import { IsInside, ReadAllowed } from './AgentGuards';
+import { tmpdir } from 'node:os';
+import { AgentEnv, AssertApiKeySource, IsInside, ReadAllowed } from './AgentGuards';
 import { UsageCounter, type Price } from './UsageCounter';
 
 export type AgentMessage = { Type: 'result'; Usage: { InputTokens: number; OutputTokens: number; CacheReadTokens: number }; CostUSD: number; Turns: number; Subtype: string } | { Type: 'assistant'; Text: string } | { Type: 'tool'; Name: string; Input: unknown; Output: unknown };
@@ -3114,8 +3143,8 @@ type CanUseTool = NonNullable<SdkOptions['canUseTool']>;
 type McpServer = ReturnType<typeof createSdkMcpServer>;
 
 /** SDK options for one session. `tools` restricts the built-ins; only run_test skips `canUseTool` (spike §2, D36). */
-export function BuildSdkOptions(o: AgentRunOptions, x: { System: string; McpServer: McpServer; Abort: AbortController; CanUseTool: CanUseTool }): SdkOptions {
-    return { cwd: o.Cwd, model: o.Model, maxTurns: o.MaxTurns, maxBudgetUsd: o.BudgetUsd, systemPrompt: x.System, settingSources: [], permissionMode: 'default',
+export function BuildSdkOptions(o: AgentRunOptions, x: { System: string; McpServer: McpServer; Abort: AbortController; CanUseTool: CanUseTool; Env: Record<string, string> }): SdkOptions {
+    return { cwd: o.Cwd, model: o.Model, maxTurns: o.MaxTurns, maxBudgetUsd: o.BudgetUsd, systemPrompt: x.System, settingSources: [], permissionMode: 'default', env: x.Env,
         tools: ['Read', 'Grep', 'Glob'], allowedTools: ['mcp__jit__run_test'],
         disallowedTools: ['Bash', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Task', 'Agent'],
         mcpServers: { jit: x.McpServer }, abortController: x.Abort, canUseTool: x.CanUseTool };
@@ -3131,9 +3160,11 @@ async function* SdkRunner(prompt: string, system: string, o: AgentRunOptions): A
     const canUseTool: CanUseTool = async (name, toolInput) => (name === 'mcp__jit__write_test' || ReadAllowed(name, toolInput, o.Cwd)
         ? { behavior: 'allow', updatedInput: toolInput }
         : { behavior: 'deny', message: `${name} is not allowed here: reads stay inside the base worktree` });
+    const env = AgentEnv(process.env, mkdtempSync(join(tmpdir(), 'jit-agent-home-')));
     const abort = new AbortController(); const usage = new UsageCounter(); let sawResult = false;
     try {
-        for await (const msg of query({ prompt, options: BuildSdkOptions(o, { System: system, McpServer: jit, Abort: abort, CanUseTool: canUseTool }) })) {
+        for await (const msg of query({ prompt, options: BuildSdkOptions(o, { System: system, McpServer: jit, Abort: abort, CanUseTool: canUseTool, Env: env }) })) {
+            if (msg.type === 'system' && msg.subtype === 'init') AssertApiKeySource(msg.apiKeySource);
             if (msg.type === 'assistant') {
                 usage.Add(msg.message.id, msg.message.usage);
                 if (usage.BudgetTokens > o.TokenBudget && !abort.signal.aborted) abort.abort();
