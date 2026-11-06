@@ -429,7 +429,7 @@ describe('FeatureValueCacheService', () => {
                 expect(outcome).toEqual({ Upserted: 0, Unchanged: 1, Previous: { SeniorityLevel: null } });
                 expect(save).toHaveBeenCalledTimes(1);
                 const reread = MockRunView.calls[2];
-                expect(reread.ExtraFilter).toBe(`RecordProcessID = 'rp-1' AND ValueKeyHash IN ('${keyHash}')`);
+                expect(reread.ExtraFilter).toBe(`RecordProcessID = 'rp-1' AND ValueKeyHash IN ('${keyHash}') AND Role = 'Champion'`);
                 expect(reread.BypassCache).toBe(true);
             });
 

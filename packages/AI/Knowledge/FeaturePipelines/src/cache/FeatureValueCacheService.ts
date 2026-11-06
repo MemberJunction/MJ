@@ -548,7 +548,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         }
         const res = await RunView.FromMetadataProvider(provider).RunView<MJFeatureValueEntity>({
             EntityName: 'MJ: Feature Values',
-            ExtraFilter: `RecordProcessID = '${EscapeSQLString(params.recordProcessID)}' AND ValueKeyHash IN (${keyHashes.map((k) => `'${EscapeSQLString(k)}'`).join(', ')})`,
+            ExtraFilter: `RecordProcessID = '${EscapeSQLString(params.recordProcessID)}' AND ValueKeyHash IN (${keyHashes.map((k) => `'${EscapeSQLString(k)}'`).join(', ')}) AND Role = 'Champion'`,
             ResultType: 'entity_object',
             BypassCache: true,
         }, params.contextUser);
