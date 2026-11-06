@@ -16,6 +16,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { type IMetadataProvider, type TenantContext, UserInfo } from '@memberjunction/core';
 import type { MJTaskEntity } from '@memberjunction/core-entities';
+import { UUIDMap, UUIDSet } from '@memberjunction/global';
 import { IsHumanTask } from './task-predicates';
 
 /** A node's stored constraints, or why they cannot be enforced (the node is then refused). */
@@ -24,7 +25,13 @@ export type NodeSecurity =
     | { readonly Refusal: string };
 
 /** The task columns {@link UpstreamCarriesTaint} reads. */
-export type UpstreamTaskTaintFields = Pick<MJTaskEntity, 'StepType' | 'UserID' | 'Status' | 'Configuration'>;
+export type UpstreamTaskTaintFields = Pick<MJTaskEntity, 'ID' | 'StepType' | 'UserID' | 'Status' | 'Configuration'>;
+
+/**
+ * The rows a task depends on, by that task's ID: how the taint check looks past a node that recorded
+ * no taint to what could have reached it. Returns `undefined` when they are not known.
+ */
+export type UpstreamTaintLookup = (taskID: string) => readonly UpstreamTaskTaintFields[] | undefined;
 
 /**
  * The constraints a node runs under: its graph parent's stored envelope merged with its own, keeping
@@ -54,15 +61,57 @@ export function ResolveStoredNodeSecurity(
  *
  * A completed `Human` step never does: a person reviewed what flowed through it, which is the only
  * thing that clears taint inside a graph. Any other node carries what it recorded when it ran
- * (`Configuration.runtime.isOutputTainted`); a node that never recorded it — skipped, or never run —
- * carries the graph's own taint, so a branch that was not taken cannot launder it.
+ * (`Configuration.runtime.isOutputTainted`, which every node the dispatcher runs writes as its input
+ * taint OR its own). A node that recorded nothing — skipped, failed before recording, or written by
+ * older code — is never read as clean: it is tainted when the graph is, or when anything it depends
+ * on could be (followed through `upstreamOf`, transitively), and tainted outright when what it depends
+ * on is not known. So a Decision, a skipped branch or a failed step between an untrusted fetch and an
+ * egress action cannot launder the fetch's taint.
  */
-export function UpstreamCarriesTaint(upstream: UpstreamTaskTaintFields, graphTainted: boolean): boolean {
-    if (IsHumanTask(upstream) && upstream.Status === 'Complete') {
+export function UpstreamCarriesTaint(
+    upstream: UpstreamTaskTaintFields,
+    graphTainted: boolean,
+    upstreamOf?: UpstreamTaintLookup,
+): boolean {
+    return carriesTaint(upstream, newTaintWalk(graphTainted, upstreamOf));
+}
+
+function newTaintWalk(graphTainted: boolean, upstreamOf: UpstreamTaintLookup | undefined): TaintWalk {
+    return { GraphTainted: graphTainted, UpstreamOf: upstreamOf, Known: new UUIDMap(), Visiting: new UUIDSet() };
+}
+
+/** One taint walk's inputs and memo: each unrecorded node is resolved once, and a cycle fails closed. */
+type TaintWalk = {
+    GraphTainted: boolean;
+    UpstreamOf: UpstreamTaintLookup | undefined;
+    Known: UUIDMap<boolean>;
+    Visiting: UUIDSet;
+};
+
+function carriesTaint(node: UpstreamTaskTaintFields, walk: TaintWalk): boolean {
+    if (IsHumanTask(node) && node.Status === 'Complete') {
         return false;
     }
-    const recorded = RecordedOutputTaint(upstream.Configuration);
-    return recorded ?? graphTainted;
+    const recorded = RecordedOutputTaint(node.Configuration);
+    if (recorded !== undefined) {
+        return recorded;
+    }
+    if (walk.GraphTainted) {
+        return true;
+    }
+    const known = walk.Known.Get(node.ID);
+    if (known !== undefined) {
+        return known;
+    }
+    const inputs = walk.UpstreamOf?.(node.ID);
+    if (inputs === undefined || walk.Visiting.Has(node.ID)) {
+        return true;
+    }
+    walk.Visiting.Add(node.ID);
+    const tainted = inputs.some((input) => carriesTaint(input, walk));
+    walk.Visiting.Delete(node.ID);
+    walk.Known.Set(node.ID, tainted);
+    return tainted;
 }
 
 /** The output taint a node recorded when it ran, or `undefined` when it recorded none. */
@@ -81,18 +130,22 @@ export function RecordedOutputTaint(configuration: string | null | undefined): b
 /**
  * Whether a node's input is tainted. A node with no prerequisites reads only what the (possibly
  * tainted) run wrote into the graph, so it takes the envelope's taint. A node with prerequisites is
- * tainted when any of them carries taint ({@link UpstreamCarriesTaint}); a compensation task also
- * keeps the taint it inherited from the forward task it undoes.
+ * tainted when any of them carries taint ({@link UpstreamCarriesTaint}, which follows `UpstreamOf`
+ * past a prerequisite that recorded none); a compensation task also keeps the taint it inherited
+ * from the forward task it undoes.
  */
 export function ComputeNodeInputTaint(args: {
     EnvelopeTainted: boolean;
     IsCompensation: boolean;
     Upstream: readonly UpstreamTaskTaintFields[];
+    /** The graph's prerequisites by task, for prerequisites that recorded no taint. Omitted: they read as tainted. */
+    UpstreamOf?: UpstreamTaintLookup;
 }): boolean {
     if (args.Upstream.length === 0) {
         return args.EnvelopeTainted;
     }
-    const fromUpstream = args.Upstream.some((u) => UpstreamCarriesTaint(u, args.EnvelopeTainted));
+    const walk = newTaintWalk(args.EnvelopeTainted, args.UpstreamOf);
+    const fromUpstream = args.Upstream.some((u) => carriesTaint(u, walk));
     return fromUpstream || (args.IsCompensation && args.EnvelopeTainted);
 }
 

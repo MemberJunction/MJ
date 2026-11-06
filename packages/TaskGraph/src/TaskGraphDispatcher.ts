@@ -129,6 +129,7 @@ import {
     ResolveStoredNodeSecurity,
     WithInputTaint,
     type NodeSecurity,
+    type UpstreamTaintLookup,
 } from './task-security';
 import { NotificationEngine } from '@memberjunction/notifications';
 
@@ -514,6 +515,12 @@ export type ClaimedTaskCandidate = {
      * without another query (see `ComputeNodeInputTaint`).
      */
     upstreamTasks?: MJTaskEntity[];
+    /**
+     * Every task's prerequisites in the same graph load, so the taint check can look past a
+     * prerequisite that recorded no taint (see `UpstreamCarriesTaint`). Absent: such a prerequisite
+     * reads as tainted.
+     */
+    upstreamOf?: UpstreamTaintLookup;
 };
 
 export class TaskGraphDispatcher implements IShutdownable {
@@ -2715,6 +2722,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     parentMetadata: graph.parentMetadata,
                     dependencyOutputs: this.extractDependencyOutputsFromGraph(entity.ID, graph),
                     upstreamTasks: this.upstreamTasksInGraph(entity.ID, graph),
+                    upstreamOf: this.upstreamLookupInGraph(graph),
                 });
                 if (claimable.length >= limit) break;
             }
@@ -3716,6 +3724,23 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
+     * Every task's prerequisites in the loaded graph, for the taint check to follow past a
+     * prerequisite that recorded no taint. A dependency whose row is not in the graph makes that
+     * task's prerequisites unknown, which the check reads as tainted.
+     */
+    private upstreamLookupInGraph(graph: GraphState): UpstreamTaintLookup {
+        return (taskID) => {
+            const rows: MJTaskEntity[] = [];
+            for (const dep of this.dependencyRowsOf(taskID, graph)) {
+                const row = graph.entityById.get(dep.DependsOnTaskID);
+                if (!row) return undefined;
+                rows.push(row);
+            }
+            return rows;
+        };
+    }
+
+    /**
      * The graph's dependency rows of `taskID`. Indexed once per graph load: callers ask for every
      * claimable task in turn, and scanning all edges per task made a pass O(tasks × edges).
      */
@@ -3732,7 +3757,7 @@ export class TaskGraphDispatcher implements IShutdownable {
     private nodeEnvelope(
         task: MJTaskEntity,
         context: GraphContext,
-        upstream: readonly MJTaskEntity[],
+        prehydrated?: Pick<ClaimedTaskCandidate, 'upstreamTasks' | 'upstreamOf'>,
     ): { Envelope: TaskSecurityEnvelope | undefined } | { Refusal: string } {
         if ('Refusal' in context.Security) {
             return context.Security;
@@ -3741,9 +3766,15 @@ export class TaskGraphDispatcher implements IShutdownable {
         const inputTainted = ComputeNodeInputTaint({
             EnvelopeTainted: stored?.IsRunTainted === true,
             IsCompensation: IsCompensationTask(task),
-            Upstream: upstream,
+            Upstream: prehydrated?.upstreamTasks ?? [],
+            UpstreamOf: prehydrated?.upstreamOf,
         });
         return { Envelope: WithInputTaint(stored, inputTainted) };
+    }
+
+    /** Whether a node's input is tainted; a node refused on security grounds counts as tainted. */
+    private inputTaintOf(envelope: { Envelope: TaskSecurityEnvelope | undefined } | { Refusal: string }): boolean {
+        return 'Refusal' in envelope || envelope.Envelope?.IsRunTainted === true;
     }
 
     /**
@@ -3834,6 +3865,10 @@ export class TaskGraphDispatcher implements IShutdownable {
      *
      * Every branch is normalized to one shape so the recording path above stays single: an action has
      * no agent run to point at, because its forensics live in `ActionExecutionLog` instead.
+     *
+     * **Every kind records its output taint here, as its input taint OR its own** (a Decision, a loop,
+     * a failure and a refusal included). A kind that returned none — a Decision did, before — let its
+     * output read as clean, so Fetch → Decision → Send Email ran the egress action ungated.
      */
     private async runTaskBody(
         task: MJTaskEntity,
@@ -3841,7 +3876,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         inputPayload: unknown,
         dependencyOutputs: Map<string, unknown>,
         onProgress?: TaskRunProgressCallback,
-        prehydrated?: Pick<ClaimedTaskCandidate, 'parentTask' | 'parentMetadata' | 'upstreamTasks'>,
+        prehydrated?: Pick<ClaimedTaskCandidate, 'parentTask' | 'parentMetadata' | 'upstreamTasks' | 'upstreamOf'>,
     ): Promise<TaskBodyOutcome> {
         // A node's input is a name → value object (`TaskGraphSpecNode.inputPayload: Record<string, unknown>`).
         // `mergedPayload` below only merges objects, so anything else would be dropped without a word
@@ -3861,13 +3896,32 @@ export class TaskGraphDispatcher implements IShutdownable {
         }
 
         const rawPayload = this.mergedPayload(inputPayload, dependencyOutputs);
+        // `data.*` / `context.*` resolve against the invocation that submitted the graph, exactly as
+        // the in-run walker resolves them and as branch conditions already see them (R3-3). Without
+        // it a mapping like `RecordID: data.ID` reached the action as the literal "data.ID".
+        const context = await this.graphContext(provider, task, prehydrated);
+        const nodeEnvelope = this.nodeEnvelope(task, context, prehydrated);
+        const outcome = await this.runTaskBodyOfKind(task, provider, rawPayload, dependencyOutputs, context, nodeEnvelope, onProgress);
+        return { ...outcome, IsOutputTainted: this.inputTaintOf(nodeEnvelope) || outcome.IsOutputTainted === true };
+    }
+
+    /** {@link runTaskBody} for one step kind, with the node's context and envelope already resolved. */
+    private async runTaskBodyOfKind(
+        task: MJTaskEntity,
+        provider: IMetadataProvider,
+        rawPayload: Record<string, unknown>,
+        dependencyOutputs: Map<string, unknown>,
+        context: GraphContext,
+        nodeEnvelope: { Envelope: TaskSecurityEnvelope | undefined } | { Refusal: string },
+        onProgress?: TaskRunProgressCallback,
+    ): Promise<TaskBodyOutcome> {
         const config = task.ConfigurationObject;
 
         // A loop's own step type decides how many times its body runs; the body itself is dispatched
         // through the very same runners as a one-shot step.
         if (task.StepType === 'ForEach' || task.StepType === 'While') {
             return {
-                ...await this.runLoopTask(task, provider, rawPayload, dependencyOutputs, prehydrated),
+                ...await this.runLoopTask(task, provider, rawPayload, dependencyOutputs, context, nodeEnvelope),
                 PayloadAtStart: rawPayload,
             };
         }
@@ -3876,14 +3930,9 @@ export class TaskGraphDispatcher implements IShutdownable {
         // payload by path and writes its answers back under `decisions`, so it has no mapping of its
         // own. And it carries a PromptID, so the Prompt branch would otherwise take it.
         if (task.StepType === 'Decision') {
-            return { ...await this.runDecisionNode(task, provider, rawPayload, onProgress, prehydrated), PayloadAtStart: rawPayload };
+            return { ...await this.runDecisionNode(task, provider, rawPayload, context, onProgress), PayloadAtStart: rawPayload };
         }
 
-        // `data.*` / `context.*` resolve against the invocation that submitted the graph, exactly as
-        // the in-run walker resolves them and as branch conditions already see them (R3-3). Without
-        // it a mapping like `RecordID: data.ID` reached the action as the literal "data.ID".
-        const context = await this.graphContext(provider, task, prehydrated);
-        const nodeEnvelope = this.nodeEnvelope(task, context, prehydrated?.upstreamTasks ?? []);
         if ('Refusal' in nodeEnvelope) {
             return { ...this.refusedNode(task, nodeEnvelope.Refusal), PayloadAtStart: rawPayload };
         }
@@ -4483,7 +4532,8 @@ export class TaskGraphDispatcher implements IShutdownable {
         provider: IMetadataProvider,
         payload: Record<string, unknown>,
         dependencyOutputs: Map<string, unknown>,
-        prehydrated?: Pick<ClaimedTaskCandidate, 'parentTask' | 'parentMetadata' | 'upstreamTasks'>,
+        graphContext: GraphContext,
+        startEnvelope: { Envelope: TaskSecurityEnvelope | undefined } | { Refusal: string },
     ): Promise<TaskBodyOutcome> {
         const config = task.ConfigurationObject as TaskStepConfiguration | null;
         const op = task.StepType === 'ForEach' ? config?.forEach : config?.while;
@@ -4509,14 +4559,12 @@ export class TaskGraphDispatcher implements IShutdownable {
         // wrote nothing. A ForEach over five items reported five successes and kept item five.
         const bodyOutputMapping = op.action?.outputMapping ?? op.prompt?.outputMapping;
 
-        // Where this step sits in its graph, resolved ONCE rather than per iteration. A loop body is
-        // dispatched exactly like a one-shot step and needs the same two things: the run that
-        // submitted the graph (so a spawned run gets a ParentRunID and is visible to the tree and to
-        // cost), and the continuation depth (so the recursion cap still applies). Omitting them made
-        // loop bodies second-class in every dimension — and reopened the unbounded-recursion hole
-        // THROUGH loops, since each spawned run restarted the chain at zero.
-        const graphContext = await this.graphContext(provider, task, prehydrated);
-        const startEnvelope = this.nodeEnvelope(task, graphContext, prehydrated?.upstreamTasks ?? []);
+        // Where this step sits in its graph (`graphContext`), resolved ONCE by the caller rather than
+        // per iteration. A loop body is dispatched exactly like a one-shot step and needs the same two
+        // things: the run that submitted the graph (so a spawned run gets a ParentRunID and is visible
+        // to the tree and to cost), and the continuation depth (so the recursion cap still applies).
+        // Omitting them made loop bodies second-class in every dimension — and reopened the
+        // unbounded-recursion hole THROUGH loops, since each spawned run restarted the chain at zero.
         if ('Refusal' in startEnvelope) {
             return this.refusedNode(task, startEnvelope.Refusal);
         }
@@ -5156,8 +5204,8 @@ export class TaskGraphDispatcher implements IShutdownable {
         task: MJTaskEntity,
         provider: IMetadataProvider,
         payload: Record<string, unknown>,
+        context: GraphContext,
         onProgress?: TaskRunProgressCallback,
-        prehydrated?: Pick<ClaimedTaskCandidate, 'parentTask' | 'parentMetadata'>,
     ): Promise<TaskBodyOutcome> {
         const config = ReadDecisionStepConfiguration(task.Configuration);
         if (!config) return this.decisionNotAsked(task, payload, 'it has no decision settings, so there is nothing to ask');
@@ -5172,7 +5220,6 @@ export class TaskGraphDispatcher implements IShutdownable {
         const conflict = DecisionsPayloadConflict(payload);
         if (conflict) return notAsked(conflict);
 
-        const context = await this.graphContext(provider, task, prehydrated);
         if ('Refusal' in context.Security) {
             return this.refusedNode(task, context.Security.Refusal);
         }

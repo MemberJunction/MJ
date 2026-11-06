@@ -7,17 +7,20 @@ import type { IMetadataProvider, TenantContext, UserInfo } from '@memberjunction
 import type { MJTaskEntity } from '@memberjunction/core-entities';
 import {
     SerializeTaskSecurityEnvelope,
+    TAINTED_EGRESS_BLOCKED,
     TASK_SECURITY_ENVELOPE_VERSION,
+    TaskNode,
     type TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
 import { TaskGraphDispatcher, type ClaimedTaskCandidate } from '../TaskGraphDispatcher';
-import { BuildTaskGraphParentInputPayload, ParseTaskGraphParentMetadata } from '../TaskGraphService';
+import { BuildStepConfiguration, BuildTaskGraphParentInputPayload, ParseTaskGraphParentMetadata } from '../TaskGraphService';
 import type {
     ProviderFactory,
     TaskActionRunParams,
     TaskActionRunResult,
     TaskActionRunner,
     TaskAgentRunner,
+    TaskDecisionRunner,
     TaskPromptRunner,
 } from '../types';
 
@@ -85,7 +88,7 @@ function makeParent(env?: TaskSecurityEnvelope): MJTaskEntity {
     return row as unknown as MJTaskEntity;
 }
 
-type Recorded = { Status: string; ErrorMessage?: string; Configuration?: string };
+type Recorded = { Status: string; ErrorMessage?: string; Configuration?: string; OutputPayload?: string | null };
 
 type Harness = {
     run: (task: MJTaskEntity, extra?: Partial<ClaimedTaskCandidate>) => Promise<Recorded>;
@@ -93,11 +96,12 @@ type Harness = {
 };
 
 function harness(opts: {
-    actionResult?: Partial<TaskActionRunResult>;
+    actionResult?: Partial<TaskActionRunResult> | ((p: TaskActionRunParams) => Partial<TaskActionRunResult>);
     enforces?: boolean;
     providerFactory?: ProviderFactory;
     agentRunner?: TaskAgentRunner;
     promptRunner?: TaskPromptRunner;
+    decisionRunner?: TaskDecisionRunner;
     parent?: MJTaskEntity;
 }): Harness {
     const actionCalls: TaskActionRunParams[] = [];
@@ -105,7 +109,8 @@ function harness(opts: {
         EnforcesSecurityEnvelope: opts.enforces ?? true,
         RunActionForTask: vi.fn(async (p: TaskActionRunParams) => {
             actionCalls.push(p);
-            return { Success: true, Output: { ok: true }, ...opts.actionResult };
+            const extra = typeof opts.actionResult === 'function' ? opts.actionResult(p) : opts.actionResult;
+            return { Success: true, Output: { ok: true }, ...extra };
         }),
     };
     const dispatcher = new TaskGraphDispatcher(
@@ -117,6 +122,7 @@ function harness(opts: {
         undefined,
         actionRunner,
         opts.promptRunner,
+        opts.decisionRunner,
     );
     const completeClaimed = vi.fn().mockResolvedValue(true);
     (dispatcher as unknown as { claims: { CompleteClaimed: typeof completeClaimed } }).claims.CompleteClaimed = completeClaimed;
@@ -301,6 +307,77 @@ describe('TaskGraphDispatcher security envelope (WS-4.1)', () => {
                 SecurityEnvelope: SerializeTaskSecurityEnvelope(tainted),
             }));
             expect(recordedTaint(outcome)).toBe(true);
+        });
+    });
+
+    describe('a Decision between an untrusted fetch and an egress action (B2)', () => {
+        const FETCH_ACTION = '77777777-7777-4777-8777-777777777777';
+        const SEND_EMAIL = '88888888-8888-4888-8888-888888888888';
+        const DECISION_PROMPT = '99999999-9999-4999-8999-999999999999';
+        const DECISION_CONFIGURATION = JSON.stringify(BuildStepConfiguration(TaskNode.Decision(
+            { tempId: 'route', name: 'Route', description: '', dependsOn: [] },
+            { state: 'payload.page', questions: { urgent: { kind: 'Likelihood', instructions: 'Is it urgent?' } } },
+        )));
+        const decisionRunner: TaskDecisionRunner = {
+            RunDecisionForTask: async () => ({ Success: true, Answers: { urgent: { probability: 0.9 } } }),
+        };
+
+        /** The action runner contract: `Send Email` is `disallowWhenTainted`, so a tainted node is refused before it runs. */
+        function runnerResult(p: TaskActionRunParams): Partial<TaskActionRunResult> {
+            if (p.ActionID === FETCH_ACTION) return { Output: { page: 'untrusted text' }, IsOutputTainted: true };
+            if (p.SecurityEnvelope?.IsRunTainted) return { Success: false, ResultCode: TAINTED_EGRESS_BLOCKED, ErrorMessage: 'refused' };
+            return { Output: { sent: true } };
+        }
+
+        /** A row that ran, as the dispatcher recorded it. */
+        function ranRow(id: string, fields: Parameters<typeof makeTask>[0], recorded: Recorded): MJTaskEntity {
+            return makeTask({ ...fields, ID: id, Status: 'Complete', Configuration: recorded.Configuration ?? null });
+        }
+
+        const decisionFields = { ID: 'decide', StepType: 'Decision' as const, ActionID: null, PromptID: DECISION_PROMPT, Configuration: DECISION_CONFIGURATION };
+
+        it('refuses Send Email behind a Decision that read the fetched page, and records the Decision tainted', async () => {
+            const h = harness({ actionResult: runnerResult, decisionRunner });
+            const fetch = ranRow('fetch', { ID: 'fetch', ActionID: FETCH_ACTION }, await h.run(makeTask({ ID: 'fetch', ActionID: FETCH_ACTION })));
+            const decided = await h.run(makeTask(decisionFields), {
+                upstreamTasks: [fetch], dependencyOutputs: new Map([['fetch', { page: 'untrusted text' }]]),
+            });
+            expect(decided.Status).toBe('Complete');
+            expect(recordedTaint(decided)).toBe(true);
+
+            const decision = ranRow('decide', decisionFields, decided);
+            const lookup = (id: string) => ({ fetch: [], decide: [fetch] } as Record<string, MJTaskEntity[]>)[id];
+            const send = await h.run(makeTask({ ID: 'send', ActionID: SEND_EMAIL }), { upstreamTasks: [decision], upstreamOf: lookup });
+
+            const sendCall = h.actionCalls.find((c) => c.ActionID === SEND_EMAIL);
+            expect(sendCall?.SecurityEnvelope?.IsRunTainted).toBe(true);
+            expect(send.Status).toBe('Failed');
+        });
+
+        it('still refuses Send Email behind a Decision that recorded no taint (written before it did)', async () => {
+            const h = harness({ actionResult: runnerResult });
+            const fetch = makeTask({ ID: 'fetch', Status: 'Complete', ActionID: FETCH_ACTION, Configuration: JSON.stringify({ runtime: { isOutputTainted: true } }) });
+            const silentDecision = makeTask({ ...decisionFields, Status: 'Complete' });
+            const lookup = (id: string) => ({ fetch: [], decide: [fetch] } as Record<string, MJTaskEntity[]>)[id];
+            const send = await h.run(makeTask({ ID: 'send', ActionID: SEND_EMAIL }), { upstreamTasks: [silentDecision], upstreamOf: lookup });
+            expect(h.actionCalls[0].SecurityEnvelope?.IsRunTainted).toBe(true);
+            expect(send.Status).toBe('Failed');
+        });
+
+        it('runs Send Email when a completed Human step reviewed the fetch before the Decision', async () => {
+            const h = harness({ actionResult: runnerResult, decisionRunner });
+            const fetch = makeTask({ ID: 'fetch', Status: 'Complete', ActionID: FETCH_ACTION, Configuration: JSON.stringify({ runtime: { isOutputTainted: true } }) });
+            const review = makeTask({ ID: 'review', Status: 'Complete', StepType: 'Human', ActionID: null, UserID: TEST_USER.ID });
+            const lookup = (id: string) => ({ fetch: [], review: [fetch] } as Record<string, MJTaskEntity[]>)[id];
+            const decided = await h.run(makeTask(decisionFields), { upstreamTasks: [review], upstreamOf: lookup });
+            expect(recordedTaint(decided)).toBe(false);
+
+            const decision = ranRow('decide', decisionFields, decided);
+            const send = await h.run(makeTask({ ID: 'send', ActionID: SEND_EMAIL }), {
+                upstreamTasks: [decision], upstreamOf: (id) => ({ ...{ fetch: [], review: [fetch], decide: [review] } } as Record<string, MJTaskEntity[]>)[id],
+            });
+            expect(h.actionCalls[0].SecurityEnvelope?.IsRunTainted).toBeFalsy();
+            expect(send.Status).toBe('Complete');
         });
     });
 });
