@@ -4224,9 +4224,10 @@ export class TaskGraphDispatcher implements IShutdownable {
             return { Graph: graph, Pending: false };
         }
         const forwardTasks = [...graph.entityById.values()].filter((t) => !IsCompensationTask(t));
-        await this.skipRemainingForwardTasks(provider, graph, forwardTasks);
-        // A forward step still running may yet complete — and then needs compensating too.
-        if (forwardTasks.some((t) => t.Status === 'In Progress')) {
+        const snapshotHolds = await this.skipRemainingForwardTasks(provider, graph, forwardTasks);
+        // A forward step still running may yet complete — and then needs compensating too. One claimed
+        // elsewhere since this pass loaded the graph still reads Pending here; the next pass sees it.
+        if (!snapshotHolds || forwardTasks.some((t) => t.Status === 'In Progress')) {
             return { Graph: graph, Pending: true };
         }
 
@@ -4283,19 +4284,28 @@ export class TaskGraphDispatcher implements IShutdownable {
      * since running new work while undoing old work is what the policy exists to prevent. Guarded on
      * `Pending` in the statement, so a step another dispatcher claimed meanwhile is left to finish (and
      * is then compensated), never overwritten.
+     *
+     * @returns false when a skip did not land: that step was claimed elsewhere after this pass loaded
+     *          the graph (or the write failed), so this snapshot no longer says what is running, and the
+     *          saga must not plan from it — a step about to complete would be compensated out of reverse
+     *          order, or after the saga reported itself finished
      */
     private async skipRemainingForwardTasks(
         provider: IMetadataProvider,
         graph: GraphState,
         forwardTasks: readonly MJTaskEntity[],
-    ): Promise<void> {
+    ): Promise<boolean> {
         const pending = forwardTasks.filter((t) => t.Status === 'Pending');
-        if (pending.length === 0) return;
+        if (pending.length === 0) return true;
         const typeID = await this.workflowTaskTypeID(provider);
-        if (!typeID) return;
+        if (!typeID) return true;
         const nodeByID = IndexByUUID(graph.nodes, (n) => n.id);
+        let allSkipped = true;
         for (const task of pending) {
-            if (!(await this.claims.TrySkipPending(provider, task.ID, typeID, this.contextUser))) continue;
+            if (!(await this.claims.TrySkipPending(provider, task.ID, typeID, this.contextUser))) {
+                allSkipped = false;
+                continue;
+            }
             task.Status = 'Skipped';
             const node = nodeByID.Get(task.ID);
             if (node) node.status = 'Skipped';
@@ -4303,6 +4313,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         }
         await this.withdrawOpenRequests(provider, pending.filter((t) => t.Status === 'Skipped').map((t) => t.ID),
             'The workflow is rolling back, so this step is no longer needed.');
+        return allSkipped;
     }
 
     /**

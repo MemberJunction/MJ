@@ -147,7 +147,11 @@ function graphOf(db: SagaDb, parent: MJTaskEntity) {
 
 type Coordinator = { pass: () => Promise<void>; skips: string[]; sagaStates: string[] };
 
-function coordinator(db: SagaDb, parent: MJTaskEntity = parentRow()): Coordinator {
+/**
+ * @param claimedElsewhere forward steps another dispatcher claims after this pass loaded the graph: their
+ *        guarded skip finds them `In Progress` and refuses
+ */
+function coordinator(db: SagaDb, parent: MJTaskEntity = parentRow(), claimedElsewhere: string[] = []): Coordinator {
     const provider = { GetEntityObject: vi.fn(async () => db.Entity()) } as unknown as IMetadataProvider;
     const dispatcher = new TaskGraphDispatcher(
         { CreateProvider: vi.fn().mockResolvedValue(provider) },
@@ -164,6 +168,7 @@ function coordinator(db: SagaDb, parent: MJTaskEntity = parentRow()): Coordinato
     };
     internals.claims.TrySkipPending = vi.fn(async (_p: IMetadataProvider, id: string) => {
         const row = db.Rows.get(id);
+        if (row && claimedElsewhere.includes(id)) row.Status = 'In Progress';
         if (row?.Status !== 'Pending') return false;
         row.Status = 'Skipped';
         skips.push(id);
@@ -405,6 +410,26 @@ describe('TaskGraphDispatcher saga coordinator', () => {
         expect(c.sagaStates.at(-1)).toBe('CompensationEscalated');
     });
 
+    it('waits when a forward step is claimed elsewhere just before its skip, then undoes it first (M4)', async () => {
+        checkoutGraph(db);
+        // T-D runs after T-B, so it is undone before T-B — if the saga knows it ran.
+        const notify = db.Rows.get('T-D')!;
+        notify.ActionID = RESERVE;
+        db.Deps.push({ TaskID: 'T-D', DependsOnTaskID: 'T-B' });
+        const c = coordinator(db, parentRow(), ['T-D']);
+
+        await c.pass();
+        expect(compensationOf(db, 'T-B')).toBeUndefined();
+        expect(c.sagaStates).not.toContain('Compensated');
+
+        notify.Status = 'Complete';
+        notify.CompletedAt = new Date('2026-11-02T10:05:00Z');
+        notify.OutputPayload = JSON.stringify({ reservationId: 'R-2' });
+        await c.pass();
+        expect(compensationOf(db, 'T-D')?.ActionID).toBe(RELEASE);
+        expect(compensationOf(db, 'T-B')).toBeUndefined();
+    });
+
     it('does nothing under the default Halt policy', async () => {
         checkoutGraph(db);
         const parent = parentRow();
@@ -442,7 +467,12 @@ describe('TaskGraphDispatcher saga coordinator', () => {
             loadGraphState: ReturnType<typeof vi.fn>;
             propagateAndRollup: (p: IMetadataProvider, ids: string[]) => Promise<Array<{ parentTaskID: string }>>;
         };
-        internals.claims.TrySkipPending = vi.fn(async () => false);
+        internals.claims.TrySkipPending = vi.fn(async (_p: IMetadataProvider, id: string) => {
+            const row = db.Rows.get(id);
+            if (row?.Status !== 'Pending') return false;
+            row.Status = 'Skipped';
+            return true;
+        });
         internals.claims.TryWriteDebugFields = vi.fn(async () => true);
         internals.claims.TryUpdateParentProgress = vi.fn(async () => true);
         internals.debugStateByGraph.set(PARENT_ID, {});
