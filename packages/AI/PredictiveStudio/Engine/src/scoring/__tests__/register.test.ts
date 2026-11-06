@@ -111,4 +111,28 @@ describe('registerMLScoringProcessor', () => {
     });
     expect(proc).toBeInstanceOf(MLModelInferenceProcessor);
   });
+
+  it('wires ChallengerConfigurationObject from context.RecordProcess into the resolved MLModelInferenceProcessor (D1)', () => {
+    RegisterMLScoringProcessor(deps);
+    const challengerConfig = {
+      Enabled: true,
+      SampleRate: 0.5,
+      WorkType: 'ML Model' as const,
+      ChallengerModelID: 'challenger-model-99',
+      MaxLatencyMs: 250,
+    };
+    const proc = RecordProcessorRegistry.Instance.Resolve({
+      WorkType: ML_INFERENCE_WORK_TYPE,
+      RecordProcessID: 'rp-shadow-1',
+      Configuration: JSON.stringify({ modelId: 'champion-model-1' }),
+      RecordProcess: {
+        ID: 'rp-shadow-1',
+        ChallengerConfigurationObject: challengerConfig,
+      },
+    }) as MLModelInferenceProcessor;
+
+    expect(proc).toBeInstanceOf(MLModelInferenceProcessor);
+    expect(Reflect.get(proc, 'challengerConfig')).toEqual(challengerConfig);
+    expect(Reflect.get(proc, 'shadowCoordinator')).toBeDefined();
+  });
 });

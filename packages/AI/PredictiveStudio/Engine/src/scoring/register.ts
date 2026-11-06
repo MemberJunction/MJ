@@ -21,6 +21,7 @@
  */
 
 import { MJGlobal, RegisterClass, SafeJSONParse } from '@memberjunction/global';
+import type { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import {
   RecordProcessorRegistry,
   type IRecordProcessor,
@@ -33,7 +34,12 @@ import {
   ML_INFERENCE_WORK_TYPE_ALIAS,
 } from './ml-model-inference-processor';
 import type { IModelAutoTrainer, MLAutoTrainConfig, MLInferenceDeps, MLModelInferenceProcessorOptions } from './types';
-import type { IRecordProcessChallengerConfig, ShadowScoringCoordinator } from './shadow-scoring';
+import {
+  FeatureValueShadowAuditSink,
+  MLModelChallengerScoreRunner,
+  ShadowScoringCoordinator,
+  type IRecordProcessChallengerConfig,
+} from './shadow-scoring';
 import type { DatedSourceSpec } from '../feature-assembly';
 
 // Register the alias key too, so both `'ML Model'` (the human-readable work-type)
@@ -117,7 +123,7 @@ export interface MLScoringConfiguration {
   datedSources?: DatedSourceSpec[];
   /** Opt-in train-if-untrained (see {@link MLAutoTrainConfig}). Off unless declared. */
   autoTrain?: MLAutoTrainConfig;
-  /** Optional WS-4.4 shadow challenger configuration (`ChallengerConfiguration`). */
+  /** Legacy fallback for WS-4.4 shadow challenger configuration when not set on `RecordProcess.ChallengerConfigurationObject`. */
   challengerConfiguration?: IRecordProcessChallengerConfig;
 }
 
@@ -127,20 +133,29 @@ export interface MLScoringConfiguration {
  * so `RecordProcessExecutor.buildProcessor()` resolves it automatically — WITHOUT the substrate
  * depending on Predictive Studio. The registered factory closes over the injected {@link MLInferenceDeps}
  * (model loader / artifact loader / sidecar) and reads the per-run {@link MLScoringConfiguration}
- * (the `modelId` etc.) off the Record Process's `Configuration`.
+ * (the `modelId` etc.) off the Record Process's `Configuration` and `ChallengerConfigurationObject`
+ * off `context.RecordProcess`.
  *
  * Idempotent — calling more than once simply re-registers (last-wins). Call from the engine's
  * startup/bootstrap with the production deps.
  *
  * @param deps the injected runtime seams the ML scorer needs (model loader, artifact loader, sidecar)
  * @param autoTrainer optional auto-trainer for train-if-untrained processes
- * @param shadowCoordinator optional shadow scoring coordinator for challenger runs
+ * @param shadowCoordinator optional shadow scoring coordinator for challenger runs; defaults to a
+ *   production coordinator wired with {@link MLModelChallengerScoreRunner} and {@link FeatureValueShadowAuditSink}
  */
 export function RegisterMLScoringProcessor(
   deps: MLInferenceDeps,
   autoTrainer?: IModelAutoTrainer,
   shadowCoordinator?: ShadowScoringCoordinator,
 ): void {
+  const effectiveShadowCoordinator =
+    shadowCoordinator ??
+    new ShadowScoringCoordinator({
+      ChallengerRunner: new MLModelChallengerScoreRunner(deps),
+      AuditSink: new FeatureValueShadowAuditSink(),
+    });
+
   const factory = (context: RecordProcessorBuildContext): IRecordProcessor => {
     const config = context.Configuration ? SafeJSONParse<MLScoringConfiguration>(context.Configuration) : undefined;
     const autoTrain = config?.autoTrain?.pipelineId ? config.autoTrain : undefined;
@@ -149,6 +164,14 @@ export function RegisterMLScoringProcessor(
         `Record Process '${context.RecordProcessName ?? context.RecordProcessID ?? ''}': WorkType=${context.WorkType} requires a Configuration with a 'modelId' (or an 'autoTrain.pipelineId')`,
       );
     }
+    const rpEntity = context.RecordProcess as Partial<MJRecordProcessEntity> | undefined;
+    const challengerFromObject = rpEntity?.ChallengerConfigurationObject ?? undefined;
+    const challengerFromJson =
+      !challengerFromObject && typeof rpEntity?.ChallengerConfiguration === 'string'
+        ? (SafeJSONParse<IRecordProcessChallengerConfig>(rpEntity.ChallengerConfiguration) ?? undefined)
+        : undefined;
+    const challengerConfig = challengerFromObject ?? challengerFromJson ?? config.challengerConfiguration;
+
     const options: MLModelInferenceProcessorOptions = {
       modelId: config.modelId ?? '',
       deps,
@@ -156,8 +179,9 @@ export function RegisterMLScoringProcessor(
       datedSources: config.datedSources,
       autoTrain,
       autoTrainer: autoTrain ? autoTrainer : undefined,
-      challengerConfig: config.challengerConfiguration,
-      shadowCoordinator,
+      recordProcessId: context.RecordProcessID ?? rpEntity?.ID,
+      challengerConfig,
+      shadowCoordinator: effectiveShadowCoordinator,
     };
     // Resolve through the ClassFactory so a higher-priority subclass registration (if any) wins.
     return ResolveMLInferenceProcessor(context.WorkType, options) ?? new MLModelInferenceProcessor(options);

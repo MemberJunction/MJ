@@ -106,6 +106,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
   private readonly primaryKeyField: string;
   private readonly datedSources?: DatedSourceSpec[];
   private readonly assembler: FeatureAssemblyExecutor;
+  private readonly recordProcessId?: string;
   private readonly challengerConfig?: IRecordProcessChallengerConfig;
   private readonly shadowCoordinator?: ShadowScoringCoordinator;
 
@@ -125,9 +126,21 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     this.datedSources = options.datedSources;
     this.autoTrain = options.autoTrain;
     this.autoTrainer = options.autoTrainer;
+    this.recordProcessId = options.recordProcessId;
     this.challengerConfig = options.challengerConfig;
     this.shadowCoordinator = options.shadowCoordinator;
     this.assembler = assembler ?? new FeatureAssemblyExecutor();
+  }
+
+  /**
+   * Convert a row-major {@link MatrixData} into schema-ordered feature row objects.
+   * Exposed as a static method so callers and unit tests can spy on conversion counts.
+   */
+  public static MatrixToFeatureRows(
+    matrix: MatrixData,
+    featureSchema: FeatureSchemaEntry[],
+  ): Array<Record<string, string | number | boolean | null>> {
+    return MatrixToFeatureRows(matrix, featureSchema);
   }
 
   /**
@@ -160,7 +173,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       {
         pipelineId: this.autoTrain.pipelineId,
         currentModelId: this.modelId || null,
-        recordProcessId: context.RecordProcessID ?? null,
+        recordProcessId: context.RecordProcessID ?? this.recordProcessId ?? null,
         binding: this.autoTrain.binding,
       },
       context.ContextUser,
@@ -195,14 +208,15 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       const model = await this.ensureModel(context);
       const row = this.recordToPlain(record);
       const assembly = await this.assembleFeatures(model, [row], context);
-      const response = await this.callSidecar(model, assembly);
+      const featureRows = MLModelInferenceProcessor.MatrixToFeatureRows(assembly.matrix, model.featureSchema);
+      const response = await this.callSidecar(model, featureRows);
       const prediction = response.predictions[0];
       if (!prediction) {
         return { Status: 'Failed', ErrorMessage: 'Sidecar returned no prediction for the record' };
       }
       const championLatencyMs = Date.now() - startedAt;
       const payload = this.toPayload(model, prediction);
-      this.dispatchShadowIfConfigured(record, model, assembly, 0, prediction, championLatencyMs, context);
+      this.dispatchShadowIfConfigured(record, model, featureRows[0] ?? {}, prediction, championLatencyMs, context);
       return { Status: 'Succeeded', ResultPayload: payload };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -231,14 +245,17 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       const model = await this.ensureModel(context);
       const rows = records.map((r) => this.recordToPlain(r));
       const assembly = await this.assembleFeatures(model, rows, context);
-      const response = await this.callSidecar(model, assembly);
-      const championLatencyMs = Date.now() - startedAt;
+      const featureRows = MLModelInferenceProcessor.MatrixToFeatureRows(assembly.matrix, model.featureSchema);
+      const response = await this.callSidecar(model, featureRows);
+      // Amortize batch wall-clock latency across the batch size so per-record champion latency
+      // is comparable to single-record challenger latency for P95 latency-ratio drift checks.
+      const perRecordLatencyMs = (Date.now() - startedAt) / Math.max(1, records.length);
       return records.map((rec, i) => {
         const prediction = response.predictions[i];
         if (!prediction) {
           return { Status: 'Failed' as const, ErrorMessage: 'Sidecar returned no prediction for the record' };
         }
-        this.dispatchShadowIfConfigured(rec, model, assembly, i, prediction, championLatencyMs, context);
+        this.dispatchShadowIfConfigured(rec, model, featureRows[i] ?? {}, prediction, perRecordLatencyMs, context);
         return { Status: 'Succeeded' as const, ResultPayload: this.toPayload(model, prediction) };
       });
     } catch (err) {
@@ -251,8 +268,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
   private dispatchShadowIfConfigured(
     record: RecordRef,
     model: LoadedModel,
-    assembly: FeatureAssemblyResult,
-    rowIndex: number,
+    featureRow: Readonly<Record<string, string | number | boolean | null>>,
     prediction: Prediction,
     championLatencyMs: number,
     context: RecordProcessorContext,
@@ -261,14 +277,18 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       return;
     }
     try {
-      const featureRows = MatrixToFeatureRows(assembly.matrix, model.featureSchema);
-      const featureRow = featureRows[rowIndex] ?? {};
+      // Sample BEFORE cloning the feature row or constructing the envelope (D3).
+      if (!this.shadowCoordinator.ShouldSample(this.challengerConfig)) {
+        return;
+      }
       this.shadowCoordinator.DispatchShadowScore(
         {
-          RecordProcessID: context.RecordProcessID,
+          RecordProcessID: context.RecordProcessID ?? this.recordProcessId,
+          ProcessRunID: context.ProcessRunID ?? null,
           EntityID: record.EntityID,
           EntityName: model.targetEntityName,
           RecordID: record.RecordID,
+          FeatureName: model.targetVariable || 'Prediction',
           ChampionModelID: model.modelId,
           ChallengerConfig: this.challengerConfig,
           FrozenFeatures: Object.freeze({ ...featureRow }),
@@ -279,6 +299,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
         },
         context.ContextUser,
         context.Provider,
+        { AlreadySampled: true },
       );
     } catch (shadowErr: unknown) {
       const msg = shadowErr instanceof Error ? shadowErr.message : String(shadowErr);
@@ -491,12 +512,15 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
    * feature-name → value objects `/predict` expects, using the MODEL's frozen
    * feature schema order (the inference input contract).
    */
-  private async callSidecar(model: LoadedModel, assembly: FeatureAssemblyResult): Promise<PredictResponse> {
+  private async callSidecar(
+    model: LoadedModel,
+    featureRows: Array<Record<string, string | number | boolean | null>>,
+  ): Promise<PredictResponse> {
     const req: PredictRequest = {
       artifact_b64: model.artifactB64,
       fitted_preprocessing: model.fittedPreprocessing,
       feature_schema: model.featureSchema,
-      rows: MatrixToFeatureRows(assembly.matrix, model.featureSchema),
+      rows: featureRows,
     };
     return this.deps.sidecar.predict(req);
   }

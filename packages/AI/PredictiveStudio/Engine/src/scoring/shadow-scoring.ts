@@ -11,37 +11,48 @@
  *    and writes only to the feature/prediction audit log with `Role: 'Challenger'`, never mutating
  *    target business entity records.
  * 3. **Non-Blocking Dispatch**: Sampled invocations (`SampleRate` in `[0, 1]`) are dispatched
- *    asynchronously via `IShadowWorkQueuePublisher` (or executed in a bounded background task with
- *    `MaxLatencyMs` timeout enforcement).
+ *    asynchronously on a deferred event-loop tick with an in-flight concurrency cap and
+ *    `MaxLatencyMs` timeout + `AbortSignal` enforcement.
  */
 
-import { LogError, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import type { MJRecordProcessEntity } from '@memberjunction/core-entities';
+import { LogError, Metadata, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import type {
+  MJFeatureValueEntity,
+  MJMLModelEntity,
+  MJRecordProcessEntity_IRecordProcessChallengerConfig,
+} from '@memberjunction/core-entities';
+import type {
+  FeatureSchemaEntry,
+  FittedPreprocessing,
+  PredictRequest,
+  ProblemType,
+} from '@memberjunction/predictive-studio-core';
+import {
+  ModelArtifactMissingMessage,
+  ModelHasTrainedArtifact,
+  ModelNeedsTrainingError,
+  ModelNeedsTrainingMessage,
+  ModelNotScorableError,
+} from './model-readiness';
+import type { MLInferenceDeps } from './types';
 
 /**
- * Declarative shadow challenger configuration stored on `MJ: Record Processes`
- * (`ChallengerConfiguration` / `Configuration.challengerConfiguration`).
+ * Declarative shadow challenger configuration stored on `MJ: Record Processes.ChallengerConfiguration`
+ * (generated as `MJRecordProcessEntity_IRecordProcessChallengerConfig` and accessed via
+ * `MJRecordProcessEntity.ChallengerConfigurationObject`).
  */
-export interface IRecordProcessChallengerConfig {
-  readonly Enabled: boolean;
-  /** Fraction of live invocations (0.0 to 1.0) mirrored to the challenger. */
-  readonly SampleRate: number;
-  readonly WorkType: MJRecordProcessEntity['WorkType'];
-  readonly ChallengerModelID?: string;
-  readonly ChallengerPromptID?: string;
-  readonly ChallengerEndpointConfig?: Readonly<Record<string, string | number | boolean>>;
-  /** Timeout budget in ms; never blocks champion write path. */
-  readonly MaxLatencyMs: number;
-}
+export type IRecordProcessChallengerConfig = MJRecordProcessEntity_IRecordProcessChallengerConfig;
 
 /**
  * Frozen snapshot dispatched to the shadow challenger queue/worker.
  */
 export interface ShadowScoreEnvelope {
   readonly RecordProcessID?: string;
+  readonly ProcessRunID?: string | null;
   readonly EntityID?: string;
   readonly EntityName?: string;
   readonly RecordID: string;
+  readonly FeatureName?: string;
   readonly ChampionModelID?: string;
   readonly ChallengerConfig: IRecordProcessChallengerConfig;
   /** Exact frozen feature vector / row snapshot assembled for the champion. */
@@ -71,12 +82,15 @@ export interface ShadowFeatureValueAuditRecord {
   readonly EntityID?: string;
   readonly EntityName?: string;
   readonly RecordProcessID?: string;
+  readonly ProcessRunID?: string | null;
+  readonly FeatureName?: string;
   readonly Role: 'Champion' | 'Challenger';
   readonly ModelID?: string;
   readonly PromptID?: string;
   readonly NumericValue?: number | null;
   readonly TextValue?: string | null;
   readonly Confidence?: number | null;
+  readonly Reasoning?: string | null;
   readonly LatencyMs?: number;
   readonly TimedOut?: boolean;
   readonly ErrorMessage?: string;
@@ -86,6 +100,14 @@ export interface ShadowFeatureValueAuditRecord {
 
 /**
  * Seam for publishing shadow scoring envelopes onto `WorkQueue` (`WorkQueueEngine.Instance.Publish(...)`).
+ *
+ * ponytail: `WorkQueueEngine.Instance.Publish(topic, requests)` requires a provisioned `MJ: Work Queue Topics`
+ * row, transport binding, and a dedicated background worker subscription that consumes the topic and calls
+ * `ShadowScoringCoordinator.ExecuteChallengerEnvelope`. Because core metadata does not seed a shadow-scoring
+ * queue topic or worker daemon, `ShadowScoringCoordinator` defaults to deferred in-process execution on a
+ * background tick (`ExecuteInProcessWhenPublished` defaults to `true` when no `WorkQueuePublisher` is supplied,
+ * and `false` when one is supplied). Deployments with a dedicated queue consumer can inject an
+ * `IShadowWorkQueuePublisher` implementation here without changing processor code.
  */
 export interface IShadowWorkQueuePublisher {
   PublishShadowItem(
@@ -103,6 +125,7 @@ export interface IChallengerScoreRunner {
     envelope: ShadowScoreEnvelope,
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
+    signal?: AbortSignal,
   ): Promise<ChallengerScoreOutput>;
 }
 
@@ -122,18 +145,38 @@ export interface IShadowScoreAuditSink {
  * Options for {@link ShadowScoringCoordinator}.
  */
 export interface ShadowScoringCoordinatorOptions {
-  readonly workQueuePublisher?: IShadowWorkQueuePublisher;
-  readonly challengerRunner?: IChallengerScoreRunner;
-  readonly auditSink?: IShadowScoreAuditSink;
+  readonly WorkQueuePublisher?: IShadowWorkQueuePublisher;
+  readonly ChallengerRunner?: IChallengerScoreRunner;
+  readonly AuditSink?: IShadowScoreAuditSink;
   /**
-   * Whether to also run `ExecuteChallengerEnvelope` in-process after publishing to `workQueuePublisher`.
-   * Defaults to `true` when `challengerRunner` or `auditSink` is supplied without an external consumer;
-   * set to `false` when a dedicated `WorkQueue` worker calls `ExecuteChallengerEnvelope`.
+   * Whether to also run `ExecuteChallengerEnvelope` in-process after publishing to `WorkQueuePublisher`.
+   * Defaults to `false` when `WorkQueuePublisher` is supplied (so the external worker is the sole consumer
+   * and the challenger is never double-run), and `true` when `WorkQueuePublisher` is omitted.
    */
-  readonly executeInProcessWhenPublished?: boolean;
+  readonly ExecuteInProcessWhenPublished?: boolean;
   /** Injectable RNG returning `[0, 1)` for deterministic sampling in tests. */
-  readonly rng?: () => number;
+  readonly Rng?: () => number;
+  /**
+   * Maximum number of concurrent in-flight shadow tasks allowed at once. Additional sampled envelopes
+   * arriving while at capacity are dropped (and counted in {@link ShadowScoringCoordinator.DroppedCount})
+   * so a slow challenger can never cause unbounded memory growth. Defaults to `64`.
+   */
+  readonly MaxInFlight?: number;
 }
+
+/**
+ * Optional per-dispatch flags for {@link ShadowScoringCoordinator.DispatchShadowScore}.
+ */
+export interface DispatchShadowScoreOptions {
+  /**
+   * Set to `true` when the caller has already verified {@link ShadowScoringCoordinator.ShouldSample}
+   * before constructing the envelope, avoiding a second RNG draw.
+   */
+  readonly AlreadySampled?: boolean;
+}
+
+const DEFAULT_MAX_IN_FLIGHT = 64;
+const DEFAULT_MAX_LATENCY_MS = 5000;
 
 /**
  * Coordinates sampling, non-blocking `WorkQueue` publication, bounded-timeout challenger execution,
@@ -145,24 +188,50 @@ export class ShadowScoringCoordinator {
   private readonly auditSink?: IShadowScoreAuditSink;
   private readonly executeInProcessWhenPublished: boolean;
   private readonly rng: () => number;
+  private readonly maxInFlight: number;
   private readonly inFlightTasks = new Set<Promise<void>>();
+  private droppedCount = 0;
 
   constructor(options: ShadowScoringCoordinatorOptions = {}) {
-    this.workQueuePublisher = options.workQueuePublisher;
-    this.challengerRunner = options.challengerRunner;
-    this.auditSink = options.auditSink;
-    this.executeInProcessWhenPublished = options.executeInProcessWhenPublished ?? true;
-    this.rng = options.rng ?? (() => Math.random());
+    this.workQueuePublisher = options.WorkQueuePublisher;
+    this.challengerRunner = options.ChallengerRunner;
+    this.auditSink = options.AuditSink;
+    this.executeInProcessWhenPublished =
+      options.ExecuteInProcessWhenPublished ?? (options.WorkQueuePublisher === undefined);
+    this.rng = options.Rng ?? (() => Math.random());
+    this.maxInFlight =
+      typeof options.MaxInFlight === 'number' && Number.isFinite(options.MaxInFlight) && options.MaxInFlight >= 1
+        ? Math.floor(options.MaxInFlight)
+        : DEFAULT_MAX_IN_FLIGHT;
+  }
+
+  /** Number of currently active background shadow tasks. */
+  public get InFlightCount(): number {
+    return this.inFlightTasks.size;
+  }
+
+  /** Number of sampled shadow envelopes dropped because `InFlightCount >= MaxInFlight`. */
+  public get DroppedCount(): number {
+    return this.droppedCount;
   }
 
   /**
    * Determine whether a live champion invocation should be mirrored to the challenger.
+   * Rejects non-number `SampleRate` values (e.g. uncoerced strings) and configurations lacking
+   * both `ChallengerModelID` and `ChallengerPromptID`.
    */
-  public ShouldSample(config: IRecordProcessChallengerConfig | undefined): boolean {
-    if (!config || !config.Enabled) {
+  public ShouldSample(config: IRecordProcessChallengerConfig | undefined | null): boolean {
+    if (!config || config.Enabled !== true) {
       return false;
     }
-    if (!Number.isFinite(config.SampleRate) || config.SampleRate <= 0) {
+    if (typeof config.SampleRate !== 'number' || !Number.isFinite(config.SampleRate) || config.SampleRate <= 0) {
+      return false;
+    }
+    const hasModelTarget =
+      typeof config.ChallengerModelID === 'string' && config.ChallengerModelID.trim().length > 0;
+    const hasPromptTarget =
+      typeof config.ChallengerPromptID === 'string' && config.ChallengerPromptID.trim().length > 0;
+    if (!hasModelTarget && !hasPromptTarget) {
       return false;
     }
     if (config.SampleRate >= 1) {
@@ -172,17 +241,28 @@ export class ShadowScoringCoordinator {
   }
 
   /**
-   * Fire-and-forget shadow dispatch. Never throws and never blocks the champion write path.
+   * Fire-and-forget shadow dispatch. Defers all publisher and challenger execution to a future tick
+   * so synchronous work inside a runner never blocks the champion write path, and caps concurrent
+   * in-flight tasks at `MaxInFlight`.
    */
   public DispatchShadowScore(
     envelope: ShadowScoreEnvelope,
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
+    options?: DispatchShadowScoreOptions,
   ): void {
-    if (!this.ShouldSample(envelope.ChallengerConfig)) {
+    if (!options?.AlreadySampled && !this.ShouldSample(envelope.ChallengerConfig)) {
       return;
     }
-    const task = this.executeShadowPipeline(envelope, contextUser, provider)
+    if (this.inFlightTasks.size >= this.maxInFlight) {
+      this.droppedCount++;
+      return;
+    }
+
+    const task: Promise<void> = new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    })
+      .then(() => this.executeShadowPipeline(envelope, contextUser, provider))
       .catch((error: unknown) => {
         const msg = error instanceof Error ? error.message : String(error);
         LogError(`ShadowScoringCoordinator: unhandled shadow error for record '${envelope.RecordID}': ${msg}`);
@@ -190,6 +270,7 @@ export class ShadowScoringCoordinator {
       .finally(() => {
         this.inFlightTasks.delete(task);
       });
+
     this.inFlightTasks.add(task);
   }
 
@@ -197,12 +278,15 @@ export class ShadowScoringCoordinator {
    * Wait for all currently in-flight background shadow tasks to settle (used by tests and graceful shutdown).
    */
   public async FlushInFlight(): Promise<void> {
-    await Promise.allSettled(Array.from(this.inFlightTasks));
+    while (this.inFlightTasks.size > 0) {
+      await Promise.allSettled(Array.from(this.inFlightTasks));
+    }
   }
 
   /**
    * Execute a single shadow envelope (called either by the WorkQueue consumer or background runner),
-   * enforcing `MaxLatencyMs` and persisting the `Role: 'Challenger'` audit record.
+   * starting the `MaxLatencyMs` timer and `AbortController` BEFORE invoking the challenger runner,
+   * and persisting the `Role: 'Challenger'` audit record.
    */
   public async ExecuteChallengerEnvelope(
     envelope: ShadowScoreEnvelope,
@@ -211,9 +295,11 @@ export class ShadowScoringCoordinator {
   ): Promise<ShadowFeatureValueAuditRecord> {
     const startedAt = Date.now();
     const maxLatencyMs =
-      Number.isFinite(envelope.ChallengerConfig.MaxLatencyMs) && envelope.ChallengerConfig.MaxLatencyMs > 0
+      typeof envelope.ChallengerConfig.MaxLatencyMs === 'number' &&
+      Number.isFinite(envelope.ChallengerConfig.MaxLatencyMs) &&
+      envelope.ChallengerConfig.MaxLatencyMs > 0
         ? envelope.ChallengerConfig.MaxLatencyMs
-        : 5000;
+        : DEFAULT_MAX_LATENCY_MS;
 
     let output: ChallengerScoreOutput | undefined;
     let timedOut = false;
@@ -222,14 +308,16 @@ export class ShadowScoringCoordinator {
     if (this.challengerRunner) {
       try {
         output = await this.runWithTimeout(
-          this.challengerRunner.RunChallenger(
-            {
-              ...envelope,
-              FrozenFeatures: Object.freeze({ ...envelope.FrozenFeatures }),
-            },
-            contextUser,
-            provider,
-          ),
+          (signal) =>
+            this.challengerRunner!.RunChallenger(
+              {
+                ...envelope,
+                FrozenFeatures: Object.freeze({ ...envelope.FrozenFeatures }),
+              },
+              contextUser,
+              provider,
+              signal,
+            ),
           maxLatencyMs,
         );
       } catch (error: unknown) {
@@ -253,12 +341,15 @@ export class ShadowScoringCoordinator {
       EntityID: envelope.EntityID,
       EntityName: envelope.EntityName,
       RecordProcessID: envelope.RecordProcessID,
+      ProcessRunID: envelope.ProcessRunID,
+      FeatureName: envelope.FeatureName,
       Role: 'Challenger',
       ModelID: envelope.ChallengerConfig.ChallengerModelID,
       PromptID: envelope.ChallengerConfig.ChallengerPromptID,
       NumericValue: output?.Score ?? null,
       TextValue: output?.Label ?? null,
       Confidence: output?.Confidence ?? null,
+      Reasoning: output?.Reasoning ?? null,
       LatencyMs: latencyMs,
       TimedOut: timedOut,
       ErrorMessage: errorMessage,
@@ -300,19 +391,267 @@ export class ShadowScoringCoordinator {
     }
   }
 
-  private async runWithTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  /**
+   * Starts the timeout timer and creates the `AbortController` BEFORE invoking `fn(signal)`
+   * so synchronous work or slow async work inside `fn` is bounded and receives an abort signal.
+   */
+  private async runWithTimeout<T>(fn: (signal: AbortSignal) => Promise<T>, timeoutMs: number): Promise<T> {
+    const abortController = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise<never>((_resolve, reject) => {
       timer = setTimeout(() => {
-        reject(new Error(`SHADOW_TIMEOUT: Challenger exceeded MaxLatencyMs (${timeoutMs}ms)`));
+        const timeoutErr = new Error(`SHADOW_TIMEOUT: Challenger exceeded MaxLatencyMs (${timeoutMs}ms)`);
+        abortController.abort(timeoutErr);
+        reject(timeoutErr);
       }, timeoutMs);
     });
     try {
-      return await Promise.race([promise, timeoutPromise]);
+      const workPromise = Promise.resolve().then(() => fn(abortController.signal));
+      return await Promise.race([workPromise, timeoutPromise]);
     } finally {
       if (timer !== undefined) {
         clearTimeout(timer);
       }
     }
   }
+}
+
+interface CachedChallengerModel {
+  modelId: string;
+  artifactB64: string;
+  fittedPreprocessing: FittedPreprocessing;
+  featureSchema: FeatureSchemaEntry[];
+  problemType: ProblemType;
+  targetVariable: string;
+}
+
+/**
+ * Production {@link IChallengerScoreRunner} for `WorkType = 'ML Model'`.
+ *
+ * Scores the frozen feature row captured from the champion run against `ChallengerModelID`
+ * through the same `MLInferenceDeps` (modelLoader, artifactLoader, sidecar `/predict`) used by
+ * `MLModelInferenceProcessor`, without touching the target business entity.
+ */
+export class MLModelChallengerScoreRunner implements IChallengerScoreRunner {
+  private readonly modelCache = new Map<string, Promise<CachedChallengerModel>>();
+
+  constructor(private readonly deps: MLInferenceDeps) {}
+
+  /** @inheritdoc */
+  public async RunChallenger(
+    envelope: ShadowScoreEnvelope,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+    signal?: AbortSignal,
+  ): Promise<ChallengerScoreOutput> {
+    this.throwIfAborted(signal);
+    const challengerModelId = envelope.ChallengerConfig.ChallengerModelID?.trim();
+    if (!challengerModelId) {
+      throw new Error('MLModelChallengerScoreRunner: ChallengerModelID is required for ML Model shadow scoring');
+    }
+
+    const activeProvider = provider ?? Metadata.Provider; // global-provider-ok: fallback when caller does not supply a per-request provider
+    const loaded = await this.ensureChallengerModel(challengerModelId, contextUser, activeProvider);
+    this.throwIfAborted(signal);
+
+    const featureRow = this.projectFrozenRow(envelope.FrozenFeatures, loaded.featureSchema);
+    const req: PredictRequest = {
+      artifact_b64: loaded.artifactB64,
+      fitted_preprocessing: loaded.fittedPreprocessing,
+      feature_schema: loaded.featureSchema,
+      rows: [featureRow],
+    };
+
+    const response = await this.deps.sidecar.predict(req);
+    this.throwIfAborted(signal);
+
+    const prediction = response.predictions[0];
+    if (!prediction) {
+      throw new Error(`MLModelChallengerScoreRunner: sidecar returned no prediction for challenger model '${challengerModelId}'`);
+    }
+
+    const label = prediction.class != null ? String(prediction.class) : undefined;
+    const confidence =
+      loaded.problemType === 'classification' && Number.isFinite(prediction.score)
+        ? Math.max(prediction.score, 1 - prediction.score)
+        : undefined;
+
+    return {
+      Score: prediction.score,
+      Label: label,
+      Confidence: confidence,
+    };
+  }
+
+  private throwIfAborted(signal?: AbortSignal): void {
+    if (signal?.aborted) {
+      const reason = signal.reason;
+      throw reason instanceof Error
+        ? reason
+        : new Error(`SHADOW_TIMEOUT: Challenger aborted (${String(reason ?? 'aborted')})`);
+    }
+  }
+
+  private ensureChallengerModel(
+    modelId: string,
+    contextUser: UserInfo | undefined,
+    provider: IMetadataProvider,
+  ): Promise<CachedChallengerModel> {
+    const existing = this.modelCache.get(modelId);
+    if (existing) {
+      return existing;
+    }
+    const loadPromise = this.loadChallengerModel(modelId, contextUser, provider).catch((err: unknown) => {
+      this.modelCache.delete(modelId);
+      throw err;
+    });
+    this.modelCache.set(modelId, loadPromise);
+    return loadPromise;
+  }
+
+  private async loadChallengerModel(
+    modelId: string,
+    contextUser: UserInfo | undefined,
+    provider: IMetadataProvider,
+  ): Promise<CachedChallengerModel> {
+    const model = await this.deps.modelLoader.loadModel(modelId, contextUser, provider);
+    if (!model) {
+      throw new ModelNeedsTrainingError(`MLModelChallengerScoreRunner: ML Model '${modelId}' not found`);
+    }
+    this.assertStatusCanScore(modelId, model);
+    const bytes = await this.deps.artifactLoader.load(model.ArtifactFileID, contextUser);
+    if (!bytes) {
+      throw new ModelNeedsTrainingError(
+        `MLModelChallengerScoreRunner: ${ModelArtifactMissingMessage(modelId, model.ArtifactFileID)}`,
+      );
+    }
+    return {
+      modelId: model.ID,
+      artifactB64: Buffer.from(bytes).toString('base64'),
+      fittedPreprocessing: parseJsonOrDefault<FittedPreprocessing>(model.FittedPreprocessing, {}),
+      featureSchema: parseJsonOrDefault<FeatureSchemaEntry[]>(model.FeatureSchema, []),
+      problemType: (model.ProblemType as ProblemType) ?? 'classification',
+      targetVariable: model.TargetVariable,
+    };
+  }
+
+  private assertStatusCanScore(modelId: string, model: MJMLModelEntity): void {
+    const status: MJMLModelEntity['Status'] = model.Status;
+    switch (status) {
+      case 'Draft':
+        if (!ModelHasTrainedArtifact(model) || !model.ArtifactFileID) {
+          throw new ModelNeedsTrainingError(`MLModelChallengerScoreRunner: ${ModelNeedsTrainingMessage(modelId)}`);
+        }
+        throw new ModelNotScorableError(modelId, status);
+      case 'Validated':
+      case 'Published':
+        if (!ModelHasTrainedArtifact(model) || !model.ArtifactFileID) {
+          throw new ModelNeedsTrainingError(`MLModelChallengerScoreRunner: ${ModelNeedsTrainingMessage(modelId)}`);
+        }
+        return;
+      default:
+        throw new ModelNotScorableError(modelId, status);
+    }
+  }
+
+  private projectFrozenRow(
+    frozenFeatures: Readonly<Record<string, unknown>>,
+    featureSchema: FeatureSchemaEntry[],
+  ): Record<string, string | number | boolean | null> {
+    const row: Record<string, string | number | boolean | null> = {};
+    if (featureSchema.length > 0) {
+      for (const entry of featureSchema) {
+        row[entry.Name] = coerceFeaturePrimitive(frozenFeatures[entry.Name]);
+      }
+      return row;
+    }
+    for (const [key, val] of Object.entries(frozenFeatures)) {
+      row[key] = coerceFeaturePrimitive(val);
+    }
+    return row;
+  }
+}
+
+/**
+ * Production {@link IShadowScoreAuditSink} that writes `MJ: Feature Values` rows with
+ * `Role = 'Challenger'`.
+ *
+ * ## Why `ValueKeyHash` is `null` on Challenger rows
+ * `__mj.FeatureValue` has a filtered unique index `UQ_FeatureValue_ValueKey` on
+ * `(RecordProcessID, ValueKeyHash) WHERE ValueKeyHash IS NOT NULL` that deduplicates
+ * production champion values by `(EntityID, RecordID, FeatureName, Value*)`. If a challenger
+ * computed the same prediction value as the champion and wrote a non-null `ValueKeyHash`,
+ * saving the challenger row would collide with `UQ_FeatureValue_ValueKey`. Leaving
+ * `ValueKeyHash = null` on `Role = 'Challenger'` rows guarantees challenger audit records
+ * can never collide with or replace a champion row while keeping full lineage (`RecordProcessID`,
+ * `EntityID`, `RecordID`, `FeatureName`, `ProcessRunID`, `AIModelID`, `PromptID`).
+ */
+export class FeatureValueShadowAuditSink implements IShadowScoreAuditSink {
+  /** @inheritdoc */
+  public async RecordShadowAudit(
+    record: ShadowFeatureValueAuditRecord,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<void> {
+    const activeProvider = provider ?? Metadata.Provider; // global-provider-ok: fallback when caller does not supply a per-request provider
+    const resolvedEntityId =
+      record.EntityID ??
+      (record.EntityName ? activeProvider.EntityByName(record.EntityName)?.ID : undefined);
+    if (!resolvedEntityId) {
+      LogError(
+        `FeatureValueShadowAuditSink: cannot persist Challenger row for record '${record.RecordID}' without EntityID or resolvable EntityName`,
+      );
+      return;
+    }
+
+    const fv = await activeProvider.GetEntityObject<MJFeatureValueEntity>('MJ: Feature Values', contextUser);
+    fv.NewRecord();
+    fv.EntityID = resolvedEntityId;
+    fv.RecordID = record.RecordID;
+    fv.FeatureName = record.FeatureName && record.FeatureName.trim().length > 0 ? record.FeatureName : 'Prediction';
+    fv.Role = 'Challenger';
+    fv.Source = 'Pipeline';
+    fv.ValueKeyHash = null;
+    fv.RecordProcessID = record.RecordProcessID ?? null;
+    fv.ProcessRunID = record.ProcessRunID ?? null;
+    fv.AIModelID = record.ModelID ?? null;
+    fv.PromptID = record.PromptID ?? null;
+    fv.ValueNumeric = record.NumericValue ?? null;
+    fv.ValueText = record.TextValue ?? null;
+    fv.Confidence = record.Confidence ?? null;
+    fv.Reasoning = record.ErrorMessage
+      ? record.TimedOut
+        ? `SHADOW_TIMEOUT: ${record.ErrorMessage}`
+        : `SHADOW_ERROR: ${record.ErrorMessage}`
+      : (record.Reasoning ?? null);
+    fv.ComputedAt = record.RecordedAt ? new Date(record.RecordedAt) : new Date();
+
+    const saved = await fv.Save();
+    if (!saved) {
+      LogError(
+        `FeatureValueShadowAuditSink: failed to save Challenger FeatureValue row for record '${record.RecordID}': ${fv.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+      );
+    }
+  }
+}
+
+function parseJsonOrDefault<T>(raw: string | null | undefined, fallback: T): T {
+  if (raw == null || raw.trim().length === 0) {
+    return fallback;
+  }
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function coerceFeaturePrimitive(value: unknown): string | number | boolean | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+  return JSON.stringify(value);
 }

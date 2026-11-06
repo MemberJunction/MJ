@@ -160,6 +160,8 @@ export interface MLModelInferenceProcessorOptions {
   autoTrain?: MLAutoTrainConfig;
   /** The trainer that fulfils {@link autoTrain}. Required for auto-train to take effect. */
   autoTrainer?: IModelAutoTrainer;
+  /** Optional RecordProcessID associated with this scoring processor instance. */
+  recordProcessId?: string;
   /** Optional WS-4.4 shadow challenger configuration (`ChallengerConfiguration`). */
   challengerConfig?: IRecordProcessChallengerConfig;
   /** Optional WS-4.4 shadow scoring coordinator. */
