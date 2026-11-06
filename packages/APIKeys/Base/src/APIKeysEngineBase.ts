@@ -114,6 +114,10 @@ export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
      *
      * If the engine has already loaded, it reloads once so the new interval applies.
      *
+     * When a timed read fails (for example during a database outage) the engine keeps its last
+     * rows and retries on the next interval, so a change made during the outage — including a
+     * revoked scope — takes effect on the first successful read after it, not before.
+     *
      * @param intervalMs - Refresh interval in milliseconds; 0, negative or undefined disables it.
      * @returns Settles when that reload is done (it never rejects; a failure is logged). Callers
      *          that do not need the reload finished can ignore it.
