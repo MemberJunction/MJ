@@ -75,6 +75,10 @@ import { Subscription } from 'rxjs';
  *
  * `mj: diagnostic sender registrations` is refused a change to its guarded fields by a rule that decides on
  * `Dirty`, so the baseline must be the stored row.
+ *
+ * `mj: graph edges` gates approval on the stored `Status`, on `Dirty` identity and content columns, and on the
+ * stored review stamp in `Attributes` (`MJGraphEdgeEntityServer`), so it must hold even if a host stops
+ * tracking the entity's changes.
  */
 const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
   'mj: record changes',
@@ -85,6 +89,7 @@ const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
   'mj: ai agent runs',
   'mj: projects',
   'mj: diagnostic sender registrations',
+  'mj: graph edges',
 ]);
 
 /** One field's values in a concurrency-conflict diagnostic. */

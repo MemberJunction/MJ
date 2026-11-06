@@ -74,6 +74,18 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
             r.Success = true;
             return r;
         }
+        public DeleteCalls = 0;
+        public async Delete(): Promise<boolean> {
+            this.DeleteCalls++;
+            return true;
+        }
+        public ResultHistory: Array<InstanceType<typeof core.BaseEntityResult>> = [];
+        public RegisterResultHistoryEntry(result: InstanceType<typeof core.BaseEntityResult>): void {
+            this.ResultHistory.push(result);
+        }
+        public get LatestResult(): InstanceType<typeof core.BaseEntityResult> | undefined {
+            return this.ResultHistory[this.ResultHistory.length - 1];
+        }
     }
 
     return {
@@ -257,6 +269,7 @@ function approvalInput(overrides: Partial<GraphEdgeApprovalInput>): GraphEdgeApp
         PreviousStatus: 'Proposed',
         NextStatus: 'Approved',
         IdentityChanged: false,
+        ContentChanged: false,
         User: curator,
         Authorizations: makeApproveAuthorizations(),
         InPipelineApprovalScope: false,
@@ -309,6 +322,12 @@ describe('EvaluateGraphEdgeApproval (Graph: Approve Edges, fail closed)', () => 
         expect(GraphEdgeSaveNeedsApproval(approvalInput({ PreviousStatus: 'Rejected', NextStatus: 'Approved' }))).toBe(true);
         expect(GraphEdgeSaveNeedsApproval(approvalInput({ PreviousStatus: 'Proposed', NextStatus: 'Rejected' }))).toBe(true);
         expect(GraphEdgeSaveNeedsApproval(approvalInput({ PreviousStatus: 'Approved', NextStatus: 'Approved', IdentityChanged: true }))).toBe(true);
+    });
+
+    it('gates editing what an Approved edge says, and taking it out of Approved', () => {
+        expect(GraphEdgeSaveNeedsApproval(approvalInput({ PreviousStatus: 'Approved', NextStatus: 'Approved', ContentChanged: true }))).toBe(true);
+        expect(GraphEdgeSaveNeedsApproval(approvalInput({ PreviousStatus: 'Approved', NextStatus: 'Proposed' }))).toBe(true);
+        expect(GraphEdgeSaveNeedsApproval(approvalInput({ PreviousStatus: 'Proposed', NextStatus: 'Proposed', ContentChanged: true }))).toBe(false);
     });
 
     it('leaves ordinary saves ungated: a Proposed create, and an Approved edge whose identity is unchanged', () => {
@@ -445,13 +464,20 @@ describe('MJGraphEdgeEntityServer.ValidateAsync', () => {
         );
     }
 
-    function markSaved(edge: MJGraphEdgeEntityServer, previousStatus: string, dirty: string[] = []): void {
+    function markSaved(edge: MJGraphEdgeEntityServer, previousStatus: string, dirty: string[] = [], storedAttributes: string | null = null): void {
         const internal = edge as unknown as { IsSaved: boolean; FieldState: Record<string, { Dirty: boolean; OldValue: unknown }> };
         internal.IsSaved = true;
-        internal.FieldState = { Status: { Dirty: previousStatus !== edge.Status, OldValue: previousStatus } };
+        internal.FieldState = {
+            Status: { Dirty: previousStatus !== edge.Status, OldValue: previousStatus },
+            Attributes: { Dirty: storedAttributes !== edge.Attributes, OldValue: storedAttributes },
+        };
         for (const f of dirty) {
             internal.FieldState[f] = { Dirty: true, OldValue: 'old' };
         }
+    }
+
+    function deleteCalls(edge: MJGraphEdgeEntityServer): number {
+        return (edge as unknown as { DeleteCalls: number }).DeleteCalls;
     }
 
     it('refuses a pre-approved Declared edge created by a caller without Graph: Approve Edges', async () => {
@@ -550,6 +576,55 @@ describe('MJGraphEdgeEntityServer.ValidateAsync', () => {
             makeEdge({ Origin: 'Inferred', Status: 'Approved' }, staff, makeProvider({ Authorizations: authorizations })).ValidateAsync(),
         );
         expect(otherUser.Success).toBe(false);
+    });
+
+    it('refuses editing an Approved edge\'s content without the authorization, and re-stamps the reviewer with it', async () => {
+        const authorizations = makeApproveAuthorizations();
+        const byStaff = makeEdge({ Status: 'Approved', IsSaved: true }, staff, makeProvider({ Authorizations: authorizations }));
+        markSaved(byStaff, 'Approved', ['Description']);
+        expect((await byStaff.ValidateAsync()).Success).toBe(false);
+
+        const byCurator = makeEdge({ Status: 'Approved', IsSaved: true }, curator, makeProvider({ Authorizations: authorizations }));
+        markSaved(byCurator, 'Approved', ['Weight']);
+        expect((await byCurator.ValidateAsync()).Success).toBe(true);
+        expect(JSON.parse(byCurator.Attributes ?? '{}')['ReviewedByUserID']).toBe(curator.ID);
+    });
+
+    it('refuses a save that sets, changes or removes the review stamp unless it is the reviewing save itself', async () => {
+        const forgedCreate = makeEdge({ Status: 'Proposed' }, staff, makeProvider());
+        forgedCreate.Attributes = JSON.stringify({ ReviewedByUserID: curator.ID, Note: 'x' });
+        const created = await forgedCreate.ValidateAsync();
+        expect(created.Success).toBe(false);
+        expect(created.Errors.some((e) => e.Source === 'Attributes' && e.Message.includes('ReviewedByUserID'))).toBe(true);
+
+        const stored = JSON.stringify({ ReviewedByUserID: curator.ID, ReviewedAt: '2026-11-01T00:00:00.000Z', Note: 'x' });
+        const rewritten = makeEdge({ Status: 'Rejected', IsSaved: true }, staff, makeProvider());
+        rewritten.Attributes = JSON.stringify({ ReviewedByUserID: staff.ID, ReviewedAt: '2026-11-01T00:00:00.000Z', Note: 'x' });
+        markSaved(rewritten, 'Rejected', [], stored);
+        expect((await rewritten.ValidateAsync()).Success).toBe(false);
+
+        const unrelated = makeEdge({ Status: 'Rejected', IsSaved: true }, staff, makeProvider());
+        unrelated.Attributes = JSON.stringify({ ReviewedByUserID: curator.ID, ReviewedAt: '2026-11-01T00:00:00.000Z', Note: 'edited' });
+        markSaved(unrelated, 'Rejected', [], stored);
+        expect((await unrelated.ValidateAsync()).Success).toBe(true);
+    });
+
+    it('refuses deleting an Approved edge without the authorization; a Proposed edge, or a curator, may delete', async () => {
+        const authorizations = makeApproveAuthorizations();
+        const approvedByStaff = makeEdge({ Status: 'Approved', IsSaved: true }, staff, makeProvider({ Authorizations: authorizations }));
+        markSaved(approvedByStaff, 'Approved');
+        expect(await approvedByStaff.Delete()).toBe(false);
+        expect(deleteCalls(approvedByStaff)).toBe(0);
+        expect(approvedByStaff.LatestResult?.Message).toContain(GRAPH_APPROVE_EDGES_AUTHORIZATION);
+
+        const proposedByStaff = makeEdge({ Status: 'Proposed', IsSaved: true }, staff, makeProvider({ Authorizations: authorizations }));
+        markSaved(proposedByStaff, 'Proposed');
+        expect(await proposedByStaff.Delete()).toBe(true);
+
+        const approvedByCurator = makeEdge({ Status: 'Approved', IsSaved: true }, curator, makeProvider({ Authorizations: authorizations }));
+        markSaved(approvedByCurator, 'Approved');
+        expect(await approvedByCurator.Delete()).toBe(true);
+        expect(deleteCalls(approvedByCurator)).toBe(1);
     });
 
     it('reports a missing endpoint record', async () => {

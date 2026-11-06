@@ -1,6 +1,8 @@
 import {
     AuthorizationInfo,
     BaseEntity,
+    BaseEntityResult,
+    EntityDeleteOptions,
     IMetadataProvider,
     RunView,
     RunViewParams,
@@ -235,6 +237,11 @@ export interface GraphEdgeApprovalInput {
      * `Source*` / `Target*` column. Re-pointing an approved edge approves a different edge.
      */
     readonly IdentityChanged: boolean;
+    /**
+     * `true` when an update changes what the edge says: `Description`, `Weight`, `Origin`, `Attributes`
+     * or `Confidence`. Rewriting an approved edge's content approves content nobody reviewed.
+     */
+    readonly ContentChanged: boolean;
     readonly User: UserInfo | undefined;
     readonly Authorizations: AuthorizationInfo[] | undefined;
     /**
@@ -255,19 +262,19 @@ export interface GraphEdgeApprovalVerdict {
 
 /**
  * True when saving these values is an approval decision that `Graph: Approve Edges` must authorize:
- * - creating an edge that starts out `Approved` (a pre-approved `Declared` edge);
- * - changing `Status` to `Approved` or `Rejected` (a review decision, from any prior status);
- * - changing what an `Approved` edge connects (`IdentityChanged`).
+ * - creating an edge that starts out `Approved`, whatever its `Origin`;
+ * - changing `Status` to `Approved` or `Rejected`, or away from `Approved` (a review decision);
+ * - changing what an `Approved` edge connects (`IdentityChanged`) or says (`ContentChanged`).
  */
 export function GraphEdgeSaveNeedsApproval(input: GraphEdgeApprovalInput): boolean {
     if (!input.IsSaved) {
         return input.NextStatus === 'Approved';
     }
     const statusChanged = input.PreviousStatus !== input.NextStatus;
-    if (statusChanged && (input.NextStatus === 'Approved' || input.NextStatus === 'Rejected')) {
+    if (statusChanged && (input.NextStatus === 'Approved' || input.NextStatus === 'Rejected' || input.PreviousStatus === 'Approved')) {
         return true;
     }
-    return input.NextStatus === 'Approved' && input.IdentityChanged;
+    return input.NextStatus === 'Approved' && (input.IdentityChanged || input.ContentChanged);
 }
 
 /**
@@ -301,26 +308,77 @@ export function EvaluateGraphEdgeApproval(input: GraphEdgeApprovalInput): GraphE
     if (!GraphEdgeSaveNeedsApproval(input) || IsPipelinePolicyApprovedCreate(input)) {
         return { Error: null, ShouldStampReview: false };
     }
-    if (!input.User) {
-        return {
-            Error: approvalError(`requires an authenticated caller with "${GRAPH_APPROVE_EDGES_AUTHORIZATION}"`, input.NextStatus),
-            ShouldStampReview: false,
-        };
-    }
-    const [check] = EvaluateAuthorizationChecks([GRAPH_APPROVE_EDGES_AUTHORIZATION], input.User, input.Authorizations ?? []);
-    if (!check || check.Unknown) {
-        return {
-            Error: approvalError(`requires "${GRAPH_APPROVE_EDGES_AUTHORIZATION}", which is not configured in this system`, input.NextStatus),
-            ShouldStampReview: false,
-        };
-    }
-    if (!check.Allowed) {
-        return {
-            Error: approvalError(`requires "${GRAPH_APPROVE_EDGES_AUTHORIZATION}", which the caller does not hold`, input.NextStatus),
-            ShouldStampReview: false,
-        };
+    const denial = ApproveEdgesDenialReason(input.User, input.Authorizations);
+    if (denial) {
+        return { Error: approvalError(denial, input.NextStatus), ShouldStampReview: false };
     }
     return { Error: null, ShouldStampReview: true };
+}
+
+/**
+ * Why `user` may not exercise `Graph: Approve Edges`, or `null` when it may. Fail closed: a missing
+ * caller, an unseeded authorization and an empty authorization list all deny.
+ */
+export function ApproveEdgesDenialReason(user: UserInfo | undefined, authorizations: AuthorizationInfo[] | undefined): string | null {
+    if (!user) {
+        return `requires an authenticated caller with "${GRAPH_APPROVE_EDGES_AUTHORIZATION}"`;
+    }
+    const [check] = EvaluateAuthorizationChecks([GRAPH_APPROVE_EDGES_AUTHORIZATION], user, authorizations ?? []);
+    if (!check || check.Unknown) {
+        return `requires "${GRAPH_APPROVE_EDGES_AUTHORIZATION}", which is not configured in this system`;
+    }
+    if (!check.Allowed) {
+        return `requires "${GRAPH_APPROVE_EDGES_AUTHORIZATION}", which the caller does not hold`;
+    }
+    return null;
+}
+
+/**
+ * The refusal for deleting an edge whose stored `Status` is `storedStatus`, or `null` when allowed.
+ * Removing an `Approved` edge undoes a review decision, so it needs `Graph: Approve Edges`; a
+ * `Proposed` or `Rejected` edge may be deleted by anyone the entity permissions allow.
+ */
+export function GraphEdgeDeleteRefusal(
+    storedStatus: MJGraphEdgeEntity['Status'] | null | undefined,
+    user: UserInfo | undefined,
+    authorizations: AuthorizationInfo[] | undefined,
+): string | null {
+    if (storedStatus !== 'Approved') {
+        return null;
+    }
+    const denial = ApproveEdgesDenialReason(user, authorizations);
+    return denial ? `Deleting an approved graph edge is a review decision and ${denial}.` : null;
+}
+
+/** `Attributes` keys the server writes when an edge is approved or rejected; a caller never sets them. */
+export const GRAPH_EDGE_REVIEW_ATTRIBUTE_KEYS: readonly string[] = ['ReviewedByUserID', 'ReviewedAt'];
+
+/**
+ * The first review-stamp key ({@link GRAPH_EDGE_REVIEW_ATTRIBUTE_KEYS}) whose value differs between
+ * the stored and the new `Attributes` JSON, or `null`. A save that is not itself a stamped review
+ * decision may not add, change or remove one: the stamp would otherwise be forgeable.
+ */
+export function FindReviewStampChange(storedAttributes: string | null | undefined, nextAttributes: string | null | undefined): string | null {
+    const stored = parseAttributeObject(storedAttributes);
+    const next = parseAttributeObject(nextAttributes);
+    for (const key of GRAPH_EDGE_REVIEW_ATTRIBUTE_KEYS) {
+        if (JSON.stringify(stored[key]) !== JSON.stringify(next[key])) {
+            return key;
+        }
+    }
+    return null;
+}
+
+function parseAttributeObject(raw: string | null | undefined): Record<string, unknown> {
+    if (!raw || raw.trim().length === 0) {
+        return {};
+    }
+    try {
+        const parsed: unknown = JSON.parse(raw);
+        return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? { ...parsed } : {};
+    } catch {
+        return {};
+    }
 }
 
 /**
@@ -441,6 +499,9 @@ function endpointError(field: string, message: string, value: unknown): Validati
 /** Columns whose change on an `Approved` edge re-approves a different edge. */
 const IDENTITY_FIELDS = ['GraphID', 'EdgeTypeID', 'SourceEntityID', 'SourceRecordID', 'TargetEntityID', 'TargetRecordID'] as const;
 
+/** Columns whose change on an `Approved` edge re-approves different content. */
+const CONTENT_FIELDS = ['Description', 'Weight', 'Origin', 'Attributes', 'Confidence'] as const;
+
 /**
  * Server-side `MJ: Graph Edges` entity enforcing Phase G1.3 write-time invariants:
  * - No self-loops
@@ -449,9 +510,10 @@ const IDENTITY_FIELDS = ['GraphID', 'EdgeTypeID', 'SourceEntityID', 'SourceRecor
  * - Enforces `MJ: Graph Edge Type Endpoints` source/target entity constraints via `GraphEngine.Instance.ValidateEdgeEndpoint`
  * - Canonicalizes undirected (`IsDirected = false`) edge endpoint orientation (lower `<entityID>|<recordID>` key first)
  * - Requires `Graph: Approve Edges` for every approval decision, whatever the `Origin`, including creating
- *   an edge that starts `Approved` ({@link EvaluateGraphEdgeApproval}), and stamps `ReviewedByUserID` /
- *   `ReviewedAt` into `Attributes`; the Content Pipeline's policy-approved `Inferred` edges are the one
- *   exception ({@link IsPipelinePolicyApprovedCreate})
+ *   an edge that starts `Approved` and editing or deleting an `Approved` edge ({@link EvaluateGraphEdgeApproval},
+ *   {@link GraphEdgeDeleteRefusal}), and stamps `ReviewedByUserID` / `ReviewedAt` into `Attributes`; the
+ *   Content Pipeline's policy-approved `Inferred` edges are the one exception ({@link IsPipelinePolicyApprovedCreate})
+ * - Refuses any other save that sets, changes or removes that review stamp ({@link FindReviewStampChange})
  * - Verifies `Source` and `Target` endpoint records exist, as the caller, via batched `RunViews` (`count_only`)
  *
  * Every check fails closed: graph metadata that cannot be loaded is a validation error, not a pass.
@@ -501,6 +563,7 @@ export class MJGraphEdgeEntityServer extends MJGraphEdgeEntity {
             PreviousStatus: this.previousStatus(),
             NextStatus: this.Status,
             IdentityChanged: this.IsSaved && IDENTITY_FIELDS.some((f) => this.GetFieldByName(f)?.Dirty === true),
+            ContentChanged: this.IsSaved && CONTENT_FIELDS.some((f) => this.GetFieldByName(f)?.Dirty === true),
             User: this.ContextCurrentUser,
             Authorizations: provider.Authorizations,
             InPipelineApprovalScope: IsInGraphPipelineApprovalScope(this.ContextCurrentUser),
@@ -509,6 +572,18 @@ export class MJGraphEdgeEntityServer extends MJGraphEdgeEntity {
             errors.push(approval.Error);
         } else if (approval.ShouldStampReview && this.ContextCurrentUser?.ID) {
             this.stampReview(this.ContextCurrentUser.ID);
+        } else {
+            const forgedKey = FindReviewStampChange(this.storedAttributes(), this.Attributes);
+            if (forgedKey) {
+                errors.push(
+                    new ValidationErrorInfo(
+                        'Attributes',
+                        `"${forgedKey}" in Attributes is recorded by the server when an edge is reviewed; it cannot be set, changed or removed.`,
+                        this.Attributes,
+                        ValidationErrorType.Failure,
+                    ),
+                );
+            }
         }
 
         if (errors.length === 0 && this.endpointsDirty()) {
@@ -564,23 +639,43 @@ export class MJGraphEdgeEntityServer extends MJGraphEdgeEntity {
         }
     }
 
+    /**
+     * Refuses deleting an `Approved` edge without `Graph: Approve Edges` ({@link GraphEdgeDeleteRefusal}).
+     * The delete path loads the stored row first, so `Status` is the stored value.
+     */
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        const provider = this.ProviderToUse;
+        const authorizations = IsGraphDataProvider(provider) ? provider.Authorizations : undefined;
+        const refusal = GraphEdgeDeleteRefusal(this.previousStatus() ?? this.Status, this.ContextCurrentUser, authorizations);
+        if (refusal) {
+            const result = new BaseEntityResult();
+            result.Success = false;
+            result.Type = 'delete';
+            result.Message = refusal;
+            result.StartedAt = new Date();
+            result.EndedAt = new Date();
+            this.RegisterResultHistoryEntry(result);
+            return false;
+        }
+        return super.Delete(options);
+    }
+
+    /** The stored `Attributes` before this save; `null` for a create. */
+    private storedAttributes(): string | null {
+        if (!this.IsSaved) {
+            return null;
+        }
+        const oldValue: unknown = this.GetFieldByName('Attributes')?.OldValue;
+        return typeof oldValue === 'string' ? oldValue : null;
+    }
+
     private previousStatus(): MJGraphEdgeEntity['Status'] | null {
         const oldValue: unknown = this.GetFieldByName('Status')?.OldValue;
         return oldValue === 'Approved' || oldValue === 'Proposed' || oldValue === 'Rejected' ? oldValue : null;
     }
 
     private stampReview(userId: string): void {
-        let attrObj: Record<string, unknown> = {};
-        if (this.Attributes && this.Attributes.trim().length > 0) {
-            try {
-                const parsed: unknown = JSON.parse(this.Attributes);
-                if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-                    attrObj = { ...(parsed as Record<string, unknown>) };
-                }
-            } catch {
-                attrObj = {};
-            }
-        }
+        const attrObj = parseAttributeObject(this.Attributes);
         attrObj['ReviewedByUserID'] = userId;
         attrObj['ReviewedAt'] = new Date().toISOString();
         this.Attributes = JSON.stringify(attrObj);
