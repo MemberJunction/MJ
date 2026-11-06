@@ -374,6 +374,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     private _refreshCheckInFlight: Promise<boolean> | null = null;
     /**
+     * The remote timestamps stored by the last refresh check whose status read succeeded; null after
+     * a check whose read failed. {@link RefreshIfNeeded} reuses the stored remote timestamps for its
+     * scoped reload only while they are this array, so a check whose read failed is followed by a
+     * fresh read. This prefers fresher stamps; it is not needed for correctness, because any stored
+     * stamps were read before the scoped dataset read starts.
+     */
+    private _checkedRemoteMetadataTimestamps: MetadataInfo[] | null = null;
+    /**
      * Set when Config() adopts a snapshot it loaded from the server (which fetched the current user
      * with it); consumed by the next {@link preValidateAndRefresh}, which then has nothing to check.
      */
@@ -1145,12 +1153,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
-     * How this provider refreshes after a metadata member entity changed. The base behavior is a
-     * hard {@link Refresh} — correct for database providers, where the process that PERFORMED the
-     * write is the one refreshing, so re-checking staleness first is wasted work and the re-read
-     * must bypass every cache layer. Transport providers (GraphQL) override this with a staleness
-     * check so a browser doesn't re-pull the full metadata graph for a change the server-side
-     * timestamp comparison can disconfirm.
+     * How this provider refreshes after a metadata member entity changed. The base behavior reads
+     * the remote timestamps once. When they attribute the change entirely to the saved-query family
+     * (see {@link PartialRefreshMetadataItemCodes}), it reloads only that family through
+     * {@link ReloadMetadata}, bypassing every cache layer and reusing that read instead of reading
+     * the timestamps again. Anything else runs a hard {@link Refresh}. Transport providers (GraphQL)
+     * override this with a staleness check so a browser doesn't re-pull the full metadata graph for
+     * a change the server-side timestamp comparison can disconfirm.
      */
     protected async RefreshAfterMetadataMemberChange(): Promise<boolean> {
         if (this.MetadataMemberRefreshMustWait) {
@@ -1190,7 +1199,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             LogError(`Metadata refresh after a member-entity change could not read the timestamps; running a full refresh: ${e instanceof Error ? e.message : String(e)}`);
         }
         if (scoped) {
-            return this.ReloadMetadata(true, undefined, true);
+            return this.ReloadMetadata(true, undefined, true, true);
         }
         return this.Refresh();
     }
@@ -5871,12 +5880,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /**
      * Reloads this provider's metadata. Single-flight: at most one reload runs at a time, and a
      * request arriving mid-reload queues exactly one follow-up pass.
-     * @param hardRefresh - re-read the remote timestamps first and bypass every cache layer
+     * @param hardRefresh - re-read the remote timestamps first (unless `stampsFresh`) and bypass
+     * every cache layer
      * @param scopedFirst - try the scoped reload of the saved-query family (see
      * {@link PartialRefreshMetadataItemCodes}) before the full one. Defaults to true unless
      * hardRefresh: an explicit Refresh() is always a full reload.
+     * @param stampsFresh - the caller read the remote timestamps just before this call. The first
+     * hard pass then uses them instead of reading them again; a queued follow-up pass still reads.
      */
-    protected async ReloadMetadata(hardRefresh: boolean, providerToUse?: IMetadataProvider, scopedFirst: boolean = !hardRefresh): Promise<boolean> {
+    protected async ReloadMetadata(hardRefresh: boolean, providerToUse?: IMetadataProvider, scopedFirst: boolean = !hardRefresh, stampsFresh: boolean = false): Promise<boolean> {
         // first, make sure we reset the flag to false so that if another call to this function happens
         // while we are waiting for the async call to finish, we dont do it again
         this._refresh = false;
@@ -5912,6 +5924,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         this._metadataReloadInFlight = (async () => {
             let effectiveHardRefresh = hardRefresh;
             let tryScoped = scopedFirst;
+            let timestampsFresh = stampsFresh;
             do {
                 this._metadataReloadQueued = false;
 
@@ -5922,8 +5935,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // them (one cheap status query, authoritative) BEFORE the load, not after:
                 // a write landing DURING the load then leaves the stamped timestamps looking
                 // stale and the next tick reloads — the safe direction. Reading after could
-                // stamp the snapshot as containing a write it does not.
-                if (effectiveHardRefresh) {
+                // stamp the snapshot as containing a write it does not. When the caller has just
+                // read them (stampsFresh), the first pass uses that read.
+                if (effectiveHardRefresh && !timestampsFresh) {
                     await this.RefreshRemoteMetadataTimestamps(providerToUse);
                 }
 
@@ -5953,6 +5967,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // The follow-up re-reads the timestamps first, so it may still be attributed to the
                 // saved-query family — and a scoped read never trusts a cache layer either.
                 tryScoped = true;
+                timestampsFresh = false;
             } while (this._metadataReloadQueued);
         })();
         try {
@@ -7052,6 +7067,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Read the reachability flag in the SAME synchronous turn the await above resumed in —
         // before the next await can let a concurrent check overwrite it.
         const serverReached = this._lastRemoteTimestampReadReached;
+        this._checkedRemoteMetadataTimestamps = gotTimestamps ? this._latestRemoteMetadataTimestamps : null;
         if (gotTimestamps) {
             this._lastRefreshCheckAt = Date.now();
         }
@@ -7119,8 +7135,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (await this.CheckToSeeIfRefreshNeeded(providerToUse, bypassMinCheckInterval)) {
             // Stale only in the saved-query family → reload just that family (fresh timestamps, no
             // cache layer), falling back to the full hard reload if the scoped read fails.
-            if (this.PartialRefreshItemCodes() !== null)
-                return this.ReloadMetadata(true, providerToUse, true);
+            if (this.PartialRefreshItemCodes() !== null) {
+                // Reuse the stored stamps while they come from the latest successful check; after a
+                // failed check read, or a read stored by another caller, the pass reads them again.
+                const stampsFresh = this._checkedRemoteMetadataTimestamps != null
+                    && this._checkedRemoteMetadataTimestamps === this._latestRemoteMetadataTimestamps;
+                return this.ReloadMetadata(true, providerToUse, true, stampsFresh);
+            }
             return this.Refresh(providerToUse);
         }
         else

@@ -6,6 +6,22 @@ import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 /**
+ * True for an expression a component destructures its dependencies from: `components`,
+ * `<x>.components`, `<x>?.components`, or any of those followed by `|| {}` / `?? {}`.
+ */
+function isComponentsSource(node: t.Node | null | undefined): boolean {
+  if (!node) return false;
+  if (t.isLogicalExpression(node) && (node.operator === '||' || node.operator === '??')) {
+    return isComponentsSource(node.left);
+  }
+  if (t.isIdentifier(node)) return node.name === 'components';
+  return (t.isMemberExpression(node) || t.isOptionalMemberExpression(node)) &&
+    !node.computed &&
+    t.isIdentifier(node.property) &&
+    node.property.name === 'components';
+}
+
+/**
  * Rule: component-usage-without-destructuring
  *
  * Detects when a component dependency is used directly in JSX without first
@@ -37,16 +53,10 @@ export class ComponentUsageWithoutDestructuringRule extends BaseLintRule {
     Traverse(ast, {
       // Track destructuring from components
       VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
-        if (t.isObjectPattern(path.node.id) && t.isIdentifier(path.node.init)) {
-          // Check if destructuring from 'components'
-          if (path.node.init.name === 'components') {
-            for (const prop of path.node.id.properties) {
-              if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
-                const name = prop.key.name;
-                if (dependencyNames.has(name)) {
-                  destructuredComponents.add(name);
-                }
-              }
+        if (t.isObjectPattern(path.node.id) && isComponentsSource(path.node.init)) {
+          for (const prop of path.node.id.properties) {
+            if (t.isObjectProperty(prop) && t.isIdentifier(prop.key) && dependencyNames.has(prop.key.name)) {
+              destructuredComponents.add(prop.key.name);
             }
           }
         }

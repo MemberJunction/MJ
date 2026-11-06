@@ -13,12 +13,13 @@ import { fileURLToPath } from 'node:url';
 const WORKFLOW_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'workflows');
 
 /** Workflows whose checks are, or are about to be, required in next-protect. */
-const REQUIRED_CHECK_WORKFLOWS = ['changes.yml', 'test.yml', 'dependency-check.yml', 'ci-standards.yml'];
+const REQUIRED_CHECK_WORKFLOWS = ['changes.yml', 'test.yml', 'dependency-check.yml', 'ci-standards.yml', 'lockfile-guard.yml'];
 
 /** Workflows that gate their real job on a `changes` job, with the job each one gates. */
 const GATED = [
     { file: 'dependency-check.yml', job: 'check-dependencies', check: 'Detect missing and unused dependencies' },
     { file: 'ci-standards.yml', job: 'standards', check: 'adopted standards' },
+    { file: 'lockfile-guard.yml', job: 'lockfile-matches-manifests', check: 'Lockfile matches package.json' },
 ];
 
 const read = (file) => readFileSync(resolve(WORKFLOW_DIR, file), 'utf8');

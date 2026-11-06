@@ -252,6 +252,11 @@ dropping a record into `.entity-documents.json` (+ a `.njk` template) and pushin
 `mj sync push` — the job picks it up on the next run. With no Active Search documents, the
 job is a clean no-op rather than an error.
 
+The daily job does **not** refresh `Record Duplicate` documents. To keep a duplicate-detection
+document's vectors current, schedule `Vectorize Entity` a second time with
+`EntityDocumentType="Record Duplicate"` (the action's default), or vectorize before a detection run —
+see the [Duplicate Management Guide](../../../../guides/DUPLICATE_MANAGEMENT_GUIDE.md#4-keeping-vectors-current).
+
 ## Configuration Types
 
 ### VectorizeEntityParams
