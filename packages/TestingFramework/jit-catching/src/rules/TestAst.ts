@@ -1,8 +1,12 @@
 import ts from 'typescript';
 import { existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, basename } from 'node:path';
 
 const COMPILER_OPTIONS: ts.CompilerOptions = { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022, moduleResolution: ts.ModuleResolutionKind.Bundler, strict: true, experimentalDecorators: true, esModuleInterop: true, skipLibCheck: true, noEmit: true, allowJs: false };
+const LIB_DIR = dirname(ts.getDefaultLibFilePath(COMPILER_OPTIONS));
+const LIB_FILE_RE = /^lib\..*\.d\.ts$/;
+/** Parsed TypeScript library files (`lib.*.d.ts`), shared by every program `TestAst.Load` builds. */
+const libSourceFiles = new Map<string, ts.SourceFile>();
 
 /** One property or element access in the test: `obj.x` or `obj['x']`. */
 export interface MemberAccess { Node: ts.Node; Name: string; Receiver: ts.Expression; }
@@ -24,11 +28,25 @@ export class TestAst {
         const memoryDirs = new Set(Object.keys(files).flatMap((f) => TestAst.ancestors(f)));
         const directoryExists = host.directoryExists?.bind(host);
         host.directoryExists = (d) => memoryDirs.has(d) || (directoryExists ? directoryExists(d) : ts.sys.directoryExists(d));
-        const getSourceFile = host.getSourceFile; host.getSourceFile = (f, lang, onError, create) => (f in files ? ts.createSourceFile(f, files[f], lang) : getSourceFile(f, lang, onError, create));
+        const getSourceFile = host.getSourceFile;
+        host.getSourceFile = (f, lang, onError, create) => {
+            if (f in files) return ts.createSourceFile(f, files[f], lang);
+            if (!TestAst.isLibFile(f)) return getSourceFile(f, lang, onError, create);
+            const cached = libSourceFiles.get(f);
+            if (cached) return cached;
+            const parsed = getSourceFile(f, lang, onError, create);
+            if (parsed) libSourceFiles.set(f, parsed);
+            return parsed;
+        };
         const program = ts.createProgram([testAbs], { ...options, noEmit: true, types: [] }, host);
         const sourceFile = program.getSourceFile(testAbs);
         if (!sourceFile) throw new Error(`TestAst: test file not in program: ${testAbs}`);
         return new TestAst(sourceFile, program.getTypeChecker(), program);
+    }
+
+    /** True for a `lib.*.d.ts` file in the TypeScript package's library folder. */
+    private static isLibFile(file: string): boolean {
+        return dirname(file) === LIB_DIR && LIB_FILE_RE.test(basename(file));
     }
 
     /** Every folder above `file`, up to the root. */

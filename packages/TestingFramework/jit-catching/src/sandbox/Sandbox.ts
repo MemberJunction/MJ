@@ -63,12 +63,12 @@ function newContainerName(): string {
 
 /**
  * The real on-disk host path of a mount, which is what Docker mounts; throws when the mount would expose
- * a denied folder or breaks the `-v` syntax.
+ * a denied folder or breaks the `-v` syntax (a `:` or `,` in the given path, its realpath or the container path).
  */
 function checkedHost(m: SandboxMount): string {
     const host = resolve(m.Host);
     const real = resolveExisting(host);
-    if (/[:,]/.test(m.Host) || /[:,]/.test(m.Container) || isDenied(host) || isDenied(real)) throw new Error(`refusing to mount ${m.Host}`);
+    if (/[:,]/.test(m.Host) || /[:,]/.test(real) || /[:,]/.test(m.Container) || isDenied(host) || isDenied(real)) throw new Error(`refusing to mount ${m.Host}`);
     return real;
 }
 

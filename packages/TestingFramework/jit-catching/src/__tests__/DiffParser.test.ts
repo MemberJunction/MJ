@@ -32,4 +32,21 @@ describe('ParseUnifiedDiff', () => {
   it('AddedLinesByFile gives new-side line numbers of + lines', () => {
     expect(AddedLinesByFile(ParseUnifiedDiff(diff))).toEqual({ 'packages/MJCore/src/a.ts': [11, 12, 41], 'packages/MJCore/src/b.ts': [1, 2] });
   });
+  it('keeps the hunks of a deleted file under its old path', () => {
+    const deleted = `diff --git a/packages/A/src/old.ts b/packages/A/src/old.ts
+deleted file mode 100644
+index 1..0
+--- a/packages/A/src/old.ts
++++ /dev/null
+@@ -1,3 +0,0 @@
+-one
+-two
+-three
+`;
+    const hunks = ParseUnifiedDiff(deleted);
+    expect(hunks).toHaveLength(1);
+    expect(hunks[0].Path).toBe('packages/A/src/old.ts');
+    expect(hunks[0].Lines).toEqual(['-one', '-two', '-three']);
+    expect(AddedLinesByFile(hunks)).toEqual({});
+  });
 });
