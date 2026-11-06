@@ -16,7 +16,10 @@ function SimpleChart({
   legendPosition = 'auto', // New prop: 'auto', 'top', 'bottom', 'left', 'right'
   legendFontSize = 12, // New prop for legend font size
   showDataLabels = false,
-  enableExport = true,
+  exportable = true, // Built-in CSV/Excel/PNG export icon; false renders the chart without it
+  enableExport = true, // Deprecated alias of exportable; false also turns the export off
+  exportLabel, // Export menu label and file name; defaults to title, then "<groupBy> chart"
+
   onDataPointClick,
   onChartRendered,
   utilities,
@@ -26,6 +29,92 @@ function SimpleChart({
   savedUserSettings,
   onSaveUserSettings
 }) {
+  // Built-in export: SimpleChart renders inside the registry ExportableData component, which offers CSV
+  // and Excel of the data the chart draws and a PNG of the chart. The helpers below build the exported
+  // rows and columns and the image; they hold no React state.
+
+  /** Export type of the measure column: currency for money fields (or, without metadata, an "amount" field). */
+  function chartValueExportType(aggregateMethod, valueField, entityInfo) {
+    if (aggregateMethod === 'count' || !valueField) return 'number';
+    const fieldInfo = entityInfo?.Fields?.find(f => f.Name === valueField);
+    const fieldType = (fieldInfo?.Type || '').toLowerCase();
+    if (fieldType.includes('money')) return 'currency';
+    if (!fieldInfo && valueField.toLowerCase().includes('amount')) return 'currency';
+    return 'number';
+  }
+
+  /** Header of the measure column, e.g. "Count" or "Amount (sum)". */
+  function chartValueExportLabel(aggregateMethod, valueField) {
+    if (aggregateMethod === 'count' || !valueField) return 'Count';
+    return `${valueField} (${aggregateMethod})`;
+  }
+
+  /**
+   * The drawn data in wide rows: one row per category (x-axis label or slice) with one column per
+   * series. Stacked charts get one column per stack value. Field keys are positional (`category`,
+   * `series0`, …) so a stack value can never collide with the category column; labels carry the names.
+   */
+  function buildChartExport(processed, options) {
+    const { groupBy, stackBy, aggregateMethod, valueField, entityInfo } = options;
+    const valueType = chartValueExportType(aggregateMethod, valueField, entityInfo);
+    const columns = [{ field: 'category', label: groupBy || 'Category', type: processed.isDateField ? 'date' : 'string' }];
+    const isStacked = Boolean(stackBy) && processed.datasets.length > 0;
+    const series = isStacked
+      ? processed.datasets.map(dataset => ({ label: dataset.label, values: dataset.data }))
+      : [{ label: chartValueExportLabel(aggregateMethod, valueField), values: processed.values }];
+    series.forEach((entry, index) => columns.push({ field: `series${index}`, label: entry.label, type: valueType }));
+    const categoryValues = isStacked ? processed.categories : processed.chartData.map(point => point.label);
+    const rows = categoryValues.map((category, rowIndex) => {
+      const row = { category };
+      series.forEach((entry, index) => { row[`series${index}`] = entry.values[rowIndex]; });
+      return row;
+    });
+    return { rows, columns };
+  }
+
+  /** Draws a PNG data URL onto white, so the transparent canvas does not export with a black background. */
+  function chartImageOnWhite(dataURL) {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = image.naturalWidth;
+        canvas.height = image.naturalHeight;
+        const context = canvas.getContext('2d');
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(image, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      image.onerror = () => reject(new Error('SimpleChart image could not be decoded'));
+      image.src = dataURL;
+    });
+  }
+
+  /** The Chart.js 4 chart re-rendered at 3x pixel ratio with animation off, then restored. Null without a chart. */
+  async function captureChartImage(chart) {
+    if (!chart) return null;
+    const original = { devicePixelRatio: chart.options.devicePixelRatio, animation: chart.options.animation };
+    try {
+      chart.options.devicePixelRatio = 3;
+      chart.options.animation = false;
+      chart.resize();
+      chart.update('none');
+      return await chartImageOnWhite(chart.toBase64Image('image/png', 1));
+    } finally {
+      chart.options.devicePixelRatio = original.devicePixelRatio;
+      chart.options.animation = original.animation;
+      chart.resize();
+      chart.update('none');
+    }
+  }
+
+  /** A kebab-case export ID from the chart's label, so it is stable across renders. */
+  function chartExportID(label) {
+    const slug = String(label || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    return slug ? `${slug}-chart` : 'simple-chart';
+  }
+
   // Always use the MJ unwrapLibraryComponents function to get components from global libraries
   // This ensures that various library build/package formats are handled correctly and transparently
   // Chart.js is available as a global 'Chart' based on the spec's globalVariable setting
@@ -51,7 +140,6 @@ function SimpleChart({
   const subtleColor = themeColors.textTertiary || '#999';
   const inverseColor = themeColors.textInverse || '#fff';
   const gridColor = themeColors.borderLight || themeColors.border || '#f0f0f0';
-  const borderColor = themeColors.border || '#d9d9d9';
   const errorColor = themeColors.error || '#ff4d4f';
 
   // Translucent version of a themed color, for area fills. Without this the fill
@@ -695,14 +783,6 @@ function SimpleChart({
       };
     }
 
-    // Add export functionality if enabled
-    if (enableExport && config.options.plugins) {
-      config.options.plugins.title = {
-        ...config.options.plugins.title,
-        display: true // Always show title when export is enabled
-      };
-    }
-
     return config;
   };
 
@@ -755,28 +835,18 @@ function SimpleChart({
         chartInstanceRef.current = null;
       }
     };
-  }, [processData, actualChartType, title, height, colors, styles, showLegend, legendPosition, legendFontSize, showDataLabels, enableExport, ChartJS]);
+  }, [processData, actualChartType, title, height, colors, styles, showLegend, legendPosition, legendFontSize, showDataLabels, ChartJS]);
 
-  // Download chart as image
-  React.useEffect(() => {
-    if (enableExport && chartInstanceRef.current && canvasRef.current) {
-      // Add a simple export button overlay
-      const exportHandler = () => {
-        const url = canvasRef.current.toDataURL('image/png');
-        const link = document.createElement('a');
-        link.download = `${title || 'chart'}.png`;
-        link.href = url;
-        link.click();
-      };
-      
-      // Store handler for cleanup
-      window.SimpleChartExport = exportHandler;
-    }
-    
-    return () => {
-      delete window.SimpleChartExport;
-    };
-  }, [enableExport, title]);
+  // Built-in export (see the export helpers at the top of the component). Callers never wrap SimpleChart in ExportableData.
+  const { ExportableData } = components || {};
+  const exportEnabled = exportable !== false && enableExport !== false && Boolean(ExportableData);
+  const exportTitle = exportLabel || title || (groupBy ? `${groupBy} chart` : 'Chart');
+  const chartExport = React.useMemo(
+    () => (exportEnabled && !processData.isEmpty
+      ? buildChartExport(processData, { groupBy, stackBy, aggregateMethod, valueField, entityInfo })
+      : { rows: [], columns: [] }),
+    [exportEnabled, processData, groupBy, stackBy, aggregateMethod, valueField, entityInfo]
+  );
 
   // Error state
   if (error) {
@@ -814,32 +884,33 @@ function SimpleChart({
   }
 
   // Render chart container with canvas
-  return (
+  const chart = (
     <div style={{ width: '100%', position: 'relative', overflow: 'hidden' }}>
-      {enableExport && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
-          <button
-            onClick={() => window.SimpleChartExport && window.SimpleChartExport()}
-            style={{
-              padding: '4px 8px',
-              fontSize: '12px',
-              backgroundColor: surfaceColor,
-              border: `1px solid ${borderColor}`,
-              borderRadius: '4px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px'
-            }}
-            title="Download as PNG"
-          >
-            ⬇ Export
-          </button>
-        </div>
-      )}
       <div style={{ width: '100%', height: `${height}px` }}>
         <canvas ref={canvasRef} />
       </div>
     </div>
+  );
+
+  if (!exportEnabled) return chart;
+  // The export icon overlays the chart's top-right corner on hover, as BI tools show a visual's header;
+  // no space is reserved, so the canvas container keeps its explicit height and position.
+  return (
+    <ExportableData
+      exportID={chartExportID(exportTitle)}
+      label={exportTitle}
+      kind="chart"
+      rows={chartExport.rows}
+      columns={chartExport.columns}
+      getImage={() => captureChartImage(chartInstanceRef.current)}
+      placement="overlay"
+      style={{ width: '100%' }}
+      utilities={utilities}
+      styles={styles}
+      components={components}
+      callbacks={callbacks}
+    >
+      {chart}
+    </ExportableData>
   );
 }

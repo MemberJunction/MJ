@@ -169,7 +169,19 @@ EntityDataGrid passes to DataGrid internally:
 - **sorting={false}**: Component manages sort logic
 - **paging={false}**: Component manages pagination
 - **filtering={enableFiltering}**: Pass through
+- **exportable / exportLabel / exportGetRows**: the inner grid shows the export button; `exportGetRows={getExportRows}` replaces its one loaded page with every matching record
 - **All other props**: selection, autoFitColumns, onRowClick, events
+
+## Built-in Export
+The inner DataGrid renders the export button (registry `ExportableData`, beside its search box), so both grids look the same. EntityDataGrid only supplies the rows. When `exportable === false` or `ExportableData` is missing, the grid renders with no export button.
+
+Helpers declared at the top of the component body (plain functions, no hooks; MJ components must be a single top-level function):
+- `filterRowsByText(rows, fieldNames, text)`: the same case-insensitive "any displayed field contains" match as `handleFilter`.
+- `loadAllRowsForExport(rv, params)`: `RunView({ EntityName, ExtraFilter, OrderBy: effectiveOrderBy, Fields, ResultType: 'simple', MaxRows: 100000 })`; throws with the RunView error message on failure (ExportableData shows "Export failed"), warns when `TotalRowCount` exceeds the rows returned. `Fields` (the displayed fields plus the primary keys, so the file keeps record identity) is sent only when entity metadata is loaded, because only then have the fields been validated.
+
+`getExportRows` (passed to DataGrid as `exportGetRows`, which hands it to ExportableData's `getRows`, so it runs only at export time): in full cache mode it returns `filterRowsByText(allDataCache, fieldNames, currentFilter)` (`allDataCache` is re-sorted by `handleSort` and restored on clear); otherwise it calls `loadAllRowsForExport` and text-filters the result.
+
+The columns are the inner DataGrid's displayed columns, typed from entity metadata by DataGrid.
 
 ## Pagination Calculation
 - **totalPages**: `totalRecords && pageSize ? Math.ceil(totalRecords / pageSize) : null`

@@ -168,9 +168,22 @@
     {
       "name": "enableExport",
       "type": "boolean",
-      "description": "When true, displays an export button in the top-right corner above the chart to download chart as PNG image. Button is positioned outside the chart canvas to avoid overlaying the visualization.",
+      "description": "Deprecated: use exportable. Kept for saved components; false turns the built-in export off just like exportable={false}.",
       "required": false,
       "defaultValue": true
+    },
+    {
+      "name": "exportable",
+      "type": "boolean",
+      "description": "Shows the built-in export icon (CSV, Excel and PNG) over the chart's top-right corner, shown on hover. CSV and Excel hold the data the chart draws, one row per category with one column per series (per stack value when stackBy is set), after aggregation, sort and limit; PNG is the chart at 3x resolution on white. Set false only for a decorative chart. Never wrap SimpleChart in ExportableData.",
+      "required": false,
+      "defaultValue": true
+    },
+    {
+      "name": "exportLabel",
+      "type": "string",
+      "description": "Name of the chart in the export menu and the file name (`<exportLabel>_<YYYY-MM-DD>.png`). Defaults to title, then '<groupBy> chart'.",
+      "required": false
     }
   ],
   "events": [
@@ -204,7 +217,14 @@
       "globalVariable": "Chart"
     }
   ],
-  "dependencies": [],
+  "dependencies": [
+    {
+      "name": "ExportableData",
+      "namespace": "Generic/UI/Export",
+      "location": "registry",
+      "description": "Built-in export: renders the export icon and writes the CSV, Excel and PNG files"
+    }
+  ],
   "code": "@file:../../code/generic/simple-chart.js",
-  "exampleUsage": "<!-- Ranking Example: Top products by revenue (explicit sort by value) -->\n<SimpleChart\n  entityName=\"Invoice Line Items\"\n  data={invoiceItems}\n  groupBy=\"ProductCategory\"\n  valueField=\"TotalAmount\"\n  aggregateMethod=\"sum\"\n  chartType=\"bar\"\n  title=\"Top 10 Products by Revenue\"\n  limit={10}\n  sortBy=\"value\"  // Explicit sort by revenue for ranking\n  sortOrder=\"desc\"  // Highest first\n  onDataPointClick={handleDrillDown}\n/>\n\n<!-- Time-Series Example: Revenue by month (preserve query order) -->\n<SimpleChart\n  entityName=\"Invoices\"\n  data={preAggregatedMonthlyData}  // Query returns data already sorted by Year/Month\n  groupBy=\"DateLabel\"  // e.g. \"January 2024\", \"February 2024\"\n  valueField=\"TotalRevenue\"\n  aggregateMethod=\"sum\"\n  chartType=\"bar\"\n  title=\"Monthly Revenue\"\n  // No sortBy - preserves chronological order from query (default behavior)\n  onDataPointClick={handleDrillDown}\n/>\n\n<!-- Stacked Example: Attendance by quarter, broken down by meeting type -->\n<SimpleChart\n  entityName=\"Meeting Attendance\"\n  data={attendanceRecords}  // Detail records with Quarter, MeetingType, AttendeeCount fields\n  groupBy=\"Quarter\"  // X-axis: Q1, Q2, Q3, Q4\n  stackBy=\"MeetingType\"  // Color-coded layers: Board, Committee, Annual, etc.\n  valueField=\"AttendeeCount\"\n  aggregateMethod=\"sum\"\n  chartType=\"bar\"\n  title=\"Meeting Attendance by Quarter and Type\"\n  showLegend={true}  // Legend shows meeting type colors\n  onDataPointClick={handleDrillDown}\n/>\n\n<!-- Counting Example: Tickets by status (no explicit sorting needed) -->\n<SimpleChart\n  entityName=\"Support Tickets\"\n  data={tickets}\n  groupBy=\"Status\"\n  // No valueField - counting records\n  aggregateMethod=\"count\"\n  chartType=\"doughnut\"\n  title=\"Tickets by Status\"\n  // sortBy omitted - preserves input order or can add sortBy=\"value\" for ranking\n/>"
+  "exampleUsage": "<!-- Ranking Example: Top products by revenue (explicit sort by value) -->\n<SimpleChart\n  entityName=\"Invoice Line Items\"\n  data={invoiceItems}\n  groupBy=\"ProductCategory\"\n  valueField=\"TotalAmount\"\n  aggregateMethod=\"sum\"\n  chartType=\"bar\"\n  title=\"Top 10 Products by Revenue\"\n  limit={10}\n  sortBy=\"value\"  // Explicit sort by revenue for ranking\n  sortOrder=\"desc\"  // Highest first\n  onDataPointClick={handleDrillDown}\n/>\n\n<!-- Time-Series Example: Revenue by month (preserve query order) -->\n<SimpleChart\n  entityName=\"Invoices\"\n  data={preAggregatedMonthlyData}  // Query returns data already sorted by Year/Month\n  groupBy=\"DateLabel\"  // e.g. \"January 2024\", \"February 2024\"\n  valueField=\"TotalRevenue\"\n  aggregateMethod=\"sum\"\n  chartType=\"bar\"\n  title=\"Monthly Revenue\"\n  // No sortBy - preserves chronological order from query (default behavior)\n  onDataPointClick={handleDrillDown}\n/>\n\n<!-- Stacked Example: Attendance by quarter, broken down by meeting type -->\n<SimpleChart\n  entityName=\"Meeting Attendance\"\n  data={attendanceRecords}  // Detail records with Quarter, MeetingType, AttendeeCount fields\n  groupBy=\"Quarter\"  // X-axis: Q1, Q2, Q3, Q4\n  stackBy=\"MeetingType\"  // Color-coded layers: Board, Committee, Annual, etc.\n  valueField=\"AttendeeCount\"\n  aggregateMethod=\"sum\"\n  chartType=\"bar\"\n  title=\"Meeting Attendance by Quarter and Type\"\n  showLegend={true}  // Legend shows meeting type colors\n  onDataPointClick={handleDrillDown}\n/>\n\n<!-- Counting Example: Tickets by status (no explicit sorting needed) -->\n<SimpleChart\n  entityName=\"Support Tickets\"\n  data={tickets}\n  groupBy=\"Status\"\n  // No valueField - counting records\n  aggregateMethod=\"count\"\n  chartType=\"doughnut\"\n  title=\"Tickets by Status\"\n  // sortBy omitted - preserves input order or can add sortBy=\"value\" for ranking\n/>\n\n<!-- Export is built in: CSV/Excel of the drawn data (one row per category, one column per series) and PNG. -->\n<!-- Never wrap SimpleChart in ExportableData. exportable={false} only for a decorative chart. -->\n<SimpleChart data={tickets} groupBy=\"Status\" aggregateMethod=\"count\" title=\"Tickets by Status\" exportLabel=\"Open Tickets by Status\" />"
 }

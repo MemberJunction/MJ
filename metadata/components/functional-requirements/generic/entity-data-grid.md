@@ -111,7 +111,19 @@ EntityDataGrid passes managed data to DataGrid with these overrides:
 - `sorting={false}`: Component handles sorting logic (client vs server)
 - `paging={false}`: Component handles pagination logic (client vs server)
 - `filtering={enableFiltering}`: Passed through (component handles filter behavior)
+- `exportable`, `exportLabel`, `exportGetRows`: the inner DataGrid shows the export button, with EntityDataGrid's all-records loader as its rows (see Export)
 - All other props: selection, autoFitColumns, onRowClick, events passed through
+
+## Export (built in)
+`exportable={true}` (default):
+- An export icon (via the registry `ExportableData` component) beside the inner DataGrid's search box (the inner DataGrid shows it, with this component's rows). Menu: **CSV** and **Excel**, named `<exportLabel or entityName>_<YYYY-MM-DD>.<ext>`.
+- Rows: every record matching `extraFilter` and the user's text filter, in the current sort, not only the loaded page.
+  - Full cache mode: the cached records (already in the current sort), text-filtered in memory. No server call.
+  - Partial cache mode: one RunView for all matching records (`ExtraFilter`, the current `OrderBy`, only the displayed fields), capped at 100,000 records with a console warning when capped, then text-filtered like the grid's search.
+- Columns: the displayed fields, headed like the grid (ColumnDef `header`, else the field's DisplayName), typed from entity metadata (money → currency, date/time → date, bit → boolean, numeric → number, value lists and text → text). Raw values; custom `render` output is not exported.
+- The inner DataGrid shows the icon; `exportGetRows` replaces its one loaded page with every matching record.
+- `exportable={false}` renders no export icon and no wrapper.
+- Callers must NOT wrap EntityDataGrid in `ExportableData`.
 
 ## User Experience Indicators
 

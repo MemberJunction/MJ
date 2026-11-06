@@ -4,6 +4,7 @@ React functional component using Chart.js 4.4.1 for canvas-based chart rendering
 ## Dependencies
 - **Chart.js** (4.4.1): Canvas chart rendering (global: Chart)
 - Unwrapped via `unwrapLibraryComponents(Chart, 'Chart')` to handle various package formats
+- **ExportableData** (registry, `Generic/UI/Export`): built-in export, read from `components`
 
 ## State Management (React Hooks)
 - **error** (string | null): Error message if rendering fails
@@ -460,29 +461,18 @@ useEffect(() => {
 }, [/* dependencies */]);
 ```
 
-## Export Functionality (useEffect)
+## Built-in Export
+Replaces the old `window.SimpleChartExport` handler and its "⬇ Export" button, which are gone.
 
-### Implementation
-```javascript
-useEffect(() => {
-  if (enableExport && canvasRef.current) {
-    const handleExport = () => {
-      const dataURL = canvasRef.current.toDataURL('image/png');
-      const a = document.createElement('a');
-      a.href = dataURL;
-      a.download = `chart-${Date.now()}.png`;
-      a.click();
-    };
-    
-    // Store in global for button access
-    window.SimpleChartExport = handleExport;
-    
-    return () => {
-      delete window.SimpleChartExport;
-    };
-  }
-}, [enableExport, canvasRef]);
-```
+Helpers declared at the top of the component body (plain functions, no hooks; MJ components must be a single top-level function):
+- `buildChartExport(processData, {groupBy, stackBy, aggregateMethod, valueField, entityInfo})` returns `{rows, columns}` from the processed data the chart draws. Field keys are positional (`category`, `series0`, `series1`, …) so a stack value can never collide with the category column; the labels carry the real names.
+  - Single series: `rows = chartData.map((point, i) => ({ category: point.label, series0: values[i] }))`.
+  - Stacked: `rows = categories.map((category, i) => ({ category, series0: datasets[0].data[i], … }))`, one column per dataset (stack value).
+- `chartValueExportType` / `chartValueExportLabel`: value column type (number or currency) and header (`Count` or `<valueField> (<aggregateMethod>)`).
+- `captureChartImage(chart)`: sets `options.devicePixelRatio = 3` and `options.animation = false`, `resize()`, `update('none')`, `toBase64Image()`, draws it on a white canvas, then restores both options and re-renders.
+- `chartExportID(label)`: kebab-case of the label plus `-chart`, else `simple-chart`.
+
+`chartExport` is a `useMemo` over `processData` and the props above, declared before the early returns so the hook order never changes. Export is on when `exportable !== false && enableExport !== false` and `components.ExportableData` exists.
 
 ## Render Output
 
@@ -525,33 +515,24 @@ if (processData.isEmpty) {
 
 ### Success State
 ```javascript
-return (
-  <div style={{ position: 'relative', height: height || '400px' }}>
-    {enableExport && (
-      <button
-        onClick={() => window.SimpleChartExport && window.SimpleChartExport()}
-        style={{
-          position: 'absolute',
-          top: '10px',
-          right: '10px',
-          zIndex: 10,
-          padding: '6px 12px',
-          backgroundColor: '#3B82F6',
-          color: 'white',
-          border: 'none',
-          borderRadius: '4px',
-          cursor: 'pointer'
-        }}
-      >
-        ⬇ Export
-      </button>
-    )}
-    <div style={{ height: '100%' }}>
-      <canvas ref={canvasRef}></canvas>
+const chart = (
+  <div style={{ width: '100%', position: 'relative', overflow: 'hidden' }}>
+    <div style={{ width: '100%', height: `${height}px` }}>
+      <canvas ref={canvasRef} />
     </div>
   </div>
 );
+if (!exportEnabled) return chart;
+return (
+  <ExportableData exportID={chartExportID(exportTitle)} label={exportTitle} kind="chart"
+    rows={chartExport.rows} columns={chartExport.columns}
+    getImage={() => captureChartImage(chartInstanceRef.current)}
+    placement="overlay" style={{ width: '100%' }}>
+    {chart}
+  </ExportableData>
+);
 ```
+The canvas container keeps its explicit height and position, so the responsive chart sizes exactly as before. The export icon overlays the chart's top-right corner and appears on hover or keyboard focus (always on touch screens), so no space is reserved for it.
 
 ## Performance Optimizations
 - Data processing memoized (useMemo) - only recalculates when dependencies change
