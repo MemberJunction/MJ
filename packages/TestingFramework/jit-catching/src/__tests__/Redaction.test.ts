@@ -14,6 +14,11 @@ describe('RedactionCheck', () => {
     expect(check.Check('AIza' + 'y'.repeat(35))?.Kind).toBe('KeyPattern');
     expect(check.Check('github_pat_' + 'z'.repeat(60))?.Kind).toBe('KeyPattern');
   });
+  it('does not match key prefixes inside ordinary identifiers and paths', () => {
+    expect(check.Check('risk-assessment-for-the-quarterly-report-module')).toBeNull();
+    expect(check.Check('src/tasks/disk-usage-monitor-integration-test-suite.ts')).toBeNull();
+    expect(check.Check('token=sk-proj-' + 'x'.repeat(48))?.Kind).toBe('KeyPattern');
+  });
   it('ignores short or empty known values so a blank env var cannot match everything', () => {
     const c = new RedactionCheck(['', 'ab']);
     expect(c.Check('abc')).toBeNull();

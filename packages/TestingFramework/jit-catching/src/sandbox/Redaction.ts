@@ -6,11 +6,11 @@ export class RedactionError extends Error {
 
 /** Patterns of vendor keys and tokens that must never leave the job, whatever the known-secret list says. */
 const KEY_PATTERNS: { Name: string; Pattern: RegExp }[] = [
-    { Name: 'anthropic', Pattern: /sk-ant-[A-Za-z0-9_-]{20,}/ },
-    { Name: 'openai', Pattern: /sk-(?:proj-)?[A-Za-z0-9_-]{32,}/ },
-    { Name: 'google', Pattern: /AIza[0-9A-Za-z_-]{35}/ },
-    { Name: 'github', Pattern: /(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{50,})/ },
-    { Name: 'aws', Pattern: /AKIA[0-9A-Z]{16}/ },
+    { Name: 'anthropic', Pattern: /(?<![A-Za-z0-9])sk-ant-[A-Za-z0-9_-]{20,}/ },
+    { Name: 'openai', Pattern: /(?<![A-Za-z0-9])sk-(?:proj-)?[A-Za-z0-9_-]{32,}/ },
+    { Name: 'google', Pattern: /(?<![A-Za-z0-9])AIza[0-9A-Za-z_-]{35}/ },
+    { Name: 'github', Pattern: /(?<![A-Za-z0-9])(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{50,})/ },
+    { Name: 'aws', Pattern: /(?<![A-Za-z0-9])AKIA[0-9A-Z]{16}/ },
     { Name: 'turbo', Pattern: /TURBO_TOKEN=\S+/ },
     { Name: 'actions', Pattern: /ACTIONS_RUNTIME_TOKEN=\S+/ },
 ];
