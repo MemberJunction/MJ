@@ -5,7 +5,7 @@
  * tested by running them.
  */
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import type { IA2ATaskStore, Message, Part, Task, TaskStatus } from './TaskStore.js';
+import { TERMINAL_STATUSES, type IA2ATaskStore, type Message, type Part, type Task, type TaskStatus } from './TaskStore.js';
 
 /**
  * The error message for a task the caller cannot see. Fixed text: the caller's task ID is never
@@ -13,6 +13,12 @@ import type { IA2ATaskStore, Message, Part, Task, TaskStatus } from './TaskStore
  * (a reflected-XSS sink), and because a missing task and another user's task must read the same.
  */
 export const TASK_NOT_FOUND_MESSAGE = 'Task not found';
+
+/**
+ * The error message for a task the store could not save. Reported rather than ignored: a task that
+ * exists only in this process's memory is invisible to every other replica and lost on restart.
+ */
+export const TASK_NOT_SAVED_MESSAGE = 'The task could not be saved';
 
 /** What `tasks/send` returns: the task on success, or an HTTP error code and message. */
 export type TaskSendOutcome =
@@ -66,7 +72,10 @@ async function createTask(
         task.messages.push(userMessage(taskID, message, deps));
     }
     deps.Store.Set(taskID, task, caller?.ID);
-    await deps.Store.SaveTask(task, caller, deps.Provider);
+    if (!(await deps.Store.SaveTask(task, caller, deps.Provider))) {
+        deps.Store.Delete(taskID);
+        return { ErrorCode: 500, ErrorMessage: TASK_NOT_SAVED_MESSAGE };
+    }
     deps.StartProcessing(task);
     return { taskId: taskID, status: task.status };
 }
@@ -91,7 +100,13 @@ async function continueTask(
         task.messages.push(userMessage(task.id, message, deps));
         task.updated = new Date();
     }
-    await deps.Store.SaveTask(task, caller, deps.Provider);
+    if (!(await deps.Store.SaveTask(task, caller, deps.Provider))) {
+        return { ErrorCode: 500, ErrorMessage: TASK_NOT_SAVED_MESSAGE };
+    }
+    // The save merged what other replicas wrote; a task finished elsewhere meanwhile is not restarted.
+    if (TERMINAL_STATUSES.has(task.status)) {
+        return { ErrorCode: 400, ErrorMessage: `Cannot update a task with status: ${task.status}` };
+    }
     deps.StartProcessing(task);
     return { taskId: task.id, status: task.status };
 }

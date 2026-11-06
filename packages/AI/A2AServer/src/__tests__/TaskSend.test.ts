@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { InMemoryA2ATaskStore, type Task } from '../TaskStore.js';
-import { HandleTaskSend, TASK_NOT_FOUND_MESSAGE, type TaskSendDependencies } from '../TaskSend.js';
+import { HandleTaskSend, TASK_NOT_FOUND_MESSAGE, TASK_NOT_SAVED_MESSAGE, type TaskSendDependencies } from '../TaskSend.js';
 
 function fakeUser(id: string): UserInfo {
     const user: Pick<UserInfo, 'ID' | 'Name' | 'IsActive'> = { ID: id, Name: `User ${id}`, IsActive: true };
@@ -74,5 +74,26 @@ describe('HandleTaskSend', () => {
         d.StartProcessing = () => { savedBeforeStart = save.mock.calls.length > 0; };
         await HandleTaskSend({}, OWNER, d);
         expect(savedBeforeStart).toBe(true);
+    });
+
+    it('reports a task it could not save instead of running it from memory alone (B5)', async () => {
+        const store = new InMemoryA2ATaskStore();
+        const d = deps(store);
+        vi.spyOn(store, 'SaveTask').mockResolvedValue(false);
+        const outcome = await HandleTaskSend({ message: { parts: [] } }, OWNER, d);
+        expect(outcome).toEqual({ ErrorCode: 500, ErrorMessage: TASK_NOT_SAVED_MESSAGE });
+        expect(d.Started).toHaveLength(0);
+        expect(store.Size).toBe(0);
+    });
+
+    it('reports a message it could not save on an existing task (B5)', async () => {
+        const store = new InMemoryA2ATaskStore();
+        const d = deps(store);
+        const created = await HandleTaskSend({}, OWNER, d);
+        if (!('taskId' in created)) throw new Error('expected a created task');
+        vi.spyOn(store, 'SaveTask').mockResolvedValue(false);
+        const outcome = await HandleTaskSend({ taskId: created.taskId, message: { parts: [] } }, OWNER, d);
+        expect(outcome).toEqual({ ErrorCode: 500, ErrorMessage: TASK_NOT_SAVED_MESSAGE });
+        expect(d.Started).toHaveLength(1);
     });
 });

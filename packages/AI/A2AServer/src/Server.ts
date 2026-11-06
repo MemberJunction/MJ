@@ -44,7 +44,6 @@ if (dbInstanceName !== null && dbInstanceName !== undefined && dbInstanceName.tr
 // Configurable via `a2aServerSettings.taskStoreMode` ('entity' by default, 'memory' for non-persistent runs).
 const taskStore = new DurableEntityA2ATaskStore({
     PersistenceEnabled: (a2aServerSettings?.taskStoreMode ?? 'entity') === 'entity',
-    DefaultTaskTypeId: a2aServerSettings?.defaultTaskTypeId,
 });
 taskStore.Start();
 ShutdownRegistry.Instance.Register(taskStore);
@@ -366,12 +365,16 @@ function setupRoutes() {
         }
 
         // Cancel a task and propagate cancellation to any in-flight agent execution and durable MJ: Tasks row
-        await tasks.CancelTaskForUser(
+        const cancelled = await tasks.CancelTaskForUser(
             taskId,
             reqWithUser.authenticatedUser,
             'Task cancelled via A2A',
             resolveProviderForRequest()
         );
+        if (!cancelled) {
+            res.status(500).json({ error: { code: 500, message: 'The cancellation could not be saved' } });
+            return;
+        }
 
         res.json({ success: true });
     });
