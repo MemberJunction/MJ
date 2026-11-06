@@ -6,9 +6,9 @@ Each section answers one question with the command run, the raw numbers, and the
 | # | Question | Answer | Design change needed? |
 |---|---|---|---|
 | 1 | Time and disk of the designed build path (job 1 base with remote cache, job 2 head with no token) | pending | |
-| 2 | Agent SDK: restrict tools, enforce write path, add `run_test`, cap turns and tokens, report usage | Yes, all six, on `@anthropic-ai/claude-agent-sdk` 0.3.318. Restrict built-ins with `tools` (`allowedTools` only auto-approves); keep `Write`/`Edit` out of `allowedTools`, or `canUseTool` is skipped and the write guard does nothing. Per-message `output_tokens` were far below the final count; budget on input + cache tokens. The runs used no API key (`apiKeySource: "none"`, the parent session's login), so the helper's `ANTHROPIC_API_KEY` was not tested. See §2 | No fallback. Yes (small): use `tools` + `permissionMode: 'default'`, keep `Write`/`Edit` out of `allowedTools`, catch the throw after max-turns and abort; the package needs zod 4 (SDK peer `zod@^4`; 24 `packages/` manifests pin `^3.25`); CI must confirm `apiKeySource: "ANTHROPIC_API_KEY"` (§2) |
+| 2 | Agent SDK: restrict tools, enforce write path, add `run_test`, cap turns and tokens, report usage | Yes, all six, on `@anthropic-ai/claude-agent-sdk` 0.3.318. Restrict built-ins with `tools` (`allowedTools` only auto-approves); keep `Write`/`Edit` out of `allowedTools`, or `canUseTool` is skipped and the write guard does nothing. Per-message `output_tokens` were far below the final count; budget on input + cache tokens. The first runs used no API key (`apiKeySource: "none"`, the parent session's login). A rerun in a clean environment that held only `ANTHROPIC_API_KEY` reported `apiKeySource: "ANTHROPIC_API_KEY"` and ran to its turn cap, so the environment-key path works (2026-11-06). See §2 | No fallback. Yes (small): use `tools` + `permissionMode: 'default'`, keep `Write`/`Edit` out of `allowedTools`, catch the throw after max-turns and abort; the package needs zod 4 (SDK peer `zod@^4`; 24 `packages/` manifests pin `^3.25`); run the SDK in an environment with no Claude Code login and check `apiKeySource: "ANTHROPIC_API_KEY"` in the init message (§2) |
 | 3 | Sandbox holds on `ubuntu-latest` (key, /proc, network, cache token) | pending | |
-| 4 | Provider classes work with no database (Anthropic, OpenAI with logprobs, Gemini) | Partly. All three classes import and construct from a bare key with no database and no warnings. Gemini `gemini-3.5-flash-lite` answered `"Yes"`. Anthropic reached the API but got 401 `invalid x-api-key` on two runs (the same key gets 401 from a direct `curl`, so the key is bad, not MJ); model id `claude-haiku-5-5` not yet confirmed. OpenAI: `gpt-5.1-mini` does not exist (404, and `OpenAILLM` throws instead of returning `success: false`); `gpt-4o-mini` and `gpt-4.1-mini` return 5 `top_logprobs` on the first token; `gpt-5.4-nano` returns only 1 although 5 were asked. Imports resolve only from a scratch package, not from the repo root (§4) | Yes (proposed): the TP Prob judge model must be one that returns 5 `top_logprobs` (`gpt-4o-mini` or `gpt-4.1-mini`), not `gpt-5.1-mini`. Callers must handle both a thrown error (`OpenAILLM`) and `success: false` (`AnthropicLLM`). The real package must declare the provider packages as dependencies. Open: re-run Anthropic with a valid key |
+| 4 | Provider classes work with no database (Anthropic, OpenAI with logprobs, Gemini) | Yes. All three classes import and construct from a bare key with no database and no warnings. Gemini `gemini-3.5-flash-lite` answered `"Yes"`. Anthropic `claude-haiku-5-5` answered `"Yes"` after the key was replaced (2026-11-06; the first two runs got 401 `invalid x-api-key` from a bad key, not from MJ). OpenAI: `gpt-5.1-mini` does not exist (404, and `OpenAILLM` throws instead of returning `success: false`); `gpt-4o-mini` and `gpt-4.1-mini` return 5 `top_logprobs` on the first token; `gpt-5.4-nano` returns only 1 although 5 were asked. Imports resolve only from a scratch package, not from the repo root (§4) | Yes (proposed): the TP Prob judge model must be one that returns 5 `top_logprobs` (`gpt-4o-mini` or `gpt-4.1-mini`), not `gpt-5.1-mini`. Callers must handle both a thrown error (`OpenAILLM`) and `success: false` (`AnthropicLLM`). The real package must declare the provider packages as dependencies. |
 | 5 | `INTEGRATION_LIVE_MODEL_KEYS` includes an OpenAI key | pending — the secret is not readable from a branch; to be asked by the user at the phase-0 exit (date 2026-11-06). The local developer `.env` had no OpenAI key either (§5) | If no OpenAI key: design Q2 becomes a request for a new `OPENAI_API_KEY` secret |
 | 6 | vitest JSON reporter gives assertion, expected, actual, stack | Partly. vitest 4.0.18 `--reporter=json` gives one string per failure (`failureMessages[0]` = `error.stack`): assertion line and stack yes; no `expected`/`actual` fields and no diff; a timeout reads `Error: STACK_TRACE_ERROR`, not `Test timed out`. The error object in a custom reporter has all of them as fields. See §6 | Yes (proposed): Task 1.10 reads a small custom reporter, not `--reporter=json` (§6) |
 | 7 | File-swap path gives the same verdicts as two worktrees | Same results on 3 one-package PRs where all tests passed (1207/627/1275 tests, 0 differences each); no failing test compared (§7) | No |
@@ -123,6 +123,40 @@ In this one run, one more API message (`hZMhUZG7`) streamed after `abort()` befo
 6. Catch the throw that follows `error_max_turns` and abort, and read the `result` message (when there is one) before the throw.
 7. Use zod 4. SDK 0.3.318 has peer `zod@^4.0.0`; 24 `package.json` files under `packages/` pin `zod` `^3.25`, so the new package cannot share that pin.
 8. Check the credential the runner uses. When the runner starts inside a Claude Code session, the SDK child can use that session's login instead of `ANTHROPIC_API_KEY` (`apiKeySource: "none"` here). In CI, confirm `apiKeySource: "ANTHROPIC_API_KEY"` in the init message.
+
+### Environment-key run (2026-11-06)
+
+The key was replaced, and the committed script ran once more in a clean environment that held only the key. `env -i` removes every inherited variable (`CLAUDECODE`, `CLAUDE_CODE_*` and the rest), and `HOME` points to a new, empty folder, so the SDK child cannot find this session's login or config. Same install (`/tmp/jit-q2`, SDK 0.3.318, zod 4); the script was copied from the branch first. `<ANTHROPIC_API_KEY>` is a placeholder:
+
+```bash
+mkdir /tmp/jit-q2-home      # empty
+cd /tmp/jit-q2 && env -i PATH="<node bin>:/usr/bin:/bin" HOME=/tmp/jit-q2-home TMPDIR=/tmp \
+  ANTHROPIC_API_KEY=<ANTHROPIC_API_KEY> MAX_TURNS=2 node q2-agent-sdk.mjs <checkout>
+```
+
+One run; no variation was needed. Output (trimmed: repeated per-block messages, `server_tool_use`, `iterations` and the shadowed-callback warning, which is the same as run 2, removed):
+
+```
+"init": {"model": "claude-haiku-5-5", "apiKeySource": "ANTHROPIC_API_KEY", "permissionMode": "default",
+         "tools": ["Edit","Glob","Grep","Read","Write","mcp__jit__run_test"]}
+"toolUses": ["Write {\"file_path\":\".../packages/MJGlobal/src/__tests__/jit/probe.jit.test.ts\", ...}"]
+"toolResult": {"is_error": false, "text": "File created successfully at: .../__tests__/jit/probe.jit.test.ts ..."}
+"toolUses": ["Write {\"file_path\":\".../packages/MJGlobal/src/probe.ts\", ...}"]
+"toolResult": {"is_error": true, "text": "Writes are allowed only under packages/<X>/src/__tests__/jit/"}
+"toolUses": ["mcp__jit__run_test {\"file\":\"packages/MJGlobal/src/__tests__/jit/probe.jit.test.ts\"}"]
+"result": {"subtype": "error_max_turns", "is_error": true, "num_turns": 3,
+  "usage": {"input_tokens": 4, "cache_creation_input_tokens": 4580, "cache_read_input_tokens": 4087,
+            "output_tokens": 544, "output_tokens_details": {"thinking_tokens": 123}, "service_tier": "standard"},
+  "total_cost_usd": 0.0011131700000000001,
+  "thrown": "Error: Claude Code returned an error result: Reached maximum number of turns (2)"}
+"counted": {"inputTokens": 8671, "outputTokens": 18, "turns": 2, "aborted": false}
+"canUseToolCalls": ["Write", "Write"], "files": {"testFileWritten": true, "outsideFileWritten": false}
+```
+
+The session authenticated with the key, used the tools, and stopped at the turn cap (`MAX_TURNS=2`), as run 3 did. The write guard also held again (one write inside `__tests__/jit/`, one denied outside). The file the agent wrote was deleted before commit.
+
+**The environment-key path is confirmed:** with no Claude Code login in reach, the SDK uses `ANTHROPIC_API_KEY` and the session runs. Item 8 still applies: a runner that starts inside a Claude Code session can pick up that login instead, so CI should still check `apiKeySource`.
+
 ## 4. Provider classes with no database
 
 Script: [`q4-providers.mjs`](q4-providers.mjs). It builds `AnthropicLLM`, `OpenAILLM` and `GeminiLLM`
@@ -253,6 +287,35 @@ Proposed changes (pending phase-0 exit):
   `AnthropicLLM` returns `success: false` (code basis in the table above). Code must handle both.
 
 Still open: re-run Anthropic with a valid key to confirm `claude-haiku-5-5`.
+
+### Anthropic rerun (2026-11-06, new key)
+
+The Anthropic key was replaced. Setup as above, on a new worktree: `pnpm install --frozen-lockfile`
+(Done in 22s), the same three-filter turbo build (8 successful, 8 cached), and a new scratch package
+with the same three symlinks to this worktree's provider folders. The committed `q4-providers.mjs` was
+copied in unchanged (`cmp` clean) and run once with all three keys exported in the same shell, default
+models. Output (complete; `usage` on one line, `bytes` arrays removed):
+
+```
+anthropic | model: claude-haiku-5-5 | success: true | text: "Yes" | usage: ModelUsage {
+  cacheReadTokens: 0, cacheWriteTokens: 0, promptTokens: 19, completionTokens: 5 } | ms: 807
+openai | model: gpt-4.1-mini | success: true | text: "Yes" | usage: ModelUsage {
+  cacheReadTokens: 0, cacheWriteTokens: 0, promptTokens: 14, completionTokens: 1 } | ms: 788
+openai | first token top_logprobs: [{"token":"Yes","logprob":0},{"token":"Sure","logprob":-20.375},
+  {"token":" Yes","logprob":-23.625},{"token":"YES","logprob":-24.125},{"token":"Certainly","logprob":-24.375}]
+gemini | model: gemini-3.5-flash-lite | success: true | text: "Yes." | usage: ModelUsage {
+  cacheReadTokens: 0, cacheWriteTokens: 0, promptTokens: 8, completionTokens: 2 } | ms: 672
+```
+
+- Anthropic: `success: true`, text `"Yes"`, 19 prompt / 5 completion tokens, 807 ms. The model id
+  `claude-haiku-5-5` is confirmed; no fallback model was needed. The 5 completion tokens for a
+  one-word answer equal the `maxOutputTokens: 5` cap; the probe does not print the stop reason, so
+  this run does not show whether the cap was reached.
+- OpenAI and Gemini gave the same results as before (5 `top_logprobs` for `gpt-4.1-mini`).
+- Import-time warnings: none. Nothing else was printed to stdout or stderr.
+
+All three provider classes now make a call from a bare key with no database. The open item above is
+closed.
 
 ## 5. OpenAI key in `INTEGRATION_LIVE_MODEL_KEYS`
 
