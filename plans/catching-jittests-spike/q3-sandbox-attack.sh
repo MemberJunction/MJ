@@ -92,7 +92,8 @@ probe_fetch() {   # $1 = label
   echo "-- $1: fetch folder patches/: $(ls -l "$F/patches" | tail -1 | awk '{print $1, $(NF-2), $(NF-1), $NF}')"
   local o; o=$( cd "$F" && pnpm fetch --store-dir "$S" 2>&1 ); echo "   fetch exit: $?"
   echo "$o" | grep -v '^Progress' | tail -8 | sed 's/^/   fetch: /'
-  echo "$o" | grep -q "outside/target.patch" && { echo "LEAK host: fetch read the symlinked patch target outside patches/"; LEAK=1; }
+  # pnpm names the link path under patches/, not the target, so EACCES on that path means it opened the link.
+  echo "$o" | grep "EACCES" | grep -q "patches/is-odd@3.0.1.patch" && { echo "LEAK host: fetch read through the symlink in patches/ (EACCES on the link path)"; LEAK=1; }
   local m; m=$(ls "$MK" 2>/dev/null | tr '\n' ' '); [ -n "$m" ] && { echo "LEAK host: head code ran during fetch: $m"; LEAK=1; } || echo "no head code ran (no markers)"
   local hit; hit=$(grep -rl "PATCH_TARGET_SPIKE_$TS" "$F" "$S" 2>/dev/null | head -3)
   [ -n "$hit" ] && { echo "LEAK host: symlinked patch target applied on the host: $hit"; LEAK=1; } || echo "symlinked patch content not found in fetch folder or store"
@@ -109,7 +110,7 @@ if [ -f "$P/head/pnpm-lock.yaml" ] && grep -q '^patchedDependencies' "$P/head/pn
   rm -f "${MK:?}"/*
   probe_fetch "B: symlinked patch only, readable target"
   chmod 000 "$P/outside/target.patch"
-  probe_fetch "B: symlinked patch only, unreadable target (an error naming the target means fetch reads it)"
+  probe_fetch "B: symlinked patch only, unreadable target (EACCES on the patches/ path means fetch reads through the symlink)"
   chmod 600 "$P/outside/target.patch"
 else
   echo "PROBE 10b-B INVALID: no lockfile with patchedDependencies, nothing was tested"; LEAK=1
