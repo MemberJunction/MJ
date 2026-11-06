@@ -14,7 +14,7 @@ import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject, ViewChi
 import { Subject } from 'rxjs';
 import { CompositeKey, Metadata, EntityFieldInfo } from '@memberjunction/core';
 import { ResourceData, UserInfoEngine, MJUserSettingEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDMap } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -152,6 +152,9 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         await this.loadEntityOptions();
         this.loadSavedVisualizations();
         this.restoreLastSession();
+        if (!this.Result && !this.ActiveSavedId && this.SavedVisualizations.length > 0) {
+            this.OnSelectSaved(this.SavedVisualizations[0]);
+        }
         // When embedded in the Visualize host, the host owns agent context +
         // the resource load lifecycle; skip them here to avoid double-reporting.
         if (!this.Embedded) {
@@ -662,7 +665,9 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         }
 
         const isMulti = docIDs.length > 1;
-        const docEntityMap = new Map(this.AllEntityDocOptions.map(d => [d.ID, d.EntityName ?? '']));
+        const docEntityMap = new UUIDMap(
+            this.AllEntityDocOptions.map(d => [d.ID, d.EntityName ?? ''] as const),
+        );
         const provider = this.ProviderToUse as GraphQLDataProvider;
         const aiClient = new GraphQLAIClient(provider);
 
@@ -696,7 +701,12 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
                 const metadata = this.parseVectorMetadata(item.Metadata);
                 // Ensure each point knows its source entity for color-by-entity.
                 if (isMulti && !metadata['EntityName']) {
-                    metadata['EntityName'] = docEntityMap.get(docID) ?? metadata['Entity'] ?? '';
+                    const templateID = metadata['TemplateID'];
+                    metadata['EntityName'] =
+                        docEntityMap.Get(docID) ??
+                        (templateID ? docEntityMap.Get(templateID) : undefined) ??
+                        metadata['Entity'] ??
+                        '';
                 }
                 const label = this.buildLabel(metadata);
 

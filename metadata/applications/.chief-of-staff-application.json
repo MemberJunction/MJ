@@ -1,18 +1,33 @@
 {
   "fields": {
     "Name": "Chief of Staff",
-    "Description": "Executive cockpit for your personal Chief of Staff AI agent — manage strategic priority objectives, pending approvals, autonomous wake routines, and governance policy.",
+    "Description": "Your personal Chief of Staff AI agent: pending approvals, wake routines and their briefings, and the governance policy that bounds what it may do. Apps such as Tasks add their own pages through NavItem.* application settings.",
     "Icon": "fa-solid fa-user-tie",
     "DefaultForNewUser": false,
     "DefaultSequence": 15,
     "Color": "#1565c0",
     "DefaultNavItems": [
       {
-        "Label": "Cockpit",
-        "Icon": "fa-solid fa-user-tie",
+        "Label": "Overview",
+        "Description": "Pending approvals, upcoming wakes and governance posture at a glance",
+        "Icon": "fa-solid fa-compass",
         "ResourceType": "Custom",
-        "DriverClass": "ChiefOfStaffDashboard",
+        "DriverClass": "ChiefOfStaffOverview",
         "isDefault": true
+      },
+      {
+        "Label": "Approvals & Wakes",
+        "Description": "Decide on the Chief of Staff's requests and manage its wake routines and briefings",
+        "Icon": "fa-solid fa-bell-concierge",
+        "ResourceType": "Custom",
+        "DriverClass": "ChiefOfStaffApprovals"
+      },
+      {
+        "Label": "Governance",
+        "Description": "The policy that sets the Chief of Staff's autonomy, channels and approval guardrails",
+        "Icon": "fa-solid fa-shield-halved",
+        "ResourceType": "Custom",
+        "DriverClass": "ChiefOfStaffGovernance"
       }
     ]
   },
@@ -23,7 +38,7 @@
     "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E70"
   },
   "sync": {
-    "lastModified": "2026-10-28T00:36:03.431Z",
-    "checksum": "22eee86b0ee2d7cdf9d35b1bc84707cd35f7f04d98ba58d0afa80a202fa0ec1c"
+    "lastModified": "2026-11-01T22:54:22.879Z",
+    "checksum": "6081c2ab534dc0da36c0f168392f3e47c1cff0c652179169aae2d6b9f962b617"
   }
 }

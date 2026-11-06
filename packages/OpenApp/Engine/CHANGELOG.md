@@ -1,5 +1,398 @@
 # @memberjunction/open-app-engine
 
+## 6.2.0
+
+### Minor Changes
+
+- 281724a: Round 2 Citizen Agent Builder feedback fixes and local development JWT auth provider (`local`):
+  - **Local Development Mock/Test JWT Auth (`local`)**: Added `LocalDevProvider` in `@memberjunction/auth-providers`, `/auth/dev-login` and `/auth/dev-users` endpoints in `@memberjunction/server` backed by `MagicLinkKeyManager` RS256 signing, `MJLocalDevProvider` in `@memberjunction/ng-auth-services`, and `AuthProvider: "local"` support in `@memberjunction/installer`. Enforced strict security guards: server startup refuses to boot if `MJ_DEV_AUTH_ENABLED=true` when `NODE_ENV=production`, and `/auth/dev-login` / `/auth/dev-users` reject any non-localhost request (`X-Forwarded-For`, `Forwarded`, `X-Real-IP`, `CF-Connecting-IP`, `Sec-Fetch-Site: cross-site`, `Host`, `Origin`, `Referer`, and socket remote address).
+  - **Single-Tarball OpenApp Archive Download**: Updated `GitHubClient` in `@memberjunction/open-app-engine` to download and extract `.sql` migrations from a single repository `.tar.gz` archive stream (`downloadTarballArchive`) instead of per-directory and per-file Contents/Blob API calls, avoiding anonymous GitHub API rate limits and large-file truncation.
+  - **Flow Agent & CLI Execution Fixes**: Enabled in-process `inRun` execution for Flow agents when no `AgentStepNode` task handler is registered, populated `userMessage` and `payload` in Flow prompt step context, supported multiple starting steps and join deferral, added `--prompt-file` (`-f`) to `mj ai agents run`, and wired `ClientClauseScreen` entity-view authorization for ad-hoc queries in `@memberjunction/ai-cli`.
+  - **Query Action Output & Truncation**: Updated `RunStoredQueryAction` and `RunAdhocQueryAction` in `@memberjunction/core-actions` to populate structured `Results`, `RowCount`, and `TotalRowCount` output parameters, raised default `ColumnMaxLength` to `500`, and appended `...[truncated]` when values are truncated.
+  - **Citizen Builder Template & Turbo Pass-Through**: Updated `citizen-builder` starter template to default to `Loop` agents, bind Docker host ports to `127.0.0.1`, pass `AI_VENDOR_API_KEY__*` and `MJ_*` through `turbo.json`, auto-select free host ports and unique `COMPOSE_PROJECT_NAME` in `mj agent init`, and added `AI_TURBO_ENV_PASSTHROUGH` doctor check in `@memberjunction/installer`.
+
+- 0e5a4cd: Template users: an account set up to be copied, with its pinned apps, views, settings, dashboards and Skip conversations, so a new user starts with all of it.
+  - **`User.IsTemplate`** (migration). The User form shows it under Account Settings. A copy is never a template itself.
+  - **The `template` preset on `MJ: Users`** copies a template user whole: views, settings, dashboards with their categories and links, conversations with their messages, and the artifacts and versions in them. Dashboard layouts, pinned items and artifact references point at the copies. The planner refuses the preset for any user not flagged `IsTemplate` (`TEMPLATE_SOURCE_REQUIRED`), so one person's private work is never copied to another. Only a template-mode preset may open a Locked edge or copy an entity marked `CloneableFromTemplate` (conversations and their messages); request overrides still cannot.
+  - **First sign-in.** `userHandling.newUserTemplate: { email, preset }` in `mj.config.cjs` makes MJAPI create each new user as a copy of that template. Any problem falls back to a plain user, so sign-in never breaks.
+  - **`mj user clone`** creates a user as a copy of another: `--from`, `--email`, `--first`, `--last`, `--preset` (default `template`), `--inactive`, `--dry-run`.
+  - **Open Apps can ship a template user.** `templateUser: { email, description?, preset?, newUsers?: offer | always | never }` in `mj-app.json`. After install, the installer gets their own copy, from `MJ_INSTALL_USER_EMAIL` / `_FIRST_NAME` / `_LAST_NAME` or prompts. The template can also be set for later sign-ins (`MJ_INSTALL_TEMPLATE_FOR_NEW_USERS`). The step only warns on failure; it never fails the install.
+  - **Explorer** shows a red banner while a template user is signed in, because everything changed there reaches every later copy.
+
+  Fixes found on the way:
+  - **CurrentUser** now returns `IsTemplate`, `FirstLast` and the `Employee*` fields. It returned null for every `UserInfo` field missing from its hand-written list. The list is now `SessionUserFields`, with a test that it covers every field the client requests.
+  - **Artifact version saves inside a transaction.** `MJArtifactVersionEntityServer` read attributes through the global provider. On a server's per-request provider, inside a clone's transaction, each read waited about 30 s on the transaction's own locks. A 23-version copy took 11 minutes instead of seconds. It now reads through the entity's provider.
+  - **Copies keep their rows' order.** The dependency walker reads children oldest first (`__mj_CreatedAt`). A row whose remapped column points only at its own ancestors, such as a copied user's messages naming the new user, now saves within the graph save instead of after it. Copied conversations kept their messages, but showed each answer above its question.
+  - **User copies keep dashboard and view names.** The entities' `(copy)` rename applies only where a name could collide. A user copy owns its rows, so the rename only mislabelled them.
+  - Record cloning: `Child.JoinField` preset keys, case-insensitive key lookup in JSON remap, Golden Layout and top-level-array JSON remap paths, and a descendant's `JsonRemap` merged with the entity's own.
+  - A conversation message can be created during a clone save (`CloneContext`) by a user who doesn't own the conversation yet. Updates and deletes are still checked.
+
+### Patch Changes
+
+- 8670958: Enforce declared version ranges on fresh Open App dependency installs (#3310): each not-yet-installed dependency resolves to a concrete version before its manifest is fetched, the install uses that version, and two dependents requiring ranges the resolved version can't both satisfy fail naming both parents and ranges.
+- 8f7214a: `mj app install` and `mj app upgrade` check every declared app package against the npm registry (`npm view`) before any database or file change, and stop with a clear message on an npm authentication failure (run `npm login`) or an unpublished package. Skipped for the `workspace` version strategy and inside an `mj dev workspace`. `AddAppPackages` restores the package.json files it already wrote when a later target fails.
+- 4fedaba: Open App schema safety: the configured MJ core schema is reserved like `__mj`, so an app can no longer adopt and later drop it (#4559). Install rollback and remove share one drop-and-report helper, so a rollback refusal now names its remedy (#4560). Teardown scripts are downloaded before migrations run, so a rollback needs no network; rollback runs teardown with the schema in place and, if that fails, once more after dropping the schema (#3506).
+- 5b2162c: Use Skyway 0.7.1. Migration errors now keep the real cause: when a failed batch had already aborted its transaction (a timeout or severe error), the follow-up rollback's "Transaction has been aborted" no longer replaces the batch's own error, and driver errors keep their full detail (message number, procedure and line, earlier errors in the batch). Skyway 0.7.0 also lets a migration opt out of its transaction with a Flyway-style `<file>.sql.conf` containing `executeInTransaction=false`; migrations without one behave as before.
+- d26183d: Fix CodeQL insecure-randomness and filesystem-race findings in runtime code (#5574).
+  - **Open App installs** download migration and teardown SQL into a fresh private temp directory (`mkdtempSync`) instead of a predictable `mj-app-<name>-<timestamp>` path that reused any directory already there.
+  - **Password generation** picks and shuffles characters with `crypto.randomInt`, removing the modulo bias of `randomBytes % length`.
+  - **Number pool `Random` selection** and the **Pi harness session id** use `node:crypto` instead of `Math.random`.
+  - **SQL log reads** drop the existence check before reading; a missing file is still reported through the existing `ENOENT` handling.
+
+- 8f23b23: Fix `mj app install` rejecting every first-party BizApp schema (#3302). The installer blocked any schema name starting with `__`, but MJ's own app convention is `__mj_<AppName>` — so installing `bizapps-common`, `-forms`, `-tasks`, `-caliber` or `-ats` required the hidden `--dangerously-ignore-dbl-underscore-schema-rule` flag. `__mj_<AppName>` is now the documented app namespace and installs with no flag; `__mj_UDT` joins the reserved set (MJ core owns it as the user-defined-table sandbox); reserved-name matching is now case-insensitive; and the schema name is validated before an app can adopt an already-existing schema, which previously bypassed the guard entirely.
+
+  Opening `__mj_` made every first-party schema name reachable on the default install path, which put weight on the reserved set that it could not previously carry. The set now covers every schema the **database platform** owns, on both dialects: PostgreSQL's `public` and the whole `pg_` prefix (which also covers the per-session `pg_temp_N` / `pg_toast_temp_N` schemas an enumerated list cannot), and SQL Server's nine fixed database-role schemas (`db_owner`, `db_accessadmin`, `db_securityadmin`, `db_ddladmin`, `db_backupoperator`, `db_datareader`, `db_datawriter`, `db_denydatareader`, `db_denydatawriter`). Each of these exists in a stock database, which is exactly what made them dangerous: an app declaring one was never _creating_ a schema, it was **adopting** one on the default path with no flag — and `mj app remove` would then drop it. Verified against SQL Server 2022: all nine accept tables and all nine `DROP SCHEMA` cleanly. The reserved-name error now names the real owner ("reserved by the database platform" vs "by MemberJunction") rather than claiming MJ owns `dbo`.
+
+  `mj app upgrade` now validates the schema name too. Validation previously lived only on the install path, so a v2 manifest could rename its schema to `public` or `db_owner` and the upgrade would run that version's migrations straight into it.
+
+  Installing an app that adopts a schema another installed app already owns now emits a warning. Sharing remains supported and the install still succeeds, but the operator is told that `mj app remove` will from then on skip the schema and metadata cleanup for **both** apps, to avoid destroying the co-tenant's data.
+
+  **Behaviour change for existing installs.** An app installed under a name that is reserved only as of this release — `public` on PostgreSQL, or a casing like `PUBLIC` / `Dbo` / `__mj_udt` that case-insensitive matching now catches — can no longer have its schema dropped, with or without any flag. `mj app remove` refuses, and the app lands in status `Error` while staying installed; reinstalling fails on the same name. This is deliberate (these are schemas MJ must never drop), and `mj app remove <app> --keep-data` is the way out: it unregisters the app and leaves the schema in place. An app installed under a different `__`-prefixed name outside the `__mj_<AppName>` namespace is not stuck the same way: re-running `mj app remove <app> --dangerously-ignore-dbl-underscore-schema-rule` — the same override its install needed — drops the schema.
+
+  Deferred, tracked separately: an optional `coreSchemaName` on `ValidateSchemaNameOptions` so a non-default `MJCoreSchema` is reserved too (#4559), factoring the duplicated rollback drop-result block into a shared helper so the install-rollback path gains the same classified remedy text as remove (#4560), and a shared mock for the three orchestrator suites' identical `vi.mock` spread (#4561).
+
+- 9241c65: Tell a missing GitHub credential apart from a missing tag when installing an Open App from a private repository (#4505). GitHub returns 404 rather than 403 for a repo it will not show you, so `mj app install` reported `Tag 'vX.Y.Z' not found` — and pointed at the repo's `/tags` page, where a signed-in maintainer sees the tag and concludes the CLI is right. The engine now probes repository visibility on the 404 path and names all three ways to supply a credential — `GITHUB_TOKEN`, `openApps.github.token`, and the per-repo `openApps.github.tokens` map — when none was supplied, and `mj app install --help` documents them.
+
+  Behavioral note for consumers of `@memberjunction/open-app-engine` directly: `ValidateGitHubTag` and `FetchManifestFromGitHub` now issue one extra `GET /repos/{owner}/{repo}` request on every 404, so a caller validating many tags against an unauthenticated rate-limit budget spends two calls per miss instead of one.
+
+  Two related fixes on the same path. An `openApps.github.tokens` entry keyed by the repository URL now also applies when a multi-app Open App is installed by its subpath URL (`https://github.com/<owner>/<repo>/<subpath>`); before, the token was not sent. An entry keyed by the exact subpath URL still wins. The "Available versions" link for such an app now points at the repository's tags page; before, it kept the subpath and led to a 404 page. And `mj app install` / `mj app upgrade` now exit 1 after one failure line when the install or upgrade fails; before, they printed a second failure line and `Error: EEXIT: 1`, and exited 2.
+
+  `mj app upgrade <app>` with no `--version` now says why it could not resolve a version: for a repository the credential cannot see, it names the missing or insufficient credential instead of `Could not determine target version`. `@memberjunction/open-app-engine` exports one new function for this, `DescribeUnresolvedVersion(repoUrl, options, subpath?)`; nothing existing changed signature.
+
+- 7d5097d: `mj app install` is more robust for clean installs: package installs run asynchronously with a 30-minute default ceiling (override with `MJ_APP_PACKAGE_INSTALL_TIMEOUT_MS`) instead of a blocking 5-minute `execFileSync`; transient GitHub failures (connection resets, timeouts, 502/503/504) are retried with backoff instead of failing the whole dependency chain; and an app left Disabled because its packages did not install is reported as such — with the real remedy — instead of "Successfully installed" and an "npm auth" guess.
+
+  `mj install --yes` no longer warns that config files were "created with default/empty values" when every value was supplied; it now names only the required connection values that are actually unset.
+
+  On macOS, `mj install`, `mj app install`, `mj app upgrade` and `mj migrate` keep the machine awake while they run (a `caffeinate` assertion tied to the CLI process; `MJ_ALLOW_SLEEP=1` opts out). Sleeping mid-install paused the local database and every connection, and on wake in-flight migration batches reported spurious 300-second timeouts and downloads reported `ECONNRESET` — the cause of every intermittent chained-install failure seen in clean-install testing.
+
+- 10ba687: Open App manifests can declare where a package runs: `platform: "node" | "browser" | "both"` on any `packages` entry. `mj app install` no longer writes Node-only `shared` packages into `dynamicPackages.client`, so an app that ships an actions package under `shared` can no longer break the host Explorer's build with unresolvable `fs` / `child_process` imports from `@google-cloud/storage` (#4428).
+
+  `platform` defaults to `node` for role `actions` and `both` for every other role, so a manifest with no `role: "actions"` entry routes exactly as before. A `role: "actions"` entry with no `platform` does change: under `shared` it no longer reaches `dynamicPackages.client`, and under `client` it is now rejected at validation. An app that declares a Node-only package under `shared` with role `library` (bizapps-ats and bizapps-caliber do, as of this release) should add `"platform": "node"` to that entry, or move it to `server`. Once an app's manifest does that, hosts already carrying the bad entry drop it on their next `mj app upgrade`, which prunes against the corrected rule — the self-heal only takes effect after the publisher ships that manifest change; it does not happen on its own against an unchanged manifest.
+
+  A manifest that puts `platform: "node"` in `client[]` (or `"browser"` in `server[]`) is now rejected at validation with a message naming the package. A `platform` value other than `node`, `browser` or `both` is rejected everywhere a manifest is read: `mj app install`, `mj dev workspace`, and the dynamic-package loader in a process running inside an Open App repository, which now warns with the file, package and value and loads none of that manifest's packages — the same handling as an unparseable `mj-app.json` — instead of silently skipping only the mistyped package.
+
+- 125f40a: Open App schemas on SQL Server are now created owned by the MJ core schema's owner (usually `dbo`), so ownership chaining lets app views read core tables without per-table grants (MJ#4756). When the installer is not permitted to assign that owner, install still succeeds with a plain `CREATE SCHEMA` and a `Schema` warning names the consequence and the remedy. Upgrades, and installs that reuse an existing schema, now check before changing anything that the login has `CONTROL` on the app schema, which its migrations need to record their history and grant on their objects. If it doesn't, they stop with an error naming the owner, the login and the remedy. PostgreSQL is unchanged. The Open App README documents the retrofit for existing installs, including that `ALTER AUTHORIZATION` drops the schema's grants (objects, columns, types and XML schema collections included).
+- edb0eaf: A monorepo app's version tag is resolved from the tag that exists rather than composed from the app's repo subpath, so an app whose repository tags by package name can be version-resolved, upgraded and pinned instead of only installed at HEAD. All three consumers change together — the tag lookup, the manifest fetch, and the migration download. The migration download mattered most: it always has a version, so it never fell back to HEAD, and a package-tagged app with migrations failed in the Migration phase on every install and upgrade — while the PostgreSQL `-pg` probe, which reads a 404 as "no PG variant here", skipped that app's PG migrations silently.
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- 9a2d7cc: RunView's `TotalRowCount` contract is now explicit: a number is always a real total, and `undefined` means the caller passed `SkipTotalRowCount: true`.
+
+  **Contract change.** `RunViewResult.TotalRowCount` is now optional (`TotalRowCount?: number`). With `SkipTotalRowCount: true` it is always `undefined`, including on a page that was not full, where it used to be the number of rows returned. A caller that needs a total must not pass the flag. Strict TypeScript consumers that read the field will see a compile error; a call without the flag always gets a number, so `?? 0` is safe there. `ResultType: 'count_only'` ignores the flag and always counts.
+
+  `MaxRows: 1` is no longer special-cased: a full page of one row now runs the same count as any other full page and reports the real total. Callers that only read `Results` should pass `SkipTotalRowCount: true` to avoid that second query; about 270 such reads in this repo now do. `SkipTotalRowCount` is now sent over GraphQL, so browser callers can use it too.
+
+- 7b543fb: Test-only: complete the fs mock in the embedded-record CodeGen suite so it passes under coverage, pin that `--no-ai` CodeGen runs still load persisted CHECK-constraint validators, share one history-recorder mock factory across the Open App orchestrator suites, and cover the field-level-security startup sweep.
+- 506f170: `mj app upgrade` now refreshes an app's `SchemaName` from its manifest, so a corrected schema name — in practice a corrected CASING — no longer has to survive as install-time debris.
+
+  `OpenApp.SchemaName` is a denormalized copy of `mj-app.json` → `schema.name`, and it was written ONLY by install. Upgrade rewrote `ManifestJSON` right next to it and left the column alone, so an app whose manifest later fixed its schema name kept the original value forever.
+
+  That stale value is not inert. CodeGen's `spUpdateSchemaInfoFromDatabase` backfills `SchemaInfo.CanonicalSchemaName` FROM this column, and `vwEntities` prefers `CanonicalSchemaName` when deriving entity `ClassName`/`CodeName` — as does the runtime GraphQL type-name path. So stale casing propagated into the GraphQL operation names a client constructs, which no longer matched the server's generated resolvers: every operation on the app's entities failed with `GRAPHQL_VALIDATION_FAILED`. Worse, the backfill only ever FILLS NULLS, so once a wrong casing was frozen onto `SchemaInfo` no later codegen pass corrected it.
+  - `UpgradeApp` writes `SchemaName` alongside `ManifestJSON` in its Step 9 record update, keeping the column in lockstep with the manifest that is the documented source of truth. Written only when the manifest declares a schema, so a schema-less app's column is left untouched.
+  - `UpgradeApp` also calls `PersistCanonicalSchemaName`, mirroring the install path (Steps 6-7), which re-asserts the canonical name on the app's `SchemaInfo` row. Its UPDATE is unconditional rather than fill-NULLs-only, so this is the one path that HEALS a row already frozen from a stale column. Best-effort by contract (warns, never fatal) and idempotent.
+
+  A casing correction is detected as a schema rename by `PruneStaleServerConfig`, which strips the old name's `entityPackageName` mapping and `excludeSchemas` entry — correct, since those config keys are case-sensitive. That detection reads the previous manifest before Step 9 overwrites it, so it is unaffected.
+
+  No behaviour change for an app whose manifest schema name has not changed: both writes resolve to the value already stored.
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [1419ba7]
+- Updated dependencies [a709bb6]
+- Updated dependencies [39b35f1]
+- Updated dependencies [e97d95c]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [a50948e]
+- Updated dependencies [2552b1e]
+- Updated dependencies [25bb295]
+- Updated dependencies [432cb73]
+- Updated dependencies [3080e83]
+- Updated dependencies [4c6a28b]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [6c36fb6]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [cc36de5]
+- Updated dependencies [9cb815b]
+- Updated dependencies [709de1a]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [d2db108]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [d43d86e]
+- Updated dependencies [a3539d2]
+- Updated dependencies [db39145]
+- Updated dependencies [41274aa]
+- Updated dependencies [91cba84]
+- Updated dependencies [b14c72f]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [c671f85]
+- Updated dependencies [49f26d9]
+- Updated dependencies [5e4205c]
+- Updated dependencies [7be1684]
+- Updated dependencies [21f9e15]
+- Updated dependencies [1090caa]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [f2248d5]
+- Updated dependencies [81aea34]
+- Updated dependencies [7384dd6]
+- Updated dependencies [6849b00]
+- Updated dependencies [67f6c85]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [5465489]
+- Updated dependencies [3bace5a]
+- Updated dependencies [88e6902]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [4248fb3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [59e32e0]
+- Updated dependencies [d122a41]
+- Updated dependencies [0a7c255]
+- Updated dependencies [0adaf76]
+- Updated dependencies [0ff7523]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [307da67]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [f65fec7]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [cb205de]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [0c634ba]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [223669e]
+- Updated dependencies [683f652]
+- Updated dependencies [914e6ff]
+- Updated dependencies [a8be410]
+- Updated dependencies [7316ac3]
+- Updated dependencies [2274f42]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [0fb3649]
+- Updated dependencies [131f3c4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [705ab4e]
+- Updated dependencies [a7da50b]
+- Updated dependencies [0f04590]
+- Updated dependencies [5fed75a]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [f26084f]
+- Updated dependencies [db39145]
+- Updated dependencies [f48dffc]
+- Updated dependencies [41c2c08]
+- Updated dependencies [630bb88]
+- Updated dependencies [e69634e]
+- Updated dependencies [6779eed]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [44faf83]
+- Updated dependencies [17cc774]
+- Updated dependencies [dae1d31]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [80905a1]
+- Updated dependencies [4c97994]
+- Updated dependencies [397ae9a]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [20650af]
+- Updated dependencies [7e72c86]
+- Updated dependencies [a17a228]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [ce758af]
+- Updated dependencies [89a5b59]
+- Updated dependencies [1ea4085]
+- Updated dependencies [aee2d53]
+- Updated dependencies [8420f36]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [25f7b82]
+- Updated dependencies [8b90b41]
+- Updated dependencies [104125c]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [d296edd]
+- Updated dependencies [66fd011]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [509d2aa]
+- Updated dependencies [68f5c01]
+- Updated dependencies [196160a]
+- Updated dependencies [5513c2a]
+- Updated dependencies [90829e3]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [8c120db]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [aac148b]
+- Updated dependencies [17a4137]
+- Updated dependencies [e1942c7]
+- Updated dependencies [b4afc13]
+- Updated dependencies [c7d1170]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [539dfe3]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [60bd774]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [ac18db8]
+- Updated dependencies [35da130]
+- Updated dependencies [5b41d48]
+- Updated dependencies [4b9542c]
+- Updated dependencies [28c92e0]
+- Updated dependencies [5f707d1]
+- Updated dependencies [369e229]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [aca4317]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [718b01c]
+- Updated dependencies [57fea6a]
+- Updated dependencies [374b1a4]
+- Updated dependencies [2c590b0]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [2854a2e]
+- Updated dependencies [b0b2cc9]
+- Updated dependencies [dc38250]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/core-entities@6.2.0
+  - @memberjunction/global@6.2.0
+  - @memberjunction/core@6.2.0
+  - @memberjunction/sql-dialect@6.2.0
+  - @memberjunction/record-cloning@6.2.0
+
+## 6.2.0-edge.8
+
+### Patch Changes
+
+- 8f7214a: `mj app install` and `mj app upgrade` check every declared app package against the npm registry (`npm view`) before any database or file change, and stop with a clear message on an npm authentication failure (run `npm login`) or an unpublished package. Skipped for the `workspace` version strategy and inside an `mj dev workspace`. `AddAppPackages` restores the package.json files it already wrote when a later target fails.
+- 4fedaba: Open App schema safety: the configured MJ core schema is reserved like `__mj`, so an app can no longer adopt and later drop it (#4559). Install rollback and remove share one drop-and-report helper, so a rollback refusal now names its remedy (#4560). Teardown scripts are downloaded before migrations run, so a rollback needs no network; rollback runs teardown with the schema in place and, if that fails, once more after dropping the schema (#3506).
+- Updated dependencies [6c36fb6]
+- Updated dependencies [9cb815b]
+- Updated dependencies [d2db108]
+- Updated dependencies [c671f85]
+- Updated dependencies [6849b00]
+- Updated dependencies [59e32e0]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [e69634e]
+- Updated dependencies [539dfe3]
+- Updated dependencies [ac18db8]
+  - @memberjunction/core@6.2.0-edge.8
+  - @memberjunction/core-entities@6.2.0-edge.8
+  - @memberjunction/global@6.2.0-edge.8
+  - @memberjunction/record-cloning@6.2.0-edge.8
+  - @memberjunction/sql-dialect@6.2.0-edge.8
+
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- 8670958: Enforce declared version ranges on fresh Open App dependency installs (#3310): each not-yet-installed dependency resolves to a concrete version before its manifest is fetched, the install uses that version, and two dependents requiring ranges the resolved version can't both satisfy fail naming both parents and ranges.
+- 9a2d7cc: RunView's `TotalRowCount` contract is now explicit: a number is always a real total, and `undefined` means the caller passed `SkipTotalRowCount: true`.
+
+  **Contract change.** `RunViewResult.TotalRowCount` is now optional (`TotalRowCount?: number`). With `SkipTotalRowCount: true` it is always `undefined`, including on a page that was not full, where it used to be the number of rows returned. A caller that needs a total must not pass the flag. Strict TypeScript consumers that read the field will see a compile error; a call without the flag always gets a number, so `?? 0` is safe there. `ResultType: 'count_only'` ignores the flag and always counts.
+
+  `MaxRows: 1` is no longer special-cased: a full page of one row now runs the same count as any other full page and reports the real total. Callers that only read `Results` should pass `SkipTotalRowCount: true` to avoid that second query; about 270 such reads in this repo now do. `SkipTotalRowCount` is now sent over GraphQL, so browser callers can use it too.
+
+- 7b543fb: Test-only: complete the fs mock in the embedded-record CodeGen suite so it passes under coverage, pin that `--no-ai` CodeGen runs still load persisted CHECK-constraint validators, share one history-recorder mock factory across the Open App orchestrator suites, and cover the field-level-security startup sweep.
+- Updated dependencies [1419ba7]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [91cba84]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [3bace5a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [0fb3649]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [6779eed]
+- Updated dependencies [397ae9a]
+- Updated dependencies [89a5b59]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/core-entities@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+  - @memberjunction/record-cloning@6.2.0-edge.7
+  - @memberjunction/sql-dialect@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Minor Changes

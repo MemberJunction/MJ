@@ -10,6 +10,7 @@ interface WhileOperation {
         params: Record<string, unknown>;
         outputMapping?: string;
     };  // Execute action per iteration
+    steps?: LoopBodyActionStep[];  // Execute an ordered sequence of actions per iteration with zero LLM turns between steps.
     subAgent?: {
         name: string;
         message: string;

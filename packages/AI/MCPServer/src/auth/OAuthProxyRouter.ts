@@ -1175,14 +1175,12 @@ async function handlePostConsentEndpoint(
   const offeredScopePaths = new Set((consentRequest.availableScopes ?? []).map((s) => s.FullPath));
   const rejectedScopes = grantedScopes.filter((s) => !offeredScopePaths.has(s));
   if (rejectedScopes.length > 0) {
-    // Rejected scopes are raw form input: strip line breaks before logging (CWE-117 log injection).
-    // Each scope is sanitized before the join: CodeQL's js/log-injection does not carry a replace
-    // on the joined string back through join(). U+2028/U+2029 are removed too. String() guards
-    // against non-string entries the extended urlencoded parser can produce (scopes[0][x]=1).
-    const safeRejectedScopes = rejectedScopes
-      .map((s) => String(s).replace(/\n|\r/g, '').replace(/[\u2028\u2029]/g, ''))
-      .join(', ');
-    console.warn(`[OAuth Proxy] Dropping ${rejectedScopes.length} submitted scope(s) not offered on the consent screen: ${safeRejectedScopes}`);
+    // Rejected scopes are raw form input: strip line breaks and U+2028/U+2029 before logging (CWE-117
+    // log injection). String() guards against non-string entries the extended urlencoded parser can
+    // produce (scopes[0][x]=1). The count is read from the sanitized array too: CodeQL treats any
+    // read of the raw array, `.length` included, as tainted.
+    const safeRejectedScopes = rejectedScopes.map((s) => String(s).replace(/\n|\r/g, '').replace(/[\u2028\u2029]/g, ''));
+    console.warn(`[OAuth Proxy] Dropping ${safeRejectedScopes.length} submitted scope(s) not offered on the consent screen: ${safeRejectedScopes.join(', ')}`);
   }
   grantedScopes = grantedScopes.filter((s) => offeredScopePaths.has(s));
 

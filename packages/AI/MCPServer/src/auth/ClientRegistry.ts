@@ -121,8 +121,9 @@ export class ClientRegistry {
 
     // client_name comes from an unauthenticated registration body: strip line breaks (CWE-117 log
     // injection). Kept inline in this exact form so CodeQL's js/log-injection recognizes it; the
-    // second replace drops the Unicode line/paragraph separators U+2028/U+2029.
-    const safeClientName = (request.client_name ?? 'unnamed').replace(/\n|\r/g, '').replace(/[\u2028\u2029]/g, '');
+    // second replace drops the Unicode line/paragraph separators U+2028/U+2029. The body is only cast,
+    // not validated, so String() turns an array or object client_name into text instead of throwing.
+    const safeClientName = String(request.client_name ?? 'unnamed').replace(/\n|\r/g, '').replace(/[\u2028\u2029]/g, '');
     console.log(`OAuth Proxy: Registered client ${clientId} (${safeClientName})`);
 
     // Build response per RFC 7591 section 3.2.1

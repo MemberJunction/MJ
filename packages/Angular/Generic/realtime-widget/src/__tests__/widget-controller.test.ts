@@ -334,6 +334,29 @@ describe('WidgetController', () => {
       }
     });
 
+    it("reports a runtime 'deadline' end as mj-session-ended with reason 'deadline'", async () => {
+      const h = buildHarness(base);
+      h.guest.Next = guestSession({ token: makeJwt(9_999_999_999) });
+      await h.controller.Start();
+      await h.runtime.EndRealtimeSession('deadline');
+      expect(h.events.find((e) => e.name === 'mj-session-ended')?.detail).toMatchObject({ reason: 'deadline' });
+    });
+
+    it('owns no deadline timer: with the runtime told not to auto-end, passing the deadline leaves the call live', async () => {
+      vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+      try {
+        const h = buildHarness(base);
+        h.guest.Next = guestSession({ token: makeJwt(9_999_999_999), voiceMaxSessionMinutes: 10 });
+        await h.controller.Start();
+        h.runtime.SetSessionDeadline(new Date(Date.now() + 10 * 60_000), { autoEnd: false });
+        await vi.advanceTimersByTimeAsync(10 * 60_000 + 1);
+        expect(h.controller.Phase).toBe('live');
+        expect(h.events.find((e) => e.name === 'mj-session-ended')).toBeUndefined();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('extends the deadline when the server announces a verification, so the call survives the original ceiling', async () => {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
       try {
@@ -602,6 +625,35 @@ describe('WidgetController', () => {
       await h.controller.End();
       h.controller.Dispose();
       expect(end).not.toHaveBeenCalled();
+    });
+
+    it("never touches another call's deadline: a launch on a busy shared runtime neither clears nor replaces it", async () => {
+      const h = buildHarness({ widgetKey: 'pk_live_abc', apiUrl: 'https://api.example.com' });
+      h.guest.Next = guestSession({ token: makeJwt(9_999_999_999), voiceMaxSessionMinutes: 10 });
+      const foreign = new Date(Date.now() + 60 * 60_000);
+      h.runtime.SetSessionDeadline(foreign, { autoEnd: false });
+      // Another widget (or the host page) holds the call: the runtime refuses this start.
+      vi.spyOn(h.runtime, 'IsActive', 'get').mockReturnValue(true);
+      vi.spyOn(h.runtime, 'StartRealtimeSession').mockResolvedValue(undefined);
+      await h.controller.Start();
+      expect(h.runtime.SessionDeadline).toBe(foreign);
+    });
+
+    // The runtime is idle when the launch begins and busy by the time it reaches the start: the host page started a
+    // call while the widget was still preparing (minting, loading the rasterizer). The refused launch must leave no
+    // deadline behind, or the guest's ceiling would end the host page's call.
+    it('leaves no deadline on the runtime when another call takes it between the launch and the start', async () => {
+      const h = buildHarness({ widgetKey: 'pk_live_abc', apiUrl: 'https://api.example.com' });
+      h.guest.Next = guestSession({ token: makeJwt(9_999_999_999), voiceMaxSessionMinutes: 10 });
+      let busy = false;
+      vi.spyOn(h.runtime, 'IsActive', 'get').mockImplementation(() => busy);
+      vi.spyOn(h.runtime, 'StartRealtimeSession').mockImplementation(async () => {
+        busy = true;
+        throw new Error('A realtime session is already active.');
+      });
+      await h.controller.Start();
+      expect(h.controller.Phase).toBe('error');
+      expect(h.runtime.SessionDeadline).toBeNull();
     });
 
     it('ends only once: a call it did start is hung up by end(), and a later removal does not hang up again', async () => {

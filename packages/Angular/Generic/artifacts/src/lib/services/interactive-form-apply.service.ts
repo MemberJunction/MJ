@@ -753,6 +753,7 @@ export class InteractiveFormApplyService {
                 ExtraFilter: `Name='${name.replace(/'/g, "''")}'`,
                 Fields: ['ID'],
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
             });
             return result.Success ? (result.Results?.[0]?.ID ?? null) : null;

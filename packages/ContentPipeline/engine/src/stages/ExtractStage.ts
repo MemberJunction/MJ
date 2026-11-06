@@ -43,6 +43,7 @@ import {
 import { ContentSourceConfigurationResolver, ResolvedSourceConfiguration } from '../ContentSourceConfigurationResolver.js';
 import { FetchContent, FetchResponse } from '../ContentFetcher.js';
 import { DetectionCatalog } from '../DetectionCatalog.js';
+import { IsUploadItemURL } from '../UploadLocator.js';
 import { SelectExtractor } from '../ExtractorCascade.js';
 import { ResolveSourceDriver } from './DiscoverStage.js';
 
@@ -84,7 +85,7 @@ export class ExtractStage extends BasePipelineStage {
         const source = await this.resolveSource(record, context);
         // Kept bytes are read back, not refetched: an archive member's URL points at the archive.
         const keptFileID = record.GetExtension<string>('Pipeline', 'fileID');
-        const fetched = keptFileID ? await this.readKeptFile(keptFileID, context) : await this.fetch(url, source, context);
+        const fetched = keptFileID ? await this.readKeptFile(keptFileID, url, context) : await this.fetch(url, source, context);
         const archiveState: ArchiveTreeState = {};
         const read = await this.detectAndRead(record, fetched.Content, fetched.ResolvedURL ?? url, source, context, archiveState, 0);
         switch (read.Kind) {
@@ -349,7 +350,7 @@ export class ExtractStage extends BasePipelineStage {
     }
 
     /** Read back bytes an earlier run kept, through MJ Files and the caller's storage access. */
-    private async readKeptFile(fileID: string, context: StageContext): Promise<FetchResponse> {
+    private async readKeptFile(fileID: string, url: string, context: StageContext): Promise<FetchResponse> {
         const file = await context.Provider.GetEntityObject<MJFileEntity>('MJ: Files', context.ContextUser);
         if (!(await file.InnerLoad(CompositeKey.FromID(fileID)))) { // first-pk-ok: MJ core entity, single-column ID
             throw new FatalStageError(`The kept copy '${fileID}' for this record no longer exists`);
@@ -359,7 +360,19 @@ export class ExtractStage extends BasePipelineStage {
             throw new FatalStageError(`No storage account is configured for provider '${file.ProviderID}', so '${fileID}' cannot be read`);
         }
         const bytes = await resolved.Driver.GetObject({ fullPath: resolved.ObjectKey });
-        return { Content: new Uint8Array(bytes), ContentType: file.ContentType ?? undefined, ResolvedURL: resolved.ObjectKey };
+        const resolvedURL = IsUploadItemURL(url) && !url.includes('#')
+            ? this.uploadFileNameHint(file.Name, resolved.ObjectKey)
+            : resolved.ObjectKey;
+        return { Content: new Uint8Array(bytes), ContentType: file.ContentType ?? undefined, ResolvedURL: resolvedURL };
+    }
+
+    /**
+     * Take the extension directly from `MJ: Files.Name` for an upload item, without passing the
+     * raw filename through URL parsing (which cuts at `#` or `?`, e.g. `Invoice #12.docx`).
+     */
+    private uploadFileNameHint(fileName: string | null | undefined, objectKey: string): string {
+        const ext = fileName ? path.posix.extname(fileName.replaceAll('\\', '/')) : '';
+        return ext.length > 1 && !/[?#]/.test(ext) ? `upload${ext}` : objectKey;
     }
 
     /** Fetch through the source's driver when it reads its own locators, else over HTTP. */

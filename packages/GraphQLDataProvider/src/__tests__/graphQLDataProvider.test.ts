@@ -376,3 +376,55 @@ describe('GraphQLDataProvider - refresh policy after a metadata member change', 
     expect((provider as unknown as { MetadataMemberRefreshRearmsOnNewEvents: boolean }).MetadataMemberRefreshRearmsOnNewEvents).toBe(false);
   });
 });
+
+describe('GraphQLDataProvider - dataset failure status preservation (MJ#6106)', () => {
+  it('preserves DatasetID and Status when GetDatasetByName returns Success=false', async () => {
+    const provider = Object.create(GraphQLDataProvider.prototype) as GraphQLDataProvider;
+    (provider as unknown as { ExecuteGQL: unknown }).ExecuteGQL = vi.fn().mockResolvedValue({
+      GetDatasetByName: {
+        DatasetID: 'DS-TEMPLATE',
+        DatasetName: 'Template_Metadata',
+        Success: false,
+        Status: 'User restricted@example.com does not have read permissions on MJ: Templates',
+        LatestUpdateDate: null,
+        Results: null,
+      },
+    });
+
+    const result = await provider.GetDatasetByName('Template_Metadata');
+    expect(result).toEqual({
+      DatasetID: 'DS-TEMPLATE',
+      DatasetName: 'Template_Metadata',
+      Success: false,
+      Status: 'User restricted@example.com does not have read permissions on MJ: Templates',
+      LatestUpdateDate: null,
+      Results: null,
+    });
+  });
+
+  it('preserves DatasetID and Status when executeDatasetStatusByName returns Success=false', async () => {
+    const provider = Object.create(GraphQLDataProvider.prototype) as GraphQLDataProvider;
+    (provider as unknown as { ExecuteGQL: unknown }).ExecuteGQL = vi.fn().mockResolvedValue({
+      GetDatasetStatusByName: {
+        DatasetID: 'DS-TEMPLATE',
+        DatasetName: 'Template_Metadata',
+        Success: false,
+        Status: 'User restricted@example.com does not have read permissions on MJ: Templates',
+        LatestUpdateDate: null,
+        EntityUpdateDates: null,
+      },
+    });
+
+    const result = await (
+      provider as unknown as { executeDatasetStatusByName(name: string): Promise<unknown> }
+    ).executeDatasetStatusByName('Template_Metadata');
+    expect(result).toEqual({
+      DatasetID: 'DS-TEMPLATE',
+      DatasetName: 'Template_Metadata',
+      Success: false,
+      Status: 'User restricted@example.com does not have read permissions on MJ: Templates',
+      LatestUpdateDate: null,
+      EntityUpdateDates: null,
+    });
+  });
+});

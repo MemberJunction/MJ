@@ -42,7 +42,7 @@
 
 import express, { Application, Request, Response, Router } from 'express';
 import { WebClient } from '@slack/web-api';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, SanitizeForLog } from '@memberjunction/global';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { SocketModeClient } from '@slack/socket-mode';
 import {
@@ -57,13 +57,9 @@ import { MessagingAdapterSettings, RequestWithRawBody } from '../base/types.js';
 import { VerifySlackSignature } from './slack-routes.js';
 import { HandleSlackInteraction } from './slack-interactivity.js';
 
-/**
- * Renders a Slack request-body value for a log line with line breaks, other control
- * characters and Unicode line/paragraph separators (U+2028/U+2029) removed, so a crafted value cannot forge extra log entries (CWE-117).
- * The `.replace(/\n|\r/g, '')` step is the form CodeQL's js/log-injection sanitizer recognizes.
- */
-function stripLineBreaks(value: unknown): string {
-    return String(value).replace(/\n|\r/g, '').replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, '');
+/** Returns a request-supplied value as one length-capped line for a log message. */
+function logValue(value: unknown): string {
+    return SanitizeForLog(String(value));
 }
 
 /**
@@ -406,7 +402,7 @@ export class SlackMessagingExtension extends BaseServerExtension {
     private async handleSlashCommand(req: Request, res: Response): Promise<void> {
         const { command, text, user_id, user_name, channel_id } = req.body as Record<string, string>;
 
-        LogStatus(`Slack slash command: command=${stripLineBreaks(command)}, text="${stripLineBreaks(text)}", user=${stripLineBreaks(user_id)}, channel=${stripLineBreaks(channel_id)}`);
+        LogStatus(`Slack slash command: command=${logValue(command)}, text="${logValue(text)}", user=${logValue(user_id)}, channel=${logValue(channel_id)}`);
 
         // Look up the agent for this command
         const agentName = this.resolveSlashCommandAgent(command);
@@ -548,17 +544,17 @@ export class SlackMessagingExtension extends BaseServerExtension {
         }
 
         const eventType = event.type as string;
-        LogStatus(`Slack event received: type=${stripLineBreaks(eventType)}, channel=${stripLineBreaks(event.channel)}, user=${stripLineBreaks(event.user)}`);
+        LogStatus(`Slack event received: type=${logValue(eventType)}, channel=${logValue(event.channel)}, user=${logValue(event.user)}`);
 
         // Only handle message and app_mention events
         if (eventType !== 'message' && eventType !== 'app_mention') {
-            LogStatus(`Slack: ignoring event type '${stripLineBreaks(eventType)}'`);
+            LogStatus(`Slack: ignoring event type '${logValue(eventType)}'`);
             return;
         }
 
         // Skip bot messages (prevent loops) and message edits/deletes
         if (event.bot_id || event.subtype) {
-            LogStatus(`Slack: skipping bot/subtype message (bot_id=${stripLineBreaks(event.bot_id)}, subtype=${stripLineBreaks(event.subtype)})`);
+            LogStatus(`Slack: skipping bot/subtype message (bot_id=${logValue(event.bot_id)}, subtype=${logValue(event.subtype)})`);
             return;
         }
 

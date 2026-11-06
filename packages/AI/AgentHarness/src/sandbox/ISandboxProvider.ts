@@ -23,6 +23,20 @@ export interface SandboxConfig {
     Image?: string;
     /** How to handle two runs wanting the same durable workspace. */
     Concurrency?: 'queue' | 'fail' | 'fork';
+    /** CPU quota in cores (`--cpus <n>`) for container providers. Ignored by the local provider. */
+    Cpus?: number;
+    /** Hard memory limit in megabytes (`--memory <n>m`) for container providers. Ignored by the local provider. */
+    MemoryMb?: number;
+    /** Maximum number of processes/threads (`--pids-limit <n>`) inside the container. Ignored by the local provider. */
+    PidsLimit?: number;
+    /** Size of `/dev/shm` in megabytes (`--shm-size <n>m`) for container providers (required by Chromium). Ignored by the local provider. */
+    ShmSizeMb?: number;
+    /** Mount the container's root filesystem read-only with a writable `/tmp` tmpfs (`--read-only --tmpfs /tmp:rw,size=256m`). Ignored by the local provider. */
+    ReadOnlyRoot?: boolean;
+    /** UID/GID (`--user <uid:gid>`) to run container processes as so bind-mounted files match host ownership. Ignored by the local provider. */
+    User?: string;
+    /** Drop all Linux capabilities and forbid privilege escalation (`--cap-drop ALL --security-opt no-new-privileges`). Ignored by the local provider. */
+    DropCapabilities?: boolean;
 }
 
 /** A provisioned workspace, and the means of running commands inside it. */
@@ -37,6 +51,11 @@ export interface SandboxHandle {
      * and that distinction is why the field is documented rather than just named.
      */
     WorkspacePath: string;
+    /**
+     * Host-filesystem directory backing {@link WorkspacePath}, for callers on the MJAPI host that need
+     * to stage request files or collect output artifacts across the bind mount.
+     */
+    HostWorkspacePath?: string;
     Key: WorkspaceKey;
     /** True when the workspace is discarded on finalize rather than retained for the next run. */
     Ephemeral: boolean;

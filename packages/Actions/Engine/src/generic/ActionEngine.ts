@@ -255,8 +255,19 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * race the INSERT's reload (the "stuck at EndedAt=NULL / shows Running forever" bug is structurally
     * impossible). The queue is self-bounding (in-flight tasks only), so it needs no flush on this
     * long-lived singleton.
+    *
+    * `detachFromTransaction`: nothing awaits these saves inside a transaction today, so a log row written
+    * from inside a save's transaction (a durable submission) would otherwise reach SQL behind its COMMIT
+    * and be lost (#6251 EA6). Detaching is safe here because every FK on the row points at metadata
+    * (Action, User, Entity Action, Entity Action Invocation Type, Entity), never at a row the open
+    * transaction created.
+    *
+    * The one way to wait on these saves is `result.LogEntryPersisted`, which RecordSetProcessor awaits
+    * outside any transaction. Awaiting it inside a transaction that changed one of those metadata rows
+    * would wait on itself: the detached INSERT blocks on that row's lock until the COMMIT, and the COMMIT
+    * waits for the INSERT.
     */
-   private readonly _logQueue = new BaseEntitySaveQueue({ saveReturnMode: 'datestamps_only' });
+   private readonly _logQueue = new BaseEntitySaveQueue({ saveReturnMode: 'datestamps_only', detachFromTransaction: true });
    /** Per-run cache of resolved BaseAction instances so CheckAudience, ValidateInputs, and RunClassBasedAction share one instance. */
    private readonly _actionInstanceCache = new WeakMap<RunActionParams, BaseAction | null>();
 
@@ -593,6 +604,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
             ResultCode: simpleResult.ResultCode,
             Message: simpleResult.Message,
             AIDirectives: simpleResult.AIDirectives,
+            ErrorRecovery: simpleResult.ErrorRecovery,
             LogEntry: logEntry,
             Params: simpleResult.Params || params.Params,
             Result: resultCodeEntity

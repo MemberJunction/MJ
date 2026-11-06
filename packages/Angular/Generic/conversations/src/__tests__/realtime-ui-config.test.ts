@@ -13,7 +13,6 @@ function signals(over: Partial<RealtimeUiSignals> = {}): RealtimeUiSignals {
     ContainerWidthPx: 900,
     TextRevealed: false,
     DisclosureShowThread: false,
-    DisclosureShowComposer: false,
     DisclosureShowPanel: false,
     DisclosureShowGear: false,
     SurfacePanelEarned: false,
@@ -49,7 +48,7 @@ describe('resolveRealtimeUi — chrome (the orb ↔ console rule)', () => {
   it('auto: the disclosure ratchet alone does NOT flip to console — only explicit text intent', () => {
     // Wide + a high disclosure base (power user) but the user has NOT revealed text → stays an orb
     // (this is the bug that produced an empty body: ratchet ≠ "the user asked for text").
-    const ratchetOnly = ResolveRealtimeUi({ chrome: 'auto' }, signals({ ContainerWidthPx: 900, DisclosureShowComposer: true, DisclosureShowThread: true }));
+    const ratchetOnly = ResolveRealtimeUi({ chrome: 'auto' }, signals({ ContainerWidthPx: 900, DisclosureShowThread: true }));
     expect(ratchetOnly.chrome).toBe('orb');
     expect(ratchetOnly.showHero).toBe(true);
     expect(ratchetOnly.showThread).toBe(false);
@@ -100,6 +99,7 @@ describe('resolveRealtimeUi — defaults & compactness', () => {
     expect(r.showCaptionsControl).toBe(DEFAULT_REALTIME_UI_INPUTS.showCaptionsControl);
     expect(r.showEnd).toBe(true);
     expect(r.allowTextReveal).toBe(true);
+    expect(r.allowTyping).toBe(true);
   });
 
   it('compact is inferred below the breakpoint', () => {
@@ -110,20 +110,10 @@ describe('resolveRealtimeUi — defaults & compactness', () => {
   it('compact can be forced on regardless of width', () => {
     expect(ResolveRealtimeUi({ compact: true }, signals({ ContainerWidthPx: 1400 })).compact).toBe(true);
   });
-
-  it('connecting flag mirrors the connection state', () => {
-    expect(ResolveRealtimeUi(undefined, signals({ ConnectionState: 'connecting' })).connecting).toBe(true);
-    expect(ResolveRealtimeUi(undefined, signals({ ConnectionState: 'speaking' })).connecting).toBe(false);
-  });
-
-  it('autoHideControls only applies in orb chrome', () => {
-    expect(ResolveRealtimeUi({ chrome: 'orb' }, signals()).autoHideControls).toBe(true);
-    expect(ResolveRealtimeUi({ chrome: 'console' }, signals()).autoHideControls).toBe(false);
-  });
 });
 
 describe('resolveRealtimeUi — per-affordance gating (flag AND runtime)', () => {
-  const consoleSig = signals({ ContainerWidthPx: 1000, TextRevealed: true, DisclosureShowPanel: true, SurfacePanelEarned: true, DisclosureShowComposer: true, DisclosureShowGear: true });
+  const consoleSig = signals({ ContainerWidthPx: 1000, TextRevealed: true, DisclosureShowPanel: true, SurfacePanelEarned: true, DisclosureShowGear: true });
 
   it('surface panel needs the flag + an earned panel — but NOT the disclosure level, NOR console chrome (the on-demand Details/agent peek)', () => {
     expect(ResolveRealtimeUi(undefined, consoleSig).showSurfacePanel).toBe(true);
@@ -168,17 +158,11 @@ describe('resolveRealtimeUi — per-affordance gating (flag AND runtime)', () =>
     expect(ResolveRealtimeUi(undefined, focused).showChannelStrip).toBe(false);
   });
 
-  it('resize is only allowed when the surface panel is actually shown', () => {
-    expect(ResolveRealtimeUi(undefined, consoleSig).allowResize).toBe(true);
-    expect(ResolveRealtimeUi({ allowResize: false }, consoleSig).allowResize).toBe(false);
-    expect(ResolveRealtimeUi(undefined, { ...consoleSig, SurfacePanelEarned: false }).allowResize).toBe(false);
-  });
-
   it('activity tab needs activity (or review) and a console', () => {
     expect(ResolveRealtimeUi(undefined, { ...consoleSig, HasActivity: true }).showActivityTab).toBe(true);
     expect(ResolveRealtimeUi(undefined, { ...consoleSig, HasActivity: false }).showActivityTab).toBe(false);
     expect(ResolveRealtimeUi({ showActivityRail: false }, { ...consoleSig, HasActivity: true }).showActivityTab).toBe(false);
-    expect(ResolveRealtimeUi(undefined, { ...consoleSig, HasActivity: true, IsReviewing: false, ContainerWidthPx: 360, TextRevealed: false, DisclosureShowComposer: false }).showActivityTab).toBe(false); // orb
+    expect(ResolveRealtimeUi(undefined, { ...consoleSig, HasActivity: true, IsReviewing: false, ContainerWidthPx: 360, TextRevealed: false }).showActivityTab).toBe(false); // orb
   });
 
   it('dev links require BOTH the flag and per-session dev mode', () => {
@@ -203,10 +187,45 @@ describe('resolveRealtimeUi — per-affordance gating (flag AND runtime)', () =>
     // orb with no gear permission → no picker
     expect(ResolveRealtimeUi({ chrome: 'orb' }, signals({ DisclosureShowGear: false })).showDensityPicker).toBe(false);
   });
+});
 
-  it('composer is console-only and suppressed in review', () => {
-    expect(ResolveRealtimeUi(undefined, consoleSig).showComposer).toBe(true);
-    expect(ResolveRealtimeUi(undefined, { ...consoleSig, IsReviewing: true }).showComposer).toBe(false);
-    expect(ResolveRealtimeUi({ chrome: 'orb' }, consoleSig).showComposer).toBe(false);
+describe('resolveRealtimeUi — typing and text', () => {
+  const consoleSig = signals({ TextRevealed: true });
+  it.each([
+    [undefined, undefined, 'console', true],
+    [false, undefined, 'console', false],
+    [undefined, false, 'console', false],
+    [true, false, 'orb', false],
+    [false, true, 'orb', false],
+    [true, true, 'orb', true],
+  ] as const)('allowTyping=%s allowTextReveal=%s chrome=%s → allowTyping %s', (allowTyping, allowTextReveal, chrome, expected) => {
+    const r = ResolveRealtimeUi({ allowTyping, allowTextReveal, chrome }, consoleSig);
+    expect(r.allowTyping).toBe(expected);
+  });
+  it('captions control needs text to be allowed', () => {
+    expect(ResolveRealtimeUi({ allowTextReveal: false }, consoleSig).showCaptionsControl).toBe(false);
+    expect(ResolveRealtimeUi({ showCaptionsControl: false }, consoleSig).showCaptionsControl).toBe(false);
+    expect(ResolveRealtimeUi(undefined, consoleSig).showCaptionsControl).toBe(true);
+  });
+  it('a forced console with no text allowed shows the hero, not the thread', () => {
+    const r = ResolveRealtimeUi({ chrome: 'console', allowTextReveal: false }, consoleSig);
+    expect(r.showThread).toBe(false);
+    expect(r.showHero).toBe(true);
+  });
+  it('review always carries the thread, even with text disallowed', () => {
+    const r = ResolveRealtimeUi({ allowTextReveal: false }, signals({ IsReviewing: true }));
+    expect(r.showThread).toBe(true);
+    expect(r.showHero).toBe(false);
+  });
+  it('the gear hides when it would be empty', () => {
+    expect(ResolveRealtimeUi({ showDensityPicker: false, showDevLinks: false }, consoleSig).showGear).toBe(false);
+    expect(ResolveRealtimeUi({ showDensityPicker: false }, consoleSig).showGear).toBe(true);
+    expect(ResolveRealtimeUi({ showDevLinks: false }, consoleSig).showGear).toBe(true);
+  });
+  it('the resolved view-model carries no dead outputs', () => {
+    const keys = Object.keys(ResolveRealtimeUi(undefined, consoleSig));
+    for (const dead of ['showComposer', 'connecting', 'autoHideControls', 'allowResize']) {
+      expect(keys).not.toContain(dead);
+    }
   });
 });

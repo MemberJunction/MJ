@@ -95,23 +95,39 @@ backported fixes that were already reviewed on `next`.
 ## 2. LTS candidate cut (the pre-exit dance)
 
 Trigger: the cert owner declares the stream ready ("current `6.1.0-edge.N` is our candidate").
-The cut happens at the **tip of `next`**. It is one workflow dispatch, takes about as long as
-an Edge release, and freezes nothing: merges after it simply ride the next stream.
+The cut is built from the **newest published Edge tag of the line** (`v6.1.0-edge.N`), not
+the tip of `next`: the candidate is exactly what shipped as Edge, minus the suffix. It is one
+workflow dispatch, takes about as long as an Edge release, and freezes nothing: anything merged
+to `next` after that tag (including during the run) is not in 6.1.0 and rides the next stream.
 
 Actions -> "Build and publish new package versions" -> Run workflow -> leave the ref at
 `next` -> `cut_line: 6.1` -> `confirm_branch: lts/6.1`. That is invocation 4 in
 `publish.yml`; the job is `cut-candidate`, the logic is `ci/candidate-cut.mjs`.
 
-**Before you press it** (the job checks all three and refuses otherwise):
+**Before you press it** (the job checks all of these and refuses otherwise):
 
 1. `release-lines.json` on `next` carries `lines["6.1"]` as `{ "status": "candidate",
    "candidateDate": "YYYY-MM-DD" }`. That is a reviewed PR (CODEOWNERS: the cert owner);
    status fields never arrive by direct push, so the job only appends the mechanical
    `newest` and `releases` fields afterwards.
-2. The newest Edge build is published. The job cuts the tip regardless and only reports
-   how many commits sit between the last Edge tag and the tip; a large unpublished batch is
-   your call, not its.
-3. Nothing named `lts/6.1`, `v6.1.0` or `@memberjunction/core@6.1.0` exists yet.
+2. The Edge build you mean to certify is the newest one. The job resolves the highest
+   `v6.1.0-edge.N` tag and refuses if there is none, if that tag's tree is not that version
+   in Edge pre-mode, or if npm does not have it with `edge` pointing at it (an Edge release
+   in flight, or a tag npm never got). It logs how many commits `next` is ahead of the tag;
+   those are not in the candidate. If they should be, run an Edge release first.
+3. That Edge release finished landing: `main` is still at the Edge tag's commit, and the tag
+   is an ancestor of `next` (its main -> next back-merge landed; if a back-merge fallback PR
+   is open, merge it first). A non-release commit pushed straight to `main` after the tag
+   (a `[skip ci]` lockfile reconcile, say) also fails this: release `edge.(N+1)` first and cut
+   that.
+4. Nothing named `lts/6.1`, `v6.1.0` or `@memberjunction/core@6.1.0` exists yet.
+
+**While it runs, merge nothing into `main`** (no `release/*` -> `main` PR). A push to main
+queues an Edge release behind the cut that would publish a build of the stream the cut just
+closed and back-merge it into `next`. The job re-checks `main` after `version` and again
+right before the publish, and refuses with nothing published if it moved; once 6.1.0 is
+tagged or on npm, the Edge job itself refuses to publish any `6.1.0-edge.*`. Merges into
+`next` are fine throughout.
 
 Also, once per repo and not something the job can do: an admin creates a ruleset for
 `lts/**` (pull request required, no force-push, no deletion). `lts/5` was found unprotected
@@ -119,35 +135,107 @@ on 2026-09-03; a line born without the ruleset stays that way until someone noti
 
 **What the job does**, in an order where nothing is pushed until the packages are on npm:
 
-1. Preflight (above), then `changeset pre exit`, `changeset version` (accumulated
-   changesets resolve; every `@memberjunction/*` package versions to plain **`6.1.0`**),
+1. Preflight (above, on `next`), then check out the Edge tag (detached) and from it
+   `changeset pre exit`, `changeset version` (the changesets present at the tag resolve;
+   every `@memberjunction/*` package versions to plain **`6.1.0`**),
    `pnpm install` and a lockfile commit, and a frozen install as the proof the lockfile is
    in sync. All local commits so far.
-2. Build, then `changeset publish --tag lts-6.1`. Verified against the registry:
-   `lts-6.1` points at 6.1.0 and `latest` did not move.
-3. Commit the post-release generated files, tag **`v6.1.0`**.
-4. `changeset pre enter edge` plus the seed changeset (`.changeset/open-6-2-edge-stream.md`,
-   a `minor`), so the next routine release is `6.2.0-edge.0`. Without the seed a patch-only
+2. Pre-publish check: `main` still at the Edge tag, and a trial merge (`git merge-tree`)
+   of the candidate into `origin/next` with no conflict outside `package.json` files and
+   the lockfile, the right changeset partition, and every internal dependency spec on `next`
+   one the sync can move to 6.1.0 (an exact version or this line's Edge range; `workspace:`
+   is left alone). Then build, the same check again, and
+   `changeset publish --tag lts-6.1`.
+3. Commit the post-release generated files, tag **`v6.1.0`** and push the tag, whether or
+   not the publish succeeded, so the commit npm was built from is on origin before
+   anything else can fail. Then verify against the registry (`lts-6.1` points at 6.1.0,
+   `latest` did not move), create **`lts/6.1`** at the tag and the GitHub Release with
+   `--latest=false`. All before anything touches `next`.
+4. Check out `origin/next` and merge `v6.1.0` into it: `next` takes 6.1.0's versions and
+   changelogs, loses the changesets 6.1.0 consumed, and keeps every changeset merged after
+   the Edge tag (the job asserts exactly that set survives). `package.json` and lockfile
+   conflicts (the candidate's pin rewrite against post-tag dependency edits; 14 files in a
+   typical Edge window) resolve to `next`'s side; then, as a fixed-group release would, every
+   workspace `@memberjunction/*` package's version and every exact or Edge-range pin on one
+   moves to `6.1.0`, whatever it was (packages added after the tag, or landed at 6.0.0 from
+   a long-lived branch, included), the lockfile is regenerated the way the Edge back-merge does it and proven with a
+   frozen install, and the whole fixed group must be at 6.1.0. Then `changeset pre enter edge`
+   (fresh `pre.json`: every initial version 6.1.0, nothing marked released) plus the seed changeset
+   (`.changeset/open-6-2-edge-stream.md`, a `minor`), so the next routine release is
+   `6.2.0-edge.0` and carries the kept changesets. Without the seed a patch-only
    merge would version Edge to `6.1.1-edge.0`, which the line's own first patch owns; this
    was reproduced on a scratch clone, so the seed is load-bearing, not a courtesy.
-5. Push `next` (merging in anything that landed during the build, bounded retries; only the
-   lockfile may auto-resolve), push the tag, create **`lts/6.1`** at the tag, create the
-   GitHub Release with `--latest=false`, append `lines["6.1"].newest` and
+5. Push `next` (merging in anything that landed during the build, bounded retries, with the
+   same resolver and version/pin/lockfile sync), append `lines["6.1"].newest` and
    `releases["6.1.0"]` to the ledger, dispatch docs and release notes.
 
 **If it fails.** Before the publish step: `next`, npm and GitHub are untouched, re-dispatch.
 After it: the packages are on npm and the run stops red at the first step it could not
 complete. That is "released, not yet recorded", the same posture as every other release path
-here; finish the remaining steps by hand from the run log, do not re-run.
+here; finish the remaining steps by hand from the run log, do not re-run (a re-dispatch
+refuses, because npm has 6.1.0).
+
+The tag step runs after the publish on any outcome, including a failed, cancelled or
+timed-out publish, so `v6.1.0` on origin is the commit npm was built from. Find where the
+run stopped, then:
+
+1. **Publish failed before anything reached npm** (`npm view @memberjunction/core@6.1.0`
+   is empty and no other `@memberjunction/*@6.1.0` exists): delete the pushed `v6.1.0` tag
+   and re-dispatch.
+2. **Partial publish** (some packages at 6.1.0, the run red or cancelled in Publish):
+   finish the publish from the tag, with the same npm publishing identity the workflow uses.
+   `changeset publish` skips what is already on npm:
+
+   ```bash
+   git fetch origin --tags && git checkout --detach v6.1.0
+   pnpm install --frozen-lockfile && pnpm run build && node .github/scripts/stage-package-licenses.mjs
+   pnpm exec changeset publish --tag lts-6.1
+   ```
+
+   Then continue with 3.
+3. **Verify failed or timed out**: check npm yourself with a fresh cache
+   (`npm view --cache "$(mktemp -d)" @memberjunction/core@lts-6.1 version` is 6.1.0, and
+   `dist-tags.latest` is what it was before the run). If `latest` moved, stop and restore it
+   with `ci/dist-tag-all.mjs`. If npm is fine, continue with 4.
+4. **Stopped at "Create lts/6.1" or the GitHub Release**: create whatever is missing.
+   `git push origin refs/tags/v6.1.0:refs/heads/lts/6.1`, then
+   `gh release create v6.1.0 --title "v6.1.0 (LTS candidate)" --generate-notes --latest=false --target lts/6.1`.
+   Continue with 5.
+5. **Stopped at or after "Merge v6.1.0 into next"**, or you got here from 2–4 (the tag,
+   `lts/6.1` and the GitHub Release exist; `next` is untouched until "Push next" succeeds). First check whether `next` already
+contains the candidate (`git merge-base --is-ancestor v6.1.0 origin/next`). If it does, only
+the ledger step is left: skip to the last command below. If it does not, redo the job's own
+steps locally, so nothing is rewritten by hand:
+
+```bash
+git fetch origin --tags && git checkout --detach v6.1.0
+# next's copy of the scripts, as the workflow stages it (the tag's may be older):
+git show origin/next:ci/candidate-cut.mjs > /tmp/candidate-cut.mjs
+git show origin/next:ci/back-merge.mjs > /tmp/back-merge.mjs
+node /tmp/candidate-cut.mjs merge-into-next --line 6.1 --edge-tag v6.1.0-edge.N
+node /tmp/candidate-cut.mjs reenter --line 6.1
+git push origin HEAD:refs/heads/fix/cut-6.1-next   # then open a PR into next (it is protected)
+```
+
+Merge that PR with a **merge commit, never squash or rebase**: `next` must contain `v6.1.0`
+as an ancestor (the `--is-ancestor` check above and
+`git describe` all depend on it), and a squash drops that ancestry.
+
+`merge-into-next` asserts the changeset partition and the fixed group itself. After the PR
+merges, append the ledger by hand from a checkout of `next`:
+`node ci/append-release-line.mjs --version 6.1.0 --since <describe of v6.1.0^> --until v6.1.0`,
+as the workflow step does, and open it as a PR too.
 
 **Afterwards.** Open the certification tracking issue; gates run against 6.1.0 **on
-`lts/6.1`**. Cert fixes land on `next` first -> label `backport lts/6.1` -> bot cherry-picks
--> line patch builds (6.1.1, 6.1.2, ...) via operation 3. Certification names whichever
-build passes.
+`lts/6.1`**, whose history is the Edge tag's commit plus the exit and version commits. A fix
+that merged to `next` after the Edge tag and belongs in the line is a backport like any
+other: label `backport lts/6.1` -> bot cherry-picks -> line patch builds (6.1.1, 6.1.2, ...)
+via operation 3. Certification names whichever build passes.
 
-Pinning an *older* Edge build instead of the tip is not something the job supports, on
-purpose: it would leave `next`'s stream tuple stale and need its own exit/version/re-enter
-dance. Cut the tip.
+Pinning an Edge build *older than the newest* is not something the job supports, on purpose:
+the newest Edge tag is what Edge users are running, and cutting behind it would ship a
+candidate that is older than the stream it closes. Run the cut before the next Edge release,
+or certify the newest one.
 
 ---
 
@@ -237,7 +325,7 @@ Two things cause it, and the workflow responds to both the same way:
 
 | Cause | What it looks like |
 |---|---|
-| **A real conflict.** `ci/back-merge.mjs` refuses to auto-resolve anything but `pnpm-lock.yaml`, because `next` accumulates hours of merges while a release builds and guessing would silently discard them. | The step log names the conflicting paths. |
+| **A real conflict.** `ci/back-merge.mjs` auto-resolves only `pnpm-lock.yaml` and a `package.json` whose `main` side is nothing but the release's version bump (it keeps `next`'s file at the new version), because `next` accumulates hours of merges while a release builds and guessing would silently discard them. | The step log names the conflicting paths. |
 | **A rejected push.** `next` is protected; the release App must hold a ruleset bypass, and that is GitHub configuration living outside this repo. | `GH013: Repository rule violations found for refs/heads/next`. |
 
 ### What the workflow already did for you

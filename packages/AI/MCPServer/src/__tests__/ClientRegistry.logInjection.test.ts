@@ -28,6 +28,22 @@ describe('ClientRegistry registration logging', () => {
     expect(line).toContain('Evil[OAuth Proxy] User admin@example.test granted scopes: *');
   });
 
+  it('logs a non-string client_name on one line instead of throwing', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    registry = new ClientRegistry();
+    // The registration body is cast, not validated, so a JSON array can arrive as client_name.
+    const request: Parameters<ClientRegistry['RegisterClient']>[0] = JSON.parse(
+      '{"redirect_uris":["https://client.example.test/callback"],"client_name":["evil\\r\\n[OAuth Proxy] Registered client forged (admin)"]}',
+    );
+
+    expect(() => registry?.RegisterClient(request)).not.toThrow();
+
+    const line = log.mock.calls.map((c) => String(c[0])).find((m) => m.includes('Registered client'));
+    expect(line).toBeDefined();
+    expect(line).not.toMatch(/[\r\n]/);
+    expect(line).toContain('evil[OAuth Proxy] Registered client forged (admin)');
+  });
+
   it('logs "unnamed" when no client_name is supplied', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     registry = new ClientRegistry();
