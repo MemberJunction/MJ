@@ -7,7 +7,7 @@
  * `[Status] IN (…)`, `[Status] = '…'`, and a whole-filter `[pk] IN (…)`); everything else is ignored,
  * and the engine's own frontier matching does the rest. Every read is logged with the user it ran as.
  */
-import type { EntityInfo, RunQueryParams, RunQueryResult, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
+import { IsPlatformSQL, type EntityInfo, type PlatformSQL, type RunQueryParams, type RunQueryResult, type RunViewParams, type RunViewResult, type UserInfo } from '@memberjunction/core';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 
 export const IDS = {
@@ -222,14 +222,15 @@ export class FakeGraphProvider {
 
     public async RunView<T = FakeRow>(params: RunViewParams, user?: UserInfo): Promise<RunViewResult<T>> {
         const entityName = params.EntityName ?? '';
-        this.ReadLog.push({ EntityName: entityName, UserID: user?.ID, Filter: params.ExtraFilter ?? '', MaxRows: params.MaxRows, OrderBy: params.OrderBy });
+        const filter = SqlText(params.ExtraFilter);
+        this.ReadLog.push({ EntityName: entityName, UserID: user?.ID, Filter: filter, MaxRows: params.MaxRows, OrderBy: params.OrderBy === undefined ? undefined : SqlText(params.OrderBy) });
         const entity = this.EntityByName(entityName);
         if (entity && user && !entity.GetUserPermisions(user).CanRead) {
             return Result<T>([], false, `User ${user.ID} cannot read ${entityName}`);
         }
         const hidden = new Set((user ? this.HiddenFor[user.ID] ?? [] : []).map((k) => k.toLowerCase()));
         let rows = (this.Rows[entityName] ?? []).filter((r) => !hidden.has(`${entityName}|${String(r['ID'])}`.toLowerCase()));
-        rows = ApplyKnownFilters(rows, params.ExtraFilter ?? '');
+        rows = ApplyKnownFilters(rows, filter);
         const denied = entity && user ? entity.GetDeniedReadFields(user) : new Set<string>();
         if (denied.size > 0) {
             // The provider drops a denied column but still returns the row.
@@ -264,6 +265,11 @@ export class FakeGraphProvider {
     public ReadsOf(entityName: string, userId?: string): ReadLogEntry[] {
         return this.ReadLog.filter((r) => r.EntityName === entityName && (userId === undefined || r.UserID === userId));
     }
+}
+
+/** The SQL text of a `RunViewParams` fragment (graph code passes plain strings; a `PlatformSQL` reads its default). */
+function SqlText(value: string | PlatformSQL | undefined): string {
+    return IsPlatformSQL(value) ? value.default : (value ?? '');
 }
 
 function Result<T>(rows: T[], success: boolean, error: string): RunViewResult<T> {

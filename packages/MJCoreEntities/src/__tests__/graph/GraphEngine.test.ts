@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
-import { BaseEngine, BaseEntity, StartupManager, WellKnownUserSource, type BaseEntityEvent, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { BaseEntity, StartupManager, WellKnownUserSource, type BaseEntityEvent, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { MJGraphEdgeEntity } from '../../generated/entity_subclasses';
 import { GraphEngine, ClampGraphDepth, ClampGraphMaxNodes, CanUserReadEntity, GRAPH_MAX_STORED_EDGES_PER_STEP } from '../../graph/GraphEngine';
 import { BaseGraphEdgeProvider, LoadGraphEdgeProviders, type GraphEdgeRequest, type GraphEdgeView, type GraphProviderContext } from '../../graph';
@@ -119,7 +119,7 @@ describe('GraphEngine', () => {
         });
 
         it('has no AdditionalLoading override, so BaseEngine updates its cached configs in place on a save', () => {
-            expect(Object.getPrototypeOf(GraphEngine.Instance).AdditionalLoading).toBe(BaseEngine.prototype.AdditionalLoading);
+            expect(Object.prototype.hasOwnProperty.call(GraphEngine.prototype, 'AdditionalLoading')).toBe(false);
         });
 
         it('reloads only the graph an edge change touches', async () => {
