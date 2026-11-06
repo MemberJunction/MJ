@@ -16,6 +16,7 @@ import {
     ScanValueLists,
     UnknownEntityNames,
     ValueListFields,
+    WithConsoleOnStderr,
     type ValueListFixProvider,
     type ValueListScanProvider,
 } from '../lib/value-list-scan.js';
@@ -277,5 +278,33 @@ describe('ApplyValueListFixes', () => {
         expect(Saved).toEqual([]);
         expect(result.Fixed).toBe(false);
         expect(result.Message).toMatch(/could not be read/);
+    });
+});
+
+describe('WithConsoleOnStderr', () => {
+    it('sends console.log/info/debug to stderr while the work runs, then restores them', async () => {
+        const original = console.log;
+        const errors: unknown[][] = [];
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+            errors.push(args);
+        });
+        try {
+            const result = await WithConsoleOnStderr(async () => {
+                console.log('startup line');
+                console.info('info line');
+                return 42;
+            });
+            expect(result).toBe(42);
+            expect(errors).toEqual([['startup line'], ['info line']]);
+            expect(console.log).toBe(original);
+        } finally {
+            errorSpy.mockRestore();
+        }
+    });
+
+    it('restores the console when the work throws', async () => {
+        const original = console.log;
+        await expect(WithConsoleOnStderr(async () => Promise.reject(new Error('boom')))).rejects.toThrow('boom');
+        expect(console.log).toBe(original);
     });
 });

@@ -10,6 +10,7 @@ import {
   ScanValueLists,
   UnknownEntityNames,
   ValueListScanExit,
+  WithConsoleOnStderr,
   type ValueListFixResult,
   type ValueListScanReport,
 } from '../../lib/value-list-scan.js';
@@ -56,20 +57,23 @@ export default class DoctorValueLists extends Command {
     let report: ValueListScanReport | undefined;
     let fixes: ValueListFixResult[] = [];
     let unknown: string[] = [];
-    try {
-      const provider = await InitializeProvider(config);
-      const user = GetSystemUser();
-      // A mistyped --entity would otherwise scan nothing and look clean (exit 0), even with --fail-on-findings.
-      unknown = UnknownEntityNames(provider.Entities, flags.entity);
-      if (unknown.length === 0) {
-        report = await ScanValueLists(provider, provider.Entities, { EntityNames: flags.entity, User: user });
-        if (targets.length > 0) {
-          fixes = await ApplyValueListFixes(provider, provider.Entities, targets, await CheckConstrainedColumns(provider, user), user);
+    // Provider startup prints status lines through the console; keep stdout for the report alone.
+    await WithConsoleOnStderr(async () => {
+      try {
+        const provider = await InitializeProvider(config);
+        const user = GetSystemUser();
+        // A mistyped --entity would otherwise scan nothing and look clean (exit 0), even with --fail-on-findings.
+        unknown = UnknownEntityNames(provider.Entities, flags.entity);
+        if (unknown.length === 0) {
+          report = await ScanValueLists(provider, provider.Entities, { EntityNames: flags.entity, User: user });
+          if (targets.length > 0) {
+            fixes = await ApplyValueListFixes(provider, provider.Entities, targets, await CheckConstrainedColumns(provider, user), user);
+          }
         }
+      } finally {
+        await CleanupProvider();
       }
-    } finally {
-      await CleanupProvider();
-    }
+    });
 
     if (!report) {
       this.logToStderr(`No entity named ${unknown.map((n) => `"${n}"`).join(', ')}. Entity names carry their prefix (for example "MJ: AI Agents").`);

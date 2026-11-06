@@ -301,6 +301,28 @@ export function FormatValueListScan(report: ValueListScanReport): string[] {
 }
 
 /**
+ * Run `work` with `console.log`, `console.info` and `console.debug` written to stderr, then restore
+ * them. Provider startup logs status lines through the console, so without this `--format json`
+ * would print them ahead of the JSON on stdout and the output would not parse.
+ */
+export async function WithConsoleOnStderr<T>(work: () => Promise<T>): Promise<T> {
+    const saved = { log: console.log, info: console.info, debug: console.debug };
+    const toStderr = (...args: unknown[]): void => {
+        console.error(...args);
+    };
+    console.log = toStderr;
+    console.info = toStderr;
+    console.debug = toStderr;
+    try {
+        return await work();
+    } finally {
+        console.log = saved.log;
+        console.info = saved.info;
+        console.debug = saved.debug;
+    }
+}
+
+/**
  * How `mj doctor value-lists` ends the process. The database provider can leave handles open after
  * its pool is released, so the command exits explicitly, like the other database commands.
  */
