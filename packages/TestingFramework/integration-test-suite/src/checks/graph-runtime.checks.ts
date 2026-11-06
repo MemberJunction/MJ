@@ -75,16 +75,17 @@ function rolelessUser(ctx: IntegrationCheckContext): UserInfo {
  * Edges` but holds no `Graph: Approve Edges` (granted to Developer only). Sharing the harness user's ID
  * keeps audit rows valid.
  */
-function integrationOnlyUser(ctx: IntegrationCheckContext): UserInfo {
+function integrationOnlyUser(ctx: IntegrationCheckContext, distinctId = false): UserInfo {
     const integration = ctx.Provider.Roles.find((r) => r.Name?.trim().toLowerCase() === 'integration');
     Assert(integration != null, "the 'Integration' role is required as the fixture and was not found");
+    const id = distinctId ? randomUUID().toUpperCase() : ctx.User.ID;
     return new UserInfo(ctx.Provider, {
-        ID: ctx.User.ID,
+        ID: id,
         Name: ctx.User.Name,
         Email: ctx.User.Email,
         Type: 'User',
         IsActive: true,
-        UserRoles: [new UserRoleInfo({ UserID: ctx.User.ID, RoleID: integration!.ID, Role: integration!.Name })],
+        UserRoles: [new UserRoleInfo({ UserID: id, RoleID: integration!.ID, Role: integration!.Name })],
     });
 }
 
@@ -351,7 +352,7 @@ export const GraphRuntimeChecks: NamedCheck[] = [
             if (!(ctx.User.UserRoles ?? []).some((r) => UUIDsEqual(r.RoleID, developer!.ID))) {
                 SkipCheck('the harness user does not hold the Developer role the fixture query is granted to');
             }
-            const restricted = integrationOnlyUser(ctx);
+            const restricted = integrationOnlyUser(ctx, true);
             const suffix = randomUUID().slice(0, 8);
             const schema = ctx.Schema ?? '__mj';
             let category: MJQueryCategoryEntity | null = null;
