@@ -114,6 +114,9 @@ export class AgentTreeBudgetTracker {
                     (step.StepType === 'Prompt' || step.StepType === 'Compaction' || step.StepType === 'Decision') &&
                     step.PromptRun
                 ) {
+                    // Add tokens from prompt runs (rollup fields include any nested child prompt runs).
+                    // A Decision step carries its own decision call's run — the Finish check, a single-state
+                    // request, or one item of a forEachItemIn request — so each call is counted once.
                     totalTokens += step.PromptRun.TokensUsedRollup || 0;
                     promptTokens += step.PromptRun.TokensPromptRollup || 0;
                     completionTokens += step.PromptRun.TokensCompletionRollup || 0;
@@ -121,6 +124,7 @@ export class AgentTreeBudgetTracker {
                     cacheWriteTokens += step.PromptRun.TokensCacheWriteRollup || 0;
                     totalCost += step.PromptRun.TotalCost || 0;
                 } else if (step.StepType === 'Sub-Agent' && step.SubAgentRun) {
+                    // Add tokens from sub-agent runs (these should already be calculated recursively)
                     totalTokens += step.SubAgentRun.TotalTokensUsed || 0;
                     promptTokens += step.SubAgentRun.TotalPromptTokensUsed || 0;
                     completionTokens += step.SubAgentRun.TotalCompletionTokensUsed || 0;
@@ -157,6 +161,14 @@ export class AgentTreeBudgetTracker {
     /**
      * Ensures that a shared {@link AgentTreeBudget} instance exists for the current execution tree
      * and is attached to `params.treeBudget` and `fallbackParams.treeBudget`.
+     *
+     * - When `params.treeBudget` is already provided (for example, propagated by a parent agent
+     *   in `ExecuteSubAgent` or supplied directly by a caller), that exact object reference
+     *   is reused so all root, sequential child, and parallel child runs mutate the same shared
+     *   counters (`totalSteps`, `totalTokens`, `totalCost`, `startedAtMs`, `breachedReason`).
+     * - When `params.treeBudget` is absent (root run), a new {@link AgentTreeBudget} is created
+     *   and seeded with any top-level convenience ceilings (`maxTreeSteps`, `maxTreeTokens`,
+     *   `maxTreeCost`, `maxTreeDurationMs`) declared on `params`.
      */
     public EnsureTreeBudget(
         params?: ExecuteAgentParams,
@@ -193,6 +205,11 @@ export class AgentTreeBudgetTracker {
     /**
      * Accumulates token and cost usage from a completed prompt execution into the shared
      * {@link AgentTreeBudget} for the execution tree.
+     *
+     * Prefers rollup figures on `promptRun` (`TokensUsedRollup` / `TokensPromptRollup` +
+     * `TokensCompletionRollup` and `TotalCost`) so hierarchical child prompts are counted,
+     * falling back to direct `promptRun` columns (`TokensUsed` / `TokensPrompt` + `TokensCompletion`
+     * and `Cost`) or the `AIPromptRunResult` summary fields when `promptRun` is not populated.
      */
     public RecordPromptUsage(
         budget: AgentTreeBudget,

@@ -111,7 +111,13 @@ export class AgentContextAssembler {
 
     /**
      * Determines whether `model` (as served by `vendor`) sits behind a byte-prefix prompt cache
-     * (`LLM.PrefixPromptCache`) from the model catalog's `ModelConfiguration` cascade.
+     * (`LLM.PrefixPromptCache`), read from the model catalog's `ModelConfiguration` cascade —
+     * `AIModelType < AIModel < AIVendor.Configuration.ModelDefaults < AIModelVendor` — via
+     * `AIEngine.GetEffectiveModelConfiguration`. The most specific layer is the INFERENCE-PROVIDER
+     * model-vendor row for `vendor`, whose vendor row supplies the host-wide default that beats the
+     * model's own bag; when the vendor is unknown, or has no inference row for this model, the model
+     * and type layers still answer. False when no layer declares it, which callers
+     * treat as a block cache (replace-in-place).
      */
     public ResolvePrefixPromptCache(
         model: MJAIModelEntityExtended | undefined,
@@ -142,7 +148,9 @@ export class AgentContextAssembler {
 
     /**
      * Resolves the three temporal placeholders (`_CURRENT_DATE`, `_CURRENT_DAY_OF_WEEK`, `_CURRENT_TIME`)
-     * for the trailing runtime-state fragment.
+     * for the trailing runtime-state fragment. Resolves only the three temporal placeholders (by name,
+     * through the same registry the template uses, so a registered override applies here too) rather
+     * than every system placeholder — this runs on every loop iteration.
      */
     public async ResolveFragmentDateTime(
         promptParams: AIPromptParams,
@@ -173,7 +181,9 @@ export class AgentContextAssembler {
     }
 
     /**
-     * Reads scratchpad notes, tasks, and task summary from prepared prompt template data.
+     * Reads scratchpad notes, tasks, and task summary from prepared prompt template data
+     * (so the fragment shows exactly what the template would have). Null when the scratchpad
+     * is disabled or absent.
      */
     public ReadScratchpadFromTemplateData(data: Record<string, unknown>): RuntimeStateScratchpad | null {
         const notes = data[SCRATCHPAD_NOTES_PLACEHOLDER];
@@ -193,6 +203,7 @@ export class AgentContextAssembler {
         return new RuntimeStateFragmentBuilder().Build({
             DateTime: input.DateTime,
             Scratchpad: input.Scratchpad,
+            // Same value the agent type injects for the template (`payload || {}`), so both placements agree.
             Payload: input.IncludePayload ? { Value: input.Payload || {} } : null,
             Specialization: input.Specialization,
         });
@@ -233,15 +244,21 @@ export class AgentContextAssembler {
     }
 
     /**
-     * Formats the skill catalog as compact markdown (name + description only for progressive disclosure).
+     * Formats the skill CATALOG as compact markdown — name + description ONLY. This is
+     * progressive disclosure by design: the LLM sees just enough to decide whether to activate a
+     * skill (via a `'Skill'` next step), but never sees `Instructions` until it does.
      */
     public FormatSkillsCatalog(skills: MJAISkillEntity[]): string {
         return skills.map((s) => `- **${s.Name}** — ${s.Description ?? '(no description)'}`).join('\n');
     }
 
     /**
-     * Formats action details as compact markdown for inclusion in prompt context, omitting
-     * any parameters bound by `boundActionParams`.
+     * Formats action details as compact markdown for inclusion in prompt context.
+     * Produces ~75% fewer tokens than the previous JSON format while preserving
+     * all information the LLM needs to invoke actions correctly.
+     *
+     * A parameter the run binds (`ExecuteAgentParams.boundActionParams`) is left out, so the model is
+     * never told it exists. With no bindings the output is the cached catalog's, unchanged.
      */
     public FormatActionDetails(
         actions: MJActionEntityExtended[],
@@ -296,6 +313,8 @@ export class AgentContextAssembler {
 
     /**
      * Formats a single action parameter as a compact inline markdown string.
+     * Uses `\*` suffix for required, `(array)` when `IsArray`, and only shows
+     * `ValueType` when it is not `Scalar`/`Other`.
      */
     public FormatActionParameter(param: MJActionParamEntity): string {
         const requiredMarker = param.IsRequired ? '\\*' : '';
@@ -305,6 +324,8 @@ export class AgentContextAssembler {
             parts.push('array');
         }
 
+        // A stored ValueSchema is the real type, so it replaces the coarse ValueType label — the
+        // same information the native tool declaration carries.
         const valueSchema = GetStoredValueSchema(param);
         const vt = param.ValueType?.trim();
         if (valueSchema) {
@@ -335,6 +356,7 @@ export class AgentContextAssembler {
         extraData?: Record<string, unknown>
     ): ClientToolMetadata[] {
         const engine = AIEngine.Instance;
+        // Static tier — agent's metadata tools from the AI Agent Client Tools junction.
         const staticTools: ClientToolMetadata[] = engine.GetClientToolsForAgent(agent.ID).map((tool) => ({
             Name: tool.Name,
             Description: tool.Description,
@@ -344,14 +366,17 @@ export class AgentContextAssembler {
             DefaultTimeoutMs: tool.DefaultTimeoutMs || undefined,
         }));
 
+        // Dynamic (session) tier — client-SDK enriched tools for this session.
         const sessionID = extraData?.sessionID as string | undefined;
         const sessionTools = sessionID ? ClientToolRequestManager.Instance.GetSessionTools(sessionID) : [];
 
+        // App tier — tools the active surface published in the app-context capability manifest.
         const appContext = extraData?.appContext as
             | { Capabilities?: { Tools?: ClientToolMetadata[] } }
             | undefined;
         const appTools = appContext?.Capabilities?.Tools ?? [];
 
+        // Override tier — tools passed directly in the run's data.
         const overrideTools = (extraData?.clientTools as ClientToolMetadata[] | undefined) ?? [];
 
         return ResolveClientTools({
@@ -365,7 +390,7 @@ export class AgentContextAssembler {
 
     /**
      * Builds the client tool prompt section for system prompt injection across static,
-     * session, app, and override tiers.
+     * session, app, and override tiers (`override > session > app > static`).
      */
     public BuildClientToolPromptSection(
         agent: MJAIAgentEntityExtended,
@@ -374,7 +399,7 @@ export class AgentContextAssembler {
         const tools = this.ResolveClientToolsForRun(agent, extraData);
 
         if (tools.length === 0) {
-            return '';
+            return ''; // No client tools available
         }
 
         const lines: string[] = [];
@@ -397,6 +422,7 @@ export class AgentContextAssembler {
             const categoryTag = tool.Category ? ` [${tool.Category}]` : '';
             lines.push(`- **${tool.Name}**${categoryTag}: ${tool.Description}`);
 
+            // Show input parameters from InputSchema
             const props = (tool.InputSchema as Record<string, unknown>)?.properties as
                 | Record<string, Record<string, unknown>>
                 | undefined;
@@ -456,6 +482,7 @@ export class AgentContextAssembler {
             lines.push(`**User:** ${user.Name}${user.Roles?.length ? ` (Roles: ${user.Roles.join(', ')})` : ''}`);
         }
 
+        // Additional context reported by the active view/component
         const dashboardCtx = ctx['AdditionalContext'] as Record<string, unknown> | undefined;
         if (dashboardCtx && Object.keys(dashboardCtx).length > 0) {
             lines.push('');
@@ -504,9 +531,13 @@ export class AgentContextAssembler {
         explicitResponseType?: Record<string, unknown>,
         decisionsEnabled: boolean = params.decisionsEnabled === true
     ): void {
+        // Align a copy: the object may be the caller's per-run override, which sub-agents inherit with the
+        // run's data. Writing into it would turn a key "explicit" for every later merge of that override.
         if (IsPlainObject(params.includeResponseTypeDefinition)) {
             params.includeResponseTypeDefinition = { ...params.includeResponseTypeDefinition };
-        } else if (
+        }
+        // Ensure includeResponseTypeDefinition is an object
+        else if (
             !params.includeResponseTypeDefinition ||
             typeof params.includeResponseTypeDefinition !== 'object'
         ) {
@@ -524,14 +555,20 @@ export class AgentContextAssembler {
 
         const responseType = params.includeResponseTypeDefinition as Record<string, unknown>;
 
+        // finishIf gates are opt-in (`finishIfMode`), and need the master switch. While off, the model is
+        // not taught to write one, whatever includeFinishIfDocs says, so the response field below follows it off too.
         if (!decisionsEnabled || ResolveFinishIfMode(params.finishIfMode) === 'off') {
             params.includeFinishIfDocs = false;
         }
 
+        // `decisions` is opt-in too (`includeDecisionsDocs: true`), and needs the master switch. Its docs and
+        // types add about 1,200 tokens to every turn, and on the Prompt Eval corpus no model used it
+        // (typed-decision plan, Task 4.7). Unset means off, so the response field below follows it off too.
         if (!decisionsEnabled || params.includeDecisionsDocs !== true) {
             params.includeDecisionsDocs = false;
         }
 
+        // Auto-alignment mappings: docs flag → response type property
         const alignmentMappings: Array<{ docsFlag: string; responseTypeKey: string }> = [
             { docsFlag: 'includePayloadInPrompt', responseTypeKey: 'payload' },
             { docsFlag: 'includeResponseFormDocs', responseTypeKey: 'responseForms' },
@@ -548,22 +585,35 @@ export class AgentContextAssembler {
         ];
 
         for (const { docsFlag, responseTypeKey } of alignmentMappings) {
+            // Check if the user explicitly set this response type property
+            // (not from schema defaults, which always provide true)
             const wasExplicitlySet =
                 explicitResponseType &&
                 Object.prototype.hasOwnProperty.call(explicitResponseType, responseTypeKey);
 
+            // Auto-align: if docs flag is false AND user didn't explicitly set the response type
+            // then auto-align the response type to false
             if (params[docsFlag] === false && !wasExplicitlySet) {
                 responseType[responseTypeKey] = false;
-            } else if (responseType[responseTypeKey] === undefined) {
+            }
+            // If user explicitly set the value, respect it regardless of docs flag
+            // Otherwise default to true if not set
+            else if (responseType[responseTypeKey] === undefined) {
                 responseType[responseTypeKey] = true;
             }
         }
 
+        // With the master switch off, neither decision field is offered, even when set explicitly: the
+        // model must not be invited to ask for something the run would refuse.
         if (!decisionsEnabled) {
             responseType.decisions = false;
             responseType.finishIf = false;
         }
 
+        // Capability gates align the OTHER way: default OFF, and the section appears only when the
+        // gate is explicitly on. Running these through the loop above would invert their meaning —
+        // that loop's `else` branch defaults an unset key to true, which is exactly what a gated
+        // capability must never do.
         const gateMappings: Array<{ gateFlag: string; responseTypeKey: string }> = [
             { gateFlag: 'enableTaskGraphs', responseTypeKey: 'tasks' },
             { gateFlag: 'enableHandoff', responseTypeKey: 'handoff' },

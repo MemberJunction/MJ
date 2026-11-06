@@ -6942,7 +6942,14 @@ export class BaseAgent {
      * Whether a model, as served by a vendor, sits behind a byte-prefix prompt cache
      * (`LLM.PrefixPromptCache`), read from the model catalog's `ModelConfiguration` cascade —
      * `AIModelType < AIModel < AIVendor.Configuration.ModelDefaults < AIModelVendor` — via
-     * `AIEngine.GetEffectiveModelConfiguration`.
+     * `AIEngine.GetEffectiveModelConfiguration`. The most specific layer is the INFERENCE-PROVIDER
+     * model-vendor row for `vendor`, whose vendor row supplies the host-wide default that beats the
+     * model's own bag; when the vendor is unknown, or has no inference row for this model, the model
+     * and type layers still answer. False when no layer declares it, which callers
+     * treat as a block cache (replace-in-place).
+     *
+     * Extension point: a subclass with out-of-catalog knowledge (an OpenAI-compatible gateway whose
+     * rows carry no flag, say) can override this rather than the mode decision above.
      */
     protected resolvePrefixPromptCache(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): boolean {
         return this._contextAssembler.ResolvePrefixPromptCache(model, vendor);
@@ -6952,7 +6959,16 @@ export class BaseAgent {
      * Builds the framework-authored `user` message that carries the loop agent's volatile state as the
      * final message of the request; returns null only when every block is turned off, or when the
      * system prompt template in this database has not yet synced and still embeds the state itself
-     * (see the guard below).
+     * (see the guard below). The blocks mirror the sections the template used to render (see
+     * {@link RuntimeStateFragmentBuilder}), and each honors the same include flag the template did.
+     *
+     * Why this exists: provider prompt caching is a prefix match over tools → system → messages, so
+     * state that changes every iteration INSIDE the system prompt invalidates the entire history each
+     * call. Measured on Sage: 36% → 83% cached on Gemini 2.5 Flash, 12% → 96% on Claude Opus 5 (with the
+     * Anthropic adapter placing its breakpoint before this message), output quality unchanged.
+     *
+     * The message carries STATE only — never rules. It is marked `metadata.volatileState` so adapters
+     * can recognize it without depending on this package's tag names.
      */
     protected async buildVolatileStateMessage<P>(
         params: ExecuteAgentParams,
@@ -6965,6 +6981,8 @@ export class BaseAgent {
         const data = promptParams.data ?? {};
         const agentTypePromptParams = data.__agentTypePromptParams as Record<string, unknown> | undefined;
 
+        // Delivery gate: the fragment is emitted only for a system prompt whose template points the model
+        // at it. See resolveRuntimeStateDelivery for the two ways a template can fail that test.
         const effectiveSystemPrompt = systemPrompt ?? (promptParams.prompt as MJAIPromptEntityExtended | undefined);
         const delivery = await this.resolveRuntimeStateDelivery(effectiveSystemPrompt, params.contextUser);
         if (delivery === 'embedded') {
@@ -6992,6 +7010,7 @@ export class BaseAgent {
         const fragment = this._contextAssembler.BuildRuntimeStateFragment({
             DateTime: includeDateTime ? await this.resolveFragmentDateTime(promptParams) : null,
             Scratchpad: includeScratchpad ? this.readScratchpadFromTemplateData(data) : null,
+            // Same value the agent type injects for the template (`payload || {}`), so both placements agree.
             Payload: payload || {},
             IncludePayload: includePayload,
             Specialization: specialization,
@@ -7005,7 +7024,10 @@ export class BaseAgent {
 
     /**
      * Decides whether this run's specialization (child prompt) rides in the trailing message, and if so
-     * pre-renders it and flags the template to render a stub in its place.
+     * pre-renders it and flags the template to render a stub in its place. Decided from the child
+     * template's UNRENDERED text via {@link ResolveSpecializationPlacement}, so the answer is the same on
+     * every iteration and the layout never flips mid-run. Returns the rendered specialization, or null
+     * when it stays in the system prompt.
      */
     protected async resolveRelocatedSpecialization(
         promptParams: AIPromptParams,
@@ -7027,7 +7049,10 @@ export class BaseAgent {
         if (!text || text.trim().length === 0) {
             return null;
         }
+        // Cache pre-rendered child templates so AIPromptRunner.ExecutePrompt does not re-render them
         promptParams.PreRenderedChildTemplates = rendered.renderedTemplates;
+        // The same data object the parent template renders against — this switches the `## Specialization`
+        // block to its stub and extends the Runtime State pointer.
         if (promptParams.data) {
             promptParams.data._SPECIALIZATION_RELOCATED = true;
         }
@@ -7050,7 +7075,19 @@ export class BaseAgent {
 
     /**
      * Decides, from the system prompt's UNRENDERED template text, whether the trailing runtime-state
-     * fragment belongs on this request.
+     * fragment belongs on this request:
+     *
+     * - `'trailing'` — the template carries the `<mj-runtime-state>` pointer, so the model is told where
+     *   the state lives. The Loop and Flow agent system prompts.
+     * - `'embedded'` — the template still renders the state blocks itself (an environment whose
+     *   TemplateContent has not synced the new system template, or a custom template that embeds the
+     *   payload). Emitting the fragment would deliver the same state twice.
+     * - `'unsupported'` — the template has neither. The Harness system prompt, or a custom prompt run
+     *   without a system prompt carrying the pointer. The model would receive an unexplained block.
+     * - `'unknown'` — no template text to inspect (no TemplateID, or the lookup failed). The caller
+     *   fails OPEN here: a Loop agent losing its payload from the model's view is far worse than a
+     *   non-Loop agent receiving an unexplained fragment, and in practice every agent type's system
+     *   prompt has a template, so this arises only from a lookup failure.
      */
     protected async resolveRuntimeStateDelivery(
         systemPrompt: MJAIPromptEntityExtended | undefined,
@@ -7077,14 +7114,18 @@ export class BaseAgent {
 
     /**
      * The strings whose presence in a system prompt's unrendered template text means the template
-     * still renders the volatile state itself, so the trailing fragment must be suppressed.
+     * still renders the volatile state itself, so the trailing fragment must be suppressed. Defaults
+     * to {@link VOLATILE_TEMPLATE_MARKERS}: the three block headings plus the date and payload
+     * placeholders. Extension point — an agent type whose template lays the state out under other
+     * headings overrides this to return its own markers.
      */
     protected get volatileTemplateMarkers(): readonly string[] {
         return VOLATILE_TEMPLATE_MARKERS;
     }
 
     /**
-     * True when unrendered template text contains any of {@link volatileTemplateMarkers}.
+     * True when unrendered template text contains any of {@link volatileTemplateMarkers} — the legacy
+     * Loop layout, or any template that embeds the payload.
      */
     protected templateTextEmbedsVolatileState(templateText: string): boolean {
         return this._contextAssembler.TemplateTextEmbedsVolatileState(templateText, this.volatileTemplateMarkers);
@@ -7135,6 +7176,8 @@ export class BaseAgent {
 
     /**
      * The child prompt's raw template text (placeholders intact), from the cached template engine.
+     * Null when the prompt has no template or the lookup fails — which fails CLOSED: with no text to
+     * inspect, {@link ResolveSpecializationPlacement} keeps the specialization in the system prompt.
      */
     protected async loadChildPromptTemplateText(childPrompt: MJAIPromptEntityExtended, contextUser: UserInfo): Promise<string | null> {
         return this.loadPromptTemplateText(childPrompt, contextUser);
@@ -7142,6 +7185,9 @@ export class BaseAgent {
 
     /**
      * The date/time strings exactly as the system placeholders would render them into the template.
+     * Resolves only the three temporal placeholders (by name, through the same registry the template
+     * uses, so a registered override applies here too) rather than every system placeholder — this runs
+     * on every loop iteration.
      */
     protected async resolveFragmentDateTime(promptParams: AIPromptParams): Promise<RuntimeStateDateTime | null> {
         return this._contextAssembler.ResolveFragmentDateTime(promptParams, (error, placeholder) => {
@@ -7154,7 +7200,8 @@ export class BaseAgent {
     }
 
     /**
-     * The scratchpad strings already placed in the template data by the prep step.
+     * The scratchpad strings already placed in the template data by the prep step (so the fragment shows
+     * exactly what the template would have). Null when the scratchpad is disabled or absent.
      */
     protected readScratchpadFromTemplateData(data: Record<string, unknown>): RuntimeStateScratchpad | null {
         return this._contextAssembler.ReadScratchpadFromTemplateData(data);
@@ -8896,6 +8943,26 @@ export class BaseAgent {
         current?: number;
         reason?: string;
     }> {
+        // Refresh the run's accumulated cost/token actuals before comparing them to the agent's
+        // static limits.
+        //
+        // The LIMITS are static — MaxCostPerRun and MaxTokensPerRun live on the agent and never
+        // change during a run. What was missing is the other side of the comparison: TotalCost and
+        // TotalTokensUsed are DERIVED from the run's steps by calculateTokenStats(), and the only
+        // writer (applyTokenStatsToRun) previously ran on terminal paths alone —
+        // createFailureResult / createCancelledResult / finalizeAgentRun — plus the post-compaction
+        // top-up, which only fires if compaction happens to trigger.
+        //
+        // So mid-run both fields sat at 0, and because the checks below are guarded on
+        // `agent.MaxCostPerRun && agentRun.TotalCost`, a falsy 0 short-circuited them entirely. The
+        // cost and token ceilings were evaluated only at the moment a run ENDED, which is too late
+        // to stop anything: they became reporting, not guardrails. Only the iteration and time
+        // limits actually interrupted a run, because TotalPromptIterations is incremented in the
+        // loop.
+        //
+        // Recomputing here rather than at the call site means every caller — including subclasses
+        // that override the loop — gets a truthful comparison, and the recompute is cheap: it walks
+        // the in-memory step array, with no database round trip.
         if (this._agentRun === agentRun) {
             this.applyTokenStatsToRun(agentRun, this.calculateTokenStats());
         }
@@ -8921,6 +8988,14 @@ export class BaseAgent {
      * Ensures that a shared {@link AgentTreeBudget} instance exists for the current execution tree
      * and is attached to both `this._treeBudget` and `params.treeBudget`.
      *
+     * - When `params.treeBudget` is already provided (for example, propagated by a parent agent
+     *   in {@link ExecuteSubAgent} or supplied directly by a caller), that exact object reference
+     *   is reused so all root, sequential child, and parallel child runs mutate the same shared
+     *   counters (`totalSteps`, `totalTokens`, `totalCost`, `startedAtMs`, `breachedReason`).
+     * - When `params.treeBudget` is absent (root run), a new {@link AgentTreeBudget} is created
+     *   and seeded with any top-level convenience ceilings (`maxTreeSteps`, `maxTreeTokens`,
+     *   `maxTreeCost`, `maxTreeDurationMs`) declared on `params`.
+     *
      * @param params - Optional execution parameters for the current run.
      * @returns The shared {@link AgentTreeBudget} instance for the execution tree.
      * @protected
@@ -8934,6 +9009,11 @@ export class BaseAgent {
     /**
      * Accumulates token and cost usage from a completed prompt execution into the shared
      * {@link AgentTreeBudget} for the execution tree.
+     *
+     * Prefers rollup figures on `promptRun` (`TokensUsedRollup` / `TokensPromptRollup` +
+     * `TokensCompletionRollup` and `TotalCost`) so hierarchical child prompts are counted,
+     * falling back to direct `promptRun` columns (`TokensUsed` / `TokensPrompt` + `TokensCompletion`
+     * and `Cost`) or the `AIPromptRunResult` summary fields when `promptRun` is not populated.
      *
      * @param promptRun - The persisted or in-memory `MJAIPromptRunEntity` from the prompt execution, if any.
      * @param promptResult - Optional `AIPromptRunResult` carrying direct token/cost metrics.
@@ -8953,6 +9033,10 @@ export class BaseAgent {
      * Evaluates whether any root-tree cumulative budget ceiling (`maxTreeSteps`, `maxTreeTokens`,
      * `maxTreeCost`, `maxTreeDurationMs`) on the shared {@link AgentTreeBudget} has been reached
      * or exceeded.
+     *
+     * When a ceiling is breached, sets `budget.breachedReason` with a descriptive diagnostic
+     * message so both the breaching agent and any ancestor agents in the call tree can terminate
+     * immediately with `step: 'Failed'` and `terminate: true`.
      *
      * @param params - Optional execution parameters for the current run.
      * @returns Guardrail evaluation result indicating whether a tree budget limit was exceeded.
@@ -14149,7 +14233,10 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Formats the skill CATALOG as compact markdown — name + description ONLY.
+     * Formats the skill CATALOG as compact markdown — name + description ONLY. This is
+     * progressive disclosure by design: the LLM sees just enough to decide whether to activate a
+     * skill (via a 'Skill' next step), but never sees `Instructions` until it does. Instructions
+     * are appended separately in {@link buildSkillActivationMessage} on activation.
      *
      * @private
      */
@@ -14191,6 +14278,11 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Formats action details as compact markdown for inclusion in prompt context.
+     * Produces ~75% fewer tokens than the previous JSON format while preserving
+     * all information the LLM needs to invoke actions correctly.
+     *
+     * A parameter the run binds (`ExecuteAgentParams.boundActionParams`) is left out, so the model is
+     * never told it exists. With no bindings the output is the cached catalog's, unchanged.
      *
      * @param {MJActionEntityExtended[]} actions - Array of action entities
      * @param {BoundActionParams} [boundActionParams] - The run's bindings, when it has any
@@ -14216,6 +14308,21 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Build the client tool prompt section for system prompt injection.
+     *
+     * Resolution is delegated to the shared, tier-agnostic {@link ResolveClientTools}
+     * (`@memberjunction/ai-core-plus`) — the single source of truth used by the async
+     * path (here), the realtime co-agent broker, and the conversations runtime. Tiers,
+     * highest precedence first:
+     *
+     * 1. **override** — tools passed directly in the run's `data.clientTools`
+     * 2. **session (dynamic)** — client-SDK enriched tools from {@link ClientToolRequestManager}
+     * 3. **app** — tools the active surface published in the app-context capability manifest
+     * 4. **static** — the agent's metadata tools from the `AI Agent Client Tools` junction
+     *
+     * NOTE (behavior change): the previous inline merge resolved *static-wins* (metadata
+     * was added first and won name collisions). The unified resolver uses the more-correct
+     * *override > session > app > static* — a runtime/dynamic tool now overrides a stale
+     * static metadata tool of the same name. Collisions are rare in practice.
      */
     private buildClientToolPromptSection(agent: MJAIAgentEntityExtended, extraData?: Record<string, unknown>): string {
         return this._contextAssembler.BuildClientToolPromptSection(agent, extraData);
@@ -14223,6 +14330,8 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Build the app context section for system prompt injection.
+     * Reads the AppContextSnapshot from extraData.appContext and formats
+     * it as a concise markdown section the LLM can reference.
      */
     private buildAppContextSection(extraData?: Record<string, unknown>): string {
         return this._contextAssembler.BuildAppContextSection(extraData);
@@ -14230,6 +14339,8 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Formats a single action parameter as a compact inline string.
+     * Uses \* suffix for required, (array) when IsArray, and only shows
+     * ValueType when it is not Scalar/Other.
      *
      * @param {MJActionParamEntity} param - The action parameter to format
      * @returns {string} Compact inline string, e.g. `` `To`\* — Email address ``
@@ -14264,7 +14375,21 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Formats an array of action result summaries as compact markdown.
+     * Formats an array of action result summaries as compact markdown instead of
+     * pretty-printed JSON. This typically saves 60-70 % of the tokens that the
+     * old `JSON.stringify(actionSummaries, null, 2)` approach consumed, while
+     * remaining equally parseable by LLMs.
+     *
+     * Format per action:
+     * ```
+     * ## ActionName ✓          (or ✗ for failure)
+     * **Result:** RESULT_CODE — human message
+     * **Output:**
+     * • `ParamName`: value
+     * ```
+     *
+     * AI directives are intentionally omitted here because they are surfaced
+     * as a separate high-priority message (see the caller).
      *
      * @param actionSummaries - The action summary objects built by executeActionStep
      * @returns Compact markdown string
@@ -14275,7 +14400,10 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Formats an ExecuteAgentResult as compact markdown for inclusion in conversation messages.
+     * Formats an ExecuteAgentResult as compact markdown for inclusion in
+     * conversation messages. Extracts only the fields that are meaningful
+     * to the calling agent (success, status, error, and payload) and
+     * presents them in a concise format.
      *
      * @param subAgentName - Display name of the sub-agent
      * @param result       - The execution result from the sub-agent
@@ -18321,6 +18449,8 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Applies sub-agent input mapping to prepare initial payload for related sub-agent.
+     * Maps parent payload paths to sub-agent initial payload paths.
+     * Enables structural data transfer from parent to related sub-agent.
      *
      * @param parentPayload - Parent agent's current payload
      * @param mappingConfig - JSON mapping configuration string
@@ -18340,6 +18470,12 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Prepares a context message containing parent payload data for related sub-agent.
+     * Extracts specified paths from parent payload or conversation messages and formats
+     * them as a user message to provide LLM context to the sub-agent.
+     *
+     * Supports both payload paths and conversation message paths:
+     * - Payload paths: "fieldName", "nested.field", etc.
+     * - Conversation paths: "conversation.all", "conversation.user.last", "conversation.all.last[5]", etc.
      *
      * @param parentPayload - Parent agent's current payload
      * @param contextPaths - Array of paths to extract, or ["*"] for entire payload
@@ -19990,7 +20126,11 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Raises the persistent `MJ: AI Agent Requests` row for a root agent's Chat or Plan step ({@link createFeedbackRequest}),
-     * so it can be answered outside the conversation — except when the run's audience adds a reader.
+     * so it can be answered outside the conversation — except when the run's audience adds a reader. A request answered
+     * on the dashboard or through the API resumes the run (`MJAIAgentRequestEntityServer.resumeAgent`) as the responder,
+     * in the original conversation, with no audience: neither the request nor the run row has a field that can carry
+     * one without a new column. So a shared conversation's run raises none: its question or plan still reaches the room,
+     * which answers in the conversation, where the host starts the next run with the room's audience.
      */
     private async raiseFeedbackRequest(
         params: ExecuteAgentParams,
@@ -20009,7 +20149,14 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Creates a persistent AIAgentRequest row when a Chat or Plan step fires.
-     * Delegates to {@link AgentFeedbackCoordinator.CreateFeedbackRequest}.
+     * Resolves the target user via the assignment chain (delegating to
+     * {@link AgentFeedbackCoordinator.CreateFeedbackRequest}):
+     *   1. ExecuteAgentParams.assignmentStrategy (per-invocation override)
+     *   2. Agent Type's AssignmentStrategy
+     *   3. Agent's Category AssignmentStrategy (walks up ParentID tree)
+     *   4. Request Type's DefaultAssignmentStrategy
+     *   5. Fallback: contextUser (explicit caller) or null (system-level, visible to admins)
+     *
      * @private
      */
     private async createFeedbackRequest(
@@ -20032,7 +20179,13 @@ The context is now within limits. Please retry your request with the recovered c
     /**
      * Resolves the file storage account ID for this agent's file artifacts.
      *
-     * Delegates to {@link AIEngineBase.ResolveAgentStorageAccountID}, the shared golden path.
+     * Delegates to {@link AIEngineBase.ResolveAgentStorageAccountID}, the shared golden path:
+     * runtime override (`params.override?.storageAccountId`) → agent → category tree → agent type →
+     * system fallback (the single active account, or the most recently updated one with a
+     * once-per-agent warning when several are active).
+     *
+     * This method is `protected` so subclasses can override the resolution logic
+     * for custom storage routing (e.g., routing by file type or tenant).
      *
      * @param params - The current agent execution parameters
      * @returns The resolved FileStorageAccount ID, or null if none configured
@@ -20732,7 +20885,20 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Formats loop iteration results as markdown.
+     * Formats loop iteration results as markdown. Handles two distinct result shapes
+     * depending on whether the loop body executed actions or sub-agents:
+     *
+     * - **Action iterations**: `priorStepResult` is an `ActionResultSummary[]`, set by
+     *   `executeActionsStep()`. These are formatted via `formatActionResultsAsMarkdown()`.
+     *
+     * - **Sub-agent iterations**: `priorStepResult` is a **pre-formatted markdown string**,
+     *   set by the loop handlers (`executeSingleForEachIteration` / `executeSingleWhileIteration`)
+     *   which call `formatSubAgentResultAsMarkdown()` and assign the result to `priorStepResult`.
+     *   Since the markdown is already rendered upstream, this method simply includes it as-is.
+     *
+     * This two-path design means sub-agent formatting happens at assignment time (in the loop
+     * handler), while action formatting happens at render time (here). Both produce the same
+     * markdown style used by non-loop results, ensuring consistency across the codebase.
      */
     private formatLoopResultsAsMarkdown(results: BaseAgentNextStep[], errors: LoopIterationError[]): string {
         return this._stepDispatcher.FormatLoopResultsAsMarkdown(
@@ -21488,6 +21654,10 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Increments the execution count for an item (action or sub-agent).
+     *
+     * Exposed as `protected` so driver sub-classes performing custom dispatch
+     * bump the same per-item counter the framework checks against execution
+     * guardrails — without this, custom dispatch silently bypasses limits.
      *
      * @param itemId - The item ID to increment (action ID or sub-agent ID)
      * @protected
@@ -22734,6 +22904,21 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Resolves a value from context using variable references - extracts from LoopAgentType
+     *
+     * This method handles both scalar and complex object iterations in ForEach/While loops.
+     *
+     * Examples:
+     *
+     * Scalar array iteration:
+     *   candidateEntities = ["Users", "Companies", "Invoices"]
+     *   itemVariable = "entityName"
+     *   Template: "{{entityName}}" → resolves to "Users", then "Companies", then "Invoices"
+     *
+     * Object array iteration:
+     *   users = [{name: "Alice", age: 30}, {name: "Bob", age: 25}]
+     *   itemVariable = "user"
+     *   Template: "{{user.name}}" → resolves to "Alice", then "Bob"
+     *   Template: "{{user}}" → resolves to entire object {name: "Alice", age: 30}
      */
     protected resolveValueFromContext(value: string, context: Record<string, any>, itemVariable: string): any {
         return this._stepDispatcher.ResolveValueFromContext(value, context, itemVariable, {
@@ -22744,6 +22929,17 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Resolves multiple {{expression}} placeholders embedded within a literal string.
+     *
+     * Unlike the single-variable path (which can return objects/numbers), this always
+     * returns a string because the resolved values are interpolated back into surrounding text.
+     *
+     * @example
+     * // Given itemVariable="cityInfo", context.item={city:"Tokyo", country:"Japan"}
+     * resolveInlineTemplateExpressions(
+     *   "largest company in {{cityInfo.city}} {{cityInfo.country}}",
+     *   context, "cityInfo"
+     * )
+     * // → "largest company in Tokyo Japan"
      */
     protected resolveInlineTemplateExpressions(
         template: string,

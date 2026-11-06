@@ -122,6 +122,8 @@ export class AgentFeedbackCoordinator {
                 {
                     id: 'plan',
                     label: 'Plan',
+                    // markdown: agents author plans in Markdown (see the plan-mode prompt
+                    // instructions); the UI renders a formatted preview with an Edit toggle.
                     type: { type: 'textarea', markdown: true },
                     defaultValue: planText,
                     required: true,
@@ -182,7 +184,13 @@ export class AgentFeedbackCoordinator {
     }
 
     /**
-     * Resolves the `MJ: AI Agent Request Types` ID for a Chat or Plan step decision.
+     * Resolves the `MJ: AI Agent Request Types` ID for a Chat or Plan step decision:
+     * - If the responseForm has only approve/reject-style buttons, uses `"Approval"`
+     * - If there's a responseForm with fields, uses `"Information"`
+     * - Otherwise defaults to `"Information"`
+     *
+     * Request types come from the AI engine's cached `MJ: AI Agent Request Types` rows
+     * (`AIEngineBase.ResolveAgentRequestTypeID`), the same source the agent actions use.
      */
     public async ResolveRequestTypeID(
         previousDecision: BaseAgentNextStep,

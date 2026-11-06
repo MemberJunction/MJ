@@ -83,7 +83,21 @@ export class AgentStepDispatcher {
     }
 
     /**
-     * Formats an array of action result summaries as compact markdown.
+     * Formats an array of action result summaries as compact markdown instead of
+     * pretty-printed JSON. This typically saves 60-70% of the tokens that the
+     * old `JSON.stringify(actionSummaries, null, 2)` approach consumed, while
+     * remaining equally parseable by LLMs.
+     *
+     * Format per action:
+     * ```
+     * ## ActionName ✓          (or ✗ for failure)
+     * **Result:** RESULT_CODE — human message
+     * **Output:**
+     * • `ParamName`: value
+     * ```
+     *
+     * AI directives are intentionally omitted here because they are surfaced
+     * as a separate high-priority message (see the caller).
      */
     public FormatActionResultsAsMarkdown(
         actionSummaries: ActionResultSummary[],
@@ -126,6 +140,7 @@ export class AgentStepDispatcher {
                     }
                 }
 
+                // Format output params as bullet list. An exempt action's values go out verbatim.
                 if (a.params && a.params.length > 0) {
                     const crush = !crushConfig?.exemptActions?.has(a.actionName);
                     lines.push('**Output:**');
@@ -144,7 +159,10 @@ export class AgentStepDispatcher {
     }
 
     /**
-     * Formats an `ExecuteAgentResult` as compact markdown for inclusion in conversation messages.
+     * Formats an `ExecuteAgentResult` as compact markdown for inclusion in
+     * conversation messages. Extracts only the fields that are meaningful
+     * to the calling agent (success, status, error, and payload) and
+     * presents them in a concise format.
      */
     public FormatSubAgentResultAsMarkdown(subAgentName: string, result: ExecuteAgentResult): string {
         const marker = result.success ? '✓' : '✗';
@@ -152,6 +170,7 @@ export class AgentStepDispatcher {
 
         lines.push(`## Sub-agent: ${subAgentName} ${marker}`);
 
+        // Status / error from the agent run
         const status = result.agentRun?.Status || (result.success ? 'Completed' : 'Failed');
         lines.push(`**Status:** ${status}`);
 
@@ -176,6 +195,10 @@ export class AgentStepDispatcher {
             lines.push(`**Message:**\n${result.agentRun.Message.trim()}`);
         }
 
+        // Payload — the actual result data the parent agent cares about.
+        // Not truncated by default — the expiration/compaction lifecycle handles
+        // context window management. Truncating here permanently discards data
+        // before the LLM ever sees it.
         if (result.payload != null) {
             const payloadStr =
                 typeof result.payload === 'string' ? result.payload : JSON.stringify(result.payload);
@@ -186,7 +209,15 @@ export class AgentStepDispatcher {
     }
 
     /**
-     * Formats a single output parameter value for inclusion in action result markdown.
+     * Formats a single output parameter value for inclusion in action result
+     * markdown. Scalars are shown inline with backtick formatting; objects and
+     * arrays use compact (single-line) JSON to avoid the indentation overhead
+     * of pretty-printed JSON.
+     *
+     * By default, values are **not truncated** — the expiration/compaction lifecycle
+     * handles context window management. Truncating at formatting time permanently
+     * discards data before the LLM ever sees it. Pass an explicit maxLength only
+     * when you have a specific reason to limit output size.
      */
     public FormatParamValueForResult(
         value: unknown,
@@ -203,6 +234,11 @@ export class AgentStepDispatcher {
         }
 
         if (typeof value === 'string') {
+            // A string param may carry JSON (many actions JSON.stringify their payloads),
+            // SQL/TS code, or plain text. Try structural JSON compression first — it is a
+            // safe no-op on non-JSON (CrushParamValue's internal JSON.parse failure is
+            // caught and returns null) — then opt-in AST code reduction (SQL/TS), then pass
+            // through (optionally length-capped).
             const crushedJson = crush ? this.CrushParamValue(value, crushConfig) : null;
             if (crushedJson !== null) {
                 return crushedJson;
@@ -214,6 +250,8 @@ export class AgentStepDispatcher {
             return maxLength > 0 && value.length > maxLength ? `${value.substring(0, maxLength)}…` : value;
         }
 
+        // Objects/arrays: compact JSON (no pretty-printing), optionally structurally
+        // compressed via context-crush when crushing is enabled and the value is large.
         const stringValue = JSON.stringify(value);
         const crushed = crush ? this.CrushParamValue(stringValue, crushConfig) : null;
         if (crushed !== null) {
@@ -254,12 +292,19 @@ export class AgentStepDispatcher {
     }
 
     /**
-     * AST-reduces a large code-string action-result value when opted into a code language.
+     * AST-reduce a large code-string action-result value when the agent opted into a code
+     * language (via `crushCodeLang` or a subclass override) and the value clears the size
+     * threshold. Returns reduced code plus a one-line legend, or null to keep the string
+     * verbatim (crushing disabled, too small, or no net saving).
+     *
+     * token optimization via @memberjunction/context-crush (CodeCompressor-inspired)
      */
     public CrushCodeValue(stringValue: string, config?: ActionResultCrushConfig): string | null {
         if (!config || !config.codeLang || stringValue.length < config.threshold) {
             return null;
         }
+        // Crushing is a best-effort optimization — it must never break an agent turn. Any
+        // failure falls back to the verbatim value.
         try {
             const result = CrushCode(stringValue, config.codeLang);
             if (result.CrushedChars >= result.OriginalChars) {
@@ -273,18 +318,30 @@ export class AgentStepDispatcher {
     }
 
     /**
-     * Structurally compresses a JSON action-result value when crushing is enabled and the value
-     * clears the size threshold.
+     * Structurally compress a JSON action-result value when crushing is enabled for the run
+     * and the value clears the size threshold. Accepts either the `JSON.stringify` of an
+     * object/array param, or a raw string param that itself contains JSON (many actions
+     * stringify their payloads, e.g. `run-adhoc-query`'s `Results`). Returns crushed text
+     * plus a one-line legend, or null when crushing is disabled, the value is too small, the
+     * value isn't valid JSON, or compression wouldn't actually save characters — so callers
+     * fall back to verbatim (and, for strings, to code crushing) behavior.
+     *
+     * token optimization via @memberjunction/context-crush (SmartCrusher-inspired)
      */
     public CrushParamValue(stringValue: string, config?: ActionResultCrushConfig): string | null {
         if (!config || stringValue.length < config.threshold) {
             return null;
         }
+        // Crushing is a best-effort optimization — it must never break an agent turn. Any
+        // failure (non-JSON input, pathologically deep payloads) falls back to verbatim.
         try {
+            // Parse to a plain JSON value. This is the JSON.stringify of an object/array
+            // param, or a raw string param that contains JSON; non-JSON strings throw here
+            // and are caught below (caller then tries code crushing / verbatim).
             const json = JSON.parse(stringValue) as JsonValue;
             const result = CrushJSON(json, { MaxChars: config.maxChars });
             if (result.CrushedChars >= result.OriginalChars) {
-                return null;
+                return null; // no net saving — keep the verbatim JSON
             }
             const legend = DescribeCrush(result);
             return legend ? `${result.Text}\n  ↳ ${legend}` : result.Text;
@@ -328,7 +385,10 @@ export class AgentStepDispatcher {
             try {
                 return globalThis.structuredClone(payload);
             } catch {
-                // Fall through to ToPlainJSON when payload contains Proxies or non-cloneable properties.
+                // DataCloneError — typically a Proxy (a live JSONType `<Field>Object` view) or an
+                // object holding functions. Fall through to the JSON clone below; returning the
+                // original here would silently give the sub-agent the caller's LIVE object and lose
+                // payload isolation.
             }
         }
         try {
@@ -547,12 +607,15 @@ export class AgentStepDispatcher {
 
     /**
      * Extracts an array collection from a payload path or a `static:[...]` literal.
+     * Strips `"payload."` prefix if present (for LLM convenience).
      */
     public GetCollectionFromPayload(
         payload: unknown,
         path: string,
         getPathFn?: (obj: unknown, path: string) => unknown,
     ): unknown[] | null {
+        // Support a literal static collection: "static:[1,2,3,4,5]". This lets a ForEach iterate a
+        // fixed list/range without a prior step having to build the array in the payload first.
         const trimmed = path.trim();
         if (trimmed.toLowerCase().startsWith('static:')) {
             try {
@@ -673,7 +736,21 @@ export class AgentStepDispatcher {
     }
 
     /**
-     * Formats loop iteration results as compact markdown.
+     * Formats loop iteration results as markdown. Handles two distinct result shapes
+     * depending on whether the loop body executed actions or sub-agents:
+     *
+     * - **Action iterations**: `priorStepResult` is an `ActionResultSummary[]`, set by
+     *   `executeActionsStep()`. These are formatted via `FormatActionResultsAsMarkdown()`
+     *   (or `formatActionResultsFn` when supplied by `BaseAgent`).
+     *
+     * - **Sub-agent iterations**: `priorStepResult` is a **pre-formatted markdown string**,
+     *   set by the loop handlers (`executeSingleForEachIteration` / `executeSingleWhileIteration`)
+     *   which call `formatSubAgentResultAsMarkdown()` and assign the result to `priorStepResult`.
+     *   Since the markdown is already rendered upstream, this method simply includes it as-is.
+     *
+     * This two-path design means sub-agent formatting happens at assignment time (in the loop
+     * handler), while action formatting happens at render time (here). Both produce the same
+     * markdown style used by non-loop results, ensuring consistency across the codebase.
      */
     public FormatLoopResultsAsMarkdown(
         results: BaseAgentNextStep[],
@@ -690,14 +767,19 @@ export class AgentStepDispatcher {
         for (let i = 0; i < results.length; i++) {
             const iterResult = results[i].priorStepResult;
 
+            // Action iterations: priorStepResult is ActionResultSummary[] — format via shared helper
             if (Array.isArray(iterResult)) {
                 lines.push(`### Iteration ${i + 1}`);
                 lines.push(formatActions(iterResult as ActionResultSummary[]));
             } else if (iterResult != null) {
+                // Sub-agent iterations: priorStepResult is already a markdown string from
+                // formatSubAgentResultAsMarkdown() called in the loop handler. Non-string
+                // results (edge cases) are JSON-stringified as a fallback.
                 lines.push(`### Iteration ${i + 1}`);
                 const text = typeof iterResult === 'string' ? iterResult : JSON.stringify(iterResult);
                 lines.push(text);
             }
+            // null/undefined priorStepResult: iteration produced no output — skip silently
         }
 
         if (errors.length > 0) {
@@ -762,6 +844,12 @@ export class AgentStepDispatcher {
 
     /**
      * Resolves a single string value or `{{expression}}` reference from a loop iteration context.
+     *
+     * Handles both scalar and complex object iterations in `ForEach` / `While` loops:
+     * - Single-variable `{{expr}}` can return non-string values (objects, numbers, arrays).
+     * - Mixed literal strings containing `{{expr}}` delegate to {@link ResolveInlineTemplateExpressions}
+     *   and return an interpolated string.
+     * - Exact `itemVariable` match (`{{user}}` or `{{entityName}}`) returns `context.item` directly.
      */
     public ResolveValueFromContext(
         value: string,
@@ -775,8 +863,11 @@ export class AgentStepDispatcher {
         const trimmedValue = value.trim();
         const wholeExpr = ExtractWholeTemplateExpression(trimmedValue);
         if (wholeExpr !== null) {
+            // Single-variable case: "{{city.name}}" — strip wrappers, fall through to
+            // single-variable resolution below which can return non-string types (objects, numbers)
             value = wholeExpr;
         } else if (trimmedValue.includes('{{')) {
+            // Inline template interpolation: "text {{var.prop}} more {{var2.field}}"
             return options?.resolveInline
                 ? options.resolveInline(trimmedValue, context, itemVariable)
                 : this.ResolveInlineTemplateExpressions(trimmedValue, context, itemVariable);
@@ -786,15 +877,18 @@ export class AgentStepDispatcher {
         const ivToLower = itemVariable?.trim().toLowerCase();
         const valueLower = value?.toLowerCase();
 
+        // CRITICAL: Check for exact match FIRST (handles scalar arrays and direct object references)
         if (valueLower === ivToLower) {
             return context.item;
         }
 
+        // Check for path notation (handles property access on object arrays)
         if (valueLower?.startsWith(`${ivToLower}.`)) {
             const path = value.substring(ivToLower.length + 1);
             return pathGetter(context.item, path);
         }
 
+        // Check for direct context variable references (index, payload, data, etc.)
         for (const [varName, varValue] of Object.entries(context)) {
             if (value === varName) {
                 return varValue;
@@ -811,6 +905,9 @@ export class AgentStepDispatcher {
 
     /**
      * Resolves multiple `{{expression}}` placeholders embedded within a literal string.
+     *
+     * Unlike the single-variable path (which can return objects/numbers), this always
+     * returns a string because the resolved values are interpolated back into surrounding text.
      */
     public ResolveInlineTemplateExpressions(
         template: string,
@@ -825,6 +922,7 @@ export class AgentStepDispatcher {
 
         return ReplaceEmbeddedTemplateExpressions(template, (expr, rawMatch) => {
             const resolved = resolver(expr, context, itemVariable);
+            // If the expression didn't resolve (returned unchanged), keep original {{ }} for transparency
             if (resolved === expr) {
                 return rawMatch;
             }
