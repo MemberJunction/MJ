@@ -666,6 +666,13 @@ def _with_heuristic_baseline(req: JsonObject) -> JsonObject:
     return _with_proto(req, "baselines", baselines + [HEURISTIC])
 
 
+def test_a_multiclass_request_with_a_heuristic_baseline_is_refused_before_running(server: FileServer) -> None:
+    """The heuristic scores one number per row; the binary log-loss branch would score it below zero."""
+    req = _with_heuristic_baseline(_multiclass_request(server, _three_classes(binary_frame(200)), "mc-heur"))
+    resp = client.post("/trainer", json=req)
+    assert resp.status_code == 400 and "multiclass" in resp.json()["detail"], resp.text
+
+
 def test_a_forecast_heuristic_that_beats_the_model_is_kept_instead(server: FileServer) -> None:
     """A declared incumbent heuristic is a gate member on the same origin rows: a near-perfect one is kept, and the
     model is not shipped over it."""

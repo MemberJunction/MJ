@@ -50,6 +50,11 @@ function protocol(d: EvaluationProtocolDraft, version = 1, authoredBy: Actor = h
 const series = unit(forecastTask, monthly);
 
 describe('DefaultEvaluationProtocolDraft', () => {
+  it('leaves the incumbent heuristic out of a multiclass unit\'s draft', () => {
+    const ruled = { ...unit({ kind: 'multiclass', classOrder: ['A', 'B', 'C'], adverseIndices: [2] }), incumbent: { kind: 'rule', name: 'tier rule', scoreExpression: 'Tier >= 1' } as const };
+    expect(draftFor(ruled).baselines.some((b) => b.kind === 'incumbent-heuristic')).toBe(false);
+  });
+
   it('passes both rule sets for a matching unit of every task kind', () => {
     const cases: { readonly Unit: PredictionUnitSpec; readonly Holdout: HoldoutSplit }[] = [
       ...[binary, { kind: 'multiclass', classOrder: ['A', 'B', 'C'], adverseIndices: [2] } as const,
@@ -78,6 +83,16 @@ describe('DefaultEvaluationProtocolDraft', () => {
 });
 
 describe('ValidateProtocolForUnit', () => {
+  it('refuses an incumbent-heuristic baseline on a multiclass unit, naming the heuristic', () => {
+    const rule = { kind: 'rule', name: 'tier rule', scoreExpression: 'Tier >= 1' } as const;
+    const multiclassUnit = { ...unit({ kind: 'multiclass', classOrder: ['A', 'B', 'C'], adverseIndices: [2] }), incumbent: rule };
+    const binaryRuledUnit = { ...unit(binary), incumbent: rule };
+    const p = protocol({ ...draftFor(multiclassUnit), baselines: [...draftFor(multiclassUnit).baselines, { kind: 'incumbent-heuristic', name: 'tier rule' }] });
+    expect(EvaluationProtocolRules.ValidateProtocolForUnit(p, multiclassUnit)).toContainEqual({ Kind: 'heuristic-needs-binary-or-regression-score', Heuristic: 'tier rule', UnitTask: 'multiclass' });
+    expect(EvaluationProtocolRules.ValidateProtocolForUnit(protocol(draftFor(binaryRuledUnit)), binaryRuledUnit)).toEqual([]);
+    expect(draftFor(binaryRuledUnit).baselines).toContainEqual({ kind: 'incumbent-heuristic', name: 'tier rule' });
+  });
+
   it('refuses calibration "not-applicable" on a binary or multiclass unit, whose probabilities are calibrated and judged', () => {
     const u = unit(binary);
     const p = protocol({ ...draftFor(u), calibration: { kind: 'not-applicable', reason: 'regression-task' } });

@@ -38,7 +38,8 @@ def refuse_invalid(req: TrainerRequest) -> None:
     Raises:
         RequestRefused: For a primary score of another family than the task, a request seed other than the
             protocol's, duplicate candidate names, a candidate named as a gate member (or with the heuristic prefix),
-            a candidate on a baseline-only driver, a holdout kind that does not fit the task, or a forecast protocol
+            a candidate on a baseline-only driver, a holdout kind that does not fit the task, an incumbent-heuristic
+            baseline on a multiclass task (it scores one number per row), or a forecast protocol
             the rolling-origin backtest cannot honour (`forecast.refuse_invalid_forecast`).
     """
     p = req.protocol
@@ -57,6 +58,8 @@ def refuse_invalid(req: TrainerRequest) -> None:
                              f"({sorted(algorithms.BASELINE_ONLY_DRIVERS)})")
     if (p.holdout.kind == "rolling-origin") != (req.task.kind == "forecast"):
         raise RequestRefused("a rolling-origin holdout is for forecast tasks, and a forecast task needs one")
+    if req.task.kind == "multiclass" and any(b.kind == "incumbent-heuristic" for b in p.baselines):
+        raise RequestRefused("an incumbent-heuristic baseline scores one number per row and cannot be judged on a multiclass task")
     if req.task.kind == "forecast":
         refuse_invalid_forecast(p)
 

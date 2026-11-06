@@ -43,6 +43,7 @@ export type ProtocolRefusal =
   | { readonly Kind: 'forecast-multiple-series'; readonly GrainEntity: string }
   | { readonly Kind: 'forecast-no-seasonal-naive' }
   | { readonly Kind: 'no-dummy-baseline' }
+  | { readonly Kind: 'heuristic-needs-binary-or-regression-score'; readonly Heuristic: string; readonly UnitTask: TaskKind }
   | { readonly Kind: 'guard-field-edited-by-disallowed-author'; readonly Fields: readonly GuardField[]; readonly Author: Actor['kind']; readonly Setting: GuardFieldsEditableBy };
 
 /** What the save-time protocol rules read: the version being saved, the version before it and its author. */
@@ -131,6 +132,7 @@ export class EvaluationProtocolRules {
       ...EvaluationProtocolRules.checkFamily(p.primaryScore, unit.label.outcome),
       ...EvaluationProtocolRules.checkCalibration(p.calibration, unit.label.outcome),
       ...EvaluationProtocolRules.checkForecast(p, unit),
+      ...EvaluationProtocolRules.checkHeuristicScore(p.baselines, unit),
     ];
   }
 
@@ -172,6 +174,8 @@ export class EvaluationProtocolRules {
         return 'A forecast needs a declared seasonal-naive baseline: its season sets the MASE scale and it is a member of the publishing gate.';
       case 'no-dummy-baseline':
         return 'A dummy baseline (base rate or mean) is required: it is the "no signal" yardstick of the gate.';
+      case 'heuristic-needs-binary-or-regression-score':
+        return `The incumbent heuristic "${r.Heuristic}" scores one number per row, which a ${r.UnitTask} unit cannot be judged by; declare the heuristic on a binary or regression unit, or leave it out of this protocol.`;
       case 'guard-field-edited-by-disallowed-author':
         return r.Setting === 'non-agent'
           ? `An agent tool call cannot change the guard fields ${r.Fields.join(', ')}; they are set in protocol configuration (UI, a non-agent API caller, a scheduled job or shipped metadata).`
@@ -330,6 +334,13 @@ export class EvaluationProtocolRules {
     return unitGroupKey === null ? 'has no group key (its rows are grouped by their entity key)' : `groups its rows by "${unitGroupKey}"`;
   }
 
+  /** A heuristic scores one number per row; a multiclass unit's probabilities are one column per class, so it cannot be judged. */
+  private static checkHeuristicScore(baselines: readonly BaselineSpec[], unit: PredictionUnitSpec): ProtocolRefusal[] {
+    const task = unit.label.outcome;
+    if (task.kind !== 'multiclass') return [];
+    return baselines.flatMap((b): ProtocolRefusal[] => (b.kind === 'incumbent-heuristic' ? [{ Kind: 'heuristic-needs-binary-or-regression-score', Heuristic: b.name, UnitTask: task.kind }] : []));
+  }
+
   private static checkFamily(primary: ProperScore, task: TaskType): ProtocolRefusal[] {
     return primary.family === task.kind ? [] : [{ Kind: 'primary-score-family-mismatch', Declared: primary.family, UnitTask: task.kind }];
   }
@@ -369,7 +380,7 @@ export class EvaluationProtocolRules {
 
   private static defaultBaselines(unit: PredictionUnitSpec): readonly BaselineSpec[] {
     const task = unit.label.outcome;
-    const heuristic: BaselineSpec[] = unit.incumbent.kind === 'rule' ? [{ kind: 'incumbent-heuristic', name: unit.incumbent.name }] : [];
+    const heuristic: BaselineSpec[] = unit.incumbent.kind === 'rule' && task.kind !== 'multiclass' ? [{ kind: 'incumbent-heuristic', name: unit.incumbent.name }] : [];
     if (task.kind === 'forecast') {
       // `||`: a null or 0 seasonality falls back to a season of 1.
       return [{ kind: 'dummy', name: 'training-window-mean' }, { kind: 'naive' }, { kind: 'seasonal-naive', season: unit.temporal?.seasonality || 1 }, ...heuristic];
