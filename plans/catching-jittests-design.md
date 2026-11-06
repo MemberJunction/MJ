@@ -263,8 +263,10 @@ any head code exists, and job 2 only reads it.
 **No tool on the host reads head as configuration.** `pnpm install --ignore-scripts` skips lifecycle scripts, but it
 still loads the project's `.pnpmfile.cjs` and, because `manage-package-manager-versions` defaults to on, downloads and
 runs the pnpm version named in the project's `packageManager` field. Both are PR-controlled, so neither `pnpm install`
-nor any other tool runs in the head worktree on the host. The host runs `git` to create the worktree, then fetches
-head's dependencies in three steps (D35):
+nor any other tool runs in the head worktree on the host. Apart from the `pnpm fetch` below, no pnpm command runs in a
+folder that holds head files, not even `pnpm --version`: in the spike, `pnpm --version` in such a folder loaded head's
+`.pnpmfile.cjs` (spike §3). The host runs `git` to create the worktree, then fetches head's dependencies in three steps
+(D35):
 
 1. Copy head's `pnpm-lock.yaml` into an empty folder (no manifest, no `.npmrc`, no `.pnpmfile.cjs`, no `patches/`).
 2. Remove the patch information from that copy with a small script in the tool: the top-level `patchedDependencies:`
@@ -568,7 +570,8 @@ run directly on the runner. Keys exist only in the orchestrating processes of jo
 
 - Job 2 holds no secrets and `contents: read`. On the host it runs only `git`, the tool's script that removes the patch
   information from a copy of head's lockfile, and `pnpm fetch` against that copy in a folder that holds nothing else
-  (D35). The host never reads a patch file; pnpm applies patches only in the sandbox. The install, every build, script
+  (D35). No other pnpm command, not even `pnpm --version`, runs in a folder that holds head files. The host never reads a
+  patch file; pnpm applies patches only in the sandbox. The install, every build, script
   and test run in the sandbox. No tool on the host
   reads head as configuration (§5.4): `--ignore-scripts` alone is not enough, because pnpm still loads `.pnpmfile.cjs`
   and follows `packageManager`.
