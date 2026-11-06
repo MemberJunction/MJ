@@ -222,7 +222,14 @@ function forbidden(detail: string): string {
 class ExpressionScreen {
     private readonly scopes: ReadonlySet<string>[] = [];
 
-    constructor(private readonly contextKeys: ReadonlySet<string> | null) {}
+    /**
+     * @param contextKeys names usable as values, or `null` when not yet known
+     * @param callables caller-declared function names usable only as a bare call (`DidFieldChange('Status')`)
+     */
+    constructor(
+        private readonly contextKeys: ReadonlySet<string> | null,
+        private readonly callables: ReadonlySet<string> = new Set(),
+    ) {}
 
     public Check(node: Node): string | null {
         switch (node.type) {
@@ -303,6 +310,9 @@ class ExpressionScreen {
         if (this.contextKeys?.has(name)) {
             return null;
         }
+        if (this.callables.has(name)) {
+            return forbidden(`"${name}" may only be called (e.g. ${name}(x)), not used as a value or callback`);
+        }
         if (DANGEROUS_IDENTIFIERS.has(name)) {
             return forbidden(`the identifier "${name}"`);
         }
@@ -353,7 +363,7 @@ class ExpressionScreen {
 
     /**
      * A call is admitted only when its callee is a FIXED name: a callable approved global
-     * (`parseInt(...)`), a listed method of an approved global namespace (`Math.abs(...)`), or a safe
+     * (`parseInt(...)`), a function the caller declared callable (`DidFieldChange(...)`), a listed method of an approved global namespace (`Math.abs(...)`), or a safe
      * instance method on a screened receiver (`payload.title.includes(...)`). Everything else — a
      * computed callee, an unlisted bare identifier, a call on an arrow or call result that is not
      * itself a safe method — is rejected.
@@ -363,7 +373,7 @@ class ExpressionScreen {
 
         if (callee.type === 'Identifier') {
             const name = (callee as Identifier).name;
-            if (this.isBoundParameter(name) || !SAFE_GLOBAL_CALLABLES.has(name)) {
+            if (this.isBoundParameter(name) || !(SAFE_GLOBAL_CALLABLES.has(name) || this.callables.has(name))) {
                 return forbidden(`calling "${name}" — only safe methods and approved global functions may be invoked`);
             }
             return this.checkCallArguments(node, null, null);
@@ -655,8 +665,16 @@ export class SafeExpressionEvaluator {
      *        checks); free identifiers are then left for evaluation time to decide, while approved
      *        globals used as values, callbacks that are not inline arrows, and every structural rule
      *        are still enforced.
+     * @param callableIdentifiers functions the caller supplies to the compiled expression, which it
+     *        may invoke by bare name (`DidFieldChange('Status')`) but never read as a value or pass
+     *        as a callback. Their arguments are screened like any other. Used by change filters,
+     *        whose helpers are not evaluation-context data.
      */
-    public static ScreenExpression(expression: string, allowedIdentifiers: Iterable<string> | null): string | null {
+    public static ScreenExpression(
+        expression: string,
+        allowedIdentifiers: Iterable<string> | null,
+        callableIdentifiers: Iterable<string> = [],
+    ): string | null {
         if (!expression || typeof expression !== 'string') {
             return 'Expression must be a non-empty string';
         }
@@ -688,7 +706,7 @@ export class SafeExpressionEvaluator {
         }
 
         const keys = allowedIdentifiers === null ? null : new Set(allowedIdentifiers);
-        return new ExpressionScreen(keys).Check((program.body[0] as ExpressionStatement).expression);
+        return new ExpressionScreen(keys, new Set(callableIdentifiers)).Check((program.body[0] as ExpressionStatement).expression);
     }
 
     /** Counts parentheses textually; used only to word the error for an expression that failed to parse. @private */

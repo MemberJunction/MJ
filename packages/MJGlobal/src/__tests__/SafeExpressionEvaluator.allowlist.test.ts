@@ -220,3 +220,26 @@ describe('SafeExpressionEvaluator — identifier allowlist', () => {
         expect([...SAFE_EXPRESSION_GLOBALS].sort()).toEqual([...APPROVED_EXPRESSION_GLOBALS.keys()].sort());
     });
 });
+
+describe('ScreenExpression callableIdentifiers', () => {
+    const screen = (expr: string) => SafeExpressionEvaluator.ScreenExpression(expr, ['row'], ['isReady']);
+
+    it('allows a declared callable as a bare call, with screened arguments', () => {
+        expect(screen("isReady('Status') && row.x > 1")).toBeNull();
+        expect(screen('isReady(row.constructor)')).toMatch(/forbidden construct/);
+    });
+
+    it('refuses a declared callable used as a value or callback', () => {
+        expect(screen('isReady')).toMatch(/may only be called/);
+        expect(screen('[row].map(isReady)')).toMatch(/forbidden construct/);
+    });
+
+    it('lets an arrow parameter shadow a declared callable, so the parameter is not callable', () => {
+        expect(screen('[row].some(isReady => isReady(1))')).toMatch(/forbidden construct/);
+    });
+
+    it('refuses undeclared bare calls as before', () => {
+        expect(screen('other(1)')).toMatch(/forbidden construct/);
+        expect(SafeExpressionEvaluator.ScreenExpression('isReady(1)', ['row'])).toMatch(/forbidden construct/);
+    });
+});
