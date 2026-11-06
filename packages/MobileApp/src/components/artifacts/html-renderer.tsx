@@ -89,22 +89,26 @@ function parseAttrs(token: string): Record<string, string> {
     return attrs;
 }
 
+const NAMED_ENTITIES: Record<string, string> = {
+    amp: '&',
+    lt: '<',
+    gt: '>',
+    quot: '"',
+    apos: "'",
+    nbsp: ' ',
+    mdash: '—',
+    ndash: '–',
+    hellip: '…',
+};
+
 /** Decode the common named + numeric HTML entities. */
 function decodeEntities(text: string): string {
-    return text
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#0?39;/g, "'")
-        .replace(/&#x27;/gi, "'")
-        .replace(/&apos;/g, "'")
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&mdash;/g, '—')
-        .replace(/&ndash;/g, '–')
-        .replace(/&hellip;/g, '…')
-        .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
-        .replace(/&#x([0-9a-fA-F]+);/g, (_, code: string) => String.fromCodePoint(parseInt(code, 16)));
+    // One pass, so a decoded '&' never starts a second entity (&amp;lt; -> &lt;, not <)
+    return text.replace(/&(#\d+|#[xX][0-9a-fA-F]+|[a-z]+);/g, (entity: string, body: string) => {
+        if (body.startsWith('#x') || body.startsWith('#X')) return String.fromCodePoint(parseInt(body.slice(2), 16));
+        if (body.startsWith('#')) return String.fromCodePoint(Number(body.slice(1)));
+        return NAMED_ENTITIES[body] ?? entity;
+    });
 }
 
 /** Collapse insignificant whitespace in flow text (HTML-style). */

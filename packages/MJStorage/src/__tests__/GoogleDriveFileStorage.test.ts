@@ -218,3 +218,24 @@ describe("initialize() says when a credential falls back to the server's client"
     }
   });
 });
+
+describe('Drive query escaping (CodeQL js/double-escaping)', () => {
+  const escape = (driver: GoogleDriveFileStorage, value: string): string =>
+    (driver as unknown as { _escapeQuery(q: string): string })._escapeQuery(value);
+
+  it('escapes a quote with exactly one backslash', () => {
+    expect(escape(new GoogleDriveFileStorage(), "O'Brien")).toBe("O\\'Brien");
+  });
+
+  it('escapes backslashes before quotes', () => {
+    expect(escape(new GoogleDriveFileStorage(), "a\\b'c")).toBe("a\\\\b\\'c");
+  });
+
+  it('escapes backslashes in path lookups too', async () => {
+    const { driver, calls } = driverWithFakeDrive();
+    const getItem = (driver as unknown as { _getItemByPath(p: string): Promise<unknown> })._getItemByPath.bind(driver);
+    await getItem("dir\\x/it's.txt").catch(() => undefined);
+    const queries = calls.list.mock.calls.map((c) => (c[0] as { q: string }).q);
+    expect(queries[0]).toContain("name = 'dir\\\\x'");
+  });
+});

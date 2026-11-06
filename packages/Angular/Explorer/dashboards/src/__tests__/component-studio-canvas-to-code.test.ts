@@ -142,3 +142,21 @@ describe('parseCanvasFromCode (round-trip)', () => {
         expect(result.HasUnknownConstructs).toBe(true);
     });
 });
+
+describe('escaping (CodeQL js/incomplete-sanitization, js/double-escaping)', () => {
+    it('escapes backslashes and quotes in a non-identifier display field', () => {
+        const s = schema();
+        s.fields[4].references = { entity: 'Accounts', displayField: 'Odd \\ "Name"' };
+        const canvas = BuildEmptyCanvas('Customers', 'Customer');
+        canvas.sections[0].elements.push({ id: GenerateCanvasId('field'), type: 'field', fieldName: 'AccountID', span: 1 });
+        const code = GenerateCodeFromCanvas(canvas, s, 'CustomerForm');
+        expect(code).toContain('o?.["Odd \\\\ \\"Name\\""]');
+        expect(code).toContain('value("AccountID")?.["Odd \\\\ \\"Name\\""]');
+    });
+
+    it('decodes each title entity once, so &amp;lt; stays &lt;', () => {
+        const code = 'function X() { return <div><h2>A &amp;lt; B &amp; C</h2><div>{value("Name")}</div></div>; }';
+        const result = ParseCanvasFromCode(code, schema());
+        expect(result.Canvas?.title).toBe('A &lt; B & C');
+    });
+});

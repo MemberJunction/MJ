@@ -304,7 +304,7 @@ function renderFieldInput(field: CuratedFormField): string {
                 `{editing`,
                 `    ? (<select style={{ ${baseStyle} }} value={(value("${name}")?.ID) ?? value("${name}") ?? ""} onChange={(e) => setField("${name}", e.target.value || null)}>`,
                 `        <option value="">—</option>`,
-                `        {(fkOptions["${name}"] || []).map((o) => <option key={o.ID} value={o.ID}>{o.${safeIdent(display)}}</option>)}`,
+                `        {(fkOptions["${name}"] || []).map((o) => <option key={o.ID} value={o.ID}>{o?.${safeIdent(display)}}</option>)}`,
                 `      </select>)`,
                 `    : <div>{(value("${name}")?.${safeIdent(display)}) ?? value("${name}") ?? "—"}</div>}`,
             ].join('\n  ');
@@ -403,12 +403,12 @@ function escapeJsxAttr(s: string): string {
 
 /**
  * Ensure a display field name is a safe JS identifier. Falls back to
- * bracket access if not. Most MJ display fields are "Name" or "Title" so
+ * bracket access (used after `?.`) if not. Most MJ display fields are "Name" or "Title" so
  * the simple path dominates.
  */
 function safeIdent(name: string): string {
     if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) return name;
-    return `["${name.replace(/"/g, '\\"')}"]`;
+    return `[${JSON.stringify(name)}]`;
 }
 
 function indent(block: string, spaces: number): string {
