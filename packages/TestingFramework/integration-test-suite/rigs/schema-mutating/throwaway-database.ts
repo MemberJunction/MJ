@@ -25,7 +25,7 @@
  * `DB_TRUST_SERVER_CERTIFICATE`). `DB_DATABASE` is ignored: the rig always works on the database
  * it created. The login needs `CREATE DATABASE` (sa in CI and in a local container).
  */
-import { spawnSync } from 'node:child_process';
+import { ChildProcess, spawn } from 'node:child_process';
 import { closeSync, existsSync, mkdtempSync, openSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -51,6 +51,11 @@ export interface CliRunResult {
 
 const SAFE_DATABASE_NAME = /^[A-Za-z][A-Za-z0-9_]{0,99}$/;
 const LOG_TAIL_CHARS = 6000;
+/** How long a child CLI gets to exit after SIGTERM before it is killed. */
+const CHILD_KILL_GRACE_MS = 10_000;
+
+/** The prefix every rig database carries, generated or passed with `--database`. */
+export const THROWAWAY_DATABASE_PREFIX = 'mj_rig_';
 
 /**
  * True when `name` can be put inside `[...]` in DDL without quoting concerns. Database names are
@@ -74,7 +79,7 @@ export function NewThrowawayDatabaseName(prefix: string, now: Date = new Date(),
         `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}` +
         `${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}`;
     const suffix = Math.floor(random() * 0x10000).toString(16).padStart(4, '0');
-    return `mj_rig_${cleanPrefix}_${stamp}_${suffix}`;
+    return `${THROWAWAY_DATABASE_PREFIX}${cleanPrefix}_${stamp}_${suffix}`;
 }
 
 /** Reads the server settings from the environment; throws naming every missing variable. */
@@ -117,12 +122,25 @@ function tail(text: string): string {
     return text.length > LOG_TAIL_CHARS ? `…${text.slice(-LOG_TAIL_CHARS)}` : text;
 }
 
+/** Resolves with the child's exit code (1 when it died from a signal); rejects if it could not start. */
+function waitForExit(child: ChildProcess): Promise<number> {
+    return new Promise((resolve, reject) => {
+        child.once('error', reject);
+        child.once('exit', code => resolve(code ?? 1));
+    });
+}
+
 /** One private database, its connection pool, and the `mj` CLI steps that run against it. */
 export class ThrowawayDatabase {
     private pool: sql.ConnectionPool | null = null;
     private readonly logDir: string;
     private readonly sqlOutputDir: string;
     private stepCounter = 0;
+    /** True once this instance's `CREATE DATABASE` succeeded. `Drop()` drops nothing else. */
+    private created = false;
+    private creating: Promise<void> | null = null;
+    private activeChild: { process: ChildProcess; exited: Promise<number> } | null = null;
+    private aborted = false;
 
     constructor(
         public readonly Name: string,
@@ -141,20 +159,38 @@ export class ThrowawayDatabase {
         return this.logDir;
     }
 
+    /** True when this instance created the database, so `Drop()` will remove it. */
+    public get Created(): boolean {
+        return this.created;
+    }
+
     /** Creates the empty database. Fails if the name is already taken. */
     public async Create(): Promise<void> {
-        await this.withMaster(async master => {
+        this.creating = this.withMaster(async master => {
             const exists = await master.request().input('name', sql.NVarChar, this.Name).query<{ n: number }>('SELECT COUNT(*) AS n FROM sys.databases WHERE name = @name');
             if (exists.recordset[0].n > 0) {
                 throw new Error(`Database '${this.Name}' already exists; refusing to reuse it`);
             }
             await master.request().batch(`CREATE DATABASE [${this.Name}]`);
+            this.created = true;
         });
+        await this.creating;
     }
 
-    /** Drops the database, disconnecting anyone still attached. Safe to call when it never existed. */
-    public async Drop(): Promise<void> {
+    /**
+     * Drops the database if this instance created it, disconnecting anyone still attached, and
+     * returns whether it did. A database it did not create (an existing name `Create()` refused, or
+     * one passed in) is left alone. Waits for a `Create()` still in flight, so an interrupt during
+     * `CREATE DATABASE` cannot leave the database behind.
+     */
+    public async Drop(): Promise<boolean> {
         await this.Close();
+        if (this.creating) {
+            await this.creating.catch(() => undefined);
+        }
+        if (!this.created) {
+            return false;
+        }
         await this.withMaster(async master => {
             await master.request().batch(
                 `IF DB_ID(N'${this.Name}') IS NOT NULL
@@ -164,14 +200,40 @@ export class ThrowawayDatabase {
                  END`
             );
         });
+        this.created = false;
+        return true;
+    }
+
+    /**
+     * Stops the run: no further CLI step starts, and a running one is sent SIGTERM (SIGKILL after a
+     * grace period) and waited for, so the drop that follows does not race a CodeGen still writing.
+     * Called on SIGINT/SIGTERM. Safe to call more than once.
+     */
+    public async Abort(): Promise<void> {
+        this.aborted = true;
+        const active = this.activeChild;
+        if (!active) {
+            return;
+        }
+        if (active.process.exitCode === null && active.process.signalCode === null) {
+            active.process.kill('SIGTERM');
+        }
+        const timer = setTimeout(() => active.process.kill('SIGKILL'), CHILD_KILL_GRACE_MS);
+        try {
+            await active.exited.catch(() => undefined);
+        } finally {
+            clearTimeout(timer);
+        }
     }
 
     /** `mj migrate`, `mj sync push --dir=metadata`, then one CodeGen run — the state CI tests against. */
     public async Bootstrap(): Promise<void> {
-        this.RequireSuccess(this.RunCli('migrate', ['migrate']));
-        this.RequireSuccess(this.RunCli('sync-push', ['sync', 'push', '--dir=metadata', '--ci']));
-        this.restoreSyncWriteBack();
-        this.RequireSuccess(this.RunCodeGen('bootstrap'));
+        this.RequireSuccess(await this.RunCli('migrate', ['migrate']));
+        const push = await this.RunCli('sync-push', ['sync', 'push', '--dir=metadata', '--ci']);
+        // Restore before checking the push, so a failed push does not leave metadata/ dirty either.
+        await this.restoreSyncWriteBack();
+        this.RequireSuccess(push);
+        this.RequireSuccess(await this.RunCodeGen('bootstrap'));
     }
 
     /**
@@ -180,14 +242,14 @@ export class ThrowawayDatabase {
      * exactly that and nothing else; anything it leaves dirty is reported, not failed on — it is
      * not what this rig tests.
      */
-    private restoreSyncWriteBack(): void {
+    private async restoreSyncWriteBack(): Promise<void> {
         const script = join(this.repoRoot, 'scripts/ci-restore-sync-only-metadata.mjs');
         if (!existsSync(script)) {
             return;
         }
-        const result = spawnSync(process.execPath, [script], { cwd: this.repoRoot, encoding: 'utf8' });
-        if (result.status !== 0) {
-            console.warn(`    [rig] metadata write-back not fully restored:\n${result.stdout}${result.stderr}`);
+        const result = await this.runLogged('restore-sync-write-back', [script], process.env);
+        if (result.ExitCode !== 0) {
+            console.warn(`    [rig] metadata write-back not fully restored:\n${this.LogTail(result)}`);
         }
     }
 
@@ -195,7 +257,7 @@ export class ThrowawayDatabase {
      * One DB-side CodeGen run. Returns the exit code rather than throwing: whether CodeGen
      * succeeded is something scenarios assert on.
      */
-    public RunCodeGen(label: string): CliRunResult {
+    public RunCodeGen(label: string): Promise<CliRunResult> {
         return this.RunCli(`codegen-${label}`, [
             'codegen',
             '--skipfiles',
@@ -206,21 +268,35 @@ export class ThrowawayDatabase {
         ]);
     }
 
-    /** Runs `node packages/MJCLI/bin/run.js <args>` from the repo root against this database. */
-    public RunCli(label: string, args: string[]): CliRunResult {
+    /**
+     * Runs `node packages/MJCLI/bin/run.js <args>` from the repo root against this database. The
+     * child runs asynchronously, so the rig's signal handlers can run while it does; after
+     * `Abort()` no new step starts.
+     */
+    public async RunCli(label: string, args: string[]): Promise<CliRunResult> {
+        const started = Date.now();
+        const result = await this.runLogged(label, [join(this.repoRoot, 'packages/MJCLI/bin/run.js'), ...args], this.ChildEnvironment());
+        console.log(`    [rig] mj ${args[0]} (${label}) exited ${result.ExitCode} in ${Math.round((Date.now() - started) / 1000)}s — log: ${result.LogPath}`);
+        return result;
+    }
+
+    /** Runs `node <nodeArgs>` from the repo root with its output in a numbered log file. */
+    private async runLogged(label: string, nodeArgs: string[], env: NodeJS.ProcessEnv): Promise<CliRunResult> {
+        if (this.aborted) {
+            throw new Error(`The rig is stopping; not starting ${label}`);
+        }
         this.stepCounter++;
         const logPath = join(this.logDir, `${String(this.stepCounter).padStart(2, '0')}-${label}.log`);
         const fd = openSync(logPath, 'w');
-        const started = Date.now();
         try {
-            const result = spawnSync(process.execPath, [join(this.repoRoot, 'packages/MJCLI/bin/run.js'), ...args], {
-                cwd: this.repoRoot,
-                env: this.childEnv(),
-                stdio: ['ignore', fd, fd],
-            });
-            const exitCode = result.status ?? 1;
-            console.log(`    [rig] mj ${args[0]} (${label}) exited ${exitCode} in ${Math.round((Date.now() - started) / 1000)}s — log: ${logPath}`);
-            return { ExitCode: exitCode, LogPath: logPath };
+            const child = spawn(process.execPath, nodeArgs, { cwd: this.repoRoot, env, stdio: ['ignore', fd, fd] });
+            const exited = waitForExit(child);
+            this.activeChild = { process: child, exited };
+            try {
+                return { ExitCode: await exited, LogPath: logPath };
+            } finally {
+                this.activeChild = null;
+            }
         } finally {
             closeSync(fd);
         }
@@ -270,7 +346,11 @@ export class ThrowawayDatabase {
         }
     }
 
-    private childEnv(): NodeJS.ProcessEnv {
+    /**
+     * The environment every CLI step runs with: the caller's, with the connection pointed at this
+     * database whatever `DB_DATABASE` says, and CodeGen's AI and command steps off.
+     */
+    public ChildEnvironment(): NodeJS.ProcessEnv {
         return {
             ...process.env,
             DB_HOST: this.server.Host,

@@ -5,14 +5,17 @@
  *
  * Creates `mj_rig_fls_<timestamp>_<hex>`, bootstraps it (migrate → sync push → CodeGen), runs the
  * field-level security reconciliation scenarios, and drops it — also when a scenario fails or the
- * process is interrupted. Needs the packages it shells out to built: `@memberjunction/cli` and
- * `@memberjunction/codegen-lib`.
+ * process gets SIGINT or SIGTERM (Ctrl-C included). On a signal it stops the running `mj` step,
+ * waits for it to exit, then drops. SIGKILL, or a second process killing this one, leaves the
+ * `mj_rig_*` database behind to drop by hand. Needs the packages it shells out to built:
+ * `@memberjunction/cli` and `@memberjunction/codegen-lib`.
  *
  * Options (local iteration; CI passes none):
  *   --keep-db           leave the database in place at the end, and print its name
  *   --bootstrap-only    create and bootstrap the database, keep it, run no scenarios
  *   --database <name>   use an existing, already bootstrapped database instead of creating one;
- *                       it is kept. The fixture schema must not exist in it yet.
+ *                       it is kept. The name must start with `mj_rig_`, so a dev database cannot be
+ *                       picked by mistake. The fixture schema must not exist in it yet.
  *
  * Server: `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD` (a login allowed to create databases),
  * optionally `CODEGEN_DB_USERNAME` / `CODEGEN_DB_PASSWORD` and `DB_TRUST_SERVER_CERTIFICATE`.
@@ -20,7 +23,7 @@
  * Exit contract (harness standard): 0 all passed · 1 failures · 2 setup error.
  */
 import { TestRunner } from '@memberjunction/testing-integration';
-import { NewThrowawayDatabaseName, ReadServerConfig, ThrowawayDatabase } from './throwaway-database';
+import { NewThrowawayDatabaseName, ReadServerConfig, THROWAWAY_DATABASE_PREFIX, ThrowawayDatabase } from './throwaway-database';
 import { RegisterFlsReconciliationScenarios } from './fls-reconciliation-scenarios';
 
 /** Parsed command-line options. */
@@ -45,6 +48,9 @@ export function ParseRigArgs(argv: string[]): RigOptions {
             if (!name || name.startsWith('--')) {
                 throw new Error('--database needs a database name');
             }
+            if (!name.startsWith(THROWAWAY_DATABASE_PREFIX)) {
+                throw new Error(`--database must name a rig database (starting with '${THROWAWAY_DATABASE_PREFIX}'); '${name}' does not`);
+            }
             options.ExistingDatabase = name;
             options.KeepDatabase = true;
         } else {
@@ -68,26 +74,35 @@ async function main(): Promise<number> {
         return 2;
     }
 
-    let dropped = false;
-    const cleanUp = async (): Promise<void> => {
-        if (dropped) {
-            return;
-        }
-        dropped = true;
-        if (options.KeepDatabase) {
-            await db.Close();
-            console.log(`[rig] Kept database ${db.Name}`);
-            return;
-        }
-        await db.Drop();
-        console.log(`[rig] Dropped database ${db.Name}`);
+    // One cleanup, shared: the signal handler and the finally below both await the same promise, so
+    // neither exits while the other's drop is still running.
+    let cleanup: Promise<void> | undefined;
+    const cleanUp = (): Promise<void> => {
+        cleanup ??= (async () => {
+            await db.Abort();
+            if (options.KeepDatabase) {
+                await db.Close();
+                console.log(`[rig] Kept database ${db.Name}`);
+                return;
+            }
+            if (await db.Drop()) {
+                console.log(`[rig] Dropped database ${db.Name}`);
+            } else {
+                console.log(`[rig] Database ${db.Name} was not created by this run; nothing dropped`);
+            }
+        })();
+        return cleanup;
     };
     const onSignal = (signal: NodeJS.Signals): void => {
-        console.error(`[rig] ${signal} — cleaning up`);
-        void cleanUp().finally(() => process.exit(2));
+        console.error(`[rig] ${signal} — stopping the running step and cleaning up`);
+        cleanUp()
+            .catch(e => console.error(`[rig] Could not drop ${db.Name}: ${e instanceof Error ? e.message : String(e)}`))
+            .finally(() => process.exit(2));
     };
-    process.once('SIGINT', onSignal);
-    process.once('SIGTERM', onSignal);
+    // `on`, not `once`: tsx re-sends a signal its child has not confirmed, and exits the process
+    // itself when it finds no listener left. A repeated Ctrl-C reaches the same cleanup.
+    process.on('SIGINT', onSignal);
+    process.on('SIGTERM', onSignal);
 
     console.log(`[rig] Database ${db.Name}; CLI logs in ${db.LogDirectory}`);
     try {

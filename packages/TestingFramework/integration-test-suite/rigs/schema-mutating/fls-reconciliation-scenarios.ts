@@ -34,6 +34,8 @@ export interface FieldPermissionCount {
     IsVirtual: boolean;
     Restrictable: boolean;
     Rows: number;
+    /** Rows that belong to a role with entity read and carry `ReadAccess = 'Allow'`. */
+    ReadAllowRows: number;
 }
 
 /** The parts of an `Entity` row the scenarios read. */
@@ -57,6 +59,8 @@ export function FindPermissionGaps(fields: FieldPermissionCount[], readRoleCount
     for (const field of fields) {
         if (field.Restrictable && field.Rows !== readRoleCount) {
             gaps.push(`${field.Name}: ${field.Rows} row(s), expected ${readRoleCount}`);
+        } else if (field.Restrictable && field.ReadAllowRows !== readRoleCount) {
+            gaps.push(`${field.Name}: ${field.ReadAllowRows} of ${readRoleCount} row(s) allow read to a read role`);
         }
         if (!field.Restrictable && field.Rows > 0) {
             gaps.push(`${field.Name}: ${field.Rows} row(s) on an unrestrictable field, expected 0`);
@@ -105,6 +109,16 @@ function sprocketViewSql(view: string, includeMargin: boolean, extraColumns: str
 }
 
 const WIDGET_INNER_VIEW = 'vwWidgetsGenerated';
+
+/**
+ * The roles whose entity-level permissions on `@entityID` resolve to read (an Allow row with read,
+ * and no Deny row with read): the roles reconciliation gives snapshot rows to.
+ */
+const READ_ROLES_SQL = `SELECT DISTINCT p.RoleID
+             FROM __mj.EntityPermission p
+             WHERE p.EntityID = @entityID AND p.CanRead = 1 AND ISNULL(p.Type, 'Allow') = 'Allow'
+               AND NOT EXISTS (SELECT 1 FROM __mj.EntityPermission d
+                               WHERE d.EntityID = p.EntityID AND d.RoleID = p.RoleID AND d.CanRead = 1 AND d.Type = 'Deny')`;
 const DOUBLE_PRICE = 'CAST(s.Price * 2 AS DECIMAL(19, 2)) AS DoublePrice';
 
 /** Reads and changes the fixture; holds the per-run state the ordered scenarios share. */
@@ -125,16 +139,26 @@ class FixtureState {
 
     public async Fields(table: string): Promise<FieldPermissionCount[]> {
         const entity = await this.Entity(table);
-        const rows = await this.db.Query<{ FieldID: string; Name: string; IsVirtual: boolean; Restrictable: number; Rows: number }>(
+        const rows = await this.db.Query<{ FieldID: string; Name: string; IsVirtual: boolean; Restrictable: number; Rows: number; ReadAllowRows: number }>(
             `SELECT ef.ID AS FieldID, ef.Name, ef.IsVirtual,
                     CASE WHEN ef.IsPrimaryKey = 1 OR ef.IsSoftPrimaryKey = 1 OR ef.Name LIKE '\\_\\_mj\\_%' ESCAPE '\\' THEN 0 ELSE 1 END AS Restrictable,
-                    (SELECT COUNT(*) FROM __mj.EntityFieldPermission p WHERE p.EntityFieldID = ef.ID) AS Rows
+                    (SELECT COUNT(*) FROM __mj.EntityFieldPermission p WHERE p.EntityFieldID = ef.ID) AS Rows,
+                    (SELECT COUNT(*) FROM __mj.EntityFieldPermission p
+                     WHERE p.EntityFieldID = ef.ID AND p.ReadAccess = 'Allow'
+                       AND p.RoleID IN (${READ_ROLES_SQL})) AS ReadAllowRows
              FROM __mj.EntityField ef
              WHERE ef.EntityID = @entityID
              ORDER BY ef.Sequence`,
             { entityID: entity.ID }
         );
-        return rows.map(r => ({ FieldID: r.FieldID, Name: r.Name, IsVirtual: r.IsVirtual, Restrictable: r.Restrictable === 1, Rows: r.Rows }));
+        return rows.map(r => ({
+            FieldID: r.FieldID,
+            Name: r.Name,
+            IsVirtual: r.IsVirtual,
+            Restrictable: r.Restrictable === 1,
+            Rows: r.Rows,
+            ReadAllowRows: r.ReadAllowRows,
+        }));
     }
 
     public async Field(table: string, name: string): Promise<FieldPermissionCount | undefined> {
@@ -152,14 +176,7 @@ class FixtureState {
             return cached;
         }
         const entity = await this.Entity(table);
-        const rows = await this.db.Query<{ n: number }>(
-            `SELECT COUNT(DISTINCT p.RoleID) AS n
-             FROM __mj.EntityPermission p
-             WHERE p.EntityID = @entityID AND p.CanRead = 1 AND ISNULL(p.Type, 'Allow') = 'Allow'
-               AND NOT EXISTS (SELECT 1 FROM __mj.EntityPermission d
-                               WHERE d.EntityID = p.EntityID AND d.RoleID = p.RoleID AND d.CanRead = 1 AND d.Type = 'Deny')`,
-            { entityID: entity.ID }
-        );
+        const rows = await this.db.Query<{ n: number }>(`SELECT COUNT(*) AS n FROM (${READ_ROLES_SQL}) r`, { entityID: entity.ID });
         const count = rows[0].n;
         Assert(count > 0, `${table} has no role with entity read; the fixture cannot show reconciliation`);
         this.readRoleCounts.set(table, count);
@@ -174,7 +191,9 @@ class FixtureState {
     public async AssertFieldCovered(table: string, name: string): Promise<void> {
         const field = await this.Field(table, name);
         Assert(field !== undefined, `${table}.${name} has no EntityField row`);
-        AssertEqual(field?.Rows, await this.ReadRoleCount(table), `${table}.${name} permission rows`);
+        const readRoles = await this.ReadRoleCount(table);
+        AssertEqual(field?.Rows, readRoles, `${table}.${name} permission rows`);
+        AssertEqual(field?.ReadAllowRows, readRoles, `${table}.${name} rows allowing read to a read role`);
     }
 
     /** The field is gone from metadata and no permission row points at a field of that name. */
@@ -207,8 +226,8 @@ class FixtureState {
     }
 
     /** One CodeGen run that must succeed. */
-    public RunCodeGen(label: string): void {
-        const result = this.db.RunCodeGen(label);
+    public async RunCodeGen(label: string): Promise<void> {
+        const result = await this.db.RunCodeGen(label);
         Assert(result.ExitCode === 0, `CodeGen (${label}) exited ${result.ExitCode}. Log tail:\n${this.db.LogTail(result)}`);
     }
 }
@@ -224,7 +243,7 @@ class FixtureState {
 async function createFixture(db: ThrowawayDatabase, state: FixtureState): Promise<void> {
     await db.Exec(FIXTURE_DDL);
     await db.Exec(FIXTURE_TABLES);
-    state.RunCodeGen('fixture-discover');
+    await state.RunCodeGen('fixture-discover');
 
     const sprocket = await state.Entity('Sprocket');
     const widget = await state.Entity('Widget');
@@ -236,7 +255,7 @@ async function createFixture(db: ThrowawayDatabase, state: FixtureState): Promis
     await db.Exec(`UPDATE __mj.Entity SET BaseViewGenerated = 0, GeneratedBaseViewName = '${WIDGET_INNER_VIEW}' WHERE ID = '${widget.ID}'`);
 
     await db.Exec(`UPDATE __mj.Entity SET EnableFieldLevelSecurity = 1 WHERE SchemaName = '${FIXTURE_SCHEMA}'`);
-    state.RunCodeGen('fixture-enable');
+    await state.RunCodeGen('fixture-enable');
 }
 
 /** Registers the fixture and every scenario, in order, on `runner`. */
@@ -253,13 +272,13 @@ export function RegisterFlsReconciliationScenarios(runner: TestRunner, db: Throw
     runner.Test('2.10 a run with no schema change leaves every permission row untouched', async () => {
         const permissionsBefore = await state.PermissionSnapshot();
         Assert(permissionsBefore !== '[]', 'precondition: the fixture has permission rows to compare');
-        state.RunCodeGen('2.10-no-change');
+        await state.RunCodeGen('2.10-no-change');
         AssertEqual(await state.PermissionSnapshot(), permissionsBefore, 'EntityFieldPermission rows (IDs, verbs, timestamps)');
     });
 
     runner.Test('2.7a a column added under a generated base view is covered in one run', async () => {
         await db.Exec(`ALTER TABLE ${FIXTURE_SCHEMA}.Gadget ADD SerialNumber NVARCHAR(50) NULL`);
-        state.RunCodeGen('2.7a-add-column');
+        await state.RunCodeGen('2.7a-add-column');
         await state.AssertFieldCovered('Gadget', 'SerialNumber');
         await state.AssertReconciled('Gadget');
     });
@@ -270,7 +289,7 @@ export function RegisterFlsReconciliationScenarios(runner: TestRunner, db: Throw
             `ALTER TABLE ${FIXTURE_SCHEMA}.Gadget ADD GadgetTypeID UNIQUEIDENTIFIER NULL
                  CONSTRAINT FK_RigGadget_GadgetType FOREIGN KEY REFERENCES ${FIXTURE_SCHEMA}.GadgetType(ID)`
         );
-        state.RunCodeGen('2.7b-add-fk');
+        await state.RunCodeGen('2.7b-add-fk');
         await state.AssertFieldCovered('Gadget', 'GadgetTypeID');
 
         const readRoles = await state.ReadRoleCount('Gadget');
@@ -283,12 +302,13 @@ export function RegisterFlsReconciliationScenarios(runner: TestRunner, db: Throw
         );
         let runs = 1;
         if (displayAfterOne === undefined || displayAfterOne.Rows === 0) {
-            state.RunCodeGen('2.7b-second-run');
+            await state.RunCodeGen('2.7b-second-run');
             runs = 2;
         }
         const display = (await state.Fields('Gadget')).find(f => f.IsVirtual && AddedFieldNames(before, [f]).length > 0);
         Assert(display !== undefined, 'no joined display field was added for GadgetTypeID');
         AssertEqual(display?.Rows, readRoles, `display field ${display?.Name} permission rows after ${runs} run(s)`);
+        AssertEqual(display?.ReadAllowRows, readRoles, `display field ${display?.Name} rows allowing read to a read role`);
         console.log(`    [rig] 2.7b display field '${display?.Name}' covered after ${runs} CodeGen run(s)`);
         await state.AssertReconciled('Gadget');
     });
@@ -296,14 +316,14 @@ export function RegisterFlsReconciliationScenarios(runner: TestRunner, db: Throw
     runner.Test('2.7c a computed column added to a custom base view is covered in one run', async () => {
         const sprocket = await state.Entity('Sprocket');
         await db.Exec(sprocketViewSql(sprocket.BaseView, true, [DOUBLE_PRICE]));
-        state.RunCodeGen('2.7c-computed-column');
+        await state.RunCodeGen('2.7c-computed-column');
         await state.AssertFieldCovered('Sprocket', 'DoublePrice');
         await state.AssertReconciled('Sprocket');
     });
 
     runner.Test('2.7d a column added under a layered base view reaches the outer view and is covered in one run', async () => {
         await db.Exec(`ALTER TABLE ${FIXTURE_SCHEMA}.Widget ADD Color NVARCHAR(30) NULL`);
-        state.RunCodeGen('2.7d-layered-column');
+        await state.RunCodeGen('2.7d-layered-column');
         await state.AssertFieldCovered('Widget', 'Color');
         await state.AssertReconciled('Widget');
     });
@@ -313,7 +333,7 @@ export function RegisterFlsReconciliationScenarios(runner: TestRunner, db: Throw
         const margin = await state.Field('Sprocket', 'Margin');
         Assert(margin !== undefined && margin.Rows > 0, 'precondition: Margin has permission rows to retire');
         await db.Exec(sprocketViewSql(sprocket.BaseView, false, [DOUBLE_PRICE]));
-        state.RunCodeGen('2.8c-narrow-view');
+        await state.RunCodeGen('2.8c-narrow-view');
         await state.AssertFieldRetired('Sprocket', 'Margin');
         const column = await db.Query<{ n: number }>(`SELECT COUNT(*) AS n FROM sys.columns WHERE object_id = OBJECT_ID(@table) AND name = 'Margin'`, {
             table: `${FIXTURE_SCHEMA}.Sprocket`,
