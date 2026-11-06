@@ -1,5 +1,7 @@
 /** Record and contract types shared by every part. Field names follow MJ entity conventions (§11). */
 
+import type { TestAst } from './rules/TestAst';
+
 export type Trigger = 'Nightly' | 'Label' | 'Recheck' | 'Backtest' | 'Local';
 export type RunStatus = 'Generated' | 'Executed' | 'Assessed' | 'Failed';
 export type RevisionKind = 'Base' | 'Head' | 'Mutant';
@@ -68,6 +70,8 @@ export interface CatchContext {
     Run: Run; Analysis: ChangeAnalysis; Test: CandidateTest; Base: ExecutionResult[]; Head: ExecutionResult[]; Verdict: Verdict;
     /** Base worktree root, for rules that need the TypeScript program. */
     BaseRootDir: string; Boosts: string[];
+    /** The program over the test and base sources, filled once per catch by the rule filter. */
+    Ast?: TestAst;
 }
 export interface RuleOutcome { Fired: boolean; Reason: string; }
 export interface JudgeScore { Judge: string; Model: string; Score: number; Bucket: Bucket | null; Reason: string; }
