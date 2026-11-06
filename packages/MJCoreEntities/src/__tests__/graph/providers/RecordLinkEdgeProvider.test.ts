@@ -25,6 +25,25 @@ describe('RecordLinkEdgeProvider', () => {
         expect(read.MaxRows).toBe(200);
     });
 
+    it('groups frontier nodes by entity ID whatever the UUID casing, one clause per entity per side', async () => {
+        const provider = new FakeGraphProvider();
+        provider.Rows = { 'MJ: Record Links': [] };
+        const entityId = 'abcdef12-3456-4789-8abc-def012345678';
+        await new RecordLinkEdgeProvider().GetEdges(
+            {
+                Nodes: [
+                    { EntityName: '', EntityID: entityId.toUpperCase(), RecordID: 'acc-1' },
+                    { EntityName: '', EntityID: entityId.toLowerCase(), RecordID: 'acc-2' },
+                ],
+                Direction: 'Out',
+            },
+            Ctx(provider, {}),
+        );
+        const filter = provider.ReadsOf('MJ: Record Links')[0].Filter;
+        expect(filter.match(/\[SourceEntityID\] = /g)).toHaveLength(1);
+        expect(filter).toContain("'acc-1', 'acc-2'");
+    });
+
     it('returns nothing for an empty frontier', async () => {
         const provider = new FakeGraphProvider();
         expect(await new RecordLinkEdgeProvider().GetEdges({ Nodes: [], Direction: 'Both' }, Ctx(provider, {}))).toEqual([]);

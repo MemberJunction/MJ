@@ -1,5 +1,5 @@
 import { RunView } from '@memberjunction/core';
-import { EscapeSQLString, IndexByUUID, RegisterClass } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID, RegisterClass, UUIDMap } from '@memberjunction/global';
 import type { MJRecordLinkEntityType } from '../../generated/entities/__mj';
 import {
     BaseGraphEdgeProvider,
@@ -41,7 +41,7 @@ export class RecordLinkEdgeProvider extends BaseGraphEdgeProvider<RecordLinkEdge
             return [];
         }
 
-        const idsByEntityId = new Map<string, Set<string>>();
+        const idsByEntityId = new UUIDMap<Set<string>>();
         const ungroupedRecordIds = new Set<string>();
         const frontierKeys = new Set<string>();
 
@@ -54,10 +54,10 @@ export class RecordLinkEdgeProvider extends BaseGraphEdgeProvider<RecordLinkEdge
             const entityId = node.EntityID ?? resolvedEntity?.ID;
             frontierKeys.add(FormatGraphNodeKey(entityId ?? node.EntityName, recId));
             if (entityId) {
-                let set = idsByEntityId.get(entityId);
+                let set = idsByEntityId.Get(entityId);
                 if (!set) {
                     set = new Set<string>();
-                    idsByEntityId.set(entityId, set);
+                    idsByEntityId.Set(entityId, set);
                 }
                 set.add(recId);
             } else {
@@ -65,7 +65,7 @@ export class RecordLinkEdgeProvider extends BaseGraphEdgeProvider<RecordLinkEdge
             }
         }
 
-        if (idsByEntityId.size === 0 && ungroupedRecordIds.size === 0) {
+        if (idsByEntityId.Size === 0 && ungroupedRecordIds.size === 0) {
             return [];
         }
 
@@ -77,7 +77,7 @@ export class RecordLinkEdgeProvider extends BaseGraphEdgeProvider<RecordLinkEdge
             recordCol: 'SourceRecordID' | 'TargetRecordID',
         ): string[] => {
             const parts: string[] = [];
-            for (const [entId, recSet] of idsByEntityId.entries()) {
+            for (const [entId, recSet] of idsByEntityId) {
                 const quotedIds = Array.from(recSet)
                     .map((id) => `'${EscapeSQLString(id)}'`)
                     .join(', ');
