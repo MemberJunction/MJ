@@ -171,6 +171,25 @@ export abstract class BaseRemotableOperation<TInput = unknown, TOutput = unknown
     public readonly ExecutionMode: RemoteOpExecMode = 'Sync';
 
     /**
+     * Whether executing this Remote Operation on the server establishes an authorized
+     * `ServerOperationScope` for entities configured with `WriteAuthority = 'ServerOperationOnly'`.
+     *
+     * Domain operations default to `true`. Generic client CRUD transports (such as
+     * `SaveEntityGraphOperation`) override this to `false` so clients cannot bypass
+     * `ServerOperationOnly` gates by wrapping entity writes in a generic graph mutation.
+     */
+    public get GrantsServerWriteAuthority(): boolean {
+        return true;
+    }
+
+    /**
+     * Optional allow-list of entity names (or `['*']`) that this Remote Operation is authorized
+     * to mutate when `GrantsServerWriteAuthority` is `true`. Forwarded into the active
+     * `ServerOperationScopeFrame.allowedEntities` by `DispatchRemoteOperationInProcess`.
+     */
+    public readonly AuthorizedWriteEntities?: ReadonlyArray<string>;
+
+    /**
      * Optional structural contract fingerprint emitted by CodeGen (or set by a hand-authored
      * operation). Automatically forwarded on {@link Execute} when the caller didn't override
      * `options.contractFingerprint`, allowing the server resolver to detect stale client bundles.
