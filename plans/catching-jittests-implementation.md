@@ -69,7 +69,8 @@ packages/TestingFramework/jit-catching/
     analyzer/PackageMap.ts                # file → workspace package; has vitest tests?
     analyzer/ChangeAnalyzer.ts            # changed packages/files + one LLM call for intent and risks
     analyzer/RiskScore.ts                 # §6 risk score
-    target/VitestJsonReport.ts            # vitest JSON → ExecutionResult[]
+    target/JitReporter.ts                 # custom vitest reporter source (mounted into the sandbox)
+    target/VitestReport.ts                # JIT_REPORT line (or --reporter=json fallback) → ExecutionResult[]
     target/VitestCatchTarget.ts           # Prepare / Run / Coverage
     verdict/AllRunsAgreeVerdict.ts
     generator/prompts.ts                  # dodgy-diff and intent-aware prompt text
@@ -1870,127 +1871,200 @@ export function ComputeRiskScore(i: RiskScoreInput): number {
 
 - [ ] **Step 4: Run tests** → PASS. **Commit:** `feat(jit-catching): workspace package map and risk score`.
 
-### Task 1.10: Vitest JSON report parser
+### Task 1.10: Vitest report — custom reporter and parser
 
 **Files:**
-- Create: `src/target/VitestJsonReport.ts`
-- Test: `src/__tests__/VitestJsonReport.test.ts`
+- Create: `src/target/JitReporter.ts`, `src/target/VitestReport.ts`
+- Test: `src/__tests__/VitestReport.test.ts`
 
 **Interfaces:**
-- Produces: `ParseVitestReport(json: string, mapping: { FilePathToTestID: Record<string, string>; Revision: RevisionKind; RunIndex: number }): ExecutionResult[]`, `ParseFailureMessage(message: string): FailureDetail`, `RunnerErrorResult(testIds: string[], revision, runIndex, message): ExecutionResult[]`.
-- One `ExecutionResult` per **file** (a candidate test is one file). A file with several `it()` blocks: `Pass` only if all pass; the first failing block's detail is used; `TestName` is that block's `fullName`.
+- Produces:
+  ```ts
+  const JIT_REPORTER_MOUNT = '/jit-reporter';                     // container folder that holds the reporter, mounted ro
+  const JIT_REPORTER_ARG = '--reporter=/jit-reporter/jit-reporter.mjs';
+  function WriteJitReporter(dir: string): string;                   // writes jit-reporter.mjs into dir on the host; returns dir
+  interface ReportMapping { FilePathToTestID: Record<string, string>; Revision: RevisionKind; RunIndex: number }
+  function ParseJitReport(stdout: string, mapping: ReportMapping): ExecutionResult[] | null;   // null when stdout has no JIT_REPORT line
+  function ParseVitestJson(json: string, mapping: ReportMapping): ExecutionResult[];           // fallback: `--reporter=json` output
+  function ParseVitestOutput(stdout: string, mapping: ReportMapping): ExecutionResult[];       // ParseJitReport, else ParseVitestJson
+  function ParseFailureMessage(message: string): FailureDetail;                                // fallback, one `failureMessages` string
+  function RunnerErrorResult(testIds: string[], revision: RevisionKind, runIndex: number, message: string): ExecutionResult[];
+  ```
+- One `ExecutionResult` per **file** (a candidate test is one file). A file with several `it()` blocks: `Pass` only if all pass; the first failing block's detail is used; `TestName` is that block's full name. Results come in the order of `FilePathToTestID`.
 
-Adjust the regular expressions to the exact shape Task 0.2 recorded.
+Why a custom reporter (spike §6, design §7, D40): `--reporter=json` gives one string per failure (`error.stack`) with no `expected`, `actual` or diff, and a timeout reads `Error: STACK_TRACE_ERROR`, not `Test timed out`. The error objects that a reporter sees inside vitest carry `name`, `message`, `expected`, `actual`, `diff` and `stacks[0]`. The reporter is a small `.mjs` file that the host writes to a temp folder and the sandbox mounts read-only at `/jit-reporter`; vitest loads it with `--reporter=<path>`. At the end of the run it prints one line, `JIT_REPORT <json>`, with per test: `File`, `Name`, `State`, `DurationMs`, and per error: `Name`, `Message`, `Expected`, `Actual`, `Diff` (ANSI codes removed), `Frame` (first stack frame, `file:line:column`) and `Timeout` (the message starts with `Test timed out in`). Errors that stop a whole file (a syntax error, a failed import) come as `ModuleErrors`.
+
+Fallback: when the reporter does not load (no `JIT_REPORT` line), the caller runs once more with `--reporter=json` and `ParseVitestJson` reads it, with these limits: assertion = the first line of `failureMessages[0]`; first stack frame = the first `at` line whose path is not under `node_modules`; `Expected` and `Actual` are null (chai's one-line text can be truncated, so it is not parsed); a first line of exactly `Error: STACK_TRACE_ERROR` means a timeout, and this cannot tell a test timeout from a hook timeout, because hooks use the same placeholder error.
 
 - [ ] **Step 1: Failing tests**
 
 ```ts
 import { describe, it, expect } from 'vitest';
-import { ParseVitestReport, ParseFailureMessage } from '../target/VitestJsonReport';
+import { ParseJitReport, ParseVitestJson, ParseVitestOutput } from '../target/VitestReport';
 
-const report = JSON.stringify({
-  numTotalTests: 3, testResults: [
-    { name: '/w/packages/MJCore/src/__tests__/jit/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa.jit.test.ts', status: 'passed', assertionResults: [{ fullName: 'A ok', status: 'passed', duration: 4, failureMessages: [] }] },
-    { name: '/w/packages/MJCore/src/__tests__/jit/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb.jit.test.ts', status: 'failed', assertionResults: [
-      { fullName: 'B first', status: 'passed', duration: 1, failureMessages: [] },
-      { fullName: 'B canRead gives per-user answers', status: 'failed', duration: 2, failureMessages: ['AssertionError: expected true to be false // Object.is equality\n\n- Expected\n+ Received\n\n- false\n+ true\n\n ❯ src/__tests__/jit/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb.jit.test.ts:12:31\n'] } ] },
-    { name: '/w/packages/MJCore/src/__tests__/jit/cccccccc-cccc-cccc-cccc-cccccccccccc.jit.test.ts', status: 'failed', assertionResults: [
-      { fullName: 'C slow', status: 'failed', duration: 50, failureMessages: ['Error: Test timed out in 50ms.\nIf this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".'] } ] },
-  ],
-});
-const mapping = { FilePathToTestID: {
-  'packages/MJCore/src/__tests__/jit/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa.jit.test.ts': 'tA',
-  'packages/MJCore/src/__tests__/jit/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb.jit.test.ts': 'tB',
-  'packages/MJCore/src/__tests__/jit/cccccccc-cccc-cccc-cccc-cccccccccccc.jit.test.ts': 'tC' }, Revision: 'Head' as const, RunIndex: 1 };
+const A = 'packages/MJCore/src/__tests__/jit/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa.jit.test.ts';
+const B = 'packages/MJCore/src/__tests__/jit/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb.jit.test.ts';
+const C = 'packages/MJCore/src/__tests__/jit/cccccccc-cccc-cccc-cccc-cccccccccccc.jit.test.ts';
+const D = 'packages/MJCore/src/__tests__/jit/dddddddd-dddd-dddd-dddd-dddddddddddd.jit.test.ts';
+const mapping = { FilePathToTestID: { [A]: 'tA', [B]: 'tB', [C]: 'tC', [D]: 'tD' }, Revision: 'Head' as const, RunIndex: 1 };
+const noErr = { Expected: null, Actual: null, Diff: null };
+const report = { Tests: [
+  { File: `/work/${A}`, Name: 'A ok', State: 'passed', DurationMs: 4, Errors: [] },
+  { File: `/work/${B}`, Name: 'B first', State: 'passed', DurationMs: 1, Errors: [] },
+  { File: `/work/${B}`, Name: 'B canRead gives per-user answers', State: 'failed', DurationMs: 2, Errors: [{ Name: 'AssertionError', Message: 'expected true to be false // Object.is equality', Expected: 'false', Actual: 'true', Diff: '- Expected\n+ Received\n\n- false\n+ true', Frame: `/work/${B}:12:31`, Timeout: false }] },
+  { File: `/work/${C}`, Name: 'C slow', State: 'failed', DurationMs: 50, Errors: [{ Name: 'Error', Message: 'Test timed out in 50ms.', ...noErr, Frame: `/work/${C}:3:3`, Timeout: true }] },
+], ModuleErrors: [{ File: `/work/${D}`, Errors: [{ Name: 'SyntaxError', Message: "Unexpected token '}'", ...noErr, Frame: null, Timeout: false }] }] };
+const out = (o: object) => `RUN v4.0.18 /work/packages/MJCore\nJIT_REPORT ${JSON.stringify(o)}\n`;
 
-describe('ParseVitestReport', () => {
-  const results = ParseVitestReport(report, mapping);
+describe('ParseJitReport', () => {
+  const results = ParseJitReport(out(report), mapping) ?? [];
   it('gives one result per file keyed by candidate test ID', () => {
-    expect(results.map((r) => [r.CandidateTestID, r.Status])).toEqual([['tA', 'Pass'], ['tB', 'Fail'], ['tC', 'Timeout']]);
+    expect(results.map((r) => [r.CandidateTestID, r.Status])).toEqual([['tA', 'Pass'], ['tB', 'Fail'], ['tC', 'Timeout'], ['tD', 'RunnerError']]);
     expect(results[1]).toMatchObject({ Revision: 'Head', RunIndex: 1, TestName: 'B canRead gives per-user answers' });
   });
-  it('extracts assertion, expected, actual and the first stack frame', () => {
-    expect(results[1].Failure).toMatchObject({ ErrorName: 'AssertionError', Assertion: 'expected true to be false', Expected: 'false', Actual: 'true' });
-    expect(results[1].Failure?.StackExcerpt).toContain('.jit.test.ts:12:31');
+  it('takes assertion, expected, actual and the first frame from the reporter fields', () => {
+    expect(results[1].Failure).toMatchObject({ ErrorName: 'AssertionError', Assertion: 'expected true to be false // Object.is equality', Expected: 'false', Actual: 'true', StackExcerpt: `/work/${B}:12:31` });
   });
-  it('marks a file whose test is missing from the report as RunnerError', () => {
-    const r = ParseVitestReport(JSON.stringify({ testResults: [] }), mapping);
-    expect(r.every((x) => x.Status === 'RunnerError')).toBe(true);
+  it('reports a module error as RunnerError with the error text', () => {
+    expect(results[3].Failure?.Message).toContain("SyntaxError: Unexpected token '}'");
+  });
+  it('marks a file missing from the report as RunnerError, and returns null when stdout has no JIT_REPORT line', () => {
+    expect((ParseJitReport(out({ Tests: [], ModuleErrors: [] }), mapping) ?? []).every((x) => x.Status === 'RunnerError')).toBe(true);
+    expect(ParseJitReport('{"testResults":[]}', mapping)).toBeNull();
   });
 });
 
-describe('ParseFailureMessage', () => {
-  it('reads a thrown TypeError', () => {
-    const f = ParseFailureMessage("TypeError: Cannot read properties of undefined (reading 'Name')\n ❯ src/foo.ts:3:5");
-    expect(f).toMatchObject({ ErrorName: 'TypeError', Assertion: null, Expected: null, Actual: null });
-    expect(f.StackExcerpt).toContain('src/foo.ts:3:5');
+describe('ParseVitestJson (fallback)', () => {
+  const runner = 'file:///work/node_modules/.pnpm/@vitest+runner@4.0.18/node_modules/@vitest/runner/dist/index.js';
+  const json = JSON.stringify({ testResults: [
+    { name: `/work/${B}`, status: 'failed', assertionResults: [{ fullName: 'B mismatch', status: 'failed', duration: 2, failureMessages: [`AssertionError: expected { a: 1 } to deeply equal { a: 2 }\n    at /work/${B}:5:33\n    at ${runner}:145:11`] }] },
+    { name: `/work/${C}`, status: 'failed', assertionResults: [{ fullName: 'C slow', status: 'failed', duration: 51, failureMessages: [`Error: STACK_TRACE_ERROR\n    at task (${runner}:796:27)\n    at /work/${C}:11:3`] }] },
+  ] });
+  const r = ParseVitestJson(json, { ...mapping, FilePathToTestID: { [B]: 'tB', [C]: 'tC' } });
+  it('reads the assertion from the first line and the first frame outside node_modules; expected and actual stay null', () => {
+    expect(r[0].Status).toBe('Fail');
+    expect(r[0].Failure).toMatchObject({ ErrorName: 'AssertionError', Assertion: 'expected { a: 1 } to deeply equal { a: 2 }', Expected: null, Actual: null, StackExcerpt: `at /work/${B}:5:33` });
   });
-  it('reads a toEqual diff block as Expected and Actual', () => {
-    const f = ParseFailureMessage('AssertionError: expected { a: 1 } to deeply equal { a: 2 }\n\n- Expected\n+ Received\n\n  {\n-   "a": 2,\n+   "a": 1,\n  }\n');
-    expect(f.Expected).toBe('{\n  "a": 2,\n}'); expect(f.Actual).toBe('{\n  "a": 1,\n}');
+  it('treats a first line of Error: STACK_TRACE_ERROR as a timeout', () => {
+    expect(r[1].Status).toBe('Timeout'); expect(r[1].Failure?.StackExcerpt).toBe(`at /work/${C}:11:3`);
+  });
+  it('is what ParseVitestOutput uses when there is no JIT_REPORT line', () => {
+    expect(ParseVitestOutput(`chatter\n${json}`, { ...mapping, FilePathToTestID: { [B]: 'tB' } })[0].Status).toBe('Fail');
   });
 });
 ```
 
 Run → FAIL.
 
-- [ ] **Step 2: VitestJsonReport.ts**
+- [ ] **Step 2: JitReporter.ts and VitestReport.ts**
 
 ```ts
+// JitReporter.ts
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+export const JIT_REPORTER_MOUNT = '/jit-reporter';
+export const JIT_REPORTER_ARG = `--reporter=${JIT_REPORTER_MOUNT}/jit-reporter.mjs`;
+
+/** vitest reporter source. It runs inside the sandbox, in vitest's process, and prints one JIT_REPORT line at the end. */
+const SOURCE = `const strip = (s) => (typeof s === 'string' ? s.replace(/\\u001b\\[[0-9;]*m/g, '') : null);
+const frame = (e) => (e.stacks && e.stacks[0] ? e.stacks[0].file + ':' + e.stacks[0].line + ':' + e.stacks[0].column : null);
+const err = (e) => ({ Name: e.name ?? null, Message: String(e.message ?? ''), Expected: typeof e.expected === 'string' ? e.expected : null,
+  Actual: typeof e.actual === 'string' ? e.actual : null, Diff: strip(e.diff), Frame: frame(e), Timeout: /^Test timed out in \\d+ms/.test(String(e.message ?? '')) });
+export default class JitReporter {
+  constructor() { this.tests = []; this.moduleErrors = []; }
+  onTestCaseResult(tc) { const r = tc.result(); this.tests.push({ File: tc.module.moduleId, Name: tc.fullName, State: r.state, DurationMs: tc.diagnostic()?.duration ?? 0, Errors: (r.errors ?? []).map(err) }); }
+  onTestModuleEnd(m) { const e = m.errors(); if (e.length) this.moduleErrors.push({ File: m.moduleId, Errors: e.map(err) }); }
+  onTestRunEnd() { process.stdout.write('\\nJIT_REPORT ' + JSON.stringify({ Tests: this.tests, ModuleErrors: this.moduleErrors }) + '\\n'); }
+}
+`;
+
+/** Writes the reporter into `dir` on the host, for a read-only mount at JIT_REPORTER_MOUNT. */
+export function WriteJitReporter(dir: string): string {
+    mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, 'jit-reporter.mjs'), SOURCE); return dir;
+}
+```
+
+```ts
+// VitestReport.ts
 import { z } from 'zod';
-import type { ExecutionResult, FailureDetail, RevisionKind } from '../types';
+import type { ExecutionResult, ExecutionStatus, FailureDetail, RevisionKind } from '../types';
 
-const ReportSchema = z.object({ testResults: z.array(z.object({ name: z.string(), status: z.string(), assertionResults: z.array(z.object({ fullName: z.string(), status: z.string(), duration: z.number().nullable().optional(), failureMessages: z.array(z.string()).optional() })) })) });
 export interface ReportMapping { FilePathToTestID: Record<string, string>; Revision: RevisionKind; RunIndex: number; }
+const ErrSchema = z.object({ Name: z.string().nullable(), Message: z.string(), Expected: z.string().nullable(), Actual: z.string().nullable(), Diff: z.string().nullable(), Frame: z.string().nullable(), Timeout: z.boolean() });
+const JitReportSchema = z.object({
+    Tests: z.array(z.object({ File: z.string(), Name: z.string(), State: z.string(), DurationMs: z.number(), Errors: z.array(ErrSchema) })),
+    ModuleErrors: z.array(z.object({ File: z.string(), Errors: z.array(ErrSchema) })),
+});
+type JitError = z.infer<typeof ErrSchema>;
+const JsonReportSchema = z.object({ testResults: z.array(z.object({ name: z.string(), status: z.string(), assertionResults: z.array(z.object({ fullName: z.string(), status: z.string(), duration: z.number().nullable().optional(), failureMessages: z.array(z.string()).optional() })) })) });
 
-/** One ExecutionResult per candidate test file. Tests absent from the report are RunnerError. */
-export function ParseVitestReport(json: string, mapping: ReportMapping): ExecutionResult[] {
-    const parsed = ReportSchema.safeParse(safeJson(json));
-    if (!parsed.success) return RunnerErrorResult(Object.values(mapping.FilePathToTestID), mapping.Revision, mapping.RunIndex, 'vitest produced no JSON report');
-    const byId = new Map<string, ExecutionResult>();
-    for (const file of parsed.data.testResults) {
-        const rel = Object.keys(mapping.FilePathToTestID).find((p) => file.name.endsWith(p));
-        if (!rel) continue;
-        const id = mapping.FilePathToTestID[rel];
-        const duration = file.assertionResults.reduce((s, a) => s + (a.duration ?? 0), 0);
-        const failing = file.assertionResults.find((a) => a.status === 'failed');
-        if (!failing) { byId.set(id, { CandidateTestID: id, Revision: mapping.Revision, RunIndex: mapping.RunIndex, Status: 'Pass', TestName: file.assertionResults[0]?.fullName ?? null, Failure: null, DurationMs: duration }); continue; }
-        const failure = ParseFailureMessage(failing.failureMessages?.[0] ?? 'failed with no message');
-        const status = /timed out in \d+ms/i.test(failure.Message) ? 'Timeout' : 'Fail';
-        byId.set(id, { CandidateTestID: id, Revision: mapping.Revision, RunIndex: mapping.RunIndex, Status: status, TestName: failing.fullName, Failure: failure, DurationMs: duration });
-    }
-    const missing = Object.values(mapping.FilePathToTestID).filter((id) => !byId.has(id));
-    return [...byId.values(), ...RunnerErrorResult(missing, mapping.Revision, mapping.RunIndex, 'file missing from the vitest report')];
+/** Results from the custom reporter's JIT_REPORT line; null when stdout has none. */
+export function ParseJitReport(stdout: string, mapping: ReportMapping): ExecutionResult[] | null {
+    const line = stdout.split('\n').reverse().find((l) => l.startsWith('JIT_REPORT '));
+    if (!line) return null;
+    const parsed = JitReportSchema.safeParse(safeJson(line.slice('JIT_REPORT '.length)));
+    if (!parsed.success) return allRunnerErrors(mapping, 'unreadable JIT_REPORT line');
+    return Object.entries(mapping.FilePathToTestID).map(([path, id]) => {
+        const moduleError = parsed.data.ModuleErrors.find((m) => m.File.endsWith(path))?.Errors[0];
+        if (moduleError) return { ...RunnerErrorResult([id], mapping.Revision, mapping.RunIndex, '')[0], Failure: fromJitError(moduleError) };
+        const tests = parsed.data.Tests.filter((t) => t.File.endsWith(path));
+        if (tests.length === 0) return RunnerErrorResult([id], mapping.Revision, mapping.RunIndex, 'file missing from the vitest report')[0];
+        const duration = tests.reduce((s, t) => s + t.DurationMs, 0);
+        const failing = tests.find((t) => t.State === 'failed');
+        if (!failing) return { CandidateTestID: id, Revision: mapping.Revision, RunIndex: mapping.RunIndex, Status: 'Pass', TestName: tests[0].Name, Failure: null, DurationMs: duration };
+        const e = failing.Errors[0];
+        const status: ExecutionStatus = e?.Timeout ? 'Timeout' : 'Fail';
+        return { CandidateTestID: id, Revision: mapping.Revision, RunIndex: mapping.RunIndex, Status: status, TestName: failing.Name, Failure: e ? fromJitError(e) : ParseFailureMessage('failed with no error'), DurationMs: duration };
+    });
 }
 
-/** Splits a vitest failure message into error name, assertion text, expected/actual diff and first stack frame. */
+function fromJitError(e: JitError): FailureDetail {
+    const text = `${e.Name ?? 'Error'}: ${e.Message}`;
+    return { Assertion: e.Name === 'AssertionError' ? e.Message.split('\n')[0] : null, Expected: e.Expected, Actual: e.Actual, Message: text.split('\n').slice(0, 3).join('\n').slice(0, 2000), StackExcerpt: e.Frame, ErrorName: e.Name };
+}
+
+/** Fallback for `--reporter=json` output. Limits: no expected/actual; a test timeout and a hook timeout look the same. */
+export function ParseVitestJson(json: string, mapping: ReportMapping): ExecutionResult[] {
+    const parsed = JsonReportSchema.safeParse(safeJson(json));
+    if (!parsed.success) return allRunnerErrors(mapping, 'vitest produced no JSON report');
+    return Object.entries(mapping.FilePathToTestID).map(([path, id]) => {
+        const file = parsed.data.testResults.find((f) => f.name.endsWith(path));
+        if (!file) return RunnerErrorResult([id], mapping.Revision, mapping.RunIndex, 'file missing from the vitest report')[0];
+        const duration = file.assertionResults.reduce((s, a) => s + (a.duration ?? 0), 0);
+        const failing = file.assertionResults.find((a) => a.status === 'failed');
+        if (!failing) return { CandidateTestID: id, Revision: mapping.Revision, RunIndex: mapping.RunIndex, Status: 'Pass', TestName: file.assertionResults[0]?.fullName ?? null, Failure: null, DurationMs: duration };
+        const message = failing.failureMessages?.[0] ?? 'failed with no message';
+        const status: ExecutionStatus = message.split('\n')[0] === 'Error: STACK_TRACE_ERROR' ? 'Timeout' : 'Fail';
+        return { CandidateTestID: id, Revision: mapping.Revision, RunIndex: mapping.RunIndex, Status: status, TestName: failing.fullName, Failure: ParseFailureMessage(message), DurationMs: duration };
+    });
+}
+
+export function ParseVitestOutput(stdout: string, mapping: ReportMapping): ExecutionResult[] {
+    return ParseJitReport(stdout, mapping) ?? ParseVitestJson(extractJson(stdout), mapping);
+}
+
+/** Splits one `failureMessages` string (an `error.stack`) into error name, assertion and the first frame outside node_modules. */
 export function ParseFailureMessage(message: string): FailureDetail {
     const lines = message.split('\n');
     const head = /^([A-Za-z]*Error[A-Za-z]*): (.*)$/.exec(lines[0] ?? '');
     const errorName = head?.[1] ?? null;
-    const isAssertion = errorName === 'AssertionError';
-    const assertion = isAssertion ? (head?.[2] ?? null) : null;
-    let expected: string | null = null; let actual: string | null = null;
-    const diffStart = lines.findIndex((l) => l === '- Expected');
-    if (diffStart >= 0 && lines[diffStart + 1] === '+ Received') {
-        const exp: string[] = []; const rec: string[] = [];
-        for (const l of lines.slice(diffStart + 3)) {
-            if (l.startsWith(' ❯') || l.startsWith('    at ')) break;
-            if (l.startsWith('- ')) exp.push(l.slice(2)); else if (l.startsWith('+ ')) rec.push(l.slice(2)); else if (l.startsWith('  ')) { exp.push(l.slice(2)); rec.push(l.slice(2)); }
-        }
-        expected = exp.join('\n').trim() || null; actual = rec.join('\n').trim() || null;
-    }
-    const frame = lines.find((l) => /^\s*❯\s|^\s+at\s/.test(l)) ?? null;
-    return { Assertion: assertion, Expected: expected, Actual: actual, Message: lines.slice(0, 3).join('\n').slice(0, 2000), StackExcerpt: frame?.trim() ?? null, ErrorName: errorName };
+    const frame = lines.find((l) => /^\s+at\s/.test(l) && !l.includes('node_modules')) ?? null;
+    return { Assertion: errorName === 'AssertionError' ? (head?.[2] ?? null) : null, Expected: null, Actual: null, Message: lines.slice(0, 3).join('\n').slice(0, 2000), StackExcerpt: frame?.trim() ?? null, ErrorName: errorName };
 }
 
 export function RunnerErrorResult(testIds: string[], revision: RevisionKind, runIndex: number, message: string): ExecutionResult[] {
     return testIds.map((id) => ({ CandidateTestID: id, Revision: revision, RunIndex: runIndex, Status: 'RunnerError', TestName: null, Failure: { Assertion: null, Expected: null, Actual: null, Message: message, StackExcerpt: null, ErrorName: null }, DurationMs: 0 }));
 }
+function allRunnerErrors(mapping: ReportMapping, message: string): ExecutionResult[] { return RunnerErrorResult(Object.values(mapping.FilePathToTestID), mapping.Revision, mapping.RunIndex, message); }
+/** vitest prints its JSON report last; anything before it (turbo or pnpm chatter) is skipped. */
+function extractJson(stdout: string): string { const i = stdout.indexOf('{"'); return i >= 0 ? stdout.slice(i) : stdout; }
 function safeJson(text: string): unknown { try { return JSON.parse(text); } catch { return null; } }
 ```
 
-- [ ] **Step 3: Run tests** → PASS. **Commit:** `feat(jit-catching): vitest JSON report parser`.
+- [ ] **Step 3: Run tests** → PASS. Then one real check (not a unit test): write the reporter to a temp folder and run it on a throwaway failing test in `packages/MJGlobal` (the three cases from spike §6: a `toEqual` mismatch, a thrown `TypeError`, a 50 ms timeout) with `npx vitest run <file> --reporter=<dir>/jit-reporter.mjs`; confirm the `JIT_REPORT` line has `Expected`/`Actual` for the first, `TypeError` for the second and `Timeout: true` for the third. Delete the throwaway test.
+
+- [ ] **Step 4: Commit:** `feat(jit-catching): vitest custom reporter and report parser`.
 
 ### Task 1.11: `VitestCatchTarget` — prepare, run, type-check, coverage
 
@@ -1999,7 +2073,7 @@ function safeJson(text: string): unknown { try { return JSON.parse(text); } catc
 - Test: `src/__tests__/VitestCatchTarget.test.ts`, `src/__tests__/LockfileStrip.test.ts`
 
 **Interfaces:**
-- Consumes: `Sandbox`, `GitRepo`, `PackageMap`, `ParseVitestReport`, `Settings`.
+- Consumes: `Sandbox`, `GitRepo`, `PackageMap`, `ParseJitReport` / `ParseVitestJson` / `WriteJitReporter`, `Settings`.
 - Produces:
   ```ts
   interface TargetOptions { Repo: GitRepo; Sandbox: Sandbox; Settings: Settings; WorkRoot: string /* where worktrees go */; PackageMap: PackageMap; StoreDir: string /* pnpm store, one per run */; HostRunner?: HostRunner }
@@ -2043,16 +2117,25 @@ const test = (id: string): CandidateTest => ({ ID: id, RunID: 'r', Package: '@me
 const ID1 = '11111111-1111-1111-1111-111111111111';
 
 describe('VitestCatchTarget.Run', () => {
-  it('runs each package once per repeat with the fixed seed, in the sandbox, and maps results', async () => {
-    const report = { testResults: [{ name: `/work/head/packages/MJCore/src/__tests__/jit/${ID1}.jit.test.ts`, status: 'passed', assertionResults: [{ fullName: 't', status: 'passed', duration: 1, failureMessages: [] }] }] };
-    const { target, calls } = fakeTarget(() => ({ Stdout: JSON.stringify(report), ExitCode: 0 }));
+  it('runs each package once per repeat with the fixed seed and the custom reporter, in the sandbox, and maps results', async () => {
+    const jit = { Tests: [{ File: `/work/packages/MJCore/src/__tests__/jit/${ID1}.jit.test.ts`, Name: 't', State: 'passed', DurationMs: 1, Errors: [] }], ModuleErrors: [] };
+    const { target, calls } = fakeTarget(() => ({ Stdout: `JIT_REPORT ${JSON.stringify(jit)}\n`, ExitCode: 0 }));
     const results = await target.Run({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: '/work/head' }, [test(ID1)], 3);
     expect(calls).toHaveLength(3);
     const cmd = calls[0].Command.join(' ');
-    expect(cmd).toContain('vitest run'); expect(cmd).toContain('--reporter=json'); expect(cmd).toContain('--sequence.seed=1'); expect(cmd).toContain(`src/__tests__/jit/${ID1}.jit.test.ts`);
+    expect(cmd).toContain('vitest run'); expect(cmd).toContain('--reporter=/jit-reporter/jit-reporter.mjs'); expect(cmd).not.toContain('--reporter=json');
+    expect(cmd).toContain('--sequence.seed=1'); expect(cmd).toContain(`src/__tests__/jit/${ID1}.jit.test.ts`);
     expect(calls[0].Env).toMatchObject({ TZ: 'UTC' });
     expect(calls[0].Mounts.find((m) => m.Container === '/work')?.Mode).toBe('ro');
+    expect(calls[0].Mounts.find((m) => m.Container === '/jit-reporter')?.Mode).toBe('ro');
     expect(results.map((r) => [r.RunIndex, r.Status])).toEqual([[0, 'Pass'], [1, 'Pass'], [2, 'Pass']]);
+  });
+  it('runs a repeat once more with --reporter=json when the custom reporter printed no JIT_REPORT line', async () => {
+    const json = { testResults: [{ name: `/work/packages/MJCore/src/__tests__/jit/${ID1}.jit.test.ts`, status: 'passed', assertionResults: [{ fullName: 't', status: 'passed', duration: 1, failureMessages: [] }] }] };
+    const { target, calls } = fakeTarget((o) => ({ Stdout: o.Command.join(' ').includes('--reporter=json') ? JSON.stringify(json) : 'Error: Failed to load custom Reporter', ExitCode: 1 }));
+    const results = await target.Run({ Ref: { Kind: 'Base', SHA: 'b' }, RootDir: '/work/base' }, [test(ID1)], 1);
+    expect(calls).toHaveLength(2); expect(calls[1].Command.join(' ')).toContain('--reporter=json');
+    expect(results.map((r) => r.Status)).toEqual(['Pass']);
   });
   it('turns a sandbox timeout into Timeout results for every test in that package', async () => {
     const { target } = fakeTarget(() => ({ Stdout: '', ExitCode: 0 }));
@@ -2146,7 +2229,8 @@ The blank line between the block and the next top-level key goes with the block,
 ```ts
 // VitestCatchTarget.ts
 import { execFile } from 'node:child_process';
-import { mkdirSync, writeFileSync, existsSync, rmSync, readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync, existsSync, rmSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { promisify } from 'node:util';
 import { BaseCatchTarget } from '../contracts/BaseCatchTarget';
@@ -2155,7 +2239,8 @@ import type { Sandbox, SandboxMount } from '../sandbox/Sandbox';
 import type { GitRepo } from '../git/GitRepo';
 import type { PackageMap } from '../analyzer/PackageMap';
 import type { Settings } from '../settings';
-import { ParseVitestReport, RunnerErrorResult } from './VitestJsonReport';
+import { ParseJitReport, ParseVitestJson, RunnerErrorResult } from './VitestReport';
+import { JIT_REPORTER_ARG, JIT_REPORTER_MOUNT, WriteJitReporter } from './JitReporter';
 import { StripPatchInfo } from './LockfileStrip';
 
 const execFileAsync = promisify(execFile);
@@ -2225,11 +2310,18 @@ export class VitestCatchTarget extends BaseCatchTarget {
             const dir = this.packageDir(pkg);
             const files = group.map((t) => t.FilePath.slice(dir.length + 1));
             const mapping = { FilePathToTestID: Object.fromEntries(group.map((t) => [t.FilePath, t.ID])), Revision: revision.Ref.Kind, RunIndex: 0 };
+            const cmd = `cd ${CONTAINER_ROOT}/${dir} && npx vitest run ${files.join(' ')} --sequence.seed=${this.o.Settings.SequenceSeed} --testTimeout=${this.o.Settings.TestTimeoutMs}`;
+            const run = (reporter: string) => this.inSandbox(revision, 'ro', ['sh', '-c', `${cmd} ${reporter}`], this.o.Settings.TestTimeoutMs * (files.length + 2) + 120_000, { TZ: 'UTC' }, [`${CONTAINER_ROOT}/${dir}/node_modules/.vite`, `${CONTAINER_ROOT}/node_modules/.vite`]);
+            const timedOut = (i: number) => RunnerErrorResult(group.map((t) => t.ID), revision.Ref.Kind, i, 'sandbox timed out').map((x) => ({ ...x, Status: 'Timeout' as const }));
             for (let i = 0; i < repeats; i++) {
-                const cmd = `cd ${CONTAINER_ROOT}/${dir} && npx vitest run ${files.join(' ')} --reporter=json --sequence.seed=${this.o.Settings.SequenceSeed} --testTimeout=${this.o.Settings.TestTimeoutMs}`;
-                const r = await this.inSandbox(revision, 'ro', ['sh', '-c', cmd], this.o.Settings.TestTimeoutMs * (files.length + 2) + 120_000, { TZ: 'UTC' }, [`${CONTAINER_ROOT}/${dir}/node_modules/.vite`, `${CONTAINER_ROOT}/node_modules/.vite`]);
-                if (r.TimedOut) { results.push(...RunnerErrorResult(group.map((t) => t.ID), revision.Ref.Kind, i, 'sandbox timed out').map((x) => ({ ...x, Status: 'Timeout' as const }))); continue; }
-                results.push(...ParseVitestReport(extractJson(r.Stdout), { ...mapping, RunIndex: i }));
+                const m = { ...mapping, RunIndex: i };
+                const r = await run(JIT_REPORTER_ARG);
+                if (r.TimedOut) { results.push(...timedOut(i)); continue; }
+                const parsed = ParseJitReport(r.Stdout, m);
+                if (parsed) { results.push(...parsed); continue; }
+                // The custom reporter did not load: run this repeat once more with the JSON reporter (fewer fields, Task 1.10).
+                const j = await run('--reporter=json');
+                results.push(...(j.TimedOut ? timedOut(i) : ParseVitestJson(extractJson(j.Stdout), m)));
             }
         }
         return results;
@@ -2255,13 +2347,16 @@ export class VitestCatchTarget extends BaseCatchTarget {
         const mounts: SandboxMount[] = [{ Host: revision.RootDir, Container: CONTAINER_ROOT, Mode: mode }];
         if (mode === 'rw') mounts.push({ Host: this.o.StoreDir, Container: CONTAINER_STORE, Mode: 'rw' });
         if (mode === 'ro') for (const jitDir of this.jitDirs(revision)) mounts.push({ Host: join(revision.RootDir, jitDir), Container: `${CONTAINER_ROOT}/${jitDir}`, Mode: 'rw' });
+        if (mode === 'ro') mounts.push({ Host: this.reporterDir(), Container: JIT_REPORTER_MOUNT, Mode: 'ro' });
         for (const t of tmpfs) mkdirSync(join(revision.RootDir, t.slice(CONTAINER_ROOT.length + 1)), { recursive: true });
         return this.sandbox.Run({ Mounts: mounts, Tmpfs: tmpfs, WorkDir: CONTAINER_ROOT, Command: command, TimeoutMs: timeoutMs, Env: { HOME: '/tmp', CI: '1', ...env } });
     }
+    private reporter: string | null = null;
+    private reporterDir(): string { return (this.reporter ??= WriteJitReporter(mkdtempSync(join(tmpdir(), 'jit-reporter-')))); }
     private jitDirs(revision: PreparedRevision): string[] { return this.o.PackageMap.All().map((p) => `${p.Dir}/src/__tests__/jit`).filter((d) => existsSync(join(revision.RootDir, d))); }
 }
 
-/** vitest prints its JSON report last; anything before it (turbo or pnpm chatter) is skipped. */
+/** The JSON report or coverage file is printed last; anything before it (turbo or pnpm chatter) is skipped. */
 function extractJson(stdout: string): string { const i = stdout.indexOf('{"'); return i >= 0 ? stdout.slice(i) : stdout; }
 
 /** Counts changed lines (new side) that the v8 coverage report marks as executed at least once. */
@@ -2610,7 +2705,7 @@ The `rel` computation must match the real package depth: `packages/MJCore/src/a.
 - Test: `src/__tests__/RunTestTool.test.ts`
 
 **Interfaces:**
-- Consumes: `Sandbox`, `ParseVitestReport`, `Mutant.ts`, `Settings`.
+- Consumes: `Sandbox`, `ParseVitestOutput` / `WriteJitReporter`, `Mutant.ts`, `Settings`.
 - Produces:
   ```ts
   interface RunTestInput { File: string /* repo-relative */; Mutant?: { Edits: MutantEdit[] } }
@@ -2641,15 +2736,18 @@ function setup(stdout: string) {
   const tool = new RunTestTool({ Sandbox: sandbox, BaseRootDir: root, PackageRelDir: 'packages/MJCore', PackageName: '@memberjunction/core', ScratchRoot: mkdtempSync(join(tmpdir(), 'jit-sc-')), Settings: DEFAULT_SETTINGS });
   return { tool, calls, root };
 }
-const passReport = JSON.stringify({ testResults: [{ name: `/work/packages/MJCore/src/__tests__/jit/${ID}.jit.test.ts`, status: 'passed', assertionResults: [{ fullName: 't', status: 'passed', duration: 1, failureMessages: [] }] }] });
-const failReport = JSON.stringify({ testResults: [{ name: `/work/packages/MJCore/src/__tests__/jit/${ID}.jit.test.ts`, status: 'failed', assertionResults: [{ fullName: 't kills', status: 'failed', duration: 1, failureMessages: ['AssertionError: expected 2 to be 1\n\n- Expected\n+ Received\n\n- 1\n+ 2\n'] }] }] });
+const jitLine = (o: object) => `JIT_REPORT ${JSON.stringify({ ModuleErrors: [], ...o })}\n`;
+const passReport = jitLine({ Tests: [{ File: `/work/packages/MJCore/src/__tests__/jit/${ID}.jit.test.ts`, Name: 't', State: 'passed', DurationMs: 1, Errors: [] }] });
+const failReport = jitLine({ Tests: [{ File: `/work/packages/MJCore/src/__tests__/jit/${ID}.jit.test.ts`, Name: 't kills', State: 'failed', DurationMs: 1,
+  Errors: [{ Name: 'AssertionError', Message: 'expected 2 to be 1 // Object.is equality', Expected: '1', Actual: '2', Diff: null, Frame: null, Timeout: false }] }] });
 
 describe('RunTestTool', () => {
   it('runs the file on base with the worktree read-only and the jit folder writable', async () => {
     const { tool, calls } = setup(passReport);
     const out = await tool.Run({ File: `packages/MJCore/src/__tests__/jit/${ID}.jit.test.ts` });
     expect(out.Status).toBe('Pass');
-    expect(calls[0].Mounts.map((m) => [m.Container, m.Mode])).toEqual([['/work', 'ro'], ['/work/packages/MJCore/src/__tests__/jit', 'rw']]);
+    expect(calls[0].Mounts.map((m) => [m.Container, m.Mode])).toEqual([['/work', 'ro'], ['/work/packages/MJCore/src/__tests__/jit', 'rw'], ['/jit-reporter', 'ro']]);
+    expect(calls[0].Command.join(' ')).toContain('--reporter=/jit-reporter/jit-reporter.mjs');
     expect(Object.keys(calls[0].Env ?? {})).not.toContain('ANTHROPIC_API_KEY');
   });
   it('refuses a file outside the jit folder', async () => {
@@ -2683,7 +2781,8 @@ import { join } from 'node:path';
 import type { Sandbox, SandboxMount } from '../sandbox/Sandbox';
 import type { FailureDetail, MutantEdit } from '../types';
 import type { Settings } from '../settings';
-import { ParseVitestReport } from '../target/VitestJsonReport';
+import { ParseVitestOutput } from '../target/VitestReport';
+import { JIT_REPORTER_ARG, JIT_REPORTER_MOUNT, WriteJitReporter } from '../target/JitReporter';
 import { ApplyMutantEdits, CopyPackageForMutant, ValidateMutantEdits } from './Mutant';
 
 export interface RunTestInput { File: string; Mutant?: { Edits: MutantEdit[] }; }
@@ -2700,7 +2799,8 @@ export class RunTestTool {
         const jitDir = `${this.o.PackageRelDir}/src/__tests__/jit`;
         if (!input.File.startsWith(`${jitDir}/`) || !input.File.endsWith('.jit.test.ts') || input.File.includes('..')) return this.refuse(`run_test accepts only files under ${jitDir}/ ending in .jit.test.ts`);
         if (!existsSync(join(this.o.BaseRootDir, input.File))) return this.refuse(`file not found: ${input.File}`);
-        const mounts: SandboxMount[] = [{ Host: this.o.BaseRootDir, Container: ROOT, Mode: 'ro' }, { Host: join(this.o.BaseRootDir, jitDir), Container: `${ROOT}/${jitDir}`, Mode: 'rw' }];
+        const mounts: SandboxMount[] = [{ Host: this.o.BaseRootDir, Container: ROOT, Mode: 'ro' }, { Host: join(this.o.BaseRootDir, jitDir), Container: `${ROOT}/${jitDir}`, Mode: 'rw' },
+            { Host: WriteJitReporter(join(this.o.ScratchRoot, 'jit-reporter')), Container: JIT_REPORTER_MOUNT, Mode: 'ro' }];
         let scratch: string | null = null; let patch = '';
         if (input.Mutant) {
             const err = ValidateMutantEdits(this.o.PackageRelDir, input.Mutant.Edits); if (err) return this.refuse(`invalid mutant: ${err}`);
@@ -2711,10 +2811,10 @@ export class RunTestTool {
         const rel = input.File.slice(this.o.PackageRelDir.length + 1);
         for (const d of [`${this.o.PackageRelDir}/node_modules/.vite`, 'node_modules/.vite']) mkdirSync(join(scratch && d.startsWith(this.o.PackageRelDir) ? scratch.replace(this.o.PackageRelDir.split('/').pop() ?? '', '') : this.o.BaseRootDir, d), { recursive: true });
         const r = await this.o.Sandbox.Run({ Mounts: mounts, Tmpfs: [`${ROOT}/${this.o.PackageRelDir}/node_modules/.vite`, `${ROOT}/node_modules/.vite`], WorkDir: `${ROOT}/${this.o.PackageRelDir}`,
-            Command: ['sh', '-c', `npx vitest run ${rel} --reporter=json --sequence.seed=${this.o.Settings.SequenceSeed} --testTimeout=${this.o.Settings.TestTimeoutMs}`], TimeoutMs: this.o.Settings.TestTimeoutMs * 3 + 60_000, Env: { TZ: 'UTC', HOME: '/tmp', CI: '1' } });
+            Command: ['sh', '-c', `npx vitest run ${rel} ${JIT_REPORTER_ARG} --sequence.seed=${this.o.Settings.SequenceSeed} --testTimeout=${this.o.Settings.TestTimeoutMs}`], TimeoutMs: this.o.Settings.TestTimeoutMs * 3 + 60_000, Env: { TZ: 'UTC', HOME: '/tmp', CI: '1' } });
         if (scratch) rmSync(scratch, { recursive: true, force: true });
         if (r.TimedOut) return { Ran: true, Status: 'Timeout', TestName: null, Failure: null, DurationMs: r.DurationMs };
-        const [res] = ParseVitestReport(r.Stdout.slice(Math.max(0, r.Stdout.indexOf('{"'))), { FilePathToTestID: { [input.File]: 'probe' }, Revision: input.Mutant ? 'Mutant' : 'Base', RunIndex: 0 });
+        const [res] = ParseVitestOutput(r.Stdout, { FilePathToTestID: { [input.File]: 'probe' }, Revision: input.Mutant ? 'Mutant' : 'Base', RunIndex: 0 });
         const out: RunTestOutput = { Ran: true, Status: res.Status, TestName: res.TestName, Failure: res.Failure, DurationMs: res.DurationMs };
         if (input.Mutant) this.LastMutant = { Edits: input.Mutant.Edits, Patch: patch, Failure: res.Status === 'Fail' ? res.Failure : null };
         return out;

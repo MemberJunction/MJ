@@ -142,6 +142,7 @@ stubs (`DatabaseProviderStub`, `EntitiesOnlyProvider`, `TestLLM`); `@vitest/cove
 | D37 | Agent token budget | The host counts tokens once per message `id`, with cache-read and cache-creation tokens as input, aborts at the budget, and estimates the cost of an aborted session from its own count; `maxBudgetUsd` is a second cap | The SDK repeats `usage` on every block of a message, `input_tokens` excludes cached tokens, per-message output counts run low, and an aborted session has no `result` message (spike §2) |
 | D38 | Agent credential | The agent runner never runs inside a Claude Code session, passes the SDK child only `PATH`, an empty `HOME` and `ANTHROPIC_API_KEY`, and requires `apiKeySource: "ANTHROPIC_API_KEY"` in the init message | Inside a Claude Code session the SDK child used that session's login (`apiKeySource: "none"`); in a clean environment it used the key (spike §2) |
 | D39 | TP Prob model | `gpt-4.1-mini` (a setting) | Returns the 5 `top_logprobs` the judge asks for; `gpt-5.1-mini` does not exist and `gpt-5.4-nano` returns only 1 (spike §4) |
+| D40 | Test failure details | A small custom vitest reporter records `name`, `message`, `expected`, `actual`, `diff`, first stack frame and a timeout flag; `--reporter=json` is the fallback, with its limits stated (§7) | The JSON reporter gives only `error.stack`: no `expected`/`actual`/diff, and a timeout reads `Error: STACK_TRACE_ERROR` (spike §6) |
 
 ---
 
@@ -351,8 +352,15 @@ package, and 49% changed two or more. Tests read their own package from `src/` b
    run. Vitest reads the package's own source directly, so nothing builds cold.
 
 **Running.** Generated tests live at `packages/<X>/src/__tests__/jit/<id>.jit.test.ts`; the shared vitest `include`
-already matches them. Per revision, all generated tests for a package run in one `vitest run --reporter=json` call,
-repeated 3 times. Every run happens in the sandbox, with `TZ=UTC` and a fixed `--sequence.seed`.
+already matches them. Per revision, all generated tests for a package run in one `vitest run` call, repeated 3 times.
+Every run happens in the sandbox, with `TZ=UTC` and a fixed `--sequence.seed`.
+
+**Failure details (D40).** vitest loads a small custom reporter that the tool writes to a temp file and mounts read-only
+(`--reporter=<path>`). For each failure it records `name`, `message`, `expected`, `actual`, `diff`, the first stack frame
+and whether the test timed out; the rules and judges read these fields. The JSON reporter is the fallback, used only when
+the custom reporter does not load, and it has limits: it gives one string per failure (`error.stack`), so the assertion
+is its first line, the first stack frame is the first one outside `node_modules`, `expected` and `actual` are unknown,
+and a timeout shows only as `Error: STACK_TRACE_ERROR`, the same for a test timeout and a hook timeout (spike §6).
 `tsc --noEmit` checks each test file against both revisions, because vitest does not type-check.
 
 **Verdicts (`AllRunsAgreeVerdict`):**
