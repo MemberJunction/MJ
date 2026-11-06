@@ -1109,7 +1109,7 @@ export type { GenerationLimits, Bucket, Vendor };
 export const DEFAULT_SETTINGS: Settings = {
     GeneratorModel: 'claude-opus-5-5',
     AnalyzerModel: 'claude-sonnet-5-5',
-    Judges: { TpProbModel: 'gpt-5.1', BucketModels: [{ Vendor: 'Anthropic', Model: 'claude-opus-5-5' }, { Vendor: 'Gemini', Model: 'gemini-4-argon' }, { Vendor: 'OpenAI', Model: 'gpt-5.1' }] },
+    Judges: { TpProbModel: 'gpt-4.1-mini', BucketModels: [{ Vendor: 'Anthropic', Model: 'claude-opus-5-5' }, { Vendor: 'Gemini', Model: 'gemini-4-argon' }, { Vendor: 'OpenAI', Model: 'gpt-5.1' }] },
     Limits: { TestsPerPackage: 5, RisksPerPackage: 3, TestsPerRisk: 2, PackagesPerPR: 3, ParallelSessions: 4, TurnsPerSession: 30, TokensPerSession: 400_000, UsdPerSession: 3 },
     Repeats: 3,
     TestTimeoutMs: 30_000,
@@ -1144,7 +1144,7 @@ function merge(base: Record<string, unknown>, over: Record<string, unknown>): Re
 function isPlainObject(v: unknown): v is Record<string, unknown> { return typeof v === 'object' && v !== null && !Array.isArray(v); }
 ```
 
-Check the OpenAI model string for TP Prob and the bucket judge against what Task 0.3 found works with logprobs; update `DEFAULT_SETTINGS.Judges` to the verified names.
+The TP Prob model is `gpt-4.1-mini` (D39): spike Q4 found it returns the 5 `top_logprobs` the judge asks for; `gpt-5.1-mini` does not exist (404) and `gpt-5.4-nano` returns only 1. The bucket judges' OpenAI model `gpt-5.1` is in the spike's model list; it needs no logprobs.
 
 `jit-catch.settings.json`: `{}` plus a one-line `"$comment": "Overrides for DEFAULT_SETTINGS in src/settings.ts; thresholds and limits are policy (D18)"`. (zod ignores unknown keys by default, so `$comment` passes.)
 
@@ -3797,7 +3797,7 @@ import { TpProbJudge } from '../judges/TpProbJudge';
 describe('TpProbJudge', () => {
   const logprobs = (yes: number, no: number) => ({ content: [{ token: 'Yes', logprob: Math.log(yes), bytes: null, top_logprobs: [{ token: 'Yes', logprob: Math.log(yes), bytes: null }, { token: 'No', logprob: Math.log(no), bytes: null }] }], refusal: null });
   it('maps P(yes) − P(no) into [−1, 1]', async () => {
-    const j = new TpProbJudge(scripted({ content: 'Yes', logprobs: logprobs(0.8, 0.15) }), 'gpt-5.1');
+    const j = new TpProbJudge(scripted({ content: 'Yes', logprobs: logprobs(0.8, 0.15) }), 'gpt-4.1-mini');
     const s = await j.Judge(ctx()); expect(s.Score).toBeCloseTo(0.65, 2); expect(s.Bucket).toBeNull(); expect(s.Judge).toBe('TpProb');
   });
   it('matches " yes" / "NO" variants and returns 0 with a reason when no logprobs come back', async () => {

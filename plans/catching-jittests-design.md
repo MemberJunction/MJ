@@ -141,6 +141,7 @@ stubs (`DatabaseProviderStub`, `EntitiesOnlyProvider`, `TestLLM`); `@vitest/cove
 | D36 | Agent tool limits | SDK `tools` lists `Read`, `Grep`, `Glob`; `permissionMode: 'default'`; `disallowedTools` as a second layer; `allowedTools` holds only `run_test`, so reads and writes reach the permission check; read and write paths are checked after `realpath` | In the spike, `allowedTools` auto-approved the plan's `Write` and an outside write went through; a bare name there skips `canUseTool`; an omitted `permissionMode` can be `auto` (spike §2) |
 | D37 | Agent token budget | The host counts tokens once per message `id`, with cache-read and cache-creation tokens as input, aborts at the budget, and estimates the cost of an aborted session from its own count; `maxBudgetUsd` is a second cap | The SDK repeats `usage` on every block of a message, `input_tokens` excludes cached tokens, per-message output counts run low, and an aborted session has no `result` message (spike §2) |
 | D38 | Agent credential | The agent runner never runs inside a Claude Code session, passes the SDK child only `PATH`, an empty `HOME` and `ANTHROPIC_API_KEY`, and requires `apiKeySource: "ANTHROPIC_API_KEY"` in the init message | Inside a Claude Code session the SDK child used that session's login (`apiKeySource: "none"`); in a clean environment it used the key (spike §2) |
+| D39 | TP Prob model | `gpt-4.1-mini` (a setting) | Returns the 5 `top_logprobs` the judge asks for; `gpt-5.1-mini` does not exist and `gpt-5.4-nano` returns only 1 (spike §4) |
 
 ---
 
@@ -483,7 +484,7 @@ continues with the list of boosts that fired. Dropped catches stay in the store 
 
 | Signal | How |
 |---|---|
-| **TP Prob** | An OpenAI model answers "Is this failure an unintended bug? Yes or no." The first token's log-probability maps to [−1, 1]. |
+| **TP Prob** | An OpenAI model, `gpt-4.1-mini` (D39), answers "Is this failure an unintended bug? Yes or no." The first token's log-probability maps to [−1, 1]. |
 | **Bucket median** | `claude-opus-5-5`, `gemini-4-argon` and an OpenAI model each answer High / Medium / Low (1 / 0 / −1). Score = median. Each model's reason is kept separately. |
 
 **Input:** test code, failure (expected vs actual), diff, intent and summary, risk and mutant if any, boosts that fired.
