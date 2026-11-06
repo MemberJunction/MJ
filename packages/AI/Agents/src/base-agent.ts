@@ -1602,10 +1602,9 @@ export class BaseAgent {
      * Stores the ID of an AIAgentRequest created when a Chat or Plan step fires.
      * Populated by createFeedbackRequest(), returned in ExecuteAgentResult.feedbackRequestId.
      * Only set for root agents (depth 0), not sub-agents.
-     * @protected
+     * @private
      */
-    // case-violation-ok-legacy-back-compat: Preserves existing BaseAgent field name
-    protected _feedbackRequestId: string | null = null;
+    private _feedbackRequestId: string | null = null;
 
     /**
      * Stores the handoff outcome when a Handoff step fires.
@@ -20158,10 +20157,9 @@ The context is now within limits. Please retry your request with the recovered c
      *   4. Request Type's DefaultAssignmentStrategy
      *   5. Fallback: contextUser (explicit caller) or null (system-level, visible to admins)
      *
-     * @protected
+     * @private
      */
-    // case-violation-ok-legacy-back-compat: Preserves existing BaseAgent method name
-    protected async createFeedbackRequest(
+    private async createFeedbackRequest(
         params: ExecuteAgentParams,
         stepEntity: MJAIAgentRunStepEntityExtended,
         previousDecision: BaseAgentNextStep

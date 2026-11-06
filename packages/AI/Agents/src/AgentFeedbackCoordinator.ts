@@ -95,6 +95,9 @@ const EXCLUDED_LIST_DETAIL_SQL_LIST = EXCLUDED_LIST_DETAIL_STATUSES.map(
  */
 const OPEN_AGENT_REQUEST_STATUS: AgentRequestStatus = 'Requested';
 
+/** How many of the list members' newest assignments LeastBusy reads to break a tie on open-request count. */
+const LEAST_BUSY_RECENT_ASSIGNMENT_ROWS = 500;
+
 /**
  * Coordinates creation of persistent `MJ: AI Agent Requests` rows, response-form
  * classification, hierarchical assignment strategy resolution, and `List`-based
@@ -572,18 +575,26 @@ export class AgentFeedbackCoordinator {
         ];
 
         if (mode === 'LeastBusy') {
-            // Query only open ('Requested') rows with IgnoreMaxRows: true so a high volume
-            // of recent closed rows never pushes older open requests past a row cap.
-            // Filtering to Status = 'Requested' is also sufficient for tie-breaking:
-            // - For candidates tied on openCount > 0, their latest open RequestedAt breaks the tie.
-            // - For candidates tied at openCount === 0, latestAssignedMs is -Infinity for both
-            //   so list sequence order breaks the tie deterministically.
+            // Load: every open ('Requested') row with no row cap, so a high volume of recent closed
+            // rows never pushes older open requests out of the count.
             batchParams.push({
                 EntityName: 'MJ: AI Agent Requests',
                 ExtraFilter: `RequestForUserID IN (${userInListClause}) AND Status = '${OPEN_AGENT_REQUEST_STATUS}'`,
                 OrderBy: 'RequestedAt DESC, ID DESC',
                 IgnoreMaxRows: true,
                 Fields: ['ID', 'RequestForUserID', 'Status', 'RequestedAt'],
+                ResultType: 'simple',
+            });
+            // Tie-break: each member's latest assignment of any status. The cap is safe here: a member
+            // with no row among the newest assignments was last assigned before all of them, so they
+            // already rank as the oldest assignment; only their order among themselves falls back to
+            // list sequence.
+            batchParams.push({
+                EntityName: 'MJ: AI Agent Requests',
+                ExtraFilter: `RequestForUserID IN (${userInListClause})`,
+                OrderBy: 'RequestedAt DESC, ID DESC',
+                MaxRows: LEAST_BUSY_RECENT_ASSIGNMENT_ROWS,
+                Fields: ['ID', 'RequestForUserID', 'RequestedAt'],
                 ResultType: 'simple',
             });
         } else if (mode === 'RoundRobin') {
@@ -622,7 +633,8 @@ export class AgentFeedbackCoordinator {
         }
 
         const requestsResult = batchResults[1];
-        if (mode !== 'Random' && !requestsResult?.Success) {
+        const recentAssignmentsResult = batchResults[2];
+        if (mode !== 'Random' && (!requestsResult?.Success || (mode === 'LeastBusy' && !recentAssignmentsResult?.Success))) {
             // Query-level failure on MJ: AI Agent Requests when active list members are already
             // known: log the failure and deterministically fall back to the first active list
             // member (activeUserIDs[0]) so the request still lands on an eligible list member.
@@ -639,7 +651,11 @@ export class AgentFeedbackCoordinator {
             case 'RoundRobin':
                 return this.pickRoundRobinMember(activeUserIDs, requestRows);
             case 'LeastBusy':
-                return this.pickLeastBusyMember(activeUserIDs, requestRows);
+                return this.pickLeastBusyMember(
+                    activeUserIDs,
+                    requestRows,
+                    (recentAssignmentsResult?.Results as AgentRequestSummaryRow[]) ?? []
+                );
             case 'Random': {
                 const index = this.randomIntFn(activeUserIDs.length);
                 const boundedIndex = Math.max(0, Math.min(activeUserIDs.length - 1, index));
@@ -671,39 +687,40 @@ export class AgentFeedbackCoordinator {
         return activeUserIDs[(lastIndex + 1) % activeUserIDs.length];
     }
 
+    /**
+     * The member with the fewest open requests; a tie goes to the member whose latest assignment (of
+     * any status) is oldest, then to list sequence.
+     */
     private pickLeastBusyMember(
         activeUserIDs: string[],
-        requestRows: AgentRequestSummaryRow[]
+        openRequestRows: AgentRequestSummaryRow[],
+        recentAssignmentRows: AgentRequestSummaryRow[]
     ): string {
-        const requestsByUser = GroupByUUID(requestRows, (req) => req.RequestForUserID);
+        const openByUser = GroupByUUID(openRequestRows, (req) => req.RequestForUserID);
+        const recentByUser = GroupByUUID(recentAssignmentRows, (req) => req.RequestForUserID);
         let bestUserID = activeUserIDs[0];
         let bestOpenCount = Number.POSITIVE_INFINITY;
         let bestLastAssignedMs = Number.POSITIVE_INFINITY;
 
         for (const candidateUserID of activeUserIDs) {
-            let openCount = 0;
-            let latestAssignedMs = Number.NEGATIVE_INFINITY;
-            const userRequests = requestsByUser.Get(candidateUserID) ?? [];
-
-            for (const req of userRequests) {
-                if (req.Status === OPEN_AGENT_REQUEST_STATUS) {
-                    openCount += 1;
-                }
-                if (req.RequestedAt) {
-                    const ts = new Date(req.RequestedAt).getTime();
-                    if (!Number.isNaN(ts) && ts > latestAssignedMs) {
-                        latestAssignedMs = ts;
-                    }
+            const openCount = (openByUser.Get(candidateUserID) ?? []).filter(
+                (req) => req.Status === OPEN_AGENT_REQUEST_STATUS
+            ).length;
+            let lastAssignedMs = Number.NEGATIVE_INFINITY;
+            for (const req of recentByUser.Get(candidateUserID) ?? []) {
+                const ts = req.RequestedAt ? new Date(req.RequestedAt).getTime() : Number.NaN;
+                if (!Number.isNaN(ts) && ts > lastAssignedMs) {
+                    lastAssignedMs = ts;
                 }
             }
 
             const isBetter =
                 openCount < bestOpenCount ||
-                (openCount === bestOpenCount && latestAssignedMs < bestLastAssignedMs);
+                (openCount === bestOpenCount && lastAssignedMs < bestLastAssignedMs);
             if (isBetter) {
                 bestUserID = candidateUserID;
                 bestOpenCount = openCount;
-                bestLastAssignedMs = latestAssignedMs;
+                bestLastAssignedMs = lastAssignedMs;
             }
         }
 

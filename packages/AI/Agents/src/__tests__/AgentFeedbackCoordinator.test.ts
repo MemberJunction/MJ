@@ -24,6 +24,12 @@ import {
     type UserInfo,
 } from '@memberjunction/core';
 
+/** BaseAgent's private feedback-request members, reached the way the other BaseAgent suites reach private members. */
+interface FeedbackRequestInternals {
+    createFeedbackRequest(params: ExecuteAgentParams, step: MJAIAgentRunStepEntityExtended, decision: BaseAgentNextStep): Promise<void>;
+    _feedbackRequestId: string | null;
+}
+
 class TestFeedbackBaseAgent extends BaseAgent {
     public async InvokeCreateFeedbackRequest(
         params: ExecuteAgentParams,
@@ -32,8 +38,9 @@ class TestFeedbackBaseAgent extends BaseAgent {
         agentRun?: MJAIAgentRunEntityExtended
     ): Promise<string | null> {
         this._agentRun = agentRun;
-        await this.createFeedbackRequest(params, stepEntity, decision);
-        return this._feedbackRequestId;
+        const internals = this as unknown as FeedbackRequestInternals;
+        await internals.createFeedbackRequest(params, stepEntity, decision);
+        return internals._feedbackRequestId;
     }
 }
 
@@ -435,6 +442,14 @@ describe('AgentFeedbackCoordinator', () => {
                             RequestedAt: '2026-10-30T08:00:00Z',
                         },
                     ]),
+                    // latest assignments of any status, newest first
+                    makeViewResult([
+                        { ID: 'r3', RequestForUserID: USER_2, RequestedAt: '2026-11-02T12:00:00Z' },
+                        { ID: 'r2', RequestForUserID: USER_1, RequestedAt: '2026-11-02T11:00:00Z' },
+                        { ID: 'r1', RequestForUserID: USER_1, RequestedAt: '2026-11-02T10:00:00Z' },
+                        { ID: 'r4', RequestForUserID: USER_3, RequestedAt: '2026-11-01T08:00:00Z' },
+                        { ID: 'r5', RequestForUserID: USER_3, RequestedAt: '2026-10-30T08:00:00Z' },
+                    ]),
                 ]);
 
             const picked = await coordinator.ResolveAssigneeUserID(
@@ -453,6 +468,39 @@ describe('AgentFeedbackCoordinator', () => {
             expect(leastBusyBatch2[1].OrderBy).toBe('RequestedAt DESC, ID DESC');
             expect(leastBusyBatch2[1].IgnoreMaxRows).toBe(true);
             expect(leastBusyBatch2[1].MaxRows).toBeUndefined();
+            expect(leastBusyBatch2[2].ExtraFilter).toBe(`RequestForUserID IN ('${USER_1}', '${USER_2}', '${USER_3}')`);
+            expect(leastBusyBatch2[2].OrderBy).toBe('RequestedAt DESC, ID DESC');
+            expect(leastBusyBatch2[2].MaxRows).toBe(500);
+        });
+
+        it('should break a LeastBusy tie at zero open requests by the oldest last assignment of any status, not list order', async () => {
+            mockRunViews
+                .mockResolvedValueOnce([
+                    makeViewResult([{ ID: LIST_ID, EntityID: 'e-users', Entity: 'MJ: Users' }]),
+                    makeViewResult([
+                        { ID: 'ld-1', RecordID: USER_1, Sequence: 1, Status: 'Pending' },
+                        { ID: 'ld-2', RecordID: USER_2, Sequence: 2, Status: 'Pending' },
+                    ]),
+                ])
+                .mockResolvedValueOnce([
+                    makeViewResult([
+                        { ID: USER_1, IsActive: true },
+                        { ID: USER_2, IsActive: true },
+                    ]),
+                    // neither member has an open request
+                    makeViewResult([]),
+                    // USER_1 answered a request yesterday; USER_2 was last assigned a week ago
+                    makeViewResult([
+                        { ID: 'a1', RequestForUserID: USER_1, RequestedAt: '2026-11-05T09:00:00Z' },
+                        { ID: 'a2', RequestForUserID: USER_2, RequestedAt: '2026-10-29T09:00:00Z' },
+                    ]),
+                ]);
+
+            const picked = await coordinator.ResolveAssigneeUserID(
+                { type: 'List', listID: LIST_ID, listStrategy: 'LeastBusy' },
+                createParamsStub()
+            );
+            expect(picked).toBe(USER_2);
         });
 
         it('should count a user with 10 older open Requested rows beyond 500 newer closed rows in LeastBusy mode', async () => {
@@ -504,6 +552,7 @@ describe('AgentFeedbackCoordinator', () => {
                             { ID: USER_2, IsActive: true },
                         ]),
                         makeViewResult(capped),
+                        makeViewResult(allRequests.slice(0, views[2].MaxRows ?? 1000)),
                     ];
                 });
 

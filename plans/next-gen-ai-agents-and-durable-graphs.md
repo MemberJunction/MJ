@@ -347,10 +347,10 @@ Preserve `BaseAgent`'s public and `protected` method signatures as thin delegati
 #### 2. Complete `List` HITL Assignment Strategy (`RoundRobin`, `LeastBusy`, `Random`)
 Inside `AgentFeedbackCoordinator.ResolveAssigneeUserID(strategy, params, provider)` (making resolution `async` and updating the single caller chain in `createFeedbackRequest`):
 - Query `MJ: List Details` for `strategy.listID` (verifying target entity is `MJ: Users` and filtering to `IsActive = true` users).
-- **`LeastBusy`**: Single aggregate `RunView` / count over `MJ: AI Agent Requests` where `Status IN ('Requested', 'InProgress')` grouped by `RequestForUserID`, selecting the active list member with the lowest open count (tie-breaking deterministically by oldest last assignment).
+- **`LeastBusy`**: Single aggregate `RunView` / count over `MJ: AI Agent Requests` where `Status = 'Requested'` (the only open status) for the list members, selecting the active list member with the lowest open count (tie-breaking deterministically by oldest last assignment).
 - **`RoundRobin`**: Query the most recent `MJ: AI Agent Requests` row assigned for `(AgentID)` (or list cursor stored via engine metadata) and pick the next active `UserID` in deterministic sorted `ListDetail.ID` order.
 - **`Random`**: Uniform selection across active list members using an injectable RNG interface (defaulting to `crypto.randomInt`, deterministic in unit tests).
-- Fall back gracefully to `SharedInbox` (`null` assignee with list visibility) or `contextUser` if the list has zero active users.
+- Fall back to the `contextUser` (or leave the request unassigned when there is no context user) if the list is missing, does not target `MJ: Users`, or has zero active members. `MJ: AI Agent Requests` has no list column, so a list-visible shared inbox is not possible without a schema change.
 
 #### 3. Durable `MJ: Tasks`-Backed A2A `TaskStore` (`@memberjunction/a2a-server`)
 Refactor `packages/AI/A2AServer/src/TaskStore.ts` into an async `IA2ATaskStore` contract with two implementations:
