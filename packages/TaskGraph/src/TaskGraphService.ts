@@ -30,6 +30,7 @@ import {
     MJTaskTypeEntity,
     MJAIAgentEntity,
     MJAIAgentRequestEntity,
+    type MJActionEntity,
 } from '@memberjunction/core-entities';
 import {
     FormatValidationErrors,
@@ -48,7 +49,7 @@ import {
     type WhileOperation,
     ConfigOf,
 } from '@memberjunction/ai-core-plus';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IsValidUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentDecisionService } from '@memberjunction/ai-agents';
@@ -523,6 +524,18 @@ export function DecisionPromptNameOf(node: TaskGraphSpecNode): string | null {
     return decision.promptName?.trim() || AgentDecisionService.DEFAULT_PROMPT_NAME;
 }
 
+/** The distinct non-blank IDs in `values`, compared as UUIDs, in first-seen order. */
+function uniqueIDs(values: readonly string[]): string[] {
+    const seen = new UUIDSet();
+    const out: string[] = [];
+    for (const value of values) {
+        if (!value || seen.Has(value)) continue;
+        seen.Add(value);
+        out.push(value);
+    }
+    return out;
+}
+
 /** Every action name a node references, including the action(s) a loop repeats and any named compensation action. */
 function actionNamesIn(node: TaskGraphSpecNode): string[] {
     const loopOp = LoopOperationOf(node);
@@ -762,6 +775,11 @@ export class TaskGraphService {
             }
             if (!promptIDsByName.Success) {
                 return { Success: false, ErrorMessage: promptIDsByName.ErrorMessage };
+            }
+            const compensationCheck = await this.validateCompensationActionIDs(spec, context);
+            if (!compensationCheck.Success) {
+                LogError(`[TaskGraphService] ${compensationCheck.ErrorMessage}`);
+                return { Success: false, ErrorMessage: compensationCheck.ErrorMessage };
             }
 
             const taskTypeID = await this.ensureTaskType(context);
@@ -1615,6 +1633,51 @@ export class TaskGraphService {
             };
         }
         return { Success: true, Map: found };
+    }
+
+    /**
+     * Refuses a graph whose node names a compensation action by an ID that is not an action (S7).
+     *
+     * The ID is written by the model and stays in the node's JSON until a rollback inserts the
+     * compensation task — the first point a foreign key sees it. There an unknown ID failed the insert
+     * on every pass, so the step was never undone. Checked here, as the caller, before anything is written.
+     */
+    private async validateCompensationActionIDs(
+        spec: TaskGraphSpec,
+        context: TaskGraphSubmitContext,
+    ): Promise<{ Success: boolean; ErrorMessage?: string }> {
+        const ids = uniqueIDs(spec.tasks.map((node) => ConfigOf(node, 'Action')?.compensation?.compensationActionId?.trim() ?? ''));
+        if (ids.length === 0) return { Success: true };
+        const notIDs = ids.filter((id) => !IsValidUUID(id));
+        if (notIDs.length > 0) {
+            return {
+                Success: false,
+                ErrorMessage: `Task graph "${spec.workflowName}" was not started: ${notIDs.length} compensationActionId value(s) are not action IDs (${notIDs.join(', ')}). Name the action with compensationActionName instead.`,
+            };
+        }
+        const result = await RunView.FromMetadataProvider(context.Provider).RunView<Pick<MJActionEntity, 'ID'>>(
+            {
+                EntityName: 'MJ: Actions',
+                ExtraFilter: `ID IN (${ids.map((id) => `'${EscapeSQLString(id)}'`).join(',')})`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+            },
+            context.ContextUser,
+        );
+        if (!result.Success) {
+            return { Success: false, ErrorMessage: `Task graph "${spec.workflowName}" was not started: its compensation actions could not be checked (${result.ErrorMessage}).` };
+        }
+        const found = new UUIDSet((result.Results ?? []).map((row) => row.ID));
+        const missing = ids.filter((id) => !found.Has(id));
+        if (missing.length > 0) {
+            return {
+                Success: false,
+                ErrorMessage:
+                    `Task graph "${spec.workflowName}" was not started: it names ${missing.length} compensation action(s) that do not exist (${missing.join(', ')}). ` +
+                    `Its rollback could never run them.`,
+            };
+        }
+        return { Success: true };
     }
 
     private async resolveActions(

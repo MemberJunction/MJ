@@ -19,7 +19,7 @@ import {
     type TaskCompensationStepMetadata,
 } from '../saga-compensation';
 import { TaskGraphDispatcher, type ClaimedTaskCandidate } from '../TaskGraphDispatcher';
-import { BuildStepConfiguration, BuildTaskGraphParentInputPayload, ParseTaskGraphParentMetadata } from '../TaskGraphService';
+import { BuildStepConfiguration, BuildTaskGraphParentInputPayload, ParseTaskGraphParentMetadata, TaskGraphService } from '../TaskGraphService';
 import type { TaskActionRunner } from '../types';
 
 const TEST_USER = { ID: '00000000-0000-4000-8000-000000000001', Name: 'Saga Tester', IsActive: true } as UserInfo;
@@ -461,6 +461,147 @@ describe('TaskGraphDispatcher saga coordinator', () => {
         expect(internals.loadGraphState.mock.calls.map((call) => call[1])).toEqual([OTHER_PARENT]);
         expect(reportsAfterFirstPass).toBe(1);
         expect(errors.mock.calls.filter((call) => String(call[0]).includes(PARENT_ID)).length).toBe(1);
+    });
+});
+
+describe('a graph rolling back does not settle under its saga (S7)', () => {
+    let db: SagaDb;
+    let previousCache: typeof globalRef.___SINGLETON__UserCache;
+    beforeEach(() => {
+        previousCache = globalRef.___SINGLETON__UserCache;
+        globalRef.___SINGLETON__UserCache = { Users: [TEST_USER], FindUser: async ({ ID }) => (ID === TEST_USER.ID ? TEST_USER : undefined) };
+        db = new SagaDb();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn(async (params: RunViewParams, user?: UserInfo) => db.RunView(params, user)),
+        } as unknown as RunView);
+    });
+    afterEach(() => {
+        globalRef.___SINGLETON__UserCache = previousCache;
+        vi.restoreAllMocks();
+    });
+
+    /** Runs one rollup pass over the saga graph; `firstSnapshot` is what the pass loads first. */
+    async function rollupPass(firstSnapshot: ReturnType<typeof graphOf>, provider: IMetadataProvider) {
+        const dispatcher = new TaskGraphDispatcher(
+            { CreateProvider: vi.fn().mockResolvedValue(provider) }, { RunAgentForTask: vi.fn() }, SYSTEM_USER, { InstanceID: 'inst-s7' },
+        );
+        const internals = dispatcher as unknown as {
+            claims: Record<string, ReturnType<typeof vi.fn>>;
+            debugStateByGraph: Map<string, object>;
+            loadGraphState: ReturnType<typeof vi.fn>;
+            propagateAndRollup: (p: IMetadataProvider, ids: string[]) => Promise<Array<{ parentTaskID: string }>>;
+        };
+        internals.claims.TrySkipPending = vi.fn(async () => true);
+        internals.claims.TryWriteDebugFields = vi.fn(async () => true);
+        internals.claims.TrySettleParent = vi.fn(async () => true);
+        internals.claims.TryUpdateParentProgress = vi.fn(async () => true);
+        internals.debugStateByGraph.set(PARENT_ID, {});
+        internals.loadGraphState = vi.fn()
+            .mockResolvedValueOnce(firstSnapshot)
+            .mockImplementation(async () => graphOf(db, parentRow()));
+        const live = await internals.propagateAndRollup(provider, [PARENT_ID]);
+        return { live, claims: internals.claims };
+    }
+
+    /** reserve → invoice → charge (failed), every forward step already terminal. */
+    function finishedForwardWork(): void {
+        checkoutGraph(db);
+        db.Rows.get('T-D')!.Status = 'Skipped';
+    }
+
+    it('reloads after losing the compensation insert and does not settle the graph Failed', async () => {
+        finishedForwardWork();
+        const stale = graphOf(db, parentRow());
+        // Another dispatcher created the compensation for T-B after this pass loaded its snapshot.
+        db.Add({ ID: 'C-B', Name: 'Compensate: Invoice', ActionID: VOID_INVOICE, CompensatesTaskID: 'T-B' });
+        const provider = { GetEntityObject: vi.fn(async () => db.Entity()) } as unknown as IMetadataProvider;
+
+        const { live, claims } = await rollupPass(stale, provider);
+
+        expect(claims.TrySettleParent).not.toHaveBeenCalled();
+        expect(live.map((g) => g.parentTaskID)).toEqual([PARENT_ID]);
+        expect([...db.Rows.values()].filter((r) => r.CompensatesTaskID === 'T-B')).toHaveLength(1);
+    });
+
+    it('keeps the graph In Progress while a compensation it must create cannot be written yet', async () => {
+        finishedForwardWork();
+        const provider = {
+            // Every insert fails, as when the database is briefly unavailable.
+            GetEntityObject: vi.fn(async () => {
+                const entity = db.Entity();
+                return new Proxy(entity, { get: (target, key) => (key === 'Save' ? async () => false : Reflect.get(target, key)) });
+            }),
+        } as unknown as IMetadataProvider;
+
+        const { live, claims } = await rollupPass(graphOf(db, parentRow()), provider);
+
+        expect(claims.TrySettleParent).not.toHaveBeenCalled();
+        expect(claims.TryUpdateParentProgress).toHaveBeenCalledWith(provider, PARENT_ID, 'In Progress', expect.any(Number), SYSTEM_USER);
+        expect(live.map((g) => g.parentTaskID)).toEqual([PARENT_ID]);
+    });
+
+    it('settles the graph once the rollback has finished', async () => {
+        finishedForwardWork();
+        db.Add({ ID: 'C-B', Name: 'Compensate: Invoice', Status: 'Complete', ActionID: VOID_INVOICE, CompensatesTaskID: 'T-B' });
+        db.Add({ ID: 'C-A', Name: 'Compensate: Reserve', Status: 'Complete', ActionID: RELEASE, CompensatesTaskID: 'T-A' });
+        const provider = { GetEntityObject: vi.fn(async () => db.Entity()) } as unknown as IMetadataProvider;
+
+        const { claims } = await rollupPass(graphOf(db, parentRow()), provider);
+
+        expect(claims.TrySettleParent).toHaveBeenCalledWith(provider, PARENT_ID, 'Failed', expect.any(Number), SYSTEM_USER);
+    });
+});
+
+describe('TaskGraphService.Submit compensation actions (S7)', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    function submitWith(compensationActionId: string, knownActionIDs: string[]) {
+        const saved: string[] = [];
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn(async (params: RunViewParams) => {
+                if (params.EntityName === 'MJ: Task Types') return { Success: true, Results: [{ ID: WORKFLOW_TYPE_ID }] };
+                if (params.EntityName === 'MJ: Actions' && params.Fields?.length === 1) {
+                    return { Success: true, Results: knownActionIDs.filter((id) => (params.ExtraFilter ?? '').includes(id)).map((ID) => ({ ID })) };
+                }
+                if (params.EntityName === 'MJ: Actions') return { Success: true, Results: [{ ID: RESERVE, Name: 'Reserve' }] };
+                return { Success: true, Results: [] };
+            }),
+        } as unknown as RunView);
+        let counter = 0;
+        const provider = {
+            GetEntityObject: vi.fn(async () => {
+                const row = { ID: `00000000-0000-4000-8000-0000000003${String(++counter).padStart(2, '0')}`, NewRecord: () => undefined, Save: async () => { saved.push(row.ID); return true; } };
+                return row;
+            }),
+        } as unknown as IMetadataProvider;
+        const spec = {
+            workflowName: 'Checkout',
+            continuation: 'none' as const,
+            failurePolicy: 'CompensateCompleted' as const,
+            tasks: [{ tempId: 'r', name: 'Reserve', kind: 'Action' as const, configuration: { actionName: 'Reserve', compensation: { compensationActionId } } }],
+        };
+        return { saved, result: new TaskGraphService().Submit(spec, { Provider: provider, ContextUser: TEST_USER }) };
+    }
+
+    it('refuses, before writing anything, a graph whose compensationActionId is not an action', async () => {
+        const missing = '33333333-3333-4333-8333-333333333333';
+        const { saved, result } = submitWith(missing, [RELEASE]);
+        const outcome = await result;
+        expect(outcome.Success).toBe(false);
+        expect(outcome.ErrorMessage).toContain('compensation action(s) that do not exist');
+        expect(outcome.ErrorMessage).toContain(missing);
+        expect(saved).toEqual([]);
+    });
+
+    it('refuses a compensationActionId that is not an ID at all', async () => {
+        const outcome = await submitWith('release the reservation', [RELEASE]).result;
+        expect(outcome.Success).toBe(false);
+        expect(outcome.ErrorMessage).toContain('are not action IDs');
+    });
+
+    it('accepts a compensationActionId that names an existing action', async () => {
+        const outcome = await submitWith(RELEASE.toUpperCase(), [RELEASE]).result;
+        expect(outcome.Success).toBe(true);
     });
 });
 

@@ -21,6 +21,7 @@
 import {
     ComputeEligibleTasks,
     ComputeParentRollup,
+    type ParentRollup,
     ComputeTasksToBlock,
     IsGraphStalled,
     type TaskGraphEdge,
@@ -440,6 +441,9 @@ type GateDecisionRecord = {
     verdict: 'satisfied' | 'notTaken' | 'held';
     reason?: string;
 };
+
+/** One saga pass: the graph as it now stands, and whether the rollback still has work to do. */
+type SagaPass = { Graph: GraphState; Pending: boolean };
 
 type GraphState = {
     parentTaskID: string;
@@ -1553,7 +1557,8 @@ export class TaskGraphDispatcher implements IShutdownable {
             }
         }
 
-        graph = await this.coordinateSagaCompensation(provider, parentID, graph, debug);
+        const saga = await this.coordinateSagaCompensation(provider, parentID, graph, debug);
+        graph = saga.Graph;
 
         // Holds are passed in, or the detector reports a held graph as healthy: a held target's
         // gating edge is still live and its origin Complete, so ComputeEligibleTasks counts it
@@ -1566,7 +1571,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         // Reuse the in-memory `graph` (whose `nodes` and `entityById` were updated in-place as
         // skips and blocks landed) and its pre-loaded `graph.parent` instead of reloading the
         // graph state and parent task a second time.
-        const rollup = ComputeParentRollup(graph.nodes, graph.handledFailureIDs);
+        const rollup = this.rollupWhileCompensating(ComputeParentRollup(graph.nodes, graph.handledFailureIDs), saga.Pending);
         let parent = graph.parent;
         if (!parent) {
             const fallbackParent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
@@ -4185,6 +4190,18 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
+     * The parent rollup while a saga still has work (S7): every forward step can be terminal while a
+     * compensation is yet to be created or run, and settling then would mark the graph `Failed` (and
+     * announce it) with the rollback unfinished, or never started. Such a graph stays `In Progress`.
+     */
+    private rollupWhileCompensating(rollup: ParentRollup, sagaPending: boolean): ParentRollup {
+        if (!sagaPending || rollup.outcome !== 'settled') {
+            return rollup;
+        }
+        return { status: 'In Progress', percentComplete: rollup.percentComplete, outcome: 'active' };
+    }
+
+    /**
      * Drives a graph's saga one move per pass (WS-4.3), when its `failurePolicy` is
      * `'CompensateCompleted'` and a forward step failed unhandled.
      *
@@ -4193,21 +4210,24 @@ export class TaskGraphDispatcher implements IShutdownable {
      * remaining forward steps are skipped through the guarded `TrySkipPending` (and the claim filter
      * already refuses them, see `sagaHoldsForwardWork`), and each compensation or escalation row is
      * inserted with `CompensatesTaskID`, whose unique index lets exactly one dispatcher create it.
+     *
+     * @returns the graph (reloaded whenever this pass tried to insert a row, won or lost) and whether the
+     *          saga still has work, so the caller does not settle the parent under it
      */
     private async coordinateSagaCompensation(
         provider: IMetadataProvider,
         parentID: string,
         graph: GraphState,
         debug?: TaskGraphDebugState,
-    ): Promise<GraphState> {
+    ): Promise<SagaPass> {
         if (!this.sagaHoldsForwardWork(graph)) {
-            return graph;
+            return { Graph: graph, Pending: false };
         }
         const forwardTasks = [...graph.entityById.values()].filter((t) => !IsCompensationTask(t));
         await this.skipRemainingForwardTasks(provider, graph, forwardTasks);
         // A forward step still running may yet complete — and then needs compensating too.
         if (forwardTasks.some((t) => t.Status === 'In Progress')) {
-            return graph;
+            return { Graph: graph, Pending: true };
         }
 
         const completedActionIDs = forwardTasks.filter((t) => t.Status === 'Complete' && t.ActionID).map((t) => t.ActionID!);
@@ -4227,22 +4247,20 @@ export class TaskGraphDispatcher implements IShutdownable {
         switch (step.Kind) {
             case 'Wait':
                 await this.updateParentSagaState(provider, graph, 'Compensating');
-                return graph;
+                return { Graph: graph, Pending: true };
             case 'Compensate':
                 await this.updateParentSagaState(provider, graph, 'Compensating');
-                if (await this.materializeCompensation(provider, graph, step.Forward, step.Compensation)) {
-                    return this.loadGraphState(provider, parentID, debug, graph.parent);
-                }
-                return graph;
+                await this.materializeCompensation(provider, graph, step.Forward, step.Compensation);
+                // Reloaded whether this insert won or not: a lost insert means another dispatcher's row
+                // exists, and this snapshot does not hold it (S7).
+                return { Graph: await this.loadGraphState(provider, parentID, debug, graph.parent), Pending: true };
             case 'Escalate':
                 await this.updateParentSagaState(provider, graph, 'CompensationEscalated');
-                if (await this.escalateCompensationFailure(provider, graph, step.Forward, step.FailedCompensation)) {
-                    return this.loadGraphState(provider, parentID, debug, graph.parent);
-                }
-                return graph;
+                await this.escalateCompensationFailure(provider, graph, step.Forward, step.FailedCompensation);
+                return { Graph: await this.loadGraphState(provider, parentID, debug, graph.parent), Pending: true };
             case 'Finished':
                 await this.updateParentSagaState(provider, graph, step.State);
-                return graph;
+                return { Graph: graph, Pending: false };
         }
     }
 
