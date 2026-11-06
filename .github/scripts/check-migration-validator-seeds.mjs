@@ -5,21 +5,26 @@
  * Two migrations must not seed the same CodeGen validator row with different text.
  *
  * ── WHY ─────────────────────────────────────────────────────────────────────────
- * A CHECK constraint's generated validator lives in `GeneratedCode`, one row per field, keyed by
- * `LinkedEntityID` + `LinkedRecordPrimaryKey` (the EntityField ID). Every seed of that row is
- * guarded by an existence check, so when two migrations seed the same key, the first one Flyway
- * runs wins and the second is skipped. If their `Description` or `Code` differ, the message users
- * see is decided by filename order alone, and the second file's text never applies anywhere.
+ * A CHECK constraint's generated validator lives in `GeneratedCode`. CodeGen guards every seed with
+ * an existence check, and the gate keys seeds the way those guards do
+ * (`entity_subclasses_codegen.ts`):
+ *   - a field validator links to `MJ: Entity Fields`; its guard matches `LinkedEntityID` +
+ *     `LinkedRecordPrimaryKey` (the EntityField ID) only;
+ *   - a table-level validator links to `MJ: Entities` (the entity's own row, shared by every
+ *     table-level validator of that entity); its guard adds `Name`.
+ * Neither guard reads `Source`, so when two migrations seed the same key, the first one Flyway runs
+ * wins and the second is skipped whatever CHECK text it was generated from. If their `Description`,
+ * `Code` or `Source` differ, what users get is decided by filename order alone, and the second
+ * file's text never applies anywhere.
  * CodeGen produces such a pair whenever a developer's database holds a different LLM wording for
  * a validator that a hand-written migration also seeds. See MJ#4673.
  *
  * ── THE RULE ────────────────────────────────────────────────────────────────────
  * Across the versioned migrations after the newest baseline (`migrations/v<N>/V<12 digits>__*.sql`), each
  * `INSERT INTO …[GeneratedCode]` with a `LinkedEntityID` and `LinkedRecordPrimaryKey` is read. When
- * two seeds share a key (compared case-insensitively) and the CHECK text they were generated from
- * (`Source`, whitespace-insensitive), and differ in `Description` or `Code`, the
- * gate fails, unless the pair is listed in the baseline file beside this script with the reason it
- * is accepted. Released migrations cannot be edited, so the baseline is how an existing pair is
+ * two seeds share a key (compared case-insensitively) and differ in `Description`, `Code` or
+ * `Source` (whitespace-insensitive), the gate fails, unless the pair is listed in the baseline file
+ * beside this script with the reason it is accepted. Released migrations cannot be edited, so the baseline is how an existing pair is
  * recorded; a new pair is fixed in the new migration (use the wording the earlier file seeded).
  *
  * Usage (from any directory inside the repository):
@@ -44,7 +49,10 @@ const VERSION_DIR_RE = /^v\d+$/;
 const GENERATED_CODE_INSERT_RE = /INSERT\s+INTO\s+(?:[^\s(]*?[.\]"])?(?:\[GeneratedCode\]|"GeneratedCode"|GeneratedCode)\s*\(/gi;
 
 /** The compared columns. Anything else (ID, GeneratedAt, model) may differ without changing behaviour. */
-const COMPARED_COLUMNS = ['Description', 'Code'];
+const COMPARED_COLUMNS = ['Description', 'Code', 'Source'];
+
+/** `MJ: Entities`: a seed linked to it is a table-level validator, whose guard also matches `Name`. */
+export const ENTITIES_ENTITY_ID = 'e0238f34-2837-ef11-86d4-6045bdee16e6';
 
 /** Whitespace-insensitive form of the CHECK text a validator was generated from. */
 function normalizeSource(value) {
@@ -102,12 +110,17 @@ function normalizeText(value) {
     return value === null ? null : value.replace(/\r\n/g, '\n');
 }
 
+/** Per-column normalization: `Source` is CHECK text, compared whitespace- and case-insensitively. */
+function normalizeColumn(column, value) {
+    return column === 'Source' ? (value === null ? null : normalizeSource(value)) : normalizeText(value);
+}
+
 /**
  * Every GeneratedCode seed in one migration's SQL.
- * `key` is the validator's row key (`<LinkedEntityID>|<LinkedRecordPrimaryKey>`, lower-cased); `check`
- * is the CHECK text it was generated from. A table-level constraint links to the entity itself, so
- * one key can carry several validators: two seeds are the same validator only when both match.
- * @returns {Array<{ key: string, check: string, line: number, values: Record<string, string | null> }>}
+ * `key` is what CodeGen's existence guard matches, lower-cased: `<LinkedEntityID>|<LinkedRecordPrimaryKey>`,
+ * plus `|<Name>` for a table-level validator (linked to `MJ: Entities`), since one entity row carries
+ * all of that entity's table-level validators.
+ * @returns {Array<{ key: string, line: number, values: Record<string, string | null> }>}
  */
 export function findSeeds(source) {
     const masked = stripSqlComments(source);
@@ -132,16 +145,18 @@ export function findSeeds(source) {
         const entityValue = entity === undefined ? null : literalValue(entity);
         const recordValue = record === undefined ? null : literalValue(record);
         if (!entityValue || !recordValue) continue;
-        const source_ = cell('Source');
-        const checkText = normalizeSource(source_ === undefined ? null : literalValue(source_));
         const values = {};
         for (const column of COMPARED_COLUMNS) {
             const raw = cell(column);
-            values[column] = raw === undefined ? null : normalizeText(literalValue(raw));
+            values[column] = raw === undefined ? null : normalizeColumn(column, literalValue(raw));
+        }
+        let key = `${entityValue.trim().toLowerCase()}|${recordValue.trim().toLowerCase()}`;
+        if (entityValue.trim().toLowerCase() === ENTITIES_ENTITY_ID) {
+            const name = cell('Name');
+            key += `|${(name === undefined ? '' : literalValue(name) ?? '').trim().toLowerCase()}`;
         }
         seeds.push({
-            key: `${entityValue.trim().toLowerCase()}|${recordValue.trim().toLowerCase()}`,
-            check: checkText,
+            key,
             line: source.slice(0, match.index).split('\n').length,
             values,
         });
@@ -184,10 +199,9 @@ export function findConflicts(migrations) {
     const conflicts = [];
     for (const { file, source } of migrations) {
         for (const seed of findSeeds(source)) {
-            const validator = `${seed.key}|${seed.check}`;
-            const winner = first.get(validator);
+            const winner = first.get(seed.key);
             if (!winner) {
-                first.set(validator, { file, ...seed });
+                first.set(seed.key, { file, ...seed });
                 continue;
             }
             const differing = COMPARED_COLUMNS.filter((c) => winner.values[c] !== seed.values[c]);
