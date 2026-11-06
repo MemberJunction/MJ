@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, realpathSync, symlinkSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, symlinkSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -61,6 +61,12 @@ describe('Sandbox.BuildArgs', () => {
   it('rejects a host or container path with a colon or a comma', () => {
     expect(() => sb.BuildArgs({ ...base, Mounts: [{ Host: '/h/a:b', Container: '/s', Mode: 'ro' }] })).toThrow(/refusing to mount/);
     expect(() => sb.BuildArgs({ ...base, Mounts: [{ Host: '/h/a', Container: '/s,ro', Mode: 'ro' }] })).toThrow(/refusing to mount/);
+  });
+  it('rejects a symlink whose realpath contains a colon', () => {
+    const t = mkdtempSync(join(tmpdir(), 'jit-colon-'));
+    mkdirSync(join(t, 'a:b'));
+    symlinkSync(join(t, 'a:b'), join(t, 'plain'));
+    expect(() => sb.BuildArgs({ ...base, Mounts: [{ Host: join(t, 'plain'), Container: '/s', Mode: 'ro' }] })).toThrow(/refusing to mount/);
   });
 });
 
