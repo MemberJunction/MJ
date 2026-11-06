@@ -34,7 +34,7 @@ Only the presentation layer is new.
                     GraphQLDataProvider.AI (agent runs)
                                  │  GraphQL over HTTP/WS
 ┌───────────────────────────────▼──────────────────────────────┐
-│  MJAPI  (localhost:4001)  →  MemberJunction 5.x database       │
+│  MJAPI  (localhost:4000)  →  MemberJunction 5.x database       │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -59,7 +59,7 @@ RN-compat notes, and the class-registration story.
 | **Node 18+** | Installed at the monorepo root; this package is an npm workspace. |
 | **Xcode** (26.x) + iOS Simulator | Required for `expo run:ios`. |
 | **CocoaPods** | Native pods are installed under `ios/` (`pod install`). |
-| **MJAPI on `:4001`** | Point it at a **MemberJunction 5.x** database. The mobile app expects `http://localhost:4001/graphql`. |
+| **MJAPI on `:4000`** | Point it at a **MemberJunction 5.x** database. The mobile app expects `http://localhost:4000/graphql` (MJAPI's default port; override with `EXPO_PUBLIC_MJ_API_PORT`). |
 | **Auth0 dev tenant** | The `mjmobile://auth` callback URL must be registered (the BlueCypress dev tenant already is). |
 
 Dependencies are installed from the **monorepo root**, never inside this package:
@@ -69,16 +69,22 @@ Dependencies are installed from the **monorepo root**, never inside this package
 npm install
 ```
 
-Start MJAPI separately (from `packages/MJAPI/`) with `GRAPHQL_PORT=4001` in its
-`.env`, targeting a migrated 5.x DB.
+Start MJAPI separately (from `packages/MJAPI/`) on its default port `4000`,
+targeting a migrated 5.x DB. If you run it on another port, set
+`EXPO_PUBLIC_MJ_API_PORT` to match.
 
 ### Configuration
 
 Runtime config lives in [`src/config/env.ts`](src/config/env.ts):
 
-- `graphqlUrl` — MJAPI GraphQL endpoint (default `http://localhost:4001/graphql`;
-  the iOS Simulator can reach `localhost` directly).
-- `graphqlWsUrl` — WebSocket subscription endpoint (`ws://localhost:4001/graphql`).
+- `graphqlUrl` / `graphqlWsUrl` — MJAPI GraphQL and WebSocket endpoints. Set
+  `EXPO_PUBLIC_MJ_GRAPHQL_URL` (the WebSocket URL derives from it, `https://` →
+  `wss://`; override with `EXPO_PUBLIC_MJ_WS_URL` if they differ). **Dev builds**
+  fall back to the developer's machine when unset (`http://localhost:4000/graphql`,
+  `10.0.2.2` from the Android emulator; `EXPO_PUBLIC_MJ_API_HOST` / `_PORT` for a
+  LAN device). **Release builds have no fallback**: a missing or non-`https://`
+  URL throws at startup, because iOS App Transport Security blocks cleartext to
+  remote hosts. Put the URL in the EAS build profile.
 - `auth0Domain` / `auth0ClientId` / `auth0Scopes` — Auth0 native app (primary path).
 - `msalTenantId` / `msalClientId` / `msalScopes` — Azure AD (ready, off the boot
   path until its RN redirect URI is registered).

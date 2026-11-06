@@ -60,7 +60,7 @@ src/data/services/*  (thin service functions)
 Metadata · RunView/RunViews · RunQuery · GetEntityObject · GraphQLDataProvider.AI
   │  GraphQL over HTTP + WS
   ▼
-MJAPI (:4001)  →  MemberJunction 5.x database
+MJAPI (:4000)  →  MemberJunction 5.x database
 ```
 
 ---

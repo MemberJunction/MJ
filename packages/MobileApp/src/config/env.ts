@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { ResolveApiUrls } from '@/config/resolve-api-urls';
 /**
  * Mobile app environment configuration.
  *
@@ -12,27 +13,33 @@ import { Platform } from 'react-native';
  *   - Refresh Token Rotation: enabled
  *   - Token Settings → Refresh Token Behavior: Rotating
  */
+// `__DEV__` is injected by Metro; it is undefined under Vitest, where we treat the run as dev.
+declare const __DEV__: boolean | undefined;
+const IS_DEV: boolean = typeof __DEV__ === 'undefined' || __DEV__ === true;
+
 /**
- * Host that reaches the developer's machine from the running app.
- *
- * The iOS Simulator shares the host's network stack, so `localhost` is the machine. An Android
- * emulator does not — `localhost` there is the emulator itself, and the special address `10.0.2.2`
- * is how it reaches the host. Without this the app builds and launches on Android and then fails
- * every request with an opaque `GraphQL Error (Code: unknown)`, which reads like a server problem
- * rather than a networking one.
- *
- * Overridable with `EXPO_PUBLIC_MJ_API_HOST` for a device on the same LAN, where neither default
- * applies and the machine's IP is needed.
+ * MJAPI URL resolution. Explicit `EXPO_PUBLIC_MJ_GRAPHQL_URL` / `EXPO_PUBLIC_MJ_WS_URL` win; a dev
+ * build otherwise falls back to the developer's machine (`localhost`, or `10.0.2.2` from the
+ * Android emulator, overridable with `EXPO_PUBLIC_MJ_API_HOST` / `EXPO_PUBLIC_MJ_API_PORT` for a
+ * LAN device). A release build has no fallback and throws here at startup, because iOS App
+ * Transport Security blocks cleartext to remote hosts and a silent `http://localhost` default
+ * would ship an app that fails every request. Rules and tests: `./resolve-api-urls.ts`.
  */
-const LocalApiHost: string =
-  process.env.EXPO_PUBLIC_MJ_API_HOST ?? (Platform.OS === 'android' ? '10.0.2.2' : 'localhost');
+const ResolvedApi = ResolveApiUrls({
+  GraphqlUrl: process.env.EXPO_PUBLIC_MJ_GRAPHQL_URL,
+  WsUrl: process.env.EXPO_PUBLIC_MJ_WS_URL,
+  ApiHost: process.env.EXPO_PUBLIC_MJ_API_HOST,
+  ApiPort: process.env.EXPO_PUBLIC_MJ_API_PORT,
+  Platform: Platform.OS,
+  IsDev: IS_DEV,
+});
 
 export const Env = {
   /** MJAPI GraphQL endpoint. */
-  graphqlUrl: `http://${LocalApiHost}:4001/graphql`,
+  graphqlUrl: ResolvedApi.GraphqlUrl,
 
   /** WebSocket subscription endpoint. */
-  graphqlWsUrl: `ws://${LocalApiHost}:4001/graphql`,
+  graphqlWsUrl: ResolvedApi.GraphqlWsUrl,
 
   // ---------------------------------------------------------------------
   // Auth0 (primary mobile auth path)
@@ -40,6 +47,14 @@ export const Env = {
   auth0Domain: 'bluecypress-dev.us.auth0.com',
   auth0ClientId: 'uRNpH3B0sFKVc2yrfBGBalfiUphUK5JI',
   auth0Scopes: ['openid', 'profile', 'email', 'offline_access'] as const,
+  /**
+   * Whether sign-out also ends the Auth0 tenant session via `/v2/logout` (see
+   * src/auth/auth0-session.ts). Requires `mjmobile://auth` under the Auth0 application's
+   * **Allowed Logout URLs**; with it unlisted, Auth0 renders an error page on every sign-out
+   * instead of redirecting back. Off until the tenant is updated. User switching still works
+   * without it because sign-out raises the one-shot `prompt=login` flag (src/auth/fresh-login.ts).
+   */
+  auth0EndSessionOnSignOut: false,
 
   // ---------------------------------------------------------------------
   // MSAL (Azure AD) — preserved for future enablement; not on the boot path
