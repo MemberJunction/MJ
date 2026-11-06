@@ -1,7 +1,8 @@
 // Q2 probe: can the Claude Agent SDK be held to the JiT agent's limits?
 // Usage: node q2-agent-sdk.mjs <path-to-a-base-checkout>
 // Env: MAX_TURNS (default 12), TOKEN_BUDGET (default 150000),
-//      WRITE_IN_ALLOWED=1 lists Write/Edit in allowedTools (auto-approve) instead of only in `tools`.
+//      WRITE_IN_ALLOWED=1 lists Write/Edit in allowedTools (auto-approve) instead of only in `tools`,
+//      NO_DISALLOWED=1 leaves out disallowedTools (only `tools` limits the built-ins).
 import { query, tool, createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import { realpathSync, existsSync } from 'node:fs';
@@ -12,6 +13,7 @@ const allowedWriteRoot = resolve(cwd, 'packages/MJGlobal/src/__tests__/jit') + s
 const MAX_TURNS = Number(process.env.MAX_TURNS ?? 12);
 const TOKEN_BUDGET = Number(process.env.TOKEN_BUDGET ?? 150_000);
 const WRITE_IN_ALLOWED = process.env.WRITE_IN_ALLOWED === '1';
+const NO_DISALLOWED = process.env.NO_DISALLOWED === '1';
 const denied = [];
 const canUseToolCalls = [];
 const trace = [];
@@ -45,7 +47,7 @@ try {
       allowedTools: WRITE_IN_ALLOWED                      // auto-approved; anything else goes through canUseTool
         ? [...builtIns, 'mcp__jit__run_test']
         : ['Read', 'Grep', 'Glob', 'mcp__jit__run_test'],
-      disallowedTools: ['Bash', 'WebFetch', 'WebSearch', 'Task', 'Agent', 'NotebookEdit'],
+      ...(NO_DISALLOWED ? {} : { disallowedTools: ['Bash', 'WebFetch', 'WebSearch', 'Task', 'Agent', 'NotebookEdit'] }),
       permissionMode: 'default',                          // ask canUseTool, not the auto-mode classifier
       mcpServers: { jit },
       abortController: abort,
@@ -60,7 +62,7 @@ try {
       },
     },
   })) {
-    if (msg.type === 'system' && msg.subtype === 'init') trace.push({ init: { model: msg.model, permissionMode: msg.permissionMode, tools: msg.tools } });
+    if (msg.type === 'system' && msg.subtype === 'init') trace.push({ init: { model: msg.model, apiKeySource: msg.apiKeySource, permissionMode: msg.permissionMode, tools: msg.tools } });
     if (msg.type === 'assistant' && msg.message?.usage) {
       // One API message arrives as one SDK message per content block, each with the same usage; count it once.
       const u = msg.message.usage;
@@ -90,4 +92,4 @@ const files = {
   testFileWritten: existsSync(resolve(cwd, 'packages/MJGlobal/src/__tests__/jit/probe.jit.test.ts')),
   outsideFileWritten: existsSync(resolve(cwd, 'packages/MJGlobal/src/probe.ts')),
 };
-console.log(JSON.stringify({ config: { MAX_TURNS, TOKEN_BUDGET, WRITE_IN_ALLOWED }, trace, result, counted: { inputTokens, outputTokens, turns, aborted }, canUseToolCalls, denied, files }, null, 2));
+console.log(JSON.stringify({ config: { MAX_TURNS, TOKEN_BUDGET, WRITE_IN_ALLOWED, NO_DISALLOWED }, trace, result, counted: { inputTokens, outputTokens, turns, aborted }, canUseToolCalls, denied, files }, null, 2));
