@@ -8,8 +8,9 @@
  * runs as.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { MJGlobal } from '@memberjunction/global';
-import { StartupManager, WellKnownUserSource, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { MJEventType, MJGlobal } from '@memberjunction/global';
+import { BaseEngine, BaseEntity, StartupManager, WellKnownUserSource, type BaseEntityEvent, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { MJGraphEdgeEntity } from '../../generated/entity_subclasses';
 import { GraphEngine, ClampGraphDepth, ClampGraphMaxNodes, CanUserReadEntity, GRAPH_MAX_STORED_EDGES_PER_STEP } from '../../graph/GraphEngine';
 import { BaseGraphEdgeProvider, LoadGraphEdgeProviders, type GraphEdgeRequest, type GraphEdgeView, type GraphProviderContext } from '../../graph';
 import { QueryEngine } from '../../engines/QueryEngine';
@@ -20,6 +21,15 @@ const analyst = MakeUser('u-analyst', ['Analyst']);
 const executive = MakeUser('u-exec', ['Analyst', 'Executive']);
 
 const PER_USER_PROVIDER = 'GraphEngineTestPerUserEdgeProvider';
+
+/** A `save` event for an `MJ: Graph Edges` row of `graphId`, shaped as a real edge entity raises it. */
+function edgeSavedEvent(graphId: string, edgeId: string): BaseEntityEvent {
+    const edge: MJGraphEdgeEntity = Object.create(MJGraphEdgeEntity.prototype);
+    Object.defineProperty(edge, 'GraphID', { value: graphId });
+    Object.defineProperty(edge, 'ID', { value: edgeId });
+    Object.defineProperty(edge, 'EntityInfo', { value: { Name: 'MJ: Graph Edges' } });
+    return { type: 'save', saveSubType: 'create', baseEntity: edge, payload: null };
+}
 
 /**
  * A derived-edge provider whose output depends on the user it runs as, the way a data-scale provider's
@@ -91,15 +101,48 @@ describe('GraphEngine', () => {
             expect(names).not.toContain('GraphEngine');
         });
 
-        it('caches stored edges of active Preload graphs only, approved only', async () => {
+        it('loads no stored edges at Config, and caches a Preload graph\'s approved edges on its first traversal', async () => {
             const provider = providerWith({});
-            await configure(provider);
+            const engine = await configure(provider);
+            expect(provider.ReadsOf('MJ: Graph Edges')).toHaveLength(0);
+
+            await engine.Subgraph('MJ Canon', canonSeed, { Depth: 1 }, analyst);
             const edgeLoads = provider.ReadsOf('MJ: Graph Edges');
             expect(edgeLoads).toHaveLength(1);
             expect(edgeLoads[0].Filter).toContain(IDS.GraphCanon);
             expect(edgeLoads[0].Filter).not.toContain(IDS.GraphNetwork);
             expect(edgeLoads[0].Filter).not.toContain(IDS.GraphDisabled);
             expect(edgeLoads[0].Filter).toContain("[Status] = 'Approved'");
+
+            await engine.Subgraph('MJ Canon', canonSeed, { Depth: 2 }, analyst);
+            expect(provider.ReadsOf('MJ: Graph Edges')).toHaveLength(1);
+        });
+
+        it('has no AdditionalLoading override, so BaseEngine updates its cached configs in place on a save', () => {
+            expect(Object.getPrototypeOf(GraphEngine.Instance).AdditionalLoading).toBe(BaseEngine.prototype.AdditionalLoading);
+        });
+
+        it('reloads only the graph an edge change touches', async () => {
+            const rows = CanonMetadataRows();
+            const provider = providerWith({
+                'MJ: Graphs': rows['MJ: Graphs'].map((g) => (g['ID'] === IDS.GraphNetwork ? { ...g, LoadMode: 'Preload' } : g)),
+                Accounts: [{ ID: 'a1', Name: 'A1' }],
+            });
+            const engine = await configure(provider);
+            const accountSeed = [{ EntityName: 'Accounts', RecordID: 'a1' }];
+            await engine.Subgraph('MJ Canon', canonSeed, { Depth: 1 }, analyst);
+            await engine.Subgraph('Member Network', accountSeed, { Depth: 1 }, analyst);
+            expect(provider.ReadsOf('MJ: Graph Edges')).toHaveLength(2);
+
+            provider.ReadLog = [];
+            MJGlobal.Instance.RaiseEvent({ event: MJEventType.ComponentEvent, eventCode: BaseEntity.BaseEventCode, args: edgeSavedEvent(IDS.GraphNetwork, 'e-new'), component: null as never });
+            await engine.Subgraph('MJ Canon', canonSeed, { Depth: 1 }, analyst);
+            expect(provider.ReadsOf('MJ: Graph Edges')).toHaveLength(0);
+            await engine.Subgraph('Member Network', accountSeed, { Depth: 1 }, analyst);
+            const reloads = provider.ReadsOf('MJ: Graph Edges');
+            expect(reloads).toHaveLength(1);
+            expect(reloads[0].Filter).toContain(IDS.GraphNetwork);
+            expect(reloads[0].Filter).not.toContain(IDS.GraphCanon);
         });
 
         it('on a server loads its cache as the system user, yet checks every node as the caller', async () => {
@@ -119,9 +162,9 @@ describe('GraphEngine', () => {
                 provider.ProviderType = 'Database';
                 // A fresh instance so the sticky system-user resolution runs for this provider.
                 const engine = await configure(provider);
-                expect(provider.ReadsOf('MJ: Graph Edges', systemUser.ID)).toHaveLength(1);
 
                 const sub = await engine.Subgraph('MJ Canon', canonSeed, { Depth: 1 }, analyst);
+                expect(provider.ReadsOf('MJ: Graph Edges', systemUser.ID)).toHaveLength(1);
                 expect(sub.Nodes.map((n) => n.RecordID)).toEqual([IDS.ConceptOpenAr]);
                 expect(provider.ReadsOf('MJ: Graph Concepts', analyst.ID).length).toBeGreaterThan(0);
             } finally {
@@ -353,8 +396,9 @@ describe('GraphEngine', () => {
                 Accounts: [{ ID: 'acc-1', Name: 'One' }],
             });
             const engine = await configure(provider);
+            await engine.Subgraph('MJ Canon', canonSeed, { Depth: 1 }, analyst); // loads the graph's cache once
             provider.ReadLog = [];
-            const sub = await engine.Subgraph('MJ Canon', canonSeed, { Depth: 1 }, analyst);
+            const sub = await engine.Subgraph('MJ Canon', canonSeed, { Depth: 2 }, analyst);
             expect(sub.Nodes.map((n) => n.RecordID)).toContain('acc-1');
             expect(provider.ReadsOf('MJ: Graph Edges')).toHaveLength(0);
         });

@@ -18,6 +18,7 @@ import {
     MJGraphAuthorityTierEntity,
     MJGraphConceptEntity,
     MJGraphConceptTypeEntity,
+    MJGraphEdgeEntity,
     MJGraphEdgeProviderEntity,
     MJGraphEdgeTypeEndpointEntity,
     MJGraphEdgeTypeEntity,
@@ -64,6 +65,7 @@ export const GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION = 'ContentPipeline.GraphStag
 const HOP_DECAY = 0.85;
 
 const GRAPH_EDGES_ENTITY = 'MJ: Graph Edges';
+const GRAPHS_ENTITY = 'MJ: Graphs';
 const GRAPH_CONCEPTS_ENTITY = 'MJ: Graph Concepts';
 
 /** The stored-edge columns traversal reads. */
@@ -107,6 +109,12 @@ const STORED_EDGE_FIELDS: Array<keyof StoredEdgeRow> = [
     'Status',
     'Confidence',
 ];
+
+/** One `Preload` graph's approved stored edges, indexed by incident node key. */
+interface PreloadedGraphEdges {
+    ByNodeKey: Map<string, StoredEdgeRow[]>;
+    EdgeIds: UUIDSet;
+}
 
 /** Which stored-edge text columns every principal may read. */
 interface StoredEdgeTextReadability {
@@ -160,9 +168,9 @@ type MetadataNodeKindName = 'MJ: Entities' | 'MJ: Entity Fields' | 'MJ: Entity A
  * Semantic Graph Engine (`WS-4.2` / `plans/canon-semantic-graph.md`).
  *
  * Caches graph metadata (graphs, edge types, endpoints, providers, concepts, lookup tables) and,
- * for `Preload` graphs only, their approved stored edges. `OnDemand` graphs read stored edges per
- * expansion step with one bounded RunView. Derived edges come from the graph's active
- * `MJ: Graph Edge Providers`.
+ * for `Preload` graphs only, their approved stored edges, loaded per graph on its first traversal
+ * and reloaded per graph after a change. `OnDemand` graphs read stored edges per expansion step with
+ * one bounded RunView. Derived edges come from the graph's active `MJ: Graph Edge Providers`.
  *
  * **Lazily configured.** Nothing loads at startup; the first caller of `Config` pays for it.
  *
@@ -187,10 +195,16 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
     private _conceptTypes: MJGraphConceptTypeEntity[] = [];
     private _authorityTiers: MJGraphAuthorityTierEntity[] = [];
 
-    /** Approved stored edges of active `Preload` graphs, indexed by incident node key. */
-    private preloadEdgesByNodeKey = new Map<string, StoredEdgeRow[]>();
-    /** False until the preload edges load, and after a `MJ: Graph Edges` change until they reload. */
-    private preloadEdgesFresh = false;
+    /**
+     * Approved stored edges of the `Preload` graphs traversed so far, one entry per graph, loaded on a
+     * graph's first traversal. A change drops only the entries it affects (see
+     * {@link HandleIndividualBaseEntityEvent}); the next traversal of that graph reloads it alone.
+     */
+    private preloadedEdges = new UUIDMap<PreloadedGraphEdges>();
+    /** In-flight preload reads by graph ID, so concurrent traversals share one read per graph. */
+    private preloadReads = new UUIDMap<Promise<PreloadedGraphEdges | null>>();
+    /** Bumped by every invalidation, so a read that started before one is not cached after it. */
+    private preloadGeneration = 0;
     /** Field and alternate-view lookups for metadata nodes; rebuilt when the provider's entity list changes. */
     private metadataNodeIndex: MetadataNodeIndex | null = null;
 
@@ -208,22 +222,58 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         await this.Load(configs, provider, forceRefresh, contextUser);
     }
 
-    /**
-     * Loads the approved stored edges of active `Preload` graphs (and only those) after every
-     * metadata (re)load, as the engine's own identity (the system user on a server).
-     */
-    protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
-        await this.loadPreloadStoredEdges(contextUser ?? this.ContextUser);
+    /** A first or forced (re)load also drops every preloaded graph; each reloads on its next traversal. */
+    protected override async Load(
+        configs: Partial<BaseEnginePropertyConfig>[],
+        provider: IMetadataProvider,
+        forceRefresh: boolean = false,
+        contextUser?: UserInfo,
+    ): Promise<void> {
+        if (forceRefresh || !this.Loaded) {
+            this.invalidatePreloadedEdges(null);
+        }
+        return super.Load(configs, provider, forceRefresh, contextUser);
     }
 
-    /** Marks the preload edge cache stale when a `MJ: Graph Edges` row changes here or on another server. */
+    /**
+     * Drops the preload entries a change affects, and nothing else.
+     *
+     * There is deliberately no `AdditionalLoading` override: `BaseEngine` turns off in-place cache
+     * updates for an engine that has one, so every concept or edge-type save would reload that whole
+     * config and then every Preload graph's edges. Without it, the cached configs update in place and
+     * stored edges load per graph, lazily:
+     * - a `MJ: Graph Edges` save or delete drops the edge's graph, and any graph whose entry holds that
+     *   edge ID (an edge moved to another graph);
+     * - a `MJ: Graphs` save or delete drops that graph (its `LoadMode` or `Status` may have changed);
+     * - a change that does not say which row (a remote invalidation) drops every entry.
+     */
     protected override async HandleIndividualBaseEntityEvent(event: BaseEntityEvent): Promise<boolean> {
-        const entityName = event.baseEntity?.EntityInfo?.Name ?? event.entityName;
+        const entityName = (event.baseEntity?.EntityInfo?.Name ?? event.entityName ?? '').trim().toLowerCase();
         const changed = event.type === 'save' || event.type === 'delete' || event.type === 'remote-invalidate';
-        if (changed && entityName?.trim().toLowerCase() === GRAPH_EDGES_ENTITY.toLowerCase()) {
-            this.preloadEdgesFresh = false;
+        if (changed && entityName === GRAPH_EDGES_ENTITY.toLowerCase()) {
+            const edge = event.baseEntity instanceof MJGraphEdgeEntity ? event.baseEntity : null;
+            this.invalidatePreloadedEdges(edge ? (graph) => UUIDsEqual(graph, edge.GraphID) || this.preloadHoldsEdge(graph, edge.ID) : null);
+        } else if (changed && entityName === GRAPHS_ENTITY.toLowerCase()) {
+            const graphRow = event.baseEntity instanceof MJGraphEntity ? event.baseEntity : null;
+            this.invalidatePreloadedEdges(graphRow ? (graph) => UUIDsEqual(graph, graphRow.ID) : null);
         }
         return super.HandleIndividualBaseEntityEvent(event);
+    }
+
+    /** Drops the preload entries whose graph ID matches `affects` (every entry when `null`). */
+    private invalidatePreloadedEdges(affects: ((graphId: string) => boolean) | null): void {
+        this.preloadGeneration++;
+        for (const map of [this.preloadedEdges, this.preloadReads]) {
+            for (const graphId of Array.from(map.Keys())) {
+                if (affects === null || affects(graphId)) {
+                    map.Delete(graphId);
+                }
+            }
+        }
+    }
+
+    private preloadHoldsEdge(graphId: string, edgeId: string): boolean {
+        return this.preloadedEdges.Get(graphId)?.EdgeIds.Has(edgeId) === true;
     }
 
     public get Graphs(): MJGraphEntity[] {
@@ -766,19 +816,20 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         }
         const includeProposed = options.IncludeProposed === true;
         const cacheServesEveryone = principals.every((p) => edgeEntity.UserExemptFromRowLevelSecurity(p, EntityPermissionType.Read));
-        if (graph.LoadMode === 'Preload' && !includeProposed && cacheServesEveryone && (await this.ensurePreloadEdgesFresh())) {
-            return this.preloadEdgesFor(graph, frontierKeys);
+        if (graph.LoadMode === 'Preload' && !includeProposed && cacheServesEveryone) {
+            const preloaded = await this.preloadedEdgesOf(graph);
+            if (preloaded) {
+                return this.preloadEdgesFor(preloaded, frontierKeys);
+            }
         }
         return this.readStoredEdgesAsPrincipals(graph, frontier, options, principals, provider);
     }
 
-    private preloadEdgesFor(graph: MJGraphEntity, frontierKeys: Set<string>): StoredEdgeRow[] {
+    private preloadEdgesFor(preloaded: PreloadedGraphEdges, frontierKeys: Set<string>): StoredEdgeRow[] {
         const byId = new Map<string, StoredEdgeRow>();
         for (const key of frontierKeys) {
-            for (const row of this.preloadEdgesByNodeKey.get(key) ?? []) {
-                if (UUIDsEqual(row.GraphID, graph.ID)) {
-                    byId.set(row.ID, row);
-                }
+            for (const row of preloaded.ByNodeKey.get(key) ?? []) {
+                byId.set(row.ID, row);
             }
         }
         return Array.from(byId.values());
@@ -858,55 +909,66 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         };
     }
 
-    private async ensurePreloadEdgesFresh(): Promise<boolean> {
-        if (!this.preloadEdgesFresh) {
-            await this.loadPreloadStoredEdges(this.ContextUser);
+    /**
+     * The approved stored edges of one `Preload` graph, loaded on first use as the engine's own identity
+     * (the system user on a server) and kept until a change drops them. `null` when the read fails: the
+     * caller then reads on demand as each principal.
+     */
+    private async preloadedEdgesOf(graph: MJGraphEntity): Promise<PreloadedGraphEdges | null> {
+        const cached = this.preloadedEdges.Get(graph.ID);
+        if (cached) {
+            return cached;
         }
-        return this.preloadEdgesFresh;
+        const inFlight = this.preloadReads.Get(graph.ID);
+        if (inFlight) {
+            return inFlight;
+        }
+        const generation = this.preloadGeneration;
+        const read = this.readPreloadedEdges(graph).then((loaded) => {
+            if (this.preloadReads.Get(graph.ID) === read) {
+                this.preloadReads.Delete(graph.ID);
+            }
+            if (loaded && generation === this.preloadGeneration) {
+                this.preloadedEdges.Set(graph.ID, loaded); // not cached if a change arrived mid-read
+            }
+            return loaded;
+        });
+        this.preloadReads.Set(graph.ID, read);
+        return read;
     }
 
-    private async loadPreloadStoredEdges(contextUser: UserInfo | undefined): Promise<void> {
-        const preloadGraphIds = this.Graphs.filter((g) => g.Status === 'Active' && g.LoadMode === 'Preload').map((g) => g.ID);
-        this.preloadEdgesByNodeKey = new Map<string, StoredEdgeRow[]>();
-        if (preloadGraphIds.length === 0) {
-            this.preloadEdgesFresh = true;
-            return;
-        }
+    private async readPreloadedEdges(graph: MJGraphEntity): Promise<PreloadedGraphEdges | null> {
         const provider = this.ProviderToUse;
         if (!IsGraphDataProvider(provider)) {
-            this.preloadEdgesFresh = false;
-            return;
+            return null;
         }
-        const graphList = preloadGraphIds.map((id) => `'${EscapeSQLString(id)}'`).join(', ');
         const res = await RunView.FromMetadataProvider(provider).RunView<StoredEdgeRow>(
             {
                 EntityName: GRAPH_EDGES_ENTITY,
-                ExtraFilter: `[Status] = 'Approved' AND [GraphID] IN (${graphList})`,
+                ExtraFilter: `[GraphID] = '${EscapeSQLString(graph.ID)}' AND [Status] = 'Approved'`,
                 Fields: STORED_EDGE_FIELDS,
                 OrderBy: '[ID]',
                 ResultType: 'simple',
             },
-            contextUser,
+            this.ContextUser,
         );
         if (!res.Success) {
-            LogError(`GraphEngine: loading stored edges of Preload graphs failed; reading them on demand until a reload succeeds: ${res.ErrorMessage}`);
-            this.preloadEdgesFresh = false;
-            return;
+            LogError(`GraphEngine: loading stored edges of Preload graph "${graph.Name}" failed; reading them on demand until a reload succeeds: ${res.ErrorMessage}`);
+            return null;
         }
+        const loaded: PreloadedGraphEdges = { ByNodeKey: new Map<string, StoredEdgeRow[]>(), EdgeIds: new UUIDSet() };
         for (const row of res.Results) {
-            this.indexPreloadEdge(FormatGraphNodeKey(row.SourceEntityID, String(row.SourceRecordID)), row);
-            this.indexPreloadEdge(FormatGraphNodeKey(row.TargetEntityID, String(row.TargetRecordID)), row);
+            loaded.EdgeIds.Add(row.ID);
+            for (const key of [FormatGraphNodeKey(row.SourceEntityID, String(row.SourceRecordID)), FormatGraphNodeKey(row.TargetEntityID, String(row.TargetRecordID))]) {
+                const list = loaded.ByNodeKey.get(key);
+                if (list) {
+                    list.push(row);
+                } else {
+                    loaded.ByNodeKey.set(key, [row]);
+                }
+            }
         }
-        this.preloadEdgesFresh = true;
-    }
-
-    private indexPreloadEdge(key: string, row: StoredEdgeRow): void {
-        const list = this.preloadEdgesByNodeKey.get(key);
-        if (list) {
-            list.push(row);
-        } else {
-            this.preloadEdgesByNodeKey.set(key, [row]);
-        }
+        return loaded;
     }
 
     /**
