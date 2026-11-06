@@ -71,7 +71,7 @@ import {
     QueryInfo,
 } from '@memberjunction/core';
 
-import { IsValidUUID, MJGlobal, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IsValidUUID, MJGlobal, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
 import { v4 as uuidv4 } from 'uuid';
@@ -693,7 +693,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         const rv = new RunView();
         const result = await rv.RunView({
             EntityName: 'MJ: Record Geo Codes',
-            ExtraFilter: `EntityID='${entity.EntityInfo.ID}' AND RecordID='${recordId}'`,
+            ExtraFilter: `EntityID='${entity.EntityInfo.ID}' AND RecordID='${EscapeSQLString(recordId)}'`,
             ResultType: 'entity_object'
         }, contextUser);
 
