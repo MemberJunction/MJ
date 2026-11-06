@@ -104,6 +104,26 @@ class NestedDialogHostComponent {}
 })
 class HiddenStopHostComponent {}
 
+/**
+ * Fields the browser cannot focus come before the real one: a display:none checkbox (a styled
+ * toggle's native input), a hidden file input, and a field inside an [inert] subtree (a collapsed
+ * accordion body). Initial focus and Tab both skip all three.
+ */
+@Component({
+  standalone: true,
+  imports: [MJDialogComponent],
+  template: `
+    <mj-dialog [Visible]="true" [Closeable]="false">
+      <input type="checkbox" class="styled-toggle" style="display: none">
+      <input type="file" class="file-picker" style="display: none">
+      <div inert><input type="text" class="collapsed-field"></div>
+      <input type="text" class="real-field">
+      <button type="button" class="last">Last</button>
+    </mj-dialog>
+  `,
+})
+class UnfocusableFieldsHostComponent {}
+
 /** A contenteditable region is a stop. contenteditable="false" is not. */
 @Component({
   standalone: true,
@@ -617,6 +637,23 @@ describe('MJDialogComponent tab stops (DOM)', () => {
     const wrap = press(again, 'Tab');
     expect(wrap.defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(shown);
+  });
+
+  it('opens on the first field the browser can focus, past hidden and inert ones', async () => {
+    const f = renderComponentFixture(UnfocusableFieldsHostComponent, { imports: [UnfocusableFieldsHostComponent] });
+    await flushMacrotask();
+    expect(document.activeElement).toBe(query(f, '.real-field'));
+  });
+
+  it('wraps Tab past a field inside an inert subtree', async () => {
+    const f = renderComponentFixture(UnfocusableFieldsHostComponent, { imports: [UnfocusableFieldsHostComponent] });
+    await flushMacrotask();
+    const real = query(f, '.real-field') as HTMLInputElement;
+    real.focus();
+    const back = press(real, 'Tab', { shiftKey: true });
+    // .real-field is the first stop, so Shift+Tab wraps to the last instead of landing in the inert block.
+    expect(back.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(query(f, '.last'));
   });
 
   it('treats contenteditable as a stop and skips contenteditable=false', async () => {
