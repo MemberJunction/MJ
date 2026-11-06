@@ -20,6 +20,7 @@ import { FieldRulesBulkUpdateChecks } from '../checks/field-rules-bulk-update.ch
 import { RemoteOperationsChecks } from '../checks/remote-operations.checks';
 import { AiSkillsChecks } from '../checks/ai-skills.checks';
 import { ApiKeysChecks } from '../checks/api-keys.checks';
+import { DiagnosticsChecks } from '../checks/diagnostics.checks';
 import { PredictiveStudioChecks } from '../checks/predictive-studio.checks';
 import { RemoteOpWireProgressChecks } from '../checks/remote-op-wire-progress.checks';
 import { PromptRunnerChecks } from '../checks/prompt-runner.checks';
@@ -162,11 +163,11 @@ describe('migrated bundles (coverage-loss guard)', () => {
     const bundles: Array<[string, NamedCheck[], number]> = [
         ['server-cache', ServerCacheChecks, 35],
         ['cache-immutability', CacheImmutabilityChecks, 15], // F1-F15 freeze-on-write runtime contract (IT81); F13/F14 cover review findings C1/C2, F15 covers M3 (dataset key collision)
-        ['client-cache', ClientCacheChecks, 14],
+        ['client-cache', ClientCacheChecks, 26],
         ['runquery-cache', RunQueryCacheChecks, 21], // Q11 (B46 category collision) + Q12 (B45 hit-vs-miss permission parity) added 2026-07-20; Q13–Q21 (query definition changes) added 2026-10-14
-        // RLS1–RLS12 (rls-isolation.checks.ts) + KF1–KF6 (keyrowfilter.checks.ts, API-key row filters)
+        // RLS1–RLS14 (rls-isolation.checks.ts) + KF1–KF6 (keyrowfilter.checks.ts, API-key row filters)
         // + RF1–RF3 (rolerowfilter.checks.ts, role filter edits) share one bundle
-        ['rls-isolation', [...RlsIsolationChecks, ...KeyRowFilterChecks, ...RoleRowFilterChecks], 20],
+        ['rls-isolation', [...RlsIsolationChecks, ...KeyRowFilterChecks, ...RoleRowFilterChecks], 22],
         ['rls-isolation-client', RlsIsolationClientChecks, 1],
         ['record-process', RecordProcessChecks, 12],
         ['record-process-facade', RecordProcessFacadeChecks, 2],
@@ -175,6 +176,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['remote-operations', RemoteOperationsChecks, 7],
         ['ai-skills', AiSkillsChecks, 21],
         ['api-keys', ApiKeysChecks, 3],
+        ['diagnostics', DiagnosticsChecks, 4], // DIAG1-DIAG4 session capture, bundle assembly, encrypted intake (IT163)
         ['predictive-studio', PredictiveStudioChecks, 5],
         ['remote-op-wire-progress', RemoteOpWireProgressChecks, 1],
         ['prompt-runner', PromptRunnerChecks, 1],
@@ -220,7 +222,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['materialized-read', MaterializedReadChecks, 3], // MR1-MR2 served-from-snapshot proof + MR3 delete-path FK cleanup (IT79)
         ['materialized-entity-read', MaterializedEntityReadChecks, 2], // EMR1-EMR2 entity base-view RunView redirect (IT78)
         ['form-contributions', FormContributionsChecks, 17], // FC1-FC17 metadata form contributions: schema, actions, clamp, kill switch, scoping, section claims, component guard (IT104)
-        ['scoped-anon-elevation', ScopedAnonElevationChecks, 6], // SA1-SA6 scoped-anonymous elevation permission contract (IT68)
+        ['scoped-anon-elevation', ScopedAnonElevationChecks, 7], // SA1-SA6 scoped-anonymous elevation permission contract + SA7 magic-link single-use consume (IT68)
         ['entity-graph', EntityGraphChecks, 11], // EG1-EG8 related-record collection graph saves (IT72)
         ['entity-embedded', EntityEmbeddedChecks, 6], // EE1-EE6 owner-held embedded records
         ['entity-graph-client', EntityGraphClientChecks, 9], // EGC1-EGC9 graph saves over the GraphQL wire (IT73)
@@ -364,7 +366,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'chief-of-staff': 8,
         'ciphertext-cache': 5,
         'class-resolution': 5,
-        'client-cache': 14,
+        'client-cache': 26,
         'cloudflare-clef': 6,
         'codegen-determinism': 6,
         'communication': 5,
@@ -375,6 +377,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'conversation-authorship-client': 12,
         'conversation-compaction': 23,
         'dataset-cache': 4,
+        'diagnostics': 4,
         'encrypted-read-client': 4,
         'entity-actions': 8,
         'entity-embedded': 6,
@@ -448,7 +451,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'remote-op-ai-authoring': 3,
         'remote-op-wire-progress': 1,
         'remote-operations': 7,
-        'rls-isolation': 20,
+        'rls-isolation': 22,
         'rls-isolation-client': 1,
         'role-elevation': 6,
         'rubrics': 15,
@@ -463,7 +466,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'scheduled-jobs': 2,
         'scheduling-concurrency': 3,
         'scope-enforcement': 5,
-        'scoped-anon-elevation': 6,
+        'scoped-anon-elevation': 7,
         'search': 8,
         'search-origin-gate': 4,
         'search-provider-trust': 2,
@@ -522,7 +525,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(178);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(179);
     });
 });
 
@@ -874,6 +877,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'rubrics.R8',
         'rubrics.R9',
         'rubrics.W1',
+        'scoped-anon-elevation.SA7',
         'self-avatar-client.AV1',
         'self-avatar-client.AV2',
         'self-avatar-client.AV3',

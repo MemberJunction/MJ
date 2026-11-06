@@ -3,7 +3,8 @@ import * as sql from 'mssql';
 vi.mock('mssql', async () => (await import('./helpers/mock-mssql')).createMockMssqlModule());
 import { SQLServerDataProvider } from '../SQLServerDataProvider';
 import { DoomedTransactionError } from '@memberjunction/generic-database-provider';
-import { mssqlState, MockConnectionPool } from './helpers/mock-mssql';
+import { BaseEntitySaveQueue, type BaseEntity } from '@memberjunction/core';
+import { mssqlState, MockConnectionPool, MockTransaction } from './helpers/mock-mssql';
 
 /**
  * #4786 — a transaction open on a shared provider belongs to the async scope that began it. An
@@ -126,5 +127,67 @@ describe('SQLServerDataProvider — transaction scope affinity (#4786)', () => {
     const savepointSQL = mssqlState.Queries.filter((q) => /(SAVE|ROLLBACK) TRANSACTION SavePoint_/i.test(q.sql));
     expect(savepointSQL.map((q) => q.sql.match(/^\s*(\w+)/)?.[1]?.toUpperCase())).toEqual(['SAVE', 'ROLLBACK']);
     expect(savepointSQL.every((q) => q.viaTransaction === true)).toBe(true);
+  });
+
+  it('a detachFromTransaction queue write queued by a member lands on the pool, even when it runs behind the COMMIT (#6251 EA6)', async () => {
+    // ActionEngine logs a durable submission this way from inside the save's transaction: the
+    // write is queued, never awaited, and the save commits. Bound to the transaction, the write
+    // reached SQL behind the COMMIT and was rejected, so the log row was lost.
+    await provider.BeginTransaction();
+    const tx = provider._transaction as unknown as MockTransaction;
+    const commitHeld = gate();
+    const originalCommit = tx.commit.bind(tx);
+    tx.commit = async () => { await commitHeld.wait; await originalCommit(); };
+
+    const saveReachesSQL = gate();
+    const entity = {
+      EntityInfo: { Name: 'Log' },
+      LatestResult: null,
+      ProviderToUse: provider,
+      Save: async () => {
+        await saveReachesSQL.wait;
+        await provider.ExecuteSQL("INSERT INTO Log VALUES ('submitted')");
+        return true;
+      },
+    } as unknown as BaseEntity;
+    const queue = new BaseEntitySaveQueue({ onError: () => undefined, detachFromTransaction: true });
+    queue.Update(entity);
+
+    const commit = provider.CommitTransaction();
+    await new Promise<void>((resolve) => setImmediate(resolve)); // the COMMIT is now the running queue item
+    saveReachesSQL.open();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    commitHeld.open();
+    await commit;
+
+    expect((await queue.Flush()).failures).toBe(0);
+    expect(via("INSERT INTO Log VALUES ('submitted')")).toBe(false);
+  });
+
+  describe('BaseEntitySaveQueue transaction membership', () => {
+    const queuedInsert = (text: string) => ({
+      EntityInfo: { Name: 'Row' },
+      LatestResult: null,
+      ProviderToUse: provider,
+      Save: async () => { await provider.ExecuteSQL(text); return true; },
+    }) as unknown as BaseEntity;
+
+    it('by default a save queued by a member joins its transaction (an owner that flushes before commit relies on it)', async () => {
+      await provider.BeginTransaction();
+      const queue = new BaseEntitySaveQueue({ onError: () => undefined });
+      queue.Insert(queuedInsert("INSERT INTO Child VALUES ('attached')"));
+      expect((await queue.Flush()).failures).toBe(0);
+      await provider.CommitTransaction();
+      expect(via("INSERT INTO Child VALUES ('attached')")).toBe(true);
+    });
+
+    it('with detachFromTransaction a save queued by a member runs on the pool', async () => {
+      await provider.BeginTransaction();
+      const queue = new BaseEntitySaveQueue({ onError: () => undefined, detachFromTransaction: true });
+      queue.Insert(queuedInsert("INSERT INTO Log VALUES ('detached')"));
+      expect((await queue.Flush()).failures).toBe(0);
+      await provider.CommitTransaction();
+      expect(via("INSERT INTO Log VALUES ('detached')")).toBe(false);
+    });
   });
 });

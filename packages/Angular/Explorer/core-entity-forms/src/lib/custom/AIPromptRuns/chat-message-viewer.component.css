@@ -371,6 +371,16 @@
 
 /* Responsive adjustments */
 @media (max-width: 640px) {
+    .message-header {
+        flex-wrap: wrap;
+        row-gap: 0.25rem;
+    }
+
+    .content-stats {
+        margin-left: 0;
+        flex-basis: 100%;
+    }
+
     .filter-controls {
         flex-wrap: wrap;
         gap: 0.75rem;
@@ -378,5 +388,19 @@
 
     .filter-checkbox {
         min-width: calc(50% - 0.375rem);
+    }
+}
+/* Phone: the role line (#1 System · 19,142 chars · ~3,044 tokens) wraps instead of running
+   past the card; the actions drop to their own line through .message-header's wrap. */
+@media (max-width: 768px) {
+    .message-header {
+        padding: 0.5rem 0.75rem;
+        row-gap: 0.25rem;
+    }
+
+    .message-role {
+        flex-wrap: wrap;
+        min-width: 0;
+        row-gap: 0.25rem;
     }
 }
