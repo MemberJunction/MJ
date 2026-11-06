@@ -21,8 +21,11 @@ jobs:
       - uses: pnpm/action-setup@v4            # probe 10 runs pnpm on the host
       - run: docker build -q -f plans/catching-jittests-spike/Dockerfile.sandbox -t jit-sandbox:spike plans/catching-jittests-spike
       - name: Attack the sandbox from inside
+        shell: bash                            # pipefail: a leak (exit 1) fails the job
         run: bash plans/catching-jittests-spike/q3-sandbox-attack.sh | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Show what the runner user can do (context for the design, never inside the sandbox)
+        if: always()
+        shell: bash
         run: |
           echo "runner uid: $(id -u); sudo: $(sudo -n true 2>&1 && echo yes || echo no); docker: $(docker --version)" | tee -a "$GITHUB_STEP_SUMMARY"
           echo "ACTIONS_RUNTIME_TOKEN set on host: $([ -n "${ACTIONS_RUNTIME_TOKEN:-}" ] && echo yes || echo no)" | tee -a "$GITHUB_STEP_SUMMARY"
@@ -59,4 +62,6 @@ jobs:
           key: jit-spike-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: jit-spike-pnpm-
       - run: df -m . | tee -a "$GITHUB_STEP_SUMMARY"
-      - run: bash plans/catching-jittests-spike/q1-q8-build-timing.sh "${{ matrix.sample.base }}" "${{ matrix.sample.head }}" "${{ matrix.sample.package }}" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+        shell: bash
+      - shell: bash                            # pipefail: a failing script fails the job
+        run: bash plans/catching-jittests-spike/q1-q8-build-timing.sh "${{ matrix.sample.base }}" "${{ matrix.sample.head }}" "${{ matrix.sample.package }}" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
