@@ -16847,6 +16847,9 @@ importers:
 
   packages/TestingFramework/integration-test-suite:
     dependencies:
+      '@memberjunction/a2aserver':
+        specifier: 6.2.0
+        version: link:../../AI/A2AServer
       '@memberjunction/actions':
         specifier: 6.2.0
         version: link:../../Actions/Engine

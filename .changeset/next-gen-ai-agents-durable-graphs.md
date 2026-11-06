@@ -7,6 +7,7 @@
 "@memberjunction/core-entities": minor
 "@memberjunction/core-entities-server": minor
 "@memberjunction/global": minor
+"@memberjunction/integration-test-suite": minor
 "@memberjunction/ng-core-entity-forms": minor
 "@memberjunction/predictive-studio": minor
 "@memberjunction/search-engine": minor

@@ -112,6 +112,7 @@ import { VideoStudioHandoffChecks } from '../checks/video-studio-handoff.checks'
 import { VideoStudioProductionChecks } from '../checks/video-studio-production.checks';
 import { VideoStudioLiveSmokeChecks } from '../checks/video-studio-live-smoke.checks';
 import { SemanticGraphChecks } from '../checks/semantic-graph.checks';
+import { TaskGraphSecurityChecks } from '../checks/task-graph-security.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -276,6 +277,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['encrypted-read-client', EncryptedReadClientChecks, 4], // ER1-ER4 encrypted field plaintext over GraphQL, miss and hit (IT160)
         ['ciphertext-cache', CiphertextCacheChecks, 5], // CT0-CT4 ciphertext at rest in the RunViewCache, plaintext to the caller (IT161)
         ['semantic-graph', SemanticGraphChecks, 7], // SG1-SG7 Semantic Graph substrate, Content Pipeline GraphStage overlay, and Executable Canon DAG similarity & telemetry (IT162)
+        ['task-graph-security', TaskGraphSecurityChecks, 3], // TGS1-TGS3 envelope on every row and immutable, one compensation per step, A2A store row boundary (IT164)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -486,6 +488,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'systemone-kev': 10,
         'task-graph-execution': 27,
         'task-graph-orchestration': 18,
+        'task-graph-security': 3,
         'templates': 8,
         'trailing-runtime-state': 6,
         'transaction-groups': 6,
@@ -525,7 +528,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(179);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(180);
     });
 });
 
@@ -922,6 +925,9 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'task-graph-orchestration.TG15',
         'task-graph-orchestration.TG16',
         'task-graph-orchestration.TG18',
+        'task-graph-security.TGS1',
+        'task-graph-security.TGS2',
+        'task-graph-security.TGS3',
         'transaction-groups-batched.TGB1',
         'transaction-groups-batched.TGB2',
         'transaction-groups-batched.TGB3',
