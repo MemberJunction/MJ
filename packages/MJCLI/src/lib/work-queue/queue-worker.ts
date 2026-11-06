@@ -1,5 +1,35 @@
 import { HOST_SHUT_DOWN_REASON } from '@memberjunction/work-queue-engine';
-import type { WorkQueueHostHealth } from '@memberjunction/work-queue-engine';
+import type { WorkQueueHostConfig, WorkQueueHostHealth } from '@memberjunction/work-queue-engine';
+
+const LONG_RUNNING_SWEEPER_INTERVAL_MS = 60000;
+const LONG_RUNNING_RECONCILE_INTERVAL_MS = 30000;
+
+/** The `mj queue work` flags that shape the host; oclif flag names, so not PascalCase. */
+interface WorkerConfigFlags {
+  subscription: string;
+  concurrency: number;
+  once: boolean;
+  'shutdown-drain-ms': number;
+  'sweeper-interval-ms'?: number;
+  'reconcile-interval-ms'?: number;
+}
+
+/**
+ * A one-shot job neither sweeps nor re-plans: it is short-lived and some other instance owns both. A long-running worker
+ * may be the only host against the database, so it sweeps and re-plans on the same defaults as MJAPI. An explicit
+ * interval wins in either mode, and 0 disables.
+ */
+export function BuildWorkerHostConfig(flags: WorkerConfigFlags, pid: number): WorkQueueHostConfig {
+  return {
+    InstanceID: `mj-queue-work-${pid}`,
+    Subscriptions: [{ Name: flags.subscription, Concurrency: flags.concurrency }],
+    IdlePollMinMs: 250,
+    IdlePollMaxMs: 2000,
+    ShutdownDrainMs: flags['shutdown-drain-ms'],
+    SweeperIntervalMs: flags['sweeper-interval-ms'] ?? (flags.once ? 0 : LONG_RUNNING_SWEEPER_INTERVAL_MS),
+    ReconcileIntervalMs: flags['reconcile-interval-ms'] ?? (flags.once ? 0 : LONG_RUNNING_RECONCILE_INTERVAL_MS),
+  };
+}
 
 export interface StoppableWorkHost {
   Shutdown(): Promise<void>;
