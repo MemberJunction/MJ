@@ -191,20 +191,6 @@ export class AgentTreeBudgetTracker {
     }
 
     /**
-     * Increments `totalSteps` on the shared {@link AgentTreeBudget} by `delta` (default `1`).
-     */
-    public IncrementTreeSteps(
-        params?: ExecuteAgentParams,
-        currentBudget?: AgentTreeBudget,
-        fallbackParams?: ExecuteAgentParams,
-        delta: number = 1
-    ): AgentTreeBudget {
-        const budget = this.EnsureTreeBudget(params, currentBudget, fallbackParams);
-        budget.totalSteps += delta;
-        return budget;
-    }
-
-    /**
      * Accumulates token and cost usage from a completed prompt execution into the shared
      * {@link AgentTreeBudget} for the execution tree.
      */

@@ -34,9 +34,9 @@ import { ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckLink, type SelfCheck
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
 import { CopyScalarsAndArrays, GroupByUUID, IndexByUUID, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, UUIDSet, EscapeSQLString, IsPlainObject, CleanAndParseJSON, IsValidUUID } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
-import { CrushJSON, DescribeCrush, PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
+import { PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
 // AST-aware code reduction (CodeCompressor-inspired) — opt-in per agent type
-import { CrushCode, type CodeLang } from '@memberjunction/context-crush/code';
+import { type CodeLang } from '@memberjunction/context-crush/code';
 import {
     RealtimeSessionRunner,
     RealtimeSessionRunnerDeps,
@@ -108,9 +108,6 @@ import {
     SecondaryScopeConfig,
     SecondaryScopeValue,
     AgentResponseForm,
-    AgentRequestAssignmentStrategy,
-    parseAssignmentStrategy,
-    mergeAssignmentStrategies,
     AgentClientToolInvocation,
     ClientToolResultSummary,
     ClientToolMetadata,
@@ -250,7 +247,7 @@ import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 import type { AgentTaintedSource } from '@memberjunction/ai-core-plus';
 // The ONE payload-mapping dialect. Loop agents and the task-graph dispatcher read the same authored
 // mapping strings, so these must be the same functions rather than two copies that agree today.
-import { GetValueFromPath, SetMappedValue } from '@memberjunction/ai-core-plus';
+import { GetValueFromPath } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
 import { ClientToolRequestManager } from './ClientToolRequestManager';
 import { BuildClientToolResultMessage, ResolveClientToolResultMaxChars, ReplaceMediaBlocksWithStubs, IsMediaBlock, IMAGE_BLOCK_TOKEN_ESTIMATE, WrapUntrustedExternalData } from './client-tool-results';
@@ -264,10 +261,10 @@ import {
     SubAgentConsultRecord
 } from './sub-agent-consult';
 import { ConversationMessageResolver } from './utils/ConversationMessageResolver';
-import { AgentTreeBudgetTracker } from './AgentTreeBudgetTracker';
+import { AgentTreeBudgetTracker, type AgentRunTokenStats } from './AgentTreeBudgetTracker';
 import { AgentFeedbackCoordinator } from './AgentFeedbackCoordinator';
 import { AgentContextAssembler } from './AgentContextAssembler';
-import { AgentStepDispatcher } from './AgentStepDispatcher';
+import { AgentStepDispatcher, type LoopIterationError } from './AgentStepDispatcher';
 import { ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import _ from 'lodash';
 
@@ -275,20 +272,6 @@ import _ from 'lodash';
  * Base iteration context for tracking loop execution in BaseAgent.
  * This is agent-type agnostic and handles both ForEach and While loops.
  */
-/**
- * The six denormalized token/cost figures rolled up from a run's steps — the single
- * shape shared by `calculateTokenStats` (producer) and `applyTokenStatsToRun`
- * (consumer) so a new stat added to one cannot silently be dropped by the other.
- */
-interface AgentRunTokenStats {
-    totalTokens: number;
-    promptTokens: number;
-    completionTokens: number;
-    cacheReadTokens: number;
-    cacheWriteTokens: number;
-    totalCost: number;
-}
-
 /** What one run's prompt leaves out (`BaseAgent.promptWithholding`). */
 interface PromptWithholding {
     /** Task graphs are not offered (a constraint no security envelope will carry: see taskGraphWithholdingReason). */
@@ -384,15 +367,6 @@ export interface ActionResultCrushConfig {
      * or specifications the model must read verbatim. Set with the `uncrushedActions` prompt param.
      */
     exemptActions?: ReadonlySet<string>;
-}
-
-/** One failed loop iteration (ForEach or While), or a loop that failed before its first iteration. */
-interface LoopIterationError {
-    /** Zero-based index of the iteration that failed. */
-    index: number;
-    message: string;
-    /** The ForEach collection element or While attempt context. Arbitrary payload data, only ever serialized. */
-    item?: unknown;
 }
 
 /** What a While loop produced, handed from executeWhileIterations to completeWhileLoop. */
@@ -14237,28 +14211,7 @@ The context is now within limits. Please retry your request with the recovered c
      *   tier, `clientTools` the override tier.
      */
     private resolveClientToolsForRun(agent: MJAIAgentEntityExtended, data: Record<string, unknown> | undefined): ClientToolMetadata[] {
-        // Static tier — agent's metadata tools from the AI Agent Client Tools junction.
-        const staticTools: ClientToolMetadata[] = AIEngine.Instance.GetClientToolsForAgent(agent.ID).map(tool => ({
-            Name: tool.Name,
-            Description: tool.Description,
-            InputSchema: tool.InputSchemaJSON ? JSON.parse(tool.InputSchemaJSON) : {},
-            OutputSchema: tool.OutputSchemaJSON ? JSON.parse(tool.OutputSchemaJSON) : undefined,
-            Category: tool.Category || undefined,
-            DefaultTimeoutMs: tool.DefaultTimeoutMs || undefined
-        }));
-
-        // Dynamic (session) tier — client-SDK enriched tools for this session.
-        const sessionID = data?.sessionID as string | undefined;
-        const sessionTools = sessionID ? ClientToolRequestManager.Instance.GetSessionTools(sessionID) : [];
-
-        // App tier — tools the active surface published in the app-context capability manifest.
-        const appContext = data?.appContext as { Capabilities?: { Tools?: ClientToolMetadata[] } } | undefined;
-        const appTools = appContext?.Capabilities?.Tools ?? [];
-
-        // Override tier — tools passed directly in the run's data.
-        const overrideTools = (data?.clientTools as ClientToolMetadata[] | undefined) ?? [];
-
-        return ResolveClientTools({ agentId: agent.ID, staticTools, sessionTools, appTools, overrideTools });
+        return this._contextAssembler.ResolveClientToolsForRun(agent, data);
     }
 
     /**
@@ -14334,18 +14287,6 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Formats a single output parameter value for inclusion in action result markdown.
-     *
-     * @param value - The parameter value (any type)
-     * @param maxLength - Maximum character length before truncation (0 = no limit, default 0)
-     * @returns Formatted string
-     * @private
-     */
-    private formatParamValueForResult(value: unknown, maxLength: number = 0, crush: boolean = true): string {
-        return this._stepDispatcher.FormatParamValueForResult(value, maxLength, crush, this._actionResultCrush);
-    }
-
-    /**
      * Resolve the per-run action-result compression config from the agent-type prompt
      * params. Crushing is on by default and only disabled when an agent explicitly sets
      * `crushActionResults: false`, mirroring the `includeXxxDocs` opt-out convention.
@@ -14357,25 +14298,6 @@ The context is now within limits. Please retry your request with the recovered c
             this._agentTypePromptParams,
             BaseAgent.ACTION_RESULT_CRUSH_THRESHOLD,
         );
-    }
-
-    /**
-     * AST-reduce a large code-string action-result value when the agent opted into a code
-     * language (via `crushCodeLang` or a subclass override) and the value clears the size
-     * threshold.
-     * @private
-     */
-    private crushCodeValue(stringValue: string): string | null {
-        return this._stepDispatcher.CrushCodeValue(stringValue, this._actionResultCrush);
-    }
-
-    /**
-     * Structurally compress a JSON action-result value when crushing is enabled for the run
-     * and the value clears the size threshold.
-     * @private
-     */
-    private crushParamValue(stringValue: string): string | null {
-        return this._stepDispatcher.CrushParamValue(stringValue, this._actionResultCrush);
     }
 
     /**
@@ -18398,20 +18320,6 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Sets a value on a target object, honouring the `[]` array-append suffix.
-     *
-     * Delegates for the same reason as {@link getValueFromPath} — `results[]` must mean append in
-     * both engines, or a workflow accumulates in one and overwrites in the other.
-     */
-    private setMappedValue(
-        target: Record<string, unknown>,
-        key: string,
-        value: unknown
-    ): void {
-        SetMappedValue(target, key, value);
-    }
-
-    /**
      * Applies sub-agent input mapping to prepare initial payload for related sub-agent.
      *
      * @param parentPayload - Parent agent's current payload
@@ -20122,26 +20030,6 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Walks the assignment strategy resolution chain (bottom-up, first-non-null wins).
-     * @private
-     */
-    private async resolveAssignmentStrategy(
-        params: ExecuteAgentParams,
-        requestTypeId: string | null
-    ): Promise<AgentRequestAssignmentStrategy | null> {
-        return this._feedbackCoordinator.ResolveAssignmentStrategy(params, requestTypeId);
-    }
-
-    /**
-     * Walks up the agent's category hierarchy looking for an AssignmentStrategy.
-     */
-    private async resolveCategoryAssignmentStrategy(
-        params: ExecuteAgentParams
-    ): Promise<AgentRequestAssignmentStrategy | null> {
-        return this._feedbackCoordinator.ResolveCategoryAssignmentStrategy(params);
-    }
-
-    /**
      * Resolves the file storage account ID for this agent's file artifacts.
      *
      * Delegates to {@link AIEngineBase.ResolveAgentStorageAccountID}, the shared golden path.
@@ -20151,42 +20039,6 @@ The context is now within limits. Please retry your request with the recovered c
      */
     protected async getStorageAccountID(params: ExecuteAgentParams): Promise<string | null> {
         return AIEngine.Instance.ResolveAgentStorageAccountID(params.agent, params.override?.storageAccountId);
-    }
-
-    /**
-     * Resolves the target user ID from a resolved assignment strategy, including async
-     * `List` strategies (`RoundRobin`, `LeastBusy`, `Random`).
-     * @private
-     */
-    private async resolveUserFromStrategy(
-        strategy: AgentRequestAssignmentStrategy | null,
-        params: ExecuteAgentParams
-    ): Promise<string | null> {
-        return this._feedbackCoordinator.ResolveAssigneeUserID(
-            strategy,
-            params,
-            this._agentRun,
-            params.provider || this._activeProvider
-        );
-    }
-
-    /**
-     * Determines the request type ID based on the Chat step's context.
-     * @private
-     */
-    private async resolveRequestTypeId(
-        previousDecision: BaseAgentNextStep,
-        contextUser?: UserInfo
-    ): Promise<string | null> {
-        return this._feedbackCoordinator.ResolveRequestTypeID(previousDecision, contextUser);
-    }
-
-    /**
-     * Inspects an AgentResponseForm to determine the best request type name.
-     * @private
-     */
-    private detectRequestTypeName(form: AgentResponseForm): string {
-        return this._feedbackCoordinator.DetectRequestTypeName(form);
     }
 
     /**
@@ -20872,15 +20724,6 @@ The context is now within limits. Please retry your request with the recovered c
             this.injectLoopResultsMessage(loopType, collectionOrCondition, [], [{ index: 0, message: errorMessage }], params, actionName);
         }
         return this.createFailedStep(errorMessage, previousDecision);
-    }
-
-    /**
-     * One loop error as readable text. Joining the error objects directly wrote "[object Object]"
-     * into the step's ErrorMessage. Falls back to JSON when an iteration threw something with no
-     * message (a thrown non-Error).
-     */
-    private describeLoopError(err: LoopIterationError): string {
-        return this._stepDispatcher.DescribeLoopError(err);
     }
 
     /** All loop errors as text for a step's ErrorMessage. */
@@ -21607,15 +21450,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     private calculateTokenStats(): AgentRunTokenStats {
-        const stats = this._budgetTracker.CalculateRunTokenStats(this._agentRun);
-        return {
-            totalTokens: stats.TotalTokens,
-            promptTokens: stats.PromptTokens,
-            completionTokens: stats.CompletionTokens,
-            cacheReadTokens: stats.CacheReadTokens,
-            cacheWriteTokens: stats.CacheWriteTokens,
-            totalCost: stats.TotalCost,
-        };
+        return this._budgetTracker.CalculateRunTokenStats(this._agentRun);
     }
 
     /**
@@ -21626,14 +21461,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     private applyTokenStatsToRun(run: MJAIAgentRunEntityExtended, tokenStats: AgentRunTokenStats): void {
-        this._budgetTracker.ApplyTokenStatsToRun(run, {
-            TotalTokens: tokenStats.totalTokens,
-            PromptTokens: tokenStats.promptTokens,
-            CompletionTokens: tokenStats.completionTokens,
-            CacheReadTokens: tokenStats.cacheReadTokens,
-            CacheWriteTokens: tokenStats.cacheWriteTokens,
-            TotalCost: tokenStats.totalCost,
-        });
+        this._budgetTracker.ApplyTokenStatsToRun(run, tokenStats);
     }
 
     /**

@@ -1,5 +1,5 @@
 /**
- * Tests for BaseAgent.resolveRequestTypeId — the Chat-step lookup that picks the
+ * Tests for AgentFeedbackCoordinator.ResolveRequestTypeID — the Chat-step lookup that picks the
  * `MJ: AI Agent Request Types` row ("Approval" vs "Information") for a new agent request.
  *
  * The lookup must go through the AI engine (AIEngineBase caches the table during Config and
@@ -9,13 +9,9 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { AIEngine } from '@memberjunction/aiengine';
 import type { AgentResponseForm, BaseAgentNextStep } from '@memberjunction/ai-core-plus';
-import { BaseAgent } from '../base-agent';
+import { AgentFeedbackCoordinator } from '../AgentFeedbackCoordinator';
 
 const ctx = { ID: 'u1', Name: 'Tester' } as never;
-
-interface RequestTypeHarness {
-    resolveRequestTypeId(previousDecision: BaseAgentNextStep, contextUser?: unknown): Promise<string | null>;
-}
 
 interface FakeEngine {
     ResolveAgentRequestTypeID: ReturnType<typeof vi.fn>;
@@ -55,12 +51,12 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
-describe('BaseAgent.resolveRequestTypeId', () => {
+describe('AgentFeedbackCoordinator.ResolveRequestTypeID', () => {
     it('resolves "Information" through the engine cache when there is no response form', async () => {
         const engine = fakeEngine([{ ID: 'RT-INFO', Name: 'Information' }, { ID: 'RT-APPR', Name: 'Approval' }]);
-        const agent = new BaseAgent() as unknown as RequestTypeHarness;
+        const coordinator = new AgentFeedbackCoordinator();
 
-        const id = await agent.resolveRequestTypeId({ step: 'Chat' } as BaseAgentNextStep, ctx);
+        const id = await coordinator.ResolveRequestTypeID({ step: 'Chat' } as BaseAgentNextStep, ctx);
 
         expect(id).toBe('RT-INFO');
         expect(engine.ResolveAgentRequestTypeID).toHaveBeenCalledWith('Information', ctx);
@@ -68,9 +64,9 @@ describe('BaseAgent.resolveRequestTypeId', () => {
 
     it('resolves "Approval" for a two-button approve/reject form', async () => {
         const engine = fakeEngine([{ ID: 'RT-INFO', Name: 'Information' }, { ID: 'RT-APPR', Name: 'Approval' }]);
-        const agent = new BaseAgent() as unknown as RequestTypeHarness;
+        const coordinator = new AgentFeedbackCoordinator();
 
-        const id = await agent.resolveRequestTypeId({ step: 'Chat', responseForm: approvalForm() } as BaseAgentNextStep, ctx);
+        const id = await coordinator.ResolveRequestTypeID({ step: 'Chat', responseForm: approvalForm() } as BaseAgentNextStep, ctx);
 
         expect(id).toBe('RT-APPR');
         expect(engine.ResolveAgentRequestTypeID).toHaveBeenCalledWith('Approval', ctx);
@@ -78,9 +74,9 @@ describe('BaseAgent.resolveRequestTypeId', () => {
 
     it('returns null when the engine has no matching request type', async () => {
         fakeEngine([]);
-        const agent = new BaseAgent() as unknown as RequestTypeHarness;
+        const coordinator = new AgentFeedbackCoordinator();
 
-        const id = await agent.resolveRequestTypeId({ step: 'Chat' } as BaseAgentNextStep, ctx);
+        const id = await coordinator.ResolveRequestTypeID({ step: 'Chat' } as BaseAgentNextStep, ctx);
 
         expect(id).toBeNull();
     });
@@ -88,9 +84,9 @@ describe('BaseAgent.resolveRequestTypeId', () => {
     it('returns null instead of throwing when the engine cannot be configured', async () => {
         const engine = fakeEngine([{ ID: 'RT-INFO', Name: 'Information' }]);
         engine.ResolveAgentRequestTypeID.mockRejectedValue(new Error('metadata unavailable'));
-        const agent = new BaseAgent() as unknown as RequestTypeHarness;
+        const coordinator = new AgentFeedbackCoordinator();
 
-        const id = await agent.resolveRequestTypeId({ step: 'Chat' } as BaseAgentNextStep, ctx);
+        const id = await coordinator.ResolveRequestTypeID({ step: 'Chat' } as BaseAgentNextStep, ctx);
 
         expect(id).toBeNull();
     });

@@ -3,7 +3,7 @@ import { AgentStepDispatcher } from '../AgentStepDispatcher';
 import { BaseAgentNextStep } from '@memberjunction/ai-core-plus';
 
 describe('AgentStepDispatcher', () => {
-    describe('BuildActionInvocationMessage & BuildActionResultsMessage', () => {
+    describe('BuildActionInvocationMessage & FormatActionResultsAsMarkdown', () => {
         it('should format single and parallel action invocations and results markdown', () => {
             const dispatcher = new AgentStepDispatcher();
             const singleMsg = dispatcher.BuildActionInvocationMessage(
@@ -13,7 +13,7 @@ describe('AgentStepDispatcher', () => {
             expect(singleMsg).toContain('[You invoked the **SearchAccounts** action with parameters:');
             expect(singleMsg).toContain('• **query**: `Acme`');
 
-            const resultsMsg = dispatcher.BuildActionResultsMessage([
+            const resultsMsg = dispatcher.FormatActionResultsAsMarkdown([
                 {
                     actionName: 'SearchAccounts',
                     success: true,
@@ -22,7 +22,6 @@ describe('AgentStepDispatcher', () => {
                     params: [{ Name: 'Count', Value: 1, Type: 'Output' }],
                 },
             ]);
-            expect(resultsMsg).toContain('Action results:');
             expect(resultsMsg).toContain('## SearchAccounts ✓');
             expect(resultsMsg).toContain('• `Count`: `1`');
         });

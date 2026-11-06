@@ -11,7 +11,6 @@
 
 import {
     MJAIAgentEntityExtended,
-    MJAIPromptEntityExtended,
     MJAIModelEntityExtended,
     AIPromptParams,
     AgentChatMessage,
@@ -24,14 +23,12 @@ import {
     MJActionParamEntity,
     MJAISkillEntity,
     MJAIVendorEntity,
-    MJTemplateEntityExtended,
 } from '@memberjunction/core-entities';
 import { MJActionEntityExtended } from '@memberjunction/actions-base';
 import { BaseLLM, ChatMessage, IsPrefixPromptCache } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
-import { UserInfo, LogError } from '@memberjunction/core';
+import { LogError } from '@memberjunction/core';
 import { IsPlainObject, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import { TemplateEngineServer } from '@memberjunction/templates';
 import { DescribeValueSchemaInline, GetStoredValueSchema } from './native-tools/action-param-schema';
 import { BindingsForAction, UnboundParams } from './bound-action-params';
 import {
@@ -44,7 +41,6 @@ import {
     CURRENT_DATE_PLACEHOLDER,
     CURRENT_DAY_OF_WEEK_PLACEHOLDER,
     CURRENT_TIME_PLACEHOLDER,
-    RUNTIME_STATE_TAG,
     SCRATCHPAD_NOTES_PLACEHOLDER,
     SCRATCHPAD_TASKS_PLACEHOLDER,
     SCRATCHPAD_TASK_SUMMARY_PLACEHOLDER,
@@ -69,14 +65,6 @@ export interface BuildRuntimeStateFragmentInput<P = unknown> {
  * cache-preserving `<mj-runtime-state>` trailing message construction for `BaseAgent`.
  */
 export class AgentContextAssembler {
-    private cachedTemplatesArrayRef: MJTemplateEntityExtended[] | null = null;
-    private templateByIdMap: Map<string, MJTemplateEntityExtended> | null = null;
-    private lastRuntimeStateDeliveryCache: {
-        templateText: string;
-        markers: readonly string[];
-        delivery: 'trailing' | 'embedded' | 'unsupported';
-    } | null = null;
-
     /**
      * Assembles the outgoing message array for a single LLM request under `'trailingMessage'`
      * runtime-state placement: escapes literal `<mj-runtime-state>` tags in non-system history
@@ -96,24 +84,6 @@ export class AgentContextAssembler {
                 : EscapeRuntimeStateTagsInMessage(m)
         );
         return [...sanitized, fragment];
-    }
-
-    /**
-     * Determines whether the run should retain prior runtime-state fragments in append-only mode
-     * (either because the model/vendor uses a byte-prefix prompt cache or because native tool calls
-     * are active on a driver whose replayed reasoning requires an unchanged prefix).
-     */
-    public ResolveAppendOnlyState(
-        model: MJAIModelEntityExtended | undefined,
-        vendor: MJAIVendorEntity | undefined,
-        hasNativeToolBindings: boolean,
-        prefixPromptCacheOverride?: boolean
-    ): boolean {
-        const isPrefixCache = prefixPromptCacheOverride ?? this.ResolvePrefixPromptCache(model, vendor);
-        if (isPrefixCache) {
-            return true;
-        }
-        return hasNativeToolBindings && this.DriverRequiresStableReasoningPrefix(model, vendor);
     }
 
     /**
@@ -168,71 +138,6 @@ export class AgentContextAssembler {
         markers: readonly string[] = VOLATILE_TEMPLATE_MARKERS
     ): boolean {
         return markers.some((marker) => templateText.includes(marker));
-    }
-
-    /**
-     * Classifies how a system prompt template handles `<mj-runtime-state>` delivery from its
-     * unrendered template text.
-     */
-    public ClassifyRuntimeStateDelivery(
-        templateText: string | null,
-        markers: readonly string[] = VOLATILE_TEMPLATE_MARKERS
-    ): 'trailing' | 'embedded' | 'unsupported' | 'unknown' {
-        if (templateText === null) {
-            return 'unknown';
-        }
-        if (
-            this.lastRuntimeStateDeliveryCache &&
-            this.lastRuntimeStateDeliveryCache.templateText === templateText &&
-            this.lastRuntimeStateDeliveryCache.markers === markers
-        ) {
-            return this.lastRuntimeStateDeliveryCache.delivery;
-        }
-        const delivery: 'trailing' | 'embedded' | 'unsupported' = this.TemplateTextEmbedsVolatileState(
-            templateText,
-            markers
-        )
-            ? 'embedded'
-            : templateText.includes(`<${RUNTIME_STATE_TAG}>`)
-              ? 'trailing'
-              : 'unsupported';
-        this.lastRuntimeStateDeliveryCache = { templateText, markers, delivery };
-        return delivery;
-    }
-
-    /**
-     * Loads the raw (unrendered) template text for an AI prompt from `TemplateEngineServer`.
-     */
-    public async LoadPromptTemplateText(
-        prompt: MJAIPromptEntityExtended | undefined,
-        contextUser: UserInfo,
-        ensureEngineConfigured: boolean = true
-    ): Promise<string | null> {
-        if (!prompt?.TemplateID) {
-            return null;
-        }
-        if (ensureEngineConfigured) {
-            await TemplateEngineServer.Instance.Config(false, contextUser);
-        }
-        const templates = TemplateEngineServer.Instance.Templates;
-        if (!templates) {
-            return null;
-        }
-        let template: MJTemplateEntityExtended | undefined;
-        if (templates === this.cachedTemplatesArrayRef && this.templateByIdMap) {
-            template = this.templateByIdMap.get(NormalizeUUID(prompt.TemplateID));
-        } else {
-            this.cachedTemplatesArrayRef = templates;
-            const map = new Map<string, MJTemplateEntityExtended>();
-            for (const t of templates) {
-                if (t?.ID) {
-                    map.set(NormalizeUUID(t.ID), t);
-                }
-            }
-            this.templateByIdMap = map;
-            template = map.get(NormalizeUUID(prompt.TemplateID));
-        }
-        return template?.GetHighestPriorityContent()?.TemplateText ?? null;
     }
 
     /**
@@ -420,13 +325,15 @@ export class AgentContextAssembler {
     }
 
     /**
-     * Builds the client tool prompt section for system prompt injection across static,
-     * session, app, and override tiers.
+     * Resolves the client tools in force for a run: the agent's static metadata tools under the
+     * session, app, and override tiers, merged by {@link ResolveClientTools} with its fixed precedence.
+     * Both the prompt section and the client-tool execution step resolve through here so the tools
+     * offered to the model and the metadata its results are classified against come from one list.
      */
-    public BuildClientToolPromptSection(
+    public ResolveClientToolsForRun(
         agent: MJAIAgentEntityExtended,
         extraData?: Record<string, unknown>
-    ): string {
+    ): ClientToolMetadata[] {
         const engine = AIEngine.Instance;
         const staticTools: ClientToolMetadata[] = engine.GetClientToolsForAgent(agent.ID).map((tool) => ({
             Name: tool.Name,
@@ -447,13 +354,24 @@ export class AgentContextAssembler {
 
         const overrideTools = (extraData?.clientTools as ClientToolMetadata[] | undefined) ?? [];
 
-        const tools = ResolveClientTools({
+        return ResolveClientTools({
             agentId: agent.ID,
             staticTools,
             sessionTools,
             appTools,
             overrideTools,
         });
+    }
+
+    /**
+     * Builds the client tool prompt section for system prompt injection across static,
+     * session, app, and override tiers.
+     */
+    public BuildClientToolPromptSection(
+        agent: MJAIAgentEntityExtended,
+        extraData?: Record<string, unknown>
+    ): string {
+        const tools = this.ResolveClientToolsForRun(agent, extraData);
 
         if (tools.length === 0) {
             return '';

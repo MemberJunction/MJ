@@ -186,7 +186,7 @@ describe('AgentTreeBudgetTracker', () => {
             expect(budget1.maxTreeCost).toBe(2.5);
             expect(budget1.maxTreeDurationMs).toBe(60000);
 
-            tracker.IncrementTreeSteps(params);
+            budget1.totalSteps += 1;
             expect(budget1.totalSteps).toBe(1);
 
             const promptRun: Partial<MJAIPromptRunEntity> = {

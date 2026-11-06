@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { AgentContextAssembler } from '../AgentContextAssembler';
-import { AgentChatMessage } from '@memberjunction/ai-core-plus';
+import { AgentChatMessage, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { ChatMessage } from '@memberjunction/ai';
+import { AIEngine } from '@memberjunction/aiengine';
 import {
     SCRATCHPAD_NOTES_PLACEHOLDER,
     SCRATCHPAD_TASKS_PLACEHOLDER,
@@ -55,15 +56,45 @@ describe('AgentContextAssembler', () => {
         });
     });
 
-    describe('ClassifyRuntimeStateDelivery', () => {
-        it('should classify templates by embedded volatile markers vs trailing tag', () => {
+    describe('TemplateTextEmbedsVolatileState', () => {
+        it('should detect embedded volatile markers in template text', () => {
             const assembler = new AgentContextAssembler();
-            expect(assembler.ClassifyRuntimeStateDelivery(null)).toBe('unknown');
-            expect(assembler.ClassifyRuntimeStateDelivery('Prompt with {{ _CURRENT_DATE }}')).toBe('embedded');
-            expect(
-                assembler.ClassifyRuntimeStateDelivery('Prompt referencing <mj-runtime-state> block')
-            ).toBe('trailing');
-            expect(assembler.ClassifyRuntimeStateDelivery('Static prompt with neither')).toBe('unsupported');
+            expect(assembler.TemplateTextEmbedsVolatileState('Prompt with {{ _CURRENT_DATE }}')).toBe(true);
+            expect(assembler.TemplateTextEmbedsVolatileState('Prompt referencing <mj-runtime-state> block')).toBe(
+                false
+            );
+            expect(assembler.TemplateTextEmbedsVolatileState('Static prompt with neither')).toBe(false);
+        });
+    });
+
+    describe('ResolveClientToolsForRun & BuildClientToolPromptSection', () => {
+        it('should resolve client tools through ResolveClientToolsForRun and format them in BuildClientToolPromptSection', () => {
+            const assembler = new AgentContextAssembler();
+            const getClientToolsSpy = vi
+                .spyOn(AIEngine.Instance, 'GetClientToolsForAgent')
+                .mockReturnValue([]);
+            const resolveSpy = vi.spyOn(assembler, 'ResolveClientToolsForRun');
+            const agent = { ID: '11111111-1111-4111-8111-111111111111' } as MJAIAgentEntityExtended;
+
+            const section = assembler.BuildClientToolPromptSection(agent, {
+                clientTools: [
+                    {
+                        Name: 'NavigateToRecord',
+                        Description: 'Opens a record view',
+                        Category: 'Navigation',
+                        InputSchema: {
+                            type: 'object',
+                            properties: { recordId: { type: 'string', description: 'Target ID' } },
+                            required: ['recordId'],
+                        },
+                    },
+                ],
+            });
+
+            expect(resolveSpy).toHaveBeenCalledOnce();
+            expect(section).toContain('- **NavigateToRecord** [Navigation]: Opens a record view');
+            expect(section).toContain('Inputs: `recordId`\\* — Target ID');
+            getClientToolsSpy.mockRestore();
         });
     });
 

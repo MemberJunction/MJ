@@ -16,12 +16,6 @@ import {
 import { IsPlainObject } from '@memberjunction/global';
 import { CrushJSON, DescribeCrush, type JsonValue } from '@memberjunction/context-crush';
 import { CrushCode, type CodeLang } from '@memberjunction/context-crush/code';
-import {
-    ActionParam,
-    AIDirective,
-    type ActionErrorRecovery,
-    type ActionOutputTrustLevel,
-} from '@memberjunction/actions-base';
 import { FormatResponseFormSummary } from './sub-agent-consult';
 import { WrapUntrustedExternalData } from './client-tool-results';
 import { ConversationMessageResolver } from './utils/ConversationMessageResolver';
@@ -30,7 +24,6 @@ import {
     ReplaceEmbeddedTemplateExpressions,
 } from './pipeline/template';
 import type {
-    ActionCircuitBreakerReason,
     ActionResultCrushConfig,
     ActionResultSummary,
 } from './base-agent';
@@ -87,19 +80,6 @@ export class AgentStepDispatcher {
                 .join('\n\n') +
             '\n]'
         );
-    }
-
-    /**
-     * Builds the action-results message body: a header naming any failures, then each result in
-     * compact markdown format.
-     */
-    public BuildActionResultsMessage(
-        actionSummaries: ActionResultSummary[],
-        crushConfig?: ActionResultCrushConfig,
-    ): string {
-        const failed = actionSummaries.filter((a) => !a.success).length;
-        const header = failed > 0 ? `${failed} of ${actionSummaries.length} action(s) failed:` : 'Action results:';
-        return `${header}\n${this.FormatActionResultsAsMarkdown(actionSummaries, crushConfig)}`;
     }
 
     /**
