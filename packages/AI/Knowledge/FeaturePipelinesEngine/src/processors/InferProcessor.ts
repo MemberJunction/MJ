@@ -17,8 +17,17 @@
 import { createHash } from 'node:crypto';
 import { type EntityInfo, GetIndexRestrictedFieldNames, type IMetadataProvider, LogError, LogStatus, Metadata, OmitDeniedFieldKeys, RunQuery, RunView } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual, Canonicalize, ComputeContentHashAsync, EscapeSQLString, ResolveMappingRef, ResolveValueMapping, SafeJSONParse } from '@memberjunction/global';
-import { KnowledgeHubMetadataEngine, type MJFeatureValueCacheEntity, type MJFeaturePipelineTypeEntity, type MJRecordProcessEntity } from '@memberjunction/core-entities';
+import {
+    KnowledgeHubMetadataEngine,
+    type MJFeatureValueCacheEntity,
+    type MJFeatureValueEntity,
+    type MJFeaturePipelineTypeEntity,
+    type MJRecordProcessEntity,
+    type MJRecordProcessEntity_IRecordProcessChallengerConfig,
+} from '@memberjunction/core-entities';
+import { ChatMessageRole } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams, type AIPromptRunResult, type MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import {
     IRecordProcessor,
@@ -232,6 +241,35 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
     /** Each record's Feature Value writes waiting for its write-back, in order, by record ID (deferred mode only). */
     private pendingFeatureValues = new Map<string, FeatureValueWriteParams[]>();
 
+    /** Optional WS-4.4 shadow challenger configuration read from `RecordProcess.ChallengerConfigurationObject`. */
+    public ChallengerConfig: MJRecordProcessEntity_IRecordProcessChallengerConfig | null = null;
+
+    /** Injectable RNG (`[0, 1)`) for deterministic shadow sampling in tests. */
+    public ChallengerRng: () => number = () => Math.random();
+
+    /** Maximum number of concurrent in-flight shadow challenger tasks per processor. */
+    public MaxInFlightShadow = 64;
+
+    private readonly inFlightShadowTasks = new Set<Promise<void>>();
+    private droppedShadowCount = 0;
+
+    /** Number of currently active background shadow challenger tasks. */
+    public get InFlightShadowCount(): number {
+        return this.inFlightShadowTasks.size;
+    }
+
+    /** Number of sampled shadow challenger tasks dropped because `InFlightShadowCount >= MaxInFlightShadow`. */
+    public get DroppedShadowCount(): number {
+        return this.droppedShadowCount;
+    }
+
+    /** Wait for all currently in-flight background shadow challenger tasks to settle. */
+    public async FlushShadowInFlight(): Promise<void> {
+        while (this.inFlightShadowTasks.size > 0) {
+            await Promise.allSettled(Array.from(this.inFlightShadowTasks));
+        }
+    }
+
     /**
      * @param promptID - The `MJ: AI Prompts` ID to run for each record.
      * @param inputMapping - Mapping shaping the data passed to the prompt; undefined for the default (`{ record }`).
@@ -263,15 +301,27 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         // unparseable mapping JSON (SafeJSONParse answers null) falls back to the default mapping, as an absent one does
         const inputMapping = (rp.InputMapping ? SafeJSONParse<Record<string, string>>(rp.InputMapping) : null) || undefined;
         const spec = InferProcessor.parseSpec(rp, provider);
+        let processor: InferProcessor;
         if (spec?.ProcessorExtensionKey) {
             const custom = MJGlobal.Instance.ClassFactory.CreateInstance<InferProcessor>(InferProcessor, spec.ProcessorExtensionKey, rp.PromptID, inputMapping, spec, rp.OutputMapping || null);
             if (custom && custom.constructor !== InferProcessor) {
-                return custom;
+                processor = custom;
             } else {
                 throw new Error(`Record Process '${rp.Name}': ProcessorExtensionKey '${spec.ProcessorExtensionKey}' not found in ClassFactory`);
             }
+        } else {
+            processor = new InferProcessor(rp.PromptID, inputMapping, spec, rp.OutputMapping || null);
         }
-        return new InferProcessor(rp.PromptID, inputMapping, spec, rp.OutputMapping || null);
+
+        const challengerConfig =
+            rp.ChallengerConfigurationObject ??
+            (typeof rp.ChallengerConfiguration === 'string' && rp.ChallengerConfiguration.trim().length > 0
+                ? SafeJSONParse<MJRecordProcessEntity_IRecordProcessChallengerConfig>(rp.ChallengerConfiguration)
+                : null);
+        if (challengerConfig) {
+            processor.ChallengerConfig = challengerConfig;
+        }
+        return processor;
     }
 
     /** Parses and validates the DataFeatureSpec in an Infer pipeline row's `Configuration`; undefined when it has none. */
@@ -1401,11 +1451,251 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             const warnings = this.dryRunRefusal ? [...(result.Warnings || []), `A real run would be refused: ${this.dryRunRefusal}`] : result.Warnings;
             return { ...pinned, DryRun: true, ...(warnings ? { Warnings: warnings } : {}) };
         }
+        if (!featureValues.OmitValues && this.WritesHistory) {
+            this.dispatchChallengerIfConfigured(featureValues);
+        }
         if (this.deferFeatureValues) {
             return pinned; // the write-back sets Outcome once it wrote them
         }
         const unchanged = outcome !== null && outcome.Upserted === 0 && outcome.Unchanged > 0;
         return { ...pinned, Outcome: unchanged ? 'Unchanged' : 'Upserted' };
+    }
+
+    /**
+     * Determine whether a live `'Infer'` champion invocation should be mirrored to its shadow challenger prompt.
+     */
+    public ShouldSampleChallenger(
+        config: MJRecordProcessEntity_IRecordProcessChallengerConfig | null | undefined = this.ChallengerConfig,
+    ): boolean {
+        if (!config || config.Enabled !== true) {
+            return false;
+        }
+        if (typeof config.SampleRate !== 'number' || !Number.isFinite(config.SampleRate) || config.SampleRate <= 0) {
+            return false;
+        }
+        if (typeof config.ChallengerPromptID !== 'string' || config.ChallengerPromptID.trim().length === 0) {
+            return false;
+        }
+        if (config.SampleRate >= 1) {
+            return true;
+        }
+        return this.ChallengerRng() < config.SampleRate;
+    }
+
+    /**
+     * Overridable seam for executing the challenger `AIPromptParams` so tests and subclasses can observe
+     * or customize challenger prompt execution.
+     */
+    protected async ExecuteChallengerPrompt(
+        params: AIPromptParams,
+        _signal: AbortSignal,
+    ): Promise<AIPromptRunResult<unknown>> {
+        return new AIPromptRunner().ExecutePrompt(params);
+    }
+
+    private dispatchChallengerIfConfigured(featureValues: FeatureValueWriteParams): void {
+        const config = this.ChallengerConfig;
+        if (!config || !this.ShouldSampleChallenger(config)) {
+            return;
+        }
+        if (this.inFlightShadowTasks.size >= this.MaxInFlightShadow) {
+            this.droppedShadowCount++;
+            return;
+        }
+
+        const frozenRecord: RecordRef = {
+            ...featureValues.Record,
+            Record: Object.freeze({ ...this.recordToPlain(featureValues.Record) }),
+        };
+        const contextSnapshot: RecordProcessorContext = { ...featureValues.Context };
+
+        const task: Promise<void> = new Promise<void>((resolve) => {
+            setImmediate(resolve);
+        })
+            .then(() => this.executeChallengerShadow(frozenRecord, contextSnapshot, config))
+            .catch((err: unknown) => {
+                const msg = err instanceof Error ? err.message : String(err);
+                LogError(`InferProcessor: unhandled shadow challenger error for record '${frozenRecord.RecordID}': ${msg}`);
+            })
+            .finally(() => {
+                this.inFlightShadowTasks.delete(task);
+            });
+
+        this.inFlightShadowTasks.add(task);
+    }
+
+    private async executeChallengerShadow(
+        record: RecordRef,
+        context: RecordProcessorContext,
+        config: MJRecordProcessEntity_IRecordProcessChallengerConfig,
+    ): Promise<void> {
+        const challengerPromptID = config.ChallengerPromptID?.trim();
+        if (!challengerPromptID) {
+            return;
+        }
+
+        const maxLatencyMs =
+            typeof config.MaxLatencyMs === 'number' && Number.isFinite(config.MaxLatencyMs) && config.MaxLatencyMs > 0
+                ? config.MaxLatencyMs
+                : 5000;
+
+        let rawAnswer: unknown;
+        let aiPromptRunID: string | null = null;
+        let aiModelID: string | null = null;
+        let timedOut = false;
+        let errorMessage: string | undefined;
+
+        const abortController = new AbortController();
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const timeoutPromise = new Promise<never>((_resolve, reject) => {
+            timer = setTimeout(() => {
+                const timeoutErr = new Error(`SHADOW_TIMEOUT: Challenger prompt exceeded MaxLatencyMs (${maxLatencyMs}ms)`);
+                abortController.abort(timeoutErr);
+                reject(timeoutErr);
+            }, maxLatencyMs);
+        });
+
+        try {
+            const runPromise = (async () => {
+                await AIEngine.Instance.Config(false, context.ContextUser);
+                const challengerPrompt = AIEngine.Instance.Prompts.find((p) => UUIDsEqual(p.ID, challengerPromptID));
+                if (!challengerPrompt) {
+                    throw new Error(`Challenger AI Prompt '${challengerPromptID}' not found`);
+                }
+                const models = (AIEngine.Instance.PromptModels ?? []).filter((pm) =>
+                    UUIDsEqual(pm.PromptID, challengerPrompt.ID),
+                );
+                aiModelID = FeaturePipelinePin.SelectPrimaryModel(models)?.ModelID ?? null;
+
+                const params = new AIPromptParams();
+                params.prompt = challengerPrompt as MJAIPromptEntityExtended;
+                params.data = await this.buildPromptData(record, context);
+                const userMessage = await this.BuildUserMessage(record);
+                if (userMessage !== null) {
+                    params.templateMessageRole = 'system';
+                    params.conversationMessages = [{ role: ChatMessageRole.user, content: userMessage }];
+                }
+                params.contextUser = context.ContextUser;
+                params.templateAutoescape = false;
+
+                const promptResult = await this.ExecuteChallengerPrompt(params, abortController.signal);
+                aiPromptRunID = promptResult.promptRun?.ID ?? null;
+                if (!promptResult.success) {
+                    throw new Error(promptResult.errorMessage ?? 'Challenger AI prompt execution failed');
+                }
+                let parsed = await this.afterPromptExecute(promptResult, record, context);
+                if (typeof parsed === 'string') {
+                    try {
+                        parsed = JSON.parse(parsed);
+                    } catch {
+                        // keep raw string
+                    }
+                }
+                return parsed;
+            })();
+
+            rawAnswer = await Promise.race([runPromise, timeoutPromise]);
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg.startsWith('SHADOW_TIMEOUT:')) {
+                timedOut = true;
+            }
+            errorMessage = msg;
+            LogError(`InferProcessor: challenger prompt '${challengerPromptID}' failed for record '${record.RecordID}': ${msg}`);
+        } finally {
+            if (timer !== undefined) {
+                clearTimeout(timer);
+            }
+        }
+
+        await this.persistChallengerFeatureValues({
+            record,
+            context,
+            challengerPromptID,
+            aiModelID,
+            aiPromptRunID,
+            rawAnswer,
+            timedOut,
+            errorMessage,
+        });
+    }
+
+    private async persistChallengerFeatureValues(options: {
+        record: RecordRef;
+        context: RecordProcessorContext;
+        challengerPromptID: string;
+        aiModelID: string | null;
+        aiPromptRunID: string | null;
+        rawAnswer: unknown;
+        timedOut: boolean;
+        errorMessage?: string;
+    }): Promise<void> {
+        const { record, context, challengerPromptID, aiModelID, aiPromptRunID, rawAnswer, timedOut, errorMessage } = options;
+        const activeProvider = context.Provider ?? Metadata.Provider; // global-provider-ok: fallback when caller does not supply a per-request provider
+        const entityID = context.EntityID || record.EntityID;
+        if (!activeProvider || !entityID || typeof activeProvider.GetEntityObject !== 'function') {
+            return;
+        }
+
+        const outputs =
+            this.spec?.Outputs && this.spec.Outputs.length > 0
+                ? this.spec.Outputs
+                : [{ Name: 'Prediction', Ref: '$' } as DataFeatureOutput];
+
+        const annotations = errorMessage ? { Reasoning: null, OutputConfidence: undefined } : this.RecordedAnnotations(rawAnswer);
+        const now = new Date();
+
+        for (const output of outputs) {
+            try {
+                const fv = await activeProvider.GetEntityObject<MJFeatureValueEntity>('MJ: Feature Values', context.ContextUser);
+                fv.NewRecord();
+                fv.RecordProcessID = context.RecordProcessID ?? null;
+                fv.ProcessRunID = context.ProcessRunID ?? null;
+                fv.EntityID = entityID;
+                fv.RecordID = record.RecordID;
+                fv.FeatureName = output.Name;
+                fv.Role = 'Challenger';
+                fv.Source = 'Pipeline';
+                // ValueKeyHash is intentionally NULL on Challenger rows so they never collide with
+                // the Champion row on UQ_FeatureValue_ValueKey (RecordProcessID, ValueKeyHash).
+                fv.ValueKeyHash = null;
+                fv.PromptID = challengerPromptID;
+                fv.AIModelID = aiModelID;
+                fv.AIPromptRunID = aiPromptRunID;
+                fv.ComputedAt = now;
+
+                if (errorMessage) {
+                    fv.ValueNumeric = null;
+                    fv.ValueText = null;
+                    fv.ValueBoolean = null;
+                    fv.ValueDate = null;
+                    fv.ValueJSON = null;
+                    fv.Confidence = null;
+                    fv.Reasoning = timedOut ? `SHADOW_TIMEOUT: ${errorMessage}` : `SHADOW_ERROR: ${errorMessage}`;
+                } else {
+                    const resolved = ResolveMappingRef(output.Ref, { $: rawAnswer });
+                    const constraintType = OutputTargets.HasWriteTarget(output) ? undefined : output.Constraint?.Type;
+                    const typed = FeatureValueCacheService.ToTypedValue(resolved !== undefined ? resolved : null, constraintType);
+                    fv.ValueNumeric = typed.ValueNumeric;
+                    fv.ValueText = typed.ValueText;
+                    fv.ValueBoolean = typed.ValueBoolean;
+                    fv.ValueDate = typed.ValueDate;
+                    fv.ValueJSON = typed.ValueJSON;
+                    fv.Confidence = annotations.OutputConfidence?.[output.Name] ?? null;
+                    fv.Reasoning = annotations.Reasoning ?? null;
+                }
+
+                const saved = await fv.Save();
+                if (!saved) {
+                    LogError(
+                        `InferProcessor: failed to save Challenger FeatureValue '${output.Name}' for record '${record.RecordID}': ${fv.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                    );
+                }
+            } catch (saveErr: unknown) {
+                const msg = saveErr instanceof Error ? saveErr.message : String(saveErr);
+                LogError(`InferProcessor: error persisting Challenger FeatureValue '${output.Name}' for record '${record.RecordID}': ${msg}`);
+            }
+        }
     }
 
     /** The run-result pin of a Feature Value pin: this processor's pipeline version plus the pin's three key hashes. */
@@ -2183,7 +2473,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             return loaded.EntityInfo;
         }
         const provider = ctx?.Provider ?? Metadata.Provider;
-        return record.EntityID && provider ? provider.EntityByID(record.EntityID) ?? null : null;
+        return record.EntityID && typeof provider?.EntityByID === 'function' ? provider.EntityByID(record.EntityID) ?? null : null;
     }
 
     /** Extracts a plain field map from the record (BaseEntity → GetAll(), plain object → as-is). */
