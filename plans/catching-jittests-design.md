@@ -575,6 +575,9 @@ run directly on the runner. Keys exist only in the orchestrating processes of jo
   and test run in the sandbox. No tool on the host
   reads head as configuration (§5.4): `--ignore-scripts` alone is not enough, because pnpm still loads `.pnpmfile.cjs`
   and follows `packageManager`.
+- The runner user has passwordless `sudo` on the host (spike §3 probe 9; inside the container the user is uid 1001 with
+  no `sudo`). So the sandbox never gets anything the host user can reach: no Docker socket, no system folder and no host
+  path other than the worktree, the per-run store and the generated-test folders the tool mounts.
 - Checkouts that the sandbox mounts use `persist-credentials: false`, so the container holds no token.
 - The same sandbox applies to `jit-catch run` and `backtest` on a developer machine (§5.1).
 - Job 1 holds the Anthropic key and `TURBO_TOKEN` in its orchestrating process. Generated tests come from an agent that
@@ -777,6 +780,7 @@ judges, reporting model and gates carry over.
 | Most generated tests fail on base, so few reach head | Agent loop; prompt includes MJ test examples and stubs; three-model comparison |
 | Noise erodes trust | Two gates; one comment per PR; thresholds as settings; nightly comments only after gate 2 |
 | The sandbox is misconfigured and untrusted code reaches a key or the cache token | Spike question 3 attacks it from inside and checks the host side (`.pnpmfile.cjs`, `packageManager`); restore-only caches (D29); redaction check on every output (D32) |
+| The runner's real cache token (`ACTIONS_RUNTIME_TOKEN`) reaches the sandbox | Not yet tested: a `run:` step has no real token, so spike probe 6 used a fake value and shows only that the host environment does not reach the container. Open evidence gap; repeat probe 6 from a step that holds the real token when the phase 3 workflows exist |
 | The host fetch fails for a PR (for example a git dependency with build scripts, which `pnpm fetch` refuses), or the copied store is too slow | The PR is recorded as an infrastructure failure, not retried with network; spike question 8 measured the copy import at 32–57 s |
 | A PR's lockfile or patch files make the host apply or read PR content | The host fetches with a copy of the lockfile without patch information and reads no patch file (D35); patches apply only in the sandbox; each run has its own store |
 | Cold head builds are too slow or fill the runner's disk | Base hand-off and seeded local turbo cache; one-package fast path; spike question 1 measures time and disk |

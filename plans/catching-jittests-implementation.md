@@ -1342,11 +1342,15 @@ export function SecretsFromEnvironment(env: NodeJS.ProcessEnv = process.env): st
   type CommandRunner = (file: string, args: string[], o: { timeoutMs: number }) => Promise<SandboxRunResult>
   ```
   `Env` may hold only `TZ`, `HOME`, `CI`, `TURBO_*` cache-dir/telemetry variables and `NODE_OPTIONS`; `BuildArgs` throws on any other name.
+  The runner user has passwordless `sudo` on the host (spike §3 probe 9), so the container gets nothing that user can reach beyond the mounts the tool names: `BuildArgs` throws on a Docker socket, `/`, or a system folder (`/etc`, `/proc`, `/sys`, `/dev`, `/run`, `/var/run`, `/root`, `/boot`), checked on the given path and after `realpath` so a symlink cannot hide one (`/private/etc` and `/private/var/run` are listed for macOS, where `/etc` resolves there). On Ubuntu `/var/run` is a symlink to `/run`, where the socket lives.
 
 - [ ] **Step 1: Failing tests** (argument construction is pure; the docker call is injected)
 
 ```ts
 import { describe, it, expect } from 'vitest';
+import { mkdtempSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Sandbox } from '../sandbox/Sandbox';
 import { DEFAULT_SETTINGS } from '../settings';
 
@@ -1371,8 +1375,11 @@ describe('Sandbox.BuildArgs', () => {
     expect(() => sb.BuildArgs({ ...base, Env: { ANTHROPIC_API_KEY: 'x' } })).toThrow(/ANTHROPIC_API_KEY/);
     expect(() => sb.BuildArgs({ ...base, Env: { PATH: '/x' } })).toThrow(/PATH/);
   });
-  it('rejects a host mount of a docker socket or a path outside the allowed roots', () => {
-    expect(() => sb.BuildArgs({ ...base, Mounts: [{ Host: '/var/run/docker.sock', Container: '/s', Mode: 'rw' }] })).toThrow(/docker.sock/);
+  it('rejects a host mount of a docker socket or a system folder, also through a symlink', () => {
+    for (const host of ['/var/run/docker.sock', '/run/docker.sock', '/run/user/1000/docker.sock', '/', '/etc', '/proc/1', '/sys', '/dev', '/root'])
+      expect(() => sb.BuildArgs({ ...base, Mounts: [{ Host: host, Container: '/s', Mode: 'rw' }] }), host).toThrow(/refusing to mount/);
+    const dir = mkdtempSync(join(tmpdir(), 'jit-sb-')); symlinkSync('/etc', join(dir, 'link'));
+    expect(() => sb.BuildArgs({ ...base, Mounts: [{ Host: join(dir, 'link'), Container: '/s', Mode: 'ro' }] })).toThrow(/refusing to mount/);
   });
 });
 
@@ -1392,7 +1399,9 @@ Run → FAIL.
 
 ```ts
 import { execFile } from 'node:child_process';
+import { existsSync, realpathSync } from 'node:fs';
 import { userInfo } from 'node:os';
+import { dirname } from 'node:path';
 import type { Settings } from '../settings';
 
 export interface SandboxMount { Host: string; Container: string; Mode: 'ro' | 'rw'; }
@@ -1402,6 +1411,8 @@ export type CommandRunner = (file: string, args: string[], options: { timeoutMs:
 
 const ENV_ALLOW = new Set(['TZ', 'HOME', 'CI', 'NODE_OPTIONS', 'TURBO_CACHE_DIR', 'TURBO_TELEMETRY_DISABLED', 'TURBO_LOG_ORDER']);
 const MAX_OUTPUT = 32 * 1024 * 1024;
+/** Host folders the sandbox never mounts. The runner user has passwordless sudo, so a socket or system path is a way out. */
+const DENIED_ROOTS = ['/etc', '/proc', '/sys', '/dev', '/run', '/var/run', '/root', '/boot', '/private/etc', '/private/var/run'];
 
 /** Runs untrusted code in a Docker container with no network, no secrets and its own PID namespace (D28). */
 export class Sandbox {
@@ -1412,7 +1423,8 @@ export class Sandbox {
             '--pids-limit', String(this.settings.PidsLimit), '--memory', `${this.settings.MemoryGB}g`, '--cpus', String(this.settings.Cpus),
             '--user', `${userInfo().uid}:${userInfo().gid}`, '--workdir', o.WorkDir];
         for (const m of o.Mounts) {
-            if (m.Host.includes('docker.sock') || m.Host.startsWith('/var/run') || m.Host.startsWith('/proc')) throw new Error(`refusing to mount ${m.Host}`);
+            const denied = (p: string) => p === '/' || p.includes('docker.sock') || DENIED_ROOTS.some((d) => p === d || p.startsWith(`${d}/`));
+            if (denied(m.Host) || denied(resolveExisting(m.Host))) throw new Error(`refusing to mount ${m.Host}`);
             args.push('-v', `${m.Host}:${m.Container}:${m.Mode}`);
         }
         for (const t of o.Tmpfs ?? []) args.push('--tmpfs', `${t}:rw,size=256m`);
@@ -1432,6 +1444,13 @@ export class Sandbox {
         const r = await this.runner('docker', ['build', '-q', '-t', this.settings.Image, dockerfileDir], { timeoutMs: 15 * 60_000 });
         if (r.ExitCode !== 0) throw new Error(`docker build failed: ${r.Stderr}`);
     }
+}
+
+/** `realpath` of the path, or of its nearest existing parent joined with the rest, so a symlink cannot hide a denied folder. */
+function resolveExisting(p: string): string {
+    if (existsSync(p)) return realpathSync(p);
+    const parent = dirname(p);
+    return parent === p ? p : `${resolveExisting(parent).replace(/\/$/, '')}/${p.slice(parent.length).replace(/^\//, '')}`;
 }
 
 function execFileRunner(file: string, args: string[], options: { timeoutMs: number }): Promise<SandboxRunResult> {
