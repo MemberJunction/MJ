@@ -187,6 +187,7 @@ export * from './checks/entity-status-fanout-client.checks';
 export * from './checks/encrypted-read-client.checks';
 export * from './checks/diagnostics.checks';
 export * from './checks/semantic-graph.checks';
+export * from './checks/graph-runtime.checks';
 export * from './checks/task-graph-security.checks';
 // The skip allowlist registers on the same registry; a skip of any check not listed fails the run.
 export * from './skip-allowlist';

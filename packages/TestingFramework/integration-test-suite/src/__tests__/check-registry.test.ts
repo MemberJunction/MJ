@@ -112,6 +112,7 @@ import { VideoStudioHandoffChecks } from '../checks/video-studio-handoff.checks'
 import { VideoStudioProductionChecks } from '../checks/video-studio-production.checks';
 import { VideoStudioLiveSmokeChecks } from '../checks/video-studio-live-smoke.checks';
 import { SemanticGraphChecks } from '../checks/semantic-graph.checks';
+import { GraphRuntimeChecks } from '../checks/graph-runtime.checks';
 import { TaskGraphSecurityChecks } from '../checks/task-graph-security.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
@@ -277,7 +278,8 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['encrypted-read-client', EncryptedReadClientChecks, 4], // ER1-ER4 encrypted field plaintext over GraphQL, miss and hit (IT160)
         ['ciphertext-cache', CiphertextCacheChecks, 5], // CT0-CT4 ciphertext at rest in the RunViewCache, plaintext to the caller (IT161)
         ['semantic-graph', SemanticGraphChecks, 7], // SG1-SG7 Semantic Graph substrate, Content Pipeline GraphStage overlay, and Executable Canon DAG similarity & telemetry (IT162)
-        ['task-graph-security', TaskGraphSecurityChecks, 3], // TGS1-TGS3 envelope on every row and immutable, one compensation per step, A2A store row boundary (IT164)
+        ['graph-runtime', GraphRuntimeChecks, 4], // GR1-GR4 MJ Canon traversal, per-caller query visibility, the edge approval gate, Get Graph Context (IT164)
+        ['task-graph-security', TaskGraphSecurityChecks, 3], // TGS1-TGS3 envelope on every row and immutable, one compensation per step, A2A store row boundary (IT165)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -403,6 +405,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'fp-gate-c2-3': 3,
         'fp-gate-c2-5': 3,
         'fp-live-jobtitle': 1,
+        'graph-runtime': 4,
         'jsontype-live-sync': 9,
         'jsontype-live-sync-client': 9,
         'layered-base-views': 6,

@@ -183,6 +183,52 @@
             "ID": "C217B0BB-D458-48CF-B0ED-3240201E3F8C"
           }
         }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The subgraph was built. NodeCount is 0 when nothing the caller may see matched the inputs."
+          },
+          "primaryKey": {
+            "ID": "163CB422-441F-47F9-80B5-4588E3881351"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "No ContextUser, or neither Question nor Seeds was provided."
+          },
+          "primaryKey": {
+            "ID": "B22E6D96-4DB7-462D-8838-EA553D74143F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "GRAPH_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "The named graph does not exist or is not active; nothing was traversed."
+          },
+          "primaryKey": {
+            "ID": "C82574B1-7800-4459-BA04-B36E38694024"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "The traversal failed; Message carries the error."
+          },
+          "primaryKey": {
+            "ID": "4CCDA786-4816-4E95-9BFC-0C5F1755F0E4"
+          }
+        }
       ]
     },
     "primaryKey": {

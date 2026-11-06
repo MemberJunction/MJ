@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT164 - Task Graph Security and Saga",
+    "Name": "IT165 - Task Graph Security and Saga",
     "Description": "Exercises task-graph security envelopes, saga compensation claims and the A2A task store's row boundary against real MJ: Tasks rows (deterministic, mutating, self-cleaning). TGS1: a submitted graph's parent and every child carry the submitting run's envelope in Task.SecurityEnvelope, and an edit to it on an existing row is refused while an ordinary edit saves. TGS2: of two concurrent compensation rows for one forward step (CompensatesTaskID), exactly one lands. TGS3: the durable A2A store reads a task-graph step's ID as not found and will not write over or cancel it, while an A2A task saves under the 'A2A Task' type and reads back.",
     "InputDefinition": {},
     "ExpectedOutcomes": {
