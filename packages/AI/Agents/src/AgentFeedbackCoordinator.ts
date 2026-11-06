@@ -409,6 +409,12 @@ export class AgentFeedbackCoordinator {
         }
     }
 
+    private describeListFallbackTarget(params: ExecuteAgentParams): string {
+        return params.contextUser?.ID
+            ? 'falling back to context user'
+            : 'falling back to unassigned (no context user)';
+    }
+
     private async resolveListAssigneeUserID(
         strategy: AgentRequestAssignmentStrategy,
         params: ExecuteAgentParams,
@@ -417,7 +423,7 @@ export class AgentFeedbackCoordinator {
         const listId = strategy.listID?.trim();
         if (!listId) {
             LogStatus(
-                `⚠️ List assignment strategy on agent ${params.agent.Name} is missing listID; falling back to context user`
+                `⚠️ List assignment strategy on agent ${params.agent.Name} is missing listID; ${this.describeListFallbackTarget(params)}`
             );
             return params.contextUser?.ID ?? null;
         }
@@ -458,7 +464,7 @@ export class AgentFeedbackCoordinator {
             const listRow = lists[0];
             if (!listRow || !this.isUsersList(listRow, effectiveProvider)) {
                 LogStatus(
-                    `⚠️ List ${listId} does not exist or does not target 'MJ: Users'; falling back to context user`
+                    `⚠️ List ${listId} does not exist or does not target 'MJ: Users'; ${this.describeListFallbackTarget(params)}`
                 );
                 return params.contextUser?.ID ?? null;
             }
@@ -467,7 +473,7 @@ export class AgentFeedbackCoordinator {
             const candidateUserIDs = this.extractOrderedCandidateUserIDs(detailRows);
             if (candidateUserIDs.length === 0) {
                 LogStatus(
-                    `ℹ️ List ${listId} has no active member rows; falling back to context user or SharedInbox`
+                    `ℹ️ List ${listId} has no active member rows; ${this.describeListFallbackTarget(params)}`
                 );
                 return params.contextUser?.ID ?? null;
             }
@@ -602,7 +608,7 @@ export class AgentFeedbackCoordinator {
         const activeUserIDs = candidateUserIDs.filter((id) => activeUserSet.Has(id));
         if (activeUserIDs.length === 0) {
             LogStatus(
-                `ℹ️ List ${listId} has zero active users; falling back to context user or SharedInbox`
+                `ℹ️ List ${listId} has zero active users; ${this.describeListFallbackTarget(params)}`
             );
             return params.contextUser?.ID ?? null;
         }

@@ -501,8 +501,8 @@ describe('AgentFeedbackCoordinator', () => {
             expect(picked).toBe(USER_3);
         });
 
-        it('should fall back to contextUser.ID or null (SharedInbox) when list has zero active users or is not an MJ: Users list', async () => {
-            // Non-Users list
+        it('should fall back to contextUser.ID or null (unassigned) when list has no member rows, zero active users, or is not an MJ: Users list', async () => {
+            // Non-Users list with contextUser present
             mockRunViews.mockResolvedValueOnce([
                 makeViewResult([{ ID: LIST_ID, EntityID: 'e-contacts', Entity: 'MJ: Contacts' }]),
                 makeViewResult([{ ID: 'ld-1', RecordID: USER_1, Sequence: 1, Status: 'Pending' }]),
@@ -513,8 +513,26 @@ describe('AgentFeedbackCoordinator', () => {
                 createParamsStub()
             );
             expect(fallbackCaller).toBe(CALLER_ID);
+            expect(LogStatus).toHaveBeenCalledWith(
+                `⚠️ List ${LIST_ID} does not exist or does not target 'MJ: Users'; falling back to context user`
+            );
 
-            // Zero active users and no contextUser -> null (SharedInbox)
+            // Empty member rows with contextUser present -> context user
+            mockRunViews.mockResolvedValueOnce([
+                makeViewResult([{ ID: LIST_ID, EntityID: 'e-users', Entity: 'MJ: Users' }]),
+                makeViewResult([{ ID: 'ld-disabled', RecordID: USER_1, Sequence: 1, Status: 'Disabled' }]),
+            ]);
+
+            const fallbackEmptyMembers = await coordinator.ResolveAssigneeUserID(
+                { type: 'List', listID: LIST_ID, listStrategy: 'RoundRobin' },
+                createParamsStub()
+            );
+            expect(fallbackEmptyMembers).toBe(CALLER_ID);
+            expect(LogStatus).toHaveBeenCalledWith(
+                `ℹ️ List ${LIST_ID} has no active member rows; falling back to context user`
+            );
+
+            // Zero active users and no contextUser -> null (unassigned)
             mockRunViews
                 .mockResolvedValueOnce([
                     makeViewResult([{ ID: LIST_ID, EntityID: 'e-users', Entity: 'MJ: Users' }]),
@@ -522,11 +540,14 @@ describe('AgentFeedbackCoordinator', () => {
                 ])
                 .mockResolvedValueOnce([makeViewResult([])]);
 
-            const fallbackSharedInbox = await coordinator.ResolveAssigneeUserID(
+            const fallbackUnassigned = await coordinator.ResolveAssigneeUserID(
                 { type: 'List', listID: LIST_ID, listStrategy: 'RoundRobin' },
                 createParamsStub({ contextUser: undefined })
             );
-            expect(fallbackSharedInbox).toBeNull();
+            expect(fallbackUnassigned).toBeNull();
+            expect(LogStatus).toHaveBeenCalledWith(
+                `ℹ️ List ${LIST_ID} has zero active users; falling back to unassigned (no context user)`
+            );
         });
 
         it('should log an error via LogError and fall back to the first active list member when the RoundRobin or LeastBusy request query fails', async () => {
