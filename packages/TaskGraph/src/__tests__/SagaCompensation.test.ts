@@ -93,6 +93,10 @@ class SagaDb {
             case 'MJ: Actions':
                 return { Success: true, Results: this.Actions.filter((a) => filter.includes(a.ID)) };
             case 'MJ: Tasks': {
+                const parentID = /ParentID='([^']+)'/.exec(filter)?.[1];
+                if (parentID) {
+                    return { Success: true, Results: [...this.Rows.values()].filter((r) => r.ParentID === parentID).map((r) => Object.assign(r, { Save: async () => true })) };
+                }
                 const id = /CompensatesTaskID='([^']+)'/.exec(filter)?.[1];
                 return { Success: true, Results: [...this.Rows.values()].filter((r) => r.CompensatesTaskID === id).map((r) => ({ ID: r.ID })) };
             }
@@ -579,6 +583,48 @@ describe('a graph rolling back does not settle under its saga (S7)', () => {
         const { claims } = await rollupPass(graphOf(db, parentRow()), provider);
 
         expect(claims.TrySettleParent).toHaveBeenCalledWith(provider, PARENT_ID, 'Failed', expect.any(Number), SYSTEM_USER);
+    });
+});
+
+describe('TaskGraphService.RetryTask once a rollback has started (S9)', () => {
+    let db: SagaDb;
+    beforeEach(() => {
+        db = new SagaDb();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn(async (params: RunViewParams, user?: UserInfo) => db.RunView(params, user)),
+        } as unknown as RunView);
+    });
+    afterEach(() => vi.restoreAllMocks());
+
+    function retry(taskID: string, sagaState?: 'Compensating') {
+        const parent = parentRow();
+        const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
+        db.Add({ ID: PARENT_ID, Name: 'Checkout', ParentID: null, InputPayload: JSON.stringify(BuildTaskGraphParentInputPayload({ ...meta, ...(sagaState ? { sagaState } : {}) })) });
+        const provider = { GetEntityObject: vi.fn(async () => db.Entity()) } as unknown as IMetadataProvider;
+        return new TaskGraphService().RetryTask(taskID, { Provider: provider, ContextUser: TEST_USER });
+    }
+
+    it('refuses to re-run the failed step once a compensation exists', async () => {
+        checkoutGraph(db);
+        db.Add({ ID: 'C-B', Name: 'Compensate: Invoice', Status: 'Complete', ActionID: VOID_INVOICE, CompensatesTaskID: 'T-B' });
+        const outcome = await retry('T-C');
+        expect(outcome.Success).toBe(false);
+        expect(outcome.ErrorMessage).toContain('rolling back');
+        expect(db.Rows.get('T-C')!.Status).toBe('Failed');
+    });
+
+    it('refuses once the graph records that it is compensating, before any compensation row exists', async () => {
+        checkoutGraph(db);
+        const outcome = await retry('T-C', 'Compensating');
+        expect(outcome.Success).toBe(false);
+        expect(outcome.ErrorMessage).toContain('rolling back');
+    });
+
+    it('still retries a failed step in a graph that is not rolling back', async () => {
+        checkoutGraph(db);
+        const outcome = await retry('T-C');
+        expect(outcome).toEqual({ Success: true });
+        expect(db.Rows.get('T-C')!.Status).toBe('Pending');
     });
 });
 

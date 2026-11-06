@@ -55,7 +55,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { AgentDecisionService } from '@memberjunction/ai-agents';
 import { ResolveRecordsByNameOrToolName } from './resolve-by-tool-name';
 import { HeldDecisionAnswers, type DecisionTaskRow, type TaskStepConfiguration } from './decision-node';
-import { CompensationFromSpec, type SagaExecutionState } from './saga-compensation';
+import { CompensationFromSpec, IsCompensationTask, type SagaExecutionState } from './saga-compensation';
 import { TaskClaimStore, type TaskGraphDebugFieldWrite } from './TaskClaimStore';
 import { ParseTaskGraphDebugState, type EdgeOverrideVerdict, type StepTarget, type TaskGraphDebugState } from './debug-state';
 import { KickTaskGraphDispatchers } from './task-graph-kick';
@@ -356,6 +356,13 @@ export type TaskGraphCancelResult = {
 export function IsReinvokeCapReached(meta: TaskGraphParentMetadata): boolean {
     return meta.reinvokeDepth >= MAX_REINVOKE_DEPTH;
 }
+
+/** The outcome of {@link TaskGraphService.RetryTask}. */
+export type TaskGraphRetryOutcome = {
+    Success: boolean;
+    /** Why the retry was refused or failed, fit to show the person who asked. */
+    ErrorMessage?: string;
+};
 
 export type TaskGraphSubmitResult = {
     Success: boolean;
@@ -1100,16 +1107,27 @@ export class TaskGraphService {
      * past this node.
      */
     public async Retry(taskID: string, context: TaskGraphSubmitContext, inputPayload?: unknown): Promise<boolean> {
+        return (await this.RetryTask(taskID, context, inputPayload)).Success;
+    }
+
+    /** {@link Retry}, with the reason when the retry is refused, for a caller that shows it to a person. */
+    public async RetryTask(taskID: string, context: TaskGraphSubmitContext, inputPayload?: unknown): Promise<TaskGraphRetryOutcome> {
         try {
             const task = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
-            if (!(await task.Load(taskID))) return false;
+            if (!(await task.Load(taskID))) return { Success: false, ErrorMessage: 'The task could not be loaded.' };
             const editedInput = inputPayload === undefined
                 ? undefined
                 : typeof inputPayload === 'string' ? inputPayload : JSON.stringify(inputPayload);
             const refusal = RetryRefusal(task, editedInput);
             if (refusal) {
                 LogError(`[TaskGraphService] Cannot retry task ${taskID}: ${refusal}.`);
-                return false;
+                return { Success: false, ErrorMessage: `The task cannot be retried: ${refusal}.` };
+            }
+            const siblings = task.ParentID ? await this.loadChildren(task.ParentID, context) : [];
+            const rollingBack = task.ParentID ? await this.rollbackStartedRefusal(task.ParentID, siblings, context) : null;
+            if (rollingBack) {
+                LogError(`[TaskGraphService] Cannot retry task ${taskID}: ${rollingBack}`);
+                return { Success: false, ErrorMessage: rollingBack };
             }
             const expectedStatus = task.Status === 'Complete' ? 'Complete' : 'Failed';
 
@@ -1130,28 +1148,47 @@ export class TaskGraphService {
                 );
                 if (!wrote) {
                     LogError(`[TaskGraphService] Could not apply the edited input to task ${taskID}; retry refused rather than re-running the old brief.`);
-                    return false;
+                    return { Success: false, ErrorMessage: 'The edited input could not be saved, so the task was not retried.' };
                 }
                 // Keep the in-memory row in step with what was just written, so the save below does
                 // not put the old input back.
                 task.InputPayload = json;
             }
             PrepareTaskForRetry(task);
-            if (!(await task.Save())) return false;
+            if (!(await task.Save())) return { Success: false, ErrorMessage: 'The task could not be saved.' };
 
-            if (task.ParentID) {
-                for (const sibling of await this.loadChildren(task.ParentID, context)) {
-                    if (sibling.Status === 'Blocked') {
-                        sibling.Status = 'Pending';
-                        await sibling.Save();
-                    }
+            for (const sibling of siblings) {
+                if (sibling.Status === 'Blocked') {
+                    sibling.Status = 'Pending';
+                    await sibling.Save();
                 }
             }
-            return true;
+            return { Success: true };
         } catch (e) {
             LogError(`[TaskGraphService] Retry failed for ${taskID}: ${e instanceof Error ? e.message : String(e)}`);
-            return false;
+            return { Success: false, ErrorMessage: 'The retry failed.' };
         }
+    }
+
+    /**
+     * Why no step of this graph may be retried, or null (S9): its rollback has started. A saga
+     * (`failurePolicy: 'CompensateCompleted'`) undoes the completed steps after a failure, so re-running
+     * the failed step would act on state the rollback has already reversed, and its dependents would
+     * run on top of that. Started means a compensation or escalation row exists, or the graph records
+     * a saga state.
+     */
+    private async rollbackStartedRefusal(
+        parentTaskID: string,
+        siblings: readonly MJTaskEntity[],
+        context: TaskGraphSubmitContext,
+    ): Promise<string | null> {
+        const refusal = 'The workflow has started rolling back the steps that completed, so a step cannot be retried: ' +
+            'it would run against state the rollback has undone. Submit the workflow again instead.';
+        if (siblings.some((t) => IsCompensationTask(t))) return refusal;
+        const parent = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
+        if (!(await parent.Load(parentTaskID))) return null;
+        const sagaState = ParseTaskGraphParentMetadata(parent.InputPayload).sagaState;
+        return sagaState && sagaState !== 'Running' ? refusal : null;
     }
 
     // ────────────────────────────────────────────────────────────────────────
