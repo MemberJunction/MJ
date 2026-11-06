@@ -223,7 +223,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (483 classes)
+// @memberjunction/core-entities (484 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -437,6 +437,7 @@ import {
     MJDiagnosticSenderRegistrationEntity,
     MJDiagnosticSessionChunkEntity,
     MJDiagnosticSessionEntity,
+    MJDocumentSequenceCounterEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -1786,6 +1787,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJDiagnosticSenderRegistrationEntity,
     MJDiagnosticSessionChunkEntity,
     MJDiagnosticSessionEntity,
+    MJDocumentSequenceCounterEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -1909,11 +1911,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJOpenAppDependencyEntity,
     MJOpenAppEntity,
     MJOpenAppInstallHistoryEntity,
-    MJOutputDeliveryTypeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJOutputDeliveryTypeEntity,
     MJOutputFormatTypeEntity,
     MJPermissionDomainEntity,
     MJPhoneNumberEntity,
@@ -2113,11 +2115,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetQuickBooksDimensionsAction,
     GetQuickBooksGLCodesAction,
     GetQuickBooksTransactionsAction,
-    GetSalesInvoicesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetSalesInvoicesAction,
     AssociateContactToCompanyAction,
     GetActivitiesByContactAction,
     LogActivityAction,
@@ -2317,11 +2319,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MeetingControlsChannelServer,
     MemoryManagerAgent,
     PDFToolLibrary,
-    QueryBuilderAgent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    QueryBuilderAgent,
     RealtimeAgentType,
     SearchResultSetToolLibrary,
     TextToolLibrary,
@@ -2521,11 +2523,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     FinalizeDocumentAction,
     FindBestActionAction,
     FindBestAgentAction,
-    FindCandidateActionsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    FindCandidateActionsAction,
     FindCandidateAgentsAction,
     GammaGeneratePresentationAction,
     GenerateImageAction,
@@ -2692,7 +2694,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1150;
+export const CLASS_REGISTRATIONS_COUNT = 1151;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

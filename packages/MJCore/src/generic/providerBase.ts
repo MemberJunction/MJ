@@ -374,6 +374,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     private _refreshCheckInFlight: Promise<boolean> | null = null;
     /**
+     * The remote timestamps stored by the last refresh check whose status read succeeded; null after
+     * a check whose read failed. {@link RefreshIfNeeded} reuses the stored remote timestamps for its
+     * scoped reload only while they are this array, so a check whose read failed is followed by a
+     * fresh read. This prefers fresher stamps; it is not needed for correctness, because any stored
+     * stamps were read before the scoped dataset read starts.
+     */
+    private _checkedRemoteMetadataTimestamps: MetadataInfo[] | null = null;
+    /**
      * Set when Config() adopts a snapshot it loaded from the server (which fetched the current user
      * with it); consumed by the next {@link preValidateAndRefresh}, which then has nothing to check.
      */
@@ -1145,12 +1153,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
-     * How this provider refreshes after a metadata member entity changed. The base behavior is a
-     * hard {@link Refresh} — correct for database providers, where the process that PERFORMED the
-     * write is the one refreshing, so re-checking staleness first is wasted work and the re-read
-     * must bypass every cache layer. Transport providers (GraphQL) override this with a staleness
-     * check so a browser doesn't re-pull the full metadata graph for a change the server-side
-     * timestamp comparison can disconfirm.
+     * How this provider refreshes after a metadata member entity changed. The base behavior reads
+     * the remote timestamps once. When they attribute the change entirely to the saved-query family
+     * (see {@link PartialRefreshMetadataItemCodes}), it reloads only that family through
+     * {@link ReloadMetadata}, bypassing every cache layer and reusing that read instead of reading
+     * the timestamps again. Anything else runs a hard {@link Refresh}. Transport providers (GraphQL)
+     * override this with a staleness check so a browser doesn't re-pull the full metadata graph for
+     * a change the server-side timestamp comparison can disconfirm.
      */
     protected async RefreshAfterMetadataMemberChange(): Promise<boolean> {
         if (this.MetadataMemberRefreshMustWait) {
@@ -1190,7 +1199,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             LogError(`Metadata refresh after a member-entity change could not read the timestamps; running a full refresh: ${e instanceof Error ? e.message : String(e)}`);
         }
         if (scoped) {
-            return this.ReloadMetadata(true, undefined, true);
+            return this.ReloadMetadata(true, undefined, true, true);
         }
         return this.Refresh();
     }
@@ -2900,22 +2909,24 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             queryDefinition = queryAuth.definition;
             // TTL-enforced, and a miss when the slot was written under another query definition.
             const cached = queryFingerprint ? await LocalCacheManager.Instance.GetRunQueryResult(queryFingerprint, queryDefinition) : null;
-            if (cached && queryFingerprint) {
-                const serveFromSlot = (): RunQueryResult => ({
-                    QueryID: cached.queryId ?? params.QueryID ?? '',
-                    QueryName: params.QueryName ?? '',
-                    Success: true,
-                    // Transport boundary: `cached.results` is readonly (shared, deep-frozen cache
-                    // rows) while the outbound Results is mutable — the runtime freeze is the
-                    // enforcement. Same cast as the RunView hit paths above.
-                    Results: cached.results as RunQueryResult['Results'],
-                    RowCount: cached.results.length,
-                    TotalRowCount: cached.rowCount ?? cached.results.length,
-                    ExecutionTime: 0,
-                    ErrorMessage: '',
-                    CacheHit: true,
-                    CacheKey: queryFingerprint
-                });
+            if (queryFingerprint) {
+                const serveFromSlot = cached
+                    ? (): RunQueryResult => ({
+                        QueryID: cached.queryId ?? params.QueryID ?? '',
+                        QueryName: params.QueryName ?? '',
+                        Success: true,
+                        // Transport boundary: `cached.results` is readonly (shared, deep-frozen cache
+                        // rows) while the outbound Results is mutable — the runtime freeze is the
+                        // enforcement. Same cast as the RunView hit paths above.
+                        Results: cached.results as RunQueryResult['Results'],
+                        RowCount: cached.results.length,
+                        TotalRowCount: cached.rowCount ?? cached.results.length,
+                        ExecutionTime: 0,
+                        ErrorMessage: '',
+                        CacheHit: true,
+                        CacheKey: queryFingerprint
+                    })
+                    : undefined;
                 const checker = (this as IRunQueryProvider).RunQueriesWithCacheCheck?.bind(this);
                 if (!checker || this.TrustLocalCacheCompletely) {
                     // TTL mode (server providers / no validation transport).
@@ -2932,85 +2943,100 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     // authorizes with the proper error message. Query metadata missing from the
                     // provider cache ⇒ ALSO fall through (never serve rows we cannot authorize);
                     // that costs one query run, not correctness.
-                    if (contextUser) {
-                        if (queryAuth.resolvable) {
-                            // Metadata can answer — enforce it. `authorized` comes from the
-                            // provider's STRONGEST available check (B45): the base enforces
-                            // roles-only QueryInfo.UserCanRun; GenericDatabaseProvider's
-                            // override enforces the full MJQueryEntityExtended.UserCanRun
-                            // (roles + entity CanRead + recursive composition) — the identical
-                            // check ValidateQueryForExecution applies on the miss path, so a
-                            // hit is never easier to read than a miss.
-                            if (queryAuth.authorized) {
+                    if (cached && serveFromSlot) {
+                        if (contextUser) {
+                            if (queryAuth.resolvable) {
+                                // Metadata can answer — enforce it. `authorized` comes from the
+                                // provider's STRONGEST available check (B45): the base enforces
+                                // roles-only QueryInfo.UserCanRun; GenericDatabaseProvider's
+                                // override enforces the full MJQueryEntityExtended.UserCanRun
+                                // (roles + entity CanRead + recursive composition) — the identical
+                                // check ValidateQueryForExecution applies on the miss path, so a
+                                // hit is never easier to read than a miss.
+                                if (queryAuth.authorized) {
+                                    return serveFromSlot();
+                                }
+                                LogStatusEx({ message: `RunQuery cache: user '${contextUser.Email}' lacks run permission on '${queryAuth.queryName ?? params.QueryName ?? params.QueryID}' — falling through to authorized execution.`, verboseOnly: true });
+                            } else if (cached.warmedForUserID && UUIDsEqual(cached.warmedForUserID, contextUser.ID)) {
+                                // Metadata CANNOT answer — runtime-created queries never appear in the
+                                // provider's Queries cache (it does not refresh in-process; verified:
+                                // a saved Query stays invisible, 21 -> 21). But a slot only exists
+                                // because its WARMER executed the fully-authorized miss path — so the
+                                // warmer's own permission is already proven. Serve the warmer;
+                                // anyone ELSE falls through and pays one authorized execution.
+                                //
+                                // The first version of this gate failed closed on unresolvable
+                                // metadata, which silently disabled TTL caching for every
+                                // runtime-created query — caught by Q2/Q5/Q10 going red.
                                 return serveFromSlot();
+                            } else {
+                                LogStatusEx({ message: `RunQuery cache: '${params.QueryID ?? params.QueryName}' not in cached metadata and requester is not the slot's warmer — falling through to authorized execution.`, verboseOnly: true });
                             }
-                            LogStatusEx({ message: `RunQuery cache: user '${contextUser.Email}' lacks run permission on '${queryAuth.queryName ?? params.QueryName ?? params.QueryID}' — falling through to authorized execution.`, verboseOnly: true });
-                        } else if (cached.warmedForUserID && UUIDsEqual(cached.warmedForUserID, contextUser.ID)) {
-                            // Metadata CANNOT answer — runtime-created queries never appear in the
-                            // provider's Queries cache (it does not refresh in-process; verified:
-                            // a saved Query stays invisible, 21 -> 21). But a slot only exists
-                            // because its WARMER executed the fully-authorized miss path — so the
-                            // warmer's own permission is already proven. Serve the warmer;
-                            // anyone ELSE falls through and pays one authorized execution.
-                            //
-                            // The first version of this gate failed closed on unresolvable
-                            // metadata, which silently disabled TTL caching for every
-                            // runtime-created query — caught by Q2/Q5/Q10 going red.
-                            return serveFromSlot();
                         } else {
-                            LogStatusEx({ message: `RunQuery cache: '${params.QueryID ?? params.QueryName}' not in cached metadata and requester is not the slot's warmer — falling through to authorized execution.`, verboseOnly: true });
+                            return serveFromSlot();
                         }
-                    } else {
-                        return serveFromSlot();
                     }
-                }
-                // Client smart validation round trip.
-                //
-                // Guarded on `checker` (R4-2): the block above is entered when `!checker ||
-                // TrustLocalCacheCompletely`. If we got here via `!checker` AND the B43 permission
-                // gate DECLINED to serve (denied user / non-warmer), execution used to fall
-                // straight into `await checker(...)` = `await undefined(...)` — a TypeError instead
-                // of the promised "fall through to authorized execution". Every in-tree provider
-                // implements the optional `RunQueriesWithCacheCheck`, so this was latent, but the
-                // pre-B43 code handled `!checker` and this must too: skip the round trip and let
-                // the normal PreRunQuery/InternalRunQuery path below authorize and execute.
-                if (!checker) {
-                    // fall through to normal execution below
                 } else {
-                const response = await checker([{
-                    params,
-                    // '' for a slot written without a hash: the server answers `stale` and returns
-                    // its hash, so the rewrite below stamps the slot.
-                    cacheStatus: { maxUpdatedAt: cached.maxUpdatedAt, rowCount: cached.rowCount, definitionHash: cached.definitionHash ?? '' }
-                }], contextUser);
-                const check = response.results?.[0];
-                if (response.success && check) {
-                    if (check.status === 'current') {
-                        return serveFromSlot();
+                    // Client smart validation round trip (both cold first-fetch and warm revalidation).
+                    // Routing cold CacheLocal requests through RunQueriesWithCacheCheck with no cacheStatus
+                    // engages the server's firstFetchWithValidation path so the initial client slot is
+                    // stamped with maxUpdatedAt, rowCount, and definitionHash — allowing the very first
+                    // subsequent refresh (F5) to validate as 'current' instead of missing.
+                    const response = await checker([{
+                        params,
+                        ...(cached
+                            ? {
+                                // '' for a slot written without a hash: the server answers `stale` and returns
+                                // its hash, so the rewrite below stamps the slot.
+                                cacheStatus: {
+                                    maxUpdatedAt: cached.maxUpdatedAt,
+                                    rowCount: cached.rowCount,
+                                    definitionHash: cached.definitionHash ?? ''
+                                }
+                            }
+                            : {})
+                    }], contextUser);
+                    const check = response.results?.[0];
+                    if (response.success && check) {
+                        if (check.status === 'current' && serveFromSlot) {
+                            return serveFromSlot();
+                        }
+                        if ((check.status === 'stale' || check.status === 'no_validation') && check.results) {
+                            const freshRows = check.results as RunQueryResult['Results'];
+                            // Fire-and-forget slot write/rewrite — same pattern as the RunView client path
+                            LocalCacheManager.Instance.SetRunQueryResult(
+                                queryFingerprint, params.QueryName ?? '', freshRows,
+                                check.maxUpdatedAt ?? '', check.rowCount, check.queryId, params.CacheLocalTTL,
+                                contextUser?.ID,
+                                check.definitionHash ? { QueryID: check.queryId, Hash: check.definitionHash } : undefined
+                            ).catch(e => LogError(`RunQuery cache rewrite failed: ${e}`));
+                            return {
+                                QueryID: check.queryId ?? params.QueryID ?? '',
+                                QueryName: params.QueryName ?? '',
+                                Success: true,
+                                Results: freshRows,
+                                RowCount: freshRows.length,
+                                TotalRowCount: check.rowCount ?? freshRows.length,
+                                ExecutionTime: 0,
+                                ErrorMessage: '',
+                                CacheKey: queryFingerprint
+                            };
+                        }
+                        if (check.status === 'error') {
+                            return {
+                                QueryID: check.queryId ?? params.QueryID ?? '',
+                                QueryName: params.QueryName ?? '',
+                                Success: false,
+                                Results: [],
+                                RowCount: 0,
+                                TotalRowCount: 0,
+                                ExecutionTime: 0,
+                                ErrorMessage: check.errorMessage ?? response.errorMessage ?? 'Query execution failed'
+                            };
+                        }
                     }
-                    if ((check.status === 'stale' || check.status === 'no_validation') && check.results) {
-                        const freshRows = check.results as RunQueryResult['Results'];
-                        // Fire-and-forget slot rewrite — same pattern as the RunView client path
-                        LocalCacheManager.Instance.SetRunQueryResult(
-                            queryFingerprint, params.QueryName ?? '', freshRows,
-                            check.maxUpdatedAt ?? '', check.rowCount, check.queryId, params.CacheLocalTTL,
-                            contextUser?.ID,
-                            check.definitionHash ? { QueryID: check.queryId, Hash: check.definitionHash } : undefined
-                        ).catch(e => LogError(`RunQuery cache rewrite failed: ${e}`));
-                        return {
-                            QueryID: check.queryId ?? params.QueryID ?? '',
-                            QueryName: params.QueryName ?? '',
-                            Success: true,
-                            Results: freshRows,
-                            RowCount: freshRows.length,
-                            TotalRowCount: check.rowCount ?? freshRows.length,
-                            ExecutionTime: 0,
-                            ErrorMessage: ''
-                        };
-                    }
+                    // validation transport failed — fall through to a normal execution
                 }
-                }
-                // validation transport failed — fall through to a normal execution
             }
         }
 
@@ -4533,13 +4559,32 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             //     `r.result` straight to the caller, so null became the caller's RESULT.
             //
             // The only correct remedy is what a cache miss does anyway: fetch in full. The
-            // declined slot was already invalidated by ApplyDifferentialUpdate, so the refetch
-            // repopulates it. CacheLocal is stripped and BypassCache set so this single call
-            // takes the plain path — it cannot re-enter the smart-cache transport, which is what
-            // makes the recursion impossible rather than merely unlikely.
+            // declined slot was already invalidated by ApplyDifferentialUpdate, and because
+            // fallbackParam sets CacheLocal:false + BypassCache:true (so the refetch takes the
+            // plain path and cannot re-enter the smart-cache transport), PostRunViews does not
+            // write to LocalCacheManager — so we repopulate the slot explicitly here.
             LogStatusEx({ message: `Differential merge declined for '${param.EntityName}' — refetching in full.`, verboseOnly: true });
             const fallbackParam: RunViewParams = { ...param, CacheLocal: false, BypassCache: true };
             const freshFetch = await (this as unknown as IRunViewProvider).RunView<T>(fallbackParam, contextUser);
+            if (this.runViewCacheEligibleForWrite(param) && freshFetch.Success && LocalCacheManager.Instance.IsInitialized) {
+                const plainRows = (freshFetch.Results || []).map(row =>
+                    row && typeof (row as { GetAll?: unknown }).GetAll === 'function'
+                        ? (row as unknown as { GetAll(): Record<string, unknown> }).GetAll()
+                        : row
+                );
+                const maxUpdatedAt = checkResult.maxUpdatedAt || this.extractMaxUpdatedAt(plainRows) || '';
+                if (maxUpdatedAt) {
+                    LocalCacheManager.Instance.SetRunViewResult(
+                        fingerprint,
+                        param,
+                        plainRows,
+                        maxUpdatedAt,
+                        freshFetch.AggregateResults ?? checkResult.aggregateResults,
+                        freshFetch.TotalRowCount ?? checkResult.rowCount,
+                        this
+                    ).catch(e => LogError(`Failed to update cache after differential fallback: ${e}`));
+                }
+            }
             return { result: freshFetch, cacheHit: false, cacheMiss: true, alreadyTransformed: true };
         } else if (checkResult.status === 'stale') {
             // Cache is stale - use fresh data and update cache (entity doesn't support differential)
@@ -5819,12 +5864,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /**
      * Reloads this provider's metadata. Single-flight: at most one reload runs at a time, and a
      * request arriving mid-reload queues exactly one follow-up pass.
-     * @param hardRefresh - re-read the remote timestamps first and bypass every cache layer
+     * @param hardRefresh - re-read the remote timestamps first (unless `stampsFresh`) and bypass
+     * every cache layer
      * @param scopedFirst - try the scoped reload of the saved-query family (see
      * {@link PartialRefreshMetadataItemCodes}) before the full one. Defaults to true unless
      * hardRefresh: an explicit Refresh() is always a full reload.
+     * @param stampsFresh - the caller read the remote timestamps just before this call. The first
+     * hard pass then uses them instead of reading them again; a queued follow-up pass still reads.
      */
-    protected async ReloadMetadata(hardRefresh: boolean, providerToUse?: IMetadataProvider, scopedFirst: boolean = !hardRefresh): Promise<boolean> {
+    protected async ReloadMetadata(hardRefresh: boolean, providerToUse?: IMetadataProvider, scopedFirst: boolean = !hardRefresh, stampsFresh: boolean = false): Promise<boolean> {
         // first, make sure we reset the flag to false so that if another call to this function happens
         // while we are waiting for the async call to finish, we dont do it again
         this._refresh = false;
@@ -5860,6 +5908,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         this._metadataReloadInFlight = (async () => {
             let effectiveHardRefresh = hardRefresh;
             let tryScoped = scopedFirst;
+            let timestampsFresh = stampsFresh;
             do {
                 this._metadataReloadQueued = false;
 
@@ -5870,8 +5919,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // them (one cheap status query, authoritative) BEFORE the load, not after:
                 // a write landing DURING the load then leaves the stamped timestamps looking
                 // stale and the next tick reloads — the safe direction. Reading after could
-                // stamp the snapshot as containing a write it does not.
-                if (effectiveHardRefresh) {
+                // stamp the snapshot as containing a write it does not. When the caller has just
+                // read them (stampsFresh), the first pass uses that read.
+                if (effectiveHardRefresh && !timestampsFresh) {
                     await this.RefreshRemoteMetadataTimestamps(providerToUse);
                 }
 
@@ -5901,6 +5951,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // The follow-up re-reads the timestamps first, so it may still be attributed to the
                 // saved-query family — and a scoped read never trusts a cache layer either.
                 tryScoped = true;
+                timestampsFresh = false;
             } while (this._metadataReloadQueued);
         })();
         try {
@@ -7000,6 +7051,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Read the reachability flag in the SAME synchronous turn the await above resumed in —
         // before the next await can let a concurrent check overwrite it.
         const serverReached = this._lastRemoteTimestampReadReached;
+        this._checkedRemoteMetadataTimestamps = gotTimestamps ? this._latestRemoteMetadataTimestamps : null;
         if (gotTimestamps) {
             this._lastRefreshCheckAt = Date.now();
         }
@@ -7067,8 +7119,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (await this.CheckToSeeIfRefreshNeeded(providerToUse, bypassMinCheckInterval)) {
             // Stale only in the saved-query family → reload just that family (fresh timestamps, no
             // cache layer), falling back to the full hard reload if the scoped read fails.
-            if (this.PartialRefreshItemCodes() !== null)
-                return this.ReloadMetadata(true, providerToUse, true);
+            if (this.PartialRefreshItemCodes() !== null) {
+                // Reuse the stored stamps while they come from the latest successful check; after a
+                // failed check read, or a read stored by another caller, the pass reads them again.
+                const stampsFresh = this._checkedRemoteMetadataTimestamps != null
+                    && this._checkedRemoteMetadataTimestamps === this._latestRemoteMetadataTimestamps;
+                return this.ReloadMetadata(true, providerToUse, true, stampsFresh);
+            }
             return this.Refresh(providerToUse);
         }
         else

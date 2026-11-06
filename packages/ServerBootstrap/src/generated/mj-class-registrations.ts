@@ -246,7 +246,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (483 classes)
+// @memberjunction/core-entities (484 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -460,6 +460,7 @@ import {
     MJDiagnosticSenderRegistrationEntity,
     MJDiagnosticSessionChunkEntity,
     MJDiagnosticSessionEntity,
+    MJDocumentSequenceCounterEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -2125,6 +2126,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJDiagnosticSenderRegistrationEntity,
     MJDiagnosticSessionChunkEntity,
     MJDiagnosticSessionEntity,
+    MJDocumentSequenceCounterEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -2237,11 +2239,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMagicLinkInviteRoleEntity,
     MJMagicLinkRedemptionEntity,
     MJMaterializedResultEntity,
-    MJMaterializedResultQueryEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJMaterializedResultQueryEntity,
     MJMeetingEntity,
     MJMeetingParticipantEntity,
     MJNumberPoolEntity,
@@ -2441,11 +2443,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ApolloGetListAccountsAction,
     ApolloGetListContactsAction,
     ApolloGetListsAction,
-    ApolloMoveListAccountsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    ApolloMoveListAccountsAction,
     ApolloMoveListContactsAction,
     ApolloSearchPeopleAction,
     CreateBusinessCentralJournalEntryAction,
@@ -2645,11 +2647,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RunAllActiveArchivesAction,
     TagEngineBase,
     AIPromptExtension,
-    TemplateEmbedExtension,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    TemplateEmbedExtension,
     TemplateRunServerOperation,
     LLMDecision,
     ParallelExecutionCoordinator,
@@ -2849,11 +2851,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
     MJConversationEntityServer,
-    MJDashboardEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJDashboardEntityServer,
     MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
     MJEntityAlternateBaseViewEntityServer,
@@ -3053,11 +3055,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PasswordStrengthAction,
     PerplexitySearchAction,
     PostalCodeLookupAction,
-    PrepareOutboundCallBriefAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    PrepareOutboundCallBriefAction,
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
@@ -3165,7 +3167,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1290;
+export const CLASS_REGISTRATIONS_COUNT = 1291;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
