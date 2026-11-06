@@ -4046,10 +4046,11 @@ export class TaskGraphDispatcher implements IShutdownable {
 
     /**
      * Runs an action task, retrying a failure up to the step's `retryCount` — but only when running the
-     * action again is safe. A forward step retries when its node says `compensation.isIdempotent`, or else
-     * its action's `IsIdempotent` column does; a compensation task retries when its compensation action is
-     * idempotent. A non-idempotent action is never re-run: a payment that failed after charging must not
-     * charge again. Retries back off exponentially (`RetryBackoffBaseMs`, doubling, capped at 30×).
+     * action again is safe: only when the action's `IsIdempotent` column says so. A forward step's node may
+     * turn that off (`compensation.isIdempotent: false`) but never on, because the node is written by a
+     * model and the column by whoever owns the action; a compensation task retries when its compensation
+     * action is idempotent. A non-idempotent action is never re-run: a payment that failed after charging
+     * must not charge again. Retries back off exponentially (`RetryBackoffBaseMs`, doubling, capped at 30×).
      */
     private async invokeActionWithRetry(
         task: MJTaskEntity,
@@ -4084,7 +4085,10 @@ export class TaskGraphDispatcher implements IShutdownable {
         return result;
     }
 
-    /** How many times a failed action step may be retried: its `retryCount`, or 0 when the action is not idempotent. */
+    /**
+     * How many times a failed action step may be retried: its `retryCount`, or 0 when the action is not
+     * idempotent. Effective idempotency is `Action.IsIdempotent && node !== false`.
+     */
     private async allowedRetries(provider: IMetadataProvider, task: MJTaskEntity): Promise<number> {
         const config = this.parseConfiguration(task) as TaskStepConfiguration | undefined;
         const compensation = ReadTaskCompensationMetadata(task.Configuration);
@@ -4092,9 +4096,11 @@ export class TaskGraphDispatcher implements IShutdownable {
         if (requested === 0 || !task.ActionID) {
             return 0;
         }
-        // A compensation task's own action decides; a forward step's node may override its action.
-        const nodeSays = IsCompensationTask(task) ? undefined : compensation?.isIdempotent;
-        const idempotent = nodeSays ?? (await this.actionRows(provider, [task.ActionID])).Get(task.ActionID)?.IsIdempotent === true;
+        // The action's own column decides. A forward step's node can only narrow it: a model-written
+        // `isIdempotent: true` must not make a payment retryable that its action says is not.
+        const actionIdempotent = (await this.actionRows(provider, [task.ActionID])).Get(task.ActionID)?.IsIdempotent === true;
+        const nodeOptsOut = !IsCompensationTask(task) && compensation?.isIdempotent === false;
+        const idempotent = actionIdempotent && !nodeOptsOut;
         if (!idempotent) {
             LogStatus(`[TaskGraphDispatcher] Not retrying '${task.Name}' (${task.ID}): its action is not marked idempotent.`);
             return 0;

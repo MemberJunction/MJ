@@ -210,7 +210,10 @@ export interface ActionCompensationSpec {
     readonly compensationInputMapping?: Readonly<Record<string, string>> | string;
     /** Policy if compensation itself fails after maxRetries. Default `'EscalateToHumanTask'`. */
     readonly onCompensationFailure?: ActionCompensationFailurePolicy;
-    /** Signals safe automatic retry and compensation replay. */
+    /**
+     * `false` turns off automatic retry of this node's action. It can only narrow the action's own
+     * `IsIdempotent` column, never widen it: `true` on an action not marked idempotent changes nothing.
+     */
     readonly isIdempotent?: boolean;
     /** Optional automatic retry count when `isIdempotent === true` or on the compensation step. */
     readonly retryCount?: number;

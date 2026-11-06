@@ -464,10 +464,16 @@ describe('TaskGraphDispatcher action retries (B4c)', () => {
         expect(await runStep(row, 1)).toBe(1);
     });
 
-    it("lets a node's own isIdempotent override its action's", async () => {
+    it("never lets a node's isIdempotent: true make a non-idempotent action retryable (S8)", async () => {
         db.Actions.push({ ID: CHARGE, CompensationActionID: null, CompensationInputMapping: null, IsIdempotent: false });
         const row = db.Add({ ID: 'T-3', Name: 'Charge', ActionID: CHARGE, Configuration: JSON.stringify({ policy: { retryCount: 1 }, compensation: { isIdempotent: true } }) });
-        expect(await runStep(row, 1)).toBe(2);
+        expect(await runStep(row, 1)).toBe(1);
+    });
+
+    it("lets a node's isIdempotent: false stop retries of an idempotent action", async () => {
+        db.Actions.push({ ID: RESERVE, CompensationActionID: null, CompensationInputMapping: null, IsIdempotent: true });
+        const row = db.Add({ ID: 'T-5', Name: 'Reserve', ActionID: RESERVE, Configuration: JSON.stringify({ policy: { retryCount: 2 }, compensation: { isIdempotent: false } }) });
+        expect(await runStep(row, 1)).toBe(1);
     });
 
     it("retries a compensation task only when its compensation action is idempotent", async () => {

@@ -47,7 +47,10 @@ export interface TaskCompensationStepMetadata {
     inputMapping?: Readonly<Record<string, string>> | string;
     /** What to do when the compensation itself fails after its retries. Default `'EscalateToHumanTask'`. */
     onCompensationFailure?: ActionCompensationFailurePolicy;
-    /** On a forward step: whether its own action may be retried automatically (overrides `Action.IsIdempotent`). */
+    /**
+     * On a forward step: `false` stops its action being retried automatically. It can only narrow
+     * `Action.IsIdempotent`, never widen it: `true` on a non-idempotent action changes nothing.
+     */
     isIdempotent?: boolean;
     /** How many times the compensation task retries, when its action is idempotent. */
     retryCount?: number;
