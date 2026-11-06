@@ -231,7 +231,8 @@ async function checkA2AStoreSeesOnlyA2ARows(ctx: IntegrationCheckContext): Promi
     if (typesBefore.length === 0 && typesAfter.length > 0) f.CreatedA2ATypeID = typesAfter[0];
     const row = await loadTask(ctx, a2aID);
     Assert(typesAfter.some((id) => UUIDsEqual(id, row.TypeID)), "TGS3: the A2A task is not filed under the 'A2A Task' type");
-    AssertEqual((await new DurableEntityA2ATaskStore().LoadTaskForUser(a2aID, ctx.User, ctx.Provider))?.id, a2aID, 'TGS3: the A2A task read back');
+    const loadedA2A = await new DurableEntityA2ATaskStore().LoadTaskForUser(a2aID, ctx.User, ctx.Provider);
+    Assert(UUIDsEqual(loadedA2A?.id, a2aID), 'TGS3: the A2A task read back');
 }
 
 function providerFactory(ctx: IntegrationCheckContext): ProviderFactory {
@@ -398,15 +399,15 @@ async function checkDispatcherTaintGateAndCompensation(ctx: IntegrationCheckCont
                 compensationRan = true;
                 return { Success: true, Output: { compensated: true } };
             }
-            if (task.Name.includes('forward')) {
+            if (task.Name === 'it165 forward step') {
                 forwardRan = true;
                 return { Success: true, Output: { forwardResult: 'ok' } };
             }
-            if (task.Name.includes('fetch')) {
+            if (task.Name === 'it165 fetch step') {
                 fetchRan = true;
                 return { Success: true, Output: { page: 'untrusted-data' }, IsOutputTainted: true };
             }
-            if (task.Name.includes('send')) {
+            if (task.Name === 'it165 send step') {
                 if (params.SecurityEnvelope?.IsRunTainted === true) {
                     sendSawTaintedEnvelope = true;
                     return {
@@ -482,8 +483,8 @@ async function checkDispatcherTaintGateAndCompensation(ctx: IntegrationCheckCont
             ctx.User,
         );
         const children = childrenRes.Results ?? [];
-        const forwardTask = children.find((c) => c.Name.includes('forward'));
-        const sendTask = children.find((c) => c.Name.includes('send'));
+        const forwardTask = children.find((c) => c.CompensatesTaskID == null && c.Name === 'it165 forward step');
+        const sendTask = children.find((c) => c.CompensatesTaskID == null && c.Name === 'it165 send step');
         const compTask = children.find((c) => c.CompensatesTaskID != null && forwardTask != null && UUIDsEqual(c.CompensatesTaskID, forwardTask.ID));
 
         Assert(forwardTask != null, 'TGS4: forward task row not found');

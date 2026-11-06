@@ -467,7 +467,40 @@ export const PredictiveShadowDriftChecks: NamedCheck[] = [
                 AssertEqual(insufficientSeverity, 'None', 'Expected OverallSeverity=None at MinSampleSize=100');
                 AssertEqual(insufficientAlert, false, 'Expected AlertEmitted=false at MinSampleSize=100');
 
-                // 2. MinSampleSize=10: 12 samples per window >= 10 -> OverallSeverity='Critical', AlertEmitted=true
+                // 2. MinSampleSize=10 as system user without NotifyUserID: drift detected (Critical), alert suppressed
+                const suppressedParams = new RunActionParams();
+                suppressedParams.Action = driftAction!;
+                suppressedParams.ContextUser = user;
+                suppressedParams.Provider = md;
+                suppressedParams.SkipActionLog = true;
+                suppressedParams.Params = [
+                    { Name: 'RecordProcessID', Type: 'Input', Value: recordProcess.ID },
+                    { Name: 'MinSampleSize', Type: 'Input', Value: 10 },
+                    { Name: 'EmitAlertOnDrift', Type: 'Input', Value: true },
+                ];
+
+                const suppressedResult = await ActionEngineServer.Instance.RunAction(suppressedParams);
+                Assert(
+                    suppressedResult.Success,
+                    `Evaluate Feature and Prediction Drift (system user without NotifyUserID) failed: ${suppressedResult.Message}`,
+                );
+                AssertEqual(
+                    suppressedParams.Params.find((p) => p.Name === 'OverallSeverity' && p.Type === 'Output')?.Value,
+                    'Critical',
+                    'Expected OverallSeverity=Critical without NotifyUserID',
+                );
+                AssertEqual(
+                    suppressedParams.Params.find((p) => p.Name === 'ShouldAlert' && p.Type === 'Output')?.Value,
+                    true,
+                    'Expected ShouldAlert=true without NotifyUserID',
+                );
+                AssertEqual(
+                    suppressedParams.Params.find((p) => p.Name === 'AlertEmitted' && p.Type === 'Output')?.Value,
+                    false,
+                    'Expected AlertEmitted=false when executed by system user without NotifyUserID',
+                );
+
+                // 3. MinSampleSize=10 with explicit NotifyUserID: OverallSeverity='Critical', AlertEmitted=true
                 const runParams = new RunActionParams();
                 runParams.Action = driftAction!;
                 runParams.ContextUser = user;
@@ -477,6 +510,7 @@ export const PredictiveShadowDriftChecks: NamedCheck[] = [
                     { Name: 'RecordProcessID', Type: 'Input', Value: recordProcess.ID },
                     { Name: 'MinSampleSize', Type: 'Input', Value: 10 },
                     { Name: 'EmitAlertOnDrift', Type: 'Input', Value: true },
+                    { Name: 'NotifyUserID', Type: 'Input', Value: user.ID },
                 ];
 
                 const result = await ActionEngineServer.Instance.RunAction(runParams);
