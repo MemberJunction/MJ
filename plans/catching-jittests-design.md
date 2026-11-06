@@ -847,7 +847,7 @@ judges, reporting model and gates carry over.
 | # | Question | Owner |
 |---|---|---|
 | Q1 | May the promotion workflow commit with the existing release GitHub App token, or a new App? | Repo admins |
-| Q2 | Is an OpenAI key available to CI (inside `INTEGRATION_LIVE_MODEL_KEYS` or new)? | Repo admins |
+| Q2 | Is an OpenAI key available to CI? Does `INTEGRATION_LIVE_MODEL_KEYS` carry `AI_VENDOR_API_KEY__OpenAILLM=`? The secret is not readable from a branch (spike §5). If it does not, request a new `OPENAI_API_KEY` secret | Repo admins |
 | Q3 | Monthly spend limit after gate 1 measures real cost | Team |
 | Q4 | Why does the head build miss turbo tasks the PR does not reach (§5.4)? Compare the base and head run summaries | Phase 1 |
 
