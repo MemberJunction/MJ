@@ -22,7 +22,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
-import { PlanRecordDocumentPrune, PrunableRecordDocument, RecordDocumentVectorTarget, RemoveRecordDocuments, SplitDuplicateRecordDocuments } from './entityRecordDocumentPruner';
+import { OrphanPruneDenial, PlanRecordDocumentPrune, PrunableRecordDocument, RecordDocumentDeleteDenial, RecordDocumentVectorTarget, RemoveRecordDocuments, SplitDuplicateRecordDocuments } from './entityRecordDocumentPruner';
 
 /**
  * Runs in progress in this process, by entity document. A second run of the same document waits for
@@ -316,9 +316,14 @@ export class EntityVectorSyncer extends VectorBase {
     // seen set is the complete list of records the document still covers.
     let prunedRecords = 0;
     if (ShouldPruneAfterRun(params, pagingState, pipelineConfig?.pruneOrphans)) {
-      prunedRecords = await this.PruneOrphanedRecordDocuments(entityDocument, pagingState.SeenRecordIDs, this._vectorTarget, contextUser);
-      if (prunedRecords > 0) {
-        LogStatus(`[${entityDocument.Name}] removed ${prunedRecords} orphaned or duplicate Entity Record Document(s) and their vectors`);
+      const denial = OrphanPruneDenial(entity, contextUser, md);
+      if (denial) {
+        LogStatus(`[${entityDocument.Name}] orphan prune skipped: ${denial}`);
+      } else {
+        prunedRecords = await this.PruneOrphanedRecordDocuments(entityDocument, pagingState.SeenRecordIDs, this._vectorTarget, contextUser);
+        if (prunedRecords > 0) {
+          LogStatus(`[${entityDocument.Name}] removed ${prunedRecords} orphaned or duplicate Entity Record Document(s) and their vectors`);
+        }
       }
     }
 
@@ -1778,8 +1783,13 @@ export class EntityVectorSyncer extends VectorBase {
         const { Keep, Duplicates } = SplitDuplicateRecordDocuments(result.Results);
         existingByRecordID = Keep;
         if (Duplicates.length > 0) {
-          const keepVectorIDs = new Set([...Keep.values()].map(k => k.VectorID).filter((v): v is string => !!v));
-          await RemoveRecordDocuments(Duplicates, this._vectorTarget, contextUser, md, keepVectorIDs);
+          const denial = RecordDocumentDeleteDenial(contextUser, md);
+          if (denial) {
+            LogStatus(`Duplicate Entity Record Documents kept: ${denial}`);
+          } else {
+            const keepVectorIDs = new Set([...Keep.values()].map(k => k.VectorID).filter((v): v is string => !!v));
+            await RemoveRecordDocuments(Duplicates, this._vectorTarget, contextUser, md, keepVectorIDs);
+          }
         }
       } else {
         LogError('Error getting existing Entity Record Documents', undefined, result?.ErrorMessage);

@@ -57,6 +57,8 @@ const KEYWORD_MATCH_RANK: Record<KeywordMatchKind, number> = { contains: 0, pref
  * it), `contains` (anywhere), or null when it does not contain the query at all.
  */
 export function ClassifyKeywordMatch(valueLower: string, queryLower: string): KeywordMatchKind | null {
+    // An empty query matches nothing; without this every value would count as a prefix match.
+    if (queryLower.length === 0) return null;
     if (valueLower === queryLower) return 'exact';
     if (valueLower.startsWith(queryLower)) return 'prefix';
     if (valueLower.includes(queryLower)) return 'contains';

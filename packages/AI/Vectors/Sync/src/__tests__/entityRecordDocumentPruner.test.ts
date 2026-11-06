@@ -5,10 +5,14 @@ import type { VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 vi.mock('@memberjunction/core', () => ({
   LogError: vi.fn(),
   Metadata: { Provider: null },
+  EntityPermissionType: { Read: 'Read', Create: 'Create', Update: 'Update', Delete: 'Delete' },
 }));
 
+import type { EntityInfo } from '@memberjunction/core';
 import {
+  OrphanPruneDenial,
   PlanRecordDocumentPrune,
+  RecordDocumentDeleteDenial,
   RemoveRecordDocuments,
   SplitDuplicateRecordDocuments,
   type PrunableRecordDocument,
@@ -149,5 +153,38 @@ describe('RemoveRecordDocuments', () => {
     const { md } = fakeProvider([]);
     const result = await RemoveRecordDocuments([row('a', 'r1', null)], { VectorDB: null }, USER, md);
     expect(result).toEqual({ RemovedRows: 1, RemovedVectors: 0, Failed: 0 });
+  });
+});
+
+describe('prune permission checks', () => {
+  function providerWith(canDelete: boolean | null): IMetadataProvider {
+    const entities = canDelete == null ? [] : [{
+      Name: 'MJ: Entity Record Documents',
+      GetUserPermisions: () => ({ CanDelete: canDelete }),
+    }];
+    return { Entities: entities } as unknown as IMetadataProvider;
+  }
+  function sourceEntity(rowFilter: string): EntityInfo {
+    return { Name: 'Members', GetEffectiveRowFilterWhereClause: vi.fn(() => rowFilter) } as unknown as EntityInfo;
+  }
+
+  it('allows removal when the user can delete Entity Record Documents', () => {
+    expect(RecordDocumentDeleteDenial(USER, providerWith(true))).toBeNull();
+  });
+
+  it('refuses removal when the user cannot delete Entity Record Documents, or the entity is missing', () => {
+    expect(RecordDocumentDeleteDenial(USER, providerWith(false))).toMatch(/cannot delete/);
+    expect(RecordDocumentDeleteDenial(USER, providerWith(null))).toMatch(/not found/);
+  });
+
+  it('allows the orphan prune only when reads of the source entity are unfiltered', () => {
+    const unfiltered = sourceEntity('');
+    expect(OrphanPruneDenial(unfiltered, USER, providerWith(true))).toBeNull();
+    expect(unfiltered.GetEffectiveRowFilterWhereClause).toHaveBeenCalledWith(USER, 'Read', '');
+    expect(OrphanPruneDenial(sourceEntity("(OwnerID='u1')"), USER, providerWith(true))).toMatch(/row-filtered/);
+  });
+
+  it('refuses the orphan prune without Delete permission, even with unfiltered reads', () => {
+    expect(OrphanPruneDenial(sourceEntity(''), USER, providerWith(false))).toMatch(/cannot delete/);
   });
 });

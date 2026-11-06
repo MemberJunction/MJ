@@ -555,6 +555,11 @@ describe('EntitySearchProvider', () => {
             expect(ClassifyKeywordMatch('other', 'acme-001')).toBeNull();
         });
 
+        it('an empty query matches nothing', () => {
+            expect(ClassifyKeywordMatch('abc', '')).toBeNull();
+            expect(ClassifyKeywordMatch('', '')).toBeNull();
+        });
+
         it('tiers do not overlap: the name boost and field ratio only reorder within a tier', () => {
             const containsMax = ScoreKeywordMatch('contains', true, 1);
             const prefixMin = ScoreKeywordMatch('prefix', false, 0);

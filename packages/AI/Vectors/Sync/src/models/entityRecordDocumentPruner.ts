@@ -1,5 +1,5 @@
 import type { VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
-import { IMetadataProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
+import { EntityInfo, EntityPermissionType, IMetadataProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
 import type { MJEntityRecordDocumentEntity } from '@memberjunction/core-entities';
 
 /** The `MJ: Entity Record Documents` columns the pruner reads. */
@@ -39,6 +39,41 @@ export type RecordDocumentPrunePlan = {
 };
 
 const REMOVE_BATCH_SIZE = 100;
+const ENTITY_RECORD_DOCUMENTS = 'MJ: Entity Record Documents';
+
+/**
+ * Why the user may not remove Entity Record Documents (and their vectors), or null when they may.
+ * Vectors are deleted before their rows, so the row-level Delete permission check in BaseEntity
+ * comes too late to protect them; this check runs first.
+ */
+export function RecordDocumentDeleteDenial(user: UserInfo, provider?: IMetadataProvider): string | null {
+  const md: IMetadataProvider = provider ?? Metadata.Provider;
+  const erdEntity = md.Entities.find(e => e.Name === ENTITY_RECORD_DOCUMENTS);
+  if (!erdEntity) {
+    return `entity "${ENTITY_RECORD_DOCUMENTS}" not found`;
+  }
+  if (!erdEntity.GetUserPermisions(user).CanDelete) {
+    return `user ${user.Email ?? user.ID} cannot delete ${ENTITY_RECORD_DOCUMENTS}`;
+  }
+  return null;
+}
+
+/**
+ * Why a completed run may not prune orphans for the user, or null when it may. The run pages the
+ * source entity as that user, so a user whose reads of the source entity are row-filtered (role
+ * row-level security or an API-key row filter) pages only part of it, and every record outside the
+ * filter would look orphaned. The prune also needs Delete permission on Entity Record Documents.
+ */
+export function OrphanPruneDenial(sourceEntity: EntityInfo, user: UserInfo, provider?: IMetadataProvider): string | null {
+  const deleteDenial = RecordDocumentDeleteDenial(user, provider);
+  if (deleteDenial) {
+    return deleteDenial;
+  }
+  if (sourceEntity.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '').length > 0) {
+    return `reads of "${sourceEntity.Name}" are row-filtered for user ${user.Email ?? user.ID}, so the run did not see every record`;
+  }
+  return null;
+}
 const DELETE_CONCURRENCY = 10;
 
 function updatedTime(row: PrunableRecordDocument): number {

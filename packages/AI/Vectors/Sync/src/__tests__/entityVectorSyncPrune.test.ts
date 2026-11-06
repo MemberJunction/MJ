@@ -217,6 +217,7 @@ describe('UpsertEntityRecordDocumentBatch with duplicate rows for one record', (
     const deleted: string[] = [];
     const syncer = new TestableSyncer();
     const md = {
+      Entities: [{ Name: 'MJ: Entity Record Documents', GetUserPermisions: () => ({ CanDelete: true }) }],
       GetEntityObject: async () => {
         let id = '';
         return { Load: async (k: string) => { id = k; return true; }, Delete: async () => { deleted.push(id); return true; } };
@@ -229,6 +230,26 @@ describe('UpsertEntityRecordDocumentBatch with duplicate rows for one record', (
     await syncer.Upsert([{ __mj_recordID: 'r1', EntityDocument: { EntityID: 'E1', ID: 'D1' } } as unknown as EmbeddingData]);
 
     expect(deleted).toEqual(['old']);
+    expect((save.mock.calls[0] as unknown[])[1]).toBe(newer);
+  });
+
+  it('keeps the duplicates when the user cannot delete Entity Record Documents', async () => {
+    const older = { ID: 'old', RecordID: 'r1', VectorID: 'v1', __mj_UpdatedAt: new Date('2026-01-01') };
+    const newer = { ID: 'new', RecordID: 'r1', VectorID: 'v2', __mj_UpdatedAt: new Date('2026-02-01') };
+    runViews.mockResolvedValueOnce([{ Success: true, Results: [older, newer] }]);
+    const deleted: string[] = [];
+    const syncer = new TestableSyncer();
+    const md = {
+      Entities: [{ Name: 'MJ: Entity Record Documents', GetUserPermisions: () => ({ CanDelete: false }) }],
+      GetEntityObject: async () => ({ Load: async () => true, Delete: async () => { deleted.push('x'); return true; } }),
+    };
+    (syncer as unknown as { TestMetadata: unknown }).TestMetadata = md;
+    const save = vi.fn(async () => undefined);
+    (syncer as unknown as { saveEntityRecordDocument: typeof save }).saveEntityRecordDocument = save;
+
+    await syncer.Upsert([{ __mj_recordID: 'r1', EntityDocument: { EntityID: 'E1', ID: 'D1' } } as unknown as EmbeddingData]);
+
+    expect(deleted).toEqual([]);
     expect((save.mock.calls[0] as unknown[])[1]).toBe(newer);
   });
 });

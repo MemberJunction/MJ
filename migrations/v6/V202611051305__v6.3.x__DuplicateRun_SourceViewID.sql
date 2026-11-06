@@ -1,5 +1,5 @@
 -- =============================================================================
--- DuplicateRun.SourceViewID (v6.2.x)
+-- DuplicateRun.SourceViewID (v6.3.x)
 -- =============================================================================
 -- A duplicate run can now scan the records of one saved view, as it already could one list
 -- (SourceListID). The detector has always accepted a view; the run record had no column to carry
