@@ -1,5 +1,5 @@
 import { RunQuery } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { IsPlainObject, RegisterClass } from '@memberjunction/global';
 import { QueryEngine } from '../../engines/QueryEngine';
 import {
     BaseGraphEdgeProvider,
@@ -93,11 +93,10 @@ export class QueryEdgeProvider extends BaseGraphEdgeProvider<QueryEdgeProviderCo
         const isDirected = config.IsDirected !== false;
 
         const edges: GraphEdgeView[] = [];
-        for (const rawRow of queryResult.Results) {
-            if (!rawRow || typeof rawRow !== 'object') {
+        for (const row of queryResult.Results) {
+            if (!IsPlainObject(row)) {
                 continue;
             }
-            const row = rawRow as Record<string, unknown>;
             const sourceEntityName = row['SourceEntity'] != null ? String(row['SourceEntity']).trim() : '';
             const sourceRecordId = row['SourceRecordID'] != null ? String(row['SourceRecordID']).trim() : '';
             const targetEntityName = row['TargetEntity'] != null ? String(row['TargetEntity']).trim() : '';

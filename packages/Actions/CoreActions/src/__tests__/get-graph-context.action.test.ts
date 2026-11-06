@@ -61,6 +61,11 @@ describe('GetGraphContextAction', () => {
         expect(subgraphSpy.mock.calls[0][2]).toMatchObject({ IncludeProposed: true });
     });
 
+    it('takes record seeds from plain objects (either casing) and ignores arrays and scalars', async () => {
+        await run([{ Name: 'Seeds', Value: [{ entityName: 'Accounts', recordId: 'a-1' }, ['Accounts', 'a-2'], 42] }]);
+        expect(subgraphSpy.mock.calls[0][1]).toEqual([{ EntityName: 'Accounts', EntityID: undefined, RecordID: 'a-1' }]);
+    });
+
     it('fails with GRAPH_NOT_FOUND for an unknown or inactive graph instead of traversing anything', async () => {
         const result = await run([{ Name: 'GraphName', Value: 'No Such Graph' }, { Name: 'Question', Value: 'Open AR' }]);
         expect(result.Success).toBe(false);

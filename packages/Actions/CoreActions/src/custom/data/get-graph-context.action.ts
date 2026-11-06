@@ -8,7 +8,7 @@ import {
     type GraphSubgraph,
     type GraphTraversalOptions,
 } from '@memberjunction/core-entities';
-import { RegisterClass, IndexByUUID } from '@memberjunction/global';
+import { IndexByUUID, IsPlainObject, RegisterClass } from '@memberjunction/global';
 
 /**
  * Result returned by {@link GetGraphContextAction}.
@@ -196,24 +196,23 @@ export class GetGraphContextAction extends BaseAction {
                         });
                     }
                 }
-            } else if (item && typeof item === 'object') {
-                const obj = item as Record<string, unknown>;
+            } else if (IsPlainObject(item)) {
                 const entityName =
-                    typeof obj['EntityName'] === 'string'
-                        ? obj['EntityName'].trim()
-                        : typeof obj['entityName'] === 'string'
-                          ? obj['entityName'].trim()
+                    typeof item['EntityName'] === 'string'
+                        ? item['EntityName'].trim()
+                        : typeof item['entityName'] === 'string'
+                          ? item['entityName'].trim()
                           : '';
                 const recordId =
-                    obj['RecordID'] != null
-                        ? String(obj['RecordID']).trim()
-                        : obj['recordId'] != null
-                          ? String(obj['recordId']).trim()
+                    item['RecordID'] != null
+                        ? String(item['RecordID']).trim()
+                        : item['recordId'] != null
+                          ? String(item['recordId']).trim()
                           : '';
                 if (entityName && recordId) {
                     pushSeed({
                         EntityName: entityName,
-                        EntityID: typeof obj['EntityID'] === 'string' ? obj['EntityID'] : undefined,
+                        EntityID: typeof item['EntityID'] === 'string' ? item['EntityID'] : undefined,
                         RecordID: recordId,
                     });
                 }
