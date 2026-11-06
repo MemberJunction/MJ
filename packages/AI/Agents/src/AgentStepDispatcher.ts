@@ -25,6 +25,10 @@ import {
 import { FormatResponseFormSummary } from './sub-agent-consult';
 import { WrapUntrustedExternalData } from './client-tool-results';
 import { ConversationMessageResolver } from './utils/ConversationMessageResolver';
+import {
+    ExtractWholeTemplateExpression,
+    ReplaceEmbeddedTemplateExpressions,
+} from './pipeline/template';
 import type {
     ActionCircuitBreakerReason,
     ActionResultCrushConfig,
@@ -789,12 +793,9 @@ export class AgentStepDispatcher {
         },
     ): unknown {
         const trimmedValue = value.trim();
-        if (
-            trimmedValue.startsWith('{{') &&
-            trimmedValue.endsWith('}}') &&
-            !trimmedValue.slice(2, -2).includes('{{')
-        ) {
-            value = trimmedValue.substring(2, trimmedValue.length - 2).trim();
+        const wholeExpr = ExtractWholeTemplateExpression(trimmedValue);
+        if (wholeExpr !== null) {
+            value = wholeExpr;
         } else if (trimmedValue.includes('{{')) {
             return options?.resolveInline
                 ? options.resolveInline(trimmedValue, context, itemVariable)
@@ -837,43 +838,18 @@ export class AgentStepDispatcher {
         itemVariable: string,
         resolveValue?: (val: string, ctx: Record<string, unknown>, itemVar: string) => unknown,
     ): string {
-        if (!template || !template.includes('{{')) {
-            return template;
-        }
         const resolver =
             resolveValue ??
             ((val: string, ctx: Record<string, unknown>, itemVar: string) =>
                 this.ResolveValueFromContext(val, ctx, itemVar));
 
-        let result = '';
-        let cursor = 0;
-        while (cursor < template.length) {
-            const openIdx = template.indexOf('{{', cursor);
-            if (openIdx === -1) {
-                result += template.slice(cursor);
-                break;
+        return ReplaceEmbeddedTemplateExpressions(template, (expr, rawMatch) => {
+            const resolved = resolver(expr, context, itemVariable);
+            if (resolved === expr) {
+                return rawMatch;
             }
-            const closeIdx = template.indexOf('}}', openIdx + 2);
-            if (closeIdx === -1) {
-                result += template.slice(cursor);
-                break;
-            }
-            result += template.slice(cursor, openIdx);
-            const rawInner = template.slice(openIdx + 2, closeIdx);
-            const expr = rawInner.trim();
-            if (expr.length === 0 || rawInner.includes('}')) {
-                result += template.slice(openIdx, closeIdx + 2);
-            } else {
-                const resolved = resolver(expr, context, itemVariable);
-                if (resolved === expr) {
-                    result += template.slice(openIdx, closeIdx + 2);
-                } else {
-                    result += String(resolved ?? '');
-                }
-            }
-            cursor = closeIdx + 2;
-        }
-        return result;
+            return String(resolved ?? '');
+        });
     }
 }
 
