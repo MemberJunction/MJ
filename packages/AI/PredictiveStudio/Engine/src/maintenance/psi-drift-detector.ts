@@ -16,7 +16,7 @@
  * - $\text{PSI} \ge 0.25$: `'Critical'` (severe distributional shift)
  */
 
-import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { RunView, type IMetadataProvider, type RunViewParams, type UserInfo } from '@memberjunction/core';
 import type { MJFeatureValueEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
 import type { DriftContext, DriftResult, IDriftDetector } from './types';
@@ -826,6 +826,62 @@ export function EvaluateFeatureAndPredictionDrift(
   };
 }
 
+const DAY_MS = 86_400_000;
+
+/** The baseline and evaluation windows one drift load compares, in epoch milliseconds. */
+interface DriftWindows {
+  readonly BaselineStartMs: number;
+  readonly BaselineEndMs: number;
+  readonly EvaluationStartMs: number;
+}
+
+/**
+ * The evaluation window defaults to the last 7 days and the baseline to the 28 days before it;
+ * explicit `EvaluationWindowStart` / `BaselineWindowEnd` values override them.
+ */
+function resolveDriftWindows(options: Pick<LoadDriftFromFeatureValuesOptions, 'EvaluationWindowStart' | 'BaselineWindowEnd'>): DriftWindows {
+  const nowMs = Date.now();
+  const parsedEvalStart = options.EvaluationWindowStart ? new Date(options.EvaluationWindowStart).getTime() : NaN;
+  const evaluationStartMs = Number.isFinite(parsedEvalStart) ? parsedEvalStart : nowMs - 7 * DAY_MS;
+  const parsedBaselineEnd = options.BaselineWindowEnd ? new Date(options.BaselineWindowEnd).getTime() : NaN;
+  const baselineEndMs = Number.isFinite(parsedBaselineEnd) ? parsedBaselineEnd : evaluationStartMs;
+  return { BaselineStartMs: baselineEndMs - 28 * DAY_MS, BaselineEndMs: baselineEndMs, EvaluationStartMs: evaluationStartMs };
+}
+
+/** The bounded `MJ: Feature Values` read behind one drift load: one record process (or model), both windows. */
+function featureValueDriftView(options: LoadDriftFromFeatureValuesOptions, windows: DriftWindows): RunViewParams {
+  const filterClauses: string[] = [];
+  if (typeof options.RecordProcessID === 'string' && options.RecordProcessID.trim().length > 0) {
+    filterClauses.push(`RecordProcessID = '${EscapeSQLString(options.RecordProcessID.trim())}'`);
+  } else if (typeof options.ModelID === 'string' && options.ModelID.trim().length > 0) {
+    filterClauses.push(`AIModelID = '${EscapeSQLString(options.ModelID.trim())}'`);
+  }
+  filterClauses.push(`ComputedAt >= '${EscapeSQLString(new Date(windows.BaselineStartMs).toISOString())}'`);
+  return {
+    EntityName: 'MJ: Feature Values',
+    ExtraFilter: filterClauses.join(' AND '),
+    OrderBy: 'ComputedAt ASC',
+    Fields: [
+      'ID',
+      'RecordProcessID',
+      'ProcessRunID',
+      'EntityID',
+      'RecordID',
+      'FeatureName',
+      'Role',
+      'AIModelID',
+      'ValueNumeric',
+      'ValueText',
+      'Confidence',
+      'Reasoning',
+      'ComputedAt',
+    ],
+    ResultType: 'simple',
+    // Bounded by the record process (or model) and the baseline start above.
+    IgnoreMaxRows: true,
+  };
+}
+
 /**
  * Load baseline and rolling evaluation feature distributions, confidence distributions, and
  * champion-vs-challenger pairs from `MJ: Feature Values` for a given `RecordProcessID` or `ModelID`.
@@ -833,60 +889,62 @@ export function EvaluateFeatureAndPredictionDrift(
 export async function LoadFeatureAndPredictionDriftFromFeatureValues(
   options: LoadDriftFromFeatureValuesOptions,
 ): Promise<FeatureAndPredictionDriftInput> {
-  const DAY_MS = 86_400_000;
-  const nowMs = Date.now();
-  const parsedEvalStart = options.EvaluationWindowStart
-    ? new Date(options.EvaluationWindowStart).getTime()
-    : NaN;
-  const evalStartMs = Number.isFinite(parsedEvalStart) ? parsedEvalStart : nowMs - 7 * DAY_MS;
-  const parsedBaselineEnd = options.BaselineWindowEnd
-    ? new Date(options.BaselineWindowEnd).getTime()
-    : NaN;
-  const baselineEndMs = Number.isFinite(parsedBaselineEnd) ? parsedBaselineEnd : evalStartMs;
-  const baselineStartMs = baselineEndMs - 28 * DAY_MS;
-
-  const filterClauses: string[] = [];
-  if (typeof options.RecordProcessID === 'string' && options.RecordProcessID.trim().length > 0) {
-    filterClauses.push(`RecordProcessID = '${EscapeSQLString(options.RecordProcessID.trim())}'`);
-  } else if (typeof options.ModelID === 'string' && options.ModelID.trim().length > 0) {
-    filterClauses.push(`AIModelID = '${EscapeSQLString(options.ModelID.trim())}'`);
-  }
-  filterClauses.push(`ComputedAt >= '${EscapeSQLString(new Date(baselineStartMs).toISOString())}'`);
-
-  const rv = RunView.FromMetadataProvider(options.Provider);
-  const res = await rv.RunView<FeatureValueDriftRow>(
-    {
-      EntityName: 'MJ: Feature Values',
-      ExtraFilter: filterClauses.join(' AND '),
-      OrderBy: 'ComputedAt ASC',
-      Fields: [
-        'ID',
-        'RecordProcessID',
-        'ProcessRunID',
-        'EntityID',
-        'RecordID',
-        'FeatureName',
-        'Role',
-        'AIModelID',
-        'ValueNumeric',
-        'ValueText',
-        'Confidence',
-        'Reasoning',
-        'ComputedAt',
-      ],
-      ResultType: 'simple',
-      IgnoreMaxRows: true,
-    },
+  const windows = resolveDriftWindows(options);
+  const res = await RunView.FromMetadataProvider(options.Provider).RunView<FeatureValueDriftRow>(
+    featureValueDriftView(options, windows),
     options.ContextUser,
   );
-
   if (!res.Success) {
     throw new Error(
       `Failed to load MJ: Feature Values for drift evaluation: ${res.ErrorMessage ?? 'unknown error'}`,
     );
   }
+  return buildDriftInputFromRows(res.Results ?? [], windows, options);
+}
 
-  const rows = res.Results ?? [];
+/** One record process's drift input, or (with no `Input`) why its Feature Values could not be read. */
+export interface RecordProcessDriftLoad {
+  readonly RecordProcessID: string;
+  readonly Input?: FeatureAndPredictionDriftInput;
+  readonly ErrorMessage?: string;
+}
+
+/**
+ * Drift inputs for several record processes in one batched `RunViews` round trip (one bounded view per
+ * process), so a sweep never reads in a loop. A failed view is reported for its own process only.
+ */
+export async function LoadFeatureAndPredictionDriftForRecordProcesses(
+  recordProcessIDs: readonly string[],
+  options: Omit<LoadDriftFromFeatureValuesOptions, 'RecordProcessID' | 'ModelID'>,
+): Promise<RecordProcessDriftLoad[]> {
+  if (recordProcessIDs.length === 0) {
+    return [];
+  }
+  const windows = resolveDriftWindows(options);
+  const perProcess: LoadDriftFromFeatureValuesOptions[] = recordProcessIDs.map((id) => ({ ...options, RecordProcessID: id }));
+  const results = await RunView.FromMetadataProvider(options.Provider).RunViews<FeatureValueDriftRow>(
+    perProcess.map((o) => featureValueDriftView(o, windows)),
+    options.ContextUser,
+  );
+  return perProcess.map((o, i): RecordProcessDriftLoad => {
+    const recordProcessID = o.RecordProcessID ?? '';
+    const res = results[i];
+    if (!res?.Success) {
+      return {
+        RecordProcessID: recordProcessID,
+        ErrorMessage: `Failed to load MJ: Feature Values for drift evaluation: ${res?.ErrorMessage ?? 'unknown error'}`,
+      };
+    }
+    return { RecordProcessID: recordProcessID, Input: buildDriftInputFromRows(res.Results ?? [], windows, o) };
+  });
+}
+
+/** Splits loaded Feature Value rows into the two windows' feature distributions and champion/challenger pairs. */
+function buildDriftInputFromRows(
+  rows: FeatureValueDriftRow[],
+  windows: DriftWindows,
+  options: LoadDriftFromFeatureValuesOptions,
+): FeatureAndPredictionDriftInput {
   const championByFeature = new Map<string, FeatureValueDriftRow[]>();
   const latestChampionByRecordFeature = new Map<string, FeatureValueDriftRow>();
   const challengerRows: FeatureValueDriftRow[] = [];
@@ -921,9 +979,9 @@ export async function LoadFeatureAndPredictionDriftFromFeatureValues(
 
     const baselineWindow = sorted.filter((r) => {
       const ts = new Date(r.ComputedAt).getTime();
-      return ts >= baselineStartMs && ts < baselineEndMs;
+      return ts >= windows.BaselineStartMs && ts < windows.BaselineEndMs;
     });
-    const evalWindow = sorted.filter((r) => new Date(r.ComputedAt).getTime() >= evalStartMs);
+    const evalWindow = sorted.filter((r) => new Date(r.ComputedAt).getTime() >= windows.EvaluationStartMs);
 
     const hasNumeric = sorted.some((r) => typeof r.ValueNumeric === 'number');
     const hasCategorical = sorted.some((r) => typeof r.ValueText === 'string' && r.ValueNumeric === null);

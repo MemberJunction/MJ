@@ -258,34 +258,41 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
 
       let capturedProcessQuery: RunViewParams | undefined;
       const savedNotifications: Array<{ Title: string; Message: string }> = [];
+      const runViewsBatchSizes: number[] = [];
 
-      const fakeProvider = {
-        RunView: async (viewParams: RunViewParams): Promise<RunViewResult> => {
-          if (viewParams.EntityName === 'MJ: Record Processes') {
-            capturedProcessQuery = viewParams;
-            const processes = [
-              { ID: 'rp-ml-1', Name: 'Alpha ML Scorer', WorkType: 'ML Model', Status: 'Active' },
-              { ID: 'rp-infer-2', Name: 'Beta Infer Pipeline', WorkType: 'Infer', Status: 'Active' },
-            ];
-            return {
-              Success: true,
-              Results: processes,
-              RowCount: processes.length,
-              TotalRowCount: processes.length,
-              ExecutionTime: 1,
-              ErrorMessage: '',
-            };
-          }
-          const filter = String(viewParams.ExtraFilter ?? '');
-          const results = filter.includes("'rp-ml-1'") ? driftedRows : stableRows;
+      const runView = async (viewParams: RunViewParams): Promise<RunViewResult> => {
+        if (viewParams.EntityName === 'MJ: Record Processes') {
+          capturedProcessQuery = viewParams;
+          const processes = [
+            { ID: 'rp-ml-1', Name: 'Alpha ML Scorer', WorkType: 'ML Model', Status: 'Active' },
+            { ID: 'rp-infer-2', Name: 'Beta Infer Pipeline', WorkType: 'Infer', Status: 'Active' },
+          ];
           return {
             Success: true,
-            Results: results,
-            RowCount: results.length,
-            TotalRowCount: results.length,
+            Results: processes,
+            RowCount: processes.length,
+            TotalRowCount: processes.length,
             ExecutionTime: 1,
             ErrorMessage: '',
           };
+        }
+        const filter = String(viewParams.ExtraFilter ?? '');
+        const results = filter.includes("'rp-ml-1'") ? driftedRows : stableRows;
+        return {
+          Success: true,
+          Results: results,
+          RowCount: results.length,
+          TotalRowCount: results.length,
+          ExecutionTime: 1,
+          ErrorMessage: '',
+        };
+      };
+
+      const fakeProvider = {
+        RunView: runView,
+        RunViews: async (views: RunViewParams[]): Promise<RunViewResult[]> => {
+          runViewsBatchSizes.push(views.length);
+          return Promise.all(views.map((v) => runView(v)));
         },
         GetEntityObject: async <T>() => {
           const notif = {
@@ -303,7 +310,7 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
           };
           return notif as T;
         },
-      } as Pick<IMetadataProvider, 'RunView' | 'GetEntityObject'> as IMetadataProvider;
+      } as Pick<IMetadataProvider, 'RunView' | 'RunViews' | 'GetEntityObject'> as IMetadataProvider;
 
       const action = new EvaluateFeatureAndPredictionDriftAction();
       const runParams = buildRunParams({});
@@ -332,6 +339,38 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
       expect(processResults[0]?.OverallSeverity).toBe('Critical');
       expect(processResults[1]?.RecordProcessID).toBe('rp-infer-2');
       expect(processResults[1]?.OverallSeverity).toBe('None');
+      // Both processes' Feature Values come from one batched RunViews, never a read per process.
+      expect(runViewsBatchSizes).toEqual([2]);
+    });
+
+    it('keeps sweeping when one record process cannot be read, and reports that process as not evaluated', async () => {
+      const fakeProvider = {
+        RunView: async (viewParams: RunViewParams): Promise<RunViewResult> => {
+          const processes = [
+            { ID: 'rp-broken', Name: 'Broken', WorkType: 'ML Model', Status: 'Active' },
+            { ID: 'rp-ok', Name: 'Healthy', WorkType: 'Infer', Status: 'Active' },
+          ];
+          return { Success: true, Results: viewParams.EntityName === 'MJ: Record Processes' ? processes : [], RowCount: 2, TotalRowCount: 2, ExecutionTime: 1, ErrorMessage: '' };
+        },
+        RunViews: async (views: RunViewParams[]): Promise<RunViewResult[]> =>
+          views.map((v) =>
+            String(v.ExtraFilter ?? '').includes("'rp-broken'")
+              ? { Success: false, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: 'timeout' }
+              : { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' },
+          ),
+      } as Pick<IMetadataProvider, 'RunView' | 'RunViews'> as IMetadataProvider;
+
+      const action = new EvaluateFeatureAndPredictionDriftAction();
+      const runParams = buildRunParams({ EmitAlertOnDrift: { value: false } });
+      runParams.Provider = fakeProvider;
+
+      const result = await action.Run(runParams);
+      expect(result.Success).toBe(true);
+      const processResults = getOutput(runParams, 'ProcessResults') as Array<{ RecordProcessID: string; ErrorMessage?: string }>;
+      expect(processResults.map((p) => p.RecordProcessID)).toEqual(['rp-broken', 'rp-ok']);
+      expect(processResults[0]?.ErrorMessage).toContain('timeout');
+      expect(processResults[1]?.ErrorMessage).toBeUndefined();
+      expect(String(getOutput(runParams, 'Summary'))).toContain('ProcessesFailed=1');
     });
   });
 

@@ -17,11 +17,12 @@ import { BaseAction } from '@memberjunction/actions';
 import { BasePredictiveStudioAction, type JsonObject } from './base-predictive-studio.action';
 import { EVALUATE_DRIFT_DRIVER_CLASS } from './driver-classes';
 import {
-  ComputeConfidenceAndChallengerDivergence,
   EvaluateFeatureAndPredictionDrift,
+  LoadFeatureAndPredictionDriftForRecordProcesses,
   LoadFeatureAndPredictionDriftFromFeatureValues,
   type ChampionChallengerPair,
   type ConfidenceAndDivergenceInput,
+  type ConfidenceAndDivergenceMetrics,
   type DriftSeverity,
   type FeatureAndPredictionDriftInput,
   type FeatureAndPredictionDriftReport,
@@ -42,6 +43,10 @@ export interface ProcessDriftSummaryItem {
   readonly InsufficientData: boolean;
   readonly AlertEmitted: boolean;
   readonly AlertID?: string;
+  /** This process's confidence-floor and champion-vs-challenger metrics; absent when its load failed. */
+  readonly DivergenceMetrics?: ConfidenceAndDivergenceMetrics;
+  /** Why this process could not be evaluated (its Feature Values failed to load); the sweep goes on. */
+  readonly ErrorMessage?: string;
   readonly Summary: string;
 }
 
@@ -279,11 +284,11 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
     let insufficientData = activeProcesses.length === 0;
     let alertEmitted = false;
     let firstAlertId: string | undefined;
-    let lastDivergence = ComputeConfidenceAndChallengerDivergence({});
+    let failedCount = 0;
 
-    for (const proc of activeProcesses) {
-      const driftInput = await LoadFeatureAndPredictionDriftFromFeatureValues({
-        RecordProcessID: proc.ID,
+    const loads = await LoadFeatureAndPredictionDriftForRecordProcesses(
+      activeProcesses.map((proc) => proc.ID),
+      {
         BaselineWindowEnd: baselineWindowEnd,
         EvaluationWindowStart: evaluationWindowStart,
         Provider: provider,
@@ -292,9 +297,30 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
         CriticalPSIThreshold: thresholds.criticalThreshold,
         Epsilon: thresholds.epsilon,
         MinSampleSize: thresholds.minSampleSize,
-      });
-      const report = EvaluateFeatureAndPredictionDrift(driftInput);
-      lastDivergence = report.DivergenceMetrics;
+      },
+    );
+
+    for (const [i, proc] of activeProcesses.entries()) {
+      const load = loads[i];
+      if (!load?.Input) {
+        const message = load?.ErrorMessage ?? 'no load result';
+        LogError(`Drift sweep: record process '${proc.Name}' (${proc.ID}) was not evaluated: ${message}`);
+        failedCount++;
+        processResults.push({
+          RecordProcessID: proc.ID,
+          ProcessName: proc.Name,
+          WorkType: proc.WorkType,
+          OverallSeverity: 'None',
+          MaxPSI: 0,
+          ShouldAlert: false,
+          InsufficientData: true,
+          AlertEmitted: false,
+          ErrorMessage: message,
+          Summary: `Not evaluated: ${message}`,
+        });
+        continue;
+      }
+      const report = EvaluateFeatureAndPredictionDrift(load.Input);
 
       if (SEVERITY_RANK[report.OverallSeverity] > SEVERITY_RANK[overallSeverity]) {
         overallSeverity = report.OverallSeverity;
@@ -333,17 +359,20 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
         InsufficientData: report.InsufficientData,
         AlertEmitted: procAlertEmitted,
         AlertID: procAlertId,
+        DivergenceMetrics: report.DivergenceMetrics,
         Summary: report.Summary,
       });
     }
 
-    const summary = `ProcessesEvaluated=${processResults.length}, OverallSeverity=${overallSeverity}, MaxPSI=${maxPSI.toFixed(4)}, DriftedFeatures=${driftedFeatures.length}`;
+    const summary =
+      `ProcessesEvaluated=${processResults.length - failedCount}, ProcessesFailed=${failedCount}, ` +
+      `OverallSeverity=${overallSeverity}, MaxPSI=${maxPSI.toFixed(4)}, DriftedFeatures=${driftedFeatures.length}`;
 
     this.addOutputParam(params, 'OverallSeverity', overallSeverity);
     this.addOutputParam(params, 'MaxPSI', maxPSI);
     this.addOutputParam(params, 'DriftedFeatures', driftedFeatures);
     this.addOutputParam(params, 'FeatureResults', featureResults);
-    this.addOutputParam(params, 'DivergenceMetrics', lastDivergence);
+    // DivergenceMetrics is per process in a sweep: see each ProcessResults entry.
     this.addOutputParam(params, 'ShouldAlert', shouldAlert);
     this.addOutputParam(params, 'InsufficientData', insufficientData);
     this.addOutputParam(params, 'AlertEmitted', alertEmitted);
