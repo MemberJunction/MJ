@@ -165,6 +165,10 @@ stubs (`DatabaseProviderStub`, `EntitiesOnlyProvider`, `TestLLM`); `@vitest/cove
 | `jit-catch label --catch <id> --answer <answer>` | Record a human label collected outside the PR comment | Gate 1 |
 | `jit-catch report` | Gate metrics, cost, judge agreement | Nightly summary, on demand |
 
+Dependencies: `@anthropic-ai/claude-agent-sdk` (0.3.318, verified in spike §2) with zod 4, its peer dependency, while the
+rest of the repo stays on zod 3.x; and `@memberjunction/ai`, `ai-anthropic`, `ai-openai` and `ai-gemini` at exactly
+`6.2.0`, declared by the package itself because the repo root cannot resolve the provider packages (spike §4).
+
 Making B a product later means flipping `private` and doing the one-time npm trusted-publisher setup (manual 2FA).
 
 The sandbox (D28) applies to every command, not only to the workflow jobs. `jit-catch run` and `jit-catch backtest`

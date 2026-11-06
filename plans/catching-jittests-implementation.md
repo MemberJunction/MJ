@@ -6,7 +6,7 @@
 
 **Architecture:** One private workspace package with a `jit-catch` CLI. Code runs every step; a Claude Agent SDK session only writes tests, on base only, and can run them only through a `run_test` tool that executes vitest inside a Docker sandbox. Base and head are separate git worktrees. Deterministic rule classes drop test faults and boost true-positive patterns; three LLM judges score what remains through MJ's own provider classes with no database. Every record is a plain JSON object validated with zod at each job boundary and appended to JSONL files.
 
-**Tech Stack:** TypeScript 5.9 (ESM, `tsconfig.server.json`), vitest 4, zod 3.25, `@anthropic-ai/claude-agent-sdk` (generator), `@memberjunction/ai` + `ai-anthropic` / `ai-openai` / `ai-gemini` (judges), `@memberjunction/rubrics` (median, agreement), TypeScript compiler API (rules), Docker (sandbox), `git` and `gh` CLIs via `child_process`.
+**Tech Stack:** TypeScript 5.9 (ESM, `tsconfig.server.json`), vitest 4, zod 4 (`^4.0.0`, the Agent SDK's peer dependency; the rest of the repo stays on zod 3.x), `@anthropic-ai/claude-agent-sdk` 0.3.318 (generator), `@memberjunction/ai` + `ai-anthropic` / `ai-openai` / `ai-gemini` (judges), `@memberjunction/rubrics` (median, agreement), TypeScript compiler API (rules), Docker (sandbox), `git` and `gh` CLIs via `child_process`.
 
 **Spec:** [`plans/catching-jittests-design.md`](catching-jittests-design.md). Section numbers below (§7, §9.1, …) refer to it. This plan implements §15 phases 0 and 1 only. Phase 2 (gate 1: corpus, `backtest`, `report`) and phase 3 (workflows, PR comment, promotion, data branch) get their own plans after the spike results are in. Items from the second design review that belong to those later plans, so they are not lost: every checkout the sandbox mounts uses `persist-credentials: false` (§5.4); job 3 checks out the base commit so `PrivateAccess` has base's types (§5.4); the feedback workflow checks `github.event.sender` (§10.2); during gate 2 the nightly selector also takes PRs merged since the previous run, with base `M^1` and head `M` (§14.2); nightly catches during gate 2 use the label-run threshold (§9.3).
 
@@ -660,7 +660,7 @@ Order: scaffold → types/schemas → settings → contracts → redaction → s
     "@memberjunction/global": "6.2.0",
     "@memberjunction/rubrics": "6.2.0",
     "typescript": "^5.9.3",
-    "zod": "^3.25.0"
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@memberjunction/unit-testing": "6.2.0",
@@ -670,7 +670,7 @@ Order: scaffold → types/schemas → settings → contracts → redaction → s
 }
 ```
 
-Replace `0.3.318` with the version Task 0.4 verified. `typescript` is a runtime dependency here on purpose: the rules use the compiler API.
+`0.3.318` is the SDK version spike Q2 verified; it has a peer dependency `zod@^4.0.0` (`zod@3.25` fails with `ERESOLVE`), so this package uses zod 4 while the 24 other packages that pin `^3.25` stay as they are. Write schemas in the zod 4 API (for example `z.record(z.string(), …)`, which needs the key schema). The three provider packages are declared at exactly `6.2.0`: the repo root cannot resolve them (`ERR_MODULE_NOT_FOUND`, spike §4), so the package must list each one it imports. `typescript` is a runtime dependency here on purpose: the rules use the compiler API.
 
 - [ ] **Step 2: tsconfig, vitest, turbo**
 
@@ -1100,7 +1100,7 @@ export const SettingsSchema = z.object({
         Label: z.object({ MinMedian: z.enum(['High', 'Medium', 'Low']), MaxReported: z.number().int().positive() }),
         Nightly: z.object({ MinMedian: z.enum(['High', 'Medium', 'Low']), MediumWithBoosts: z.array(z.string()) }),
     }),
-    Prices: z.record(z.object({ Input: z.number(), Output: z.number(), CachedInput: z.number() })),
+    Prices: z.record(z.string(), z.object({ Input: z.number(), Output: z.number(), CachedInput: z.number() })),
     Sandbox: z.object({ Image: z.string(), MemoryGB: z.number().positive(), Cpus: z.number().positive(), PidsLimit: z.number().int().positive() }),
     RiskPaths: z.array(z.string()),
 });
@@ -4231,7 +4231,7 @@ export class RunDir {
 }
 ```
 
-with `type GenerationFile = z.infer<typeof GenerationFileSchema>` etc. exported from `schemas.ts`, and `ExecutionFileSchema` extended with `TypeErrors: z.record(z.object({ Base: z.string().nullable(), Head: z.string().nullable() }))`.
+with `type GenerationFile = z.infer<typeof GenerationFileSchema>` etc. exported from `schemas.ts`, and `ExecutionFileSchema` extended with `TypeErrors: z.record(z.string(), z.object({ Base: z.string().nullable(), Head: z.string().nullable() }))`.
 
 `Generate.ts` (core loop; construction of defaults omitted here but required in the file):
 
