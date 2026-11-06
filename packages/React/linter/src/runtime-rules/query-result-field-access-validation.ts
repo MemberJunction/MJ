@@ -5,6 +5,7 @@ import { BaseLintRule } from '../lint-rule';
 import { Violation, FieldAccessViolationDetails } from '../component-linter';
 import { TypeContext } from '../type-context';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
+import type { Binding, Scope } from '@babel/traverse';
 
 /**
  * Rule: query-result-field-access-validation
@@ -24,6 +25,17 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 /** Array methods whose callbacks receive row items as the first parameter */
 const ARRAY_METHODS = ['map', 'forEach', 'filter', 'find', 'some', 'every', 'reduce', 'sort', 'flatMap'];
+
+/**
+ * Key for a tracked variable: its Babel binding, so a same-named variable in another function
+ * (`const rows = result.Results` in one, `let rows = [...courseData]` in another) is a different
+ * variable. A name with no binding (a global) is keyed by the name.
+ */
+type VariableKey = Binding | string;
+
+function variableKey(scope: Scope, name: string): VariableKey {
+  return scope.getBinding(name) ?? `global:${name}`;
+}
 
 /**
  * Resolves the identifier being accessed through optional chaining or regular member access.
@@ -140,10 +152,10 @@ export class QueryResultFieldAccessValidationRule extends BaseLintRule {
       return violations;
     }
 
-    // Track RunQuery result variables: varName -> queryName
-    const runQueryResultVars = new Map<string, string>();
-    // Track .Results arrays: varName -> queryName
-    const queryArrayVars = new Map<string, string>();
+    // Track RunQuery result variables: variable -> queryName
+    const runQueryResultVars = new Map<VariableKey, string>();
+    // Track .Results arrays: variable -> queryName
+    const queryArrayVars = new Map<VariableKey, string>();
 
     /**
      * Validates a single field access on a query row variable.
@@ -306,7 +318,7 @@ export class QueryResultFieldAccessValidationRule extends BaseLintRule {
     Traverse(ast, {
       VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
         if (!t.isIdentifier(path.node.id)) return;
-        const varName = path.node.id.name;
+        const varName = variableKey(path.scope, path.node.id.name);
         const init = path.node.init;
         if (!init) return;
 
@@ -342,7 +354,7 @@ export class QueryResultFieldAccessValidationRule extends BaseLintRule {
             t.isIdentifier(init.property) &&
             init.property.name === 'Results'
           ) {
-            const sourceVar = init.object.name;
+            const sourceVar = variableKey(path.scope, init.object.name);
             const queryName = runQueryResultVars.get(sourceVar);
             if (queryName) {
               queryArrayVars.set(varName, queryName);
@@ -369,7 +381,7 @@ export class QueryResultFieldAccessValidationRule extends BaseLintRule {
 
         // .map() etc. on a tracked array variable
         if (t.isIdentifier(callee.object)) {
-          queryName = queryArrayVars.get(callee.object.name);
+          queryName = queryArrayVars.get(variableKey(path.scope, callee.object.name));
         }
 
         // .Results.map() — direct chaining on result.Results or result?.Results
@@ -379,7 +391,7 @@ export class QueryResultFieldAccessValidationRule extends BaseLintRule {
           t.isIdentifier(callee.object.property) &&
           callee.object.property.name === 'Results'
         ) {
-          queryName = runQueryResultVars.get(callee.object.object.name);
+          queryName = runQueryResultVars.get(variableKey(path.scope, callee.object.object.name));
         }
 
         if (!queryName) return;
