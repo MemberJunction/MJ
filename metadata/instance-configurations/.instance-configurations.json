@@ -128,12 +128,12 @@
   {
     "fields": {
       "FeatureKey": "Search.DefaultMinScore",
-      "Value": "0.35",
+      "Value": "0.30",
       "ValueType": "number",
       "Category": "Search",
       "DisplayName": "Default Minimum Relevance Score",
-      "Description": "Minimum semantic similarity (0-1) for search results, applied to semantic (vector) matches before fusion. Keyword and other text matches are never filtered by it. Embedding models score even unrelated text fairly high, so the useful value depends on the model in use.",
-      "DefaultValue": "0.35"
+      "Description": "Minimum semantic similarity (0-1) for search results, applied to semantic (vector) matches before fusion. Keyword and other text matches are never filtered by it. The Explorer search page starts its similar-meaning cutoff at this value. Embedding models score even unrelated text fairly high, so the useful value depends on the model in use.",
+      "DefaultValue": "0.30"
     },
     "primaryKey": {
       "ID": "4916E87B-55BF-425D-BE05-FD86F3F91023"

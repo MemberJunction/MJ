@@ -72,7 +72,9 @@
                                 <div class="suggest-result-title">{{ result.RecordName || result.Title }}</div>
                                 <div class="suggest-result-entity">{{ result.EntityDisplayName || result.EntityName }}</div>
                             </div>
-                            <span class="suggest-result-score" [class]="'suggest-result-score ' + GetScoreClass(result.Score)">{{ FormatScore(result.Score) }}</span>
+                            @if (GetMatchChip(result); as chip) {
+                                <span [class]="'suggest-match-chip suggest-match-chip-' + chip.Kind" [title]="chip.Title">{{ chip.Label }}</span>
+                            }
                         </div>
                     }
                 </div>
@@ -96,32 +98,26 @@
             }
         }
 
-        <!-- Min relevance filter bar -->
+        <!-- Match type filter bar -->
         @if (showPreviewSection) {
             <div class="suggest-filter-bar">
                 <div class="suggest-filter-toggle" (mousedown)="ToggleFilter($event)">
                     <i class="fa-solid fa-sliders suggest-filter-icon"></i>
-                    <span class="suggest-filter-label">
-                        @if (MinRelevancePercent > 0) {
-                            Min relevance: {{ MinRelevancePercent }}%
-                        } @else {
-                            Showing all results
-                        }
-                    </span>
+                    <span class="suggest-filter-label">Match type: {{ MatchTypeLabel }}</span>
                     <i class="fa-solid fa-chevron-down suggest-filter-chevron" [class.suggest-filter-chevron-open]="IsFilterOpen"></i>
                 </div>
 
                 @if (IsFilterOpen) {
                     <div class="suggest-filter-popover">
-                        <div class="suggest-filter-popover-header">Min Relevance</div>
-                        @for (option of MinRelevanceOptions; track option) {
+                        <div class="suggest-filter-popover-header">Match type</div>
+                        @for (option of MatchTypeOptions; track option.Value) {
                             <div
                                 class="suggest-filter-option"
-                                [class.suggest-filter-option-active]="IsSelectedRelevance(option)"
-                                (mousedown)="SetMinRelevance(option, $event)"
+                                [class.suggest-filter-option-active]="IsSelectedMatchType(option.Value)"
+                                (mousedown)="SetMatchType(option.Value, $event)"
                             >
-                                <span>{{ FormatRelevanceOption(option) }}</span>
-                                @if (IsSelectedRelevance(option)) {
+                                <span>{{ option.Label }}</span>
+                                @if (IsSelectedMatchType(option.Value)) {
                                     <i class="fa-solid fa-check suggest-filter-check"></i>
                                 }
                             </div>

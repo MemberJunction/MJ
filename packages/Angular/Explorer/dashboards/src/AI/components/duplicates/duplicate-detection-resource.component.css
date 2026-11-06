@@ -177,6 +177,17 @@ app-duplicate-detection-resource {
     color: var(--mj-text-muted);
 }
 
+/* Run record scope: whole entity, a list, or a saved view */
+.run-scope-group {
+    padding-right: 24px;
+    border-right: 1px solid var(--mj-border-subtle);
+}
+
+.run-scope-select {
+    width: 100%;
+    font-size: 0.82rem;
+}
+
 /* ---- Threshold Info (legacy) ---- */
 
 .threshold-info {

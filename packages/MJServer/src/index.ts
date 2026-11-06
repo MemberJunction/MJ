@@ -61,6 +61,7 @@ import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';
 
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
+import { EntityVectorDeleteListener } from '@memberjunction/ai-vector-sync';
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
 import { IntegrationSyncWorkerService } from './services/IntegrationSyncWorkerService.js';
 import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, LogStatus, LogError, SetVerboseLogging } from '@memberjunction/core';
@@ -1149,6 +1150,10 @@ const setupComplete$ = new ReplaySubject(1);
       }
     }
   });
+
+  // A deleted record's vectors and Entity Record Documents go with it (no FK cascades to them);
+  // the cleanup runs as the system user, fire-and-forget, and only for entities with an active document.
+  EntityVectorDeleteListener.Subscribe(() => UserCache.Instance.GetSystemUser());
 
   lap('Resolver + Middleware Discovery', tServe);
   tServe = startupLog.BeginPhase('Building GraphQL schema');

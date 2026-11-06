@@ -99,10 +99,10 @@
                 }
             </div>
             @if (ShowScores) {
-                <div class="result-card-score">
-                    <div class="score-circle" [class.score-high]="result.Score >= 0.40" [class.score-medium]="result.Score >= 0.15 && result.Score < 0.40" [class.score-low]="result.Score < 0.15">
-                        <span class="score-value">{{ FormatScore(result.Score) }}</span>
-                    </div>
+                <div class="result-card-match">
+                    @for (chip of GetMatchChips(result); track chip.Kind) {
+                        <span class="match-chip" [class]="'match-chip match-chip-' + chip.Kind" [title]="chip.Title">{{ chip.Label }}</span>
+                    }
                 </div>
             }
             <div class="result-card-actions">
@@ -136,20 +136,25 @@
                         <i class="fa-solid fa-fingerprint"></i>
                         <span class="detail-record-id">{{ result.RecordID }}</span>
                     </div>
-                    <!-- SR-1: Show overall score consistently -->
-                    <div class="detail-meta-item">
-                        <i class="fa-solid fa-signal"></i>
-                        <span>Relevance: {{ FormatScore(result.Score) }}</span>
-                    </div>
-                    @if (result.ScoreBreakdown) {
-                        <div class="detail-meta-item">
-                            <i class="fa-solid fa-chart-bar"></i>
-                            <span>
-                                @if (result.ScoreBreakdown.Vector) { Vector: {{ FormatScore(result.ScoreBreakdown.Vector) }} }
-                                @if (result.ScoreBreakdown.FullText) { FTS: {{ FormatScore(result.ScoreBreakdown.FullText) }} }
-                            </span>
-                        </div>
-                    }
+                </div>
+                <!-- Technical details: the raw numbers behind the chips. Rank-based and model-specific, so labeled as such. -->
+                <div class="detail-technical">
+                    <span class="detail-label">Technical details</span>
+                    <dl class="detail-technical-list">
+                        @if (RankOf(result) > 0) {
+                            <dt>Rank</dt><dd>#{{ RankOf(result) }}</dd>
+                        }
+                        @if (result.MatchedFields?.length) {
+                            <dt>Matched fields</dt><dd>{{ MatchedFieldNames(result) }}</dd>
+                        }
+                        @if (result.ScoreBreakdown?.Vector != null) {
+                            <dt>Raw similarity</dt><dd>{{ result.ScoreBreakdown.Vector.toFixed(3) }} <span class="detail-technical-note">(embedding model's own scale)</span></dd>
+                        }
+                        @if (result.ScoreBreakdown?.ReRank != null) {
+                            <dt>Re-ranker score</dt><dd>{{ result.ScoreBreakdown.ReRank.toFixed(3) }}</dd>
+                        }
+                        <dt>Rank score</dt><dd>{{ result.Score.toFixed(3) }} <span class="detail-technical-note">(orders results; not a confidence)</span></dd>
+                    </dl>
                 </div>
                 @if (ShowTags && result.Tags.length > 0) {
                     <div class="detail-tags">

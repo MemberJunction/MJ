@@ -26,11 +26,14 @@ import {
     SearchFilterOption,
     SearchProviderInfo,
     SearchScopeInfo,
-    RecentRecordItem
+    RecentRecordItem,
+    HasTextMatch,
+    HasSemanticMatch
 } from './search-types';
 
 /** Default minimum relevance score threshold (0-1). Results below this are filtered out. */
-const DEFAULT_MIN_SCORE = 0.35;
+/** Fallback semantic cutoff when a request names none; the shipped value of the `Search.DefaultMinScore` setting. */
+const DEFAULT_MIN_SCORE = 0.30;
 
 /** Fallback icon mapping for source types (used when provider metadata is not available) */
 const FALLBACK_SOURCE_ICONS: Record<string, string> = {
@@ -75,6 +78,9 @@ interface RecentSearchJson {
  * Multi-provider note: callers under a non-default provider should set
  * `service.Provider = component.ProviderToUse` before invoking any methods.
  */
+/** The facet category the results page filters match type under (values `text` and `meaning`). */
+export const MATCH_TYPE_FILTER_CATEGORY = 'Match type';
+
 @Injectable({ providedIn: 'root' })
 export class SearchService {
     private _provider: IMetadataProvider | null = null;
@@ -159,6 +165,8 @@ export class SearchService {
         /** Set on 'provider' events: how many hits that provider returned, capped at `MaxResults`. */
         ResultCount?: number;
         Results?: SearchResultItem[];
+        /** Set on 'final' events: hits per lane, counted before the permission pass. */
+        SourceCounts?: { Vector: number; FullText: number; Entity: number; Storage: number };
         ElapsedMs?: number;
         ErrorMessage?: string;
     }> {
@@ -180,6 +188,7 @@ export class SearchService {
             ProviderName: ev.ProviderName,
             ResultCount: ev.ResultCount,
             Results: ev.Results ? ev.Results.map(r => this.mapClientResultItem(r)) : undefined,
+            SourceCounts: ev.SourceCounts,
             ElapsedMs: ev.ElapsedMs,
             ErrorMessage: ev.ErrorMessage,
         })));
@@ -255,7 +264,7 @@ export class SearchService {
      */
     public BuildFilters(results: SearchResultItem[]): SearchFilter[] {
         return [
-            this.buildSourceTypeFilter(results),
+            this.buildMatchTypeFilter(results),
             this.buildEntityNameFilter(results),
             this.buildFileTypeFilter(results),
             this.buildTagFilter(results)
@@ -267,22 +276,19 @@ export class SearchService {
         return this.providersBySourceType.get(sourceType)?.Icon ?? FALLBACK_SOURCE_ICONS[sourceType] ?? 'fa-solid fa-circle';
     }
 
-    private buildSourceTypeFilter(results: SearchResultItem[]): SearchFilter {
-        const counts = new Map<string, number>();
-        for (const r of results) {
-            counts.set(r.SourceType, (counts.get(r.SourceType) ?? 0) + 1);
-        }
-        const options: SearchFilterOption[] = Array.from(counts.entries()).map(([type, count]) => {
-            const cached = this.providersBySourceType.get(type);
-            return {
-                Label: cached?.DisplayName ?? FALLBACK_SOURCE_LABELS[type] ?? type,
-                Value: type,
-                Count: count,
-                IsSelected: false,
-                Icon: cached?.Icon ?? FALLBACK_SOURCE_ICONS[type]
-            };
-        });
-        return { Category: 'Source', Options: options, MultiSelect: true };
+    /**
+     * "Match type": how results matched — as exact text (any text lane) or by similar meaning (the
+     * semantic lane). Replaces the per-provider "Source" facet: which provider answered is an
+     * implementation detail, while "did my words appear" is the question a reader has. A result
+     * both lanes matched counts under both. Filter values: `text`, `meaning`.
+     */
+    private buildMatchTypeFilter(results: SearchResultItem[]): SearchFilter {
+        const text = results.filter(r => HasTextMatch(r)).length;
+        const meaning = results.filter(r => HasSemanticMatch(r)).length;
+        const options: SearchFilterOption[] = [];
+        if (text > 0) options.push({ Label: 'Exact text', Value: 'text', Count: text, IsSelected: false, Icon: 'fa-solid fa-font' });
+        if (meaning > 0) options.push({ Label: 'Similar meaning', Value: 'meaning', Count: meaning, IsSelected: false, Icon: 'fa-solid fa-brain' });
+        return { Category: MATCH_TYPE_FILTER_CATEGORY, Options: options, MultiSelect: true };
     }
 
     private buildEntityNameFilter(results: SearchResultItem[]): SearchFilter {
@@ -618,6 +624,7 @@ export class SearchService {
             RecordName: r.RecordName,
             MatchedAt: new Date(r.MatchedAt),
             RawMetadata: r.RawMetadata,
+            MatchedFields: r.MatchedFields,
             ProviderId: r.ProviderId,
             ProviderLabel: r.ProviderLabel,
             ProviderIcon: r.ProviderIcon,

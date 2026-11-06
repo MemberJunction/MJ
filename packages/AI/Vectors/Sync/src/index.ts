@@ -5,5 +5,7 @@ export * from './generic/entityDocumentConfig';
 export * from './generic/indexRestrictedFields';
 export * from './generic/temporalValues';
 export * from './models/entityVectorSync';
+export * from './models/entityRecordDocumentPruner';
+export * from './models/entityVectorDeleteListener';
 export * from './models/EntityDocumentTemplateData';
 export * from './models/EntityDocumentSuggester';

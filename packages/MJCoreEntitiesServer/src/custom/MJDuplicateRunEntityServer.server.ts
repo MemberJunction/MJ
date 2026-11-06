@@ -1,6 +1,6 @@
-import { BaseEntity, DuplicateDetectionOptions, DuplicateDetectionProgress, EntitySaveOptions, IMetadataProvider, LogError, LogStatus, PotentialDuplicateRequest, RunView } from "@memberjunction/core";
+import { BaseEntity, DuplicateDetectionOptions, DuplicateDetectionProgress, EntitySaveOptions, IMetadataProvider, LogError, LogStatus, PotentialDuplicateRequest, RunView, ValidationErrorInfo, ValidationErrorType, ValidationResult } from "@memberjunction/core";
 import { RegisterClass, GetGlobalObjectStore, EscapeSQLString, UUIDsEqual } from "@memberjunction/global";
-import { MJDuplicateRunEntity, MJEntityDocumentEntity } from "@memberjunction/core-entities";
+import { MJDuplicateRunEntity, MJEntityDocumentEntity, MJUserViewEntity } from "@memberjunction/core-entities";
 import { DuplicateRecordDetector } from "@memberjunction/ai-vector-dupe";
 
 const PIPELINE_PROGRESS_TOPIC = 'PIPELINE_PROGRESS';
@@ -39,6 +39,31 @@ export function CheckRunEntityDocument(
 ): string | null {
     if (!UUIDsEqual(entityDocument.EntityID, entityID)) {
         return `Entity Document "${entityDocument.Name}" belongs to a different entity than this duplicate run`;
+    }
+    return null;
+}
+
+/**
+ * A run scans the whole entity, one list, or one saved view: never a list and a view together
+ * (which one would win is not something the request can express).
+ *
+ * @returns why the source cannot be used, or null when it can
+ */
+export function CheckRunSourceScope(run: Pick<MJDuplicateRunEntity, 'SourceListID' | 'SourceViewID'>): string | null {
+    if (run.SourceListID && run.SourceViewID) {
+        return 'A duplicate run can scan a list or a view, not both. Clear one of SourceListID and SourceViewID.';
+    }
+    return null;
+}
+
+/**
+ * Checks that the saved view a run scans is a view of the run's entity.
+ *
+ * @returns why the view cannot be used, or null when it can
+ */
+export function CheckRunSourceView(view: Pick<MJUserViewEntity, 'EntityID' | 'Name'>, entityID: string): string | null {
+    if (!UUIDsEqual(view.EntityID, entityID)) {
+        return `View "${view.Name}" is a view of a different entity than this duplicate run`;
     }
     return null;
 }
@@ -84,6 +109,45 @@ const PHASE_TO_STAGE: Record<DuplicateDetectionProgress['Phase'], string> = {
 
 @RegisterClass(BaseEntity, 'MJ: Duplicate Runs')
 export class MJDuplicateRunEntityServer extends MJDuplicateRunEntity {
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        const scopeProblem = CheckRunSourceScope(this);
+        if (scopeProblem) {
+            result.Errors.push(new ValidationErrorInfo('SourceViewID', scopeProblem, this.SourceViewID, ValidationErrorType.Failure));
+            result.Success = false;
+        }
+        return result;
+    }
+
+    /** Async validation checks the source view's entity; it reads only when the view is new or changed. */
+    public override get DefaultSkipAsyncValidation(): boolean {
+        return false;
+    }
+
+    public override async ValidateAsync(): Promise<ValidationResult> {
+        const result = await super.ValidateAsync();
+        const viewChanged = !this.IsSaved || (this.GetFieldByName('SourceViewID')?.Dirty ?? false);
+        if (!this.SourceViewID || !viewChanged) {
+            return result;
+        }
+        const rv = new RunView(this.RunViewProviderToUse);
+        const views = await rv.RunView<MJUserViewEntity>({
+            EntityName: 'MJ: User Views',
+            ExtraFilter: `ID='${EscapeSQLString(this.SourceViewID)}'`,
+            ResultType: 'simple',
+            Fields: ['ID', 'Name', 'EntityID'],
+        }, this.ContextCurrentUser);
+        const view = views.Success ? views.Results[0] : undefined;
+        const problem = view
+            ? CheckRunSourceView(view, this.EntityID)
+            : `View ${this.SourceViewID} was not found or is not visible to you`;
+        if (problem) {
+            result.Errors.push(new ValidationErrorInfo('SourceViewID', problem, this.SourceViewID, ValidationErrorType.Failure));
+            result.Success = false;
+        }
+        return result;
+    }
+
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         // A run must name its entity document. Server-side callers that create a run without one
         // (GetRecordDuplicates, scripts) get the entity's default duplicate-detection document.
@@ -130,7 +194,9 @@ export class MJDuplicateRunEntityServer extends MJDuplicateRunEntity {
             const detector = new DuplicateRecordDetector(provider);
             const request = new PotentialDuplicateRequest();
             request.EntityID = this.EntityID;
-            request.ListID = this.SourceListID || undefined; // Optional — if not set, scans all entity records
+            // Optional — with neither set, the run scans all of the entity's records
+            request.ListID = this.SourceListID || undefined;
+            request.ViewID = this.SourceViewID || undefined;
 
             // The run's entity document supplies the template, vectors and thresholds.
             const entityDocument = await this.loadRunEntityDocument();

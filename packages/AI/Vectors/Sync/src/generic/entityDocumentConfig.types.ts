@@ -223,6 +223,14 @@ export interface EntityDocumentPipelineConfig {
      * been vectorized (by their deterministic SHA-1 ID). Default: false.
      */
     forceRevectorize?: boolean;
+
+    /**
+     * Whether a full run removes Entity Record Documents (and their vectors) for records it no
+     * longer covers — deleted, re-keyed, or excluded by the record filter — and duplicate rows for
+     * one record. Runs only after a complete pass (not for list runs or runs with a StartingOffset).
+     * Default: true. Set false for very large indexes where the in-memory RecordID set is too costly.
+     */
+    pruneOrphans?: boolean;
 }
 
 /* ------------------------------------------------------------------ */

@@ -40,6 +40,16 @@ vi.mock('@memberjunction/core-entities', () => {
         public EntityDocumentID = 'doc-1';
         public IsSaved = true;
         public SourceListID: string | null = null;
+        public SourceViewID: string | null = null;
+        public Validate(): { Success: boolean; Errors: unknown[] } {
+            return { Success: true, Errors: [] };
+        }
+        public async ValidateAsync(): Promise<{ Success: boolean; Errors: unknown[] }> {
+            return { Success: true, Errors: [] };
+        }
+        public GetFieldByName(_name: string): { Dirty: boolean } {
+            return { Dirty: true };
+        }
         public EndedAt: Date | null = null;
         public ProcessingStatus: 'Complete' | 'Failed' | 'In Progress' | 'Pending' = 'In Progress';
         public ProcessingErrorMessage: string | null = null;
@@ -70,7 +80,7 @@ vi.mock('@memberjunction/ai-vector-dupe', () => ({
     },
 }));
 
-import { CheckRunEntityDocument, MJDuplicateRunEntityServer, PickDuplicateDetectionDocument } from '../custom/MJDuplicateRunEntityServer.server';
+import { CheckRunEntityDocument, CheckRunSourceScope, CheckRunSourceView, MJDuplicateRunEntityServer, PickDuplicateDetectionDocument } from '../custom/MJDuplicateRunEntityServer.server';
 
 describe('PickDuplicateDetectionDocument', () => {
     it('prefers a Record Duplicate document over a newer Search document', () => {
@@ -266,5 +276,60 @@ describe('MJDuplicateRunEntityServer', () => {
             'autotag',
             'complete',
         ]);
+    });
+
+    // #5200: a run can scan one saved view.
+    it('passes the run\'s source view to the detector as ViewID', async () => {
+        runViewMock.mockResolvedValue({
+            Success: true,
+            Results: [{ ID: 'doc-1', EntityID: 'entity-1', PotentialMatchThreshold: 0.8, AbsoluteMatchThreshold: 0.95 }],
+        });
+        getDuplicateRecordsMock.mockResolvedValue({ Status: 'Success', PotentialDuplicateResult: [] });
+
+        const run = new MJDuplicateRunEntityServer();
+        run.SourceViewID = 'view-1';
+        await (run as unknown as { runDetectionAsync: () => Promise<void> }).runDetectionAsync();
+
+        const request = getDuplicateRecordsMock.mock.calls[0][0] as PotentialDuplicateRequest;
+        expect(request.ViewID).toBe('view-1');
+        expect(request.ListID).toBeUndefined();
+    });
+
+    it('refuses a run that names both a list and a view', () => {
+        const run = new MJDuplicateRunEntityServer();
+        run.SourceListID = 'list-1';
+        run.SourceViewID = 'view-1';
+        const result = run.Validate();
+        expect(result.Success).toBe(false);
+    });
+
+    it('refuses a view of another entity, and accepts one of the run\'s entity', async () => {
+        const run = new MJDuplicateRunEntityServer();
+        run.SourceViewID = 'view-1';
+        runViewMock.mockResolvedValueOnce({ Success: true, Results: [{ ID: 'view-1', Name: 'Orgs view', EntityID: 'entity-2' }] });
+        expect((await run.ValidateAsync()).Success).toBe(false);
+        runViewMock.mockResolvedValueOnce({ Success: true, Results: [{ ID: 'view-1', Name: 'People view', EntityID: 'ENTITY-1' }] });
+        expect((await run.ValidateAsync()).Success).toBe(true);
+    });
+
+    it('refuses a view it cannot find', async () => {
+        const run = new MJDuplicateRunEntityServer();
+        run.SourceViewID = 'gone';
+        runViewMock.mockResolvedValueOnce({ Success: true, Results: [] });
+        expect((await run.ValidateAsync()).Success).toBe(false);
+    });
+});
+
+describe('run source checks', () => {
+    it('CheckRunSourceScope allows the whole entity, a list, or a view, but not a list and a view', () => {
+        expect(CheckRunSourceScope({ SourceListID: null, SourceViewID: null })).toBeNull();
+        expect(CheckRunSourceScope({ SourceListID: 'l', SourceViewID: null })).toBeNull();
+        expect(CheckRunSourceScope({ SourceListID: null, SourceViewID: 'v' })).toBeNull();
+        expect(CheckRunSourceScope({ SourceListID: 'l', SourceViewID: 'v' })).toMatch(/not both/);
+    });
+
+    it('CheckRunSourceView compares entity IDs case-insensitively', () => {
+        expect(CheckRunSourceView({ EntityID: 'E-1', Name: 'v' }, 'e-1')).toBeNull();
+        expect(CheckRunSourceView({ EntityID: 'e-2', Name: 'Other view' }, 'e-1')).toMatch(/different entity/);
     });
 });

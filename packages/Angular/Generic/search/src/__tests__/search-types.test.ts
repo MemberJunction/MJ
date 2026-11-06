@@ -9,7 +9,11 @@ import {
     SearchResultSelectedEvent,
     SearchFilterChangeEvent,
     SearchExecutedEvent,
-    ScoreBreakdown
+    ScoreBreakdown,
+    MatchChipsFor,
+    PassesMatchType,
+    HasNoExactMatches,
+    MinScorePercentFromSetting
 } from '../lib/search-types';
 
 describe('Search Types', () => {
@@ -132,5 +136,66 @@ describe('Search Types', () => {
             expect(breakdown.FullText).toBeUndefined();
             expect(breakdown.Entity).toBeUndefined();
         });
+    });
+});
+
+// #5123: results say how they matched instead of showing the rank-based Score as a percentage.
+describe('MatchChipsFor', () => {
+    const lookup = {
+        IsNameField: (_entity: string, field: string) => field === 'Name',
+        DisplayName: (_entity: string, field: string) => (field === 'EmailAddress' ? 'Email' : field),
+    };
+
+    it('a keyword hit on a name field is a name match', () => {
+        const chips = MatchChipsFor({ EntityName: 'People', ScoreBreakdown: { Entity: 0.9 }, MatchedFields: ['EmailAddress', 'Name'] }, lookup);
+        expect(chips.map(c => c.Label)).toEqual(['Name match']);
+    });
+
+    it('any other text hit names the first field, with a count of the rest', () => {
+        const chips = MatchChipsFor({ EntityName: 'People', ScoreBreakdown: { Entity: 0.6 }, MatchedFields: ['EmailAddress', 'Notes'] }, lookup);
+        expect(chips.map(c => c.Label)).toEqual(['Text match · Email +1']);
+    });
+
+    it('a full-text hit with no field names is a plain text match', () => {
+        expect(MatchChipsFor({ EntityName: 'Docs', ScoreBreakdown: { FullText: 0.4 } }).map(c => c.Label)).toEqual(['Text match']);
+    });
+
+    it('semantic only, both lanes, and re-ranked', () => {
+        expect(MatchChipsFor({ EntityName: 'X', ScoreBreakdown: { Vector: 0.7 } }).map(c => c.Kind)).toEqual(['meaning']);
+        expect(MatchChipsFor({ EntityName: 'X', ScoreBreakdown: { Vector: 0.7, Entity: 0.5 } }).map(c => c.Kind)).toEqual(['text', 'meaning']);
+        expect(MatchChipsFor({ EntityName: 'X', ScoreBreakdown: { Vector: 0.7, ReRank: 0.555 } }).map(c => c.Label)).toEqual(['Similar meaning', 'Relevance 56%']);
+    });
+
+    it('no evidence at all gives no chips (and never a percentage)', () => {
+        expect(MatchChipsFor({ EntityName: 'X', ScoreBreakdown: {} })).toEqual([]);
+    });
+});
+
+describe('PassesMatchType', () => {
+    it('text keeps text matches, meaning keeps semantic matches, a both-lane result passes either', () => {
+        const both = { ScoreBreakdown: { Vector: 0.7, Entity: 0.5 } };
+        expect(PassesMatchType({ ScoreBreakdown: { Entity: 0.5 } }, 'meaning')).toBe(false);
+        expect(PassesMatchType({ ScoreBreakdown: { Vector: 0.7 } }, 'text')).toBe(false);
+        expect(PassesMatchType(both, 'text')).toBe(true);
+        expect(PassesMatchType(both, 'meaning')).toBe(true);
+        expect(PassesMatchType({ ScoreBreakdown: {} }, 'all')).toBe(true);
+    });
+});
+
+describe('HasNoExactMatches', () => {
+    it('is true only when there were no keyword and no full-text hits', () => {
+        expect(HasNoExactMatches({ Entity: 0, FullText: 0 })).toBe(true);
+        expect(HasNoExactMatches({ Entity: 2, FullText: 0 })).toBe(false);
+        expect(HasNoExactMatches(undefined)).toBe(false);
+    });
+});
+
+describe('MinScorePercentFromSetting', () => {
+    it('turns the 0-1 setting into a percent and falls back to 30 when unusable', () => {
+        expect(MinScorePercentFromSetting(0.3)).toBe(30);
+        expect(MinScorePercentFromSetting(0.355)).toBe(36);
+        expect(MinScorePercentFromSetting(Number.NaN)).toBe(30);
+        expect(MinScorePercentFromSetting(35)).toBe(30);
+        expect(MinScorePercentFromSetting(undefined)).toBe(30);
     });
 });

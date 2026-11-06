@@ -267,4 +267,23 @@ describe('ProviderBase.SearchEntity / SearchEntities', () => {
             expect(r.every(group => group[0].recordId === 'a')).toBe(true);
         });
     });
+
+    // #5668: with two active Search documents for an entity the pick used to be arbitrary
+    // (MaxRows 1, no order). The oldest one now wins every time.
+    describe('resolveSearchEntityDocument — which Search document is used', () => {
+        it('orders the lookup oldest-first so the same document wins every time', async () => {
+            const runView = vi.spyOn(provider, 'RunView').mockResolvedValue({
+                Success: true, Results: [{ ID: 'doc-old', AIModelID: null }], RowCount: 1, TotalRowCount: 1,
+                ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '',
+            });
+
+            const resolved = await originalResolve.call(provider, 'entity-1', undefined, undefined);
+
+            expect(resolved).toEqual({ id: 'doc-old', aiModelId: null });
+            const params = runView.mock.calls[0][0];
+            expect(params.OrderBy).toBe('__mj_CreatedAt ASC, ID ASC');
+            expect(params.MaxRows).toBe(1);
+            expect(params.ExtraFilter).toContain("Type='Search'");
+        });
+    });
 });

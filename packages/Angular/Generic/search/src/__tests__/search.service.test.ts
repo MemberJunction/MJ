@@ -315,7 +315,7 @@ describe('SearchService', () => {
     });
 
     describe('BuildFilters', () => {
-        it('should build source type, entity, and tag filters', () => {
+        it('should build match type, entity, and tag filters', () => {
             const results: SearchResultItem[] = [
                 createMockResult('1', 'entity', 'Contacts', ['customer']),
                 createMockResult('2', 'file', 'Documents', ['internal']),
@@ -324,8 +324,19 @@ describe('SearchService', () => {
             const filters = service.BuildFilters(results);
 
             expect(filters).toHaveLength(3);
-            const sourceFilter = filters.find(f => f.Category === 'Source');
-            expect(sourceFilter?.Options).toHaveLength(2);
+            expect(filters.find(f => f.Category === 'Source')).toBeUndefined();
+            const matchType = filters.find(f => f.Category === 'Match type');
+            // both mock results carry Vector and FullText scores, so each counts under both options
+            expect(matchType?.Options.map(o => [o.Value, o.Count])).toEqual([['text', 2], ['meaning', 2]]);
+        });
+
+        // #5123: "Match type" says how results matched; a result only one lane matched counts once.
+        it('counts text-only and semantic-only results under their own match type', () => {
+            const textOnly = { ...createMockResult('1', 'entity', 'Contacts'), ScoreBreakdown: { Entity: 0.7 } };
+            const meaningOnly = { ...createMockResult('2', 'entity', 'Contacts'), ScoreBreakdown: { Vector: 0.8 } };
+            const filters = service.BuildFilters([textOnly, meaningOnly]);
+            const matchType = filters.find(f => f.Category === 'Match type');
+            expect(matchType?.Options.map(o => [o.Label, o.Count])).toEqual([['Exact text', 1], ['Similar meaning', 1]]);
         });
 
         it('should limit tags filter to 15 options', () => {

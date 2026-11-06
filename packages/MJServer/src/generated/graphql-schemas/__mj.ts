@@ -47861,6 +47861,10 @@ export class MJDuplicateRun_ {
     @MaxLength(36)
     EntityDocumentID?: string;
         
+    @Field({nullable: true, description: "The saved view whose records this run scanned. NULL when the run scanned the whole entity or a list (SourceListID); a run never sets both."}) 
+    @MaxLength(36)
+    SourceViewID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Entity?: string;
@@ -47880,6 +47884,10 @@ export class MJDuplicateRun_ {
     @Field({nullable: true}) 
     @MaxLength(250)
     EntityDocument?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    SourceView?: string;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
@@ -47942,6 +47950,9 @@ export class CreateMJDuplicateRunInput {
     @Field({ nullable: true })
     EntityDocumentID?: string;
 
+    @Field({ nullable: true })
+    SourceViewID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -48002,6 +48013,9 @@ export class UpdateMJDuplicateRunInput {
 
     @Field({ nullable: true })
     EntityDocumentID?: string;
+
+    @Field({ nullable: true })
+    SourceViewID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

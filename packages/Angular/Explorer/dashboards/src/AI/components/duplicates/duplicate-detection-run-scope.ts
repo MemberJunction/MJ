@@ -35,6 +35,8 @@ export interface DuplicateRunCandidate {
     StartedAt: Date | string | null;
     /** Set when the run covered one list's records rather than the whole entity. */
     SourceListID: string | null;
+    /** Set when the run covered one saved view's records rather than the whole entity. */
+    SourceViewID?: string | null;
 }
 
 const RUN_FAILED = 'Failed';
@@ -42,10 +44,49 @@ const RUN_FAILED = 'Failed';
 /**
  * A run worth putting on the board ahead of others: it did not fail (a run is marked Failed on any
  * exception in detection, usually before a single detail is written) and it covered the whole
- * entity rather than one list (a list run is a small subset that would hide the entity-wide results).
+ * entity rather than one list or view (a subset that would hide the entity-wide results).
  */
 function isPreferredRun(run: DuplicateRunCandidate): boolean {
-    return run.ProcessingStatus !== RUN_FAILED && !run.SourceListID;
+    return run.ProcessingStatus !== RUN_FAILED && !run.SourceListID && !run.SourceViewID;
+}
+
+/** Which records a new run scans: the whole entity, one list, or one saved view. */
+export type RunRecordScope = 'all' | 'list' | 'view';
+
+/**
+ * The `SourceListID` / `SourceViewID` a new run carries for the chosen scope. Null when the scope is
+ * a list or view and none is picked, so the caller can refuse to start the run.
+ */
+export function RunSourceFields(
+    scope: RunRecordScope,
+    sourceID: string | null | undefined
+): { SourceListID: string | null; SourceViewID: string | null } | null {
+    if (scope === 'all') {
+        return { SourceListID: null, SourceViewID: null };
+    }
+    if (!sourceID) {
+        return null;
+    }
+    return scope === 'list'
+        ? { SourceListID: sourceID, SourceViewID: null }
+        : { SourceListID: null, SourceViewID: sourceID };
+}
+
+/**
+ * The query for the lists or saved views a run may scan, for one entity. Views are the user's own
+ * and shared ones; lists are whatever the user can read for the entity. Both ordered by name.
+ */
+export function BuildRunSourceOptionsQuery(scope: 'list' | 'view', entityID: string, userID: string): RunViewParams {
+    const entity = `EntityID='${EscapeSQLString(entityID)}'`;
+    return scope === 'list'
+        ? { EntityName: 'MJ: Lists', ExtraFilter: entity, Fields: ['ID', 'Name'], OrderBy: 'Name', ResultType: 'simple' }
+        : {
+            EntityName: 'MJ: User Views',
+            ExtraFilter: `${entity} AND (UserID='${EscapeSQLString(userID)}' OR IsShared=1)`,
+            Fields: ['ID', 'Name'],
+            OrderBy: 'Name',
+            ResultType: 'simple',
+        };
 }
 
 /** How many detail IDs go into one matches query; keeps each `IN (...)` list a sane size. */

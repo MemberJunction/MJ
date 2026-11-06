@@ -354,6 +354,10 @@ class BatchHarness extends TestableDetector {
     protected override async LoadRecordsByKeys(compositeKeys: CompositeKey[]): Promise<BaseEntity[]> {
         return compositeKeys.map(() => ({}) as unknown as BaseEntity);
     }
+    /** No stored vectors, so every record is embedded: the stored-vector path is covered in duplicateRecordDetector.test.ts. */
+    protected override async LoadStoredVectors(): Promise<Map<string, number[]>> {
+        return new Map();
+    }
     protected override buildSourceMetadataMap(): Map<string, string> {
         return new Map();
     }

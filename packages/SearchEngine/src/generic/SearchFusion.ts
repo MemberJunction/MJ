@@ -196,6 +196,7 @@ export class SearchFusion {
                                   result.Score > existing.Score ? result : existing;
 
                 const mergedTags = Array.from(new Set([...(existing.Tags ?? []), ...(result.Tags ?? [])]));
+                const matchedFields = UnionMatchedFields(existing.MatchedFields, result.MatchedFields);
 
                 const other = preferred === existing ? result : existing;
                 let snippet = preferred.Snippet;
@@ -209,7 +210,8 @@ export class SearchFusion {
                     Snippet: snippet,
                     Score: maxScore,
                     ScoreBreakdown: mergedBreakdown,
-                    Tags: mergedTags
+                    Tags: mergedTags,
+                    MatchedFields: matchedFields
                 });
             }
         }
@@ -271,6 +273,7 @@ export class SearchFusion {
                     resultMap.set(key, {
                         ...existing,
                         ScoreBreakdown: { ...existing.ScoreBreakdown, ...r.ScoreBreakdown },
+                        MatchedFields: UnionMatchedFields(existing.MatchedFields, r.MatchedFields),
                     });
                 }
             }
@@ -373,4 +376,13 @@ export class SearchFusion {
             MatchedAt: new Date()
         };
     }
+}
+
+/**
+ * The union of two results' matched field names, in first-seen order; undefined when neither has any,
+ * so a result no text lane matched keeps no `MatchedFields`.
+ */
+export function UnionMatchedFields(a: string[] | undefined, b: string[] | undefined): string[] | undefined {
+    if (!a?.length && !b?.length) return undefined;
+    return Array.from(new Set([...(a ?? []), ...(b ?? [])]));
 }

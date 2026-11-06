@@ -19206,6 +19206,12 @@ export const MJDuplicateRunSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entity Documents (vwEntityDocuments.ID)
         * * Description: The Entity Document this run used: its template, vectors, match thresholds and LLM reasoning settings produced the run's matches.`),
+    SourceViewID: z.string().nullable().describe(`
+        * * Field Name: SourceViewID
+        * * Display Name: Source View ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: User Views (vwUserViews.ID)
+        * * Description: The saved view whose records this run scanned. NULL when the run scanned the whole entity or a list (SourceListID); a run never sets both.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
@@ -19226,6 +19232,10 @@ export const MJDuplicateRunSchema = z.object({
         * * Field Name: EntityDocument
         * * Display Name: Entity Document Name
         * * SQL Data Type: nvarchar(250)`),
+    SourceView: z.string().nullable().describe(`
+        * * Field Name: SourceView
+        * * Display Name: Source View
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJDuplicateRunEntityType = z.infer<typeof MJDuplicateRunSchema>;
@@ -97064,6 +97074,20 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
     }
 
     /**
+    * * Field Name: SourceViewID
+    * * Display Name: Source View ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: User Views (vwUserViews.ID)
+    * * Description: The saved view whose records this run scanned. NULL when the run scanned the whole entity or a list (SourceListID); a run never sets both.
+    */
+    get SourceViewID(): string | null {
+        return this.Get('SourceViewID');
+    }
+    set SourceViewID(value: string | null) {
+        this.Set('SourceViewID', value);
+    }
+
+    /**
     * * Field Name: Entity
     * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
@@ -97106,6 +97130,15 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
     */
     get EntityDocument(): string {
         return this.Get('EntityDocument');
+    }
+
+    /**
+    * * Field Name: SourceView
+    * * Display Name: Source View
+    * * SQL Data Type: nvarchar(100)
+    */
+    get SourceView(): string | null {
+        return this.Get('SourceView');
     }
 }
 

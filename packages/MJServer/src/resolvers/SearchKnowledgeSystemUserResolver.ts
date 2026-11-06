@@ -101,6 +101,7 @@ export class SearchKnowledgeSystemUserResolver extends ResolverBase {
                 RecordName: r.RecordName,
                 MatchedAt: r.MatchedAt,
                 RawMetadata: r.RawMetadata,
+                MatchedFields: r.MatchedFields,
                 ProviderId: r.ProviderId,
                 ProviderLabel: r.ProviderLabel,
                 ProviderIcon: r.ProviderIcon,

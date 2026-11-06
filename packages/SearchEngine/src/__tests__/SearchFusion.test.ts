@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { SearchFusion, LabeledResultList } from '../generic/SearchFusion';
+import { SearchFusion, LabeledResultList, UnionMatchedFields } from '../generic/SearchFusion';
 import { SearchResultItem, SearchScoreBreakdown } from '../generic/search.types';
 
 // Mock the ComputeRRF function from @memberjunction/core.
@@ -46,6 +46,7 @@ function makeResult(overrides: Partial<SearchResultItem> & { RecordID: string; E
         ScoreBreakdown: overrides.ScoreBreakdown ?? {},
         Tags: overrides.Tags ?? [],
         MatchedAt: overrides.MatchedAt ?? new Date('2025-01-01'),
+        MatchedFields: overrides.MatchedFields,
     };
 }
 
@@ -787,5 +788,36 @@ describe('SearchFusion', () => {
             expect(result).toHaveLength(5);
             expect(result.map(r => r.RecordID)).toEqual(['r0', 'r1', 'r2', 'r3', 'r4']);
         });
+    });
+});
+
+// #5123: a UI says how a result matched ("Text match · Email") from MatchedFields, so the field
+// names must survive fusion and dedup when the same record comes back from several lanes.
+describe('MatchedFields across lanes', () => {
+    it('Fuse unions MatchedFields when the same record is in several lists', () => {
+        const fusion = new SearchFusion();
+        const lists: LabeledResultList[] = [
+            { Source: 'entity', Results: [makeResult({ RecordID: 'r1', EntityName: 'People', MatchedFields: ['Name'] })] },
+            { Source: 'fulltext', Results: [makeResult({ RecordID: 'r1', EntityName: 'People', MatchedFields: ['Email', 'Name'] })] },
+            { Source: 'vector', Results: [makeResult({ RecordID: 'r1', EntityName: 'People', SourceType: 'vector' })] },
+        ];
+        const [fused] = fusion.Fuse(lists, 10);
+        expect(fused.MatchedFields).toEqual(['Name', 'Email']);
+    });
+
+    it('Deduplicate unions MatchedFields, and leaves a semantic-only result without any', () => {
+        const fusion = new SearchFusion();
+        const deduped = fusion.Deduplicate([
+            makeResult({ RecordID: 'r1', EntityName: 'People', MatchedFields: ['Name'] }),
+            makeResult({ RecordID: 'r1', EntityName: 'People', SourceType: 'vector' }),
+            makeResult({ RecordID: 'r2', EntityName: 'People', SourceType: 'vector' }),
+        ]);
+        expect(deduped.find(r => r.RecordID === 'r1')?.MatchedFields).toEqual(['Name']);
+        expect(deduped.find(r => r.RecordID === 'r2')?.MatchedFields).toBeUndefined();
+    });
+
+    it('UnionMatchedFields is undefined when neither side has any', () => {
+        expect(UnionMatchedFields(undefined, [])).toBeUndefined();
+        expect(UnionMatchedFields(['A'], ['B', 'A'])).toEqual(['A', 'B']);
     });
 });

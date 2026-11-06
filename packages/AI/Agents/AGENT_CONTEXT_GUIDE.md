@@ -141,81 +141,75 @@ private registerAgentTools(): void {
 
 ---
 
-## Example: Knowledge Search Dashboard
+## Example: Search Results page
 
-The Search dashboard (`KnowledgeSearchResourceComponent`) demonstrates both context and tools.
+The Explorer search page (`SearchResultsResource`, `packages/Angular/Explorer/explorer-core/src/lib/resource-wrappers/search-results-resource.component.ts`) demonstrates both context and tools.
 
 ### emitAgentContext()
 
-Reports the current search state so the agent knows what the user is looking at:
+Reports the current search state so the agent knows what the user is looking at. Each result says how it matched rather than carrying the fused `Score` as a percentage: that score is rank-based (RRF ÷ max) and orders results, but it is not a confidence.
 
 ```typescript
 private emitAgentContext(): void {
     this.navigationService.SetAgentContext(this, {
-        CurrentQuery: this.Query || null,
+        CurrentQuery: this.CurrentQuery || null,
         ResultCount: this.TotalCount,
-        ElapsedMs: this.ElapsedMs,
-        HasSearched: this.HasSearched,
-        ShowFilters: this.ShowFilters,
-        MinScoreThreshold: this.MinScoreThreshold,
-        ActiveFilterCount: this.GetActiveFilterCount(),
-        TopResults: this.AllResults.slice(0, 5).map(r => ({
-            Title: r.Title,
+        FilteredCount: this.FilteredResults.length,
+        MinScorePercent: this.MinScorePercent,
+        ActiveFilterCount: Object.values(this.ActiveFilters).filter(v => v.length > 0).length,
+        TopResults: this.FilteredResults.slice(0, 50).map(r => ({
+            Title: r.Title || r.RecordName,
             EntityName: r.EntityName,
-            Score: Math.round(r.Score * 100),
+            RecordID: r.RecordID,
+            HowMatched: MatchChipsFor(r).map(c => c.Label), // e.g. ["Text match · Email", "Similar meaning"]
         })),
+        NoExactMatches: this.NoExactMatches,
     });
 }
 ```
 
-This method is called after initialization, after every search, and after every filter change.
+This method is called after every search and after every filter change.
 
 ### registerAgentTools()
 
-Registers three tools the agent can invoke:
+Registers tools the agent can invoke, for example running a search and setting the similar-meaning cutoff:
 
 ```typescript
 private registerAgentTools(): void {
     this.navigationService.SetAgentClientTools(this, [
         {
-            Name: 'RunKnowledgeSearch',
-            Description: 'Execute a knowledge search query across all indexed content',
+            Name: 'RunSearch',
+            Description: 'Execute a search query and display results',
             ParameterSchema: {
                 type: 'object',
-                properties: {
-                    query: { type: 'string', description: 'The search query text' },
-                    minScore: { type: 'number', description: 'Minimum relevance score 0-1 (default 0.35)' },
-                },
+                properties: { query: { type: 'string', description: 'The search query text' } },
                 required: ['query'],
             },
             Handler: async (params: Record<string, unknown>) => {
-                this.Query = String(params['query'] ?? '');
-                if (params['minScore'] != null) this.MinScoreThreshold = Number(params['minScore']);
-                await this.RunSearch();
+                const query = String(params['query'] ?? '');
+                this.CurrentQuery = query;
+                await this.executeSearch(query);
                 return { Success: true, Data: { ResultCount: this.TotalCount, ElapsedMs: this.ElapsedMs } };
             },
         },
         {
-            Name: 'ClearKnowledgeSearch',
-            Description: 'Clear the current search query and results',
-            ParameterSchema: { type: 'object', properties: {} },
-            Handler: async () => {
-                this.ClearSearch();
-                return { Success: true };
+            Name: 'SetMinRelevance',
+            Description: 'Set the similar-meaning cutoff (0-100 percent). Exact text matches always show.',
+            ParameterSchema: {
+                type: 'object',
+                properties: { percent: { type: 'number', description: 'Semantic similarity cutoff in percent (0-100)' } },
+                required: ['percent'],
             },
-        },
-        {
-            Name: 'ToggleSearchFilters',
-            Description: 'Show or hide the search filter panel',
-            ParameterSchema: { type: 'object', properties: {} },
-            Handler: async () => {
-                this.ToggleFilters();
-                return { Success: true, Data: { ShowFilters: this.ShowFilters } };
+            Handler: async (params: Record<string, unknown>) => {
+                this.OnMinScoreChanged(Number(params['percent'] ?? 0));
+                return { Success: true, Data: { MinScorePercent: this.MinScorePercent } };
             },
         },
     ]);
 }
 ```
+
+The cutoff starts at the `Search.DefaultMinScore` instance setting.
 
 ---
 

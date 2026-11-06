@@ -141,50 +141,50 @@
     font-size: 0.82rem;
 }
 
-/* Score Visualization */
-.score-overview {
+/* How it matched */
+.detail-match-chips {
     display: flex;
-    gap: 2rem;
-    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.75rem;
 }
 
-.score-main {
-    width: 5rem;
-    height: 5rem;
-    border-radius: 50%;
+.detail-match-chip-name,
+.detail-match-chip-text,
+.detail-match-chip-meaning,
+.detail-match-chip-relevance {
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    border: 1px solid var(--mj-border-subtle);
+}
+
+.detail-match-chip-name,
+.detail-match-chip-text {
+    color: var(--mj-status-success-text, var(--mj-status-success));
+    background: color-mix(in srgb, var(--mj-status-success) 12%, var(--mj-bg-surface));
+}
+
+.detail-match-chip-meaning {
+    color: var(--mj-status-info-text, var(--mj-status-info));
+    background: color-mix(in srgb, var(--mj-status-info) 12%, var(--mj-bg-surface));
+}
+
+.detail-match-chip-relevance {
+    color: var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+}
+
+.score-technical {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    border: 3px solid;
+    gap: 0.4rem;
 }
 
-.score-main.score-high {
-    border-color: var(--mj-status-success);
-    background: var(--mj-status-success-bg);
-}
-
-.score-main.score-medium {
-    border-color: var(--mj-status-warning);
-    background: var(--mj-status-warning-bg);
-}
-
-.score-main.score-low {
-    border-color: var(--mj-status-error);
-    background: var(--mj-status-error-bg);
-}
-
-.score-main-value {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: var(--mj-text-primary);
-}
-
-.score-main-label {
-    font-size: 0.6rem;
+.score-technical-label {
+    font-size: 0.72rem;
     color: var(--mj-text-muted);
-    text-transform: uppercase;
 }
 
 .score-breakdown {
@@ -221,16 +221,8 @@
     transition: width 0.3s ease;
 }
 
-.score-bar-fill.score-high {
-    background: var(--mj-status-success);
-}
-
-.score-bar-fill.score-medium {
-    background: var(--mj-status-warning);
-}
-
-.score-bar-fill.score-low {
-    background: var(--mj-status-error);
+.score-bar-fill {
+    background: color-mix(in srgb, var(--mj-brand-primary) 60%, var(--mj-bg-surface));
 }
 
 .score-bar-value {
@@ -350,8 +342,4 @@
         border-top: 1px solid var(--mj-border-default);
     }
 
-    .score-overview {
-        flex-direction: column;
-        align-items: center;
-    }
 }

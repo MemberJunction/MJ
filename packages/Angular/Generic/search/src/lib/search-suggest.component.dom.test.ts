@@ -87,6 +87,46 @@ describe('SearchSuggestComponent (DOM)', () => {
     expect(items[0].querySelector('.suggest-result-title')?.textContent?.trim()).toBe('High');
   });
 
+  // #5123: the preview says how a row matched instead of showing the rank-based score as a %.
+  it('shows how each preview row matched, and no percentage unless a re-ranker scored it', () => {
+    const fixture = render({
+      IsOpen: true,
+      Query: 'graph',
+      MinQueryLength: 2,
+      IsLoading: false,
+      PreviewResults: [
+        makeResult({ ID: 'kw', Title: 'Keyword', Score: 0.9, ScoreBreakdown: { Entity: 0.9 }, MatchedFields: ['Email'] }),
+        makeResult({ ID: 'sem', Title: 'Semantic', Score: 0.8, ScoreBreakdown: { Vector: 0.71 } }),
+        makeResult({ ID: 'rr', Title: 'Reranked', Score: 0.7, ScoreBreakdown: { ReRank: 0.64 } }),
+      ],
+      TotalCount: 3,
+    });
+    const items = queryAll(fixture, '.suggest-result-item');
+    expect(items[0].querySelector('.suggest-match-chip-text')?.textContent?.trim()).toBe('Text match · Email');
+    expect(items[1].querySelector('.suggest-match-chip-meaning')?.textContent?.trim()).toBe('Similar meaning');
+    expect(items[2].querySelector('.suggest-match-chip-relevance')?.textContent?.trim()).toBe('Relevance 64%');
+    expect(text(fixture, '.suggest-section')).not.toMatch(/\b(90|80)%/);
+  });
+
+  it('filters the preview by match type', () => {
+    const fixture = render({
+      IsOpen: true,
+      Query: 'graph',
+      MinQueryLength: 2,
+      IsLoading: false,
+      PreviewResults: [
+        makeResult({ ID: 'kw', Title: 'Keyword', ScoreBreakdown: { Entity: 0.9 } }),
+        makeResult({ ID: 'sem', Title: 'Semantic', ScoreBreakdown: { Vector: 0.71 } }),
+      ],
+      TotalCount: 2,
+    });
+    const c = fixture.componentInstance;
+    c.MatchType = 'text';
+    expect(c.VisiblePreviewResults.map(r => r.ID)).toEqual(['kw']);
+    c.MatchType = 'meaning';
+    expect(c.VisiblePreviewResults.map(r => r.ID)).toEqual(['sem']);
+  });
+
   it('shows the "See all N results" footer when there are total results for the query', () => {
     const fixture = render({
       IsOpen: true,
@@ -174,7 +214,7 @@ describe('SearchSuggestComponent (DOM)', () => {
     expect(cleared.length).toBe(1);
   });
 
-  it('opens the relevance filter (chevron-open) and marks the selected option active', () => {
+  it('opens the match-type filter (chevron-open) and marks the selected option active', () => {
     // The filter bar only shows in preview mode (showPreviewSection), so render with a query +
     // results. IsFilterOpen is set in `setup` (before the first CD) so the chevron-open class
     // is stable on the first pass — flipping it after render trips the zoneless NG0100 check.
@@ -183,12 +223,14 @@ describe('SearchSuggestComponent (DOM)', () => {
       declarations: [SearchSuggestComponent],
       inputs: { IsOpen: true, Query: 'graph', MinQueryLength: 2, IsLoading: false, PreviewResults: [makeResult()], TotalCount: 1 },
       setup: (c) => {
-        c.IsFilterOpen = true; // open the Min Relevance popover
+        c.IsFilterOpen = true; // open the Match type popover
       },
     });
     expect(query(fixture, '.suggest-filter-chevron')?.classList.contains('suggest-filter-chevron-open')).toBe(true);
-    // the option matching the current MinRelevancePercent carries the active class
-    expect(queryAll(fixture, '.suggest-filter-option-active').length).toBeGreaterThanOrEqual(1);
+    // the option matching the current MatchType ('all' by default) carries the active class
+    const active = queryAll(fixture, '.suggest-filter-option-active');
+    expect(active.length).toBe(1);
+    expect(active[0].textContent).toContain('All matches');
   });
 
   it('unsubscribes the MJGlobal login listener on ngOnDestroy (MJ-NG-6)', () => {
