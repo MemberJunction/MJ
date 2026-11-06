@@ -774,7 +774,7 @@ Passing gate 2 turns on nightly PR comments (at the nightly threshold) and start
 
 | Phase | Delivers | Exit |
 |---|---|---|
-| 0 Spike | Answers to the questions below; throwaway code | All answered; design adjusted if needed |
+| 0 Spike | Answers to the questions below; throwaway code | All answered; design adjusted if needed. Done 2026-11-06, except question 5 (open question Q2) |
 | 1 Core | Package, CLI, sandbox runner, redaction check, `VitestCatchTarget`, `AllRunsAgreeVerdict`, generator, analyzer, rules, judges, `FileCatchStore`; `jit-catch run --pr` works locally | Unit tests for every rule and verdict; end-to-end run on 3 real PRs |
 | 2 Gate 1 | Corpus files, `backtest` and `report` commands, three-model comparison | Gate 1 passes with the chosen model |
 | 3 Gate 2 | Workflows (jobs 1–3, feedback, recheck), PR comment, promotion, data branch | Gate 2 passes |
@@ -804,6 +804,26 @@ Passing gate 2 turns on nightly PR comments (at the nightly threshold) and start
    sandbox (`--network none`, store on a bind mount, so `package-import-method=copy`)? How long does the copy take and
    how much disk does it use? If fetch cannot serve the workspace lockfile, does the install-container fallback (§7)
    work? And does turbo `^2.7` give job 1 read-only remote cache access (`--cache=local:rw,remote:r`)?
+
+**Answers (phase 0, 2026-11-06).** The full record, with commands and raw output, is
+`plans/catching-jittests-spike/RESULTS.md` on branch `CB-jit-catching-impl`.
+
+1. It fits a hosted runner: job 1 took 40–49 s to install and 3–10 s to build (all remote cache hits); job 2's sandbox
+   step took 52–246 s; 14 GB of disk used, 71 GB free. In 3 of 5 PRs the head build missed 54–117 tasks (Q4).
+2. Yes, on SDK 0.3.318, with `tools`, `permissionMode: 'default'` and reads and writes kept out of `allowedTools`;
+   the token count needs care, and the credential must be checked (D36, D37, D38).
+3. Inside the container, yes (probes 1–9). On the host, the first design failed: with `patches/` copied, `pnpm fetch`
+   applied PR diffs on the host; D35 removes this. A real `ACTIONS_RUNTIME_TOKEN` was not tested (§17).
+4. Yes for all three; TP Prob uses `gpt-4.1-mini` (D39); `OpenAILLM` throws where `AnthropicLLM` returns
+   `success: false` (§9.2).
+5. Pending: the secret is not readable from a branch; repo admins check (Q2).
+6. Partly: the JSON reporter has no `expected`/`actual` and shows a timeout as `Error: STACK_TRACE_ERROR`; a custom
+   reporter gets every field (D40).
+7. Yes, on 3 eligible PRs where all tests passed; no failing test was compared (D41).
+8. Not as first designed: the lockfile-only fetch fails (`ERR_PNPM_PATCH_NOT_FOUND`). A fetch with a lockfile copy
+   without patch information works, and the sandbox applies the patch offline (D35, "Option (b) test"). The copy import
+   takes 32–57 s and the store 3.2 GB; `--cache=local:rw,remote:r` gives remote hits. The install-container fallback
+   works but is not used (§7).
 
 ---
 
@@ -836,7 +856,7 @@ judges, reporting model and gates carry over.
 | A PR's lockfile or patch files make the host apply or read PR content | The host fetches with a copy of the lockfile without patch information and reads no patch file (D35); patches apply only in the sandbox; each run has its own store |
 | Cold head builds are too slow or fill the runner's disk | Base hand-off and seeded local turbo cache; one-package fast path; spike question 1 measured 1–5 minutes for job 2 and 14 GB of disk with 71 GB free; the unexplained head cache misses are Q4 |
 | Gate 2 does not reach 15 answered catches | Nightly catches count (D34); 8-week limit with a defined outcome |
-| Agent SDK cannot enforce the tool limits | Spike question 2; fall back to a hand-written tool loop with the Anthropic SDK |
+| Agent SDK cannot enforce the tool limits | Spike question 2 showed it can, with `tools`, `permissionMode: 'default'` and checked reads and writes (D36); no fallback loop needed |
 | Contention with normal CI | Nightly at 07:45 UTC in the existing nightly window, after `test.yml` starts; at most 2 PRs in parallel |
 | Model prices change (Gemini rates double on fixed dates) | Prices are settings in the report; spend limit stops nightly runs |
 
