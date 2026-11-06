@@ -125,7 +125,10 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
             return [];
         }
         const refs = scored.map((s) => ({ EntityName: CONCEPT_ENTITY, RecordID: s.Concept.ID }));
-        const visible = await GraphEngine.Instance.FilterNodesForUser(refs, user, options.AudienceReaders, { IncludeProposed: includeProposed });
+        const visible = await GraphEngine.Instance.FilterNodesForUser(refs, user, options.AudienceReaders, {
+            IncludeProposed: includeProposed,
+            Provider: options.provider,
+        });
         const result: GraphNodeView[] = [];
         for (const s of scored) {
             const view = visible.get(GraphEngine.Instance.GetNodeKey({ EntityName: CONCEPT_ENTITY, RecordID: s.Concept.ID }));
@@ -168,6 +171,7 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
             [seed],
             { Depth: 2, MaxNodes: 50, Direction: 'Both', EdgeTypes: ['Describes', 'Subsets', 'Reads', 'Measures'] },
             user,
+            provider,
         );
         return { ...this.classifyEntityNeighborhood(GraphEngine.Instance.GetNodeKey(seed), subgraph), EntityName: entityInfo.Name };
     }
@@ -207,6 +211,7 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
             [seed],
             { Depth: 2, MaxNodes: 50, Direction: 'Both', IncludeProposed: includeProposed },
             user,
+            provider,
         );
         const conceptEntity = (provider ?? GraphEngine.Instance.ProviderToUse).EntityByName(CONCEPT_ENTITY);
         return {
@@ -427,7 +432,7 @@ export class CanonGraphExpansionService implements IGraphExpansionService {
         const admittedSeeds = new Map<string, GraphSeedNode>();
         const messages: string[] = [];
         for (const graphName of graphNames) {
-            const subgraph = await GraphEngine.Instance.Subgraph(graphName, seedRefs, options, contextUser);
+            const subgraph = await GraphEngine.Instance.Subgraph(graphName, seedRefs, options, contextUser, provider);
             if (subgraph.Message) {
                 messages.push(subgraph.Message);
             }

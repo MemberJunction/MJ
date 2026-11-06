@@ -173,6 +173,31 @@ describe('GraphEngine', () => {
         });
     });
 
+    describe('the provider a caller passes', () => {
+        it('carries every read made for the caller, not the provider the engine was configured with', async () => {
+            const extra = {
+                'MJ: Graph Edges': [StoredEdge(IDS.GraphNetwork, IDS.EdgeTypeRelated, 'Related To', NODE.Account('a1'), NODE.Account('a2'), 0.9)],
+                Accounts: [
+                    { ID: 'a1', Name: 'A1' },
+                    { ID: 'a2', Name: 'A2' },
+                ],
+            };
+            const engine = await configure(providerWith(extra));
+            const requestProvider = new FakeGraphProvider().Reset({ ...CanonMetadataRows(), ...extra });
+            sharedProvider.ReadLog = [];
+            const sub = await engine.Subgraph('Member Network', [{ EntityName: 'Accounts', RecordID: 'a1' }], { Depth: 1 }, analyst, requestProvider as unknown as IMetadataProvider);
+            expect(sub.Nodes.map((n) => n.RecordID).sort()).toEqual(['a1', 'a2']);
+            expect(sharedProvider.ReadLog.filter((r) => r.UserID === analyst.ID)).toEqual([]);
+            expect(requestProvider.ReadsOf('Accounts', analyst.ID).length).toBeGreaterThan(0);
+            expect(requestProvider.ReadsOf('MJ: Graph Edges', analyst.ID).length).toBeGreaterThan(0);
+
+            requestProvider.ReadLog = [];
+            await engine.Expand('Member Network', [{ EntityName: 'Accounts', RecordID: 'a1' }], { Depth: 1 }, analyst, requestProvider as unknown as IMetadataProvider);
+            expect(requestProvider.ReadsOf('Accounts', analyst.ID).length).toBeGreaterThan(0);
+            expect(sharedProvider.ReadLog.filter((r) => r.UserID === analyst.ID)).toEqual([]);
+        });
+    });
+
     describe('unknown and inactive graphs', () => {
         it('returns an empty subgraph with a message instead of traversing every graph', async () => {
             const provider = providerWith({

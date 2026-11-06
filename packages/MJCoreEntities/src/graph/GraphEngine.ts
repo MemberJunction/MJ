@@ -126,6 +126,8 @@ interface StoredEdgeTextReadability {
 export interface GraphNodeFilterOptions {
     /** When `true`, `Proposed` concepts are visible alongside `Approved` ones (`false` by default). */
     IncludeProposed?: boolean;
+    /** Provider for the visibility reads (the engine's own when omitted). */
+    Provider?: IMetadataProvider;
 }
 
 /** A node admitted during traversal, with the best path that reached it. */
@@ -365,28 +367,30 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         if (!user || !nodes || nodes.length === 0) {
             return new Map<string, GraphNodeView>();
         }
-        const provider = this.graphProvider();
+        const provider = this.graphProvider(options.Provider);
         return this.resolveVisibleNodes(nodes, this.principals(user, audienceReaders), provider, options.IncludeProposed === true);
     }
 
     /**
      * Stored and derived edges incident to `node` in `graphName` whose endpoints the caller (and any
-     * `options.AudienceReaders`) may see. An unknown or inactive graph yields no edges.
+     * `options.AudienceReaders`) may see. An unknown or inactive graph yields no edges. Every read made
+     * for the caller goes through `provider` when one is given (see {@link Subgraph}).
      */
     public async GetEdges(
         graphName: string,
         node: GraphNodeRef,
         options: GraphTraversalOptions,
         user: UserInfo,
+        provider?: IMetadataProvider,
     ): Promise<GraphEdgeView[]> {
         const graph = this.GetGraph(graphName);
         if (!user || !graph) {
             return [];
         }
-        const provider = this.graphProvider();
+        const dataProvider = this.graphProvider(provider);
         const principals = this.principals(user, options.AudienceReaders);
-        const start = this.normalizeNodeRef(node, provider);
-        const rawEdges = await this.getEdgesForFrontier(graph, [start], options, principals, provider);
+        const start = this.normalizeNodeRef(node, dataProvider);
+        const rawEdges = await this.getEdgesForFrontier(graph, [start], options, principals, dataProvider);
         if (rawEdges.length === 0) {
             return [];
         }
@@ -394,9 +398,9 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         for (const edge of rawEdges) {
             endpoints.push(edge.Source, edge.Target);
         }
-        const visible = await this.resolveVisibleNodes(endpoints, principals, provider, options.IncludeProposed === true);
+        const visible = await this.resolveVisibleNodes(endpoints, principals, dataProvider, options.IncludeProposed === true);
         return rawEdges.filter(
-            (edge) => visible.has(this.nodeKey(edge.Source, provider)) && visible.has(this.nodeKey(edge.Target, provider)),
+            (edge) => visible.has(this.nodeKey(edge.Source, dataProvider)) && visible.has(this.nodeKey(edge.Target, dataProvider)),
         );
     }
 
@@ -410,12 +414,18 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
      * cannot see. Every admitted node carries the path that reached it.
      *
      * An unknown or inactive graph returns an empty subgraph with a `Message`.
+     *
+     * `provider`, when given, carries every read made for the caller and the readers (node visibility,
+     * on-demand stored edges, derived-edge providers), e.g. the request's own provider on a server. The
+     * engine's cached metadata and Preload edges still come from the provider the engine was configured
+     * with.
      */
     public async Subgraph(
         graphName: string,
         seeds: GraphNodeRef[],
         options: GraphTraversalOptions,
         user: UserInfo,
+        provider?: IMetadataProvider,
     ): Promise<GraphSubgraph> {
         if (!user || !seeds || seeds.length === 0) {
             return { Nodes: [], Edges: [] };
@@ -425,7 +435,7 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
             return { Nodes: [], Edges: [], Message: `Graph "${graphName}" was not found or is not active.` };
         }
 
-        const provider = this.graphProvider();
+        const dataProvider = this.graphProvider(provider);
         const principals = this.principals(user, options.AudienceReaders);
         const maxDepth = ClampGraphDepth(options.Depth ?? options.MaxDepth);
         const maxNodes = ClampGraphMaxNodes(options.MaxNodes);
@@ -434,19 +444,19 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         const includeProposed = options.IncludeProposed === true;
         const discovered = new Map<string, DiscoveredNode>();
         const visibleByKey = new Map<string, GraphNodeView>();
-        let frontier = await this.admitSeeds(seeds, principals, maxNodes, provider, includeProposed, discovered, visibleByKey);
+        let frontier = await this.admitSeeds(seeds, principals, maxNodes, dataProvider, includeProposed, discovered, visibleByKey);
         let capped = false;
 
         for (let hop = 1; hop <= maxDepth && frontier.length > 0; hop++) {
-            const stepEdges = await this.getEdgesForFrontier(graph, frontier.map((f) => f.Node), options, principals, provider);
-            const candidates = this.rankCandidates(stepEdges, frontier, discovered, minWeight, hop, provider);
-            const visible = await this.resolveVisibleNodes(this.uniqueNeighborRefs(candidates), principals, provider, includeProposed);
+            const stepEdges = await this.getEdgesForFrontier(graph, frontier.map((f) => f.Node), options, principals, dataProvider);
+            const candidates = this.rankCandidates(stepEdges, frontier, discovered, minWeight, hop, dataProvider);
+            const visible = await this.resolveVisibleNodes(this.uniqueNeighborRefs(candidates), principals, dataProvider, includeProposed);
             const admitted = this.admitCandidates(candidates, visible, maxNodes, hop, discovered, visibleByKey);
             capped = capped || admitted.Capped;
             frontier = admitted.Next;
         }
 
-        const edges = new Map((await this.collectEdgesBetween(graph, discovered, options, principals, provider)).map((e) => [e.ID, e]));
+        const edges = new Map((await this.collectEdgesBetween(graph, discovered, options, principals, dataProvider)).map((e) => [e.ID, e]));
         const nodes: GraphNodeView[] = [];
         for (const d of discovered.values()) {
             const view = visibleByKey.get(d.Key);
@@ -472,8 +482,9 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         seeds: GraphNodeRef[],
         options: GraphTraversalOptions,
         user: UserInfo,
+        provider?: IMetadataProvider,
     ): Promise<GraphSubgraph> {
-        return this.Subgraph(graphName, seeds, options, user);
+        return this.Subgraph(graphName, seeds, options, user, provider);
     }
 
     /**
@@ -516,7 +527,11 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
 
     // ----- Provider + principals ------------------------------------------------
 
-    private graphProvider(): GraphDataProvider {
+    /** `requested` when it can serve graph reads, else the provider the engine is bound to. */
+    private graphProvider(requested?: IMetadataProvider): GraphDataProvider {
+        if (requested && IsGraphDataProvider(requested)) {
+            return requested;
+        }
         const p = this.ProviderToUse;
         if (IsGraphDataProvider(p)) {
             return p;

@@ -98,7 +98,7 @@ export class GetGraphContextAction extends BaseAction {
 
             const subgraph: GraphSubgraph =
                 seeds.length > 0
-                    ? await GraphEngine.Instance.Subgraph(graph.Name, seeds, options, params.ContextUser)
+                    ? await GraphEngine.Instance.Subgraph(graph.Name, seeds, options, params.ContextUser, params.Provider)
                     : { Nodes: [], Edges: [] };
 
             const promptText = GraphEngine.Instance.DescribeForPrompt(subgraph);

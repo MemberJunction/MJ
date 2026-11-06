@@ -48,11 +48,12 @@ describe('GetGraphContextAction', () => {
         expect(result.NodeCount).toBe(2);
         expect(ensureSpy).toHaveBeenCalledWith(caller, undefined);
         expect(findSpy).toHaveBeenCalledWith('What is Unpaid Invoices?', caller, { GraphNames: ['MJ Canon'], IncludeProposed: false, provider: undefined });
-        const [graphName, seeds, options, user] = subgraphSpy.mock.calls[0];
+        const [graphName, seeds, options, user, provider] = subgraphSpy.mock.calls[0];
         expect(graphName).toBe('MJ Canon');
         expect(seeds).toEqual([{ EntityName: 'MJ: Graph Concepts', EntityID: undefined, RecordID: 'c-open-ar' }]);
         expect(options).toMatchObject({ Depth: 4, MaxNodes: 200 });
         expect(user).toBe(caller);
+        expect(provider).toBeUndefined(); // the action's own provider (none in this test) carries the reads
     });
 
     it('asks for proposed concepts only when IncludeProposed is set, for the seeds and the traversal alike', async () => {

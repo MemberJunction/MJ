@@ -127,6 +127,27 @@ describe('CanonGraphEngine', () => {
             expect(explained.MeasuringQueries.map((q) => q.Label)).toEqual(['Base Invoices']);
         });
 
+        it('reads through the provider it is given, for the entity explanation and the expansion service', async () => {
+            await setup({
+                'MJ: Graph Edges': [StoredEdge(IDS.GraphCanon, IDS.EdgeTypeDescribes, 'Describes', NODE.Entity(IDS.Invoices), NODE.Concept(IDS.ConceptOpenAr), 0.9)],
+            });
+            const requestProvider = new FakeGraphProvider().Reset({ ...provider.Rows });
+            // The engine's own Preload-edge cache still loads through the engine's provider; every read
+            // made for the caller (node visibility) must go through the one passed in.
+            const callerReads = (fake: FakeGraphProvider) => fake.ReadLog.filter((r) => r.UserID === analyst.ID && r.EntityName !== 'MJ: Graph Edges');
+            provider.ReadLog = [];
+            const explained = await CanonGraphEngine.Instance.ExplainEntity('Invoices', analyst, requestProvider as unknown as IMetadataProvider);
+            expect(explained.DescribedConcepts.map((c) => c.Label)).toEqual(['Open AR']);
+            expect(requestProvider.ReadsOf('MJ: Graph Concepts', analyst.ID).length).toBeGreaterThan(0);
+            expect(callerReads(provider)).toEqual([]);
+
+            requestProvider.ReadLog = [];
+            const service = CanonGraphEngine.Instance.AsExpansionService();
+            await service.Expand({ Seeds: [{ EntityName: 'MJ: Graph Concepts', RecordID: IDS.ConceptOpenAr }], GraphNames: ['MJ Canon'] }, analyst, requestProvider as unknown as IMetadataProvider);
+            expect(requestProvider.ReadsOf('MJ: Graph Concepts', analyst.ID).length).toBeGreaterThan(0);
+            expect(callerReads(provider)).toEqual([]);
+        });
+
         it('returns an empty explanation for an entity the caller cannot read', async () => {
             await setup();
             const explained = await CanonGraphEngine.Instance.ExplainEntity('SecretDeals', analyst);
