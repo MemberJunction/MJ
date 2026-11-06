@@ -6,7 +6,7 @@ Each section answers one question with the command run, the raw numbers, and the
 | # | Question | Answer | Design change needed? |
 |---|---|---|---|
 | 1 | Time and disk of the designed build path (job 1 base with remote cache, job 2 head with no token) | pending | |
-| 2 | Agent SDK: restrict tools, enforce write path, add `run_test`, cap turns and tokens, report usage | pending | |
+| 2 | Agent SDK: restrict tools, enforce write path, add `run_test`, cap turns and tokens, report usage | Yes, all six, on `@anthropic-ai/claude-agent-sdk` 0.3.318. Restrict built-ins with `tools` (`allowedTools` only auto-approves); keep `Write`/`Edit` out of `allowedTools`, or `canUseTool` is skipped and the write guard does nothing. Per-message `output_tokens` were far below the final count; budget on input + cache tokens. The runs used no API key (`apiKeySource: "none"`, the parent session's login), so the helper's `ANTHROPIC_API_KEY` was not tested. See §2 | No fallback. Yes (small): use `tools` + `permissionMode: 'default'`, keep `Write`/`Edit` out of `allowedTools`, catch the throw after max-turns and abort; the package needs zod 4 (SDK peer `zod@^4`; 24 `packages/` manifests pin `^3.25`); CI must confirm `apiKeySource: "ANTHROPIC_API_KEY"` (§2) |
 | 3 | Sandbox holds on `ubuntu-latest` (key, /proc, network, cache token) | pending | |
 | 4 | Provider classes work with no database (Anthropic, OpenAI with logprobs, Gemini) | Partly. All three classes import and construct from a bare key with no database and no warnings. Gemini `gemini-3.5-flash-lite` answered `"Yes"`. Anthropic reached the API but got 401 `invalid x-api-key` on two runs (the same key gets 401 from a direct `curl`, so the key is bad, not MJ); model id `claude-haiku-5-5` not yet confirmed. OpenAI: `gpt-5.1-mini` does not exist (404, and `OpenAILLM` throws instead of returning `success: false`); `gpt-4o-mini` and `gpt-4.1-mini` return 5 `top_logprobs` on the first token; `gpt-5.4-nano` returns only 1 although 5 were asked. Imports resolve only from a scratch package, not from the repo root (§4) | Yes (proposed): the TP Prob judge model must be one that returns 5 `top_logprobs` (`gpt-4o-mini` or `gpt-4.1-mini`), not `gpt-5.1-mini`. Callers must handle both a thrown error (`OpenAILLM`) and `success: false` (`AnthropicLLM`). The real package must declare the provider packages as dependencies. Open: re-run Anthropic with a valid key |
 | 5 | `INTEGRATION_LIVE_MODEL_KEYS` includes an OpenAI key | pending — the secret is not readable from a branch; to be asked by the user at the phase-0 exit (date 2026-11-06). The local developer `.env` had no OpenAI key either (§5) | If no OpenAI key: design Q2 becomes a request for a new `OPENAI_API_KEY` secret |
@@ -14,6 +14,115 @@ Each section answers one question with the command run, the raw numbers, and the
 | 7 | File-swap path gives the same verdicts as two worktrees | Same results on 3 one-package PRs where all tests passed (1207/627/1275 tests, 0 differences each); no failing test compared (§7) | No |
 | 8 | Host `pnpm fetch` (lockfile only) + sandbox `pnpm install --offline` + `pnpm rebuild` builds on the real lockfile; copy-import time and disk; install-container fallback if fetch fails; turbo `--cache=local:rw,remote:r` works | pending | |
 
+## 2. Agent SDK limits
+
+**Setup.** `@anthropic-ai/claude-agent-sdk@0.3.318` in `/tmp/jit-q2` (outside the repo). It has a peer dependency `zod@^4.0.0`, so `zod@3.25.76` fails with `ERESOLVE`; the runs used `zod@4.6.7`. Model `claude-haiku-5-5`. Probe: [`q2-agent-sdk.mjs`](q2-agent-sdk.mjs), run against a base checkout. `run_test` is a stub that returns fixed JSON. Env vars select each run: `MAX_TURNS` (default 12), `TOKEN_BUDGET` (default 150000), `WRITE_IN_ALLOWED=1`, `NO_DISALLOWED=1`.
+
+Options in every run: `cwd`, `model`, `maxTurns`, `settingSources: []`, `tools: ['Read','Grep','Glob','Write','Edit']`, `permissionMode: 'default'`, `mcpServers: { jit }`, `abortController`, `canUseTool` (allows all, except `Write`/`Edit` outside `packages/MJGlobal/src/__tests__/jit/`). Per run:
+
+- `allowedTools`: `['Read','Grep','Glob','mcp__jit__run_test']`; with `WRITE_IN_ALLOWED=1`, `['Read','Grep','Glob','Write','Edit','mcp__jit__run_test']` (the plan's list).
+- `disallowedTools`: `['Bash','WebFetch','WebSearch','Task','Agent','NotebookEdit']`; with `NO_DISALLOWED=1`, not set.
+
+**Credential.** The init message reported `"apiKeySource": "none"` (runs A and B). The typings define `none` as "no API key in use - e.g. claude.ai OAuth login, a bearer token, or a third-party cloud provider". So the session did **not** use the `ANTHROPIC_API_KEY` the helper exported, although it was set and non-empty. The probe ran inside a Claude Code session, and the SDK child process inherits `process.env` (which includes `CLAUDECODE` and `CLAUDE_CODE_*` session variables); it most likely authenticated through that session's login. These runs therefore do not show that the env key works. Costs below are the SDK's estimates, not charges to that key.
+
+**Option names.** The typings (`sdk.d.ts`) use the same names as the plan: `allowedTools`, `disallowedTools`, `canUseTool`, `maxTurns`, `settingSources`, `mcpServers`, `abortController`, `createSdkMcpServer`, `tool`, `total_cost_usd`. Two meanings differ from what the plan assumed:
+
+- `allowedTools` does **not** restrict tools. The typings say it lists tools "auto-allowed without prompting for permission", and "To restrict which tools are available, use the `tools` option instead." Run A shows the auto-approve side: `canUseTool` was not called for the listed tools.
+- A bare name in `allowedTools` is approved before `canUseTool` runs. The SDK prints this line at start (run A, verbatim):
+
+  ```
+  (node:49915) [CLAUDE_SDK_CAN_USE_TOOL_SHADOWED] Warning: canUseTool will not be invoked for: Read, Grep, Glob, Write, Edit, mcp__jit__run_test. Bare allowedTools entries auto-approve the whole tool before the callback is consulted. To gate every tool call, use a PreToolUse hook; or remove the bare names from allowedTools so they fall through to canUseTool. Allow rules from settings files can also shadow the callback but are not visible here.
+  ```
+
+Also present and not used here: `maxBudgetUsd` (result subtype `error_max_budget_usd`). When `permissionMode` is omitted the mode can be `auto`, where a classifier decides; the probe sets `'default'` so `canUseTool` decides.
+
+**Runs.** All `node q2-agent-sdk.mjs <checkout>` with the committed script. Runs 2–4 ran before two output-only additions (the `apiKeySource` field in the init trace and the `NO_DISALLOWED` switch, off by default); their options were the same. An earlier run 1 of the plan's layout used a previous script version; its figures are replaced by run A.
+
+| Run | Env | `total_cost_usd` | Shows |
+|---|---|---|---|
+| A | `WRITE_IN_ALLOWED=1` | 0.00191 | **Write guard failed**: `canUseToolCalls: []`, `outsideFileWritten: true` |
+| 2 | (none) | 0.00177 | (a)–(c), (e) |
+| 3 | `MAX_TURNS=2` | 0.00150 | (d) `error_max_turns` |
+| 4 | `TOKEN_BUDGET=3000` | none (aborted) | (f) |
+| B | `NO_DISALLOWED=1 MAX_TURNS=1` | 0.00056 | (a) with `tools` only |
+
+**(a) Tools limited — yes, by the start-up tool list.** Run 2 (`tools` and `disallowedTools`) and run B (`tools` only, no `disallowedTools`) give the same init message:
+
+```
+run 2: {"init": {"model": "claude-haiku-5-5", "permissionMode": "default", "tools": ["Edit", "Glob", "Grep", "Read", "Write", "mcp__jit__run_test"]}}
+run B: {"init": {"model": "claude-haiku-5-5", "apiKeySource": "none", "permissionMode": "default", "tools": ["Edit", "Glob", "Grep", "Read", "Write", "mcp__jit__run_test"]}}
+```
+
+So `tools` alone removes Bash and every other built-in. Limits of this evidence: the proof is the start-up tool list, not a refused call — the model never emitted a `Bash` call in any run, because Bash was not offered.
+
+**(b) Write path enforced — yes, only with `Write`/`Edit` out of `allowedTools`.** Run A (plan's `allowedTools`): `canUseTool` was never called and the outside write went through:
+
+```
+"toolUses": ["Write {\"file_path\":\"…/packages/MJGlobal/src/probe.ts\",\"content\":\"export const probe = 'p…"]
+"toolResult": {"is_error": false, "text": "File created successfully at: …/packages/MJGlobal/src/probe.ts …"}
+"permission_denials": [], "canUseToolCalls": [], "denied": [], "files": {"testFileWritten": true, "outsideFileWritten": true}
+```
+
+Run 2 (`Write`/`Edit` only in `tools`): `canUseTool` saw both writes, allowed the one under `__tests__/jit/` and denied the other:
+
+```
+"toolResult": {"is_error": false, "text": "File created successfully at: …/packages/MJGlobal/src/__tests__/jit/probe.jit.test.ts …"}
+"toolResult": {"is_error": true, "text": "Writes are allowed only under packages/<X>/src/__tests__/jit/"}
+"permission_denials": [{"tool_name": "Write", "tool_input": {"file_path": "…/packages/MJGlobal/src/probe.ts", …}}]
+"canUseToolCalls": ["Write", "Write"], "files": {"testFileWritten": true, "outsideFileWritten": false}
+```
+
+**(c) `run_test` called and its JSON returned — yes** (run 2):
+
+```
+"toolUses": ["mcp__jit__run_test {\"file\":\"packages/MJGlobal/src/__tests__/jit/probe.jit.test.ts\"}"]
+"toolResult": {"is_error": false, "text": "{\"file\":\"packages/MJGlobal/src/__tests__/jit/probe.jit.test.ts\",\"ran\":true,\"passed\":0,\"failed\":0,\"note\":\"stub\"}"}
+```
+
+**(d) `maxTurns` honored — yes** (run 3, `maxTurns: 2`). The session stopped after two API messages, one per turn:
+
+```
+msg_011CgnFt8WkWKn4sqKH2sBTW ["Write {\"file_path\":\"…/packages/MJGlobal/src/__tests__/jit/probe.jit.test.ts\",…"]
+msg_011CgnFtQJ3LTtygEiGfj51K ["mcp__jit__run_test {\"file\":\"packages/MJGlobal/src/__tests__/jit/probe.jit.test.ts\"}"]
+"result": {"subtype": "error_max_turns", "is_error": true, "num_turns": 3, "total_cost_usd": 0.00150495, …}
+"thrown": "Error: Claude Code returned an error result: Reached maximum number of turns (2)"
+```
+
+The `result` message arrives, and then the iterator **throws**. Run B (`maxTurns: 1`) gives the same pattern: one API message, `"subtype": "error_max_turns", "num_turns": 2`, then `Reached maximum number of turns (1)`. `num_turns` counts one more than `maxTurns`; it is not the number of API messages.
+
+**(e) Usage reported — yes, with one limit.** Each assistant message carries `usage`; the final `result` carries `usage` and `total_cost_usd` (run 2):
+
+```
+assistant J8aD2sx6: {"input_tokens": 2, "output_tokens": 3, "cache_read_input_tokens": 4574, "cache_creation_input_tokens": 4221}
+result: {"usage": {"input_tokens": 4, "cache_creation_input_tokens": 5069, "cache_read_input_tokens": 8300, "output_tokens": 1061}, "total_cost_usd": 0.0017681}
+counted (deduped by message id): {"inputTokens": 13373, "outputTokens": 5}
+```
+
+- One API message arrives as several SDK messages (one per content block) with the same `id` and `usage`. Count each `id` once. In run A, 2 distinct ids came as 6 SDK messages (4 + 2); the script counted `"turns": 2`, while the plan's code would count 6.
+- `input_tokens` is only the uncached part (2). Input must be `input_tokens + cache_read_input_tokens + cache_creation_input_tokens`. Summed this way, the running total (13373) equals the final `result.usage` (4 + 5069 + 8300). Run A: 13520 counted, 4 + 5214 + 8302 = 13520 final.
+- Observed: per-message `output_tokens` were far below the final figure (run 2: 5 counted vs 1061; run A: 5 vs 1284). A mid-run budget can count input exactly but, on this evidence, not output. The final figures in `result` are exact.
+
+**(f) Abort on token budget stops the session — yes** (run 4, `TOKEN_BUDGET: 3000`). The first API message (4571 input tokens) crossed the budget and the host called `abort()`. The pending `Write` was refused and nothing was written; the iterator then threw. There is **no `result` message** after an abort, so no `total_cost_usd` from the SDK:
+
+```
+{"abort": {"inputTokens": 4571, "outputTokens": 8}}
+"toolResult": {"is_error": true, "text": "Tool permission request failed: AbortError: Stream closed"}
+"result": {"thrown": "Error: Claude Code process aborted by user"}
+"counted": {"inputTokens": 12885, "outputTokens": 11, "turns": 2, "aborted": true}, "files": {"testFileWritten": false}
+```
+
+In this one run, one more API message (`hZMhUZG7`) streamed after `abort()` before the process stopped.
+
+**Decision.** The Agent SDK meets the design; no fallback to a hand-written loop on `@anthropic-ai/sdk` is needed. The JiT agent code must:
+
+1. Restrict built-ins with `tools`, set `permissionMode: 'default'`, and keep `disallowedTools` as a second layer.
+2. Keep `Write` and `Edit` out of `allowedTools` so `canUseTool` sees every write. The SDK warning names the other way: "To gate every tool call, use a PreToolUse hook".
+3. Treat `Read`, `Grep` and `Glob` the same way if reads must be limited. In `allowedTools` they are auto-approved with no path check, so the agent can read any file the host process can read.
+4. In the production write guard, resolve the nearest existing parent of the target with `realpath`, and resolve the allowed root with `realpath` too. The probe's guard falls back to the unresolved path when the file does not exist yet and does not resolve the root, so a symlinked folder can bypass it.
+5. Count usage once per message `id`, with cache tokens as input. Keep the host's own count, because an aborted run has no `result`. `maxBudgetUsd` is a built-in alternative (not tested here).
+6. Catch the throw that follows `error_max_turns` and abort, and read the `result` message (when there is one) before the throw.
+7. Use zod 4. SDK 0.3.318 has peer `zod@^4.0.0`; 24 `package.json` files under `packages/` pin `zod` `^3.25`, so the new package cannot share that pin.
+8. Check the credential the runner uses. When the runner starts inside a Claude Code session, the SDK child can use that session's login instead of `ANTHROPIC_API_KEY` (`apiKeySource: "none"` here). In CI, confirm `apiKeySource: "ANTHROPIC_API_KEY"` in the init message.
 ## 4. Provider classes with no database
 
 Script: [`q4-providers.mjs`](q4-providers.mjs). It builds `AnthropicLLM`, `OpenAILLM` and `GeminiLLM`
