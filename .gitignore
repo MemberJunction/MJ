@@ -276,3 +276,4 @@ gen-lang-client-0516550786-6a039e3b0346.json
 
 # Catching JiTTests run output.
 .jit-catch/
+!packages/TestingFramework/jit-catching/src/target/
