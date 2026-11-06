@@ -2,6 +2,8 @@ import {
     BaseEngine,
     BaseEnginePropertyConfig,
     BaseEntityEvent,
+    EntityAlternateBaseViewInfo,
+    EntityFieldInfo,
     EntityInfo,
     EntityPermissionType,
     IMetadataProvider,
@@ -11,7 +13,7 @@ import {
     RunViewParams,
     UserInfo,
 } from '@memberjunction/core';
-import { EscapeSQLString, MJGlobal, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID, MJGlobal, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
     MJGraphAuthorityTierEntity,
     MJGraphConceptEntity,
@@ -121,6 +123,13 @@ interface DataNodeBucket {
     Nodes: Array<{ Ref: GraphNodeRef; Key: string }>;
 }
 
+/** Entity fields and alternate base views by ID, built once per metadata snapshot. */
+interface MetadataNodeIndex {
+    Source: EntityInfo[];
+    FieldsById: UUIDMap<{ Entity: EntityInfo; Field: EntityFieldInfo }>;
+    ViewsById: UUIDMap<{ Entity: EntityInfo; View: EntityAlternateBaseViewInfo }>;
+}
+
 /** Metadata entities whose nodes are checked against metadata rather than read as data. */
 type MetadataNodeKindName = 'MJ: Entities' | 'MJ: Entity Fields' | 'MJ: Entity Alternate Base Views' | 'MJ: Queries';
 
@@ -159,6 +168,8 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
     private preloadEdgesByNodeKey = new Map<string, StoredEdgeRow[]>();
     /** False until the preload edges load, and after a `MJ: Graph Edges` change until they reload. */
     private preloadEdgesFresh = false;
+    /** Field and alternate-view lookups for metadata nodes; rebuilt when the provider's entity list changes. */
+    private metadataNodeIndex: MetadataNodeIndex | null = null;
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
         const configs: Partial<BaseEnginePropertyConfig>[] = [
@@ -593,8 +604,9 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         const results = new Map<string, GraphEdgeView>();
 
         const storedRows = await this.loadStoredEdges(graph, normalizedFrontier, frontierKeys, options, principals, provider);
+        const edgeTypesById = IndexByUUID(this.EdgeTypes);
         for (const row of storedRows) {
-            const view = this.toStoredEdgeView(row, graph, options, frontierKeys, provider);
+            const view = this.toStoredEdgeView(row, graph, options, frontierKeys, provider, edgeTypesById);
             if (view) {
                 results.set(view.ID, view);
             }
@@ -636,6 +648,7 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         options: GraphTraversalOptions,
         frontierKeys: Set<string>,
         provider: GraphDataProvider,
+        edgeTypesById: UUIDMap<MJGraphEdgeTypeEntity>,
     ): GraphEdgeView | null {
         if (!UUIDsEqual(row.GraphID, graph.ID) || row.Status === 'Rejected') {
             return null;
@@ -643,7 +656,7 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         if (row.Status === 'Proposed' && options.IncludeProposed !== true) {
             return null;
         }
-        const edgeType = this.EdgeTypes.find((et) => UUIDsEqual(et.ID, row.EdgeTypeID));
+        const edgeType = edgeTypesById.Get(row.EdgeTypeID);
         const typeName = edgeType?.Name ?? row.EdgeType ?? 'Related To';
         const weight = typeof row.Weight === 'number' ? row.Weight : (edgeType?.DefaultWeight ?? 1.0);
         if (!MatchesEdgeTypeFilter(typeName, options.EdgeTypes) || weight < (options.MinWeight ?? 0)) {
@@ -959,33 +972,43 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
                 : null;
         }
         if (kind === 'MJ: Entity Fields') {
-            for (const entity of provider.Entities ?? []) {
-                const field = (entity.Fields ?? []).find((f) => UUIDsEqual(f.ID, node.RecordID));
-                if (field) {
-                    return CanUserReadEntity(entity, principal)
-                        ? { ...base, RecordID: field.ID, Label: `${entity.Name}.${field.Name}`, Icon: entity.Icon || null, Description: field.Description || null }
-                        : null;
-                }
-            }
-            return null;
+            const entry = this.metadataIndex(provider).FieldsById.Get(node.RecordID);
+            return entry && CanUserReadEntity(entry.Entity, principal)
+                ? { ...base, RecordID: entry.Field.ID, Label: `${entry.Entity.Name}.${entry.Field.Name}`, Icon: entry.Entity.Icon || null, Description: entry.Field.Description || null }
+                : null;
         }
         if (kind === 'MJ: Entity Alternate Base Views') {
-            for (const entity of provider.Entities ?? []) {
-                const view = (entity.AlternateBaseViews ?? []).find((v) => UUIDsEqual(v.ID, node.RecordID));
-                if (view) {
-                    // "UserCanUse": read permission on the owning entity, and the view must be usable.
-                    return CanUserReadEntity(entity, principal) && view.IsUsable
-                        ? { ...base, RecordID: view.ID, Label: `${entity.Name}.${view.Name}`, Icon: entity.Icon || null, Description: view.Description || null }
-                        : null;
-                }
-            }
-            return null;
+            const entry = this.metadataIndex(provider).ViewsById.Get(node.RecordID);
+            // "UserCanUse": read permission on the owning entity, and the view must be usable.
+            return entry && CanUserReadEntity(entry.Entity, principal) && entry.View.IsUsable
+                ? { ...base, RecordID: entry.View.ID, Label: `${entry.Entity.Name}.${entry.View.Name}`, Icon: entry.Entity.Icon || null, Description: entry.View.Description || null }
+                : null;
         }
         const query = QueryEngine.Instance.FindQueryByID(node.RecordID);
         // UserCanRun returns { canRun, deniedEntities }; the object itself is always truthy.
         return query && query.UserCanRun(principal).canRun
             ? { ...base, RecordID: query.ID, Label: query.Name, Icon: 'fa-solid fa-terminal', Description: query.Description || null }
             : null;
+    }
+
+    private metadataIndex(provider: GraphDataProvider): MetadataNodeIndex {
+        const entities = provider.Entities ?? [];
+        if (this.metadataNodeIndex && this.metadataNodeIndex.Source === entities) {
+            return this.metadataNodeIndex;
+        }
+        const index: MetadataNodeIndex = { Source: entities, FieldsById: new UUIDMap(), ViewsById: new UUIDMap() };
+        for (const entity of entities) {
+            for (const field of entity.Fields ?? []) {
+                index.FieldsById.Set(field.ID, { Entity: entity, Field: field });
+            }
+            for (const view of entity.AlternateBaseViews ?? []) {
+                if (view.ID) {
+                    index.ViewsById.Set(view.ID, { Entity: entity, View: view });
+                }
+            }
+        }
+        this.metadataNodeIndex = index;
+        return index;
     }
 
     private async resolveDataNodes(
