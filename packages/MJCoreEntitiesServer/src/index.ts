@@ -98,3 +98,4 @@ export * from './custom/MJBrandKitEntityServer.server';
 export * from './custom/MJGraphEdgeEntityServer.server';
 export * from './custom/MJGraphEdgeTypeEntityServer.server';
 export * from './custom/MJGraphEdgeProviderEntityServer.server';
+export * from './custom/MJTaskEntityServer.server';

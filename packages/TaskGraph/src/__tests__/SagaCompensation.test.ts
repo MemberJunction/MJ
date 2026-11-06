@@ -257,7 +257,7 @@ describe('Saga Compensation & Idempotent Action Metadata (WS-4.3)', () => {
                 });
 
             const actionRunner: TaskActionRunner = {
-                SupportsAudience: true,
+                EnforcesSecurityEnvelope: true,
                 RunActionForTask: runActionMock,
             };
             const dispatcher = new TaskGraphDispatcher(

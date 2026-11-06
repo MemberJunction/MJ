@@ -13,6 +13,7 @@
  * @module @memberjunction/server
  */
 import { AgentRunner } from '@memberjunction/ai-agents';
+import { ActionEngineServer } from '@memberjunction/actions';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessageRole } from '@memberjunction/ai';
 import { LogError, type UserInfo } from '@memberjunction/core';
@@ -20,10 +21,18 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { MJTaskEntity } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
-import type { AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
+import type { ActionChange, AgentExecutionProgressCallback, ExecuteAgentParams, TaskSecurityEnvelope } from '@memberjunction/ai-core-plus';
 import type { TaskAgentRunner, TaskAgentRunParams, TaskAgentRunResult } from '@memberjunction/task-graph';
 
+/**
+ * Runs a task-graph agent node. The agent run starts under the node's security envelope exactly as
+ * the submitting run was bounded: the same run scope (tenant, secondary dimensions, host-assigned
+ * search scopes), audience and bound parameters, starting tainted when the node's input is, and
+ * without the actions a tainted run may not call ({@link TaintedActionRemovals}).
+ */
 export class TaskGraphAgentRunner implements TaskAgentRunner {
+    public readonly EnforcesSecurityEnvelope = true;
+
     public async RunAgentForTask(params: TaskAgentRunParams): Promise<TaskAgentRunResult> {
         try {
             const agent = await params.Provider.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', params.ContextUser);
@@ -32,7 +41,7 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
             }
 
             const parentRun = await this.loadSubmittingRun(params);
-            const actingUser = this.resolveActingUser(parentRun?.UserID, params.ContextUser);
+            const actingUser = this.resolveActingUser(parentRun?.UserID, params.ContextUser, params.SecurityEnvelope);
             const engineLoaded = (AIEngine.Instance?.Agents?.length ?? 0) > 0;
             if (engineLoaded && actingUser && typeof AIEngine.Instance.CanUserRunAgent === 'function') {
                 const permitted = await AIEngine.Instance.CanUserRunAgent(agent.ID, actingUser);
@@ -67,14 +76,7 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                 parentRun?.ConversationDetailID ?? taskContext.conversationDetailId ?? undefined;
 
             const env = params.SecurityEnvelope;
-            const readerIds = env?.Audience?.ReaderUserIDs;
-            const audience = readerIds && readerIds.length > 0
-                ? { Mode: 'Intersection' as const, UserIDs: [...readerIds] }
-                : undefined;
-            const boundActionParams = this.buildBoundActionParams(env);
-            const secondaryScopes = env?.SecondaryScopes ?? (env?.TenantContext?.SecondaryScopes as typeof env.SecondaryScopes);
-            const primaryScopeEntityName = env?.PrimaryScopeEntityName ?? env?.TenantContext?.PrimaryScopeEntityName ?? undefined;
-            const primaryScopeRecordId = env?.PrimaryScopeRecordID ?? env?.TenantContext?.PrimaryScopeRecordID ?? undefined;
+            const envelopeParams = await this.envelopeRunParams(env, actingUser);
 
             const runner = new AgentRunner(params.Provider);
             const result = await runner.RunAgent({
@@ -101,12 +103,7 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                 // dispatcher turns these into rate-limited `NodeProgress` frames, which is how a
                 // running Agent step shows "what it is doing right now" on the workflow canvas.
                 onProgress: this.bridgeProgress(params),
-                ...(env ? { securityEnvelope: env } : {}),
-                ...(boundActionParams ? { boundActionParams } : {}),
-                ...(audience ? { Audience: audience } : {}),
-                ...(primaryScopeEntityName !== undefined ? { PrimaryScopeEntityName: primaryScopeEntityName } : {}),
-                ...(primaryScopeRecordId !== undefined ? { PrimaryScopeRecordID: primaryScopeRecordId } : {}),
-                ...(secondaryScopes ? { SecondaryScopes: secondaryScopes } : {}),
+                ...envelopeParams,
             });
 
             const success = result?.success === true;
@@ -145,16 +142,13 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                 }
             }
 
-            const isOutputTainted = Boolean(
-                (result?.taintedSources && result.taintedSources.length > 0) ||
-                env?.IsRunTainted === true,
-            );
             return {
                 Success: success,
                 Output: this.extractOutput(result),
                 ErrorMessage: success ? undefined : (result?.agentRun?.ErrorMessage ?? 'Agent execution failed'),
                 AgentRunID: result?.agentRun?.ID,
-                ...(isOutputTainted ? { IsOutputTainted: true } : {}),
+                // The run reports what it ingested, including the taint it was seeded with.
+                IsOutputTainted: (result?.taintedSources?.length ?? 0) > 0 || env?.IsRunTainted === true,
             };
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
@@ -163,28 +157,49 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
         }
     }
 
-    private buildBoundActionParams(
-        env: TaskAgentRunParams['SecurityEnvelope'],
-    ): Record<string, Record<string, unknown>> | undefined {
-        if (!env) return undefined;
-        const map: Record<string, Record<string, unknown>> = {};
-        if (env.BoundParamsByAction) {
-            for (const [actionId, params] of Object.entries(env.BoundParamsByAction)) {
-                map[actionId] = { ...params };
-            }
-        }
-        if (env.BoundActionParams && Object.keys(env.BoundActionParams).length > 0) {
-            map['*'] = {
-                ...(map['*'] ?? {}),
-                ...env.BoundActionParams,
-            };
-        }
-        return Object.keys(map).length > 0 ? map : undefined;
+    /**
+     * The `RunAgent` parameters that carry the node's envelope into the run: the envelope itself (which
+     * seeds the run's taint and bounds any graph the run submits), the run scope, audience and bound
+     * parameters exactly as the submitting run had them, and the removals for a tainted run.
+     */
+    private async envelopeRunParams(
+        env: TaskSecurityEnvelope | undefined,
+        actingUser: UserInfo,
+    ): Promise<Partial<ExecuteAgentParams>> {
+        if (!env) return {};
+        const scope = env.RunScope;
+        const readers = env.Audience?.ReaderUserIDs ?? [];
+        const removals = env.IsRunTainted ? await this.taintedActionRemovals(actingUser) : [];
+        return {
+            SecurityEnvelope: env,
+            ...(env.BoundActionParams ? { boundActionParams: structuredClone(env.BoundActionParams) } : {}),
+            ...(readers.length > 0 ? { Audience: { Mode: 'Intersection', UserIDs: [...readers] } } : {}),
+            ...(scope?.PrimaryScopeEntityName ? { PrimaryScopeEntityName: scope.PrimaryScopeEntityName } : {}),
+            ...(scope?.PrimaryScopeRecordID ? { PrimaryScopeRecordID: scope.PrimaryScopeRecordID } : {}),
+            ...(scope?.SecondaryScopes ? { SecondaryScopes: structuredClone(scope.SecondaryScopes) } : {}),
+            ...(scope?.SearchScopeIDs ? { SearchScopeIDs: [...scope.SearchScopeIDs] } : {}),
+            ...(removals.length > 0 ? { actionChanges: removals } : {}),
+        };
     }
 
-    private resolveActingUser(ownerUserId: string | null | undefined, fallback: UserInfo): UserInfo {
-        if (!ownerUserId) {
-            return fallback;
+    /** {@link TaintedActionRemovals} over the action engine's catalog. */
+    private async taintedActionRemovals(actingUser: UserInfo): Promise<ActionChange[]> {
+        await ActionEngineServer.Instance.Config(false, actingUser);
+        return TaintedActionRemovals(ActionEngineServer.Instance.Actions);
+    }
+
+    /**
+     * Who the agent runs as. The dispatcher already decided (`ContextUser`), and when the graph carries
+     * the caller's tenant context it handed over a per-task clone stamped with it: that clone is never
+     * swapped for the shared cached user, which carries no tenant.
+     */
+    private resolveActingUser(
+        ownerUserId: string | null | undefined,
+        contextUser: UserInfo,
+        env: TaskSecurityEnvelope | undefined,
+    ): UserInfo {
+        if (!ownerUserId || UUIDsEqual(ownerUserId, contextUser.ID) || env?.CallerTenantContext) {
+            return contextUser;
         }
         try {
             const users = UserCache.Instance?.Users ?? UserCache.Users ?? [];
@@ -195,7 +210,7 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
         } catch {
             // Fall back to params.ContextUser when UserCache is not initialized.
         }
-        return fallback;
+        return contextUser;
     }
 
     /**
@@ -395,4 +410,14 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
         }
         return null;
     }
+}
+
+/**
+ * The action change that takes every `disallowWhenTainted` action away from a tainted run and all of
+ * its sub-agents. An action node's runner refuses those actions itself; an agent node would otherwise
+ * call them from inside the run, past that gate.
+ */
+export function TaintedActionRemovals(actions: ReadonlyArray<{ ID: string; Config_Object: { disallowWhenTainted?: boolean } | null }>): ActionChange[] {
+    const ids = actions.filter((a) => a.Config_Object?.disallowWhenTainted === true).map((a) => a.ID);
+    return ids.length > 0 ? [{ scope: 'global', mode: 'remove', actionIds: ids }] : [];
 }

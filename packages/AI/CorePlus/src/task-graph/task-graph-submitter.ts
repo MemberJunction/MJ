@@ -65,9 +65,9 @@ export type TaskGraphSubmitRequest = {
      */
     ParentAgentHierarchy?: string[];
     /**
-     * Durable security envelope (`BoundActionParams`, `Audience`, `TenantContext`, monotonic
-     * `IsRunTainted`, and `AllowedEgressActionIDs`) persisted onto the parent `MJ: Tasks` row and
-     * enforced by `TaskGraphDispatcher` across every node in the graph.
+     * The submitting run's security envelope (bound action parameters, audience, run scope, caller
+     * tenant context and taint). Written to `MJ: Tasks.SecurityEnvelope` on the parent and every child
+     * row and enforced by the dispatcher on every node. Absent when the run carries no constraint.
      */
     SecurityEnvelope?: TaskSecurityEnvelope;
     /**
@@ -117,8 +117,10 @@ export type TaskGraphSubmitOutcome = {
  */
 export abstract class TaskGraphSubmitter {
     /**
-     * Whether this submitter persists and enforces {@link TaskSecurityEnvelope} across dispatched
-     * nodes (`DurableTaskGraphSubmitter` overrides to `true`).
+     * Whether this submitter persists {@link TaskSecurityEnvelope} on every row it writes and its
+     * dispatcher enforces it on every node (`DurableTaskGraphSubmitter` overrides to `true`). The only
+     * thing that lets a run with an audience, a scope, a tenant or bound parameters submit a graph:
+     * `BaseAgent` withholds graphs from such a run whenever this is false.
      */
     public readonly SupportsSecurityEnvelope: boolean = false;
 
@@ -127,6 +129,17 @@ export abstract class TaskGraphSubmitter {
 
 /** ClassFactory key under which the durable implementation registers itself. */
 export const TASK_GRAPH_SUBMITTER_KEY = 'TaskGraphSubmitter';
+
+/** Explicit submitter instance registered programmatically (e.g. in tests or custom hosts). */
+let explicitSubmitter: TaskGraphSubmitter | null | undefined = undefined;
+
+/**
+ * Registers or clears an explicit {@link TaskGraphSubmitter} instance for this process.
+ * Pass `null` to reset to default `ClassFactory` resolution.
+ */
+export function RegisterTaskGraphSubmitter(submitter: TaskGraphSubmitter | null): void {
+    explicitSubmitter = submitter ?? undefined;
+}
 
 /**
  * Resolves the registered submitter, or `null` when no durable-execution package is loaded.
@@ -143,17 +156,6 @@ export const TASK_GRAPH_SUBMITTER_KEY = 'TaskGraphSubmitter';
  * is "this host has no dispatcher". That is precisely the diagnosis the null return exists to give,
  * so the contract is enforced here rather than trusted.
  */
-/** Explicit submitter instance registered programmatically (e.g. in tests or custom hosts). */
-let explicitSubmitter: TaskGraphSubmitter | null | undefined = undefined;
-
-/**
- * Registers or clears an explicit {@link TaskGraphSubmitter} instance for this process.
- * Pass `null` to reset to default `ClassFactory` resolution.
- */
-export function RegisterTaskGraphSubmitter(submitter: TaskGraphSubmitter | null): void {
-    explicitSubmitter = submitter ?? undefined;
-}
-
 export function GetTaskGraphSubmitter(): TaskGraphSubmitter | null {
     if (submissionSuppressedBecause) return null;
     if (explicitSubmitter !== undefined) {

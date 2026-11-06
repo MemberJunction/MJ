@@ -54,8 +54,7 @@ import {
     ResolveDecisionState,
     type TaskGraphDecisionAnswer,
     ApplyTaskSecurityEnvelopeToParams,
-    MergeTaskSecurityEnvelopes,
-    ParseTaskSecurityEnvelope,
+    SerializeTaskSecurityEnvelope,
     type TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
 import { DatabaseProviderBase, IMetadataProvider, IRunQueryProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
@@ -118,6 +117,15 @@ import {
     SelectTasksToCompensate,
     type TaskCompensationStepMetadata,
 } from './saga-compensation';
+import {
+    CloneUserWithTenantContext,
+    ComputeNodeInputTaint,
+    EnvelopeConstrains,
+    RecordedOutputTaint,
+    ResolveStoredNodeSecurity,
+    WithInputTaint,
+    type NodeSecurity,
+} from './task-security';
 import { NotificationEngine } from '@memberjunction/notifications';
 
 /** Metadata-seeded notification type for human tasks (metadata/notifications/.task-assignment-type.json). */
@@ -286,7 +294,10 @@ type TaskBodyOutcome = {
     PayloadAtStart?: Record<string, unknown>;
     /** Structured result code returned by the action runner or security gate (e.g. `AUDIENCE_UNSUPPORTED`, `TAINTED_EGRESS_BLOCKED`). */
     ResultCode?: string;
-    /** True when the step's output is tainted by untrusted context or an upstream tainted node. */
+    /**
+     * Whether the step's output is tainted: its input was, or what it ran returned untrusted content.
+     * Set for every step that ran (`false` included) and recorded as `runtime.isOutputTainted`.
+     */
     IsOutputTainted?: boolean;
 };
 
@@ -311,9 +322,11 @@ type GraphContext = {
      */
     ExecutionUser: UserInfo;
     /**
-     * Durable security envelope inherited from the parent graph (`InputPayload.securityEnvelope`), if any.
+     * The node's stored constraints — the parent's and the node's `SecurityEnvelope` columns merged —
+     * or why they cannot be enforced. When they carry the caller's tenant context, `ExecutionUser` is
+     * a per-task clone stamped with it (never the shared user itself).
      */
-    SecurityEnvelope?: TaskSecurityEnvelope;
+    Security: NodeSecurity;
 };
 
 /**
@@ -486,22 +499,15 @@ export type ClaimedTaskCandidate = {
      */
     dependencyOutputs?: Map<string, unknown> | Record<string, unknown>;
     /**
-     * True when any direct upstream dependency of this task produced tainted output and has not been
-     * sanitized by a completed Human approval step.
+     * The task rows this task depends on, from the same graph load, so its input taint is computed
+     * without another query (see `ComputeNodeInputTaint`).
      */
-    isUpstreamTainted?: boolean;
-    /**
-     * True when a direct upstream dependency of this task is a completed Human approval step, acting
-     * as a HITL sanitization barrier for inherited run taint.
-     */
-    isSanitizedByHuman?: boolean;
+    upstreamTasks?: MJTaskEntity[];
 };
 
 export class TaskGraphDispatcher implements IShutdownable {
     private readonly config: TaskGraphDispatcherConfig;
     private readonly claims: TaskClaimStore;
-    /** Tracks upstream taint / human sanitization discovered during non-prehydrated `loadDependencyOutputs`. */
-    private readonly loadedDependencyTaint = new Map<string, { isUpstreamTainted: boolean; isSanitizedByHuman: boolean }>();
 
     /**
      * Edges already reported as unevaluable, so the report is once per transition and not once per
@@ -1220,15 +1226,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             : (taskOrID.taskId ?? taskOrID.ID ?? taskOrID.taskEntity.ID);
         let heartbeat: ReturnType<typeof setInterval> | null = null;
         try {
-            const parentEnv = hydrated?.parentMetadata?.securityEnvelope
-                ?? (hydrated?.parentTask ? ParseTaskGraphParentMetadata(hydrated.parentTask.InputPayload).securityEnvelope : undefined);
-            const stepEnv = ParseTaskSecurityEnvelope(
-                (hydrated?.taskEntity?.ConfigurationObject as TaskStepConfiguration | undefined)?.securityEnvelope,
-            );
-            const prehydratedTenantContext = MergeTaskSecurityEnvelopes(parentEnv, stepEnv)?.TenantContext;
-            const provider = prehydratedTenantContext
-                ? await this.providerFactory.CreateProvider({ TenantContext: prehydratedTenantContext, ContextUser: this.contextUser })
-                : await this.providerFactory.CreateProvider();
+            const provider = await this.providerFactory.CreateProvider();
 
             let task: MJTaskEntity;
             if (hydrated?.taskEntity) {
@@ -1281,11 +1279,16 @@ export class TaskGraphDispatcher implements IShutdownable {
                 ClaimExpiresAt: new Date(Date.now() + this.config.ClaimTTLSeconds * 1000).toISOString(),
             });
 
-            const dependencyOutputs = hydrated?.dependencyOutputs instanceof Map
-                ? hydrated.dependencyOutputs
-                : hydrated?.dependencyOutputs
-                    ? new Map(Object.entries(hydrated.dependencyOutputs))
-                    : await this.loadDependencyOutputs(provider, taskID);
+            const dependencies = hydrated?.dependencyOutputs
+                ? {
+                    Outputs: hydrated.dependencyOutputs instanceof Map
+                        ? hydrated.dependencyOutputs
+                        : new Map(Object.entries(hydrated.dependencyOutputs)),
+                    Upstream: hydrated.upstreamTasks ?? [],
+                }
+                : await this.loadDependencies(provider, taskID);
+            const dependencyOutputs = dependencies.Outputs;
+            const nodeHydration = { ...hydrated, upstreamTasks: dependencies.Upstream };
             const parsed = ParseTaskInputPayload(taskID, task.InputPayload);
             let result: TaskBodyOutcome;
             if ('ErrorMessage' in parsed) {
@@ -1295,7 +1298,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 result = { Success: false, ErrorMessage: parsed.ErrorMessage };
             } else {
                 const onProgress = this.nodeProgressEmitter(graphID, ownerUserID, taskID, task.Name);
-                result = await this.runTaskBody(task, provider, parsed.Payload, dependencyOutputs, onProgress, hydrated, Boolean(prehydratedTenantContext));
+                result = await this.runTaskBody(task, provider, parsed.Payload, dependencyOutputs, onProgress, nodeHydration);
             }
 
             // ONLY THE CONFIRMED OWNER MUTATES THE GRAPH (R2-10).
@@ -1951,7 +1954,9 @@ export class TaskGraphDispatcher implements IShutdownable {
         let invocation: { data?: unknown; context?: unknown } = {};
         let submittedByUserID: string | null | undefined = task.UserID;
         let parentAgentHierarchy: string[] | undefined = undefined;
-        let securityEnvelope: TaskSecurityEnvelope | undefined = undefined;
+        // The parent's stored envelope. Every child carries its own copy too, so a parent that cannot
+        // be read still leaves the node constrained by its own row.
+        let parentEnvelopeColumn: string | null = null;
 
         if (task.ParentID && prehydrated && (prehydrated.parentMetadata || prehydrated.parentTask)) {
             const parent = prehydrated.parentTask ?? null;
@@ -1963,7 +1968,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             parentAgentHierarchy = meta.parentAgentHierarchy;
             invocation = { data: meta.invocation?.data, context: meta.invocation?.context };
             submittedByUserID = meta.submittedByUserID ?? parent?.UserID ?? task.UserID;
-            securityEnvelope = meta.securityEnvelope ?? prehydrated.parentMetadata?.securityEnvelope;
+            parentEnvelopeColumn = parent?.SecurityEnvelope ?? null;
         } else if (task.ParentID && typeof provider?.GetEntityObject === 'function') {
             try {
                 const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
@@ -1976,25 +1981,28 @@ export class TaskGraphDispatcher implements IShutdownable {
                     parentAgentHierarchy = meta.parentAgentHierarchy;
                     invocation = { data: meta.invocation?.data, context: meta.invocation?.context };
                     submittedByUserID = meta.submittedByUserID ?? parent.UserID ?? task.UserID;
-                    securityEnvelope = meta.securityEnvelope;
+                    parentEnvelopeColumn = parent.SecurityEnvelope;
                 }
             } catch (e) {
                 // An unreadable parent must not stop the work; depth zero is the safe reading, and the
                 // submit-time cap still guards the next hop. Logged, because it also blanks `data.*`.
                 LogError(`[TaskGraphDispatcher] Task ${task.ID}: reading parent ${task.ParentID} failed; running at depth 0 with no invocation data/context: ${e instanceof Error ? e.message : String(e)}`);
             }
-        } else if (prehydrated?.parentMetadata?.securityEnvelope) {
-            securityEnvelope = prehydrated.parentMetadata.securityEnvelope;
         }
 
-        const executionUser = await this.resolveGraphExecutionUser(submittedByUserID, task.ParentID ?? task.ID);
+        const security = ResolveStoredNodeSecurity(parentEnvelopeColumn, task.SecurityEnvelope);
+        const submitter = await this.resolveGraphExecutionUser(submittedByUserID, task.ParentID ?? task.ID);
+        // The submitter resolves to the process-wide UserCache instance (or this dispatcher's own
+        // user), which every other task shares: the caller's tenant goes on a per-task clone, never
+        // on that instance (see CloneUserWithTenantContext).
+        const tenant = 'Envelope' in security ? security.Envelope?.CallerTenantContext : undefined;
         return {
             Depth: depth,
             SubmittingAgentRunID: submittingAgentRunID,
             ParentAgentHierarchy: parentAgentHierarchy,
             Invocation: invocation,
-            ExecutionUser: executionUser,
-            ...(securityEnvelope ? { SecurityEnvelope: securityEnvelope } : {}),
+            ExecutionUser: tenant ? CloneUserWithTenantContext(submitter, tenant, provider) : submitter,
+            Security: security,
         };
     }
 
@@ -2682,7 +2690,6 @@ export class TaskGraphDispatcher implements IShutdownable {
                 }
 
                 if (this.inFlight.has(entity.ID)) continue;
-                const upstreamTaint = this.computeUpstreamTaintInGraph(entity.ID, graph);
                 claimable.push({
                     ID: entity.ID,
                     taskId: entity.ID,
@@ -2692,8 +2699,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     parentTask: graph.parent ?? null,
                     parentMetadata: graph.parentMetadata,
                     dependencyOutputs: this.extractDependencyOutputsFromGraph(entity.ID, graph),
-                    isUpstreamTainted: upstreamTaint.isUpstreamTainted,
-                    isSanitizedByHuman: upstreamTaint.isSanitizedByHuman,
+                    upstreamTasks: this.upstreamTasksInGraph(entity.ID, graph),
                 });
                 if (claimable.length >= limit) break;
             }
@@ -3684,192 +3690,67 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
 
-    /**
-     * Returns true when a completed upstream task produced tainted output and is not a Human approval step.
-     */
-    private isTaskEntityOutputTainted(upstream: MJTaskEntity): boolean {
-        if (IsHumanTask(upstream)) {
-            return false;
+    /** The task rows `taskID` depends on, from the loaded graph (no query). */
+    private upstreamTasksInGraph(taskID: string, graph: GraphState): MJTaskEntity[] {
+        const upstream: MJTaskEntity[] = [];
+        for (const dep of graph.rawDependencies ?? []) {
+            if (!UUIDsEqual(dep.TaskID, taskID)) continue;
+            const row = graph.entityById.get(dep.DependsOnTaskID);
+            if (row) upstream.push(row);
         }
-        const cfg = this.parseConfiguration(upstream) as TaskStepConfiguration | undefined;
-        if (cfg?.runtime?.isOutputTainted === true) {
-            return true;
-        }
-        if (ParseTaskSecurityEnvelope(cfg?.securityEnvelope)?.IsRunTainted === true) {
-            return true;
-        }
-        if (upstream.OutputPayload) {
-            try {
-                const parsed: unknown = JSON.parse(upstream.OutputPayload);
-                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-                    const rec = parsed as Record<string, unknown>;
-                    if (rec.__isTainted === true || rec.isOutputTainted === true) {
-                        return true;
-                    }
-                }
-            } catch {
-                // Ignore malformed JSON here; extractDependencyOutputsFromGraph logs it.
-            }
-        }
-        return false;
+        return upstream;
     }
 
     /**
-     * Computes whether `taskID` has any tainted upstream ancestors or is sanitized by a completed
-     * Human approval ancestor directly from the in-memory `GraphState` (0 database queries).
-     *
-     * A tainted ancestor `T` is sanitized if and only if at least one completed Human ancestor `H`
-     * of `taskID` is downstream of `T` (`T` ∈ ancestors(`H`)), and every ancestor of `taskID` that
-     * is not upstream of `H` is untainted.
+     * The envelope a node's runners receive: its stored constraints ({@link GraphContext.Security})
+     * with `IsRunTainted` set to the node's input taint (`ComputeNodeInputTaint`), or why the node
+     * must not run.
      */
-    private computeUpstreamTaintInGraph(
-        taskID: string,
-        graph: GraphState,
-    ): { isUpstreamTainted: boolean; isSanitizedByHuman: boolean } {
-        const deps = graph.rawDependencies ?? [];
-        const collectAncestors = (startId: string): UUIDSet => {
-            const visited = new UUIDSet();
-            const stack: string[] = [startId];
-            while (stack.length > 0) {
-                const current = stack.pop()!;
-                for (const dep of deps) {
-                    if (!UUIDsEqual(dep.TaskID, current)) continue;
-                    if (!visited.Has(dep.DependsOnTaskID)) {
-                        visited.Add(dep.DependsOnTaskID);
-                        stack.push(dep.DependsOnTaskID);
-                    }
-                }
-            }
-            return visited;
-        };
-
-        const allAncestors = collectAncestors(taskID);
-        if (allAncestors.Size === 0) {
-            return { isUpstreamTainted: false, isSanitizedByHuman: false };
+    private nodeEnvelope(
+        task: MJTaskEntity,
+        context: GraphContext,
+        upstream: readonly MJTaskEntity[],
+    ): { Envelope: TaskSecurityEnvelope | undefined } | { Refusal: string } {
+        if ('Refusal' in context.Security) {
+            return context.Security;
         }
-
-        const completedHumanAncestors: string[] = [];
-        const sanitizedAncestorIds = new UUIDSet();
-        for (const ancId of allAncestors) {
-            const ancEntity = graph.entityById.get(ancId);
-            if (ancEntity && IsHumanTask(ancEntity) && ancEntity.Status === 'Complete') {
-                completedHumanAncestors.push(ancId);
-                for (const upstreamOfHuman of collectAncestors(ancId)) {
-                    sanitizedAncestorIds.Add(upstreamOfHuman);
-                }
-            }
-        }
-
-        let hasUnsanitizedTaintedAncestor = false;
-        let hasUnsanitizedNonHumanBranch = false;
-        for (const ancId of allAncestors) {
-            const ancEntity = graph.entityById.get(ancId);
-            if (!ancEntity) continue;
-            const isCompletedHuman = IsHumanTask(ancEntity) && ancEntity.Status === 'Complete';
-            if (isCompletedHuman || sanitizedAncestorIds.Has(ancId)) {
-                continue;
-            }
-            hasUnsanitizedNonHumanBranch = true;
-            if (this.isTaskEntityOutputTainted(ancEntity)) {
-                hasUnsanitizedTaintedAncestor = true;
-            }
-        }
-
-        return {
-            isUpstreamTainted: hasUnsanitizedTaintedAncestor,
-            isSanitizedByHuman:
-                completedHumanAncestors.length > 0 &&
-                !hasUnsanitizedTaintedAncestor &&
-                !hasUnsanitizedNonHumanBranch,
-        };
+        const stored = context.Security.Envelope;
+        const inputTainted = ComputeNodeInputTaint({
+            EnvelopeTainted: stored?.IsRunTainted === true,
+            IsCompensation: !!task.CompensatesTaskID || IsCompensationTask(task),
+            Upstream: upstream,
+        });
+        return { Envelope: WithInputTaint(stored, inputTainted) };
     }
 
     /**
-     * Evaluates Audience and Tainted Egress security gates before invoking an Action runner.
-     * Returns a failed `TaskBodyOutcome` when blocked, or `null` when allowed to proceed.
+     * The failed outcome for a node refused on security grounds, or null when it may run. A node whose
+     * envelope constrains anything runs only on a runner that enforces envelopes: the dispatcher
+     * cannot apply a run scope, an audience or the taint gate itself, so a runner that does not
+     * declare it would run the node unconstrained.
      */
-    private checkActionSecurityGates(
-        taskName: string,
-        actionID: string,
-        envelope: TaskSecurityEnvelope | undefined,
+    private securityRefusal(
+        task: MJTaskEntity,
+        envelope: { Envelope: TaskSecurityEnvelope | undefined } | { Refusal: string },
+        runnerEnforces: boolean | undefined,
     ): TaskBodyOutcome | null {
-        if (envelope?.Audience?.ReaderUserIDs && envelope.Audience.ReaderUserIDs.length > 0) {
-            if (this.actionRunner?.SupportsAudience !== true) {
-                const msg =
-                    `Action "${taskName}" (${actionID}) blocked by security envelope (AUDIENCE_UNSUPPORTED): ` +
-                    `action runner does not support audience enforcement.`;
-                LogError(`[TaskGraphDispatcher] ${msg}`);
-                return {
-                    Success: false,
-                    AgentRunID: null,
-                    ResultCode: 'AUDIENCE_UNSUPPORTED',
-                    ErrorMessage: msg,
-                };
-            }
+        if ('Refusal' in envelope) {
+            return this.refusedNode(task, envelope.Refusal);
         }
-        if (envelope?.IsRunTainted === true) {
-            const allowedIds = envelope.AllowedEgressActionIDs ?? [];
-            const isAllowed = allowedIds.some((allowedId) => UUIDsEqual(allowedId, actionID));
-            if (!isAllowed) {
-                const msg =
-                    `Action "${taskName}" (${actionID}) blocked by security envelope (TAINTED_EGRESS_BLOCKED): ` +
-                    `run is tainted by untrusted context and action is not in AllowedEgressActionIDs.`;
-                LogError(`[TaskGraphDispatcher] ${msg}`);
-                return {
-                    Success: false,
-                    AgentRunID: null,
-                    ResultCode: 'TAINTED_EGRESS_BLOCKED',
-                    ErrorMessage: msg,
-                    IsOutputTainted: true,
-                };
-            }
+        if (EnvelopeConstrains(envelope.Envelope) && runnerEnforces !== true) {
+            return this.refusedNode(
+                task,
+                'This host\'s runner for the step does not enforce task security envelopes, and the workflow was ' +
+                'submitted by a run with an audience, a scope, a tenant, bound parameters or tainted content.',
+            );
         }
         return null;
     }
 
-    /**
-     * Resolves the effective `TaskSecurityEnvelope` for a task by merging its parent graph envelope,
-     * its step-level configuration envelope, and monotonic upstream taint (unless sanitized by a
-     * completed Human approval prerequisite).
-     */
-    private resolveEffectiveSecurityEnvelope(
-        task: MJTaskEntity,
-        contextEnvelope: TaskSecurityEnvelope | undefined,
-        dependencyOutputs: Map<string, unknown>,
-        prehydrated?: Pick<ClaimedTaskCandidate, 'isUpstreamTainted' | 'isSanitizedByHuman'>,
-    ): TaskSecurityEnvelope | undefined {
-        const loadedTaint = this.loadedDependencyTaint?.get(task.ID);
-        this.loadedDependencyTaint?.delete(task.ID);
-
-        let depOutputTainted = false;
-        for (const outVal of dependencyOutputs.values()) {
-            if (outVal && typeof outVal === 'object' && !Array.isArray(outVal)) {
-                const rec = outVal as Record<string, unknown>;
-                if (rec.__isTainted === true || rec.isOutputTainted === true) {
-                    depOutputTainted = true;
-                    break;
-                }
-            }
-        }
-
-        const isSanitizedByHuman = Boolean(prehydrated?.isSanitizedByHuman ?? loadedTaint?.isSanitizedByHuman);
-        const isUpstreamTainted = !isSanitizedByHuman && Boolean(
-            prehydrated?.isUpstreamTainted ?? loadedTaint?.isUpstreamTainted ?? depOutputTainted,
-        );
-
-        const rawStepEnv = (task.ConfigurationObject as TaskStepConfiguration | null)?.securityEnvelope
-            ?? (this.parseConfiguration(task) as TaskStepConfiguration | undefined)?.securityEnvelope;
-        const stepEnvelope = ParseTaskSecurityEnvelope(rawStepEnv);
-
-        let effective = MergeTaskSecurityEnvelopes(
-            contextEnvelope,
-            stepEnvelope,
-            isUpstreamTainted ? { IsRunTainted: true } : undefined,
-        );
-        if (isSanitizedByHuman && effective?.IsRunTainted && !stepEnvelope?.IsRunTainted) {
-            effective = { ...effective, IsRunTainted: false };
-        }
-        return effective;
+    /** A node refused on security grounds: failed, never run, and its output counted as tainted. */
+    private refusedNode(task: MJTaskEntity, message: string): TaskBodyOutcome {
+        LogError(`[TaskGraphDispatcher] Task '${task.Name}' (${task.ID}) refused: ${message}`);
+        return { Success: false, AgentRunID: null, ErrorMessage: message, IsOutputTainted: true };
     }
 
     /**
@@ -3893,9 +3774,17 @@ export class TaskGraphDispatcher implements IShutdownable {
         return outputs;
     }
 
-    /** Parsed `OutputPayload` of each completed dependency, keyed by that task's ID. */
-    private async loadDependencyOutputs(provider: IMetadataProvider, taskID: string): Promise<Map<string, unknown>> {
+    /**
+     * The task rows `taskID` depends on, and the parsed `OutputPayload` of each, keyed by that task's
+     * ID. The path for a task claimed without a graph load; `findClaimableTasks` reads both from the
+     * graph it already holds.
+     */
+    private async loadDependencies(
+        provider: IMetadataProvider,
+        taskID: string,
+    ): Promise<{ Outputs: Map<string, unknown>; Upstream: MJTaskEntity[] }> {
         const outputs = new Map<string, unknown>();
+        const upstreamRows: MJTaskEntity[] = [];
         const rv = RunView.FromMetadataProvider(provider);
         // BypassCache: an upstream task's OutputPayload is written on the completion path, so a
         // cached read here can hand a dependent task the previous run's output — or none at all.
@@ -3903,30 +3792,15 @@ export class TaskGraphDispatcher implements IShutdownable {
             { EntityName: 'MJ: Task Dependencies', ExtraFilter: `TaskID='${taskID}'`, ResultType: 'entity_object', BypassCache: true },
             this.contextUser,
         );
-        let hasTaintedDep = false;
-        let sawCompletedHuman = false;
-        let sawNonHumanDep = false;
         for (const dep of (deps.Success ? deps.Results : []) ?? []) {
             const upstream = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
             if (!(await upstream.Load(dep.DependsOnTaskID))) continue;
-            if (IsHumanTask(upstream) && upstream.Status === 'Complete') {
-                sawCompletedHuman = true;
-            } else {
-                sawNonHumanDep = true;
-                if (this.isTaskEntityOutputTainted(upstream)) {
-                    hasTaintedDep = true;
-                }
-            }
+            upstreamRows.push(upstream);
             if (!upstream.OutputPayload) continue;
             try { outputs.set(dep.DependsOnTaskID, JSON.parse(upstream.OutputPayload)); }
             catch (e) { LogError(`[TaskGraphDispatcher] Task ${dep.DependsOnTaskID} has malformed OutputPayload: ${e}`); }
         }
-        const isSanitizedByHuman = sawCompletedHuman && !sawNonHumanDep && !hasTaintedDep;
-        this.loadedDependencyTaint?.set(taskID, {
-            isUpstreamTainted: hasTaintedDep,
-            isSanitizedByHuman,
-        });
-        return outputs;
+        return { Outputs: outputs, Upstream: upstreamRows };
     }
 
     /**
@@ -3946,8 +3820,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         inputPayload: unknown,
         dependencyOutputs: Map<string, unknown>,
         onProgress?: TaskRunProgressCallback,
-        prehydrated?: Pick<ClaimedTaskCandidate, 'parentTask' | 'parentMetadata' | 'isUpstreamTainted' | 'isSanitizedByHuman'>,
-        tenantProviderAlreadyMinted: boolean = false,
+        prehydrated?: Pick<ClaimedTaskCandidate, 'parentTask' | 'parentMetadata' | 'upstreamTasks'>,
     ): Promise<TaskBodyOutcome> {
         // A node's input is a name → value object (`TaskGraphSpecNode.inputPayload: Record<string, unknown>`).
         // `mergedPayload` below only merges objects, so anything else would be dropped without a word
@@ -3973,7 +3846,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         // through the very same runners as a one-shot step.
         if (task.StepType === 'ForEach' || task.StepType === 'While') {
             return {
-                ...await this.runLoopTask(task, provider, rawPayload, dependencyOutputs, prehydrated, tenantProviderAlreadyMinted),
+                ...await this.runLoopTask(task, provider, rawPayload, dependencyOutputs, prehydrated),
                 PayloadAtStart: rawPayload,
             };
         }
@@ -3989,19 +3862,12 @@ export class TaskGraphDispatcher implements IShutdownable {
         // the in-run walker resolves them and as branch conditions already see them (R3-3). Without
         // it a mapping like `RecordID: data.ID` reached the action as the literal "data.ID".
         const context = await this.graphContext(provider, task, prehydrated);
-        const effectiveEnvelope = this.resolveEffectiveSecurityEnvelope(
-            task,
-            context.SecurityEnvelope,
-            dependencyOutputs,
-            prehydrated,
-        );
-        const executionProvider =
-            effectiveEnvelope?.TenantContext && !tenantProviderAlreadyMinted
-                ? await this.providerFactory.CreateProvider({
-                    TenantContext: effectiveEnvelope.TenantContext,
-                    ContextUser: context.ExecutionUser,
-                })
-                : provider;
+        const nodeEnvelope = this.nodeEnvelope(task, context, prehydrated?.upstreamTasks ?? []);
+        if ('Refusal' in nodeEnvelope) {
+            return { ...this.refusedNode(task, nodeEnvelope.Refusal), PayloadAtStart: rawPayload };
+        }
+        const effectiveEnvelope = nodeEnvelope.Envelope;
+        const inputTainted = effectiveEnvelope?.IsRunTainted === true;
 
         const payload = rawPayload;
         const invocation = config?.inputMapping ? context.Invocation : {};
@@ -4022,7 +3888,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         // Every layer looked like it was working.
         const rawEffectiveInput = Object.keys(params).length > 0 ? params : payload;
         const inputEnforcement = task.ActionID
-            ? ApplyTaskSecurityEnvelopeToParams(rawEffectiveInput, effectiveEnvelope, task.ActionID, task.Name)
+            ? ApplyTaskSecurityEnvelopeToParams(rawEffectiveInput, effectiveEnvelope, task.ActionID)
             : { Params: rawEffectiveInput, OverriddenKeys: [] as string[] };
         const effectiveInput = inputEnforcement.Params;
         if (inputEnforcement.OverriddenKeys.length > 0) {
@@ -4044,7 +3910,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 InputPayload: effectiveInput,
                 DependencyOutputs: dependencyOutputs,
                 TemplateParameters: config?.prompt?.templateParameters,
-                Provider: executionProvider,
+                Provider: provider,
                 ContextUser: context.ExecutionUser,
                 OnProgress: onProgress,
                 ...(effectiveEnvelope ? { SecurityEnvelope: effectiveEnvelope } : {}),
@@ -4056,7 +3922,6 @@ export class TaskGraphDispatcher implements IShutdownable {
             const merged = promptResult.Success && promptResult.Output && typeof promptResult.Output === 'object'
                 ? deepMergePayload(payload, promptResult.Output as Record<string, unknown>)
                 : payload;
-            const isOutputTainted = !IsHumanTask(task) && Boolean(effectiveEnvelope?.IsRunTainted || promptResult.IsOutputTainted);
 
             return {
                 Success: promptResult.Success,
@@ -4069,22 +3934,25 @@ export class TaskGraphDispatcher implements IShutdownable {
                 // cost rollup that silently omits failures under-reports exactly the runs someone
                 // is most likely to be investigating.
                 PromptRunID: promptResult.PromptRunID,
-                ...(isOutputTainted ? { IsOutputTainted: true } : {}),
+                // Monotonic: a prompt fed tainted input writes tainted output.
+                IsOutputTainted: inputTainted || promptResult.IsOutputTainted === true,
             };
         }
 
-        if (task.ActionID) {
-            const gateRejection = this.checkActionSecurityGates(task.Name, task.ActionID, effectiveEnvelope);
-            if (gateRejection) {
-                return { ...gateRejection, PayloadAtStart: payload };
-            }
+        const refusal = this.securityRefusal(
+            task,
+            nodeEnvelope,
+            task.ActionID ? this.actionRunner?.EnforcesSecurityEnvelope : this.agentRunner.EnforcesSecurityEnvelope,
+        );
+        if (refusal) {
+            return { ...refusal, PayloadAtStart: payload };
         }
 
         const raw = task.ActionID
             ? {
                 ...await this.invokeActionWithIdempotentRetry(
                     task,
-                    executionProvider,
+                    provider,
                     effectiveInput,
                     dependencyOutputs,
                     context.ExecutionUser,
@@ -4093,14 +3961,16 @@ export class TaskGraphDispatcher implements IShutdownable {
                 ),
                 AgentRunID: null,
             }
-            : await this.runAgentNode(task, executionProvider, effectiveInput, dependencyOutputs, onProgress, context, effectiveEnvelope);
+            : await this.runAgentNode(task, provider, effectiveInput, dependencyOutputs, onProgress, context, effectiveEnvelope);
 
-        const isOutputTainted = !IsHumanTask(task) && Boolean(effectiveEnvelope?.IsRunTainted || raw.IsOutputTainted);
         return {
             ...raw,
             Output: this.applyStepOutputMapping(task, payload, raw.Output, config?.outputMapping),
             PayloadAtStart: payload,
-            ...(isOutputTainted ? { IsOutputTainted: true } : {}),
+            // Monotonic: tainted input taints the output, and so does an action or agent that read
+            // untrusted content (the runner reports that from the action's trust level or the run's
+            // tainted sources).
+            IsOutputTainted: inputTainted || raw.IsOutputTainted === true,
         };
     }
 
@@ -4302,6 +4172,11 @@ export class TaskGraphDispatcher implements IShutdownable {
         for (const { task: forwardTask, compensation: compMeta } of orderedToCompensate) {
             const compActionID = await this.resolveCompensationActionID(provider, compMeta);
             if (!compActionID) continue;
+            const envelope = this.compensationEnvelope(graph, forwardTask);
+            if ('Refusal' in envelope) {
+                LogError(`[TaskGraphDispatcher] Not compensating task ${forwardTask.ID}: ${envelope.Refusal}`);
+                continue;
+            }
 
             const recordChanges = await this.loadCorrelatedRecordChangesForTask(provider, forwardTask);
             const compInput = this.buildForwardTaskCompensationInput(forwardTask, compMeta, recordChanges);
@@ -4321,8 +4196,8 @@ export class TaskGraphDispatcher implements IShutdownable {
             compTask.UserID = forwardTask.UserID ?? graph.parent?.UserID ?? null;
             compTask.AgentRunID = forwardTask.AgentRunID ?? graph.parent?.AgentRunID ?? null;
             compTask.InputPayload = JSON.stringify(compInput);
+            compTask.SecurityEnvelope = SerializeTaskSecurityEnvelope(envelope.Envelope);
             const compStepConfig: TaskStepConfiguration = {
-                ...(forwardConfig?.securityEnvelope ? { securityEnvelope: forwardConfig.securityEnvelope } : {}),
                 ...(compMeta.retryCount != null ? { policy: { retryCount: compMeta.retryCount } } : {}),
                 compensation: {
                     ...compMeta,
@@ -4361,6 +4236,23 @@ export class TaskGraphDispatcher implements IShutdownable {
             await forwardTask.Save();
         }
         return createdCount;
+    }
+
+    /**
+     * The envelope a compensation task is written with: the forward task's constraints, tainted when
+     * the forward task's output was. A compensation reads the forward run's input and output, so it
+     * runs under exactly what the forward task ran under, and never less tainted than what it reads.
+     */
+    private compensationEnvelope(
+        graph: GraphState,
+        forwardTask: MJTaskEntity,
+    ): { Envelope: TaskSecurityEnvelope | undefined } | { Refusal: string } {
+        const stored = ResolveStoredNodeSecurity(graph.parent?.SecurityEnvelope, forwardTask.SecurityEnvelope);
+        if ('Refusal' in stored) {
+            return stored;
+        }
+        const forwardTainted = RecordedOutputTaint(forwardTask.Configuration) === true;
+        return { Envelope: forwardTainted ? WithInputTaint(stored.Envelope, true) : stored.Envelope };
     }
 
     /**
@@ -4617,8 +4509,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         provider: IMetadataProvider,
         payload: Record<string, unknown>,
         dependencyOutputs: Map<string, unknown>,
-        prehydrated?: Pick<ClaimedTaskCandidate, 'parentTask' | 'parentMetadata' | 'isUpstreamTainted' | 'isSanitizedByHuman'>,
-        tenantProviderAlreadyMinted: boolean = false,
+        prehydrated?: Pick<ClaimedTaskCandidate, 'parentTask' | 'parentMetadata' | 'upstreamTasks'>,
     ): Promise<TaskBodyOutcome> {
         const config = task.ConfigurationObject as TaskStepConfiguration | null;
         const op = task.StepType === 'ForEach' ? config?.forEach : config?.while;
@@ -4651,19 +4542,17 @@ export class TaskGraphDispatcher implements IShutdownable {
         // loop bodies second-class in every dimension — and reopened the unbounded-recursion hole
         // THROUGH loops, since each spawned run restarted the chain at zero.
         const graphContext = await this.graphContext(provider, task, prehydrated);
-        const effectiveEnvelope = this.resolveEffectiveSecurityEnvelope(
-            task,
-            graphContext.SecurityEnvelope,
-            dependencyOutputs,
-            prehydrated,
-        );
-        const executionProvider =
-            effectiveEnvelope?.TenantContext && !tenantProviderAlreadyMinted
-                ? await this.providerFactory.CreateProvider({
-                    TenantContext: effectiveEnvelope.TenantContext,
-                    ContextUser: graphContext.ExecutionUser,
-                })
-                : provider;
+        const startEnvelope = this.nodeEnvelope(task, graphContext, prehydrated?.upstreamTasks ?? []);
+        if ('Refusal' in startEnvelope) {
+            return this.refusedNode(task, startEnvelope.Refusal);
+        }
+        // Monotonic across passes as well as across nodes: once a pass reports tainted output, every
+        // later pass reads it through the running payload, so it runs tainted too.
+        let loopEnvelope = startEnvelope.Envelope;
+        const markLoopTainted = (): void => {
+            loopEnvelope = WithInputTaint(loopEnvelope, true);
+        };
+        const executionProvider = provider;
 
         // Pre-resolve ActionIDs once for multi-step action bodies (`op.steps[]`). Submit stamps
         // `config.stepActionIds`; fallback RunView covers callers constructing Task rows directly.
@@ -4693,7 +4582,6 @@ export class TaskGraphDispatcher implements IShutdownable {
         // took the give-up branch, making the other branch unreachable. The loop ran, reported
         // success, and its result was predetermined.
         let livePayload: Record<string, unknown> = { ...payload };
-        let anyIterationTainted = Boolean(effectiveEnvelope?.IsRunTainted);
 
         // One entry per pass, so the loop's work exists somewhere the platform can see it. Without
         // this a loop is a single childless node: the run tree reaches nested work through six links
@@ -4727,8 +4615,8 @@ export class TaskGraphDispatcher implements IShutdownable {
                     invocation: graphContext.Invocation,
                     iterationTrace,
                     budget,
-                    securityEnvelope: effectiveEnvelope,
-                    onIterationTainted: () => { anyIterationTainted = true; },
+                    securityEnvelope: loopEnvelope,
+                    onIterationTainted: markLoopTainted,
                 });
             }
 
@@ -4741,8 +4629,9 @@ export class TaskGraphDispatcher implements IShutdownable {
                 payload: iterationPayload,
                 ...graphContext.Invocation,
             });
+            const envelope = loopEnvelope;
             const resolved = task.ActionID
-                ? ApplyTaskSecurityEnvelopeToParams(rawResolved, effectiveEnvelope, task.ActionID, op.action?.name ?? task.Name).Params
+                ? ApplyTaskSecurityEnvelopeToParams(rawResolved, envelope, task.ActionID).Params
                 : rawResolved;
 
             /**
@@ -4755,7 +4644,7 @@ export class TaskGraphDispatcher implements IShutdownable {
              */
             const absorb = <T extends { Success: boolean; Output?: unknown; ErrorMessage?: string; PromptRunID?: string; AgentRunID?: string; ActionLogID?: string; IsOutputTainted?: boolean }>(outcome: T, bodyInput: unknown): T => {
                 if (outcome.IsOutputTainted) {
-                    anyIterationTainted = true;
+                    markLoopTainted();
                 }
                 livePayload = this.foldIterationOutput(task, livePayload, outcome.Output, bodyOutputMapping);
                 iterationTrace.push({
@@ -4817,15 +4706,20 @@ export class TaskGraphDispatcher implements IShutdownable {
                     TemplateParameters: { ...stringifyBindings(Bindings), ...op.prompt?.templateParameters },
                     Provider: executionProvider,
                     ContextUser: graphContext.ExecutionUser,
-                    ...(effectiveEnvelope ? { SecurityEnvelope: effectiveEnvelope } : {}),
+                    ...(envelope ? { SecurityEnvelope: envelope } : {}),
                 }), iterationPayload);
             }
 
+            const refusal = this.securityRefusal(
+                task,
+                { Envelope: envelope },
+                task.ActionID ? this.actionRunner?.EnforcesSecurityEnvelope : this.agentRunner.EnforcesSecurityEnvelope,
+            );
+            if (refusal) {
+                return refusal;
+            }
+
             if (task.ActionID) {
-                const gateRejection = this.checkActionSecurityGates(task.Name, task.ActionID, effectiveEnvelope);
-                if (gateRejection) {
-                    return gateRejection;
-                }
                 return absorb(await this.actionRunner!.RunActionForTask({
                     TaskID: task.ID,
                     ActionID: task.ActionID,
@@ -4833,7 +4727,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     DependencyOutputs: dependencyOutputs,
                     Provider: executionProvider,
                     ContextUser: graphContext.ExecutionUser,
-                    ...(effectiveEnvelope ? { SecurityEnvelope: effectiveEnvelope } : {}),
+                    ...(envelope ? { SecurityEnvelope: envelope } : {}),
                 }), resolved);
             }
 
@@ -4851,7 +4745,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 ...(graphContext.ParentAgentHierarchy ? { ParentAgentHierarchy: graphContext.ParentAgentHierarchy } : {}),
                 Provider: executionProvider,
                 ContextUser: graphContext.ExecutionUser,
-                ...(effectiveEnvelope ? { SecurityEnvelope: effectiveEnvelope } : {}),
+                ...(envelope ? { SecurityEnvelope: envelope } : {}),
             }), agentInput);
         };
 
@@ -4898,7 +4792,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             // pass inside `foldIterationOutput`; applying it again against the accumulated payload
             // is what used to make it match nothing.
             Output: this.applyStepOutputMapping(task, livePayload, outcome.Output, config?.outputMapping),
-            ...(anyIterationTainted ? { IsOutputTainted: true } : {}),
+            IsOutputTainted: loopEnvelope?.IsRunTainted === true,
         };
     }
 
@@ -4988,6 +4882,8 @@ export class TaskGraphDispatcher implements IShutdownable {
         let workingPayload: Record<string, unknown> = structuredClone(getLivePayload());
         let lastActionLogID: string | undefined;
         let lastStepOutput: Record<string, unknown> | undefined;
+        // A later step reads an earlier step's output, so taint is monotonic within the pass too.
+        let stepEnvelope = securityEnvelope;
 
         for (let stepIdx = 0; stepIdx < steps.length; stepIdx++) {
             const step = steps[stepIdx];
@@ -5040,12 +4936,11 @@ export class TaskGraphDispatcher implements IShutdownable {
             const actionId = stepActionIds.get(step.name)!;
             const resolvedParams = ApplyTaskSecurityEnvelopeToParams(
                 rawResolvedParams,
-                securityEnvelope,
+                stepEnvelope,
                 actionId,
-                step.name,
             ).Params;
             stepInputsTrace[stepKey] = resolvedParams;
-            const gateRejection = this.checkActionSecurityGates(step.name, actionId, securityEnvelope);
+            const gateRejection = this.securityRefusal(task, { Envelope: stepEnvelope }, this.actionRunner?.EnforcesSecurityEnvelope);
             if (gateRejection) {
                 iterationTrace.push({
                     index,
@@ -5069,12 +4964,13 @@ export class TaskGraphDispatcher implements IShutdownable {
                 DependencyOutputs: dependencyOutputs,
                 Provider: provider,
                 ContextUser: executionUser,
-                ...(securityEnvelope ? { SecurityEnvelope: securityEnvelope } : {}),
+                ...(stepEnvelope ? { SecurityEnvelope: stepEnvelope } : {}),
             });
             if (actionOutcome.ActionLogID) {
                 lastActionLogID = actionOutcome.ActionLogID;
             }
             if (actionOutcome.IsOutputTainted) {
+                stepEnvelope = WithInputTaint(stepEnvelope, true);
                 onIterationTainted?.();
             }
 
@@ -5303,6 +5199,9 @@ export class TaskGraphDispatcher implements IShutdownable {
         if (conflict) return notAsked(conflict);
 
         const context = await this.graphContext(provider, task, prehydrated);
+        if ('Refusal' in context.Security) {
+            return this.refusedNode(task, context.Security.Refusal);
+        }
         const startedAt = new Date();
         const result = await this.decisionRunner.RunDecisionForTask({
             TaskID: task.ID,
@@ -5915,7 +5814,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         payloadAtStart?: Record<string, unknown>,
         isOutputTainted?: boolean,
     ): string | undefined {
-        if (!promptRunID && !actionLogID && !iterations?.length && !payloadAtStart && !isOutputTainted) return undefined;
+        if (!promptRunID && !actionLogID && !iterations?.length && !payloadAtStart && isOutputTainted === undefined) return undefined;
 
         const existing = this.parseConfiguration(task);
         const merged: TaskStepConfiguration = {
@@ -5932,7 +5831,8 @@ export class TaskGraphDispatcher implements IShutdownable {
                 // against. NOT written to Task.InputPayload, which holds the AUTHORED input and
                 // round-trips back out as part of the spec.
                 ...(payloadAtStart ? { payloadAtStart } : {}),
-                ...(isOutputTainted ? { isOutputTainted: true } : {}),
+                // Written true OR false: "ran clean" must be told apart from "never ran" (UpstreamCarriesTaint).
+                ...(isOutputTainted !== undefined ? { isOutputTainted } : {}),
             },
         };
         return JSON.stringify(merged);

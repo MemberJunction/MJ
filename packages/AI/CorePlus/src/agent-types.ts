@@ -23,6 +23,7 @@ import { ActionParam, type ActionOutputTrustLevel } from '@memberjunction/action
 import { ActionableCommand, AutomaticCommand } from './ui-commands';
 import { AgentRequestAssignmentStrategy } from './assignment-strategy';
 import { MJAIAgentRunEntityExtended } from './MJAIAgentRunEntityExtended';
+import type { TaskSecurityEnvelope } from './task-graph/task-security-envelope';
 import { MJAIAgentEntityExtended } from './MJAIAgentEntityExtended';
 import { MJAIPromptEntityExtended } from './MJAIPromptEntityExtended';
 import { MediaModality } from './prompt.types';
@@ -1683,18 +1684,17 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     taskGraphDebug?: { paused?: boolean };
 
     /**
-     * Optional explicit `TaskSecurityEnvelope` to attach to any durable task graph emitted by this run,
-     * merged with any `boundActionParams`, `Audience`, and tenant scope active on the run.
+     * The security envelope of the task-graph node this run executes, set by the task-graph agent runner
+     * (MJServer's `TaskGraphAgentRunner`) and nowhere else: server-side only, no GraphQL input reaches it.
+     * It only ever adds constraints. A tainted envelope (`IsRunTainted`) starts the run tainted, and a
+     * graph this run submits carries the envelope merged with the run's own bindings, audience and scope
+     * (`MergeTaskSecurityEnvelopes`, which keeps the stricter of each). Whether the run may submit a graph
+     * at all is decided by the registered `TaskGraphSubmitter` (`SupportsSecurityEnvelope`), never by this.
+     *
+     * @since 6.2.0
      */
-    securityEnvelope?: import('./task-graph/task-security-envelope').TaskSecurityEnvelope;  // case-violation-ok-legacy-back-compat: ExecuteAgentParams uses camelCase properties
+    SecurityEnvelope?: TaskSecurityEnvelope;
 
-    /**
-     * When true, permits the agent run to offer and submit durable task graphs even under
-     * `boundActionParams`, `Audience`, or tenant scoping by attaching a `TaskSecurityEnvelope` to the
-     * submitted graph. Also enabled automatically when the registered `TaskGraphSubmitter` declares
-     * `SupportsSecurityEnvelope === true`.
-     */
-    allowScopedTaskGraphs?: boolean;  // case-violation-ok-legacy-back-compat: ExecuteAgentParams uses camelCase properties
 
     /**
      * Skills the caller (typically an end user via a `/skill-name` mention in the composer)

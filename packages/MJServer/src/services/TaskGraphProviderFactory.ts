@@ -18,7 +18,7 @@
  * @module @memberjunction/server
  */
 import { DatabaseProviderBase, IMetadataProvider } from '@memberjunction/core';
-import type { ProviderFactory, ProviderFactoryOptions } from '@memberjunction/task-graph';
+import type { ProviderFactory } from '@memberjunction/task-graph';
 import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import sql from 'mssql';
 import { mj_core_schema } from '../config.js';
@@ -33,20 +33,18 @@ import { mj_core_schema } from '../config.js';
 export class TaskGraphProviderFactory implements ProviderFactory {
     constructor(private readonly pool: sql.ConnectionPool) {}
 
-    public async CreateProvider(options?: ProviderFactoryOptions): Promise<IMetadataProvider> {
+    /**
+     * A fresh provider. It carries no user and no tenant: the dispatcher runs each node as a per-task
+     * clone of its user stamped with the caller's tenant context, so nothing here touches a `UserInfo`
+     * (a shared one stamped here would be pinned to one tenant for the life of the process).
+     */
+    public async CreateProvider(): Promise<IMetadataProvider> {
         // `loadIfNeeded = false` (the trailing false) reuses already-loaded metadata rather than
         // re-reading it per provider — the difference between "cheap enough to do per task" and
         // "prohibitively expensive".
         const config = new SQLServerProviderConfigData(this.pool, mj_core_schema, 0, undefined, undefined, false);
         const provider = new SQLServerDataProvider();
         await provider.Config(config);
-        const tenantId = options?.TenantContext?.PrimaryScopeRecordID?.trim();
-        if (options?.ContextUser && tenantId && !options.ContextUser.TenantContext) {
-            options.ContextUser.TenantContext = {
-                TenantID: tenantId,
-                Source: 'custom',
-            };
-        }
         return provider as unknown as IMetadataProvider;
     }
 }

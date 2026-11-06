@@ -1,510 +1,306 @@
+/**
+ * The dispatcher's enforcement of `MJ: Tasks.SecurityEnvelope`: where the envelope is read from, what
+ * a node is refused for, who it runs as, and how taint flows from node to node.
+ */
 import { describe, it, expect, vi } from 'vitest';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import type { MJTaskDependencyEntity, MJTaskEntity } from '@memberjunction/core-entities';
+import type { IMetadataProvider, TenantContext, UserInfo } from '@memberjunction/core';
+import type { MJTaskEntity } from '@memberjunction/core-entities';
 import {
-    ApplyTaskSecurityEnvelopeToParams,
-    BuildTaskSecurityEnvelopeFromAgentScope,
-    MergeTaskSecurityEnvelopes,
-    ParseTaskSecurityEnvelope,
     SerializeTaskSecurityEnvelope,
+    TASK_SECURITY_ENVELOPE_VERSION,
     type TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
 import { TaskGraphDispatcher, type ClaimedTaskCandidate } from '../TaskGraphDispatcher';
 import { BuildTaskGraphParentInputPayload, ParseTaskGraphParentMetadata } from '../TaskGraphService';
-import type { ProviderFactoryOptions, TaskActionRunner, TaskAgentRunner } from '../types';
+import type {
+    ProviderFactory,
+    TaskActionRunParams,
+    TaskActionRunResult,
+    TaskActionRunner,
+    TaskAgentRunner,
+    TaskPromptRunner,
+} from '../types';
 
-const TEST_USER = { ID: '00000000-0000-0000-0000-000000000001', Name: 'Tester', IsActive: true } as UserInfo;
-const READER_USER_ID = '00000000-0000-0000-0000-000000000002';
-const ACTION_SEND_EMAIL_ID = '22222222-2222-4222-8222-222222222222';
-const ACTION_INTERNAL_LOG_ID = '33333333-3333-4333-8333-333333333333';
+const TEST_USER = { ID: '00000000-0000-4000-8000-000000000001', Name: 'Tester', IsActive: true } as UserInfo;
+const ACTION_ID = '33333333-3333-4333-8333-333333333333';
+const PARENT_ID = '44444444-4444-4444-8444-444444444444';
+const TENANT: TenantContext = { TenantID: 'org-A', Source: 'header' };
 
-function makeChildTask(fields: {
+function envelope(parts: Partial<TaskSecurityEnvelope> = {}): TaskSecurityEnvelope {
+    return { Version: TASK_SECURITY_ENVELOPE_VERSION, IsRunTainted: false, ...parts };
+}
+
+function makeTask(fields: {
     ID: string;
-    ParentID: string;
-    Name: string;
+    Name?: string;
     Status?: MJTaskEntity['Status'];
     StepType?: MJTaskEntity['StepType'];
     ActionID?: string | null;
-    AgentID?: string | null;
     PromptID?: string | null;
     UserID?: string | null;
-    InputPayload?: string | null;
-    OutputPayload?: string | null;
+    InputPayload?: string;
     Configuration?: string | null;
-    ConfigurationObject?: Record<string, unknown> | null;
+    SecurityEnvelope?: string | null;
 }): MJTaskEntity {
-    return {
+    const row = {
         ID: fields.ID,
-        ParentID: fields.ParentID,
-        Name: fields.Name,
+        ParentID: PARENT_ID,
+        Name: fields.Name ?? fields.ID,
         Status: fields.Status ?? 'Pending',
         StepType: fields.StepType ?? 'Action',
-        ActionID: fields.ActionID ?? null,
-        AgentID: fields.AgentID ?? null,
+        ActionID: fields.ActionID === undefined ? ACTION_ID : fields.ActionID,
+        AgentID: null,
         PromptID: fields.PromptID ?? null,
         UserID: fields.UserID ?? null,
-        ClaimedBy: null,
-        ClaimExpiresAt: null,
-        StartedAt: null,
-        CompletedAt: null,
-        PercentComplete: fields.Status === 'Complete' ? 100 : 0,
-        ErrorMessage: null,
+        CompensatesTaskID: null,
         InputPayload: fields.InputPayload ?? JSON.stringify({}),
-        OutputPayload: fields.OutputPayload ?? null,
+        OutputPayload: null,
         Configuration: fields.Configuration ?? null,
-        ConfigurationObject: fields.ConfigurationObject ?? null,
+        SecurityEnvelope: fields.SecurityEnvelope ?? null,
+        get ConfigurationObject(): Record<string, unknown> | null {
+            return row.Configuration ? (JSON.parse(row.Configuration) as Record<string, unknown>) : null;
+        },
         Save: vi.fn().mockResolvedValue(true),
         Load: vi.fn().mockResolvedValue(true),
-    } as unknown as MJTaskEntity;
+    };
+    return row as unknown as MJTaskEntity;
 }
 
-describe('TaskSecurityEnvelope contract and TaskGraphDispatcher enforcement (WS-4.1)', () => {
-    describe('ParseTaskSecurityEnvelope, MergeTaskSecurityEnvelopes & ApplyTaskSecurityEnvelopeToParams', () => {
-        it('should round-trip serialize and parse a TaskSecurityEnvelope and enforce BoundActionParams case-insensitively', () => {
-            const built = BuildTaskSecurityEnvelopeFromAgentScope({
-                BoundActionParams: { OrganizationID: 'org-real', Region: 'us-east' },
-                AudienceReaderUserIDs: [READER_USER_ID],
-                PrimaryScopeEntityName: 'MJ: Organizations',
-                PrimaryScopeRecordID: 'org-real',
-                IsRunTainted: true,
-                AllowedEgressActionIDs: [ACTION_INTERNAL_LOG_ID],
-            });
-            expect(built).toBeDefined();
-            const serialized = SerializeTaskSecurityEnvelope(built);
-            const parsed = ParseTaskSecurityEnvelope(serialized);
-            expect(parsed).toEqual(built);
+function makeParent(env?: TaskSecurityEnvelope): MJTaskEntity {
+    const row = {
+        ID: PARENT_ID,
+        ParentID: null,
+        Name: 'Workflow',
+        UserID: TEST_USER.ID,
+        AgentRunID: null,
+        InputPayload: JSON.stringify(BuildTaskGraphParentInputPayload({
+            continuation: 'none',
+            reinvokeDepth: 0,
+            failureSemantics: 'block',
+            submittedByAgentRunID: null,
+            submittedByUserID: TEST_USER.ID,
+        })),
+        SecurityEnvelope: SerializeTaskSecurityEnvelope(env),
+    };
+    return row as unknown as MJTaskEntity;
+}
 
-            const stepOverride = ParseTaskSecurityEnvelope({
-                BoundActionParams: { ExtraBoundKey: 'locked-val' },
-                AllowedEgressActionIDs: [ACTION_SEND_EMAIL_ID],
-            });
-            const merged = MergeTaskSecurityEnvelopes(parsed, stepOverride);
-            expect(merged?.IsRunTainted).toBe(true);
-            expect(merged?.BoundActionParams).toEqual({
-                OrganizationID: 'org-real',
-                Region: 'us-east',
-                ExtraBoundKey: 'locked-val',
-            });
+type Recorded = { Status: string; ErrorMessage?: string; Configuration?: string };
 
-            // Attempt to override `organizationid` (different casing) in node input:
-            const enforcement = ApplyTaskSecurityEnvelopeToParams(
-                { organizationid: 'org-spoofed', PromptText: 'Hello' },
-                merged,
-            );
-            expect(enforcement.Params).toEqual({
-                OrganizationID: 'org-real',
-                Region: 'us-east',
-                ExtraBoundKey: 'locked-val',
-                PromptText: 'Hello',
+type Harness = {
+    run: (task: MJTaskEntity, extra?: Partial<ClaimedTaskCandidate>) => Promise<Recorded>;
+    actionCalls: TaskActionRunParams[];
+};
+
+function harness(opts: {
+    actionResult?: Partial<TaskActionRunResult>;
+    enforces?: boolean;
+    providerFactory?: ProviderFactory;
+    agentRunner?: TaskAgentRunner;
+    promptRunner?: TaskPromptRunner;
+    parent?: MJTaskEntity;
+}): Harness {
+    const actionCalls: TaskActionRunParams[] = [];
+    const actionRunner: TaskActionRunner = {
+        EnforcesSecurityEnvelope: opts.enforces ?? true,
+        RunActionForTask: vi.fn(async (p: TaskActionRunParams) => {
+            actionCalls.push(p);
+            return { Success: true, Output: { ok: true }, ...opts.actionResult };
+        }),
+    };
+    const dispatcher = new TaskGraphDispatcher(
+        opts.providerFactory ?? { CreateProvider: vi.fn().mockResolvedValue({} as IMetadataProvider) },
+        opts.agentRunner ?? { RunAgentForTask: vi.fn() },
+        TEST_USER,
+        { InstanceID: 'inst-sec' },
+        undefined,
+        undefined,
+        actionRunner,
+        opts.promptRunner,
+    );
+    const completeClaimed = vi.fn().mockResolvedValue(true);
+    (dispatcher as unknown as { claims: { CompleteClaimed: typeof completeClaimed } }).claims.CompleteClaimed = completeClaimed;
+    const parent = opts.parent ?? makeParent();
+    const execClaimed = (dispatcher as unknown as {
+        executeClaimed: (c: ClaimedTaskCandidate) => Promise<void>;
+    }).executeClaimed.bind(dispatcher);
+    return {
+        actionCalls,
+        run: async (task, extra = {}) => {
+            completeClaimed.mockClear();
+            await execClaimed({
+                ID: task.ID,
+                ParentID: PARENT_ID,
+                taskEntity: task,
+                parentTask: parent,
+                parentMetadata: ParseTaskGraphParentMetadata(parent.InputPayload),
+                dependencyOutputs: new Map(),
+                upstreamTasks: [],
+                ...extra,
             });
-            expect(enforcement.OverriddenKeys).toEqual(['OrganizationID']);
+            return completeClaimed.mock.calls[0][2] as Recorded;
+        },
+    };
+}
+
+function recordedTaint(outcome: Recorded): boolean | undefined {
+    const config = outcome.Configuration ? (JSON.parse(outcome.Configuration) as { runtime?: { isOutputTainted?: boolean } }) : undefined;
+    return config?.runtime?.isOutputTainted;
+}
+
+describe('TaskGraphDispatcher security envelope (WS-4.1)', () => {
+    describe('where the envelope comes from (S9)', () => {
+        it('restores a bound parameter the node input or an upstream output tried to replace', async () => {
+            const env = envelope({ BoundActionParams: { [ACTION_ID]: { OrganizationID: 'org-A' } } });
+            const h = harness({ parent: makeParent(env) });
+            const task = makeTask({ ID: 'bound-1', InputPayload: JSON.stringify({ organizationid: 'org-B', Note: 'x' }), SecurityEnvelope: SerializeTaskSecurityEnvelope(env) });
+            await h.run(task, { dependencyOutputs: new Map([['dep', { OrganizationID: 'org-C', Metric: 1 }]]) });
+            expect(h.actionCalls[0].InputPayload).toEqual({ OrganizationID: 'org-A', Note: 'x', Metric: 1 });
+        });
+
+        it('refuses a node whose stored envelope has an unknown version instead of running it unconstrained', async () => {
+            const h = harness({});
+            const task = makeTask({ ID: 'v2', SecurityEnvelope: JSON.stringify({ Version: 2, IsRunTainted: false }) });
+            const outcome = await h.run(task);
+            expect(h.actionCalls).toHaveLength(0);
+            expect(outcome.Status).toBe('Failed');
+            expect(outcome.ErrorMessage).toContain('Version');
+        });
+
+        it('refuses a node whose stored envelope is not JSON', async () => {
+            const h = harness({});
+            const outcome = await h.run(makeTask({ ID: 'garbled', SecurityEnvelope: '{"Version":1,' }));
+            expect(h.actionCalls).toHaveLength(0);
+            expect(outcome.Status).toBe('Failed');
+        });
+
+        it('refuses every node of a workflow whose stored envelope is unreadable', async () => {
+            const parent = makeParent();
+            (parent as unknown as { SecurityEnvelope: string }).SecurityEnvelope = '{"Version":"1"}';
+            const h = harness({ parent });
+            const outcome = await h.run(makeTask({ ID: 'child' }));
+            expect(h.actionCalls).toHaveLength(0);
+            expect(outcome.Status).toBe('Failed');
+        });
+
+        it("refuses a node whose own envelope names a different tenant than the workflow's", async () => {
+            const scope = (record: string) => envelope({ RunScope: { PrimaryScopeEntityName: 'Organizations', PrimaryScopeRecordID: record, SecondaryScopes: null } });
+            const h = harness({ parent: makeParent(scope('org-A')) });
+            const outcome = await h.run(makeTask({ ID: 'tenant-swap', SecurityEnvelope: SerializeTaskSecurityEnvelope(scope('org-B')) }));
+            expect(h.actionCalls).toHaveLength(0);
+            expect(outcome.ErrorMessage).toContain('different tenants');
+        });
+
+        it("applies the workflow's envelope even when the node's own column is empty", async () => {
+            const env = envelope({ RunScope: { PrimaryScopeEntityName: null, PrimaryScopeRecordID: 'org-A', SecondaryScopes: null, SearchScopeIDs: ['55555555-5555-4555-8555-555555555555'] } });
+            const h = harness({ parent: makeParent(env) });
+            await h.run(makeTask({ ID: 'no-own-column' }));
+            expect(h.actionCalls[0].SecurityEnvelope?.RunScope).toEqual(env.RunScope);
         });
     });
 
-    describe('TaskGraphDispatcher.executeClaimed security envelope enforcement', () => {
-        it('should restore BoundActionParams when a node InputPayload or dependencyOutputs attempts to override them', async () => {
-            const envelope: TaskSecurityEnvelope = {
-                BoundActionParams: { OrganizationID: 'org-tenant-A', AccountTier: 'enterprise' },
-            };
-            const parentBag = BuildTaskGraphParentInputPayload({
-                continuation: 'none',
-                reinvokeDepth: 0,
-                failureSemantics: 'block',
-                submittedByAgentRunID: 'run-1',
-                submittedByUserID: TEST_USER.ID,
-                securityEnvelope: envelope,
-            });
-            const parentMeta = ParseTaskGraphParentMetadata(JSON.stringify(parentBag));
-
-            const runActionMock = vi.fn().mockResolvedValue({
-                Success: true,
-                Output: { ok: true },
-                ActionLogID: 'log-1',
-            });
-            const actionRunner: TaskActionRunner = {
-                SupportsAudience: true,
-                RunActionForTask: runActionMock,
-            };
-            const agentRunner: TaskAgentRunner = {
-                RunAgentForTask: vi.fn(),
-            };
-            const provider = {} as IMetadataProvider;
-            const dispatcher = new TaskGraphDispatcher(
-                { CreateProvider: vi.fn().mockResolvedValue(provider) },
-                agentRunner,
-                TEST_USER,
-                { InstanceID: 'inst-sec-1' },
-                undefined,
-                undefined,
-                actionRunner,
-            );
-
-            // Access claims to stub CompleteClaimed
-            const claims = (dispatcher as unknown as { claims: { CompleteClaimed: ReturnType<typeof vi.fn> } }).claims;
-            claims.CompleteClaimed = vi.fn().mockResolvedValue(true);
-
-            const task = makeChildTask({
-                ID: 'task-bound-1',
-                ParentID: 'parent-1',
-                Name: 'Update Org Settings',
-                StepType: 'Action',
-                ActionID: ACTION_INTERNAL_LOG_ID,
-                // LLM node input tries to spoof OrganizationID
-                InputPayload: JSON.stringify({ organizationid: 'org-spoofed-B', CustomNote: 'Safe note' }),
-            });
-
-            const candidate: ClaimedTaskCandidate = {
-                ID: task.ID,
-                ParentID: 'parent-1',
-                taskEntity: task,
-                parentMetadata: parentMeta,
-                // Upstream dependency output also tries to inject AccountTier
-                dependencyOutputs: new Map([['dep-1', { AccountTier: 'free-spoofed', UpstreamMetric: 42 }]]),
-            };
-
-            const execClaimed = (dispatcher as unknown as {
-                executeClaimed: (c: ClaimedTaskCandidate) => Promise<void>;
-            }).executeClaimed.bind(dispatcher);
-            await execClaimed(candidate);
-
-            expect(runActionMock).toHaveBeenCalledTimes(1);
-            const calledParams = runActionMock.mock.calls[0][0];
-            expect(calledParams.InputPayload).toEqual({
-                OrganizationID: 'org-tenant-A',
-                AccountTier: 'enterprise',
-                CustomNote: 'Safe note',
-                UpstreamMetric: 42,
-            });
+    describe('runners (S1)', () => {
+        it('refuses a constrained node on a runner that does not enforce envelopes', async () => {
+            const env = envelope({ Audience: { ReaderUserIDs: ['00000000-0000-4000-8000-000000000002'] } });
+            const h = harness({ enforces: false, parent: makeParent(env) });
+            const outcome = await h.run(makeTask({ ID: 'aud', SecurityEnvelope: SerializeTaskSecurityEnvelope(env) }));
+            expect(h.actionCalls).toHaveLength(0);
+            expect(outcome.Status).toBe('Failed');
         });
 
-        it('should fail closed with AUDIENCE_UNSUPPORTED when Audience has readers and actionRunner does not support audience', async () => {
-            const envelope: TaskSecurityEnvelope = {
-                Audience: { ReaderUserIDs: [READER_USER_ID] },
+        it('runs an unconstrained node on such a runner', async () => {
+            const h = harness({ enforces: false });
+            await h.run(makeTask({ ID: 'plain' }));
+            expect(h.actionCalls).toHaveLength(1);
+            expect(h.actionCalls[0].SecurityEnvelope).toBeUndefined();
+        });
+    });
+
+    describe('who a node runs as (S2)', () => {
+        it("runs a tenant node as a per-task clone and never stamps the dispatcher's own user", async () => {
+            // A factory that stamps whatever user it is handed, as the old MJServer factory did: the
+            // dispatcher must hand it none, so nothing it does can pin the shared user to a tenant.
+            const stampingFactory: ProviderFactory = {
+                CreateProvider: vi.fn(async (...args: unknown[]) => {
+                    const opts = args[0] as { ContextUser?: UserInfo } | undefined;
+                    if (opts?.ContextUser) opts.ContextUser.TenantContext = { TenantID: 'stamped', Source: 'custom' };
+                    return {} as IMetadataProvider;
+                }),
             };
-            const parentMeta = ParseTaskGraphParentMetadata(
-                JSON.stringify(
-                    BuildTaskGraphParentInputPayload({
-                        continuation: 'none',
-                        reinvokeDepth: 0,
-                        failureSemantics: 'block',
-                        submittedByAgentRunID: 'run-aud-1',
-                        submittedByUserID: TEST_USER.ID,
-                        securityEnvelope: envelope,
-                    }),
-                ),
-            );
+            const env = envelope({ CallerTenantContext: TENANT, RunScope: { PrimaryScopeEntityName: 'Organizations', PrimaryScopeRecordID: 'org-A', SecondaryScopes: null } });
+            const h = harness({ providerFactory: stampingFactory, parent: makeParent(env) });
 
-            const runActionMock = vi.fn();
-            const legacyActionRunner: TaskActionRunner = {
-                SupportsAudience: false,
-                RunActionForTask: runActionMock,
-            };
-            const dispatcher = new TaskGraphDispatcher(
-                { CreateProvider: vi.fn().mockResolvedValue({} as IMetadataProvider) },
-                { RunAgentForTask: vi.fn() },
-                TEST_USER,
-                { InstanceID: 'inst-aud-1' },
-                undefined,
-                undefined,
-                legacyActionRunner,
-            );
+            await h.run(makeTask({ ID: 'scoped', SecurityEnvelope: SerializeTaskSecurityEnvelope(env) }));
+            const ranAs = h.actionCalls[0].ContextUser;
+            expect(ranAs).not.toBe(TEST_USER);
+            expect(ranAs.ID).toBe(TEST_USER.ID);
+            expect(ranAs.TenantContext).toEqual(TENANT);
+            expect(TEST_USER.TenantContext).toBeUndefined();
 
-            const completeClaimedMock = vi.fn().mockResolvedValue(true);
-            (dispatcher as unknown as { claims: { CompleteClaimed: ReturnType<typeof vi.fn> } }).claims.CompleteClaimed =
-                completeClaimedMock;
+            // The next, unscoped graph's node runs with no tenant at all.
+            const h2 = harness({ providerFactory: stampingFactory });
+            await h2.run(makeTask({ ID: 'unscoped' }));
+            expect(h2.actionCalls[0].ContextUser.TenantContext).toBeUndefined();
+        });
+    });
 
-            const task = makeChildTask({
-                ID: 'task-aud-1',
-                ParentID: 'parent-aud-1',
-                Name: 'Read Private Record',
-                StepType: 'Action',
-                ActionID: ACTION_INTERNAL_LOG_ID,
-            });
+    describe('taint (S7, S8)', () => {
+        const tainted = envelope({ IsRunTainted: true });
 
-            const execClaimed = (dispatcher as unknown as {
-                executeClaimed: (c: ClaimedTaskCandidate) => Promise<void>;
-            }).executeClaimed.bind(dispatcher);
-            await execClaimed({
-                ID: task.ID,
-                ParentID: 'parent-aud-1',
-                taskEntity: task,
-                parentMetadata: parentMeta,
-                dependencyOutputs: new Map(),
-            });
-
-            expect(runActionMock).not.toHaveBeenCalled();
-            expect(completeClaimedMock).toHaveBeenCalledTimes(1);
-            const completionOutcome = completeClaimedMock.mock.calls[0][2] as { Status: string; ErrorMessage: string };
-            expect(completionOutcome.Status).toBe('Failed');
-            expect(completionOutcome.ErrorMessage).toContain('AUDIENCE_UNSUPPORTED');
+        it('hands a root node of a tainted run a tainted envelope and records its output tainted', async () => {
+            const h = harness({ parent: makeParent(tainted) });
+            const outcome = await h.run(makeTask({ ID: 'root', SecurityEnvelope: SerializeTaskSecurityEnvelope(tainted) }));
+            expect(h.actionCalls[0].SecurityEnvelope?.IsRunTainted).toBe(true);
+            expect(recordedTaint(outcome)).toBe(true);
         });
 
-        it('should forward TenantContext to ProviderFactory.CreateProvider when executing a tenant-scoped task', async () => {
-            const envelope: TaskSecurityEnvelope = {
-                TenantContext: {
-                    PrimaryScopeEntityName: 'MJ: Organizations',
-                    PrimaryScopeRecordID: 'org-999',
-                    SecondaryScopes: { workspaceId: 'ws-123' },
-                },
-            };
-            const parentMeta = ParseTaskGraphParentMetadata(
-                JSON.stringify(
-                    BuildTaskGraphParentInputPayload({
-                        continuation: 'none',
-                        reinvokeDepth: 0,
-                        failureSemantics: 'block',
-                        submittedByAgentRunID: 'run-tenant-1',
-                        submittedByUserID: TEST_USER.ID,
-                        securityEnvelope: envelope,
-                    }),
-                ),
-            );
-
-            const createProviderMock = vi.fn(async (_opts?: ProviderFactoryOptions) => ({} as IMetadataProvider));
-            const runActionMock = vi.fn().mockResolvedValue({ Success: true, Output: {} });
-            const dispatcher = new TaskGraphDispatcher(
-                { CreateProvider: createProviderMock },
-                { RunAgentForTask: vi.fn() },
-                TEST_USER,
-                { InstanceID: 'inst-tenant-1' },
-                undefined,
-                undefined,
-                { SupportsAudience: true, RunActionForTask: runActionMock },
-            );
-            (dispatcher as unknown as { claims: { CompleteClaimed: ReturnType<typeof vi.fn> } }).claims.CompleteClaimed =
-                vi.fn().mockResolvedValue(true);
-
-            const task = makeChildTask({
-                ID: 'task-tenant-1',
-                ParentID: 'parent-tenant-1',
-                Name: 'Scoped Action',
-                StepType: 'Action',
-                ActionID: ACTION_INTERNAL_LOG_ID,
-            });
-
-            const execClaimed = (dispatcher as unknown as {
-                executeClaimed: (c: ClaimedTaskCandidate) => Promise<void>;
-            }).executeClaimed.bind(dispatcher);
-            await execClaimed({
-                ID: task.ID,
-                ParentID: 'parent-tenant-1',
-                taskEntity: task,
-                parentMetadata: parentMeta,
-                dependencyOutputs: new Map(),
-            });
-
-            expect(createProviderMock).toHaveBeenCalledTimes(1);
-            expect(createProviderMock).toHaveBeenCalledWith({
-                TenantContext: envelope.TenantContext,
-                ContextUser: TEST_USER,
-            });
+        it("records a clean node's output as untainted, explicitly", async () => {
+            const h = harness({});
+            expect(recordedTaint(await h.run(makeTask({ ID: 'clean' })))).toBe(false);
         });
 
-        it('should monotonically propagate IsRunTainted, block non-allowlisted egress actions with TAINTED_EGRESS_BLOCKED, and sanitize after a completed Human approval step', async () => {
-            const envelope: TaskSecurityEnvelope = {
-                AllowedEgressActionIDs: [ACTION_INTERNAL_LOG_ID],
-            };
-            const parentMeta = ParseTaskGraphParentMetadata(
-                JSON.stringify(
-                    BuildTaskGraphParentInputPayload({
-                        continuation: 'none',
-                        reinvokeDepth: 0,
-                        failureSemantics: 'block',
-                        submittedByAgentRunID: 'run-taint-1',
-                        submittedByUserID: TEST_USER.ID,
-                        securityEnvelope: envelope,
-                    }),
-                ),
-            );
-
-            const runActionMock = vi.fn().mockResolvedValue({ Success: true, Output: { sent: true } });
-            const dispatcher = new TaskGraphDispatcher(
-                { CreateProvider: vi.fn().mockResolvedValue({} as IMetadataProvider) },
-                { RunAgentForTask: vi.fn() },
-                TEST_USER,
-                { InstanceID: 'inst-taint-1' },
-                undefined,
-                undefined,
-                { SupportsAudience: true, RunActionForTask: runActionMock },
-            );
-            const completeClaimedMock = vi.fn().mockResolvedValue(true);
-            (dispatcher as unknown as { claims: { CompleteClaimed: ReturnType<typeof vi.fn> } }).claims.CompleteClaimed =
-                completeClaimedMock;
-
-            const egressTask = makeChildTask({
-                ID: 'task-egress-1',
-                ParentID: 'parent-taint-1',
-                Name: 'Send External Email',
-                StepType: 'Action',
-                ActionID: ACTION_SEND_EMAIL_ID,
-            });
-
-            const execClaimed = (dispatcher as unknown as {
-                executeClaimed: (c: ClaimedTaskCandidate) => Promise<void>;
-            }).executeClaimed.bind(dispatcher);
-
-            // 1. Upstream dependency is tainted -> non-allowlisted ACTION_SEND_EMAIL_ID is blocked with TAINTED_EGRESS_BLOCKED
-            await execClaimed({
-                ID: egressTask.ID,
-                ParentID: 'parent-taint-1',
-                taskEntity: egressTask,
-                parentMetadata: parentMeta,
-                dependencyOutputs: new Map([['task-untrusted-1', { __isTainted: true, text: 'prompt injection' }]]),
-                isUpstreamTainted: true,
-            });
-
-            expect(runActionMock).not.toHaveBeenCalled();
-            expect(completeClaimedMock).toHaveBeenCalledTimes(1);
-            const blockedOutcome = completeClaimedMock.mock.calls[0][2] as {
-                Status: string;
-                ErrorMessage: string;
-                Configuration?: string;
-            };
-            expect(blockedOutcome.Status).toBe('Failed');
-            expect(blockedOutcome.ErrorMessage).toContain('TAINTED_EGRESS_BLOCKED');
-            expect(JSON.parse(blockedOutcome.Configuration!).runtime.isOutputTainted).toBe(true);
-
-            // 2. Allowlisted ACTION_INTERNAL_LOG_ID is permitted even when tainted
-            const allowlistedTask = makeChildTask({
-                ID: 'task-allowlisted-1',
-                ParentID: 'parent-taint-1',
-                Name: 'Internal Audit Log',
-                StepType: 'Action',
-                ActionID: ACTION_INTERNAL_LOG_ID,
-            });
-            await execClaimed({
-                ID: allowlistedTask.ID,
-                ParentID: 'parent-taint-1',
-                taskEntity: allowlistedTask,
-                parentMetadata: parentMeta,
-                dependencyOutputs: new Map(),
-                isUpstreamTainted: true,
-            });
-            expect(runActionMock).toHaveBeenCalledTimes(1);
-
-            // 3a. Unreviewed parallel branch (Human does NOT depend on taintedUpstream) must NOT sanitize taint
-            const computeUpstreamTaintInGraph = (dispatcher as unknown as {
-                computeUpstreamTaintInGraph: (
-                    taskID: string,
-                    graph: {
-                        rawDependencies: MJTaskDependencyEntity[];
-                        entityById: Map<string, MJTaskEntity>;
-                    },
-                ) => { isUpstreamTainted: boolean; isSanitizedByHuman: boolean };
-            }).computeUpstreamTaintInGraph.bind(dispatcher);
-
-            const taintedUpstream = makeChildTask({
-                ID: 'task-untrusted-1',
-                ParentID: 'parent-taint-1',
-                Name: 'Ingest Untrusted Webhook',
-                Status: 'Complete',
-                Configuration: JSON.stringify({ runtime: { isOutputTainted: true } }),
-            });
-            const middleStep = makeChildTask({
-                ID: 'task-mid-1',
-                ParentID: 'parent-taint-1',
-                Name: 'Intermediate Transform',
-                Status: 'Complete',
-            });
-            const humanApprovalTask = makeChildTask({
-                ID: 'task-human-approve-1',
-                ParentID: 'parent-taint-1',
-                Name: 'Human Review & Sanitize',
-                StepType: 'Human',
-                UserID: TEST_USER.ID,
-                Status: 'Complete',
-            });
-            const entityById = new Map<string, MJTaskEntity>([
-                [taintedUpstream.ID, taintedUpstream],
-                [middleStep.ID, middleStep],
-                [humanApprovalTask.ID, humanApprovalTask],
-                [egressTask.ID, egressTask],
-            ]);
-
-            // Multi-hop transitive taint (taintedUpstream -> middleStep -> egressTask) must propagate
-            const multiHopDeps = [
-                { ID: 'dep-hop-1', TaskID: middleStep.ID, DependsOnTaskID: taintedUpstream.ID },
-                { ID: 'dep-hop-2', TaskID: egressTask.ID, DependsOnTaskID: middleStep.ID },
-            ] as unknown as MJTaskDependencyEntity[];
-            const multiHopCheck = computeUpstreamTaintInGraph(egressTask.ID, {
-                rawDependencies: multiHopDeps,
-                entityById,
-            });
-            expect(multiHopCheck.isUpstreamTainted).toBe(true);
-            expect(multiHopCheck.isSanitizedByHuman).toBe(false);
-
-            // Parallel unreviewed branch (taintedUpstream -> egressTask AND humanApprovalTask -> egressTask,
-            // where humanApprovalTask did NOT review taintedUpstream) must remain tainted
-            const parallelDeps = [
-                { ID: 'dep-par-a', TaskID: egressTask.ID, DependsOnTaskID: taintedUpstream.ID },
-                { ID: 'dep-par-b', TaskID: egressTask.ID, DependsOnTaskID: humanApprovalTask.ID },
-            ] as unknown as MJTaskDependencyEntity[];
-            const parallelCheck = computeUpstreamTaintInGraph(egressTask.ID, {
-                rawDependencies: parallelDeps,
-                entityById,
-            });
-            expect(parallelCheck.isUpstreamTainted).toBe(true);
-            expect(parallelCheck.isSanitizedByHuman).toBe(false);
-
-            // 3b. Sequential Human review (taintedUpstream -> humanApprovalTask -> egressTask) sanitizes taint
-            const reviewedDeps = [
-                { ID: 'dep-rev-1', TaskID: humanApprovalTask.ID, DependsOnTaskID: taintedUpstream.ID },
-                { ID: 'dep-rev-2', TaskID: egressTask.ID, DependsOnTaskID: humanApprovalTask.ID },
-                { ID: 'dep-rev-data', TaskID: egressTask.ID, DependsOnTaskID: taintedUpstream.ID },
-            ] as unknown as MJTaskDependencyEntity[];
-            const taintCheck = computeUpstreamTaintInGraph(egressTask.ID, {
-                rawDependencies: reviewedDeps,
-                entityById,
-            });
-            expect(taintCheck.isSanitizedByHuman).toBe(true);
-            expect(taintCheck.isUpstreamTainted).toBe(false);
-
-            runActionMock.mockClear();
-            await execClaimed({
-                ID: egressTask.ID,
-                ParentID: 'parent-taint-1',
-                taskEntity: egressTask,
-                parentMetadata: parentMeta,
-                dependencyOutputs: new Map(),
-                isUpstreamTainted: taintCheck.isUpstreamTainted,
-                isSanitizedByHuman: taintCheck.isSanitizedByHuman,
-            });
-            expect(runActionMock).toHaveBeenCalledTimes(1);
+        it("records an action node tainted when its runner reports the action's output untrusted", async () => {
+            const h = harness({ actionResult: { IsOutputTainted: true } });
+            expect(recordedTaint(await h.run(makeTask({ ID: 'fetch' })))).toBe(true);
         });
 
-        it('should isolate per-action BoundActionParams to the matching action without leaking onto other actions', () => {
-            const built = BuildTaskSecurityEnvelopeFromAgentScope({
-                BoundActionParams: {
-                    '*': { OrganizationID: 'org-global' },
-                    [ACTION_SEND_EMAIL_ID]: { FromAddress: 'security@example.com' },
-                },
-            });
-            expect(built?.BoundActionParams).toEqual({ OrganizationID: 'org-global' });
-            expect(built?.BoundParamsByAction?.[ACTION_SEND_EMAIL_ID]).toEqual({
-                FromAddress: 'security@example.com',
-            });
+        it('taints a node whose upstream output was tainted', async () => {
+            const h = harness({});
+            const upstream = makeTask({ ID: 'up', Status: 'Complete', Configuration: JSON.stringify({ runtime: { isOutputTainted: true } }) });
+            await h.run(makeTask({ ID: 'down' }), { upstreamTasks: [upstream] });
+            expect(h.actionCalls[0].SecurityEnvelope?.IsRunTainted).toBe(true);
+        });
 
-            const forEmail = ApplyTaskSecurityEnvelopeToParams(
-                { To: 'user@example.com', FromAddress: 'spoofed@evil.com' },
-                built,
-                ACTION_SEND_EMAIL_ID,
-            );
-            expect(forEmail.Params).toEqual({
-                To: 'user@example.com',
-                OrganizationID: 'org-global',
-                FromAddress: 'security@example.com',
-            });
+        it('clears taint behind a completed Human step', async () => {
+            const h = harness({ parent: makeParent(tainted) });
+            const human = makeTask({ ID: 'approve', Status: 'Complete', StepType: 'Human', ActionID: null, UserID: TEST_USER.ID });
+            await h.run(makeTask({ ID: 'after-review', SecurityEnvelope: SerializeTaskSecurityEnvelope(tainted) }), { upstreamTasks: [human] });
+            expect(h.actionCalls[0].SecurityEnvelope?.IsRunTainted).toBe(false);
+        });
 
-            const forInternalLog = ApplyTaskSecurityEnvelopeToParams(
-                { Message: 'Audit event' },
-                built,
-                ACTION_INTERNAL_LOG_ID,
-            );
-            expect(forInternalLog.Params).toEqual({
-                Message: 'Audit event',
-                OrganizationID: 'org-global',
-            });
-            expect(forInternalLog.Params).not.toHaveProperty('FromAddress');
+        it('keeps taint when a tainted branch bypasses the Human step', async () => {
+            const h = harness({ parent: makeParent(tainted) });
+            const human = makeTask({ ID: 'approve', Status: 'Complete', StepType: 'Human', ActionID: null, UserID: TEST_USER.ID });
+            const unreviewed = makeTask({ ID: 'side', Status: 'Complete', Configuration: JSON.stringify({ runtime: { isOutputTainted: true } }) });
+            await h.run(makeTask({ ID: 'join', SecurityEnvelope: SerializeTaskSecurityEnvelope(tainted) }), { upstreamTasks: [human, unreviewed] });
+            expect(h.actionCalls[0].SecurityEnvelope?.IsRunTainted).toBe(true);
+        });
+
+        it('does not let a skipped upstream launder the run taint', async () => {
+            const h = harness({ parent: makeParent(tainted) });
+            const skipped = makeTask({ ID: 'skipped', Status: 'Skipped' });
+            await h.run(makeTask({ ID: 'after-skip', SecurityEnvelope: SerializeTaskSecurityEnvelope(tainted) }), { upstreamTasks: [skipped] });
+            expect(h.actionCalls[0].SecurityEnvelope?.IsRunTainted).toBe(true);
+        });
+
+        it('taints a prompt node fed tainted input', async () => {
+            const promptRunner: TaskPromptRunner = { RunPromptForTask: vi.fn().mockResolvedValue({ Success: true, Output: {} }) };
+            const h = harness({ promptRunner, parent: makeParent(tainted) });
+            const outcome = await h.run(makeTask({
+                ID: 'prompt', StepType: 'Prompt', ActionID: null, PromptID: '66666666-6666-4666-8666-666666666666',
+                SecurityEnvelope: SerializeTaskSecurityEnvelope(tainted),
+            }));
+            expect(recordedTaint(outcome)).toBe(true);
         });
     });
 });

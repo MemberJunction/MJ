@@ -17,7 +17,6 @@ import {
     type TaskGraphDecisionAnswer,
     type TaskGraphDecisionQuestion,
     type TaskGraphNodeConfigMap,
-    type TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
 import type { MJTaskEntity_ITaskStepConfiguration } from '@memberjunction/core-entities';
 import { ParseConditionOutput } from './condition-gate';
@@ -53,11 +52,13 @@ export type TaskStepConfiguration = MJTaskEntity_ITaskStepConfiguration & {
     agent?: NonNullable<MJTaskEntity_ITaskStepConfiguration['agent']> & {
         presetName?: string;
     };
-    /** Optional node-level security envelope merged with the parent graph's security envelope. */
-    securityEnvelope?: TaskSecurityEnvelope;
     /** Optional saga compensation metadata for an Action step or synthesized compensation task. */
     compensation?: TaskCompensationStepMetadata;
-    /** Runtime execution metadata extended with monotonic output taint tracking. */
+    /**
+     * Runtime execution metadata, plus whether the node's output was tainted when it ran (its input
+     * taint OR its own untrusted output). Written for every node that ran, `false` included, so a node
+     * that never ran is told apart from one that ran clean (see `UpstreamCarriesTaint`).
+     */
     runtime?: NonNullable<MJTaskEntity_ITaskStepConfiguration['runtime']> & {
         isOutputTainted?: boolean;
     };

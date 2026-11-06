@@ -10,15 +10,24 @@
  * @module @memberjunction/server
  */
 import { ActionEngineServer } from '@memberjunction/actions';
-import { ActionParam, type ActionRunAudience } from '@memberjunction/actions-base';
-import { ApplyTaskSecurityEnvelopeToParams, BuildActionOutputObject } from '@memberjunction/ai-core-plus';
+import { ActionParam, type ActionRunAudience, type ActionRunScope, type MJActionEntityExtended } from '@memberjunction/actions-base';
+import { ApplyTaskSecurityEnvelopeToParams, BuildActionOutputObject, type TaskRunScope, type TaskSecurityEnvelope } from '@memberjunction/ai-core-plus';
 import { LogError, UserInfo } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { IndexByUUID, UUIDsEqual } from '@memberjunction/global';
 import type { TaskActionRunner, TaskActionRunParams, TaskActionRunResult } from '@memberjunction/task-graph';
 
+/** The result code a tainted node's refused action reports. */
+export const TAINTED_EGRESS_BLOCKED = 'TAINTED_EGRESS_BLOCKED';
+
+/**
+ * Runs a task-graph action node under the node's security envelope, as `BaseAgent` runs an action
+ * inside a turn: the run's scope as `RunScope` (so a Scoped Search node searches the run's tenant
+ * and host-assigned search scopes, not every tenant), the audience, the bound parameters, the taint
+ * gate, and the action's output trust level reported back as taint.
+ */
 export class TaskGraphActionRunner implements TaskActionRunner {
-    public readonly SupportsAudience = true;
+    public readonly EnforcesSecurityEnvelope = true;
 
     public async RunActionForTask(params: TaskActionRunParams): Promise<TaskActionRunResult> {
         try {
@@ -28,7 +37,14 @@ export class TaskGraphActionRunner implements TaskActionRunner {
                 return { Success: false, ErrorMessage: `Action ${params.ActionID} is not in the engine's metadata.` };
             }
 
-            const readerIds = params.SecurityEnvelope?.Audience?.ReaderUserIDs;
+            const envelope = params.SecurityEnvelope;
+            const taintRefusal = this.taintGateRefusal(action, envelope);
+            if (taintRefusal) {
+                LogError(`[TaskGraphActionRunner] Task ${params.TaskID}: ${taintRefusal}`);
+                return { Success: false, ErrorMessage: taintRefusal, ResultCode: TAINTED_EGRESS_BLOCKED, IsOutputTainted: true };
+            }
+
+            const readerIds = envelope?.Audience?.ReaderUserIDs;
             const audience: ActionRunAudience | undefined =
                 readerIds && readerIds.length > 0
                     ? { Readers: this.resolveAudienceReaders(readerIds) }
@@ -37,14 +53,16 @@ export class TaskGraphActionRunner implements TaskActionRunner {
             const result = await ActionEngineServer.Instance.RunAction({
                 Action: action,
                 ContextUser: params.ContextUser,
-                Params: this.buildParams(params, action.Name),
+                Params: this.buildParams(params),
                 // No Filters. A durable node is work that a filter ALREADY let through — the entity
                 // action's gate ran at dispatch time, on the change context that no longer exists by
                 // the time the dispatcher picks the task up. Re-evaluating here would ask a
                 // transition question with nothing to answer it, and fail closed on every retry.
                 Filters: [],
                 ...(audience ? { Audience: audience } : {}),
+                ...(envelope?.RunScope ? { RunScope: ToActionRunScope(envelope.RunScope) } : {}),
             });
+            const isOutputTainted = this.outputIsUntrusted(action);
 
             const output = this.buildOutput(result.Params, result.Message);
             const unstorable = this.findUnstorableOutput(output);
@@ -53,7 +71,7 @@ export class TaskGraphActionRunner implements TaskActionRunner {
                     `Action "${action.Name}" returned output param "${unstorable.Name}", which cannot be stored ` +
                     `as the step's result: ${unstorable.Reason}. Output params of a durable step must be plain data.`;
                 LogError(`[TaskGraphActionRunner] Task ${params.TaskID}: ${message}`);
-                return { Success: false, ErrorMessage: message, ActionLogID: result.LogEntry?.ID, ResultCode: result.ResultCode };
+                return { Success: false, ErrorMessage: message, ActionLogID: result.LogEntry?.ID, ResultCode: result.ResultCode, IsOutputTainted: isOutputTainted };
             }
 
             return {
@@ -65,6 +83,7 @@ export class TaskGraphActionRunner implements TaskActionRunner {
                 // record — the one thing anyone wants when an action misbehaves.
                 ActionLogID: result.LogEntry?.ID,
                 ResultCode: result.ResultCode,
+                IsOutputTainted: isOutputTainted,
             };
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
@@ -129,17 +148,32 @@ export class TaskGraphActionRunner implements TaskActionRunner {
      * not read here — spreading it would hand the action one extra parameter per dependency, named
      * by a GUID and holding that task's whole output.
      */
-    private buildParams(params: TaskActionRunParams, actionName?: string | null): ActionParam[] {
+    private buildParams(params: TaskActionRunParams): ActionParam[] {
         const base = params.InputPayload && typeof params.InputPayload === 'object' && !Array.isArray(params.InputPayload)
             ? (params.InputPayload as Record<string, unknown>)
             : {};
-        const enforced = ApplyTaskSecurityEnvelopeToParams(
-            base,
-            params.SecurityEnvelope,
-            params.ActionID,
-            actionName,
-        ).Params;
+        const enforced = ApplyTaskSecurityEnvelopeToParams(base, params.SecurityEnvelope, params.ActionID).Params;
         return Object.entries(enforced).map(([Name, Value]) => ({ Name, Value, Type: 'Input' }));
+    }
+
+    /**
+     * Why a tainted node may not run this action, or null when it may. A node is tainted when its input
+     * derives from untrusted content no completed Human step has reviewed (the dispatcher works that out
+     * and sets `IsRunTainted`); an action that sends data out or cannot be undone says so with
+     * `disallowWhenTainted`, and is refused.
+     */
+    private taintGateRefusal(action: MJActionEntityExtended, envelope: TaskSecurityEnvelope | undefined): string | null {
+        if (envelope?.IsRunTainted !== true || action.Config_Object?.disallowWhenTainted !== true) {
+            return null;
+        }
+        return `Action "${action.Name}" was not run (${TAINTED_EGRESS_BLOCKED}): the step's input came from untrusted content ` +
+            'that no completed Human step has approved, and this action sends data out or cannot be undone.';
+    }
+
+    /** True when the action's output is not trusted — the same metadata setting `BaseAgent` reads. */
+    private outputIsUntrusted(action: MJActionEntityExtended): boolean {
+        const level = action.Config_Object?.outputTrustLevel;
+        return level === 'SemiTrusted' || level === 'Untrusted';
     }
 
     private resolveAudienceReaders(readerIds: ReadonlyArray<string>): UserInfo[] {
@@ -160,4 +194,16 @@ export class TaskGraphActionRunner implements TaskActionRunner {
             return placeholder;
         });
     }
+}
+
+/** The envelope's run scope as the action engine takes it (`RunActionParams.RunScope`), copied. */
+export function ToActionRunScope(scope: TaskRunScope): ActionRunScope {
+    return {
+        PrimaryScopeEntityName: scope.PrimaryScopeEntityName,
+        PrimaryScopeRecordID: scope.PrimaryScopeRecordID,
+        SecondaryScopes: scope.SecondaryScopes
+            ? Object.fromEntries(Object.entries(scope.SecondaryScopes).map(([k, v]) => [k, Array.isArray(v) ? [...v] : v]))
+            : null,
+        ...(scope.SearchScopeIDs ? { SearchScopeIDs: [...scope.SearchScopeIDs] } : {}),
+    };
 }

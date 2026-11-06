@@ -7,17 +7,7 @@ import type {
     AgentDecisionQuestion,
     TaskGraphDecisionAnswer,
     TaskSecurityEnvelope,
-    TaskTenantEnvelope,
 } from '@memberjunction/ai-core-plus';
-
-/**
- * Optional tenant and user context passed to {@link ProviderFactory.CreateProvider} when minting
- * a provider for a scoped task-graph node execution.
- */
-export type ProviderFactoryOptions = {
-    TenantContext?: TaskTenantEnvelope;
-    ContextUser?: UserInfo;
-};
 
 /**
  * Mints a fresh metadata/data provider.
@@ -33,7 +23,7 @@ export type ProviderFactoryOptions = {
  * responsible for nothing beyond using it — pooling and lifetime are the host's concern.
  */
 export type ProviderFactory = {
-    CreateProvider(options?: ProviderFactoryOptions): Promise<IMetadataProvider>;
+    CreateProvider(): Promise<IMetadataProvider>;
 };
 
 /**
@@ -55,6 +45,12 @@ export type TaskRunProgressCallback = (message: string, percent?: number) => voi
  */
 export type TaskAgentRunner = {
     RunAgentForTask(params: TaskAgentRunParams): Promise<TaskAgentRunResult>;
+    /**
+     * True when the runner starts the node's run under its `SecurityEnvelope`: the same run scope,
+     * audience, bound parameters and taint, with the actions a tainted run may not call taken away.
+     * The dispatcher refuses a node whose envelope constrains anything when this is not true.
+     */
+    EnforcesSecurityEnvelope?: boolean;
 };
 
 /** Everything running one action for one task node needs. */
@@ -67,7 +63,10 @@ export type TaskActionRunParams = {
     DependencyOutputs: Map<string, unknown>;
     Provider: IMetadataProvider;
     ContextUser: UserInfo;
-    /** Effective security envelope enforced on this node. */
+    /**
+     * The node's security envelope: the submitting run's constraints, with `IsRunTainted` set to whether
+     * this node's input is tainted. `ContextUser` already carries the caller's tenant context.
+     */
     SecurityEnvelope?: TaskSecurityEnvelope;
     /** Optional progress sink; the dispatcher turns calls into rate-limited `NodeProgress` frames. */
     OnProgress?: TaskRunProgressCallback;
@@ -78,7 +77,7 @@ export type TaskActionRunResult = {
     Success: boolean;
     Output?: unknown;
     ErrorMessage?: string;
-    /** Raw result code from the action engine (e.g., `AUDIENCE_UNSUPPORTED` or `TAINTED_EGRESS_BLOCKED`). */
+    /** The action engine's result code (e.g. `AUDIENCE_UNSUPPORTED`, or `TAINTED_EGRESS_BLOCKED` from the runner's taint gate). */
     ResultCode?: string;
     /**
      * The `MJ: Action Execution Logs` row this run produced.
@@ -89,8 +88,9 @@ export type TaskActionRunResult = {
      */
     ActionLogID?: string;
     /**
-     * When true, marks this node's output as tainted by untrusted external data so downstream nodes
-     * inherit `IsRunTainted: true` monotonically unless a Human (HITL) step intervenes.
+     * True when the action's own output is untrusted (its `outputTrustLevel` is `SemiTrusted` or
+     * `Untrusted`). The dispatcher ORs it with the node's input taint and records the result, so the
+     * nodes downstream inherit it until a completed Human step reviews it.
      */
     IsOutputTainted?: boolean;
 };
@@ -111,11 +111,12 @@ export type TaskActionRunResult = {
 export type TaskActionRunner = {
     RunActionForTask(params: TaskActionRunParams): Promise<TaskActionRunResult>;
     /**
-     * When true, indicates the runner enforces per-action `SupportsAudience` checks (as
-     * `ActionEngineServer` does). When omitted/false, the dispatcher fails closed with
-     * `AUDIENCE_UNSUPPORTED` before invoking the runner whenever `Audience.ReaderUserIDs` is non-empty.
+     * True when the runner enforces the node's `SecurityEnvelope` on the action: the run scope passed
+     * as `RunScope`, the audience, the bound parameters, and the taint gate (a tainted node may not run
+     * an action whose configuration says `disallowWhenTainted`). The dispatcher refuses a node whose
+     * envelope constrains anything when this is not true.
      */
-    SupportsAudience?: boolean;
+    EnforcesSecurityEnvelope?: boolean;
 };
 
 /** Everything running one prompt for one task node needs. */
@@ -130,7 +131,7 @@ export type TaskPromptRunParams = {
     TemplateParameters?: Record<string, string>;
     Provider: IMetadataProvider;
     ContextUser: UserInfo;
-    /** Effective security envelope enforced on this node. */
+    /** The node's security envelope; `IsRunTainted` is the node's input taint. */
     SecurityEnvelope?: TaskSecurityEnvelope;
     /** Optional progress sink; the dispatcher turns calls into rate-limited `NodeProgress` frames. */
     OnProgress?: TaskRunProgressCallback;
@@ -153,7 +154,7 @@ export type TaskPromptRunResult = {
      * abandoned graph.
      */
     ChatMessage?: string;
-    /** When true, marks this node's output as tainted so downstream nodes inherit `IsRunTainted: true`. */
+    /** True when the prompt's own output is untrusted. The dispatcher always adds the node's input taint. */
     IsOutputTainted?: boolean;
 };
 
@@ -432,7 +433,10 @@ export type TaskAgentRunParams = {
     ContextUser: UserInfo;
     /** Optional configuration preset name for the target agent, configured on the Agent step. */
     ConfigurationPresetName?: string;
-    /** Effective security envelope enforced on this node and propagated to the sub-agent run. */
+    /**
+     * The node's security envelope (the submitting run's constraints, `IsRunTainted` set to the node's
+     * input taint). The runner starts the agent run under it; see `TaskAgentRunner.EnforcesSecurityEnvelope`.
+     */
     SecurityEnvelope?: TaskSecurityEnvelope;
     /** Optional progress sink; the dispatcher turns calls into rate-limited `NodeProgress` frames. */
     OnProgress?: TaskRunProgressCallback;
@@ -447,7 +451,7 @@ export type TaskAgentRunResult = {
     ErrorMessage?: string;
     /** The `MJ: AI Agent Runs` row that executed this task, for `Task.AgentRunID`. */
     AgentRunID?: string;
-    /** When true, marks this node's output as tainted so downstream nodes inherit `IsRunTainted: true`. */
+    /** True when the run ingested untrusted content (`taintedSources`), including any it started with. */
     IsOutputTainted?: boolean;
 };
 

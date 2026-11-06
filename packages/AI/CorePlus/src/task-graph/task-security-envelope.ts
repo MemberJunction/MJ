@@ -1,536 +1,496 @@
 /**
- * @fileoverview Durable security envelope contract for task graphs (`TaskSecurityEnvelope`).
+ * @fileoverview The security envelope of a durable task graph (`TaskSecurityEnvelope`).
  *
- * Carries bound action parameters, shared-room audience intersections, tenant/run scope context,
- * and monotonic taint state across durable `MJ: Tasks` rows so `TaskGraphDispatcher` enforces the
- * same security invariants as in-turn `BaseAgent` execution across restarts and worker boundaries.
+ * A graph runs outside the agent run that wrote it: the dispatcher claims its nodes later, on any
+ * server, as a background worker. Everything that bounded the run — the parameters the host bound,
+ * the audience, the validated scope, the caller's tenant and the taint bit — would be lost at that
+ * boundary, so the submitter writes it into `MJ: Tasks.SecurityEnvelope` on the graph's root and on
+ * every child, and the dispatcher enforces it on each node.
+ *
+ * The envelope fails closed: a column that holds anything but a well-formed envelope of a known
+ * version refuses the node ({@link ParseTaskSecurityEnvelope}), and two envelopes combine into the
+ * stricter of the two or not at all ({@link MergeTaskSecurityEnvelopes}).
  *
  * @module @memberjunction/ai-core-plus
  */
+import type { TenantContext } from '@memberjunction/core';
 import { NormalizeUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
-import type { AgentRunAudience, BoundActionParams, SecondaryScopeValue } from '../agent-types';
+import type { BoundActionParams, SecondaryScopeValue } from '../agent-types';
+
+/** The envelope format this code reads and writes. A stored envelope of any other version is refused. */
+export const TASK_SECURITY_ENVELOPE_VERSION = 1;
 
 /**
- * Scalar or primitive-array values bound by the host for action parameters across a task graph.
+ * The run's validated scope, exactly as `BaseAgent` hands it to each action dispatch
+ * (`ActionRunScope` in `@memberjunction/actions-base`, which the action runner passes on as `RunScope`).
  */
-export type TaskBoundParamValue =
-    | string
-    | number
-    | boolean
-    | null
-    | ReadonlyArray<string | number>;
+export interface TaskRunScope {
+    /** The primary scope entity's name, or `null` when the run names none. */
+    readonly PrimaryScopeEntityName: string | null;
+    /** The run's tenant record ID, or `null` when the run has none. */
+    readonly PrimaryScopeRecordID: string | null;
+    /** The run's secondary dimensions, or `null` when it has none. */
+    readonly SecondaryScopes: Readonly<Record<string, SecondaryScopeValue>> | null;
+    /** The search scopes the host assigned the run; absent when it assigned none. Never empty when present. */
+    readonly SearchScopeIDs?: readonly string[];
+}
 
-/**
- * Parameter name -> bound value map enforced across task-graph action/agent/prompt nodes.
- */
-export type TaskBoundParamMap = Record<string, TaskBoundParamValue>;
-
-/**
- * Audience constraint carried across a durable task graph.
- */
+/** The readers a run's output reaches besides its caller (`ExecuteAgentParams.Audience`, `'Intersection'`). */
 export interface TaskAudienceEnvelope {
-    readonly ReaderUserIDs: ReadonlyArray<string>;
-    readonly Mode?: 'Intersection' | 'StrictSubset';
+    /** `MJ: Users` IDs of every reader besides the caller. Never empty. */
+    readonly ReaderUserIDs: readonly string[];
 }
 
-/**
- * Multi-tenant and secondary scope context carried across a durable task graph.
- */
-export interface TaskTenantEnvelope {
-    readonly PrimaryScopeEntityName?: string | null;
-    readonly PrimaryScopeRecordID?: string | null;
-    readonly SecondaryScopes?: Readonly<Record<string, unknown>> | null;
-}
-
-/**
- * Immutable security envelope persisted on a task graph parent and its child tasks.
- */
+/** A run's security constraints, persisted on a task graph's rows and enforced on every node. */
 export interface TaskSecurityEnvelope {
-    readonly Version?: 1;
-    /**
-     * Global parameter bindings applied to every action node in the graph regardless of ActionID.
-     */
-    readonly BoundActionParams?: Readonly<TaskBoundParamMap>;
-    /**
-     * Per-action parameter bindings (keyed by ActionID or `'*'`), preserving the structure of
-     * `ExecuteAgentParams.boundActionParams`.
-     */
-    readonly BoundParamsByAction?: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
-    /**
-     * Shared-room audience constraint; non-empty `ReaderUserIDs` causes non-audience-supporting
-     * actions to fail closed with `AUDIENCE_UNSUPPORTED`.
-     */
+    /** Always {@link TASK_SECURITY_ENVELOPE_VERSION}. */
+    readonly Version: typeof TASK_SECURITY_ENVELOPE_VERSION;
+    /** The run's bound action parameters, in `ExecuteAgentParams.boundActionParams`' shape: Action ID → name → value. */
+    readonly BoundActionParams?: Readonly<BoundActionParams>;
+    /** The run's audience, when it adds a reader beyond the caller. */
     readonly Audience?: TaskAudienceEnvelope;
+    /** The run's validated scope, when it carries a tenant, a secondary dimension or host-assigned search scopes. */
+    readonly RunScope?: TaskRunScope;
     /**
-     * Primary and secondary tenant scopes used to mint tenant-scoped providers and sub-agent runs.
+     * The caller's request-level tenant (`UserInfo.TenantContext`), when it had one. Each node runs as a
+     * per-task clone of its user stamped with exactly this value, never as the shared user itself.
      */
-    readonly TenantContext?: TaskTenantEnvelope;
-    /** Convenience alias for `TenantContext.PrimaryScopeEntityName`. */
-    readonly PrimaryScopeEntityName?: string | null;
-    /** Convenience alias for `TenantContext.PrimaryScopeRecordID`. */
-    readonly PrimaryScopeRecordID?: string | null;
-    /** Convenience alias for `TenantContext.SecondaryScopes`. */
-    readonly SecondaryScopes?: Readonly<Record<string, SecondaryScopeValue>> | null;
+    readonly CallerTenantContext?: TenantContext;
     /**
-     * Monotonic taint flag; once true on an upstream node, propagates to all downstream nodes
-     * unless a completed `Human` (HITL approval) node intervenes.
+     * Whether the run had ingested `SemiTrusted` or `Untrusted` content. Monotonic within a graph: a
+     * node's output is tainted when any of its inputs was, until a completed `Human` step reviews it.
      */
-    readonly IsRunTainted?: boolean;
-    /**
-     * Optional allowlist of ActionIDs permitted to execute when `IsRunTainted` is `true`.
-     * When `IsRunTainted === true`:
-     * - If `AllowedEgressActionIDs` is omitted or empty, all action nodes are blocked unless
-     *   explicitly allowlisted.
-     * - If `AllowedEgressActionIDs` is provided, only actions whose ID matches an entry (via
-     *   `UUIDsEqual`) are permitted.
-     */
-    readonly AllowedEgressActionIDs?: ReadonlyArray<string>;
+    readonly IsRunTainted: boolean;
 }
 
-/**
- * Result of applying a {@link TaskSecurityEnvelope}'s bound parameters onto a node's input payload.
- */
+/** What a stored envelope column holds. */
+export type TaskSecurityEnvelopeParse =
+    | { readonly Status: 'Absent' }
+    | { readonly Status: 'Valid'; readonly Envelope: TaskSecurityEnvelope }
+    | { readonly Status: 'Invalid'; readonly Reason: string };
+
+/** Two envelopes combined: the stricter of the two, or the reason they cannot be combined. */
+export type TaskSecurityEnvelopeMerge =
+    | { readonly Success: true; readonly Envelope: TaskSecurityEnvelope | undefined }
+    | { readonly Success: false; readonly Reason: string };
+
+/** The run state {@link BuildTaskSecurityEnvelope} reads. */
+export interface TaskSecurityEnvelopeSource {
+    BoundActionParams?: BoundActionParams;
+    /** Reader IDs the audience adds beyond the caller (`AgentAudienceReaderIDs`). */
+    AudienceReaderUserIDs?: readonly string[];
+    /** The run's validated scope. */
+    RunScope?: TaskRunScope | null;
+    /** The caller's `UserInfo.TenantContext`. */
+    CallerTenantContext?: TenantContext;
+    IsRunTainted?: boolean;
+}
+
+/** Result of applying an envelope's bound parameters to one action's input. */
 export interface TaskSecurityParamEnforcementResult {
     readonly Params: Record<string, unknown>;
+    /** Bound names whose input value differed from the binding and was replaced. */
     readonly OverriddenKeys: string[];
 }
 
+const ENVELOPE_KEYS: ReadonlySet<string> = new Set([
+    'Version', 'BoundActionParams', 'Audience', 'RunScope', 'CallerTenantContext', 'IsRunTainted',
+]);
+const RUN_SCOPE_KEYS: ReadonlySet<string> = new Set([
+    'PrimaryScopeEntityName', 'PrimaryScopeRecordID', 'SecondaryScopes', 'SearchScopeIDs',
+]);
+const TENANT_SOURCES: ReadonlySet<string> = new Set<TenantContext['Source']>(['header', 'linkedEntity', 'custom']);
+
 /**
- * Safely parses a serialized or raw {@link TaskSecurityEnvelope}, returning `undefined` when
- * absent or malformed.
+ * Reads a stored `SecurityEnvelope` column. `null`, `undefined` and blank text are `Absent`; anything
+ * else must be a complete envelope of {@link TASK_SECURITY_ENVELOPE_VERSION}, or it is `Invalid`:
+ * malformed JSON, an unknown version, an unknown key and a malformed part all refuse, because a
+ * constraint this code cannot read is a constraint it cannot enforce.
  */
-export function ParseTaskSecurityEnvelope(raw: unknown): TaskSecurityEnvelope | undefined {
-    if (raw == null) {
-        return undefined;
+export function ParseTaskSecurityEnvelope(raw: string | null | undefined): TaskSecurityEnvelopeParse {
+    if (raw == null || raw.trim().length === 0) {
+        return { Status: 'Absent' };
     }
-    let candidate: unknown = raw;
-    if (typeof raw === 'string') {
-        const trimmed = raw.trim();
-        if (!trimmed) {
-            return undefined;
-        }
-        try {
-            candidate = JSON.parse(trimmed);
-        } catch {
-            return undefined;
-        }
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(raw);
+    } catch {
+        return invalid('it is not valid JSON');
     }
-    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
-        return undefined;
+    if (!isPlainObject(parsed)) {
+        return invalid('it is not a JSON object');
     }
-    const obj = candidate as Record<string, unknown>;
-    if (obj.Version !== undefined && obj.Version !== 1) {
-        return undefined;
+    if (parsed.Version !== TASK_SECURITY_ENVELOPE_VERSION) {
+        return invalid(`its Version is ${JSON.stringify(parsed.Version) ?? 'missing'}, not ${TASK_SECURITY_ENVELOPE_VERSION}`);
     }
+    const unknownKey = Object.keys(parsed).find((key) => !ENVELOPE_KEYS.has(key));
+    if (unknownKey) {
+        return invalid(`it has an unknown key '${unknownKey}'`);
+    }
+    if (typeof parsed.IsRunTainted !== 'boolean') {
+        return invalid('IsRunTainted is not a boolean');
+    }
+    const problem = boundParamsProblem(parsed.BoundActionParams)
+        ?? audienceProblem(parsed.Audience)
+        ?? runScopeProblem(parsed.RunScope)
+        ?? tenantContextProblem(parsed.CallerTenantContext);
+    if (problem) {
+        return invalid(problem);
+    }
+    return { Status: 'Valid', Envelope: toEnvelope(parsed) };
+}
 
-    const boundActionParams = parseBoundParamMap(obj.BoundActionParams);
-    const boundParamsByAction = parseBoundParamsByAction(obj.BoundParamsByAction);
-    const audience = parseAudienceEnvelope(obj.Audience);
-    const tenantContext = parseTenantEnvelope(obj.TenantContext) ?? parseTenantEnvelope(obj);
-    const isRunTainted = typeof obj.IsRunTainted === 'boolean' ? obj.IsRunTainted : undefined;
-    const allowedEgressActionIDs = Array.isArray(obj.AllowedEgressActionIDs)
-        ? obj.AllowedEgressActionIDs.filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
-        : undefined;
+/** Serializes an envelope for the `SecurityEnvelope` column; `null` for none. */
+export function SerializeTaskSecurityEnvelope(envelope: TaskSecurityEnvelope | null | undefined): string | null {
+    return envelope ? JSON.stringify(envelope) : null;
+}
 
-    if (
-        !boundActionParams &&
-        !boundParamsByAction &&
-        !audience &&
-        !tenantContext &&
-        isRunTainted === undefined &&
-        allowedEgressActionIDs === undefined
-    ) {
+/**
+ * Builds the envelope for a graph from its submitting run's state, or `undefined` when the run carries
+ * no constraint (the column then stays `NULL`). The caller decides beforehand whether the run's state
+ * can be carried at all ({@link TenantContextCarryProblem}).
+ */
+export function BuildTaskSecurityEnvelope(source: TaskSecurityEnvelopeSource): TaskSecurityEnvelope | undefined {
+    const bound = nonEmptyBoundParams(source.BoundActionParams);
+    const readers = source.AudienceReaderUserIDs?.filter((id) => id.trim().length > 0) ?? [];
+    const runScope = constrainingRunScope(source.RunScope);
+    const tenant = source.CallerTenantContext;
+    const tainted = source.IsRunTainted === true;
+    if (!bound && readers.length === 0 && !runScope && !tenant && !tainted) {
         return undefined;
     }
-
     return {
-        ...(obj.Version === 1 ? { Version: 1 as const } : {}),
-        ...(boundActionParams ? { BoundActionParams: boundActionParams } : {}),
-        ...(boundParamsByAction ? { BoundParamsByAction: boundParamsByAction } : {}),
-        ...(audience ? { Audience: audience } : {}),
-        ...(tenantContext ? {
-            TenantContext: tenantContext,
-            ...(tenantContext.PrimaryScopeEntityName ? { PrimaryScopeEntityName: tenantContext.PrimaryScopeEntityName } : {}),
-            ...(tenantContext.PrimaryScopeRecordID ? { PrimaryScopeRecordID: tenantContext.PrimaryScopeRecordID } : {}),
-            ...(tenantContext.SecondaryScopes ? { SecondaryScopes: tenantContext.SecondaryScopes as Readonly<Record<string, SecondaryScopeValue>> } : {}),
-        } : {}),
-        ...(isRunTainted !== undefined ? { IsRunTainted: isRunTainted } : {}),
-        ...(allowedEgressActionIDs !== undefined ? { AllowedEgressActionIDs: allowedEgressActionIDs } : {}),
+        Version: TASK_SECURITY_ENVELOPE_VERSION,
+        ...(bound ? { BoundActionParams: bound } : {}),
+        ...(readers.length > 0 ? { Audience: { ReaderUserIDs: [...readers] } } : {}),
+        ...(runScope ? { RunScope: runScope } : {}),
+        ...(tenant ? { CallerTenantContext: { ...tenant } } : {}),
+        IsRunTainted: tainted,
     };
 }
 
 /**
- * Serializes a {@link TaskSecurityEnvelope} to JSON, or returns `null` when undefined.
+ * Why a caller's `TenantContext` cannot travel in an envelope, or `null` when it can. It must be plain
+ * JSON data with a `TenantID` and a known `Source`; a subtype's extra fields travel too, but a value
+ * JSON cannot hold (a function, a `Date`, a class instance) would arrive changed, so it refuses instead.
  */
-export function SerializeTaskSecurityEnvelope(
-    envelope: TaskSecurityEnvelope | null | undefined,
-): string | null {
-    if (!envelope) {
+export function TenantContextCarryProblem(tenant: TenantContext | undefined): string | null {
+    if (tenant === undefined) {
         return null;
     }
-    return JSON.stringify(envelope);
+    if (!isJSONData(tenant)) {
+        return 'the caller\'s tenant context holds a value that does not survive JSON';
+    }
+    return tenantContextProblem(tenant);
 }
 
 /**
- * Merges two or more {@link TaskSecurityEnvelope} objects monotonically:
- * - Earlier (parent) bound parameters win over later (child) attempts to weaken or override them.
- * - `IsRunTainted` is monotonic (`parent.IsRunTainted || child.IsRunTainted`).
- * - `Audience.ReaderUserIDs` is the union of reader sets so intersection narrowing is preserved.
- * - `TenantContext` prefers the parent's tenant bindings when present.
- * - `AllowedEgressActionIDs` intersects allowlists when both are specified.
+ * Combines envelopes into the strictest one: bound parameters, audience readers and secondary
+ * dimensions add up, host-assigned search scopes intersect, the tenant and the caller's tenant
+ * context must agree, and taint is OR'd. Two envelopes that disagree on a value (a different tenant,
+ * a parameter bound to two values, search scopes with nothing in common) do not combine.
  */
 export function MergeTaskSecurityEnvelopes(
-    ...envelopes: Array<TaskSecurityEnvelope | null | undefined>
-): TaskSecurityEnvelope | undefined {
-    const valid = envelopes.filter((e): e is TaskSecurityEnvelope => e != null);
-    if (valid.length === 0) {
-        return undefined;
-    }
-    return valid.reduce((acc, next) => mergeTwoEnvelopes(acc, next));
-}
-
-function mergeTwoEnvelopes(
-    parent: TaskSecurityEnvelope,
-    child: TaskSecurityEnvelope,
-): TaskSecurityEnvelope {
-    const mergedBoundParams: TaskBoundParamMap = {
-        ...(child.BoundActionParams ?? {}),
-        ...(parent.BoundActionParams ?? {}),
-    };
-
-    const mergedByAction: Record<string, Readonly<Record<string, unknown>>> = {};
-    for (const [actionKey, params] of Object.entries(child.BoundParamsByAction ?? {})) {
-        mergedByAction[NormalizeUUID(actionKey)] = { ...params };
-    }
-    for (const [actionKey, params] of Object.entries(parent.BoundParamsByAction ?? {})) {
-        const normKey = NormalizeUUID(actionKey);
-        mergedByAction[normKey] = {
-            ...(mergedByAction[normKey] ?? {}),
-            ...params,
-        };
-    }
-
-    let mergedAudience: TaskAudienceEnvelope | undefined;
-    if (parent.Audience || child.Audience) {
-        const seenReaders = new UUIDSet();
-        const readers: string[] = [];
-        const addReaders = (list?: ReadonlyArray<string>): void => {
-            for (const id of list ?? []) {
-                if (!seenReaders.Has(id)) {
-                    seenReaders.Add(id);
-                    readers.push(id);
-                }
-            }
-        };
-        addReaders(parent.Audience?.ReaderUserIDs);
-        addReaders(child.Audience?.ReaderUserIDs);
-        const mode = parent.Audience?.Mode ?? child.Audience?.Mode;
-        mergedAudience = {
-            ReaderUserIDs: readers,
-            ...(mode ? { Mode: mode } : {}),
-        };
-    }
-
-    const parentTenant = parent.TenantContext ?? parseTenantEnvelope(parent);
-    const childTenant = child.TenantContext ?? parseTenantEnvelope(child);
-    const mergedTenant: TaskTenantEnvelope | undefined =
-        parentTenant || childTenant
-            ? {
-                  PrimaryScopeEntityName:
-                      parentTenant?.PrimaryScopeEntityName ??
-                      childTenant?.PrimaryScopeEntityName ??
-                      null,
-                  PrimaryScopeRecordID:
-                      parentTenant?.PrimaryScopeRecordID ??
-                      childTenant?.PrimaryScopeRecordID ??
-                      null,
-                  SecondaryScopes:
-                      parentTenant?.SecondaryScopes || childTenant?.SecondaryScopes
-                          ? {
-                                ...(childTenant?.SecondaryScopes ?? {}),
-                                ...(parentTenant?.SecondaryScopes ?? {}),
-                            }
-                          : null,
-              }
-            : undefined;
-
-    const isRunTainted = Boolean(parent.IsRunTainted || child.IsRunTainted);
-
-    let allowedEgress: ReadonlyArray<string> | undefined;
-    if (parent.AllowedEgressActionIDs && child.AllowedEgressActionIDs) {
-        const seenEgress = new UUIDSet(parent.AllowedEgressActionIDs);
-        const combined: string[] = [...parent.AllowedEgressActionIDs];
-        for (const childId of child.AllowedEgressActionIDs) {
-            if (!seenEgress.Has(childId)) {
-                seenEgress.Add(childId);
-                combined.push(childId);
-            }
+    ...envelopes: ReadonlyArray<TaskSecurityEnvelope | null | undefined>
+): TaskSecurityEnvelopeMerge {
+    let merged: TaskSecurityEnvelope | undefined;
+    for (const next of envelopes) {
+        if (!next) continue;
+        if (!merged) {
+            merged = next;
+            continue;
         }
-        allowedEgress = combined;
-    } else {
-        allowedEgress = parent.AllowedEgressActionIDs ?? child.AllowedEgressActionIDs;
+        const result = mergeTwo(merged, next);
+        if (!result.Success) return result;
+        merged = result.Envelope;
     }
-
-    return {
-        ...(parent.Version === 1 || child.Version === 1 ? { Version: 1 as const } : {}),
-        ...(Object.keys(mergedBoundParams).length > 0 ? { BoundActionParams: mergedBoundParams } : {}),
-        ...(Object.keys(mergedByAction).length > 0 ? { BoundParamsByAction: mergedByAction } : {}),
-        ...(mergedAudience ? { Audience: mergedAudience } : {}),
-        ...(mergedTenant ? {
-            TenantContext: mergedTenant,
-            ...(mergedTenant.PrimaryScopeEntityName ? { PrimaryScopeEntityName: mergedTenant.PrimaryScopeEntityName } : {}),
-            ...(mergedTenant.PrimaryScopeRecordID ? { PrimaryScopeRecordID: mergedTenant.PrimaryScopeRecordID } : {}),
-            ...(mergedTenant.SecondaryScopes ? { SecondaryScopes: mergedTenant.SecondaryScopes as Readonly<Record<string, SecondaryScopeValue>> } : {}),
-        } : {}),
-        ...(isRunTainted ? { IsRunTainted: true } : parent.IsRunTainted === false || child.IsRunTainted === false ? { IsRunTainted: false } : {}),
-        ...(allowedEgress !== undefined ? { AllowedEgressActionIDs: allowedEgress } : {}),
-    };
+    return { Success: true, Envelope: merged };
 }
 
 /**
- * Enforces `BoundActionParams` and `BoundParamsByAction` from `envelope` onto `inputPayload`
- * (case-insensitively matching existing keys so LLM or dependency overrides cannot smuggle an
- * alternate casing past the binding).
+ * Applies the envelope's bindings for one action to that action's input: each bound name is set to the
+ * bound value, and an input key naming it in any other casing is removed, so neither an LLM-written node
+ * input nor an upstream node's output can replace a bound value. Bindings are keyed by Action ID, exactly
+ * as `ExecuteAgentParams.boundActionParams` are.
  */
 export function ApplyTaskSecurityEnvelopeToParams(
     inputPayload: Record<string, unknown> | null | undefined,
     envelope: TaskSecurityEnvelope | null | undefined,
-    actionID?: string | null,
-    actionName?: string | null,
+    actionID: string | null | undefined,
 ): TaskSecurityParamEnforcementResult {
     const out: Record<string, unknown> = inputPayload ? { ...inputPayload } : {};
     const overriddenKeys: string[] = [];
-    if (!envelope) {
-        return { Params: out, OverriddenKeys: overriddenKeys };
-    }
-
-    const effectiveBindings: Record<string, unknown> = {};
-    if (envelope.BoundActionParams) {
-        for (const [key, val] of Object.entries(envelope.BoundActionParams)) {
-            effectiveBindings[key] = val;
-        }
-    }
-    if (envelope.BoundParamsByAction) {
-        for (const [boundActionKey, boundMap] of Object.entries(envelope.BoundParamsByAction)) {
-            const trimmedKey = boundActionKey.trim();
-            const isWildcard = trimmedKey === '*';
-            const matchesAction = Boolean(
-                (actionID && UUIDsEqual(trimmedKey, actionID)) ||
-                (actionName && trimmedKey.toLowerCase() === actionName.trim().toLowerCase()),
-            );
-            if (isWildcard || matchesAction) {
-                for (const [key, val] of Object.entries(boundMap)) {
-                    effectiveBindings[key] = val;
-                }
-            }
-        }
-    }
-
-    for (const [boundKey, boundValue] of Object.entries(effectiveBindings)) {
+    const bindings = actionID ? bindingsForAction(envelope?.BoundActionParams, actionID) : undefined;
+    for (const [boundKey, boundValue] of Object.entries(bindings ?? {})) {
         const boundLower = boundKey.toLowerCase();
         for (const existingKey of Object.keys(out)) {
-            if (existingKey.toLowerCase() === boundLower) {
-                if (!deepValuesEqual(out[existingKey], boundValue)) {
-                    overriddenKeys.push(boundKey);
-                }
-                if (existingKey !== boundKey) {
-                    delete out[existingKey];
-                }
+            if (existingKey.toLowerCase() !== boundLower) continue;
+            if (!jsonEqual(out[existingKey], boundValue)) {
+                overriddenKeys.push(boundKey);
             }
+            delete out[existingKey];
         }
         out[boundKey] = boundValue;
     }
-
     return { Params: out, OverriddenKeys: overriddenKeys };
 }
 
-/**
- * Builds a {@link TaskSecurityEnvelope} from an agent run's active security state
- * (`boundActionParams`, `Audience`, `PrimaryScopeEntityName`, `PrimaryScopeRecordID`,
- * `SecondaryScopes`, and optional taint/egress settings). Returns `undefined` when no
- * security constraints are active on the run.
- */
-export function BuildTaskSecurityEnvelopeFromAgentScope(options: {
-    BoundActionParams?: BoundActionParams | TaskBoundParamMap;
-    AudienceReaderUserIDs?: ReadonlyArray<string>;
-    Audience?: AgentRunAudience;
-    CallerUserID?: string | null;
-    PrimaryScopeEntityName?: string | null;
-    PrimaryScopeRecordID?: string | null;
-    SecondaryScopes?: Record<string, SecondaryScopeValue> | null;
-    IsRunTainted?: boolean;
-    AllowedEgressActionIDs?: ReadonlyArray<string>;
-    BaseEnvelope?: TaskSecurityEnvelope | null;
-}): TaskSecurityEnvelope | undefined {
-    const globalBound: TaskBoundParamMap = {};
-    const byAction: Record<string, Record<string, unknown>> = {};
+function bindingsForAction(bound: Readonly<BoundActionParams> | undefined, actionID: string): Readonly<Record<string, unknown>> | undefined {
+    const key = bound ? Object.keys(bound).find((id) => UUIDsEqual(id, actionID)) : undefined;
+    return key && bound ? bound[key] : undefined;
+}
 
-    if (options.BoundActionParams) {
-        for (const [keyOrActionId, valOrParamMap] of Object.entries(options.BoundActionParams)) {
-            if (isTaskBoundParamValue(valOrParamMap)) {
-                globalBound[keyOrActionId] = valOrParamMap;
-            } else if (valOrParamMap && typeof valOrParamMap === 'object' && !Array.isArray(valOrParamMap)) {
-                byAction[keyOrActionId] = { ...(valOrParamMap as Record<string, unknown>) };
-                if (keyOrActionId.trim() === '*') {
-                    for (const [paramName, paramValue] of Object.entries(valOrParamMap as Record<string, unknown>)) {
-                        if (isTaskBoundParamValue(paramValue)) {
-                            globalBound[paramName] = paramValue;
-                        }
-                    }
-                }
+function mergeTwo(a: TaskSecurityEnvelope, b: TaskSecurityEnvelope): TaskSecurityEnvelopeMerge {
+    const bound = mergeBoundParams(a.BoundActionParams, b.BoundActionParams);
+    if (typeof bound === 'string') return { Success: false, Reason: bound };
+    const runScope = mergeRunScopes(a.RunScope, b.RunScope);
+    if (typeof runScope === 'string') return { Success: false, Reason: runScope };
+    if (a.CallerTenantContext && b.CallerTenantContext && !jsonEqual(a.CallerTenantContext, b.CallerTenantContext)) {
+        return { Success: false, Reason: 'the envelopes name different caller tenant contexts' };
+    }
+    const tenant = a.CallerTenantContext ?? b.CallerTenantContext;
+    const readers = unionIDs(a.Audience?.ReaderUserIDs, b.Audience?.ReaderUserIDs);
+    return {
+        Success: true,
+        Envelope: {
+            Version: TASK_SECURITY_ENVELOPE_VERSION,
+            ...(bound ? { BoundActionParams: bound } : {}),
+            ...(readers.length > 0 ? { Audience: { ReaderUserIDs: readers } } : {}),
+            ...(runScope ? { RunScope: runScope } : {}),
+            ...(tenant ? { CallerTenantContext: tenant } : {}),
+            IsRunTainted: a.IsRunTainted || b.IsRunTainted,
+        },
+    };
+}
+
+/** Both envelopes' bindings, or the reason they conflict (one parameter bound to two values). */
+function mergeBoundParams(
+    a: Readonly<BoundActionParams> | undefined,
+    b: Readonly<BoundActionParams> | undefined,
+): BoundActionParams | undefined | string {
+    if (!a || !b) return a ?? b;
+    const merged: BoundActionParams = {};
+    for (const [actionID, params] of Object.entries(a)) {
+        merged[NormalizeUUID(actionID)] = { ...params };
+    }
+    for (const [actionID, params] of Object.entries(b)) {
+        const target = merged[NormalizeUUID(actionID)] ?? {};
+        for (const [name, value] of Object.entries(params)) {
+            const existing = Object.keys(target).find((key) => key.toLowerCase() === name.toLowerCase());
+            if (existing !== undefined && !jsonEqual(target[existing], value)) {
+                return `parameter '${name}' of action ${actionID} is bound to two different values`;
             }
+            target[existing ?? name] = value;
         }
+        merged[NormalizeUUID(actionID)] = target;
     }
-
-    let audience: TaskAudienceEnvelope | undefined;
-    if (options.AudienceReaderUserIDs && options.AudienceReaderUserIDs.length > 0) {
-        const nonCallerReaders = options.AudienceReaderUserIDs.filter(
-            (id) => typeof id === 'string' && id.trim().length > 0 && (!options.CallerUserID || !UUIDsEqual(id, options.CallerUserID)),
-        );
-        if (nonCallerReaders.length > 0) {
-            audience = {
-                Mode: 'Intersection',
-                ReaderUserIDs: nonCallerReaders,
-            };
-        }
-    } else if (options.Audience?.UserIDs && Array.isArray(options.Audience.UserIDs)) {
-        const nonCallerReaders = options.Audience.UserIDs.filter(
-            (id) => typeof id === 'string' && id.trim().length > 0 && (!options.CallerUserID || !UUIDsEqual(id, options.CallerUserID)),
-        );
-        if (nonCallerReaders.length > 0) {
-            audience = {
-                Mode: 'Intersection',
-                ReaderUserIDs: nonCallerReaders,
-            };
-        }
-    }
-
-    const hasPrimaryScope = Boolean(
-        (options.PrimaryScopeEntityName && options.PrimaryScopeEntityName.trim().length > 0) ||
-            (options.PrimaryScopeRecordID && options.PrimaryScopeRecordID.trim().length > 0),
-    );
-    const hasSecondaryScopes = Boolean(
-        options.SecondaryScopes && Object.keys(options.SecondaryScopes).length > 0,
-    );
-    const tenantContext: TaskTenantEnvelope | undefined =
-        hasPrimaryScope || hasSecondaryScopes
-            ? {
-                  PrimaryScopeEntityName: options.PrimaryScopeEntityName ?? null,
-                  PrimaryScopeRecordID: options.PrimaryScopeRecordID ?? null,
-                  SecondaryScopes: options.SecondaryScopes ? { ...options.SecondaryScopes } : null,
-              }
-            : undefined;
-
-    const hasAnyField =
-        Object.keys(globalBound).length > 0 ||
-        Object.keys(byAction).length > 0 ||
-        audience !== undefined ||
-        tenantContext !== undefined ||
-        options.IsRunTainted === true ||
-        options.AllowedEgressActionIDs !== undefined;
-
-    const constructed: TaskSecurityEnvelope | undefined = hasAnyField
-        ? {
-              ...(Object.keys(globalBound).length > 0 ? { BoundActionParams: globalBound } : {}),
-              ...(Object.keys(byAction).length > 0 ? { BoundParamsByAction: byAction } : {}),
-              ...(audience ? { Audience: audience } : {}),
-              ...(tenantContext ? {
-                  TenantContext: tenantContext,
-                  ...(options.PrimaryScopeEntityName ? { PrimaryScopeEntityName: options.PrimaryScopeEntityName } : {}),
-                  ...(options.PrimaryScopeRecordID ? { PrimaryScopeRecordID: options.PrimaryScopeRecordID } : {}),
-                  ...(options.SecondaryScopes ? { SecondaryScopes: { ...options.SecondaryScopes } } : {}),
-              } : {}),
-              ...(options.IsRunTainted !== undefined ? { IsRunTainted: options.IsRunTainted } : {}),
-              ...(options.AllowedEgressActionIDs !== undefined
-                  ? { AllowedEgressActionIDs: [...options.AllowedEgressActionIDs] }
-                  : {}),
-          }
-        : undefined;
-
-    return MergeTaskSecurityEnvelopes(options.BaseEnvelope, constructed);
+    return merged;
 }
 
-function isTaskBoundParamValue(val: unknown): val is TaskBoundParamValue {
-    if (val === null || typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') {
-        return true;
+/** Both scopes combined, or the reason they conflict. */
+function mergeRunScopes(a: TaskRunScope | undefined, b: TaskRunScope | undefined): TaskRunScope | undefined | string {
+    if (!a || !b) return a ?? b;
+    const entityName = agreeingValue(a.PrimaryScopeEntityName, b.PrimaryScopeEntityName, (x, y) => x.toLowerCase() === y.toLowerCase());
+    const recordID = agreeingValue(a.PrimaryScopeRecordID, b.PrimaryScopeRecordID, (x, y) => x === y || UUIDsEqual(x, y));
+    if (entityName.Conflict || recordID.Conflict) {
+        return 'the envelopes name different tenants';
     }
-    if (Array.isArray(val)) {
-        return val.every((item) => typeof item === 'string' || typeof item === 'number');
-    }
-    return false;
-}
-
-function parseBoundParamMap(raw: unknown): TaskBoundParamMap | undefined {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-        return undefined;
-    }
-    const out: TaskBoundParamMap = {};
-    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-        if (isTaskBoundParamValue(v)) {
-            out[k] = v;
+    const secondary: Record<string, SecondaryScopeValue> = { ...(a.SecondaryScopes ?? {}) };
+    for (const [dimension, value] of Object.entries(b.SecondaryScopes ?? {})) {
+        if (dimension in secondary && !jsonEqual(secondary[dimension], value)) {
+            return `the envelopes give secondary scope '${dimension}' different values`;
         }
+        secondary[dimension] = value;
     }
-    return Object.keys(out).length > 0 ? out : undefined;
-}
-
-function parseBoundParamsByAction(
-    raw: unknown,
-): Record<string, Readonly<Record<string, unknown>>> | undefined {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-        return undefined;
+    const searchScopeIDs = intersectSearchScopes(a.SearchScopeIDs, b.SearchScopeIDs);
+    if (searchScopeIDs !== undefined && searchScopeIDs.length === 0) {
+        // An empty list must never reach an action: "no search scopes assigned" widens Scoped Search.
+        return 'the envelopes\' host-assigned search scopes have none in common';
     }
-    const out: Record<string, Readonly<Record<string, unknown>>> = {};
-    for (const [actionId, map] of Object.entries(raw as Record<string, unknown>)) {
-        if (map && typeof map === 'object' && !Array.isArray(map)) {
-            out[actionId] = { ...(map as Record<string, unknown>) };
-        }
-    }
-    return Object.keys(out).length > 0 ? out : undefined;
-}
-
-function parseAudienceEnvelope(raw: unknown): TaskAudienceEnvelope | undefined {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-        return undefined;
-    }
-    const obj = raw as Record<string, unknown>;
-    if (!Array.isArray(obj.ReaderUserIDs)) {
-        return undefined;
-    }
-    const readers = obj.ReaderUserIDs.filter((id): id is string => typeof id === 'string' && id.trim().length > 0);
-    const mode = obj.Mode === 'StrictSubset' ? 'StrictSubset' : 'Intersection';
     return {
-        ReaderUserIDs: readers,
-        Mode: mode,
+        PrimaryScopeEntityName: entityName.Value,
+        PrimaryScopeRecordID: recordID.Value,
+        SecondaryScopes: Object.keys(secondary).length > 0 ? secondary : null,
+        ...(searchScopeIDs ? { SearchScopeIDs: searchScopeIDs } : {}),
     };
 }
 
-function parseTenantEnvelope(raw: unknown): TaskTenantEnvelope | undefined {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-        return undefined;
+/** The one value two scopes agree on (either may be null), or a conflict when both are set and differ. */
+function agreeingValue(
+    a: string | null,
+    b: string | null,
+    same: (x: string, y: string) => boolean,
+): { Value: string | null; Conflict: boolean } {
+    if (a === null || b === null) return { Value: a ?? b, Conflict: false };
+    return same(a, b) ? { Value: a, Conflict: false } : { Value: null, Conflict: true };
+}
+
+function intersectSearchScopes(a: readonly string[] | undefined, b: readonly string[] | undefined): string[] | undefined {
+    if (!a || !b) return a ? [...a] : b ? [...b] : undefined;
+    const inB = new UUIDSet(b);
+    return a.filter((id) => inB.Has(id));
+}
+
+function unionIDs(a: readonly string[] | undefined, b: readonly string[] | undefined): string[] {
+    const seen = new UUIDSet();
+    const out: string[] = [];
+    for (const id of [...(a ?? []), ...(b ?? [])]) {
+        if (!seen.Has(id)) {
+            seen.Add(id);
+            out.push(id);
+        }
     }
-    const obj = raw as Record<string, unknown>;
-    const primaryEntity = typeof obj.PrimaryScopeEntityName === 'string' ? obj.PrimaryScopeEntityName : null;
-    const primaryRecord = typeof obj.PrimaryScopeRecordID === 'string' ? obj.PrimaryScopeRecordID : null;
-    const secondary =
-        obj.SecondaryScopes && typeof obj.SecondaryScopes === 'object' && !Array.isArray(obj.SecondaryScopes)
-            ? { ...(obj.SecondaryScopes as Record<string, unknown>) }
-            : null;
-    if (!primaryEntity && !primaryRecord && !secondary) {
-        return undefined;
+    return out;
+}
+
+function nonEmptyBoundParams(bound: BoundActionParams | undefined): BoundActionParams | undefined {
+    if (!bound) return undefined;
+    const out: BoundActionParams = {};
+    for (const [actionID, params] of Object.entries(bound)) {
+        if (params && Object.keys(params).length > 0) {
+            out[actionID] = { ...params };
+        }
     }
+    return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** The scope when it bounds anything (a tenant, a secondary dimension or search scopes), copied; else undefined. */
+function constrainingRunScope(scope: TaskRunScope | null | undefined): TaskRunScope | undefined {
+    if (!scope) return undefined;
+    const recordID = scope.PrimaryScopeRecordID?.trim() ? scope.PrimaryScopeRecordID : null;
+    const secondary = scope.SecondaryScopes && Object.keys(scope.SecondaryScopes).length > 0
+        ? Object.fromEntries(Object.entries(scope.SecondaryScopes).map(([k, v]) => [k, Array.isArray(v) ? [...v] : v]))
+        : null;
+    const searchScopeIDs = scope.SearchScopeIDs && scope.SearchScopeIDs.length > 0 ? [...scope.SearchScopeIDs] : undefined;
+    if (!recordID && !secondary && !searchScopeIDs) return undefined;
     return {
-        PrimaryScopeEntityName: primaryEntity,
-        PrimaryScopeRecordID: primaryRecord,
+        PrimaryScopeEntityName: scope.PrimaryScopeEntityName ?? null,
+        PrimaryScopeRecordID: recordID,
         SecondaryScopes: secondary,
+        ...(searchScopeIDs ? { SearchScopeIDs: searchScopeIDs } : {}),
     };
 }
 
-function deepValuesEqual(a: unknown, b: unknown): boolean {
-    if (a === b) {
-        return true;
+/** Copies a parsed object, already checked part by part, into an envelope. */
+function toEnvelope(parsed: Record<string, unknown>): TaskSecurityEnvelope {
+    const runScope = isPlainObject(parsed.RunScope) ? parsed.RunScope : undefined;
+    const audience = isPlainObject(parsed.Audience) ? parsed.Audience : undefined;
+    return {
+        Version: TASK_SECURITY_ENVELOPE_VERSION,
+        ...(isPlainObject(parsed.BoundActionParams) ? { BoundActionParams: toBoundParams(parsed.BoundActionParams) } : {}),
+        ...(audience ? { Audience: { ReaderUserIDs: toStrings(audience.ReaderUserIDs) } } : {}),
+        ...(runScope ? { RunScope: toRunScope(runScope) } : {}),
+        ...(isPlainObject(parsed.CallerTenantContext) ? { CallerTenantContext: toTenantContext(parsed.CallerTenantContext) } : {}),
+        IsRunTainted: parsed.IsRunTainted === true,
+    };
+}
+
+function toBoundParams(raw: Record<string, unknown>): BoundActionParams {
+    const out: BoundActionParams = {};
+    for (const [actionID, params] of Object.entries(raw)) {
+        if (isPlainObject(params)) out[actionID] = { ...params };
     }
-    if (Array.isArray(a) && Array.isArray(b)) {
-        return a.length === b.length && a.every((item, idx) => deepValuesEqual(item, b[idx]));
+    return out;
+}
+
+function toRunScope(raw: Record<string, unknown>): TaskRunScope {
+    const secondary: Record<string, SecondaryScopeValue> = {};
+    for (const [key, value] of Object.entries(isPlainObject(raw.SecondaryScopes) ? raw.SecondaryScopes : {})) {
+        if (isSecondaryScopeValue(value)) secondary[key] = value;
     }
-    return false;
+    return {
+        PrimaryScopeEntityName: typeof raw.PrimaryScopeEntityName === 'string' ? raw.PrimaryScopeEntityName : null,
+        PrimaryScopeRecordID: typeof raw.PrimaryScopeRecordID === 'string' ? raw.PrimaryScopeRecordID : null,
+        SecondaryScopes: isPlainObject(raw.SecondaryScopes) ? secondary : null,
+        ...(Array.isArray(raw.SearchScopeIDs) ? { SearchScopeIDs: toStrings(raw.SearchScopeIDs) } : {}),
+    };
+}
+
+function toTenantContext(raw: Record<string, unknown>): TenantContext {
+    const source = raw.Source === 'header' || raw.Source === 'linkedEntity' ? raw.Source : 'custom';
+    return { ...raw, TenantID: String(raw.TenantID), Source: source };
+}
+
+function toStrings(raw: unknown): string[] {
+    return Array.isArray(raw) ? raw.filter((id): id is string => typeof id === 'string') : [];
+}
+
+function boundParamsProblem(raw: unknown): string | null {
+    if (raw === undefined) return null;
+    if (!isPlainObject(raw)) return 'BoundActionParams is not an object';
+    for (const [actionID, params] of Object.entries(raw)) {
+        if (!isPlainObject(params)) return `BoundActionParams['${actionID}'] is not an object`;
+        if (!isJSONData(params)) return `BoundActionParams['${actionID}'] holds a value that is not JSON data`;
+    }
+    return null;
+}
+
+function audienceProblem(raw: unknown): string | null {
+    if (raw === undefined) return null;
+    if (!isPlainObject(raw) || Object.keys(raw).some((key) => key !== 'ReaderUserIDs')) {
+        return 'Audience is not { ReaderUserIDs }';
+    }
+    const readers = raw.ReaderUserIDs;
+    if (!Array.isArray(readers) || readers.length === 0 || readers.some((id) => typeof id !== 'string' || id.trim().length === 0)) {
+        return 'Audience.ReaderUserIDs is not a non-empty list of user IDs';
+    }
+    return null;
+}
+
+function runScopeProblem(raw: unknown): string | null {
+    if (raw === undefined) return null;
+    if (!isPlainObject(raw)) return 'RunScope is not an object';
+    const unknownKey = Object.keys(raw).find((key) => !RUN_SCOPE_KEYS.has(key));
+    if (unknownKey) return `RunScope has an unknown key '${unknownKey}'`;
+    if (!isNullableString(raw.PrimaryScopeEntityName) || !isNullableString(raw.PrimaryScopeRecordID)) {
+        return 'RunScope.PrimaryScopeEntityName and PrimaryScopeRecordID must be strings or null';
+    }
+    const secondary = raw.SecondaryScopes;
+    if (secondary !== null && (!isPlainObject(secondary) || !Object.values(secondary).every(isSecondaryScopeValue))) {
+        return 'RunScope.SecondaryScopes is not null or an object of scope values';
+    }
+    const search = raw.SearchScopeIDs;
+    if (search !== undefined && (!Array.isArray(search) || search.length === 0 || search.some((id) => typeof id !== 'string' || id.trim().length === 0))) {
+        return 'RunScope.SearchScopeIDs is not a non-empty list of IDs';
+    }
+    return null;
+}
+
+function tenantContextProblem(raw: unknown): string | null {
+    if (raw === undefined) return null;
+    if (!isPlainObject(raw)) return 'CallerTenantContext is not an object';
+    if (typeof raw.TenantID !== 'string' || raw.TenantID.trim().length === 0) return 'CallerTenantContext.TenantID is not a non-blank string';
+    if (typeof raw.Source !== 'string' || !TENANT_SOURCES.has(raw.Source)) return 'CallerTenantContext.Source is not a known tenant source';
+    return null;
+}
+
+function isSecondaryScopeValue(value: unknown): value is SecondaryScopeValue {
+    return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+        || (Array.isArray(value) && value.every((item) => typeof item === 'string'));
+}
+
+function isNullableString(value: unknown): value is string | null {
+    return value === null || typeof value === 'string';
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+    const proto: unknown = Object.getPrototypeOf(value);
+    return proto === Object.prototype || proto === null;
+}
+
+/** True for values JSON round-trips unchanged: null, finite numbers, strings, booleans, arrays and plain objects of those. */
+function isJSONData(value: unknown): boolean {
+    if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
+    if (typeof value === 'number') return Number.isFinite(value);
+    if (Array.isArray(value)) return value.every(isJSONData);
+    return isPlainObject(value) && Object.values(value).every(isJSONData);
+}
+
+function jsonEqual(a: unknown, b: unknown): boolean {
+    return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function invalid(reason: string): TaskSecurityEnvelopeParse {
+    return { Status: 'Invalid', Reason: `The task's security envelope cannot be enforced: ${reason}.` };
 }

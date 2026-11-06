@@ -150,8 +150,9 @@ import {
     type LoopBodyActionStep,
     type TaskGraphSpec,
     type TaskGraphSpecNode,
-    BuildTaskSecurityEnvelopeFromAgentScope,
+    BuildTaskSecurityEnvelope,
     MergeTaskSecurityEnvelopes,
+    TenantContextCarryProblem,
     type TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
 import {
@@ -290,7 +291,7 @@ interface AgentRunTokenStats {
 
 /** What one run's prompt leaves out (`BaseAgent.promptWithholding`). */
 interface PromptWithholding {
-    /** Task graphs are not offered (an audience, or a tenant-scoped run). */
+    /** Task graphs are not offered (a constraint no security envelope will carry: see taskGraphWithholdingReason). */
     TaskGraphs: boolean;
     /** Handoff is not offered (a sub-agent run, no conversation detail row, or a host that does not carry handoffs). */
     Handoff: boolean;
@@ -1487,6 +1488,19 @@ export class BaseAgent {
     protected recordTaintedSource(stepNumber: number, sourceName: string, trustLevel: AgentTaintedSource['trustLevel']): void {
         if (!this._taintedSources.some(s => s.stepNumber === stepNumber && s.sourceName === sourceName && s.trustLevel === trustLevel)) {
             this._taintedSources.push({ stepNumber, sourceName, trustLevel });
+        }
+    }
+
+    /**
+     * Starts a run tainted when it executes a task-graph node whose input is tainted
+     * (`ExecuteAgentParams.SecurityEnvelope.IsRunTainted`): the node's input derives from untrusted content no
+     * completed Human step reviewed, so the run is tainted before it reads anything itself, exactly as the run
+     * that ingested the content was.
+     * @protected
+     */
+    protected seedTaintFromSecurityEnvelope(params: ExecuteAgentParams): void {
+        if (params.SecurityEnvelope?.IsRunTainted === true) {
+            this.recordTaintedSource(0, 'task-graph:security-envelope', 'Untrusted');
         }
     }
 
@@ -2943,6 +2957,7 @@ export class BaseAgent {
             this._resolvedHandoffTarget = null;
             this._lastSubAgentArtifactDirective = undefined;
             this._taintedSources = [];
+            this.seedTaintFromSecurityEnvelope(params);
             this._messageLifecycleCallback = params.onMessageLifecycle;
             this._catalogNarrowing = undefined;
             this._openingRequest = OpeningRequestText(params.conversationMessages);
@@ -3289,34 +3304,50 @@ export class BaseAgent {
     }
 
     /**
-     * True when the registered `TaskGraphSubmitter` or caller parameters opt into durable
-     * `TaskSecurityEnvelope` enforcement across `MJ: Tasks` nodes.
+     * What this run carries that a graph would have to carry too, or null when nothing: an audience that adds a
+     * reader, host-assigned search scopes, a tenant or secondary dimension (`ActionRunScopeIsBounded`), bound
+     * action parameters, or the caller's tenant context. A graph runs outside the run — its nodes are claimed later
+     * by a dispatcher, as a background worker — so each of these is lost unless the graph's security envelope
+     * carries it.
      */
-    private supportsTaskSecurityEnvelope(params?: ExecuteAgentParams): boolean {
-        return Boolean(
-            params?.allowScopedTaskGraphs ||
-            params?.securityEnvelope ||
-            GetTaskGraphSubmitter()?.SupportsSecurityEnvelope,
-        );
+    private taskGraphConstraint(params: ExecuteAgentParams): string | null {
+        if (this.runAudienceAddsReader(params)) {
+            return 'a run with an audience';
+        }
+        const scope = this._runScope ?? this.validatedRunScope(params);
+        if (scope?.SearchScopeIDs?.length) {
+            return 'a run with host-assigned search scopes';
+        }
+        if (ActionRunScopeIsBounded(scope)) {
+            return 'a tenant-scoped run';
+        }
+        if (this.hasBoundActionParams(params.boundActionParams)) {
+            return 'a run with bound action parameters';
+        }
+        return params.contextUser?.TenantContext ? 'a run with a tenant context' : null;
     }
 
     /**
      * Why this run is not offered task graphs and refuses one the model writes, or null when it may use them — the one
-     * predicate, so every condition that withholds graphs is added in one place. When the active `TaskGraphSubmitter`
-     * supports durable `TaskSecurityEnvelope` propagation (`SupportsSecurityEnvelope === true`, or caller sets
-     * `allowScopedTaskGraphs` / `securityEnvelope`), audience and tenant/bound scopes are carried into the durable
-     * graph and enforced per node by `TaskGraphDispatcher`.
+     * predicate, read by the prompt (`promptWithholding`) and by {@link executeTasksStep} alike, so the two cannot
+     * disagree. A constrained run ({@link taskGraphConstraint}) may use graphs only when the registered submitter
+     * enforces security envelopes (`TaskGraphSubmitter.SupportsSecurityEnvelope`): then the envelope carries the
+     * audience, the validated run scope (tenant, dimensions and search scopes), the bound parameters, the caller's
+     * tenant context and the taint into every node. Nothing the caller passes opens this gate. What the envelope
+     * cannot carry keeps the refusal: a malformed audience, and a tenant context JSON would change.
      */
     private taskGraphWithholdingReason(params: ExecuteAgentParams): string | null {
-        const supportsEnvelope = this.supportsTaskSecurityEnvelope(params);
-        if (this.runAudienceAddsReader(params) && !supportsEnvelope) {
+        const constraint = this.taskGraphConstraint(params);
+        if (!constraint) {
+            return null;
+        }
+        if (GetTaskGraphSubmitter()?.SupportsSecurityEnvelope !== true) {
+            return constraint;
+        }
+        if (AgentAudienceProblem(params.Audience) !== null) {
             return 'a run with an audience';
         }
-        const scope = this._runScope ?? this.validatedRunScope(params);
-        if (scope?.SearchScopeIDs?.length && !params.allowScopedTaskGraphs) {
-            return 'a run with host-assigned search scopes';
-        }
-        return ActionRunScopeIsBounded(scope) && !supportsEnvelope ? 'a tenant-scoped run' : null;
+        return TenantContextCarryProblem(params.contextUser?.TenantContext) ? 'a run whose tenant context cannot be carried into a task graph' : null;
     }
 
     /** Whether this run withholds task graphs ({@link taskGraphWithholdingReason}). */
@@ -12316,11 +12347,10 @@ The context is now within limits. Please retry your request with the recovered c
                 // and removes any cache-poisoning foot-gun should a future consumer write to it.
                 agentTypePromptParams = { ...catalog.baseAgentTypePromptParams };
             }
-            // A run that withholds task graphs (an audience or a tenant: see taskGraphWithholdingReason) is not offered
-            // them; a copy, so the cached base is never written. executeTasksStep refuses a graph the model writes anyway.
-            // A bound run (ExecuteAgentParams.boundActionParams) is not offered them either: a graph's action
-            // nodes are dispatched outside the binding gate (executeTasksStep refuses one of those too).
-            if (withholding?.TaskGraphs || (this.hasBoundActionParams(boundActionParams) && !this.supportsTaskSecurityEnvelope())) {
+            // A run that withholds task graphs (taskGraphWithholdingReason: a constraint no security envelope will
+            // carry) is not offered them; a copy, so the cached base is never written. executeTasksStep refuses a
+            // graph the model writes anyway, through the same predicate.
+            if (withholding?.TaskGraphs) {
                 agentTypePromptParams = this.withoutTaskGraphs(agentTypePromptParams);
             }
             if (withholding?.Handoff) {
@@ -19682,34 +19712,22 @@ The context is now within limits. Please retry your request with the recovered c
             };
         }
         const spec = this.canonicalizeTaskGraphSpec(rawSpec);
-        // Fail closed under bound parameters (ExecuteAgentParams.boundActionParams) unless the registered
-        // TaskGraphSubmitter supports durable TaskSecurityEnvelope enforcement.
-        if (this.hasBoundActionParams(params.boundActionParams) && !this.supportsTaskSecurityEnvelope(params)) {
-            return {
-                step: 'Failed',
-                terminate: true,
-                errorMessage: 'Task graphs are not available in a run with bound action parameters: a graph dispatches actions outside the binding gate.',
-                previousPayload: previousDecision.previousPayload,
-                newPayload: previousDecision.newPayload || previousDecision.previousPayload
-            };
-        }
-        // Fail closed under an audience or a tenant-scoped run (taskGraphRefusal) unless security envelopes are supported.
+        // Fail closed on anything the graph could not carry (the same predicate the prompt used to hide `tasks`).
         const withheld = this.taskGraphRefusal(params, previousDecision);
         if (withheld) {
             return withheld;
         }
-
-        const scope = this._runScope ?? this.validatedRunScope(params);
-        const audienceReaderIDs = AgentAudienceReaderIDs(params.Audience, params.contextUser?.ID);
-        const derivedEnvelope = BuildTaskSecurityEnvelopeFromAgentScope({
-            BoundActionParams: params.boundActionParams,
-            AudienceReaderUserIDs: audienceReaderIDs,
-            PrimaryScopeEntityName: scope?.PrimaryScopeEntityName ?? params.PrimaryScopeEntityName,
-            PrimaryScopeRecordID: scope?.PrimaryScopeRecordID ?? params.PrimaryScopeRecordID,
-            SecondaryScopes: scope?.SecondaryScopes ?? params.SecondaryScopes,
-            IsRunTainted: this.IsRunTainted,
-        });
-        const securityEnvelope = MergeTaskSecurityEnvelopes(derivedEnvelope, params.securityEnvelope);
+        const envelope = this.taskGraphSecurityEnvelope(params);
+        if ('Refusal' in envelope) {
+            return {
+                step: 'Failed',
+                terminate: true,
+                errorMessage: `Task graph not submitted: ${envelope.Refusal}`,
+                previousPayload: previousDecision.previousPayload,
+                newPayload: previousDecision.newPayload || previousDecision.previousPayload
+            };
+        }
+        const securityEnvelope = envelope.Envelope;
 
         const stepEntity = await this.createStepEntity({
             stepType: 'TaskGraph',
@@ -19796,6 +19814,31 @@ The context is now within limits. Please retry your request with the recovered c
             newPayload: previousDecision.newPayload || previousDecision.previousPayload
         };
     }
+
+    /**
+     * The security envelope a graph this run submits carries: the run's bound parameters, the readers its audience
+     * adds, its validated scope exactly as each action dispatch is handed it ({@link runScopeFor}), the caller's
+     * tenant context and its taint — merged with the envelope this run itself executes under, when it is a
+     * task-graph node (`ExecuteAgentParams.SecurityEnvelope`), keeping the stricter of each part.
+     */
+    private taskGraphSecurityEnvelope(params: ExecuteAgentParams): { Envelope: TaskSecurityEnvelope | undefined } | { Refusal: string } {
+        const scope = this.runScopeFor(params);
+        const derived = BuildTaskSecurityEnvelope({
+            BoundActionParams: params.boundActionParams,
+            AudienceReaderUserIDs: AgentAudienceReaderIDs(params.Audience, params.contextUser?.ID),
+            RunScope: {
+                PrimaryScopeEntityName: scope.PrimaryScopeEntityName ?? null,
+                PrimaryScopeRecordID: scope.PrimaryScopeRecordID,
+                SecondaryScopes: scope.SecondaryScopes ?? null,
+                ...(scope.SearchScopeIDs ? { SearchScopeIDs: scope.SearchScopeIDs } : {}),
+            },
+            CallerTenantContext: params.contextUser?.TenantContext,
+            IsRunTainted: this.IsRunTainted,
+        });
+        const merged = MergeTaskSecurityEnvelopes(derived, params.SecurityEnvelope);
+        return 'Reason' in merged ? { Refusal: merged.Reason } : { Envelope: merged.Envelope };
+    }
+
 
     /**
      * Executes a `'Handoff'` next step: records the `'Handoff'` step entity with the resolved

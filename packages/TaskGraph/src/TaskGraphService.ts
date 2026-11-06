@@ -36,6 +36,7 @@ import {
     NormalizeDependency,
     ParseTaskSecurityEnvelope,
     RankGraphNodes,
+    SerializeTaskSecurityEnvelope,
     SanitizeInvocationEnvelope,
     ValidateTaskGraphSpec,
     type TaskGraphFailurePolicy,
@@ -106,8 +107,9 @@ export type TaskGraphSubmitContext = {
     /** Seed `$.debug` on the parent at insert. See `TaskGraphStartDebug`. */
     Debug?: { paused?: boolean };
     /**
-     * Immutable security envelope persisted on the parent task and inherited by all child tasks
-     * (`BoundActionParams`, `Audience`, `TenantContext`, and monotonic `IsRunTainted`).
+     * The submitting run's security envelope. Written to `Task.SecurityEnvelope` on the parent and on
+     * every child row at insert, never afterwards (`MJTaskEntityServer` refuses a change), and enforced
+     * by the dispatcher on every node.
      */
     SecurityEnvelope?: TaskSecurityEnvelope;
 };
@@ -185,10 +187,6 @@ export type TaskGraphParentMetadata = {
      */
     invocation?: { data?: unknown; context?: unknown };
     /**
-     * Durable security envelope persisted on the graph parent and enforced across all child nodes.
-     */
-    securityEnvelope?: TaskSecurityEnvelope;
-    /**
      * Workflow-level saga failure policy (`'Halt'` default, or `'CompensateCompleted'`).
      */
     failurePolicy?: TaskGraphFailurePolicy;
@@ -248,9 +246,6 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
                 .map((name) => name.trim())
                 .filter((name) => name.length > 0)
             : undefined;
-        const securityEnvelope = parsed.securityEnvelope
-            ? ParseTaskSecurityEnvelope(parsed.securityEnvelope)
-            : undefined;
         const failurePolicy =
             parsed.failurePolicy === 'CompensateCompleted' || parsed.failurePolicy === 'Halt'
                 ? parsed.failurePolicy
@@ -277,7 +272,6 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
             parentAgentHierarchy: parentAgentHierarchy && parentAgentHierarchy.length > 0
                 ? parentAgentHierarchy
                 : undefined,
-            securityEnvelope,
             ...(failurePolicy !== undefined ? { failurePolicy } : {}),
             ...(sagaState !== undefined ? { sagaState } : {}),
         };
@@ -305,7 +299,6 @@ export function BuildTaskGraphParentInputPayload(args: {
     parentAgentHierarchy?: string[];
     invocation?: { data?: unknown; context?: unknown } | null;
     startPaused?: boolean;
-    securityEnvelope?: TaskSecurityEnvelope | null;
 }): Record<string, unknown> {
     const parentAgentHierarchy = Array.isArray(args.parentAgentHierarchy)
         ? args.parentAgentHierarchy
@@ -325,7 +318,6 @@ export function BuildTaskGraphParentInputPayload(args: {
         ...(args.invocation
             ? { invocation: { data: args.invocation.data, context: args.invocation.context } }
             : {}),
-        ...(args.securityEnvelope ? { securityEnvelope: args.securityEnvelope } : {}),
         ...(args.startPaused
             ? {
                 debug: {
@@ -744,6 +736,14 @@ export class TaskGraphService {
                 `almost always calling itself, directly or through another one.`;
             LogError(`[TaskGraphService] ${message}`);
             return { Success: false, ErrorMessage: message };
+        }
+
+        // 1d. The security envelope must read back as the one written, or every node would be refused
+        //     after the graph is already persisted. Refused here, before anything is written.
+        const envelopeRefusal = this.envelopeRefusal(context.SecurityEnvelope);
+        if (envelopeRefusal) {
+            LogError(`[TaskGraphService] "${spec.workflowName}" was not started: ${envelopeRefusal}`);
+            return { Success: false, ErrorMessage: envelopeRefusal };
         }
 
         try {
@@ -1716,6 +1716,12 @@ export class TaskGraphService {
         return rows[0]?.ID ?? null;
     }
 
+    /** Why the submitted envelope cannot be stored and enforced, or null when it can (or there is none). */
+    private envelopeRefusal(envelope: TaskSecurityEnvelope | undefined): string | null {
+        const parsed = ParseTaskSecurityEnvelope(SerializeTaskSecurityEnvelope(envelope));
+        return parsed.Status === 'Invalid' ? parsed.Reason : null;
+    }
+
     /** Writes the parent task that represents the graph as a whole. */
     private async persistParent(spec: TaskGraphSpec, taskTypeID: string, context: TaskGraphSubmitContext): Promise<string> {
         const parent = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
@@ -1765,8 +1771,8 @@ export class TaskGraphService {
                 ? { data: sanitized.Envelope.Data, context: sanitized.Envelope.Context }
                 : null,
             startPaused: context.Debug?.paused === true,
-            securityEnvelope: context.SecurityEnvelope ?? null,
         }));
+        parent.SecurityEnvelope = SerializeTaskSecurityEnvelope(context.SecurityEnvelope);
         if (!(await parent.Save())) {
             throw new Error(`Could not create parent task: ${parent.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
@@ -1912,10 +1918,12 @@ export class TaskGraphService {
                     ...builtConfig,
                     ...(resolvedCompensation ? { compensation: resolvedCompensation } : {}),
                     ...(stepActionIds && Object.keys(stepActionIds).length > 0 ? { stepActionIds } : {}),
-                    ...(context.SecurityEnvelope ? { securityEnvelope: context.SecurityEnvelope } : {}),
                     sequence: ranks.get(node.tempId),
                 };
                 task.Configuration = JSON.stringify(configuration);
+                // Every child carries the envelope, not only the parent: a node is enforced from its
+                // own row too, so losing the parent row can never run it unconstrained.
+                task.SecurityEnvelope = SerializeTaskSecurityEnvelope(context.SecurityEnvelope);
 
                 // Input rides in its own column; Description stays human-readable.
                 task.InputPayload = node.inputPayload ? JSON.stringify(node.inputPayload) : null;
