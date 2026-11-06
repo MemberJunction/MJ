@@ -695,6 +695,227 @@ describe('GenericDatabaseProvider', () => {
         });
     });
 
+    describe('Row-Level Security — Create check projects NULL fields as typed NULLs', () => {
+        interface CreateRLSAccess {
+            CheckCreateRLS: (e: BaseEntity, u: UserInfo) => Promise<boolean>;
+        }
+        const RLS = (): CreateRLSAccess => provider as unknown as CreateRLSAccess;
+
+        function makeCreateEntity(rlsClause: string, fields: Array<{ Name: string; Value: unknown; Type?: string; Length?: number; MaxLength?: number; SQLFullType?: string }>): BaseEntity {
+            const infoFields = fields.map(f => ({
+                Name: f.Name,
+                IsVirtual: false,
+                NeedsQuotes: true,
+                Type: f.Type,
+                Length: f.Length ?? 0,
+                MaxLength: f.MaxLength ?? 0,
+                Precision: 0,
+                Scale: 0,
+                SQLFullType: f.SQLFullType,
+            }));
+            const values = new Map<string, unknown>(fields.map(f => [f.Name, f.Value]));
+            return {
+                EntityInfo: {
+                    Fields: infoFields,
+                    GetUserRowLevelSecurityWhereClause: () => rlsClause,
+                },
+                Get: (name: string) => values.get(name),
+            } as unknown as BaseEntity;
+        }
+
+        it('projects a null field as a typed NULL, so a filter on it evaluates instead of failing to bind', async () => {
+            // A shared folder leaves OwnerUserID NULL. Skipping the column made any create filter
+            // that mentions it fail with `Invalid column name` instead of evaluating.
+            const entity = makeCreateEntity("OwnerUserID IS NULL OR OwnerUserID = 'u1'", [
+                { Name: 'Name', Value: 'Shared folder' },
+                { Name: 'OwnerUserID', Value: null, Type: 'uniqueidentifier', SQLFullType: 'uniqueidentifier' },
+            ]);
+            provider.executeSQLResults = [[{ pass: 1 }]];
+
+            const result = await RLS().CheckCreateRLS(entity, mockUser);
+
+            expect(result).toBe(true);
+            expect(provider.executeSQLCalls[0].sql).toContain('CAST(NULL AS uniqueidentifier) AS "OwnerUserID"');
+        });
+
+        it('maps the type through the dialect in characters, not bytes, keeps the MAX sentinel and binary byte lengths', async () => {
+            for (const [dialect, expected] of [
+                [new SQLServerDialect(), ['CAST(NULL AS NVARCHAR(4000)) AS "FileName"', 'CAST(NULL AS NVARCHAR(MAX)) AS "Body"', 'CAST(NULL AS VARBINARY(16)) AS "Hash"']],
+                [new PostgreSQLDialect(), ['CAST(NULL AS VARCHAR(4000)) AS "FileName"', 'CAST(NULL AS TEXT) AS "Body"', 'CAST(NULL AS BYTEA) AS "Hash"']],
+            ] as const) {
+                const entity = makeCreateEntity("FileName IS NULL", [
+                    { Name: 'FileName', Value: null, Type: 'nvarchar', Length: 8000, MaxLength: 4000, SQLFullType: 'nvarchar(4000)' },
+                    { Name: 'Body', Value: null, Type: 'nvarchar', Length: -1, MaxLength: 0, SQLFullType: 'nvarchar(MAX)' },
+                    // MaxLength is a character count and is 0 for binary; VARBINARY(0) is rejected.
+                    { Name: 'Hash', Value: null, Type: 'varbinary', Length: 16, MaxLength: 0, SQLFullType: 'varbinary(16)' },
+                ]);
+                (provider as unknown as { getDialect(): unknown }).getDialect = () => dialect;
+                provider.resetExecuteSQLState();
+                provider.executeSQLResults = [[{ pass: 1 }]];
+
+                await RLS().CheckCreateRLS(entity, mockUser);
+
+                for (const projection of expected) {
+                    expect(provider.executeSQLCalls[0].sql, dialect.constructor.name).toContain(projection);
+                }
+            }
+        });
+
+        it('fails the save for a null field with no resolvable SQL type instead of emitting an untyped NULL', async () => {
+            const entity = makeCreateEntity("Notes IS NULL", [{ Name: 'Notes', Value: null, Type: '', SQLFullType: '' }]);
+
+            await expect(RLS().CheckCreateRLS(entity, mockUser)).rejects.toThrow(/no resolvable SQL type/i);
+        });
+
+        it('throws for a numeric field whose value is not a number', async () => {
+            const entity = {
+                EntityInfo: {
+                    Fields: [{ Name: 'Priority', IsVirtual: false, NeedsQuotes: false, Type: 'int' }],
+                    GetUserRowLevelSecurityWhereClause: () => 'Priority < 10',
+                },
+                Get: () => 'abc',
+            } as unknown as BaseEntity;
+
+            await expect(RLS().CheckCreateRLS(entity, mockUser)).rejects.toThrow(/numeric field Priority does not parse as a number/);
+            expect(provider.executeSQLCalls).toHaveLength(0);
+        });
+    });
+
+    describe('CheckUpdateRLSPostImage — the row as it will be after the update', () => {
+        type PostImageCheck = { CheckUpdateRLSPostImage: (e: BaseEntity, u: UserInfo) => Promise<boolean> };
+        const ORG_FILTER = "OrganizationID = 'org-a'";
+
+        /** A row on an entity whose Update filter scopes the user to org-a. */
+        type FieldMeta = { NeedsQuotes?: boolean; Type?: string; Length?: number; MaxLength?: number; SQLFullType?: string };
+        function scopedRow(values: Record<string, unknown>, dirty: string[], filter = ORG_FILTER, meta: Record<string, FieldMeta> = {}): BaseEntity {
+            const fieldNames = Object.keys(values);
+            const entityInfo = {
+                Name: 'Projects',
+                GetUserRowLevelSecurityWhereClause: () => filter,
+                Fields: fieldNames.map(n => ({ Name: n, IsVirtual: false, NeedsQuotes: true, Precision: 0, Scale: 0, ...meta[n] })),
+            } as unknown as EntityInfo;
+            return {
+                EntityInfo: entityInfo,
+                Fields: fieldNames.map(n => ({ Name: n, Dirty: dirty.includes(n) })),
+                Get: (n: string) => values[n],
+            } as unknown as BaseEntity;
+        }
+
+        const check = (entity: BaseEntity) => (provider as unknown as PostImageCheck).CheckUpdateRLSPostImage(entity, mockUser);
+
+        it('passes without a query when no Update filter applies', async () => {
+            const entity = scopedRow({ ID: 'p1', Name: 'x' }, ['Name'], '');
+            expect(await check(entity)).toBe(true);
+            expect(provider.executeSQLCalls).toHaveLength(0);
+        });
+
+        it('passes without a query when an in-scope edit leaves the filter columns alone', async () => {
+            const entity = scopedRow({ ID: 'p1', Name: 'Renamed', OrganizationID: 'org-a' }, ['Name']);
+            expect(await check(entity)).toBe(true);
+            expect(provider.executeSQLCalls).toHaveLength(0);
+        });
+
+        it('tests the new values against the filter when a filter column changes, and refuses a move out of scope', async () => {
+            provider.executeSQLResults = [[{ pass: 0 }]];
+            const entity = scopedRow({ ID: 'p1', Name: 'x', OrganizationID: 'org-b' }, ['OrganizationID']);
+
+            expect(await check(entity)).toBe(false);
+            const sql = provider.executeSQLCalls[0].sql;
+            expect(sql).toContain(`CASE WHEN (${ORG_FILTER}) THEN 1 ELSE 0 END`);
+            expect(sql).toContain(`'org-b' AS "OrganizationID"`);
+        });
+
+        it('allows a filter column change that stays in scope', async () => {
+            provider.executeSQLResults = [[{ pass: 1 }]];
+            const entity = scopedRow({ ID: 'p1', OrganizationID: 'org-a' }, ['OrganizationID']);
+            expect(await check(entity)).toBe(true);
+        });
+
+        it('always runs the check for a filter it cannot fully decompose', async () => {
+            provider.executeSQLResults = [[{ pass: 1 }]];
+            const entity = scopedRow({ ID: 'p1', Name: 'x', OrganizationID: 'org-a' }, ['Name'], "OrganizationID = 'org-a' OR IsPublic = 1");
+            expect(await check(entity)).toBe(true);
+            expect(provider.executeSQLCalls).toHaveLength(1);
+        });
+
+        it('escapes quotes in the new values', async () => {
+            provider.executeSQLResults = [[{ pass: 0 }]];
+            const entity = scopedRow({ ID: 'p1', OrganizationID: "x' OR '1'='1" }, ['OrganizationID']);
+            await check(entity);
+            expect(provider.executeSQLCalls[0].sql).toContain(`'x'' OR ''1''=''1' AS "OrganizationID"`);
+        });
+
+        it('refuses when the check query returns no row (fails closed)', async () => {
+            provider.executeSQLResults = [[]];
+            const entity = scopedRow({ ID: 'p1', OrganizationID: 'org-a' }, ['OrganizationID']);
+            expect(await check(entity)).toBe(false);
+        });
+
+        it('projects a NULL column in another OR branch, so an in-scope edit evaluates instead of failing to bind', async () => {
+            // A user with two filtered roles gets their filters joined with OR, so the query runs on
+            // every save. Leaving the NULL Region column out of the row made this save fail with
+            // `Invalid column name 'Region'` although the row is in scope through the first branch.
+            provider.executeSQLResults = [[{ pass: 1 }]];
+            const entity = scopedRow(
+                { ID: 'p1', Name: 'Renamed', OrganizationID: 'org-a', Region: null },
+                ['Name'],
+                "(OrganizationID = 'org-a') OR (Region = 'west')",
+                { Region: { Type: 'nvarchar', Length: 100, MaxLength: 50, SQLFullType: 'nvarchar(50)' } }
+            );
+
+            expect(await check(entity)).toBe(true);
+            expect(provider.executeSQLCalls[0].sql).toMatch(/CAST\(NULL AS NVARCHAR\(50\)\) AS "Region"/i);
+        });
+
+        it('renders a numeric value as a number', async () => {
+            provider.executeSQLResults = [[{ pass: 1 }]];
+            const entity = scopedRow({ ID: 'p1', Priority: 5 }, ['Priority'], 'Priority < 10', { Priority: { NeedsQuotes: false, Type: 'int' } });
+
+            await check(entity);
+            expect(provider.executeSQLCalls[0].sql).toContain('5 AS "Priority"');
+        });
+
+        it('throws for a numeric field whose value is not a number', async () => {
+            const entity = scopedRow({ ID: 'p1', Priority: 'abc' }, ['Priority'], 'Priority < 10', { Priority: { NeedsQuotes: false, Type: 'int' } });
+
+            await expect(check(entity)).rejects.toThrow(/numeric field Priority does not parse as a number/);
+            expect(provider.executeSQLCalls).toHaveLength(0);
+        });
+    });
+
+    describe('TryExtractSimpleFilterColumns', () => {
+        const extract = (clause: string) =>
+            (provider as unknown as { TryExtractSimpleFilterColumns: (c: string) => string[] | null }).TryExtractSimpleFilterColumns(clause);
+
+        it('returns the columns of a conjunction of simple terms', () => {
+            expect(extract("OrganizationID = 'a' AND [Region] <> 'x' AND \"Status\" IS NOT NULL")).toEqual(['organizationid', 'region', 'status']);
+        });
+
+        it('returns null for OR, subqueries and functions', () => {
+            expect(extract("A = 1 OR B = 2")).toBeNull();
+            expect(extract("ID IN (SELECT ID FROM t)")).toBeNull();
+            expect(extract("LOWER(Name) = 'x'")).toBeNull();
+        });
+
+        it('ignores AND/OR inside string literals', () => {
+            expect(extract("Name = 'a OR b' AND Org = 'c AND d'")).toEqual(['name', 'org']);
+        });
+
+        it('accepts string, number and NULL literals on the right side', () => {
+            expect(extract("A = N'x' AND B >= -2.5 AND C <> 0 AND D LIKE 'a%' AND E = NULL")).toEqual(['a', 'b', 'c', 'd', 'e']);
+        });
+
+        it('returns null when the right side is a column', () => {
+            expect(extract('OwnerID = ManagerID')).toBeNull();
+            expect(extract("OrgID = 'a' AND [TeamID] = [ParentTeamID]")).toBeNull();
+        });
+
+        it('returns null for subtraction or modulo on the right side', () => {
+            expect(extract('Score = Base - 5')).toBeNull();
+            expect(extract('Score = 7 % 2')).toBeNull();
+        });
+    });
+
     describe('AdjustDatetimeFields (default no-op)', () => {
         it('returns rows unchanged by default', async () => {
             const now = new Date();
