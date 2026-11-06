@@ -20,7 +20,7 @@ import { UserCache } from "@memberjunction/generic-database-provider";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'crypto';
 import { Readable } from 'stream';
 import express, { Request, Response, NextFunction } from 'express';
 import sql from "mssql";
@@ -240,16 +240,30 @@ function extractAPIKeyFromRequest(request: Request | http.IncomingMessage): stri
         }
     }
 
-    // Check URL query parameters as fallback
-    if (!apiKey && request.url) {
-        const url = new URL(request.url, `http://${request.headers.host}`);
-        const queryKey = url.searchParams.get('apiKey') || url.searchParams.get('api_key');
-        if (queryKey) {
-            apiKey = queryKey;
-        }
-    }
+    // NOTE: API keys are deliberately NOT accepted via URL query parameters — long-lived
+    // credentials in a query string land in access logs, proxies and browser history.
+    // Send the key in the x-mj-api-key (or Authorization) header instead.
 
     return apiKey || null;
+}
+
+/**
+ * Placeholder values that have shipped in example configs. A system key equal to one of these
+ * (or shorter than 16 characters) is publicly known or trivially guessable, so system-key auth
+ * is disabled rather than honored.
+ */
+const placeholderSystemApiKeys = ['MY_API_KEY_FOR_MCP_SERVER'];
+
+function isUsableSystemApiKey(key: string): boolean {
+    const trimmed = key.trim();
+    return trimmed.length >= 16 && !placeholderSystemApiKeys.includes(trimmed);
+}
+
+/** Constant-time string comparison via SHA-256 digests (same pattern as MJServer's system-key check). */
+function timingSafeKeyCompare(a: string, b: string): boolean {
+    const hashA = createHash('sha256').update(a).digest();
+    const hashB = createHash('sha256').update(b).digest();
+    return timingSafeEqual(hashA, hashB);
 }
 
 /**
@@ -325,7 +339,7 @@ async function validateApiKey(
         const sharedApiKey = _config.apiKey;
         const configuredSystemApiKey = mcpSystemKey || sharedApiKey;
 
-        if (configuredSystemApiKey && apiKey === configuredSystemApiKey) {
+        if (configuredSystemApiKey && isUsableSystemApiKey(configuredSystemApiKey) && timingSafeKeyCompare(apiKey, configuredSystemApiKey)) {
             return {
                 valid: true,
                 user: systemUser,
