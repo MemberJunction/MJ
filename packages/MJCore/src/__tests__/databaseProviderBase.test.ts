@@ -45,6 +45,8 @@ class TestSQLServerProvider extends DatabaseProviderBase {
     public checkUpdatePostImageResult = true;
     public postImageChecks = 0;
     public saveRows: Record<string, unknown>[] = [];
+    /** Order in which the save pipeline reached the before-save hook and the post-image check. */
+    public saveSteps: string[] = [];
 
     protected override async CheckRecordRLS(
         entity: BaseEntity,
@@ -66,7 +68,12 @@ class TestSQLServerProvider extends DatabaseProviderBase {
         user: UserInfo
     ): Promise<boolean> {
         this.postImageChecks++;
+        this.saveSteps.push('postImageCheck');
         return this.checkUpdatePostImageResult;
+    }
+
+    protected override async OnBeforeSaveExecute(): Promise<void> {
+        this.saveSteps.push('beforeSaveHook');
     }
 
     override async ExecuteSQL<T>(): Promise<Array<T>> { return this.saveRows as unknown as Array<T>; }
@@ -297,6 +304,25 @@ describe('DatabaseProviderBase', () => {
             const entity = createMockEntity(false);
 
             await sqlServer.Save(entity, mockUser, new EntitySaveOptions());
+            expect(sqlServer.postImageChecks).toBe(0);
+        });
+
+        it('runs the post-image check after the before-save hooks, which can change the values written', async () => {
+            sqlServer.saveRows = [{ ID: 'test-id' }];
+            const entity = createMockEntity(true);
+
+            await sqlServer.Save(entity, mockUser, new EntitySaveOptions());
+            expect(sqlServer.saveSteps).toEqual(['beforeSaveHook', 'postImageCheck']);
+        });
+
+        it('does not run the post-image check for a replayed update', async () => {
+            sqlServer.checkRecordRLSResult = false;
+            sqlServer.checkUpdatePostImageResult = false;
+            const entity = createMockEntity(true);
+            const options = new EntitySaveOptions();
+            options.ReplayOnly = true;
+
+            await sqlServer.Save(entity, mockUser, options);
             expect(sqlServer.postImageChecks).toBe(0);
         });
 
