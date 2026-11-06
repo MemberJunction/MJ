@@ -11,7 +11,7 @@ Each section answers one question with the command run, the raw numbers, and the
 | 4 | Provider classes work with no database (Anthropic, OpenAI with logprobs, Gemini) | pending | |
 | 5 | `INTEGRATION_LIVE_MODEL_KEYS` includes an OpenAI key | pending | |
 | 6 | vitest JSON reporter gives assertion, expected, actual, stack | pending | |
-| 7 | File-swap path gives the same verdicts as two worktrees | Yes on 3 one-package PRs: 1207/627/1275 tests, 0 differences each (§7) | No |
+| 7 | File-swap path gives the same verdicts as two worktrees | Same results on 3 one-package PRs where all tests passed (1207/627/1275 tests, 0 differences each); no failing test compared (§7) | No |
 | 8 | Host `pnpm fetch` (lockfile only) + sandbox `pnpm install --offline` + `pnpm rebuild` builds on the real lockfile; copy-import time and disk; install-container fallback if fetch fails; turbo `--cache=local:rw,remote:r` works | pending | |
 
 ## 7. File-swap path vs two worktrees
@@ -45,15 +45,27 @@ OpenApp/Engine 627 pass; MJCoreEntitiesServer 1275 pass. Each install took about
 vitest runs.
 
 Notes:
+- Only passing results were compared. In all three PRs every test passed (or was skipped) in both runs,
+  so no failing test was compared. The PRs' new and changed test files exist in run (b) only because the
+  swap copied them, and they passed there. This does not prove that the copied source was loaded: it was
+  not checked whether those tests fail on base.
 - Every one of these PRs also adds a `.changeset/*.md` file. Almost no merge in the last 200 touches
   only `packages/<X>/src`, so the PR filter ignored `.changeset/` files. The script diffs only
   `<pkg>/src`, so changesets have no effect on the result.
-- The comparison is valid for these packages because their tests import the package's own source by
-  relative path. No test in the three packages imports the package by its own name or through `dist/`.
-  A package whose tests import itself by name (resolved to base `dist/`) would not see the copied files.
-- The PRs were one-package, so no other package loads the changed files from `dist/`. A PR that changes
-  a package that another tested package imports from `dist/` needs a rebuild of that package; the
-  file-swap path does not cover that shape.
+- The tests in these packages import the package's own source by relative path (checked by grep).
+  `grep -rn "@memberjunction/<name>'" <pkg>/src` for each package's own name and
+  `grep -rlE "from '@memberjunction/[^']+/dist" <pkg>/src` both found 0 matches. The grep ran on the
+  current branch checkout, not on each merge commit. A package whose tests import itself by name
+  (resolved to base `dist/`) would not see the copied files.
+- The script runs only the changed package's own tests. Packages that depend on the changed package may
+  load it from `dist/`, but their tests are not run, so they do not affect this result. Testing such a
+  dependent package needs a rebuild of the changed package; the file-swap path does not cover that.
 
-**Decision:** the file-swap path gives the same verdicts as two worktrees for one-package, `src`-only
-PRs. No design change. Keep the limits above (no self-import by name, no cross-package `dist/` use).
+Shapes the file-swap path (as scripted) does not cover. None of the three PRs had these shapes:
+- A PR that deletes or renames a `src` file: `cp` from head fails and `pipefail` stops the script.
+- A changed `package.json`, vitest config, or any other file outside `<pkg>/src`: never copied.
+- Tests that import the package by its own name, or tests in another package that load the changed
+  package from `dist/` (see notes above).
+
+**Decision:** the file-swap path gave the same results as two worktrees on 3 one-package, `src`-only
+PRs where all tests passed; no failing test compared. No design change. Keep the limits above.
