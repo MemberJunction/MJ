@@ -17,7 +17,7 @@
  *
  * @module @memberjunction/ai-core-plus
  */
-import { MJGlobal } from '@memberjunction/global';
+import { GetGlobalObjectStore, MJGlobal } from '@memberjunction/global';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import type { TaskGraphSpec } from './task-graph-spec';
 import type { TaskSecurityEnvelope } from './task-security-envelope';
@@ -130,15 +130,34 @@ export abstract class TaskGraphSubmitter {
 /** ClassFactory key under which the durable implementation registers itself. */
 export const TASK_GRAPH_SUBMITTER_KEY = 'TaskGraphSubmitter';
 
-/** Explicit submitter instance registered programmatically (e.g. in tests or custom hosts). */
-let explicitSubmitter: TaskGraphSubmitter | null | undefined = undefined;
+/**
+ * Where an explicitly registered submitter lives: the global object store, not a module variable, so a bundle
+ * that loads this module twice still sees one registration (as `BaseSingleton` guarantees for singletons).
+ */
+const EXPLICIT_SUBMITTER_KEY = '___TaskGraphSubmitter_Explicit';
 
 /**
- * Registers or clears an explicit {@link TaskGraphSubmitter} instance for this process.
+ * Registers or clears an explicit {@link TaskGraphSubmitter} instance for this process (tests, custom hosts).
  * Pass `null` to reset to default `ClassFactory` resolution.
  */
 export function RegisterTaskGraphSubmitter(submitter: TaskGraphSubmitter | null): void {
-    explicitSubmitter = submitter ?? undefined;
+    const store = GetGlobalObjectStore();
+    if (!store) return;
+    if (submitter) store[EXPLICIT_SUBMITTER_KEY] = submitter;
+    else delete store[EXPLICIT_SUBMITTER_KEY];
+}
+
+/**
+ * The explicitly registered submitter, if any. Checked by shape, not `instanceof`: a submitter registered
+ * through a second copy of this module is an instance of that copy's class.
+ */
+function explicitSubmitter(): TaskGraphSubmitter | undefined {
+    const registered: unknown = GetGlobalObjectStore()?.[EXPLICIT_SUBMITTER_KEY];
+    return isSubmitter(registered) ? registered : undefined;
+}
+
+function isSubmitter(value: unknown): value is TaskGraphSubmitter {
+    return typeof value === 'object' && value !== null && 'Submit' in value && typeof value.Submit === 'function';
 }
 
 /**
@@ -158,8 +177,9 @@ export function RegisterTaskGraphSubmitter(submitter: TaskGraphSubmitter | null)
  */
 export function GetTaskGraphSubmitter(): TaskGraphSubmitter | null {
     if (submissionSuppressedBecause) return null;
-    if (explicitSubmitter !== undefined) {
-        return explicitSubmitter;
+    const explicit = explicitSubmitter();
+    if (explicit) {
+        return explicit;
     }
     const submitter = MJGlobal.Instance.ClassFactory.CreateInstance<TaskGraphSubmitter>(
         TaskGraphSubmitter, TASK_GRAPH_SUBMITTER_KEY,

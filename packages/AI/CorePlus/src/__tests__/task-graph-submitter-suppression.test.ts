@@ -10,10 +10,11 @@
  * is already built to be honest: the agent reports that this host cannot run graphs instead of
  * promising a follow-up that will never come.
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
 import {
     GetTaskGraphSubmitter,
+    RegisterTaskGraphSubmitter,
     SuppressTaskGraphSubmission,
     TaskGraphSubmissionSuppressedBecause,
     TASK_GRAPH_SUBMITTER_KEY,
@@ -52,5 +53,20 @@ describe('SuppressTaskGraphSubmission', () => {
 
     it('reports nothing suppressed on an ordinary host', () => {
         expect(TaskGraphSubmissionSuppressedBecause()).toBeNull();
+    });
+});
+
+describe('RegisterTaskGraphSubmitter', () => {
+    afterEach(() => RegisterTaskGraphSubmitter(null));
+
+    it('holds the registration process-wide, so a second copy of the module resolves the same submitter', async () => {
+        const submitter = new WillingSubmitter();
+        RegisterTaskGraphSubmitter(submitter);
+        vi.resetModules();
+        const secondCopy = await import('../task-graph/task-graph-submitter');
+        expect(secondCopy.GetTaskGraphSubmitter()).toBe(submitter);
+
+        secondCopy.RegisterTaskGraphSubmitter(null);
+        expect(GetTaskGraphSubmitter()).not.toBe(submitter);
     });
 });
