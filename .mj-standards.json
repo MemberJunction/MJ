@@ -57,7 +57,21 @@
         "migrations"
       ],
       "Options": {
-        "FromVersion": "202611031700"
+        "FromVersion": "202610221306",
+        "Exempt": [
+          "V202610231210__v6.2.x__Bound_Data_Access_And_Approvals.sql",
+          "V202610231220__v6.2.x__Calendar_Event_Links.sql",
+          "V202610240805__v6.2.x__Entity_Alternate_Base_Views.sql",
+          "V202610252000__v6.2.x__Content_Pipeline_Framework.sql",
+          "V202610271915__v6.2.x__CommunicationProvider_UserDelegatedOAuth_Gates.sql",
+          "V202610291200__v6.2.x__Query_Extraction_Metadata.sql",
+          "V202610301710__v6.2.x__Agent_Consult_Chat_Handling.sql",
+          "V202610301713__v6.2.x__Brand_Kits_And_Video_Archetypes.sql",
+          "V202611022155__v6.2.x__Anchored_Conversations_And_Record_Comments.sql",
+          "V202611022300__v6.2.x__Semantic_Graph_And_Graph_Concepts.sql",
+          "V202611030307__v6.2.x__Diagnostic_Bundles.sql",
+          "V202611040751__v6.2.x__Document_Sequence_Counter.sql"
+        ]
       }
     }
   }
