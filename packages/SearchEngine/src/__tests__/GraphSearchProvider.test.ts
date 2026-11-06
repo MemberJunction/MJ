@@ -137,9 +137,18 @@ describe('GraphSearchProvider', () => {
         expect(Calls[0].MaxDepth).toBe(4);
     });
 
-    it('hands the audience to the expansion service so it applies it during traversal', async () => {
+    it('hands the audience to the expansion service so it applies it to the seeds and during traversal', async () => {
         const { Service, Calls } = fixedService(expansion, seeds);
-        await new GraphSearchProvider(Service).Search('Open AR', 10, undefined, caller, { AudienceReaders: [reader] });
+        const seedAudiences: Array<string[] | undefined> = [];
+        const recording: IGraphExpansionService = {
+            ResolveSeeds: async (q, g, u, p, audienceReaders) => {
+                seedAudiences.push(audienceReaders?.map((r) => r.ID));
+                return Service.ResolveSeeds(q, g, u, p, audienceReaders);
+            },
+            Expand: (params, u, p) => Service.Expand(params, u, p),
+        };
+        await new GraphSearchProvider(recording).Search('Open AR', 10, undefined, caller, { AudienceReaders: [reader] });
+        expect(seedAudiences).toEqual([[reader.ID]]);
         expect(Calls[0].AudienceReaders?.map((r) => r.ID)).toEqual([reader.ID]);
     });
 

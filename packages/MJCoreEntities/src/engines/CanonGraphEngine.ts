@@ -341,6 +341,7 @@ export class CanonGraphExpansionService implements IGraphExpansionService {
         graphNames: readonly string[] | undefined,
         contextUser: UserInfo,
         provider?: IMetadataProvider,
+        audienceReaders?: readonly UserInfo[],
     ): Promise<readonly GraphSeedNode[]> {
         if (!contextUser || !queryText?.trim()) {
             return [];
@@ -359,11 +360,11 @@ export class CanonGraphExpansionService implements IGraphExpansionService {
                 seeds.push(seed);
             }
         };
-        const concepts = await this.canon.FindConcepts(queryText, contextUser, { GraphNames: graphNames, provider });
+        const concepts = await this.canon.FindConcepts(queryText, contextUser, { GraphNames: graphNames, AudienceReaders: audienceReaders, provider });
         for (const c of concepts) {
             push({ EntityName: c.EntityName, RecordID: c.RecordID, Title: c.Label, SeedScore: 1.0, GraphName: graphName });
         }
-        for (const seed of this.entityNameSeeds(queryText, contextUser, graphName, provider)) {
+        for (const seed of this.entityNameSeeds(queryText, [contextUser, ...(audienceReaders ?? [])], graphName, provider)) {
             push(seed);
         }
         return seeds;
@@ -388,15 +389,21 @@ export class CanonGraphExpansionService implements IGraphExpansionService {
 
         const nodes = new Map<string, GraphExpandedNode>();
         const edges = new Map<string, GraphExpandedEdge>();
+        const admittedSeeds = new Map<string, GraphSeedNode>();
         const messages: string[] = [];
         for (const graphName of graphNames) {
             const subgraph = await GraphEngine.Instance.Subgraph(graphName, seedRefs, options, contextUser);
             if (subgraph.Message) {
                 messages.push(subgraph.Message);
             }
-            this.addSubgraph(subgraph, graphName, seedIndex, nodes, edges);
+            this.addSubgraph(subgraph, graphName, seedIndex, nodes, edges, admittedSeeds);
         }
-        return { Nodes: Array.from(nodes.values()), Edges: Array.from(edges.values()), Messages: messages.length > 0 ? messages : undefined };
+        return {
+            Nodes: Array.from(nodes.values()),
+            Edges: Array.from(edges.values()),
+            Seeds: Array.from(admittedSeeds.values()),
+            Messages: messages.length > 0 ? messages : undefined,
+        };
     }
 
     private addSubgraph(
@@ -405,8 +412,16 @@ export class CanonGraphExpansionService implements IGraphExpansionService {
         seedIndex: Map<string, { Seed: GraphSeedNode; Rank: number }>,
         nodes: Map<string, GraphExpandedNode>,
         edges: Map<string, GraphExpandedEdge>,
+        admittedSeeds: Map<string, GraphSeedNode>,
     ): void {
         const nodeByKey = new Map(subgraph.Nodes.map((n) => [n.Key, n]));
+        for (const node of subgraph.Nodes) {
+            const seed = seedIndex.get(node.Key);
+            if (seed && !node.ParentKey && !admittedSeeds.has(node.Key)) {
+                // Admitted at hop 0, so the caller and every reader may see it; the title is the checked label.
+                admittedSeeds.set(node.Key, { EntityName: node.EntityName, RecordID: node.RecordID, Title: node.Label, SeedScore: seed.Seed.SeedScore ?? 1.0, GraphName: graphName });
+            }
+        }
         const edgeById = new Map(subgraph.Edges.map((e) => [e.ID, e]));
         for (const edge of subgraph.Edges) {
             edges.set(edge.ID, {
@@ -431,7 +446,8 @@ export class CanonGraphExpansionService implements IGraphExpansionService {
                 NodeKind: classifyNodeKind(node.EntityName),
                 SeedScore: seed?.Seed.SeedScore ?? 1.0,
                 SeedRank: seed?.Rank ?? 1,
-                SeedTitle: seed?.Seed.Title ?? nodeByKey.get(path.RootKey)?.Label ?? node.Label,
+                // The admitted root's label, never the requested seed's title: that was not checked for every reader.
+                SeedTitle: nodeByKey.get(path.RootKey)?.Label ?? node.Label,
                 PathEdges: path.Edges,
             };
             const existing = nodes.get(node.Key);
@@ -464,7 +480,8 @@ export class CanonGraphExpansionService implements IGraphExpansionService {
         return { RootKey: current?.Key ?? node.Key, Edges: reversed.reverse() };
     }
 
-    private entityNameSeeds(queryText: string, user: UserInfo, graphName: string, provider?: IMetadataProvider): GraphSeedNode[] {
+    /** `MJ: Entities` nodes named in the query that every one of `principals` may read. */
+    private entityNameSeeds(queryText: string, principals: readonly UserInfo[], graphName: string, provider?: IMetadataProvider): GraphSeedNode[] {
         const queryLower = queryText.trim().toLowerCase();
         if (queryLower.length < 3) {
             return [];
@@ -473,7 +490,7 @@ export class CanonGraphExpansionService implements IGraphExpansionService {
         const seeds: GraphSeedNode[] = [];
         for (const entity of md.Entities ?? []) {
             const nameLower = entity.Name?.trim().toLowerCase() ?? '';
-            if (nameLower.length >= 3 && queryLower.includes(nameLower) && CanUserReadEntity(entity, user)) {
+            if (nameLower.length >= 3 && queryLower.includes(nameLower) && principals.every((p) => CanUserReadEntity(entity, p))) {
                 seeds.push({ EntityName: 'MJ: Entities', RecordID: entity.ID, Title: entity.Name, SeedScore: 0.9, GraphName: graphName });
             }
         }

@@ -130,6 +130,30 @@ describe('CanonGraphEngine', () => {
             expect(withReader.Nodes.map((n) => n.RecordID)).toEqual([IDS.ConceptOpenAr]);
         });
 
+        it('checks seeds for the caller and every audience reader, and reports only the seeds it admitted', async () => {
+            await setup();
+            const reader = MakeUser('u-reader');
+            provider.HiddenFor[reader.ID] = [`MJ: Graph Concepts|${IDS.ConceptOpenAr}`];
+            const service = CanonGraphEngine.Instance.AsExpansionService();
+
+            // Text seeds: the concept the reader cannot see is not a seed at all (no name, no ID).
+            expect((await service.ResolveSeeds('Open AR', ['MJ Canon'], analyst)).map((s) => s.RecordID)).toEqual([IDS.ConceptOpenAr]);
+            expect(await service.ResolveSeeds('Open AR', ['MJ Canon'], analyst, undefined, [reader])).toEqual([]);
+
+            // Entity-name seeds: an entity a reader cannot read is not a seed either.
+            const executive = MakeUser('u-exec', ['Analyst', 'Executive']);
+            expect((await service.ResolveSeeds('SecretDeals by owner', ['MJ Canon'], executive)).map((s) => s.Title)).toEqual(['SecretDeals']);
+            expect(await service.ResolveSeeds('SecretDeals by owner', ['MJ Canon'], executive, undefined, [analyst])).toEqual([]);
+
+            // A seed handed in directly is reported only when admitted, with the checked label, never the requested title.
+            const requested = [{ EntityName: 'MJ: Graph Concepts', RecordID: IDS.ConceptOpenAr, Title: 'requested title' }];
+            const hidden = await service.Expand({ Seeds: requested, GraphNames: ['MJ Canon'], AudienceReaders: [reader] }, analyst);
+            expect(hidden.Seeds).toEqual([]);
+            expect(hidden.Nodes).toEqual([]);
+            const visible = await service.Expand({ Seeds: requested, GraphNames: ['MJ Canon'] }, analyst);
+            expect(visible.Seeds?.map((s) => [s.RecordID, s.Title])).toEqual([[IDS.ConceptOpenAr, 'Open AR']]);
+        });
+
         it('is a no-op for a graph that is not active, and says why', async () => {
             await setup();
             const service = CanonGraphEngine.Instance.AsExpansionService();

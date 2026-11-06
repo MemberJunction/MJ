@@ -117,7 +117,7 @@ export class GraphSearchProvider extends BaseSearchProvider {
         const graphNames = this.resolveGraphNames(scopeConstraints);
         const minWeight = Math.min(1, this.resolveNumericOption(scopeConstraints, 'minWeight', this.minWeight));
         try {
-            const seeds = await service.ResolveSeeds(effectiveQuery, graphNames, contextUser, this.Provider);
+            const seeds = await service.ResolveSeeds(effectiveQuery, graphNames, contextUser, this.Provider, scopeConstraints?.AudienceReaders);
             if (seeds.length === 0) {
                 return [];
             }

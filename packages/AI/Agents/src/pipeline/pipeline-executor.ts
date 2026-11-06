@@ -366,7 +366,9 @@ export class PipelineExecutor {
 
         const formattedSubgraph: PipeValue = {
             graphNames: [...cfg.graphNames],
-            seeds: seeds.map((s) => ({
+            // Only the seeds the expansion admitted (checked for the caller and every audience reader),
+            // titled with the checked label; a requested seed a reader cannot see never reaches the output.
+            seeds: (expansion.Seeds ?? []).map((s) => ({
                 EntityName: s.EntityName,
                 RecordID: s.RecordID,
                 Title: s.Title ?? null,
@@ -474,6 +476,7 @@ export class PipelineExecutor {
                         graphNames,
                         contextUser,
                         this.provider,
+                        this.audienceReaders,
                     );
                     resolvedSeeds.push(...seedsFromText);
                 }

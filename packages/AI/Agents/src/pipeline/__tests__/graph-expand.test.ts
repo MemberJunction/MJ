@@ -243,6 +243,36 @@ describe('PipelineExecutor graphExpand stage (WS-4.2)', () => {
         expect(g['messages']).toEqual(['Expansion stopped at the 200-node limit.']);
     });
 
+    it('resolves text seeds for the run\'s audience and reports only the seeds the expansion admitted', async () => {
+        const reader = { ID: 'user-2', Name: 'Reader', UserRoles: [] } as unknown as UserInfo;
+        const seenAudiences: Array<readonly UserInfo[] | undefined> = [];
+        const service: IGraphExpansionService = {
+            ResolveSeeds: async (_q, _g, _u, _p, audienceReaders): Promise<readonly GraphSeedNode[]> => {
+                seenAudiences.push(audienceReaders);
+                return [{ EntityName: 'MJ: Graph Concepts', RecordID: 'c-1', Title: 'Open AR' }];
+            },
+            // The service admitted none of the requested seeds (a reader cannot see them).
+            Expand: async (): Promise<GraphExpansionResult> => ({ Nodes: [], Edges: [], Seeds: [] }),
+        };
+        const executor = new PipelineExecutor(new PipelineToolRegistry(), 20, {
+            initialValue: { query: 'Open AR', records: [{ EntityName: 'Members', RecordID: 'm-1', Title: 'Hidden Member' }] },
+            graphExpansionService: service,
+            contextUser: TEST_USER,
+            audienceReaders: [reader],
+        });
+        const result = await executor.Execute([
+            { stageType: 'graphExpand', graphNames: ['MJ Canon'], seedSource: '$.query', outputKey: 'fromText' } as unknown as PipelineStage,
+            { stageType: 'graphExpand', graphNames: ['MJ Canon'], seedSource: '$.records[*]', outputKey: 'fromRecords' } as unknown as PipelineStage,
+        ]);
+        expect(result.success).toBe(true);
+        expect(seenAudiences.map((a) => a?.map((r) => r.ID))).toEqual([['user-2']]);
+        const out = result.finalOutput as Record<string, Record<string, PipeValue>>;
+        expect(out['fromText']['seeds']).toEqual([]);
+        expect(out['fromRecords']['seeds']).toEqual([]);
+        expect(JSON.stringify(out['fromRecords'])).not.toContain('Hidden Member');
+        expect(JSON.stringify(out['fromText'])).not.toContain('Open AR');
+    });
+
     it('should degrade gracefully with an empty subgraph when no IGraphExpansionService is registered', async () => {
         const registry = new PipelineToolRegistry();
         const executor = new PipelineExecutor(registry, 20, {

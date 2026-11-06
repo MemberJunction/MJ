@@ -104,6 +104,12 @@ export interface GraphExpansionParams {
 export interface GraphExpansionResult {
     readonly Nodes: readonly GraphExpandedNode[];
     readonly Edges: readonly GraphExpandedEdge[];
+    /**
+     * The requested seeds the expansion admitted: each passed the same caller-and-every-audience-reader
+     * check as an expanded node, and its `Title` is the label that check produced. A caller that reports
+     * seeds reports these, never the seeds it asked for (a requested seed may be hidden from a reader).
+     */
+    readonly Seeds?: readonly GraphSeedNode[];
     /** Why a graph contributed nothing or was cut short (unknown/inactive graph, a cap reached). */
     readonly Messages?: readonly string[];
 }
@@ -113,12 +119,16 @@ export interface GraphExpansionResult {
  * every audience reader during traversal, and degrade to empty results when no graph is active.
  */
 export interface IGraphExpansionService {
-    /** Map free-text query terms to initial graph seed nodes the caller may see. */
+    /**
+     * Map free-text query terms to initial graph seed nodes the caller AND every one of
+     * `audienceReaders` (a run's audience) may see.
+     */
     ResolveSeeds(
         queryText: string,
         graphNames: readonly string[] | undefined,
         contextUser: UserInfo,
         provider?: IMetadataProvider,
+        audienceReaders?: readonly UserInfo[],
     ): Promise<readonly GraphSeedNode[]>;
 
     /** Bounded multi-hop expansion from `params.Seeds`. */
