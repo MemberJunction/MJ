@@ -12,7 +12,7 @@ import { AIEngine } from "@memberjunction/aiengine";
 import { MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { randomUUID } from "crypto";
 import { ShutdownRegistry } from "@memberjunction/global";
-import { DurableEntityA2ATaskStore, TaskStore, Task, TaskStatus, Message, Artifact, Part } from "./TaskStore.js";
+import { CreateA2ATaskStore, DurableEntityA2ATaskStore, TERMINAL_STATUSES, Task, TaskStatus, Message, Artifact } from "./TaskStore.js";
 import { AgentCard, AgentCardAgentCapability, AgentCardEntityCapability, BuildAgentCard, ResolveAgentCardIdentity } from "./AgentCard.js";
 import { CreateTaskOperations } from "./TaskOperations.js";
 import { HandleTaskSend, TASK_NOT_FOUND_MESSAGE, type TaskSendOutcome, type TaskSendRequest } from "./TaskSend.js";
@@ -40,11 +40,9 @@ if (dbInstanceName !== null && dbInstanceName !== undefined && dbInstanceName.tr
     poolConfig.options!.instanceName = dbInstanceName;
 }
 
-// Durable `MJ: Tasks`-backed task store with in-memory L1 cache and periodic sweep.
-// Configurable via `a2aServerSettings.taskStoreMode` ('entity' by default, 'memory' for non-persistent runs).
-const taskStore = new DurableEntityA2ATaskStore({
-    PersistenceEnabled: (a2aServerSettings?.taskStoreMode ?? 'entity') === 'entity',
-});
+// In-process by default; `a2aServerSettings.taskStoreMode: 'entity'` opts into the durable `MJ: Tasks` store,
+// which needs every A2A caller to hold Create and Update on `MJ: Tasks` (see CreateA2ATaskStore).
+const taskStore = CreateA2ATaskStore(a2aServerSettings?.taskStoreMode);
 taskStore.Start();
 ShutdownRegistry.Instance.Register(taskStore);
 const tasks = taskStore;
@@ -600,21 +598,36 @@ async function handleTaskSend(
 }
 
 async function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res: Response, authenticatedUser?: UserInfo, authContext?: AuthorizationContext) {
-    const result = await handleTaskSend(requestBody, authenticatedUser, authContext);
-    if ('ErrorCode' in result) {
-        res.write(`data: ${JSON.stringify({ error: { code: result.ErrorCode, message: result.ErrorMessage } })}\n\n`);
-        res.end();
-        return;
-    }
-    const task = authenticatedUser
-        ? (tasks.GetForUser(result.taskId, authenticatedUser.ID)
-            ?? (await tasks.LoadTaskForUser(result.taskId, authenticatedUser, resolveProviderForRequest())))
-        : undefined;
+    const isResubscribe = typeof requestBody.taskId === 'string' && !requestBody.message;
+    let task: Task | undefined;
 
-    if (!task) {
-        res.write(`data: ${JSON.stringify({ error: { code: 404, message: TASK_NOT_FOUND_MESSAGE } })}\n\n`);
-        res.end();
-        return;
+    if (isResubscribe) {
+        const taskId = requestBody.taskId as string;
+        task = authenticatedUser
+            ? ((await tasks.LoadTaskForUser(taskId, authenticatedUser, resolveProviderForRequest())) ?? tasks.GetForUser(taskId, authenticatedUser.ID))
+            : undefined;
+        if (!task) {
+            res.write(`data: ${JSON.stringify({ error: { code: 404, message: TASK_NOT_FOUND_MESSAGE } })}\n\n`);
+            res.end();
+            return;
+        }
+    } else {
+        const result = await handleTaskSend(requestBody, authenticatedUser, authContext);
+        if ('ErrorCode' in result) {
+            res.write(`data: ${JSON.stringify({ error: { code: result.ErrorCode, message: result.ErrorMessage } })}\n\n`);
+            res.end();
+            return;
+        }
+        task = authenticatedUser
+            ? (tasks.GetForUser(result.taskId, authenticatedUser.ID)
+                ?? (await tasks.LoadTaskForUser(result.taskId, authenticatedUser, resolveProviderForRequest())))
+            : undefined;
+
+        if (!task) {
+            res.write(`data: ${JSON.stringify({ error: { code: 404, message: TASK_NOT_FOUND_MESSAGE } })}\n\n`);
+            res.end();
+            return;
+        }
     }
 
     // Send initial task state
@@ -634,14 +647,21 @@ async function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res
         return;
     }
 
-    // Subscribe to event-driven task updates (zero polling timers)
-    const unsubscribe = tasks.Subscribe(task.id, (updatedTask) => {
-        res.write(`data: ${JSON.stringify({
-            taskId: updatedTask.id,
-            status: updatedTask.status
-        })}\n\n`);
+    // Subscribe to task updates (event-driven locally; cross-replica status polling in durable mode)
+    let lastStatus: TaskStatus = task.status;
+    const provider = resolveProviderForRequest();
+    const pollInterval = a2aServerSettings?.statusPollIntervalMs ?? 5000;
 
-        if (updatedTask.status === 'completed' || updatedTask.status === 'cancelled' || updatedTask.status === 'failed') {
+    const onUpdate = (updatedTask: Task) => {
+        if (updatedTask.status !== lastStatus || TERMINAL_STATUSES.has(updatedTask.status)) {
+            lastStatus = updatedTask.status;
+            res.write(`data: ${JSON.stringify({
+                taskId: updatedTask.id,
+                status: updatedTask.status
+            })}\n\n`);
+        }
+
+        if (TERMINAL_STATUSES.has(updatedTask.status)) {
             unsubscribe();
 
             if (updatedTask.artifacts.length > 0) {
@@ -653,7 +673,11 @@ async function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res
 
             res.end();
         }
-    });
+    };
+
+    const unsubscribe = tasks instanceof DurableEntityA2ATaskStore && authenticatedUser
+        ? tasks.SubscribeWithPolling(task.id, authenticatedUser, provider, onUpdate, pollInterval)
+        : tasks.Subscribe(task.id, onUpdate);
 
     // Handle client disconnect
     res.on('close', () => {
@@ -664,6 +688,15 @@ async function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res
 // Process a task using MemberJunction APIs
 async function processTask(task: Task, authenticatedUser?: UserInfo, authContext?: AuthorizationContext) {
     const abortController = tasks.RegisterAbortController(task.id);
+    let stopCancellationWatcher: (() => void) | undefined;
+    if (tasks instanceof DurableEntityA2ATaskStore && authenticatedUser) {
+        stopCancellationWatcher = tasks.WatchCancellation(
+            task.id,
+            authenticatedUser,
+            resolveProviderForRequest(),
+            a2aServerSettings?.statusPollIntervalMs ?? 5000
+        );
+    }
     try {
         task.status = 'in_progress';
         task.updated = new Date();
@@ -889,6 +922,8 @@ async function processTask(task: Task, authenticatedUser?: UserInfo, authContext
         }
         task.updated = new Date();
         await tasks.NotifyTask(task, authenticatedUser, resolveProviderForRequest());
+    } finally {
+        stopCancellationWatcher?.();
     }
 }
 

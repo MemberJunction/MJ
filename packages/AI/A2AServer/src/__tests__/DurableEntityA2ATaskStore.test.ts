@@ -1,10 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import * as Core from '@memberjunction/core';
 import { RunView, type IMetadataProvider, type RunViewParams, type UserInfo } from '@memberjunction/core';
 import type { MJTaskEntity } from '@memberjunction/core-entities';
 import {
     A2A_TASK_PROTOCOL,
     A2A_TASK_TYPE_NAME,
+    CreateA2ATaskStore,
     DurableEntityA2ATaskStore,
+    InMemoryA2ATaskStore,
     MapA2AStatusToMJTaskStatus,
     MapMJTaskStatusToA2AStatus,
     MergeStoredA2ATask,
@@ -40,6 +43,8 @@ const USER_B = fakeUser('BBBBBBBB-0000-4000-8000-000000000002');
 const TASK_ID = '11111111-2222-4333-8444-555555555555';
 const GRAPH_STEP_ID = '66666666-2222-4333-8444-555555555555';
 const WORKFLOW_TYPE_ID = '99999999-0000-4000-8000-000000000002';
+/** The `A2A Task` row `metadata/task-types/.a2a-task-type.json` seeds. */
+const A2A_TYPE_ID = 'D9B0026D-7E3C-40B5-9DA0-D22CE651E8A7';
 
 let clock = 0;
 
@@ -115,7 +120,7 @@ describe('DurableEntityA2ATaskStore', () => {
     let db: FakeDatabase;
     beforeEach(() => {
         clock = 10_000;
-        db = { Rows: new Map(), TaskTypes: [{ ID: WORKFLOW_TYPE_ID, Name: 'AI Workflow' }] };
+        db = { Rows: new Map(), TaskTypes: [{ ID: WORKFLOW_TYPE_ID, Name: 'AI Workflow' }, { ID: A2A_TYPE_ID, Name: A2A_TASK_TYPE_NAME }] };
         vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
             RunView: vi.fn(async (params: RunViewParams) => {
                 const name = /Name='([^']*)'/.exec(params.ExtraFilter ?? '')?.[1];
@@ -124,6 +129,12 @@ describe('DurableEntityA2ATaskStore', () => {
         } as unknown as RunView);
     });
     afterEach(() => vi.restoreAllMocks());
+
+    it('keeps tasks in memory unless the durable store is asked for (S1)', () => {
+        expect(CreateA2ATaskStore()).toBeInstanceOf(InMemoryA2ATaskStore);
+        expect(CreateA2ATaskStore('memory')).toBeInstanceOf(InMemoryA2ATaskStore);
+        expect(CreateA2ATaskStore('entity')).toBeInstanceOf(DurableEntityA2ATaskStore);
+    });
 
     it('maps A2A statuses bidirectionally with MJ: Tasks statuses', () => {
         expect(MapA2AStatusToMJTaskStatus('pending')).toBe('Pending');
@@ -145,17 +156,29 @@ describe('DurableEntityA2ATaskStore', () => {
         expect((await replica1.LoadTaskForUser(TASK_ID, USER_A, provider))?.status).toBe('cancelled');
     });
 
-    it("files rows under the 'A2A Task' type, created once by name", async () => {
+    it("files rows under the seeded 'A2A Task' type, found by name", async () => {
         const provider = fakeProvider(db);
         await new DurableEntityA2ATaskStore().SaveTask(task('pending'), USER_A, provider);
         await new DurableEntityA2ATaskStore().SaveTask({ ...task('pending'), id: '22222222-2222-4333-8444-555555555555' }, USER_A, provider);
 
-        const a2aTypes = db.TaskTypes.filter((t) => t.Name === A2A_TASK_TYPE_NAME);
-        expect(a2aTypes).toHaveLength(1);
+        expect(db.TaskTypes.filter((t) => t.Name === A2A_TASK_TYPE_NAME)).toHaveLength(1);
         for (const row of db.Rows.values()) {
-            expect(row.TypeID).toBe(a2aTypes[0].ID);
+            expect(row.TypeID).toBe(A2A_TYPE_ID);
             expect(JSON.parse(row.InputPayload ?? '{}').protocol).toBe(A2A_TASK_PROTOCOL);
         }
+    });
+
+    it("refuses to save, and never creates the type, when the 'A2A Task' metadata is missing (S1)", async () => {
+        db.TaskTypes = db.TaskTypes.filter((t) => t.Name !== A2A_TASK_TYPE_NAME);
+        const logError = vi.spyOn(Core, 'LogError').mockImplementation(() => undefined);
+        const provider = fakeProvider(db);
+
+        expect(await new DurableEntityA2ATaskStore().SaveTask(task('pending'), USER_A, provider)).toBe(false);
+
+        expect(db.TaskTypes.some((t) => t.Name === A2A_TASK_TYPE_NAME)).toBe(false);
+        expect(vi.mocked(provider.GetEntityObject).mock.calls.some(([name]) => name === 'MJ: Task Types')).toBe(false);
+        expect(db.Rows.size).toBe(0);
+        expect(logError.mock.calls.map(([m]) => String(m)).join('\n')).toContain("the 'A2A Task' task type is not in this database");
     });
 
     it("keeps one user's task from another", async () => {
@@ -196,11 +219,6 @@ describe('DurableEntityA2ATaskStore', () => {
             expect(await store.SaveTask({ ...task('completed'), id: GRAPH_STEP_ID }, USER_A, provider)).toBe(false);
             expect(await store.CancelTaskForUser(GRAPH_STEP_ID, USER_A, 'x', provider)).toBe(false);
             expect(db.Rows.get(GRAPH_STEP_ID.toLowerCase())).toEqual(before);
-        });
-
-        it('never creates the A2A type just to read', async () => {
-            await new DurableEntityA2ATaskStore().LoadTaskForUser(TASK_ID, USER_A, fakeProvider(db));
-            expect(db.TaskTypes.some((t) => t.Name === A2A_TASK_TYPE_NAME)).toBe(false);
         });
     });
 
@@ -269,6 +287,95 @@ describe('DurableEntityA2ATaskStore', () => {
             const current = task('completed');
             expect(MergeStoredA2ATask(current, task('in_progress'))).toBe(false);
             expect(current.status).toBe('completed');
+        });
+    });
+
+    describe('cancellation watcher and resubscribe across replicas (S10)', () => {
+        it('aborts local in-flight work when cancellation watcher observes Cancelled in storage', async () => {
+            vi.useFakeTimers();
+            try {
+                const provider = fakeProvider(db);
+                const owner = new DurableEntityA2ATaskStore();
+                const other = new DurableEntityA2ATaskStore();
+                const running = task('in_progress', [message('m1', 1000)]);
+                await owner.SaveTask(running, USER_A, provider);
+                const controller = owner.RegisterAbortController(TASK_ID);
+
+                const stopWatcher = owner.WatchCancellation(TASK_ID, USER_A, provider, 100);
+                expect(controller.signal.aborted).toBe(false);
+
+                // Another replica cancels the task in durable storage
+                expect(await other.CancelTaskForUser(TASK_ID, USER_A, 'stop from replica 2', provider)).toBe(true);
+
+                // Advance clock so cancellation watcher polls
+                await vi.advanceTimersByTimeAsync(150);
+
+                expect(controller.signal.aborted).toBe(true);
+                stopWatcher();
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('streams stored task updates across replicas with SubscribeWithPolling until terminal', async () => {
+            vi.useFakeTimers();
+            try {
+                const provider = fakeProvider(db);
+                const subscriberStore = new DurableEntityA2ATaskStore();
+                const runnerStore = new DurableEntityA2ATaskStore();
+                const running = task('in_progress');
+                await runnerStore.SaveTask(running, USER_A, provider);
+
+                const observedStatuses: string[] = [];
+                const unsubscribe = subscriberStore.SubscribeWithPolling(
+                    TASK_ID,
+                    USER_A,
+                    provider,
+                    (t) => { observedStatuses.push(t.status); },
+                    100
+                );
+
+                // Runner on another replica completes the task
+                running.status = 'completed';
+                await runnerStore.SaveTask(running, USER_A, provider);
+
+                await vi.advanceTimersByTimeAsync(150);
+
+                expect(observedStatuses).toContain('completed');
+                unsubscribe();
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+    });
+
+    describe('UUID collections and primary key hydration', () => {
+        it('deduplicates messages and artifacts case-insensitively using UUID collections', () => {
+            const upperID = 'AAAAAAAA-1111-4000-8000-000000000001';
+            const lowerID = 'aaaaaaaa-1111-4000-8000-000000000001';
+            const current = task('in_progress', [{ id: upperID, taskId: TASK_ID, role: 'user', parts: [], created: new Date(1000) }]);
+            const stored = task('in_progress', [{ id: lowerID, taskId: TASK_ID, role: 'user', parts: [], created: new Date(1000) }]);
+
+            MergeStoredA2ATask(current, stored);
+            expect(current.messages).toHaveLength(1);
+        });
+
+        it('always hydrates task ID from the entity primary key, ignoring mismatched JSON taskId', async () => {
+            const provider = fakeProvider(db);
+            const store = new DurableEntityA2ATaskStore();
+            const original = task('in_progress');
+            await store.SaveTask(original, USER_A, provider);
+
+            // Directly inject a hostile or mismatched taskId into the stored entity's InputPayload
+            const row = db.Rows.get(TASK_ID.toLowerCase());
+            expect(row).toBeDefined();
+            const payload = JSON.parse(row!.InputPayload ?? '{}');
+            payload.taskId = 'HOSTILE-MISMATCHED-ID';
+            row!.InputPayload = JSON.stringify(payload);
+
+            const hydrated = await store.LoadTaskForUser(TASK_ID, USER_A, provider);
+            expect(hydrated).toBeDefined();
+            expect(hydrated!.id).toBe(TASK_ID);
         });
     });
 });

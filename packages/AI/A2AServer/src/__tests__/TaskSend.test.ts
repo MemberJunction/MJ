@@ -96,4 +96,17 @@ describe('HandleTaskSend', () => {
         expect(outcome).toEqual({ ErrorCode: 500, ErrorMessage: TASK_NOT_SAVED_MESSAGE });
         expect(d.Started).toHaveLength(1);
     });
+
+    it('does not re-run processing when called with an existing taskId and no message (S10)', async () => {
+        const store = new InMemoryA2ATaskStore();
+        const d = deps(store);
+        const created = await HandleTaskSend({}, OWNER, d);
+        if (!('taskId' in created)) throw new Error('expected a created task');
+        expect(d.Started).toHaveLength(1);
+
+        const outcome = await HandleTaskSend({ taskId: created.taskId }, OWNER, d);
+        expect('taskId' in outcome).toBe(true);
+        // StartProcessing was not invoked a second time
+        expect(d.Started).toHaveLength(1);
+    });
 });

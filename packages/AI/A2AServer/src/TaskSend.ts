@@ -99,15 +99,15 @@ async function continueTask(
     if (message) {
         task.messages.push(userMessage(task.id, message, deps));
         task.updated = new Date();
+        if (!(await deps.Store.SaveTask(task, caller, deps.Provider))) {
+            return { ErrorCode: 500, ErrorMessage: TASK_NOT_SAVED_MESSAGE };
+        }
+        // The save merged what other replicas wrote; a task finished elsewhere meanwhile is not restarted.
+        if (TERMINAL_STATUSES.has(task.status)) {
+            return { ErrorCode: 400, ErrorMessage: `Cannot update a task with status: ${task.status}` };
+        }
+        deps.StartProcessing(task);
     }
-    if (!(await deps.Store.SaveTask(task, caller, deps.Provider))) {
-        return { ErrorCode: 500, ErrorMessage: TASK_NOT_SAVED_MESSAGE };
-    }
-    // The save merged what other replicas wrote; a task finished elsewhere meanwhile is not restarted.
-    if (TERMINAL_STATUSES.has(task.status)) {
-        return { ErrorCode: 400, ErrorMessage: `Cannot update a task with status: ${task.status}` };
-    }
-    deps.StartProcessing(task);
     return { taskId: task.id, status: task.status };
 }
 

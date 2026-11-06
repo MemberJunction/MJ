@@ -1,6 +1,6 @@
 import { IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { MJTaskEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
-import { EscapeSQLString, IShutdownable, IsValidUUID, UUIDsEqual } from '@memberjunction/global';
+import type { MJTaskEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
+import { EscapeSQLString, IShutdownable, IsValidUUID, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 
 export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
 
@@ -418,8 +418,19 @@ export class TaskStore implements IA2ATaskStore {
  */
 export class InMemoryA2ATaskStore extends TaskStore {}
 
-/** The `MJ: Task Types` row every A2A task is filed under, found or created by name. */
+/**
+ * The `MJ: Task Types` row every A2A task is filed under. Seeded as metadata (`metadata/task-types`) and found
+ * by name; the store never creates it, so a caller's request never writes task-type metadata.
+ */
 export const A2A_TASK_TYPE_NAME = 'A2A Task';
+
+/**
+ * The store `a2aServerSettings.taskStoreMode` asks for. `'memory'` (the default) keeps tasks in this process;
+ * `'entity'` keeps them in `MJ: Tasks`, which needs every A2A caller to hold Create and Update on `MJ: Tasks`.
+ */
+export function CreateA2ATaskStore(mode: 'entity' | 'memory' = 'memory'): TaskStore {
+    return mode === 'entity' ? new DurableEntityA2ATaskStore() : new InMemoryA2ATaskStore();
+}
 
 /** The protocol marker every A2A task row's payloads carry. */
 export const A2A_TASK_PROTOCOL = 'a2a/v1';
@@ -490,11 +501,11 @@ export function MergeStoredA2ATask(task: Task, stored: Task): boolean {
 }
 
 function unionByID<T extends { id: string; created: Date }>(stored: T[], current: T[]): T[] {
-    const byID = new Map<string, T>();
+    const byID = new UUIDMap<T>();
     for (const item of [...stored, ...current]) {
-        byID.set(item.id, item);
+        byID.Set(item.id, item);
     }
-    return [...byID.values()].sort((a, b) => a.created.getTime() - b.created.getTime());
+    return [...byID.Values()].sort((a, b) => a.created.getTime() - b.created.getTime());
 }
 
 /**
@@ -615,7 +626,7 @@ export class DurableEntityA2ATaskStore extends TaskStore {
             if (!(await entity.Load(id))) {
                 return cached;
             }
-            const typeID = await this.a2aTaskTypeID(contextUser, md, false);
+            const typeID = await this.a2aTaskTypeID(contextUser, md);
             if (!this.isCallersA2ARow(entity, typeID, contextUser.ID)) {
                 return undefined;
             }
@@ -632,7 +643,8 @@ export class DurableEntityA2ATaskStore extends TaskStore {
 
     /**
      * Cancels a task owned by `contextUser` across both local in-flight execution and durable `MJ: Tasks` storage.
-     * The replica running the task sees the stored `Cancelled` on its next save and stops ({@link MergeStoredA2ATask}).
+     * In durable mode, the replica running the task polls stored status (default 5 s, {@link WatchCancellation})
+     * and aborts its local work when it observes `Cancelled`, or stops on its next save via {@link MergeStoredA2ATask}.
      * Returns false when the task is not the caller's, or the cancellation could not be saved.
      */
     public override async CancelTaskForUser(
@@ -670,9 +682,12 @@ export class DurableEntityA2ATaskStore extends TaskStore {
 
     /** One read-merge-write of the task's row. */
     private async saveOnce(task: Task, contextUser: UserInfo, md: IMetadataProvider): Promise<SaveAttempt> {
-        const typeID = await this.a2aTaskTypeID(contextUser, md, true);
+        const typeID = await this.a2aTaskTypeID(contextUser, md);
         if (!typeID) {
-            LogError(`DurableEntityA2ATaskStore: the '${A2A_TASK_TYPE_NAME}' task type could not be found or created`);
+            LogError(
+                `DurableEntityA2ATaskStore: the '${A2A_TASK_TYPE_NAME}' task type is not in this database, so task ${task.id} was not saved. ` +
+                'It ships as metadata (metadata/task-types); push it with mj sync, or set a2aServerSettings.taskStoreMode to \'memory\'.'
+            );
             return 'refused';
         }
         const entity = await md.GetEntityObject<MJTaskEntity>('MJ: Tasks', contextUser);
@@ -721,11 +736,88 @@ export class DurableEntityA2ATaskStore extends TaskStore {
             return false;
         }
         const stored = this.hydrateTaskFromEntity(fresh);
-        const storedMessages = new Set(stored.messages.map((m) => m.id));
-        const storedArtifacts = new Set(stored.artifacts.map((a) => a.id));
+        const storedMessages = new UUIDSet(stored.messages.map((m) => m.id));
+        const storedArtifacts = new UUIDSet(stored.artifacts.map((a) => a.id));
         return stored.status === task.status
-            && task.messages.every((m) => storedMessages.has(m.id))
-            && task.artifacts.every((a) => storedArtifacts.has(a.id));
+            && task.messages.every((m) => storedMessages.Has(m.id))
+            && task.artifacts.every((a) => storedArtifacts.Has(a.id));
+    }
+
+    /**
+     * In durable mode, periodically checks the stored status of an in-flight task while this
+     * replica is running it. When stored status is observed as 'cancelled' (e.g. cancelled
+     * on another replica), aborts local work via the registered AbortController (S10).
+     *
+     * @returns A cleanup function to stop polling when the task finishes locally.
+     */
+    public WatchCancellation(
+        taskId: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+        intervalMs: number = 5000
+    ): () => void {
+        const interval = setInterval(async () => {
+            try {
+                const stored = await this.LoadTaskForUser(taskId, contextUser, provider);
+                if (stored?.status === 'cancelled') {
+                    this.stopLocalWork(taskId);
+                    clearInterval(interval);
+                }
+            } catch {
+                // Ignore transient read errors during cancellation poll
+            }
+        }, intervalMs);
+
+        if (typeof interval.unref === 'function') {
+            interval.unref();
+        }
+
+        return () => {
+            clearInterval(interval);
+        };
+    }
+
+    /**
+     * In durable mode, subscribes to task updates across replicas by combining in-process events
+     * with periodic polling of the stored row in `MJ: Tasks` (S10).
+     */
+    public SubscribeWithPolling(
+        taskId: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+        listener: (task: Task) => void,
+        intervalMs: number = 5000
+    ): () => void {
+        const unsubscribeLocal = this.Subscribe(taskId, listener);
+        let active = true;
+
+        const interval = setInterval(async () => {
+            if (!active) return;
+            try {
+                const stored = await this.LoadTaskForUser(taskId, contextUser, provider);
+                if (stored && active) {
+                    listener(stored);
+                    if (TERMINAL_STATUSES.has(stored.status)) {
+                        cleanup();
+                    }
+                }
+            } catch {
+                // Ignore transient polling errors
+            }
+        }, intervalMs);
+
+        if (typeof interval.unref === 'function') {
+            interval.unref();
+        }
+
+        const cleanup = () => {
+            if (!active) return;
+            active = false;
+            clearInterval(interval);
+            unsubscribeLocal();
+        };
+
+        return cleanup;
     }
 
     /** Aborts this replica's in-flight work on a task another replica finished or cancelled. */
@@ -804,7 +896,7 @@ export class DurableEntityA2ATaskStore extends TaskStore {
     }
 
     private hydrateTaskFromEntity(entity: MJTaskEntity): Task {
-        let taskId = entity.ID;
+        const taskId = entity.ID;
         let created = entity.StartedAt ? new Date(entity.StartedAt) : new Date();
         let updated = entity.CompletedAt ? new Date(entity.CompletedAt) : new Date(created);
         let messages: Message[] = [];
@@ -813,9 +905,6 @@ export class DurableEntityA2ATaskStore extends TaskStore {
         if (entity.InputPayload) {
             try {
                 const parsed = JSON.parse(entity.InputPayload) as Partial<SerializedA2ATaskInputPayload>;
-                if (typeof parsed.taskId === 'string' && parsed.taskId.trim().length > 0) {
-                    taskId = parsed.taskId;
-                }
                 if (parsed.created) {
                     created = new Date(parsed.created);
                 }
@@ -869,23 +958,13 @@ export class DurableEntityA2ATaskStore extends TaskStore {
 
     /**
      * The `A2A Task` type's ID, found by name — deterministically, the oldest when a database holds
-     * duplicates — and created when `create` is set and none exists. A lost create race re-reads and
-     * binds the winner's row. Reads never create: no type means no A2A row exists.
+     * duplicates. Never created here: it is seeded metadata, and a caller's request must not write it.
+     * Not found means no A2A row can exist, and a save is refused.
      */
-    private async a2aTaskTypeID(contextUser: UserInfo, md: IMetadataProvider, create: boolean): Promise<string | null> {
-        if (this._a2aTaskTypeID) {
-            return this._a2aTaskTypeID;
+    private async a2aTaskTypeID(contextUser: UserInfo, md: IMetadataProvider): Promise<string | null> {
+        if (!this._a2aTaskTypeID) {
+            this._a2aTaskTypeID = await this.findA2ATaskTypeID(contextUser, md);
         }
-        const found = await this.findA2ATaskTypeID(contextUser, md);
-        if (found || !create) {
-            this._a2aTaskTypeID = found;
-            return found;
-        }
-        const type = await md.GetEntityObject<MJTaskTypeEntity>('MJ: Task Types', contextUser);
-        type.NewRecord();
-        type.Name = A2A_TASK_TYPE_NAME;
-        type.Description = 'Tasks created through the A2A (agent-to-agent) protocol.';
-        this._a2aTaskTypeID = (await type.Save()) ? type.ID : await this.findA2ATaskTypeID(contextUser, md);
         return this._a2aTaskTypeID;
     }
 
