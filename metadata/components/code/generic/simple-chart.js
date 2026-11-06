@@ -128,6 +128,11 @@ function SimpleChart({
   // against the caller's state (selection toggles) keeps the first render's values.
   const onDataPointClickRef = React.useRef(onDataPointClick);
   onDataPointClickRef.current = onDataPointClick;
+  // The same for the rows behind each bar: a rebuild is skipped when only their identity
+  // changed (see chartSignature), so onClick reads the latest ones.
+  const latestDataRef = React.useRef({ data: null, processData: null });
+  // Set once the chart has drawn; later rebuilds skip the entry animation.
+  const hasDrawnRef = React.useRef(false);
   const [error, setError] = React.useState(null);
   const [entityInfo, setEntityInfo] = React.useState(null);
 
@@ -595,6 +600,7 @@ function SimpleChart({
         },
         onClick: (_event, elements) => {
           if (elements && elements.length > 0 && onDataPointClickRef.current) {
+            const { data, processData } = latestDataRef.current;
             const clickedElement = elements[0];
             const categoryIndex = clickedElement.index;
             const datasetIndex = clickedElement.datasetIndex;
@@ -786,6 +792,21 @@ function SimpleChart({
     return config;
   };
 
+  latestDataRef.current = { data, processData };
+
+  // The chart is rebuilt only when what it draws changes. Callers often pass new arrays and
+  // objects with the same content on every render (data={rows.filter(...)}, colors={[...]});
+  // rebuilding on identity replayed the entry animation whenever the parent re-rendered,
+  // including on every click of any chart.
+  const chartSignature = React.useMemo(() => JSON.stringify({
+    categories: processData.categories,
+    values: processData.values,
+    datasets: processData.datasets,
+    isEmpty: processData.isEmpty,
+    actualChartType, title, height, colors, styles, showLegend, legendPosition, legendFontSize, showDataLabels,
+    valueField, aggregateMethod, groupBy, stackBy
+  }), [processData, actualChartType, title, height, colors, styles, showLegend, legendPosition, legendFontSize, showDataLabels, valueField, aggregateMethod, groupBy, stackBy]);
+
   // Render chart
   React.useEffect(() => {
     if (processData.isEmpty || !canvasRef.current) {
@@ -808,7 +829,12 @@ function SimpleChart({
       }
 
       const config = getChartConfig();
-      
+      // Only the first draw animates: a rebuild (new data, a filter) redraws in place.
+      if (hasDrawnRef.current) {
+        config.options.animation = false;
+      }
+      hasDrawnRef.current = true;
+
       // Create new chart instance
       const ctx = canvasRef.current.getContext('2d');
       chartInstanceRef.current = new ChartJS(ctx, config);
@@ -835,7 +861,7 @@ function SimpleChart({
         chartInstanceRef.current = null;
       }
     };
-  }, [processData, actualChartType, title, height, colors, styles, showLegend, legendPosition, legendFontSize, showDataLabels, ChartJS]);
+  }, [chartSignature, ChartJS]);
 
   // Built-in export (see the export helpers at the top of the component). Callers never wrap SimpleChart in ExportableData.
   const { ExportableData } = components || {};
