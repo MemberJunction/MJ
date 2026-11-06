@@ -14,7 +14,6 @@
  * @module @memberjunction/ng-react
  */
 
-import { toCanvas } from 'html-to-image';
 import { BuildImagePdf, PdfImagePage } from './image-pdf-writer';
 
 /** Inline style properties print mode sets; each touched element gets its original style text back on exit. */
@@ -597,6 +596,21 @@ function captureBlocks(root: HTMLElement, scale: number, orientation: PdfOrienta
     return blocks;
 }
 
+type HtmlToImage = typeof import('html-to-image');
+
+let htmlToImage: Promise<HtmlToImage> | null = null;
+
+/**
+ * Loads `html-to-image` the first time a PDF is captured. A dynamic import is correct here (MJ allows one
+ * for a measured bundle-size deferral): this package is bundled into hosts that never export a PDF, such
+ * as the realtime widget's call, and a static import puts the rasterizer (about 15 KB minified) on their
+ * start-up path. Loaded here, the bundler keeps it in a chunk only an export downloads.
+ */
+function loadHtmlToImage(): Promise<HtmlToImage> {
+    htmlToImage ??= import('html-to-image');
+    return htmlToImage;
+}
+
 /**
  * Captures `root` laid out at the page width and fully expanded, as a canvas. The width is applied
  * first and allowed to settle (charts re-render on resize), then clipping elements are expanded.
@@ -627,6 +641,7 @@ async function captureAtPageWidth(root: HTMLElement, orientation: PdfOrientation
             await settleLayout();
         }
         const width = root.scrollWidth;
+        const { toCanvas } = await loadHtmlToImage();
         const canvas = await toCanvas(root, {
             pixelRatio: CAPTURE_PIXEL_RATIO,
             backgroundColor: '#ffffff',
