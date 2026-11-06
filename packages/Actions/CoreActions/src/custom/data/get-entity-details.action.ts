@@ -4,6 +4,7 @@ import { BaseAction } from "@memberjunction/actions";
 import { MJGlobal } from "@memberjunction/global";
 import { EntityInfo, IMetadataProvider, LogError, Metadata, RunView, RunViewParams, UserInfo } from "@memberjunction/core";
 import type { IRunViewProvider } from "@memberjunction/core";
+import { CanonGraphEngine, EntityCanonSummary } from "@memberjunction/core-entities";
 
 /**
  * Action that returns field details and sample data for a specific entity.
@@ -179,6 +180,17 @@ export class GetEntityDetailsAction extends BaseAction {
                     Status: abv.Status
                 }));
 
+            // Resolve governed Canon summary (concepts, queries, precedence rules)
+            let canonSummary: EntityCanonSummary | null = null;
+            try {
+                canonSummary = await CanonGraphEngine.Instance.GetEntityCanonSummary(
+                    entity.ID,
+                    params.ContextUser
+                );
+            } catch {
+                canonSummary = null;
+            }
+
             const executionTimeMs = Date.now() - startTime;
 
             // Build detailed message
@@ -189,7 +201,8 @@ export class GetEntityDetailsAction extends BaseAction {
                 totalRowCount,
                 primaryKeyFields,
                 relatedEntities,
-                alternateBaseViews
+                alternateBaseViews,
+                canonSummary
             );
 
             return {
@@ -206,6 +219,7 @@ export class GetEntityDetailsAction extends BaseAction {
                 Description: entity.Description,
                 BaseView: entity.BaseView,
                 AlternateBaseViews: alternateBaseViews,
+                Canon: canonSummary,
                 IsVirtual: entity.VirtualEntity,
                 Fields: fields,
                 PrimaryKeyFields: primaryKeyFields,
@@ -357,7 +371,8 @@ export class GetEntityDetailsAction extends BaseAction {
             ParentID: string | null;
             CachePolicy: string;
             Status: string;
-        }> = []
+        }> = [],
+        canonSummary: EntityCanonSummary | null = null
     ): string {
         const lines: string[] = [];
 
@@ -379,6 +394,40 @@ export class GetEntityDetailsAction extends BaseAction {
             for (const abv of alternateBaseViews) {
                 const descSuffix = abv.Description ? ` — ${abv.Description}` : '';
                 lines.push(`- **${abv.Name}** (${abv.DisplayName}) → \`[${abv.SchemaName}].[${abv.ViewName}]\`${descSuffix}`);
+            }
+            lines.push('');
+        }
+
+        // Canon Governance Section
+        if (
+            canonSummary &&
+            (canonSummary.Concepts.length > 0 ||
+                canonSummary.Queries.length > 0 ||
+                canonSummary.PrecedenceRules.length > 0)
+        ) {
+            lines.push(`## Canon`);
+            if (canonSummary.Concepts.length > 0) {
+                lines.push(`### Governed Concepts (${canonSummary.Concepts.length})`);
+                for (const c of canonSummary.Concepts) {
+                    const tier = c.AuthorityTier ? ` [${c.AuthorityTier}]` : '';
+                    const desc = c.Description ? `: ${c.Description}` : '';
+                    lines.push(`- **${c.Name}** (${c.ConceptType}, ${c.Relationship})${tier}${desc}`);
+                }
+            }
+            if (canonSummary.Queries.length > 0) {
+                lines.push(`### Governed Queries (${canonSummary.Queries.length})`);
+                for (const q of canonSummary.Queries) {
+                    const pathPrefix = q.CategoryPath ? `${q.CategoryPath}/` : '';
+                    const desc = q.Description ? ` — ${q.Description}` : '';
+                    lines.push(`- **${pathPrefix}${q.Name}** (${q.Relationship})${desc}`);
+                }
+            }
+            if (canonSummary.PrecedenceRules.length > 0) {
+                lines.push(`### Precedence Rules (${canonSummary.PrecedenceRules.length})`);
+                for (const rule of canonSummary.PrecedenceRules) {
+                    const desc = rule.Description ? ` (${rule.Description})` : '';
+                    lines.push(`- **${rule.Preferred.EntityName}:${rule.Preferred.RecordID}** ${rule.EdgeType} **${rule.Over.EntityName}:${rule.Over.RecordID}**${desc}`);
+                }
             }
             lines.push('');
         }

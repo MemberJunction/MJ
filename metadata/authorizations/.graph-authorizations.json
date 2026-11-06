@@ -1,0 +1,26 @@
+[
+  {
+    "fields": {
+      "Name": "Semantic Graph",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Root authorization category for governing semantic graphs, business concepts, and canonical graph edges."
+    },
+    "primaryKey": {
+      "ID": "E1B9491A-E647-4EA6-989C-682A2433664D"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Graph: Approve Edges",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Semantic Graph",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants permission to approve proposed or draft semantic graph edges (MJ: Graph Edges.Status = 'Approved')."
+    },
+    "primaryKey": {
+      "ID": "019E4F13-1D04-4502-9B97-34507DD0D2AA"
+    }
+  }
+]

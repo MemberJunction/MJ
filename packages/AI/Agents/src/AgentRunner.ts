@@ -1878,7 +1878,15 @@ export class AgentRunner {
                     newVersionNumber = previousArtifact.versionNumber + 1;
                     LogStatus(`Creating version ${newVersionNumber} of existing artifact ${artifactId}`);
                 } else {
-                    const artifact = await this.createArtifactHeader(md, contextUser, agent, creationMode, directive, payload);
+                    const artifact = await this.createArtifactHeader(
+                        md,
+                        contextUser,
+                        agent,
+                        creationMode,
+                        directive,
+                        payload,
+                        agentResult.payloadArtifactTypeID
+                    );
                     artifactId = artifact.ID;
                     newVersionNumber = 1;
                     isNewArtifact = true;
@@ -2222,7 +2230,8 @@ export class AgentRunner {
         agent: (typeof AIEngine.Instance.Agents)[number] | undefined,
         creationMode: string | undefined,
         directive: ArtifactDirective | undefined,
-        payload?: unknown
+        payload?: unknown,
+        payloadArtifactTypeID?: string
     ): Promise<MJArtifactEntity> {
         const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
 
@@ -2235,8 +2244,10 @@ export class AgentRunner {
         artifact.Description = AgentRunner.safeDirectiveText(directive?.description)
             || `Payload returned by ${agentName}`;
 
-        // Use agent's DefaultArtifactTypeID if available; otherwise infer Research Content when
-        // the payload carries a non-empty report.html string (e.g., Research Report Writer).
+        // Prefer a delegated sub-agent's payloadArtifactTypeID over the parent agent's
+        // DefaultArtifactTypeID so router agents (e.g. Skip -> Data Answerer) don't overwrite
+        // a specialist child's artifact type; otherwise infer Research Content when the payload
+        // carries a non-empty report.html string.
         const payloadObj = (typeof payload === 'object' && payload !== null && !Array.isArray(payload))
             ? (payload as Record<string, unknown>)
             : undefined;
@@ -2244,7 +2255,8 @@ export class AgentRunner {
             ? (payloadObj.report as Record<string, unknown>)
             : undefined;
         const hasReportHtml = typeof reportObj?.html === 'string' && reportObj.html.trim().length > 0;
-        artifact.TypeID = agent?.DefaultArtifactTypeID
+        artifact.TypeID = payloadArtifactTypeID
+            || agent?.DefaultArtifactTypeID
             || (hasReportHtml ? AgentRunner.RESEARCH_CONTENT_ARTIFACT_TYPE_ID : AgentRunner.JSON_ARTIFACT_TYPE_ID);
 
         artifact.UserID = contextUser.ID;
