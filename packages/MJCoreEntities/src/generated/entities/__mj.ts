@@ -23831,6 +23831,12 @@ export const MJFeatureValueSchema = z.object({
     *   * Challenger
     *   * Champion
         * * Description: Champion for the production value of the record process; Challenger for a shadow score from its challenger, kept for comparison only.`),
+    MLModelID: z.string().nullable().describe(`
+        * * Field Name: MLModelID
+        * * Display Name: ML Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+        * * Description: The MJ: ML Models record that scored this value, for values written by an ML Model record process (the champion's audit row or a shadow challenger's row). NULL for values from AI prompts, which record their model in AIModelID.`),
     RecordProcess: z.string().describe(`
         * * Field Name: RecordProcess
         * * Display Name: Record Process
@@ -109959,6 +109965,20 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     }
     set Role(value: 'Challenger' | 'Champion') {
         this.Set('Role', value);
+    }
+
+    /**
+    * * Field Name: MLModelID
+    * * Display Name: ML Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+    * * Description: The MJ: ML Models record that scored this value, for values written by an ML Model record process (the champion's audit row or a shadow challenger's row). NULL for values from AI prompts, which record their model in AIModelID.
+    */
+    get MLModelID(): string | null {
+        return this.Get('MLModelID');
+    }
+    set MLModelID(value: string | null) {
+        this.Set('MLModelID', value);
     }
 
     /**

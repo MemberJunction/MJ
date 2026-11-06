@@ -59212,6 +59212,10 @@ export class MJFeatureValue_ {
     @MaxLength(20)
     Role?: string;
         
+    @Field({nullable: true, description: "The MJ: ML Models record that scored this value, for values written by an ML Model record process (the champion's audit row or a shadow challenger's row). NULL for values from AI prompts, which record their model in AIModelID."}) 
+    @MaxLength(36)
+    MLModelID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     RecordProcess?: string;
@@ -59327,6 +59331,9 @@ export class CreateMJFeatureValueInput {
     @Field({ nullable: true })
     Role?: string;
 
+    @Field({ nullable: true })
+    MLModelID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -59417,6 +59424,9 @@ export class UpdateMJFeatureValueInput {
 
     @Field({ nullable: true })
     Role?: string;
+
+    @Field({ nullable: true })
+    MLModelID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
