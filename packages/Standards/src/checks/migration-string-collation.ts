@@ -1,0 +1,245 @@
+/**
+ * @fileoverview The migration-string-collation standard.
+ *
+ * Every string column in MJ's baseline pins `COLLATE SQL_Latin1_General_CP1_CI_AS`. A column added
+ * later without a `COLLATE` clause follows the database default instead, so on a database created
+ * case-sensitive its unique constraints accept "Coach" and "coach" as two values and its lookups
+ * stop matching the baseline columns beside it (MJ#6111). This check asks new string columns to
+ * say their collation, so a migration behaves the same on every install.
+ *
+ * @module @memberjunction/standards
+ */
+
+import type { CheckContext, CheckResult, StandardCheck, Violation } from '../types.js';
+import { HasMarkerNear } from '../lib/markers.js';
+import { FindMigrations, IsCodeGenStatement, StripSqlComments } from '../lib/migrations.js';
+
+/** The reviewed-exception marker, on the column's line or the line above it. */
+export const STRING_COLLATION_MARKER = 'mj-standards-allow: collation';
+
+/*
+ * A table name is one or more dot-separated parts, each `[bracketed]`, `"quoted"` or bare. A bare
+ * part cannot contain `.`, `"`, `[`, `(` or whitespace, so each character of a name belongs to exactly
+ * one part and the patterns below cannot backtrack over the same text in more than one way.
+ */
+
+/** `CREATE TABLE <name> (` — the name is captured so a `#temp` table can be skipped. */
+const CREATE_TABLE = /\bCREATE\s+TABLE\s+((?:\[[^\]]+\]|"[^"]+"|[^\s(."[]+)(?:\s*\.\s*(?:\[[^\]]+\]|"[^"]+"|[^\s(."[]+))*)\s*\(/gi;
+
+/** `ALTER TABLE <name> ADD` — `ADD CONSTRAINT …` items are filtered out per item, not here. */
+const ALTER_TABLE_ADD = /\bALTER\s+TABLE\s+((?:\[[^\]]+\]|"[^"]+"|[^\s(."[]+)(?:\s*\.\s*(?:\[[^\]]+\]|"[^"]+"|[^\s(."[]+))*)\s+ADD\b/gi;
+
+/** A column definition whose type is a character type: `<name> [N][VAR]CHAR…`, bracketed or not. */
+const STRING_COLUMN = /^\s*(\[[^\]]+\]|"[^"]+"|[A-Za-z_@#$][\w@#$]*)\s+\[?(N?VARCHAR|N?CHAR)\]?(?![\w])/i;
+
+/** Statement keywords that end an `ALTER TABLE … ADD` written without a semicolon. */
+const STATEMENT_START = /^(?:GO|CREATE|ALTER|DROP|EXEC|EXECUTE|INSERT|UPDATE|DELETE|DECLARE|IF|BEGIN|END|PRINT|SELECT|MERGE|RETURN|SET\s+(?:XACT_ABORT|NOCOUNT|ANSI_|QUOTED_))\b/i;
+
+/** A temporary table (`#t`, `##t`) is session-local and inherits tempdb's collation by design. */
+function isTempTable(name: string): boolean {
+    return /^\[?#/.test(name.trim());
+}
+
+/** One string column without a `COLLATE` clause. */
+export interface UncollatedColumn {
+    /** 1-based line of the column definition. */
+    Line: number;
+    /** The column name as written. */
+    Column: string;
+    /** The character type as written (`NVARCHAR`, `CHAR`, …). */
+    Type: string;
+    /** Set when the column names a collation other than the expected one. */
+    DeclaredCollation?: string;
+}
+
+/** Offsets of each line start, so a character offset maps back to a 1-based line number. */
+function lineStarts(text: string): number[] {
+    const starts = [0];
+    for (let i = 0; i < text.length; i++) if (text[i] === '\n') starts.push(i + 1);
+    return starts;
+}
+
+function lineAt(starts: readonly number[], offset: number): number {
+    let lo = 0;
+    let hi = starts.length - 1;
+    while (lo < hi) {
+        const mid = (lo + hi + 1) >> 1;
+        if (starts[mid] <= offset) lo = mid;
+        else hi = mid - 1;
+    }
+    return lo + 1;
+}
+
+/**
+ * Top-level comma-separated items from `text[start]` until the depth drops below zero (the closing
+ * parenthesis of a `CREATE TABLE`) or, when `stopAtStatement` is set, until a `;` or a new statement
+ * at depth zero (the end of an `ALTER TABLE … ADD`). String literals and bracketed names are opaque.
+ */
+function splitItems(text: string, start: number, stopAtStatement: boolean): Array<{ Start: number; Text: string }> {
+    const items: Array<{ Start: number; Text: string }> = [];
+    let depth = 0;
+    let itemStart = start;
+    let i = start;
+    const push = (end: number): void => {
+        items.push({ Start: itemStart, Text: text.slice(itemStart, end) });
+    };
+    while (i < text.length) {
+        const ch = text[i];
+        if (ch === "'") {
+            const close = text.indexOf("'", i + 1);
+            if (close === -1) break;
+            i = close + 1; // a doubled '' re-opens here, which pairs the same way
+            continue;
+        }
+        if (ch === '[') {
+            const close = text.indexOf(']', i + 1);
+            if (close === -1) break;
+            i = close + 1;
+            continue;
+        }
+        if (ch === '(') depth++;
+        else if (ch === ')') {
+            if (depth === 0) {
+                push(i);
+                return items;
+            }
+            depth--;
+        } else if (depth === 0 && ch === ',') {
+            push(i);
+            itemStart = i + 1;
+        } else if (stopAtStatement && depth === 0) {
+            if (ch === ';') {
+                push(i);
+                return items;
+            }
+            if (ch === '\n' && STATEMENT_START.test(text.slice(i + 1).trimStart())) {
+                push(i);
+                return items;
+            }
+        }
+        i++;
+    }
+    push(i);
+    return items;
+}
+
+/** `COLLATE <name>` in a column definition; the name is captured. */
+const COLLATE_CLAUSE = /\bCOLLATE\s+([A-Za-z0-9_]+)/i;
+
+/**
+ * The string columns in one item list that carry no `COLLATE`, or (when `collation` is given) one
+ * other than `collation`.
+ */
+function uncollated(items: ReadonlyArray<{ Start: number; Text: string }>, starts: readonly number[], collation?: string): UncollatedColumn[] {
+    const found: UncollatedColumn[] = [];
+    for (const item of items) {
+        const m = STRING_COLUMN.exec(item.Text);
+        if (!m) continue;
+        const declared = COLLATE_CLAUSE.exec(item.Text);
+        if (declared && (!collation || declared[1].toLowerCase() === collation.toLowerCase())) continue;
+        const lead = item.Text.search(/\S/);
+        found.push({
+            Line: lineAt(starts, item.Start + Math.max(lead, 0)),
+            Column: m[1],
+            Type: m[2].toUpperCase(),
+            ...(declared ? { DeclaredCollation: declared[1] } : {}),
+        });
+    }
+    return found;
+}
+
+/**
+ * Every `NVARCHAR`/`VARCHAR`/`NCHAR`/`CHAR` column defined in a `CREATE TABLE` or `ALTER TABLE … ADD`
+ * in `code` (comment-stripped lines) without a `COLLATE` clause, or, when `collation` is given, with
+ * a `COLLATE` naming a different collation. Temporary tables are skipped, and a table variable
+ * (`DECLARE @t TABLE (…)`) never matches, since it is not a `CREATE TABLE`.
+ */
+export function FindUncollatedStringColumns(code: readonly string[], collation?: string): UncollatedColumn[] {
+    const text = code.join('\n');
+    const starts = lineStarts(text);
+    const found: UncollatedColumn[] = [];
+    for (const m of text.matchAll(CREATE_TABLE)) {
+        if (isTempTable(m[1])) continue;
+        found.push(...uncollated(splitItems(text, (m.index ?? 0) + m[0].length, false), starts, collation));
+    }
+    for (const m of text.matchAll(ALTER_TABLE_ADD)) {
+        if (isTempTable(m[1])) continue;
+        found.push(...uncollated(splitItems(text, (m.index ?? 0) + m[0].length, true), starts, collation));
+    }
+    return found.sort((a, b) => a.Line - b.Line);
+}
+
+/** The base name of a repo-relative path, either separator. */
+function baseName(file: string): string {
+    return file.slice(file.replace(/\\/g, '/').lastIndexOf('/') + 1);
+}
+
+/** The `Exempt` option: migration file names (base names), lower-cased. */
+function exemptNames(value: unknown): Set<string> {
+    if (!Array.isArray(value)) return new Set();
+    return new Set(value.filter((v): v is string => typeof v === 'string').map((v) => v.trim().toLowerCase()));
+}
+
+/**
+ * Find uncollated string columns in the hand-written part of every migration at or after
+ * `FromVersion`, except the files named in `Exempt`.
+ *
+ * `Exempt` lists the migrations that already broke the rule when it was adopted. Released
+ * migrations cannot be edited, so they are named one by one instead of moving `FromVersion` past
+ * them: a moved cutoff also skips every later-merging migration with an older timestamp (a branch's
+ * migration is dated when it is written, not when it merges), while a name skips only that file.
+ */
+function run(context: CheckContext): CheckResult {
+    const fromVersion = String(context.Options['FromVersion'] ?? '');
+    const collation = String(context.Options['Collation'] ?? 'SQL_Latin1_General_CP1_CI_AS');
+    const exempt = exemptNames(context.Options['Exempt']);
+    const { Migrations, Notes } = FindMigrations(context.RepoRoot, context.Roots, fromVersion);
+    const violations: Violation[] = [];
+    const seen = new Set<string>();
+    let skipped = 0;
+    for (const migration of Migrations) {
+        const name = baseName(migration.File).toLowerCase();
+        seen.add(name);
+        if (exempt.has(name)) {
+            skipped++;
+            continue;
+        }
+        const handWritten = migration.Lines.slice(0, migration.HandWrittenLineCount);
+        for (const column of FindUncollatedStringColumns(StripSqlComments(handWritten), collation)) {
+            if (HasMarkerNear(migration.Lines, column.Line, STRING_COLLATION_MARKER)) continue;
+            if (IsCodeGenStatement(migration.Lines, column.Line)) continue;
+            const fix = `Write \`${column.Column} ${column.Type}(…) COLLATE ${collation}\`, as the baseline's string columns do.`;
+            violations.push({
+                File: migration.File,
+                Line: column.Line,
+                Message: column.DeclaredCollation
+                    ? `${column.Type} column ${column.Column} is COLLATE ${column.DeclaredCollation}, not ${collation}. ${fix}`
+                    : `${column.Type} column ${column.Column} has no COLLATE clause, so it follows the database default. ${fix}`,
+            });
+        }
+    }
+    const notes = [...Notes, `${Migrations.length - skipped} migration(s) at or after ${fromVersion || '(no cutoff)'} read, ${skipped} exempt.`];
+    const stale = [...exempt].filter((n) => !seen.has(n));
+    if (stale.length > 0) notes.push(`Exempt names ${stale.length} file(s) that were not read (renamed, removed, or before FromVersion): ${stale.join(', ')}`);
+    return { Violations: violations, Notes: notes };
+}
+
+/** The registered standard. */
+export const MigrationStringCollationCheck: StandardCheck = {
+    Id: 'migration-string-collation',
+    Title: 'Declare the collation of every new string column',
+    Since: '6.3.0',
+    DefaultSeverity: 'error',
+    DocsUrl: 'https://github.com/MemberJunction/MJ/blob/next/migrations/CLAUDE.md#critical-migration-content-rules',
+    Description:
+        'Flags NVARCHAR / VARCHAR / NCHAR / CHAR columns defined in CREATE TABLE or ALTER TABLE … ADD without a COLLATE ' +
+        'clause, or with a COLLATE other than the Collation option, in the hand-written part of every versioned migration ' +
+        'at or after the FromVersion option, except the files named in the Exempt option (migrations that broke the rule ' +
+        'before it was adopted). Without one, ' +
+        'the column follows the database default, so a case-sensitive database treats it differently from every ' +
+        'baseline column. Temporary tables and table variables are not read. The expected collation is the Collation ' +
+        `option (default SQL_Latin1_General_CP1_CI_AS). Reviewed exception: "${STRING_COLLATION_MARKER}" on the line or the one above.`,
+    DefaultRoots: ['migrations'],
+    DefaultOptions: { FromVersion: '202610210000', Collation: 'SQL_Latin1_General_CP1_CI_AS', Exempt: [] },
+    Run: run,
+};

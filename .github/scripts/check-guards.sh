@@ -6,6 +6,7 @@
 #     + PlatformStringCompliance              (packages/MJGlobal; the "Source guards" job)
 #   PrimaryKeyCompliance                      (packages/MJCore; the "Source guards" job)
 #   check:manifest-registrations              (an entity subclass missing from the committed manifests)
+#   check-migration-validator-seeds           (two migrations seeding one validator with different text)
 #   check-explorer-prebundle-exclude          (a joined workspace's scopes in a committed angular.json)
 #
 # All of them read source text off disk: no build, no database. Each is run even if an earlier one
@@ -36,6 +37,9 @@ pnpm --filter @memberjunction/core exec vitest run --passWithNoTests=false \
 # before the PR exists. Pure file reads, like its neighbours above.
 node .github/scripts/check-manifest-registrations.mjs || status=1
 
+# Competing GeneratedCode validator seeds across migrations (MJ#4673). Pure file reads.
+node .github/scripts/check-migration-validator-seeds.mjs || status=1
+
 # A committed angular.json prebundle exclude holds only "@memberjunction/*" (#3875): a joined
 # workspace's linked scopes are added by `mj dev workspace` and must not be committed.
 node .github/scripts/check-explorer-prebundle-exclude.mjs || status=1
@@ -49,6 +53,7 @@ if [ "$status" -ne 0 ]; then
   echo "  entity serialization at egress  -> guides/FIELD_LEVEL_SECURITY_GUIDE.md (Building on field-level security)"
   echo "  platform-name branch (SQL path) -> read the fact from the dialect's facets (@memberjunction/sql-dialect)"
   echo "  entity class not in a manifest  -> regenerate with the pnpm run mj:manifest:* script the failure names"
+  echo "  competing validator seeds       -> use the earlier migration's wording (.github/scripts/check-migration-validator-seeds.mjs)"
   echo "  angular.json prebundle exclude  -> run mj dev workspace clean, or revert the file's prebundle change"
 fi
 
