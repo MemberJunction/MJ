@@ -5,14 +5,60 @@ Each section answers one question with the command run, the raw numbers, and the
 
 | # | Question | Answer | Design change needed? |
 |---|---|---|---|
-| 1 | Time and disk of the designed build path (job 1 base with remote cache, job 2 head with no token) | pending | |
+| 1 | Time and disk of the designed build path (job 1 base with remote cache, job 2 head with no token) | On 5 PRs: base install 40–49 s (cold store) + base build 3–10 s, all tasks `HIT/REMOTE`. Head: fetch 9–16 s after a failed lockfile-only try of 32–42 s (§8), sandbox offline install + rebuild + build 52–246 s. Designed path uses 14.0–14.2 GB of disk; 71 GB stays free. Head builds of 80–154 tasks missed 54–117 tasks although the PR reaches only 2–7 of them (cause not found). See §1 | No for time and disk. Open: find why the sandbox build misses tasks the PR does not reach (§1) |
 | 2 | Agent SDK: restrict tools, enforce write path, add `run_test`, cap turns and tokens, report usage | Yes, all six, on `@anthropic-ai/claude-agent-sdk` 0.3.318. Restrict built-ins with `tools` (`allowedTools` only auto-approves); keep `Write`/`Edit` out of `allowedTools`, or `canUseTool` is skipped and the write guard does nothing. Per-message `output_tokens` were far below the final count; budget on input + cache tokens. The runs used no API key (`apiKeySource: "none"`, the parent session's login), so the helper's `ANTHROPIC_API_KEY` was not tested. See §2 | No fallback. Yes (small): use `tools` + `permissionMode: 'default'`, keep `Write`/`Edit` out of `allowedTools`, catch the throw after max-turns and abort; the package needs zod 4 (SDK peer `zod@^4`; 24 `packages/` manifests pin `^3.25`); CI must confirm `apiKeySource: "ANTHROPIC_API_KEY"` (§2) |
-| 3 | Sandbox holds on `ubuntu-latest` (key, /proc, network, cache token) | pending | |
+| 3 | Sandbox holds on `ubuntu-latest` (key, /proc, network, cache token) | Yes. All 10 probes held on `ubuntu-24.04` (2 runs, same output) and on Docker Desktop for Mac: no key in env or /proc, no network, no DNS, no docker socket, no runner vars, read-only mount held, uid 1001 with no sudo inside. Probe 10: host `pnpm fetch` did not run the head's `.pnpmfile.cjs` and the host pnpm stayed 10.33.0; the control (host install) did run it; in the sandbox the pnpmfile ran without the key and pnpm stayed 10.33.0. The runner user itself has passwordless sudo (host only). See §3 | No |
 | 4 | Provider classes work with no database (Anthropic, OpenAI with logprobs, Gemini) | Partly. All three classes import and construct from a bare key with no database and no warnings. Gemini `gemini-3.5-flash-lite` answered `"Yes"`. Anthropic reached the API but got 401 `invalid x-api-key` on two runs (the same key gets 401 from a direct `curl`, so the key is bad, not MJ); model id `claude-haiku-5-5` not yet confirmed. OpenAI: `gpt-5.1-mini` does not exist (404, and `OpenAILLM` throws instead of returning `success: false`); `gpt-4o-mini` and `gpt-4.1-mini` return 5 `top_logprobs` on the first token; `gpt-5.4-nano` returns only 1 although 5 were asked. Imports resolve only from a scratch package, not from the repo root (§4) | Yes (proposed): the TP Prob judge model must be one that returns 5 `top_logprobs` (`gpt-4o-mini` or `gpt-4.1-mini`), not `gpt-5.1-mini`. Callers must handle both a thrown error (`OpenAILLM`) and `success: false` (`AnthropicLLM`). The real package must declare the provider packages as dependencies. Open: re-run Anthropic with a valid key |
 | 5 | `INTEGRATION_LIVE_MODEL_KEYS` includes an OpenAI key | pending — the secret is not readable from a branch; to be asked by the user at the phase-0 exit (date 2026-11-06). The local developer `.env` had no OpenAI key either (§5) | If no OpenAI key: design Q2 becomes a request for a new `OPENAI_API_KEY` secret |
 | 6 | vitest JSON reporter gives assertion, expected, actual, stack | Partly. vitest 4.0.18 `--reporter=json` gives one string per failure (`failureMessages[0]` = `error.stack`): assertion line and stack yes; no `expected`/`actual` fields and no diff; a timeout reads `Error: STACK_TRACE_ERROR`, not `Test timed out`. The error object in a custom reporter has all of them as fields. See §6 | Yes (proposed): Task 1.10 reads a small custom reporter, not `--reporter=json` (§6) |
 | 7 | File-swap path gives the same verdicts as two worktrees | Same results on 3 one-package PRs where all tests passed (1207/627/1275 tests, 0 differences each); no failing test compared (§7) | No |
-| 8 | Host `pnpm fetch` (lockfile only) + sandbox `pnpm install --offline` + `pnpm rebuild` builds on the real lockfile; copy-import time and disk; install-container fallback if fetch fails; turbo `--cache=local:rw,remote:r` works | pending | |
+| 8 | Host `pnpm fetch` (lockfile only) + sandbox `pnpm install --offline` + `pnpm rebuild` builds on the real lockfile; copy-import time and disk; install-container fallback if fetch fails; turbo `--cache=local:rw,remote:r` works | Partly. Lockfile-only fetch fails on all 5 PRs: `ERR_PNPM_PATCH_NOT_FOUND` for `patches/type-graphql@2.0.0-beta.3.patch` (the lockfile's `patchedDependencies`). With `patches/` copied too, fetch works (store 3251 MB), the offline install prints `INSTALLED` (copy import 32–57 s), `pnpm rebuild` works offline (4–8 s) and the build exits 0. The install-container fallback also works (install 65–111 s). `remote:r` gave remote hits on every base task. See §8 | Yes (small): the host fetch folder gets the lockfile plus the patch files the lockfile names, each path checked to be inside `patches/`. Fallback not needed |
+
+## 1. Build path time and disk
+
+**Setup.** Workflow `.github/workflows/jit-catch-spike.yml`, job `q1-q8-build`, on `ubuntu-latest` (`ubuntu-24.04`, image 20261101.360.1), script [`q1-q8-build-timing.sh`](q1-q8-build-timing.sh). Run 42287623326 (head `c338efd913`), one matrix job per PR. `workflow_dispatch` was refused (`HTTP 404: workflow jit-catch-spike.yml not found on the default branch`), so the workflow ran from draft PR #6435 (closed after the runs) with a `pull_request` trigger and a matrix of the 5 PRs. `base` = the merge commit's first parent, `head` = the merge commit. One `--filter=<pkg>...` per PR; in the 2-package PRs the named package depends on the other one.
+
+The repo has the turbo remote cache (`TURBO_TEAM: blue-cypress`; the secrets are org-level, so `gh secret list` on the repo does not show them). The pnpm store cache was empty (restore only, nothing saves it), so every base install was a cold download. Free disk at job start: 86013 MB.
+
+| PR | Packages (filter → tasks) | Base install s | Base build s, cache statuses | Head fetch s, store MB | Head sandbox install + rebuild + build s, cache statuses | Peak disk MB | Free disk MB |
+|---|---|---|---|---|---|---|---|
+| #6368 | 1: sql-converter (4) | 49 | 5, `HIT/REMOTE` 4 | 40 failed + 14 with `patches/`, 3251 | 57 (46 + 6 + 3), `HIT/LOCAL` 3, `MISS` 1 | 13956 (22436 with fallback) | 71258 (62774) |
+| #6362 | 2: react-linter, react-test-harness (105) | 49 | 9, `HIT/REMOTE` 105 | 42 failed + 16, 3251 | 213 (57 + 6 + 150), `HIT/LOCAL` 20, `MISS` 85 | 14156 (22742) | 71060 (62470) |
+| #6122 | 2: core-entities-server, metadata-sync (154) | 44 | 10, `HIT/REMOTE` 154 | 35 failed + 10, 3251 | 224 (36 + 5 + 179), `HIT/LOCAL` 37, `MISS` 117 | 14205 (22816) | 71000 (62385) |
+| #6357 | MJCore: core (3) | 40 | 3, `HIT/REMOTE` 3 | 33 failed + 13, 3251 | 52 (40 + 4 + 4), `HIT/LOCAL` 2, `MISS` 1 | 13968 (22456) | 71247 (62755) |
+| #6280 | Angular: ng-markdown, ng-conversations (80) | 47 | 6, `HIT/REMOTE` 80 | 32 failed + 9, 3251 | 246 (32 + 8 + 204), `HIT/LOCAL` 26, `MISS` 54 | 14183 (22784) | 71022 (62417) |
+
+"Head fetch": the lockfile-only fetch fails after the download (§8); the second number is the retry with `patches/`, on a store already filled by the first try. Peak disk is `du` of the work folder after the designed path (base worktree, head worktree, store); the number in brackets is after the fallback worktree too. Run 1 (42286827095, before the fallback was scripted) gave the same base figures: install 42–56 s, build 3–10 s, the same hit counts.
+
+Excerpt, PR #6122 (job 128132434882):
+
+```
+== job 1: base 22050a32d89a30513ec0972617ac90dcf2c754be
+base install: 44s, disk after install: 4890MB
+base build (remote:r): 10s, disk: 5025MB
+base cache statuses: {"HIT/REMOTE":154}
+== job 2: head 314640c9d6b4a378fc2ded49d5e544f17d8f1ee7
+head fetch (host, lockfile only): FAILED after 35s, store: 3251MB
+head fetch (host, lockfile + patches/, store warm from the failed try): lockfile+patches 10s, store: 3251MB
+INSTALLED in 36s
+REBUILT in 5s
+BUILT in 179s
+head install+rebuild+build (sandbox, offline, no token, fetch=lockfile+patches): exit 0, 224s, disk head: 5363MB
+head cache statuses: {"MISS":117,"HIT/LOCAL":37}
+disk after designed path: 14205MB; free: 71000MB
+== fallback (fetch from the lockfile alone failed): install container with network, then build with --network none
+INSTALLED
+fallback install (container, network): exit 0, 73s, store: 3250MB
+REBUILT in 7s
+BUILT in 194s
+fallback rebuild+build (sandbox, --network none): exit 0, 202s, disk head-fb: 5363MB
+fallback cache statuses: {"MISS":117,"HIT/LOCAL":37}
+total disk: 22816MB; free: 62385MB
+```
+
+**Head cache misses.** The head build seeds its local cache with the base's turbo cache. In 3 PRs it missed far more tasks than the PR can change. Counted from the `package.json` files at the merge commit, the tasks in the filter that depend (directly or not) on a changed package are: #6362 2 of 105 (85 missed), #6122 4 of 153 (117 missed), #6280 7 of 81 (54 missed). #6357 and #6368 missed exactly the changed package. The fallback (a separate head worktree) gave the same counts, so the result repeats. Not investigated. One candidate: inside the sandbox the head worktree's `.git` file points to a host path that is not mounted, so turbo hashes without git; another: the remote hits are not all written to the local cache that seeds the head. The next step is to save both turbo run summaries and compare task hashes.
+
+**Decision:** the time and disk fit a hosted runner: about 1 minute for job 1 and 1–5 minutes for job 2, 14 GB of disk with 71 GB free. Open item: the head misses above. They cost 150–204 s of build in 3 of 5 PRs.
 
 ## 2. Agent SDK limits
 
@@ -123,6 +169,60 @@ In this one run, one more API message (`hZMhUZG7`) streamed after `abort()` befo
 6. Catch the throw that follows `error_max_turns` and abort, and read the `result` message (when there is one) before the throw.
 7. Use zod 4. SDK 0.3.318 has peer `zod@^4.0.0`; 24 `package.json` files under `packages/` pin `zod` `^3.25`, so the new package cannot share that pin.
 8. Check the credential the runner uses. When the runner starts inside a Claude Code session, the SDK child can use that session's login instead of `ANTHROPIC_API_KEY` (`apiKeySource: "none"` here). In CI, confirm `apiKeySource: "ANTHROPIC_API_KEY"` in the init message.
+
+## 3. Sandbox attack (inside and host side)
+
+**Setup.** [`q3-sandbox-attack.sh`](q3-sandbox-attack.sh) with the image from [`Dockerfile.sandbox`](Dockerfile.sandbox) (used as is). Every container: `--network none --pids-limit 256 --user <runner uid:gid> --cap-drop ALL --security-opt no-new-privileges -e HOME=/tmp`, the work folder mounted read-only. The script exports a fake `ANTHROPIC_API_KEY=sk-ant-SPIKE-<time>` and `ACTIONS_RUNTIME_TOKEN` in its own environment; the container must not see either. Probe 10 makes a head with `.pnpmfile.cjs` (it writes a marker file next to itself, with the key as content if it can read it) and `packageManager: pnpm@10.30.0`.
+
+Runs: job `q3-sandbox` in runs 42286827095 (job 128129693502) and 42287623326 (job 128132434919), output identical; and locally on Docker Desktop for Mac (uid 502), same result except the uid. Runner output, verbatim (run 42287623326):
+
+```
+== 1 environment
+== 2 /proc of every visible pid
+visible pids: 3
+== 3 network
+blocked: EAI_AGAIN
+== 4 DNS
+no dns
+== 5 docker socket
+ls: cannot access '/var/run/docker.sock': No such file or directory
+no socket
+== 6 cache token
+no runner vars
+== 7 host filesystem
+bin
+boot
+dev
+etc
+home
+== 8 write to ro mount
+touch: cannot touch '/work/x': Read-only file system
+ro holds
+== 9 sudo / root
+uid=1001 gid=1001 groups=1001
+sh: 1: sudo: not found
+no sudo
+== 10 host side: pnpmfile + packageManager in head
+pnpmfile did not run on host
+host pnpm still 10.33.0
+control: host install ran .pnpmfile.cjs (expected, this is why the host never installs head)
+sandbox pnpmfile marker: ran
+sandbox pnpm: 10.33.0 (must be 10.33.0, not 10.30.0)
+SANDBOX HELD
+runner uid: 1001; sudo: yes; docker: Docker version 28.0.4, build b8034c0
+ACTIONS_RUNTIME_TOKEN set on host: no
+```
+
+Notes:
+- Probe 6: a `run:` step on the runner has no `ACTIONS_RUNTIME_TOKEN` (`set on host: no`), so the probe used the script's fake value. It shows that the host environment does not reach the container, not that a real runtime token is safe.
+- Probe 9: inside the sandbox the user is uid 1001 and the image has no `sudo`. The runner user outside the sandbox has passwordless sudo (`sudo: yes`). The tool must never give the sandbox anything the host user can reach (docker socket, host paths).
+- Probe 10, host: `pnpm fetch` in a folder with only the lockfile did not run the head's `.pnpmfile.cjs`, and `pnpm --version` stayed 10.33.0 although head names 10.30.0. The control, a host `pnpm install --frozen-lockfile --ignore-scripts` in the head folder, ran the pnpmfile, so the test can tell the two cases apart.
+- Probe 10, sandbox: the offline install ran the pnpmfile (marker `ran`), but it had no key to write, and pnpm stayed 10.33.0 (`manage-package-manager-versions=false`, no network).
+- Seen in an early local run (before the script fix listed in the task report): `pnpm --version` run in the sandbox's `/work`, which held the head's `.pnpmfile.cjs`, printed that pnpmfile's error and no version. So pnpm loads `.pnpmfile.cjs` even for `--version`, and the host must not run any pnpm command, not even `--version`, inside a head folder.
+- The fake key does not appear in any job log of either run.
+
+**Decision:** the sandbox held on both. No design change.
+
 ## 4. Provider classes with no database
 
 Script: [`q4-providers.mjs`](q4-providers.mjs). It builds `AnthropicLLM`, `OpenAILLM` and `GeminiLLM`
@@ -401,3 +501,27 @@ Shapes the file-swap path (as scripted) does not cover. None of the three PRs ha
 
 **Decision:** the file-swap path gave the same results as two worktrees on 3 one-package, `src`-only
 PRs where all tests passed; no failing test compared. No design change. Keep the limits above.
+
+## 8. Host fetch + sandbox offline install
+
+**Setup.** Same runs and script as §1. Job 2 of the script, per PR: (1) host `pnpm fetch --store-dir <store>` in a folder that holds only the head's `pnpm-lock.yaml`; (2) if that fails, the same fetch with the head's `patches/` folder copied in too; (3) sandbox offline `pnpm install --offline --frozen-lockfile --ignore-scripts`, then `pnpm rebuild`, then `turbo run build --cache=local:rw,remote:r` with no token; (4) because (1) failed, the brief's fallback once: a new head worktree, `pnpm install --frozen-lockfile --ignore-scripts` in a container with network (still non-root, `--cap-drop ALL`, no environment), then `pnpm rebuild` + build with `--network none`.
+
+**Lockfile-only fetch: fails** on all 5 PRs, after downloading the store:
+
+```
+
+```
+
+The lockfile has `patchedDependencies: type-graphql@2.0.0-beta.3: { path: patches/type-graphql@2.0.0-beta.3.patch }`, and `pnpm fetch` needs that file. With `patches/` copied into the fetch folder, the fetch works on all 5 (9–16 s on the warm store; store 3251 MB). The host fetch ran no dependency build scripts: with no `pnpm-workspace.yaml` there is no `onlyBuiltDependencies` allowlist, so pnpm listed every one under `Ignored build scripts`.
+
+| Item | Result |
+|---|---|
+| `pnpm fetch` from the lockfile alone | No: `ERR_PNPM_PATCH_NOT_FOUND`. Yes with the lockfile + `patches/` |
+| Offline install printed `INSTALLED` | Yes, all 5 |
+| Copy-import time (offline install, `package-import-method=copy`) | 46, 57, 36, 40, 32 s (#6368, #6362, #6122, #6357, #6280) |
+| `pnpm rebuild` offline | Yes, exit 0, 4–8 s |
+| Install-container fallback | Run once per PR, as the lockfile-only fetch failed. Works: install 65–111 s with network, store 3250 MB, then rebuild 6–8 s + build with `--network none`, same cache statuses as the designed path |
+| `--cache=local:rw,remote:r` remote hits | Yes on the base (host, token): every task `HIT/REMOTE` (4, 105, 154, 3, 80). The head (sandbox, no token) got only `HIT/LOCAL` from the seeded cache, as designed |
+| Disk | Head worktree after install + build 5231–5363 MB; store 3251 MB |
+
+**Decision:** design change (small). The host fetch folder needs the lockfile **and** each patch file the lockfile names under `patchedDependencies`. A patch is a diff that pnpm applies; it is not run. The lockfile comes from the PR, so copy only the paths it names, and reject any path that is not inside `patches/` after it is resolved (a PR could name `../../x` and make the host read a file outside the worktree). The fallback works but costs 30–80 s more per run, so it is not needed.
