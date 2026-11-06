@@ -1492,6 +1492,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.2.0
         version: link:../../../MJCoreEntities
+      '@memberjunction/feature-pipelines':
+        specifier: 6.2.0
+        version: link:../../Knowledge/FeaturePipelines
       '@memberjunction/global':
         specifier: 6.2.0
         version: link:../../../MJGlobal

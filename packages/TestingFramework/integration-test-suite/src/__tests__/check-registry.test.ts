@@ -181,7 +181,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['api-keys', ApiKeysChecks, 3],
         ['diagnostics', DiagnosticsChecks, 4], // DIAG1-DIAG4 session capture, bundle assembly, encrypted intake (IT163)
         ['predictive-studio', PredictiveStudioChecks, 5],
-        ['predictive-shadow-drift', PredictiveShadowDriftChecks, 2], // PSD1-PSD2 shadow scoring Role=Challenger isolation and PredictiveStudioEvaluateDriftAction over MJ: Feature Values (IT164)
+        ['predictive-shadow-drift', PredictiveShadowDriftChecks, 2], // PSD1-PSD2 shadow scoring Role=Challenger isolation and PredictiveStudioEvaluateDriftAction over MJ: Feature Values (IT166)
         ['remote-op-wire-progress', RemoteOpWireProgressChecks, 1],
         ['prompt-runner', PromptRunnerChecks, 1],
         ['ai-vendor-effort', AiVendorEffortChecks, 2],
