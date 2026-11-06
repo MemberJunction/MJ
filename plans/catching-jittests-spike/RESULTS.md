@@ -12,7 +12,7 @@ Each section answers one question with the command run, the raw numbers, and the
 | 5 | `INTEGRATION_LIVE_MODEL_KEYS` includes an OpenAI key | pending — the secret is not readable from a branch; the user asks a repo admin (§5). | If no key: a new `OPENAI_API_KEY` secret (Q2 in §18) |
 | 6 | vitest JSON reporter gives assertion, expected, actual, stack | Partly: `--reporter=json` gives the assertion line and stack in one string, with no `expected`/`actual`, and a timeout reads `Error: STACK_TRACE_ERROR`; a custom reporter gets all of them as fields (§6). | Yes, §7 (Task 1.10): read a small custom vitest reporter, not `--reporter=json` |
 | 7 | File-swap path gives the same verdicts as two worktrees | Same results on 3 one-package PRs where all tests passed (1207/627/1275 tests, 0 differences each); no failing test compared (§7). | no |
-| 8 | Host `pnpm fetch` (lockfile only) + sandbox `pnpm install --offline` + `pnpm rebuild` builds on the real lockfile; copy-import time and disk; install-container fallback if fetch fails; turbo `--cache=local:rw,remote:r` works | Partly: the lockfile-only fetch fails (`ERR_PNPM_PATCH_NOT_FOUND`); with `patches/` copied, the offline install (copy import 32–57 s), `pnpm rebuild` and build work, the install-container fallback works, and `remote:r` gives remote hits (§8). | Yes, open, §5.4 / §7 host fetch: the `patches/` retry makes the host apply PR diffs (§3); choose one of the options in §8 |
+| 8 | Host `pnpm fetch` (lockfile only) + sandbox `pnpm install --offline` + `pnpm rebuild` builds on the real lockfile; copy-import time and disk; install-container fallback if fetch fails; turbo `--cache=local:rw,remote:r` works | Partly: the lockfile-only fetch fails (`ERR_PNPM_PATCH_NOT_FOUND`); with `patches/` copied, the offline install (copy import 32–57 s), `pnpm rebuild` and build work, the install-container fallback works, and `remote:r` gives remote hits (§8). | Yes, §5.4 / §7 host fetch: option (b) works (§8 "Option (b) test"): fetch with a lockfile copy stripped of `patchedDependencies` and `(patch_hash=…)`; the sandbox applies patches offline |
 
 ## 1. Build path time and disk
 
@@ -706,3 +706,86 @@ The lockfile has `patchedDependencies: type-graphql@2.0.0-beta.3: { path: patche
 The choice is not made here.
 
 The temporary workflow `.github/workflows/jit-catch-spike.yml` was removed at the end of phase 0 (commit 8f6c5f1673). Its `pull_request` trigger would otherwise run it on any PR that touches `plans/catching-jittests-spike/**`.
+
+### Option (b) test (2026-11-06)
+
+**Setup.** Script `q8b-strip-patches.sh`, run once on a local Mac (Docker Desktop, linux/arm64 containers). Both halves ran in Linux containers from `jit-sandbox:spike` (pnpm 10.33.0, `package-import-method=copy`), with a new, empty store. Script exit 0, total 416 s.
+
+**Stripping.** A `python3` script deletes the top-level `patchedDependencies:` block and every `(patch_hash=<hash>)` segment. The fetch folder holds only the stripped `pnpm-lock.yaml`. `diff | wc -l` = 18. pnpm accepted the first variant (block and segments both removed), so the script did not try the other two (block only, segments only). The changed lines, verbatim (cut at 140 characters):
+
+```
+36,40d35
+< patchedDependencies:
+<   type-graphql@2.0.0-beta.3:
+<     hash: 4d3544a1e64ad80b22832bb91021718c73db40ae6c6ac140b86d22cacaab8c67
+<     path: patches/type-graphql@2.0.0-beta.3.patch
+<
+14082c14077
+<         version: 2.0.0-beta.3(patch_hash=4d3544a1e64ad80b22832bb91021718c73db40ae6c6ac140b86d22cacaab8c67)(class-validator@0.14.3)(graphql
+>         version: 2.0.0-beta.3(class-validator@0.14.3)(graphql-scalars@1.25.0(graphql@16.12.0))(graphql@16.12.0)
+16596c16591
+<         version: 2.0.0-beta.3(patch_hash=4d3544a1e64ad80b22832bb91021718c73db40ae6c6ac140b86d22cacaab8c67)(class-validator@0.14.3)(graphql
+>         version: 2.0.0-beta.3(class-validator@0.14.3)(graphql-scalars@1.25.0(graphql@16.12.0))(graphql@16.12.0)
+51329c51324
+<   type-graphql@2.0.0-beta.3(patch_hash=4d3544a1e64ad80b22832bb91021718c73db40ae6c6ac140b86d22cacaab8c67)(class-validator@0.14.3)(graphql-s
+>   type-graphql@2.0.0-beta.3(class-validator@0.14.3)(graphql-scalars@1.25.0(graphql@16.12.0))(graphql@16.12.0):
+patch_hash left: 0
+```
+
+**Host half (fetch, network, non-root).** `docker run --rm --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges -e HOME=/tmp -v "$WORK/fetch:/fetch" -v "$WORK/store:/pnpm-store" jit-sandbox:spike sh -c 'cd /fetch && pnpm fetch'`
+
+```
+Progress: resolved 3191, reused 0, downloaded 3170, added 3191, done
+fetch exit=0 time=153s
+store size: 3187 MB
+patch_hash dirs in fetch node_modules: 0
+type-graphql@2.0.0-beta.3_class-validator@0.14.3_graphql-scalars@1.25.0_graphql@16.12.0__graphql@16.12.0
+store files holding '_mjBuildIndexes' after host fetch: 0
+```
+
+The host fetched only the unpatched `type-graphql`, and no patched file reached the store. The fetch printed the same `Ignored build scripts` list as in phase 0, so it ran no dependency scripts.
+
+**Sandbox half (offline install).** A temporary `git worktree add --detach "$WORK/head" HEAD` (real lockfile + `patches/`), then `docker run --rm --network none --pids-limit 1024 --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges -e HOME=/tmp -v "$WORK/head:/work" -v "$WORK/store:/pnpm-store" jit-sandbox:spike sh -c 'cd /work && pnpm install --offline --frozen-lockfile --ignore-scripts && echo INSTALLED && pnpm rebuild && echo REBUILT'`
+
+```
+Packages: +3191
+Done in 1m 44.3s using pnpm v10.33.0
+INSTALLED
+REBUILT
+install+rebuild exit=0 time=111s
+```
+
+During `pnpm rebuild`, the install script of the optional package `msgpackr-extract` failed. The prebuilt-binary loader failed first, then the fallback native build. From the install log, in order:
+
+```
+.../node_modules/msgpackr-extract install: TypeError [ERR_INVALID_ARG_TYPE]: The "id" argument must be of type string. Received undefined
+.../node_modules/msgpackr-extract install:   code: 'ERR_INVALID_ARG_TYPE'
+.../node_modules/msgpackr-extract install: gyp info using node@24.22.2 | linux | arm64
+.../node_modules/msgpackr-extract install: gyp ERR! find Python
+.../node_modules/msgpackr-extract install: gyp ERR! stack Error: Could not find any Python installation to use
+.../node_modules/msgpackr-extract install: gyp ERR! not ok
+.../node_modules/msgpackr-extract install: Failed
+```
+
+The failure is not fatal: `REBUILT` printed and `pnpm rebuild` exited 0. It is not related to the patch. The likely cause is that the image has no Python and this run was arm64. The log does not show that cause. How this package behaves on the x64 runner was not checked here. The phase 0 runner runs also used `--ignore-scripts` and then `pnpm rebuild`, but I did not check their logs for this package.
+
+**Was the patch applied in the sandbox? Yes.** The check looks for `_mjBuildIndexes` (`PATCH_LINE` in the script), a line the patch adds. I picked it by hand from `patches/type-graphql@2.0.0-beta.3.patch`.
+
+```
+$ ls $WORK/head/node_modules/.pnpm | grep type-graphql
+type-graphql@2.0.0-beta.3_patch_hash=4d3544a1e64ad80b22832bb91021718c73db40ae6c6ac140b8_61eac4cec08843f3d44792990504a1b5
+$ grep -rnF _mjBuildIndexes .../node_modules/type-graphql/build
+build/esm/metadata/metadata-storage.js:93:        this._mjBuildIndexes(); // [MJ scale patch] index target/name keyed arrays once (O(1) lookups below)
+build/esm/metadata/metadata-storage.js:144:    _mjBuildIndexes() {
+build/cjs/metadata/metadata-storage.js:96:        this._mjBuildIndexes(); // [MJ scale patch] index target/name keyed arrays once (O(1) lookups below)
+build/cjs/metadata/metadata-storage.js:147:    _mjBuildIndexes() {
+store files holding '_mjBuildIndexes' after sandbox install: 2
+```
+
+The store held no patched file after the host fetch (0 hits). After the sandbox install it held 2, so pnpm applied the patch inside the sandbox and wrote the patched files back into the mounted store. The script printed only the counts. The paths of the 2 files (`store/v10/files/d9/…` and `store/v10/files/c3/…`) and the single index entry for the package (`v10/index/e4/…-type-graphql@2.0.0-beta.3.json`) come from a manual `grep -rl` / `find` after the run. Since that run, the script prints the matching paths (`grep -rlF "$PATCH_LINE" "$WORK/store"`) and no longer only a count. It also has a `trap` that removes the worktree and `$WORK` on any exit. Both changes came after the recorded run, so the output above comes from the earlier version of the script. This was not checked: whether the original unpatched files stay in the store as separate content-addressed entries, and whether the index entry still points at them.
+
+**Build smoke.** The same sandbox shape, with `-e TURBO_TELEMETRY_DISABLED=1 -e TURBO_CACHE_DIR=/work/.turbo/cache`, ran `timeout 1200 npx turbo run build --filter=@memberjunction/core... --cache=local:rw`. Result: `Tasks: 3 successful, 3 total`, `Cached: 0 cached`, exit 0, 8 s.
+
+**Timing.** Host half (cold fetch, empty store, local network): 153 s. Sandbox half (offline install + rebuild): 111 s, of which the install was 104 s. Phase 0 on the runner measured 9–16 s for a warm-store fetch and 32–57 s for the copy import. The local sandbox time is higher because Docker Desktop bind mounts on macOS are slow, so it is not comparable to the runner.
+
+**Decision:** option (b) works. pnpm accepts a lockfile copy with both the `patchedDependencies:` block and the `(patch_hash=…)` segments removed. The host then fetches only the unpatched originals and reads no patch file. The sandbox's `pnpm install --offline --frozen-lockfile` with the real lockfile and `patches/` succeeds from that store and applies the patch (the evidence is above). We did not test the other two forms (block only, segments only). Removing both is the form to specify. Under option (b), the host never reads a patch file, and the lockfile it strips is HEAD's (the PR's). Limits: (1) The sandbox writes the patched files into the store, so a store shared across runs collects PR-patched content. Mount it per run, or test a read-only mount (not tested). (2) A PR that changes a patch file or adds a new patched dependency is still covered: the stripped lockfile names only the base package, which the store gets, and the sandbox applies the new diff offline. Only the "changed patch" case comes from reasoning; it was not run. (3) A patch can only change files of a package the lockfile already has. A patched dependency that is new in the PR needs that package in the head lockfile, which is fetched as usual. (4) A PR that changes a patch file must also update that patch's `hash:` line in its lockfile (pnpm does this on install). If it does not, `--frozen-lockfile` fails in the sandbox. This is a separate case and was not tested.
