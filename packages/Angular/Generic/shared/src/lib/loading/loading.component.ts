@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, ElementRef, inject, Input, OnInit } from '@angular/core';
 
 /**
  * Gradient configuration for the logo.
@@ -55,7 +55,32 @@ export interface LogoGradient {
   templateUrl: './loading.component.html',
   styleUrls: ['./loading.component.css']
 })
-export class LoadingComponent {
+export class LoadingComponent implements OnInit {
+  private readonly host = inject(ElementRef<HTMLElement>);
+
+  /**
+   * True when the active theme sets `--mj-loading-mark` (LXP P5): the animated wrapper then
+   * renders that image instead of the inline MJ mark. Read ONCE at init from the host's
+   * computed style — the token is declared on `:root` by a brand theme and inherits down. MJ's
+   * own tokens leave it unset, so MJ keeps the inline path (and the seasonal `LogoColor` /
+   * `LogoGradient` fills, which an image mark cannot take). Deliberately a separate token from
+   * `--mj-logo-mark`: MJ sets that one itself, so "render it when set" would always be true.
+   */
+  public UsesThemeMark = false;
+
+  ngOnInit(): void {
+    this.UsesThemeMark = this.readThemeMark();
+  }
+
+  /** Whether `--mj-loading-mark` resolves to a real image on this host (not empty, not `none`). */
+  private readThemeMark(): boolean {
+    if (typeof getComputedStyle !== 'function') {
+      return false;
+    }
+    const value = getComputedStyle(this.host.nativeElement).getPropertyValue('--mj-loading-mark').trim();
+    return value !== '' && value !== 'none';
+  }
+
   /**
    * Text to display below the loading animation.
    * Set to empty string or use showText=false to hide text.
