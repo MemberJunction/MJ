@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, symlinkSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { randomBytes } from 'node:crypto';
+import { homedir, tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { Sandbox } from '../sandbox/Sandbox';
 import { DEFAULT_SETTINGS } from '../settings';
 
@@ -32,6 +33,20 @@ describe('Sandbox.BuildArgs', () => {
     const dir = mkdtempSync(join(tmpdir(), 'jit-sb-')); symlinkSync('/etc', join(dir, 'link'));
     expect(() => sb.BuildArgs({ ...base, Mounts: [{ Host: join(dir, 'link'), Container: '/s', Mode: 'ro' }] })).toThrow(/refusing to mount/);
   });
+  it('resolves .. segments before the deny-list check', () => {
+    const host = `/tmp/jit-missing-${randomBytes(6).toString('hex')}/../../etc`;
+    expect(() => sb.BuildArgs({ ...base, Mounts: [{ Host: host, Container: '/s', Mode: 'ro' }] })).toThrow(/refusing to mount/);
+  });
+  it('rejects a mount that contains a denied folder, and accepts a plain work folder', () => {
+    for (const host of ['/var', dirname(homedir()), homedir(), join(homedir(), '.docker')])
+      expect(() => sb.BuildArgs({ ...base, Mounts: [{ Host: host, Container: '/s', Mode: 'ro' }] }), host).toThrow(/refusing to mount/);
+    const ok = mkdtempSync(join(tmpdir(), 'jit-ok-'));
+    expect(sb.BuildArgs({ ...base, Mounts: [{ Host: ok, Container: '/s', Mode: 'ro' }] })).toContain('-v');
+  });
+  it('rejects a host or container path with a colon or a comma', () => {
+    expect(() => sb.BuildArgs({ ...base, Mounts: [{ Host: '/h/a:b', Container: '/s', Mode: 'ro' }] })).toThrow(/refusing to mount/);
+    expect(() => sb.BuildArgs({ ...base, Mounts: [{ Host: '/h/a', Container: '/s,ro', Mode: 'ro' }] })).toThrow(/refusing to mount/);
+  });
 });
 
 describe('Sandbox.Run', () => {
@@ -41,7 +56,7 @@ describe('Sandbox.Run', () => {
     expect(r.TimedOut).toBe(true);
     expect(r.ExitCode).toBeNull();
   });
-  it('names the container and kills it by that name after a timeout', async () => {
+  it('names the container and removes it by that name after a timeout', async () => {
     const calls: { file: string; args: string[] }[] = [];
     const fake = new Sandbox(DEFAULT_SETTINGS.Sandbox, async (file, args) => {
       calls.push({ file, args });
@@ -52,6 +67,6 @@ describe('Sandbox.Run', () => {
     const name = calls[0].args[calls[0].args.indexOf('--name') + 1];
     expect(name).toMatch(/^jit-[0-9a-f]{12}$/);
     expect(calls).toHaveLength(2);
-    expect(calls[1]).toEqual({ file: 'docker', args: ['kill', name] });
+    expect(calls[1]).toEqual({ file: 'docker', args: ['rm', '-f', name] });
   });
 });
