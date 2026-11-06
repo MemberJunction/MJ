@@ -105,7 +105,8 @@ interface DiscoveredNode {
     PathWeight: number;
     Hop: number;
     ParentKey: string | null;
-    ViaEdgeID: string | null;
+    /** The edge this node was reached through (`null` for a seed). */
+    ViaEdge: GraphEdgeView | null;
 }
 
 /** A candidate neighbor proposed by one edge during an expansion step. */
@@ -370,17 +371,20 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
             frontier = admitted.Next;
         }
 
-        const edges = await this.collectEdgesBetween(graph, discovered, options, principals, provider);
+        const edges = new Map((await this.collectEdgesBetween(graph, discovered, options, principals, provider)).map((e) => [e.ID, e]));
         const nodes: GraphNodeView[] = [];
         for (const d of discovered.values()) {
             const view = visibleByKey.get(d.Key);
             if (view) {
-                nodes.push({ ...view, Hop: d.Hop, PathWeight: d.PathWeight, ParentKey: d.ParentKey, ViaEdgeID: d.ViaEdgeID });
+                nodes.push({ ...view, Hop: d.Hop, PathWeight: d.PathWeight, ParentKey: d.ParentKey, ViaEdgeID: d.ViaEdge?.ID ?? null });
+            }
+            if (d.ViaEdge && !edges.has(d.ViaEdge.ID)) {
+                edges.set(d.ViaEdge.ID, d.ViaEdge); // the path edge, even if the final read was capped
             }
         }
         return {
             Nodes: nodes,
-            Edges: edges,
+            Edges: Array.from(edges.values()).sort((a, b) => compareStrings(a.ID, b.ID)),
             Message: capped ? `Expansion stopped at the ${maxNodes}-node limit.` : undefined,
         };
     }
@@ -483,7 +487,7 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
             if (!view || discovered.has(key) || discovered.size >= maxNodes) {
                 continue;
             }
-            const node: DiscoveredNode = { Node: seed, Key: key, PathWeight: 1.0, Hop: 0, ParentKey: null, ViaEdgeID: null };
+            const node: DiscoveredNode = { Node: seed, Key: key, PathWeight: 1.0, Hop: 0, ParentKey: null, ViaEdge: null };
             discovered.set(key, node);
             visibleByKey.set(key, view);
             frontier.push(node);
@@ -558,7 +562,7 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
                 PathWeight: c.Score,
                 Hop: hop,
                 ParentKey: c.Parent.Key,
-                ViaEdgeID: c.Edge.ID,
+                ViaEdge: c.Edge,
             };
             discovered.set(c.NeighborKey, node);
             visibleByKey.set(c.NeighborKey, view);
