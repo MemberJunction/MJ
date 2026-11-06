@@ -22,6 +22,17 @@ describe('ApplyMutantEdits', () => {
     expect(readFileSync(join(d, 'src/a.ts'), 'utf8')).toContain('return true;');
     expect(r.Patch).toContain('-  return u === "admin";'); expect(r.Patch).toContain('+  return true;'); expect(r.Changed).toEqual(['src/a.ts']);
   });
+  it('keeps both changes when two edits target the same file', () => {
+    const d = pkg();
+    const r = ApplyMutantEdits(d, [
+      { File: 'packages/MJCore/src/a.ts', Find: 'u === "admin"', Replace: 'true' },
+      { File: 'packages/MJCore/src/a.ts', Find: 'export function f', Replace: 'export function g' },
+    ], 'packages/MJCore');
+    const text = readFileSync(join(d, 'src/a.ts'), 'utf8');
+    expect(text).toContain('return true;'); expect(text).toContain('function g');
+    expect(r.Changed).toEqual(['src/a.ts']);
+    expect(r.Patch).toContain('+  return true;'); expect(r.Patch).toContain('+export function g');
+  });
   it('rejects a Find that is missing or not unique', () => {
     expect(() => ApplyMutantEdits(pkg(), [{ File: 'packages/MJCore/src/a.ts', Find: 'nope', Replace: 'x' }], 'packages/MJCore')).toThrow(/not found/);
     expect(() => ApplyMutantEdits(pkg(), [{ File: 'packages/MJCore/src/a.ts', Find: 'u', Replace: 'x' }], 'packages/MJCore')).toThrow(/once/);
