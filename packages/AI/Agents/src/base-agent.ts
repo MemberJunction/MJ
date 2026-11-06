@@ -22899,6 +22899,7 @@ The context is now within limits. Please retry your request with the recovered c
             context,
             itemVariable,
             (val, ctx, iv) => this.resolveValueFromContext(val, ctx, iv),
+            (nested, ctx, iv) => this.resolveTemplates(nested, ctx, iv),
         );
     }
 

@@ -117,6 +117,24 @@ describe('AgentStepDispatcher', () => {
             });
         });
 
+        it('should resolve nested objects through the resolveNested callback when one is given', () => {
+            const dispatcher = new AgentStepDispatcher();
+            const nestedCalls: Array<Record<string, unknown>> = [];
+            const resolved = dispatcher.ResolveTemplates(
+                { top: '{{item}}', nested: { inner: '{{item}}' } },
+                { item: 'Tokyo', index: 0 },
+                'item',
+                undefined,
+                (nested) => {
+                    nestedCalls.push(nested);
+                    return { replaced: true };
+                }
+            );
+
+            expect(resolved).toEqual({ top: 'Tokyo', nested: { replaced: true } });
+            expect(nestedCalls).toEqual([{ inner: '{{item}}' }]);
+        });
+
         it('should evaluate pathological unclosed template strings in linear time and reject prototype-polluting keys', () => {
             const dispatcher = new AgentStepDispatcher();
             const pathological = `{{{{${'\t'.repeat(50_000)}`;
@@ -135,6 +153,37 @@ describe('AgentStepDispatcher', () => {
     });
 
     describe('BaseAgent subclass protected override hooks', () => {
+        it('should run a subclass override of resolveTemplates for nested objects at every depth', async () => {
+            const { BaseAgent } = await import('../base-agent');
+
+            const seen: string[] = [];
+            class TaggingTemplatesAgent extends BaseAgent {
+                protected override resolveTemplates(
+                    obj: Record<string, unknown>,
+                    context: Record<string, unknown>,
+                    itemVariable: string
+                ): Record<string, unknown> {
+                    seen.push(Object.keys(obj).join(','));
+                    return { ...super.resolveTemplates(obj, context, itemVariable), tagged: true };
+                }
+            }
+
+            const agent = new TaggingTemplatesAgent();
+            const resolved = agent['resolveTemplates'](
+                { city: '{{place.city}}', address: { country: '{{place.country}}', geo: { zone: 'APAC' } } },
+                { item: { city: 'Tokyo', country: 'Japan' }, index: 0 },
+                'place'
+            );
+
+            expect(seen).toEqual(['city,address', 'country,geo', 'zone']);
+            expect(resolved).toEqual({
+                city: 'Tokyo',
+                address: { country: 'Japan', geo: { zone: 'APAC', tagged: true }, tagged: true },
+                tagged: true,
+            });
+        });
+
+
         it('should route internal loop and sub-agent methods through subclass overrides of formatActionResultsAsMarkdown, cloneSubAgentPayload, and getValueFromPath', async () => {
             const { BaseAgent } = await import('../base-agent');
 

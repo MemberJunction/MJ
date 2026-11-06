@@ -807,18 +807,32 @@ export class AgentStepDispatcher {
 
     /**
      * Resolves `{{variable}}` templates recursively across an object's string and array properties.
+     *
+     * `resolveValue` resolves each string; `resolveNested` resolves each nested object. `BaseAgent` binds
+     * both to its protected `resolveValueFromContext` / `resolveTemplates`, so a subclass override of
+     * either still runs at every depth. Without `resolveNested`, nested objects recurse here with the same
+     * `resolveValue`.
      */
     public ResolveTemplates(
         obj: Record<string, unknown>,
         context: Record<string, unknown>,
         itemVariable: string,
         resolveValue?: (val: string, ctx: Record<string, unknown>, itemVar: string) => unknown,
+        resolveNested?: (
+            nested: Record<string, unknown>,
+            ctx: Record<string, unknown>,
+            itemVar: string,
+        ) => Record<string, unknown>,
     ): Record<string, unknown> {
         const result: Record<string, unknown> = {};
         const resolver =
             resolveValue ??
             ((val: string, ctx: Record<string, unknown>, itemVar: string) =>
                 this.ResolveValueFromContext(val, ctx, itemVar));
+        const nestedResolver =
+            resolveNested ??
+            ((nested: Record<string, unknown>, ctx: Record<string, unknown>, itemVar: string) =>
+                this.ResolveTemplates(nested, ctx, itemVar, resolver));
 
         for (const [key, value] of Object.entries(obj)) {
             if (typeof value === 'string') {
@@ -828,12 +842,7 @@ export class AgentStepDispatcher {
                     typeof v === 'string' ? resolver(v, context, itemVariable) : v,
                 );
             } else if (typeof value === 'object' && value !== null) {
-                result[key] = this.ResolveTemplates(
-                    value as Record<string, unknown>,
-                    context,
-                    itemVariable,
-                    resolver,
-                );
+                result[key] = nestedResolver(value as Record<string, unknown>, context, itemVariable);
             } else {
                 result[key] = value;
             }
