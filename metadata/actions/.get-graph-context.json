@@ -1,0 +1,192 @@
+[
+  {
+    "fields": {
+      "Name": "Get Graph Context",
+      "Description": "Returns a bounded neighborhood of a semantic graph (default \"MJ Canon\") around concepts matching a natural-language Question and/or explicit seed nodes: the nodes and edges as JSON and as compact prompt text. Every node is one the caller may see. Use it to find the canonical definition of a business term and the views, queries and entities that define, measure or describe it. Fails with GRAPH_NOT_FOUND when the graph is unknown or not active.",
+      "DriverClass": "Get Graph Context",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-diagram-project",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "GraphName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name or ID of an active graph to traverse. Default: \"MJ Canon\".",
+            "IsRequired": false,
+            "DefaultValue": "MJ Canon"
+          },
+          "primaryKey": {
+            "ID": "22D53579-281E-4A22-8094-6521AE139AA0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Question",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Natural-language text; concepts whose name or synonyms match it become seeds (up to 5). Provide this and/or Seeds.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "27CCE18D-6FB8-48A0-8495-05510F2C0B10"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Seeds",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Explicit seeds: an array of { EntityName, RecordID } objects and/or concept names or IDs (a JSON string or a comma-separated list is also accepted). Provide this and/or Question.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8A9E5588-3FB4-42EA-B27C-B8C943AA8870"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Depth",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum hops from the seeds, 1 to 4. Default: 2.",
+            "IsRequired": false,
+            "DefaultValue": "2"
+          },
+          "primaryKey": {
+            "ID": "B5C0437B-91BD-44AE-B410-6B856DFFF30C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxNodes",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum nodes returned, 1 to 200. Default: 50.",
+            "IsRequired": false,
+            "DefaultValue": "50"
+          },
+          "primaryKey": {
+            "ID": "2A08CAF1-4A17-4290-B634-E9177D36AB55"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EdgeTypes",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Optional allow-list of edge type names to follow (array, JSON string or comma-separated list).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9C53C93A-2D49-4D6F-B55B-A83B0277B0E8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MinWeight",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional minimum edge weight to follow, 0 to 1.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "98588C09-BB2E-4C46-B826-AD60C1F64DB7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeProposed",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "When true, also follow stored edges still awaiting review (Status Proposed). Default: false.",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "55360060-BF77-4984-B17F-2861AB9BBD39"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Subgraph",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "The subgraph: { Nodes, Edges, Message? }. Each node carries its label, hop count and the edge that reached it.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7F17398A-E007-4E47-83BB-69A4D82A27FD"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PromptText",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The subgraph rendered as compact Markdown for a prompt.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "EE252530-3462-45C2-A7F3-B650C02F8EB3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NodeCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of nodes returned.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "03F6DC44-87CE-4E8A-9114-BC7E9EF89284"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EdgeCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of edges returned.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C217B0BB-D458-48CF-B0ED-3240201E3F8C"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A39B5FF6-A7DD-4851-9172-32713A601273"
+    }
+  }
+]
