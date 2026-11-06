@@ -695,6 +695,44 @@ describe('GenericDatabaseProvider', () => {
         });
     });
 
+    describe('CheckCreateRLS — field values in the candidate row', () => {
+        type CreateCheck = { CheckCreateRLS: (e: BaseEntity, u: UserInfo) => Promise<boolean> };
+        const check = (entity: BaseEntity) => (provider as unknown as CreateCheck).CheckCreateRLS(entity, mockUser);
+
+        function newRow(values: Record<string, unknown>, needsQuotes: Record<string, boolean>, filter = 'Priority < 10'): BaseEntity {
+            return {
+                EntityInfo: {
+                    GetUserRowLevelSecurityWhereClause: () => filter,
+                    Fields: Object.keys(values).map(n => ({ Name: n, IsVirtual: false, NeedsQuotes: needsQuotes[n] ?? true })),
+                },
+                Get: (n: string) => values[n],
+            } as unknown as BaseEntity;
+        }
+
+        it('renders numbers, booleans, dates and quoted strings', async () => {
+            provider.executeSQLResults = [[{ pass: 1 }]];
+            const entity = newRow(
+                { Priority: 5, Ratio: '2.5', Active: true, DueAt: new Date('2026-01-02T03:04:05.000Z'), Name: "O'Neil" },
+                { Priority: false, Ratio: false, Active: false, DueAt: false }
+            );
+
+            expect(await check(entity)).toBe(true);
+            const sql = provider.executeSQLCalls[0].sql;
+            expect(sql).toContain('5 AS "Priority"');
+            expect(sql).toContain('2.5 AS "Ratio"');
+            expect(sql).toContain('1 AS "Active"');
+            expect(sql).toContain(`'2026-01-02T03:04:05.000Z' AS "DueAt"`);
+            expect(sql).toContain(`'O''Neil' AS "Name"`);
+        });
+
+        it('throws for a numeric field whose value is not a number', async () => {
+            const entity = newRow({ Priority: 'abc' }, { Priority: false });
+
+            await expect(check(entity)).rejects.toThrow(/numeric field Priority does not parse as a number/);
+            expect(provider.executeSQLCalls).toHaveLength(0);
+        });
+    });
+
     describe('AdjustDatetimeFields (default no-op)', () => {
         it('returns rows unchanged by default', async () => {
             const now = new Date();

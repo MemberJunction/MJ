@@ -4194,18 +4194,33 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             if (field.IsVirtual) continue;
             const val = entity.Get(field.Name);
             if (val == null) continue;
-
-            let sqlVal: string;
-            if (typeof val === 'boolean') {
-                sqlVal = val ? '1' : '0';
-            } else if (field.NeedsQuotes) {
-                sqlVal = `'${String(val).replace(/'/g, "''")}'`;
-            } else {
-                sqlVal = String(val);
-            }
-            parts.push(`${sqlVal} AS ${this.QuoteIdentifier(field.Name)}`);
+            parts.push(`${this.renderRLSProjectionValue(field, val)} AS ${this.QuoteIdentifier(field.Name)}`);
         }
         return parts.join(', ');
+    }
+
+    /**
+     * Renders one field value for the RLS synthetic row: quoted values are `''`-escaped,
+     * booleans render as 1/0, dates as ISO strings, and numeric values must parse as finite
+     * numbers (anything else throws).
+     */
+    private renderRLSProjectionValue(field: EntityFieldInfo, val: unknown): string {
+        if (typeof val === 'boolean') {
+            return val ? '1' : '0';
+        }
+        if (field.NeedsQuotes) {
+            return `'${String(val).replace(/'/g, "''")}'`;
+        }
+        if (val instanceof Date) {
+            return `'${val.toISOString().replace(/'/g, "''")}'`;
+        }
+        const num = typeof val === 'number' ? val : Number(String(val));
+        if (!Number.isFinite(num)) {
+            throw new Error(
+                `Cannot build RLS projection: value for numeric field ${field.Name} does not parse as a number`
+            );
+        }
+        return String(num);
     }
 
     /**************************************************************************/
