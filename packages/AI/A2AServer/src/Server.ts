@@ -15,6 +15,7 @@ import { ShutdownRegistry } from "@memberjunction/global";
 import { DurableEntityA2ATaskStore, TaskStore, Task, TaskStatus, Message, Artifact, Part } from "./TaskStore.js";
 import { AgentCard, AgentCardAgentCapability, AgentCardEntityCapability, BuildAgentCard, ResolveAgentCardIdentity } from "./AgentCard.js";
 import { CreateTaskOperations } from "./TaskOperations.js";
+import { HandleTaskSend, TASK_NOT_FOUND_MESSAGE, type TaskSendOutcome, type TaskSendRequest } from "./TaskSend.js";
 
 // A2A Server Configuration
 const a2aServerPort = a2aServerSettings?.port || 3200;
@@ -282,9 +283,9 @@ function setupRoutes() {
                 ? { apiKeyHash: reqWithUser.apiKeyHash, user: reqWithUser.authenticatedUser }
                 : undefined;
             const result = await handleTaskSend(req.body, reqWithUser.authenticatedUser, authContext);
-            if ('errorCode' in result) {
-                res.status(result.errorCode).json({
-                    error: { code: result.errorCode, message: result.errorMessage }
+            if ('ErrorCode' in result) {
+                res.status(result.ErrorCode).json({
+                    error: { code: result.ErrorCode, message: result.ErrorMessage }
                 });
                 return;
             }
@@ -338,7 +339,7 @@ function setupRoutes() {
             res.status(404).json({
                 error: {
                     code: 404,
-                    message: `Task with ID ${taskId} not found`
+                    message: TASK_NOT_FOUND_MESSAGE
                 }
             });
             return;
@@ -358,7 +359,7 @@ function setupRoutes() {
             res.status(404).json({
                 error: {
                     code: 404,
-                    message: `Task with ID ${taskId} not found`
+                    message: TASK_NOT_FOUND_MESSAGE
                 }
             });
             return;
@@ -582,99 +583,23 @@ function getMatchingEntitiesForConfig(allEntities: EntityInfo[], config: any) {
     });
 }
 
-type TaskSendOutcome =
-    | { taskId: string; status: TaskStatus }
-    | { errorCode: 400 | 404; errorMessage: string };
-
 async function handleTaskSend(
     requestBody: Record<string, unknown>,
     authenticatedUser?: UserInfo,
     authContext?: AuthorizationContext
 ): Promise<TaskSendOutcome> {
-    const { taskId, message } = requestBody as { taskId?: string; message?: { parts?: Part[] } };
-
-    if (!taskId) {
-        // Create a new task
-        const newTaskId = generateId();
-        const task: Task = {
-            id: newTaskId,
-            status: 'pending',
-            messages: [],
-            artifacts: [],
-            created: new Date(),
-            updated: new Date()
-        };
-
-        if (message) {
-            const newMessage: Message = {
-                id: generateId(),
-                taskId: newTaskId,
-                role: 'user',
-                parts: message.parts || [],
-                created: new Date()
-            };
-            task.messages.push(newMessage);
-        }
-
-        tasks.Set(newTaskId, task, authenticatedUser?.ID);
-        await tasks.SaveTask(task, authenticatedUser, resolveProviderForRequest());
-
-        // Process the task asynchronously with the authenticated user
-        void processTask(task, authenticatedUser, authContext);
-
-        return {
-            taskId: newTaskId,
-            status: task.status
-        };
-    } else {
-        // Update an existing task: only the caller's own, so another user's task reads as missing
-        const task = authenticatedUser
-            ? ((await tasks.LoadTaskForUser(taskId, authenticatedUser, resolveProviderForRequest()))
-                ?? tasks.GetForUser(taskId, authenticatedUser.ID))
-            : undefined;
-
-        if (!task) {
-            return {
-                errorCode: 404,
-                errorMessage: `Task with ID ${taskId} not found`
-            };
-        }
-
-        if (task.status === 'completed' || task.status === 'cancelled' || task.status === 'failed') {
-            return {
-                errorCode: 400,
-                errorMessage: `Cannot update a task with status: ${task.status}`
-            };
-        }
-
-        if (message) {
-            const newMessage: Message = {
-                id: generateId(),
-                taskId,
-                role: 'user',
-                parts: message.parts || [],
-                created: new Date()
-            };
-            task.messages.push(newMessage);
-            task.updated = new Date();
-        }
-
-        await tasks.SaveTask(task, authenticatedUser, resolveProviderForRequest());
-
-        // Process the updated task with the authenticated user
-        void processTask(task, authenticatedUser, authContext);
-
-        return {
-            taskId: task.id,
-            status: task.status
-        };
-    }
+    return HandleTaskSend(requestBody as TaskSendRequest, authenticatedUser, {
+        Store: tasks,
+        Provider: resolveProviderForRequest(),
+        StartProcessing: (task) => void processTask(task, authenticatedUser, authContext),
+        NewID: generateId,
+    });
 }
 
 async function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res: Response, authenticatedUser?: UserInfo, authContext?: AuthorizationContext) {
     const result = await handleTaskSend(requestBody, authenticatedUser, authContext);
-    if ('errorCode' in result) {
-        res.write(`data: ${JSON.stringify({ error: { code: result.errorCode, message: result.errorMessage } })}\n\n`);
+    if ('ErrorCode' in result) {
+        res.write(`data: ${JSON.stringify({ error: { code: result.ErrorCode, message: result.ErrorMessage } })}\n\n`);
         res.end();
         return;
     }
@@ -684,7 +609,7 @@ async function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res
         : undefined;
 
     if (!task) {
-        res.write(`data: ${JSON.stringify({ error: { code: 404, message: "Task not found" } })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: { code: 404, message: TASK_NOT_FOUND_MESSAGE } })}\n\n`);
         res.end();
         return;
     }
