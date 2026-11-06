@@ -8936,6 +8936,8 @@ export class BaseAgent {
             AbsoluteMaxIterations: absoluteMaxIterations,
             ValidationRetryCount: this._generalValidationRetryCount,
             MaxValidationRetries: BaseAgent.MAX_VALIDATION_RETRIES,
+            EnsureTreeBudgetFn: (p) => this.ensureTreeBudget(p),
+            CheckTreeBudgetLimitFn: (p) => this.checkTreeBudgetLimit(p),
         });
         this._treeBudget = Budget;
         return this._budgetTracker.ToLegacyGuardrailVerdict(Result);
@@ -18387,7 +18389,12 @@ The context is now within limits. Please retry your request with the recovered c
         parentPayload: Record<string, unknown>,
         mappingConfig: string
     ): AgentPayloadChangeRequest<P> | null {
-        return this._stepDispatcher.ApplySubAgentOutputMapping(subAgentResult, parentPayload, mappingConfig);
+        return this._stepDispatcher.ApplySubAgentOutputMapping(
+            subAgentResult,
+            parentPayload,
+            mappingConfig,
+            (obj, path) => this.getValueFromPath(obj, path)
+        );
     }
 
     /**
@@ -18416,7 +18423,11 @@ The context is now within limits. Please retry your request with the recovered c
         parentPayload: Record<string, unknown>,
         mappingConfig: string
     ): Record<string, unknown> | null {
-        return this._stepDispatcher.ApplySubAgentInputMapping(parentPayload, mappingConfig);
+        return this._stepDispatcher.ApplySubAgentInputMapping(
+            parentPayload,
+            mappingConfig,
+            (obj, path) => this.getValueFromPath(obj, path)
+        );
     }
 
     /**
@@ -18433,7 +18444,12 @@ The context is now within limits. Please retry your request with the recovered c
         contextPaths: string[],
         params?: ExecuteAgentParams
     ): ChatMessage | null {
-        return this._stepDispatcher.PrepareRelatedSubAgentContextMessage(parentPayload, contextPaths, params);
+        return this._stepDispatcher.PrepareRelatedSubAgentContextMessage(
+            parentPayload,
+            contextPaths,
+            params,
+            (obj, path) => this.getValueFromPath(obj, path)
+        );
     }
 
     /**
@@ -20351,7 +20367,9 @@ The context is now within limits. Please retry your request with the recovered c
      * Strips "payload." prefix if present (for LLM convenience)
      */
     private getCollectionFromPayload(payload: unknown, path: string): unknown[] | null {
-        return this._stepDispatcher.GetCollectionFromPayload(payload, path);
+        return this._stepDispatcher.GetCollectionFromPayload(payload, path, (obj, p) =>
+            this.getValueFromPath(obj, p)
+        );
     }
 
     /**
@@ -20538,7 +20556,12 @@ The context is now within limits. Please retry your request with the recovered c
         initialPayload: unknown,
         continueOnError: boolean
     ): { results: BaseAgentNextStep[]; errors: LoopIterationError[]; finalPayload: unknown } {
-        return this._stepDispatcher.ApplyForEachResultsSequentially(sortedResults, initialPayload, continueOnError);
+        return this._stepDispatcher.ApplyForEachResultsSequentially(
+            sortedResults,
+            initialPayload,
+            continueOnError,
+            (p) => this.cloneSubAgentPayload(p)
+        );
     }
 
     private extractActionOutputObject(summaries: readonly ActionResultSummary[]): Record<string, unknown> {
@@ -20546,7 +20569,9 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     private applyLoopOutputFold(basePayload: unknown, output: Record<string, unknown>, mapping: string): Record<string, unknown> {
-        return this._stepDispatcher.ApplyLoopOutputFold(basePayload, output, mapping);
+        return this._stepDispatcher.ApplyLoopOutputFold(basePayload, output, mapping, (p) =>
+            this.cloneSubAgentPayload(p)
+        );
     }
 
     /**
@@ -20867,7 +20892,12 @@ The context is now within limits. Please retry your request with the recovered c
      * Formats loop iteration results as markdown.
      */
     private formatLoopResultsAsMarkdown(results: BaseAgentNextStep[], errors: LoopIterationError[]): string {
-        return this._stepDispatcher.FormatLoopResultsAsMarkdown(results, errors, this._actionResultCrush);
+        return this._stepDispatcher.FormatLoopResultsAsMarkdown(
+            results,
+            errors,
+            this._actionResultCrush,
+            (summaries) => this.formatActionResultsAsMarkdown(summaries)
+        );
     }
 
     /**

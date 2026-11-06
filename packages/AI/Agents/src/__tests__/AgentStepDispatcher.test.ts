@@ -134,4 +134,104 @@ describe('AgentStepDispatcher', () => {
             expect(({} as Record<string, unknown>).pollutedTestKey).toBeUndefined();
         });
     });
+
+    describe('BaseAgent subclass protected override hooks', () => {
+        it('should route internal loop and sub-agent methods through subclass overrides of formatActionResultsAsMarkdown, cloneSubAgentPayload, and getValueFromPath', async () => {
+            const { BaseAgent } = await import('../base-agent');
+
+            const formatCalls: number[] = [];
+            const cloneCalls: unknown[] = [];
+            const pathCalls: string[] = [];
+
+            class CustomStepHooksAgent extends BaseAgent {
+                protected override formatActionResultsAsMarkdown(
+                    actionSummaries: Parameters<BaseAgent['formatActionResultsAsMarkdown']>[0]
+                ): string {
+                    formatCalls.push(actionSummaries.length);
+                    return `[custom-markdown:${actionSummaries.map((s) => s.actionName).join(',')}]`;
+                }
+
+                protected override cloneSubAgentPayload<T>(payload: T): T {
+                    cloneCalls.push(payload);
+                    return super.cloneSubAgentPayload(payload);
+                }
+
+                protected override getValueFromPath(obj: unknown, path: string): unknown {
+                    pathCalls.push(path);
+                    return super.getValueFromPath(obj, path);
+                }
+            }
+
+            const agent = new CustomStepHooksAgent();
+
+            // 1. formatLoopResultsAsMarkdown -> formatActionResultsAsMarkdown override
+            const loopStep: BaseAgentNextStep = {
+                step: 'Retry',
+                terminate: false,
+                priorStepResult: [
+                    {
+                        actionName: 'LookupOrder',
+                        success: true,
+                        resultCode: 'SUCCESS',
+                        message: 'ok',
+                        params: [],
+                    },
+                ],
+            };
+            const loopMarkdown = agent['formatLoopResultsAsMarkdown']([loopStep], []);
+            expect(formatCalls).toEqual([1]);
+            expect(loopMarkdown).toContain('[custom-markdown:LookupOrder]');
+
+            // 2. applyLoopOutputFold & applyForEachResultsSequentially -> cloneSubAgentPayload override
+            const foldedDirect = agent['applyLoopOutputFold'](
+                { items: ['a'] },
+                { next: 'b' },
+                JSON.stringify({ next: 'items[]' })
+            );
+            expect(foldedDirect).toEqual({ items: ['a', 'b'] });
+            expect(cloneCalls).toHaveLength(1);
+
+            const sequential = agent['applyForEachResultsSequentially'](
+                [
+                    {
+                        index: 0,
+                        result: loopStep,
+                        appliedFolds: [{ output: { next: 'c' }, mapping: JSON.stringify({ next: 'items[]' }) }],
+                    },
+                ],
+                { items: ['x'] },
+                false
+            );
+            expect(sequential.finalPayload).toEqual({ items: ['x', 'c'] });
+            expect(cloneCalls).toHaveLength(2);
+
+            // 3. applySubAgentInputMapping, applySubAgentOutputMapping, prepareRelatedSubAgentContextMessage, getCollectionFromPayload -> getValueFromPath override
+            const subIn = agent['applySubAgentInputMapping'](
+                { account: { id: 'acc-1' } },
+                JSON.stringify({ 'account.id': 'target.accountId' })
+            );
+            expect(subIn).toEqual({ target: { accountId: 'acc-1' } });
+
+            const subOut = agent['applySubAgentOutputMapping']<{ out: { score: number } }>(
+                { metrics: { score: 42 } },
+                {},
+                JSON.stringify({ 'metrics.score': 'out.score' })
+            );
+            expect(subOut).toEqual({ updateElements: { out: { score: 42 } } });
+
+            const ctxMsg = agent['prepareRelatedSubAgentContextMessage'](
+                { profile: { region: 'EU' } },
+                ['profile.region']
+            );
+            expect(ctxMsg?.content).toContain('EU');
+
+            const collection = agent['getCollectionFromPayload'](
+                { rows: [{ id: 1 }, { id: 2 }] },
+                'payload.rows'
+            );
+            expect(collection).toHaveLength(2);
+
+            expect(pathCalls).toEqual(['account.id', 'metrics.score', 'profile.region', 'rows']);
+        });
+    });
 });

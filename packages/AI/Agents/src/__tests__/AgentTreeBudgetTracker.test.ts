@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AgentTreeBudgetTracker } from '../AgentTreeBudgetTracker';
+import { BaseAgent } from '../base-agent';
 import type {
+    AgentTreeBudget,
     AIPromptRunResult,
     ExecuteAgentParams,
     MJAIAgentEntityExtended,
@@ -276,6 +278,74 @@ describe('AgentTreeBudgetTracker', () => {
             expect(tracker.IncrementExecutionCount(counts, 'action-1')).toBe(2);
             expect(tracker.GetExecutionCount(counts, 'action-1')).toBe(2);
             expect(tracker.GetExecutionCount(counts, 'action-2')).toBe(0);
+        });
+    });
+
+    describe('BaseAgent subclass protected override hooks', () => {
+        it('should route hasExceededAgentRunGuardrails through subclass overrides of ensureTreeBudget and checkTreeBudgetLimit', async () => {
+            const ensureCalls: Array<ExecuteAgentParams | undefined> = [];
+            const checkCalls: Array<ExecuteAgentParams | undefined> = [];
+
+            class CustomBudgetAgent extends BaseAgent {
+                protected override ensureTreeBudget(params?: ExecuteAgentParams): AgentTreeBudget {
+                    ensureCalls.push(params);
+                    const budget = super.ensureTreeBudget(params);
+                    budget.maxTreeTokens = 777;
+                    return budget;
+                }
+
+                protected override checkTreeBudgetLimit(params?: ExecuteAgentParams): {
+                    exceeded: boolean;
+                    type?: 'cost' | 'tokens' | 'iterations' | 'time';
+                    limit?: number;
+                    current?: number;
+                    reason?: string;
+                } {
+                    checkCalls.push(params);
+                    return {
+                        exceeded: true,
+                        type: 'tokens',
+                        limit: 777,
+                        current: 999,
+                        reason: 'Custom subclass tree budget limit triggered',
+                    };
+                }
+
+                public async EvaluateGuardrails(
+                    params: ExecuteAgentParams,
+                    run: MJAIAgentRunEntityExtended
+                ): Promise<{
+                    exceeded: boolean;
+                    type?: 'cost' | 'tokens' | 'iterations' | 'time';
+                    limit?: number;
+                    current?: number;
+                    reason?: string;
+                }> {
+                    return this.hasExceededAgentRunGuardrails(params, run);
+                }
+            }
+
+            const customAgent = new CustomBudgetAgent();
+            const params: ExecuteAgentParams = {
+                agent: createAgentStub({ MaxIterationsPerRun: 10 }),
+                conversationMessages: [],
+            };
+            const run = createRunStub({ TotalPromptIterations: 1 });
+
+            const verdict = await customAgent.EvaluateGuardrails(params, run);
+
+            expect(ensureCalls).toHaveLength(1);
+            expect(ensureCalls[0]).toBe(params);
+            expect(checkCalls).toHaveLength(1);
+            expect(checkCalls[0]).toBe(params);
+            expect(params.treeBudget?.maxTreeTokens).toBe(777);
+            expect(verdict).toEqual({
+                exceeded: true,
+                type: 'tokens',
+                limit: 777,
+                current: 999,
+                reason: 'Custom subclass tree budget limit triggered',
+            });
         });
     });
 });

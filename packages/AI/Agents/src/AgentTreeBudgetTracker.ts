@@ -77,6 +77,16 @@ export interface AgentGuardrailEvaluationInput {
     ValidationRetryCount: number;
     MaxValidationRetries: number;
     NowMs?: number;
+    /**
+     * Optional callback routing tree-budget initialization through `BaseAgent.ensureTreeBudget`
+     * so subclasses overriding the `protected` method are invoked.
+     */
+    EnsureTreeBudgetFn?: (params?: ExecuteAgentParams) => AgentTreeBudget;
+    /**
+     * Optional callback routing tree-budget evaluation through `BaseAgent.checkTreeBudgetLimit`
+     * so subclasses overriding the `protected` method are invoked.
+     */
+    CheckTreeBudgetLimitFn?: (params?: ExecuteAgentParams) => LegacyAgentGuardrailVerdict;
 }
 
 /**
@@ -343,13 +353,17 @@ export class AgentTreeBudgetTracker {
             maxValidationRetries,
             nowMs
         );
-        const budget = this.EnsureTreeBudget(params, currentBudget, fallbackParams, nowMs);
+        const budget = input.EnsureTreeBudgetFn
+            ? input.EnsureTreeBudgetFn(params)
+            : this.EnsureTreeBudget(params, currentBudget, fallbackParams, nowMs);
         if (perRunCheck.Exceeded) {
             return { Result: perRunCheck, Budget: budget };
         }
 
         this.SyncRunFloorIntoTreeBudget(budget, agentRun);
-        const treeCheck = this.CheckTreeBudgetLimit(budget, nowMs);
+        const treeCheck = input.CheckTreeBudgetLimitFn
+            ? this.FromLegacyGuardrailVerdict(input.CheckTreeBudgetLimitFn(params))
+            : this.CheckTreeBudgetLimit(budget, nowMs);
         return { Result: treeCheck, Budget: budget };
     }
 
@@ -367,6 +381,23 @@ export class AgentTreeBudgetTracker {
             ...(result.Limit !== undefined ? { limit: result.Limit } : {}),
             ...(result.Current !== undefined ? { current: result.Current } : {}),
             ...(result.Reason !== undefined ? { reason: result.Reason } : {}),
+        };
+    }
+
+    /**
+     * Converts a legacy camelCase {@link LegacyAgentGuardrailVerdict} returned by a
+     * `BaseAgent.checkTreeBudgetLimit` override into an {@link AgentGuardrailCheckResult}.
+     */
+    public FromLegacyGuardrailVerdict(verdict: LegacyAgentGuardrailVerdict): AgentGuardrailCheckResult {
+        if (!verdict.exceeded) {
+            return { Exceeded: false };
+        }
+        return {
+            Exceeded: true,
+            ...(verdict.type !== undefined ? { Type: verdict.type } : {}),
+            ...(verdict.limit !== undefined ? { Limit: verdict.limit } : {}),
+            ...(verdict.current !== undefined ? { Current: verdict.current } : {}),
+            ...(verdict.reason !== undefined ? { Reason: verdict.reason } : {}),
         };
     }
 

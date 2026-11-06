@@ -364,7 +364,9 @@ export class AgentStepDispatcher {
         subAgentResult: Record<string, unknown>,
         _parentPayload: Record<string, unknown>,
         mappingConfig: string,
+        getPathFn?: (obj: unknown, path: string) => unknown,
     ): AgentPayloadChangeRequest<P> | null {
+        const pathGetter = getPathFn ?? GetValueFromPath;
         try {
             const mapping = JSON.parse(mappingConfig) as Record<string, string>;
             const updateObj: Record<string, unknown> = {};
@@ -375,7 +377,7 @@ export class AgentStepDispatcher {
                 if (subAgentPath === '*') {
                     value = subAgentResult;
                 } else {
-                    value = GetValueFromPath(subAgentResult, subAgentPath);
+                    value = pathGetter(subAgentResult, subAgentPath);
                 }
 
                 if (value !== undefined) {
@@ -424,7 +426,9 @@ export class AgentStepDispatcher {
     public ApplySubAgentInputMapping(
         parentPayload: Record<string, unknown>,
         mappingConfig: string,
+        getPathFn?: (obj: unknown, path: string) => unknown,
     ): Record<string, unknown> | null {
+        const pathGetter = getPathFn ?? GetValueFromPath;
         try {
             const mapping = JSON.parse(mappingConfig) as Record<string, string>;
             const subAgentPayload: Record<string, unknown> = {};
@@ -435,7 +439,7 @@ export class AgentStepDispatcher {
                 if (parentPath === '*') {
                     value = parentPayload;
                 } else {
-                    value = GetValueFromPath(parentPayload, parentPath);
+                    value = pathGetter(parentPayload, parentPath);
                 }
 
                 if (value !== undefined) {
@@ -482,6 +486,7 @@ export class AgentStepDispatcher {
         parentPayload: Record<string, unknown>,
         contextPaths: string[],
         params?: ExecuteAgentParams,
+        getPathFn?: (obj: unknown, path: string) => unknown,
     ): ChatMessage | null {
         if (!contextPaths || contextPaths.length === 0) {
             return null;
@@ -494,6 +499,7 @@ export class AgentStepDispatcher {
             };
         }
 
+        const pathGetter = getPathFn ?? GetValueFromPath;
         const contextData: Record<string, unknown> = {};
 
         for (const path of contextPaths) {
@@ -502,7 +508,7 @@ export class AgentStepDispatcher {
             if (ConversationMessageResolver.isConversationReference(path) && params?.conversationMessages) {
                 value = ConversationMessageResolver.resolve(path, params.conversationMessages);
             } else {
-                value = GetValueFromPath(parentPayload, path);
+                value = pathGetter(parentPayload, path);
             }
 
             if (value !== undefined) {
@@ -558,7 +564,11 @@ export class AgentStepDispatcher {
     /**
      * Extracts an array collection from a payload path or a `static:[...]` literal.
      */
-    public GetCollectionFromPayload(payload: unknown, path: string): unknown[] | null {
+    public GetCollectionFromPayload(
+        payload: unknown,
+        path: string,
+        getPathFn?: (obj: unknown, path: string) => unknown,
+    ): unknown[] | null {
         const trimmed = path.trim();
         if (trimmed.toLowerCase().startsWith('static:')) {
             try {
@@ -569,8 +579,9 @@ export class AgentStepDispatcher {
             }
         }
 
+        const pathGetter = getPathFn ?? GetValueFromPath;
         const cleanPath = path.toLowerCase().startsWith('payload.') ? path.substring(8) : path;
-        const value = GetValueFromPath(payload, cleanPath);
+        const value = pathGetter(payload, cleanPath);
         return Array.isArray(value) ? value : null;
     }
 
@@ -607,6 +618,7 @@ export class AgentStepDispatcher {
         }>,
         initialPayload: unknown,
         continueOnError: boolean,
+        clonePayloadFn?: <T>(payload: T) => T,
     ): { results: BaseAgentNextStep[]; errors: LoopIterationError[]; finalPayload: unknown } {
         let currentPayload = initialPayload;
         const results: BaseAgentNextStep[] = [];
@@ -622,7 +634,12 @@ export class AgentStepDispatcher {
                 results.push(result);
                 if (appliedFolds && appliedFolds.length > 0) {
                     for (const fold of appliedFolds) {
-                        currentPayload = this.ApplyLoopOutputFold(currentPayload, fold.output, fold.mapping);
+                        currentPayload = this.ApplyLoopOutputFold(
+                            currentPayload,
+                            fold.output,
+                            fold.mapping,
+                            clonePayloadFn,
+                        );
                     }
                 } else {
                     currentPayload = payload || currentPayload;
@@ -647,9 +664,11 @@ export class AgentStepDispatcher {
         basePayload: unknown,
         output: Record<string, unknown>,
         mapping: string,
+        clonePayloadFn?: <T>(payload: T) => T,
     ): Record<string, unknown> {
+        const clone = clonePayloadFn ?? (<T>(p: T): T => this.CloneSubAgentPayload(p));
         const target: Record<string, unknown> = IsPlainObject(basePayload)
-            ? this.CloneSubAgentPayload(basePayload as Record<string, unknown>)
+            ? clone(basePayload as Record<string, unknown>)
             : {};
         const mapped = ApplyOutputMapping(output, mapping, target);
         return mapped.updates;
@@ -676,7 +695,12 @@ export class AgentStepDispatcher {
         results: BaseAgentNextStep[],
         errors: LoopIterationError[],
         crushConfig?: ActionResultCrushConfig,
+        formatActionResultsFn?: (summaries: ActionResultSummary[]) => string,
     ): string {
+        const formatActions =
+            formatActionResultsFn ??
+            ((summaries: ActionResultSummary[]) =>
+                this.FormatActionResultsAsMarkdown(summaries, crushConfig));
         const lines: string[] = [];
 
         for (let i = 0; i < results.length; i++) {
@@ -684,7 +708,7 @@ export class AgentStepDispatcher {
 
             if (Array.isArray(iterResult)) {
                 lines.push(`### Iteration ${i + 1}`);
-                lines.push(this.FormatActionResultsAsMarkdown(iterResult as ActionResultSummary[], crushConfig));
+                lines.push(formatActions(iterResult as ActionResultSummary[]));
             } else if (iterResult != null) {
                 lines.push(`### Iteration ${i + 1}`);
                 const text = typeof iterResult === 'string' ? iterResult : JSON.stringify(iterResult);
