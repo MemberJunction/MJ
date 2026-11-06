@@ -365,7 +365,7 @@ describe('AgentFeedbackCoordinator', () => {
                         {
                             ID: 'r2',
                             RequestForUserID: USER_1,
-                            Status: 'InProgress',
+                            Status: 'Requested',
                             RequestedAt: '2026-11-02T11:00:00Z',
                         },
                         // USER_2 and USER_3 both have 1 open request; USER_3's latest assignment is older than USER_2's
@@ -396,6 +396,72 @@ describe('AgentFeedbackCoordinator', () => {
                 createParamsStub()
             );
             expect(picked).toBe(USER_3);
+        });
+
+        it('should count a user with 10 older open Requested rows beyond 500 newer closed rows in LeastBusy mode', async () => {
+            const allRequests = [
+                // 1 recent open request for USER_2 (newest row)
+                {
+                    ID: 'open-user-2',
+                    RequestForUserID: USER_2,
+                    Status: 'Requested' as const,
+                    RequestedAt: '2026-11-06T12:00:00Z',
+                },
+                // 500 newer Responded requests for USER_1
+                ...Array.from({ length: 500 }, (_, i) => ({
+                    ID: `closed-${i}`,
+                    RequestForUserID: USER_1,
+                    Status: 'Responded' as const,
+                    RequestedAt: '2026-11-05T12:00:00Z',
+                })),
+                // 10 older open requests for USER_1 (sit past index 500 if closed rows are not filtered out)
+                ...Array.from({ length: 10 }, (_, i) => ({
+                    ID: `open-user-1-${i}`,
+                    RequestForUserID: USER_1,
+                    Status: 'Requested' as const,
+                    RequestedAt: '2026-10-01T12:00:00Z',
+                })),
+            ];
+
+            mockRunViews
+                .mockResolvedValueOnce([
+                    makeViewResult([{ ID: LIST_ID, EntityID: 'e-users', Entity: 'MJ: Users' }]),
+                    makeViewResult([
+                        { ID: 'ld-1', RecordID: USER_1, Sequence: 1, Status: 'Pending' },
+                        { ID: 'ld-2', RecordID: USER_2, Sequence: 2, Status: 'Pending' },
+                    ]),
+                ])
+                .mockImplementationOnce(async (views: RunViewParams[]) => {
+                    const reqView = views[1];
+                    const filterStr = String(reqView.ExtraFilter ?? '');
+                    const filtered = filterStr.includes("Status = 'Requested'")
+                        ? allRequests.filter((r) => r.Status === 'Requested')
+                        : allRequests;
+                    const capped =
+                        reqView.IgnoreMaxRows === true
+                            ? filtered
+                            : filtered.slice(0, reqView.MaxRows ?? 1000);
+                    return [
+                        makeViewResult([
+                            { ID: USER_1, IsActive: true },
+                            { ID: USER_2, IsActive: true },
+                        ]),
+                        makeViewResult(capped),
+                    ];
+                });
+
+            const picked = await coordinator.ResolveAssigneeUserID(
+                { type: 'List', listID: LIST_ID, listStrategy: 'LeastBusy' },
+                createParamsStub()
+            );
+            expect(picked).toBe(USER_2);
+
+            const secondBatchViews = mockRunViews.mock.calls[1][0];
+            expect(secondBatchViews[1].ExtraFilter).toBe(
+                `RequestForUserID IN ('${USER_1}', '${USER_2}') AND Status = 'Requested'`
+            );
+            expect(secondBatchViews[1].IgnoreMaxRows).toBe(true);
+            expect(secondBatchViews[1].MaxRows).toBeUndefined();
         });
 
         it('should use the injected RandomInt function in Random mode and exclude inactive users', async () => {

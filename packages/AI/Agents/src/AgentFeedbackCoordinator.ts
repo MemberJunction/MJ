@@ -74,6 +74,7 @@ type ListSummaryRow = Pick<MJListEntity, 'ID' | 'EntityID' | 'Entity'>;
 type ListDetailStatus = MJListDetailEntity['Status'];
 type ListDetailSummaryRow = Pick<MJListDetailEntity, 'ID' | 'ListID' | 'RecordID' | 'Sequence' | 'Status'>;
 type UserActiveSummaryRow = Pick<MJUserEntity, 'ID' | 'IsActive'>;
+type AgentRequestStatus = MJAIAgentRequestEntity['Status'];
 type AgentRequestSummaryRow = Pick<
     MJAIAgentRequestEntity,
     'ID' | 'AgentID' | 'RequestForUserID' | 'Status' | 'RequestedAt'
@@ -88,6 +89,11 @@ const EXCLUDED_LIST_DETAIL_STATUSES: readonly ListDetailStatus[] = ['Disabled', 
 const EXCLUDED_LIST_DETAIL_SQL_LIST = EXCLUDED_LIST_DETAIL_STATUSES.map(
     (status) => `'${EscapeSQLString(status)}'`
 ).join(', ');
+
+/**
+ * The sole open status on `MJ: AI Agent Requests` (`MJAIAgentRequestEntity['Status']`).
+ */
+const OPEN_AGENT_REQUEST_STATUS: AgentRequestStatus = 'Requested';
 
 /**
  * Coordinates creation of persistent `MJ: AI Agent Requests` rows, response-form
@@ -552,11 +558,17 @@ export class AgentFeedbackCoordinator {
         ];
 
         if (mode === 'LeastBusy') {
+            // Query only open ('Requested') rows with IgnoreMaxRows: true so a high volume
+            // of recent closed rows never pushes older open requests past a row cap.
+            // Filtering to Status = 'Requested' is also sufficient for tie-breaking:
+            // - For candidates tied on openCount > 0, their latest open RequestedAt breaks the tie.
+            // - For candidates tied at openCount === 0, latestAssignedMs is -Infinity for both
+            //   so list sequence order breaks the tie deterministically.
             batchParams.push({
                 EntityName: 'MJ: AI Agent Requests',
-                ExtraFilter: `RequestForUserID IN (${userInListClause})`,
+                ExtraFilter: `RequestForUserID IN (${userInListClause}) AND Status = '${OPEN_AGENT_REQUEST_STATUS}'`,
                 OrderBy: 'RequestedAt DESC, ID DESC',
-                MaxRows: 500,
+                IgnoreMaxRows: true,
                 Fields: ['ID', 'RequestForUserID', 'Status', 'RequestedAt'],
                 ResultType: 'simple',
             });
@@ -645,8 +657,7 @@ export class AgentFeedbackCoordinator {
             const userRequests = requestsByUser.Get(candidateUserID) ?? [];
 
             for (const req of userRequests) {
-                const status = String(req.Status ?? '');
-                if (status === 'Requested' || status === 'InProgress') {
+                if (req.Status === OPEN_AGENT_REQUEST_STATUS) {
                     openCount += 1;
                 }
                 if (req.RequestedAt) {
