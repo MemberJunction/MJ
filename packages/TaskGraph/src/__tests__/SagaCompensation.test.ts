@@ -416,6 +416,52 @@ describe('TaskGraphDispatcher saga coordinator', () => {
         expect(c.skips).toEqual([]);
         expect(compensationOf(db, 'T-B')).toBeUndefined();
     });
+
+    it("sets aside a graph whose saga cannot resolve its submitter and keeps processing the next graph (S6)", async () => {
+        const OTHER_PARENT = '00000000-0000-4000-8000-000000000200';
+        checkoutGraph(db);
+        // The submitter of the saga graph has been deactivated, so resolving who compensations run as throws.
+        const inactive = { ...TEST_USER, IsActive: false } as UserInfo;
+        globalRef.___SINGLETON__UserCache = { Users: [inactive], FindUser: async ({ ID }) => (ID === TEST_USER.ID ? inactive : undefined) };
+        const provider = { GetEntityObject: vi.fn(async () => db.Entity()) } as unknown as IMetadataProvider;
+        const dispatcher = new TaskGraphDispatcher(
+            { CreateProvider: vi.fn().mockResolvedValue(provider) }, { RunAgentForTask: vi.fn() }, SYSTEM_USER, { InstanceID: 'inst-isolate' },
+        );
+        const otherParent = { ...parentRow(), ID: OTHER_PARENT, Status: 'Pending', PercentComplete: 0 } as unknown as MJTaskEntity;
+        (otherParent as unknown as { InputPayload: string }).InputPayload = JSON.stringify(BuildTaskGraphParentInputPayload({
+            continuation: 'none', reinvokeDepth: 0, failureSemantics: 'block', submittedByAgentRunID: null, submittedByUserID: TEST_USER.ID,
+        }));
+        const otherTask = { ID: 'O-1', Name: 'Other', Status: 'Pending', ParentID: OTHER_PARENT, StepType: 'Action', CompensatesTaskID: null } as unknown as MJTaskEntity;
+        const otherGraph = {
+            ...graphOf(new SagaDb(), otherParent), parentTaskID: OTHER_PARENT, rawDependencies: [],
+            nodes: [{ id: 'O-1', status: 'Pending' }], entityById: new Map([['O-1', otherTask]]),
+        };
+        const internals = dispatcher as unknown as {
+            claims: Record<string, unknown>;
+            debugStateByGraph: Map<string, object>;
+            loadGraphState: ReturnType<typeof vi.fn>;
+            propagateAndRollup: (p: IMetadataProvider, ids: string[]) => Promise<Array<{ parentTaskID: string }>>;
+        };
+        internals.claims.TrySkipPending = vi.fn(async () => false);
+        internals.claims.TryWriteDebugFields = vi.fn(async () => true);
+        internals.claims.TryUpdateParentProgress = vi.fn(async () => true);
+        internals.debugStateByGraph.set(PARENT_ID, {});
+        internals.debugStateByGraph.set(OTHER_PARENT, {});
+        internals.loadGraphState = vi.fn(async (_p: IMetadataProvider, id: string) => (id === PARENT_ID ? graphOf(db, parentRow()) : otherGraph));
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+        const live = await internals.propagateAndRollup(provider, [PARENT_ID, OTHER_PARENT]);
+        expect(live.map((g) => g.parentTaskID)).toEqual([OTHER_PARENT]);
+        expect(internals.claims.TryUpdateParentProgress).toHaveBeenCalledWith(provider, OTHER_PARENT, expect.anything(), expect.anything(), SYSTEM_USER);
+
+        // The next pass leaves the failing graph alone instead of failing on it again, and says nothing new about it.
+        const reportsAfterFirstPass = errors.mock.calls.filter((call) => String(call[0]).includes(PARENT_ID)).length;
+        internals.loadGraphState.mockClear();
+        await internals.propagateAndRollup(provider, [PARENT_ID, OTHER_PARENT]);
+        expect(internals.loadGraphState.mock.calls.map((call) => call[1])).toEqual([OTHER_PARENT]);
+        expect(reportsAfterFirstPass).toBe(1);
+        expect(errors.mock.calls.filter((call) => String(call[0]).includes(PARENT_ID)).length).toBe(1);
+    });
 });
 
 describe('TaskGraphDispatcher action retries (B4c)', () => {

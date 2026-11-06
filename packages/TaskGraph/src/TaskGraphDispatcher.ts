@@ -164,6 +164,13 @@ const STOP_DRAIN_TIMEOUT_MS = 30_000;
 const MAX_SETTLEMENT_RETRY_PASSES = 20;
 
 /**
+ * How long this instance leaves a graph alone after processing it threw (S6) — an inactive submitter,
+ * a row that will not read. Long enough that a graph that cannot be processed is not re-attempted and
+ * re-reported every poll; short enough that one that recovers (the user reactivated) moves on its own.
+ */
+const FAILED_GRAPH_BACKOFF_MS = 5 * 60 * 1000;
+
+/**
  * What the cost rollup managed to do.
  *
  * `refused-permanent` is a decision the next pass would repeat identically — a truncated tree, a
@@ -562,6 +569,12 @@ export class TaskGraphDispatcher implements IShutdownable {
      * by the wide startup sweep, which is the durable backstop this leans on.
      */
     private readonly retryingSettlement = new Map<string, number>();
+
+    /**
+     * Graphs whose processing threw on this instance, and when it may try each again (S6). Reported
+     * once per failure streak, not once per poll; cleared the first time the graph processes cleanly.
+     */
+    private readonly failedGraphs = new UUIDMap<{ RetryAt: number }>();
 
     /**
      * Graphs whose settled-branch ANNOUNCEMENTS have already been made by this process.
@@ -1396,271 +1409,310 @@ export class TaskGraphDispatcher implements IShutdownable {
         const graphs = graphIDs ?? await this.findActiveGraphIDs(provider);
         const survivingGraphs: GraphState[] = [];
         for (const parentID of graphs) {
-            // Edge overrides apply to propagation exactly as they apply to claiming — a branch the
-            // operator answered 'false' must cascade its skips here, not merely stop being claimed.
-            // `loadGraphState` loads the parent row once and populates `debugStateByGraph` and
-            // `ownerByParentID` from it, avoiding a separate `primeDebugStates` RunView round-trip.
-            let graph = await this.loadGraphState(provider, parentID);
-            if (graph.nodes.length === 0) continue;
-            const debug = await this.readDebugState(provider, parentID);
-
-            // Human steps are only swept when the loaded graph actually contains at least one
-            // non-terminal Human task. When a graph has 0 pending human tasks (99% of graphs), this
-            // check short-circuits in memory with 0 DB queries instead of running 3 RunViews per graph.
-            const pendingHumanTasks = [...graph.entityById.values()].filter(
-                (t) => t.Status === 'Pending' && IsHumanTask(t),
-            );
-            if (pendingHumanTasks.length > 0) {
-                await this.expireOverdueRequests(provider, parentID, pendingHumanTasks);
-                const settledHumanCount = await this.settleAnsweredHumanTasks(provider, parentID, pendingHumanTasks);
-                await this.reconcileWaitingHumanTasks(provider, parentID, pendingHumanTasks);
-                if (settledHumanCount > 0) {
-                    // Re-evaluate conditional edges and skip/block cascades now that a human step's
-                    // answer and status have landed, reusing the already-loaded parent task.
-                    graph = await this.loadGraphState(provider, parentID, debug, graph.parent);
-                    if (graph.nodes.length === 0) continue;
-                }
-            }
-
-            // SKIPS FIRST — before blocking, before eligibility. A task whose gating predecessors
-            // are all Skipped is simultaneously "eligible" (Skipped satisfies a prerequisite) and
-            // "to be skipped"; deciding eligibility first would dispatch the branch nobody took.
-            //
-            // `unreachableTaskIDs` seeds this too, and that is a correction (R6). A target whose only
-            // route in was an ordinary conditional edge that evaluated DEFINITELY FALSE is a branch
-            // that was not taken — semantically identical to an XOR loser — yet it used to settle
-            // `Blocked`. That made `Blocked` mean two unrelated things: "the workflow chose another
-            // route" and "something upstream broke". A reader cannot tell those apart, so every
-            // conditional workflow looked half-failed and people went hunting for bugs that did not
-            // exist. `Blocked` is now reserved for FAILURE-driven unsatisfiability.
-            // Computed once in `loadGraphState` so the claim filter sees the same set this pass is
-            // about to write — see R2-14 there.
-            const toSkip = graph.cascadeSkipTaskIDs;
-            const skippedByRoute: string[] = [];
-            for (const taskID of toSkip) {
-                const entity = graph.entityById.get(taskID);
-                if (!entity || entity.Status !== 'Pending') continue;
-                // The in-memory check above is a cheap pre-filter; the guard that matters is IN the
-                // statement (R3-1's audit item). This snapshot was loaded at the top of the pass and
-                // a task can be claimed and started before its skip write lands — R2-14 closed that
-                // window for the claim filter, and this closes it for the write itself.
-                const skipTypeID = await this.workflowTaskTypeID(provider);
-                if (skipTypeID && await this.claims.TrySkipPending(provider, taskID, skipTypeID, this.contextUser)) {
-                    entity.Status = 'Skipped';
-                    skippedByRoute.push(taskID);
-                    LogStatus(`[TaskGraphDispatcher] Skipped '${entity.Name}' (${taskID}) — another branch was taken.`);
-                    // Announced separately from TaskBlocked because it means something different to
-                    // a viewer: nothing went wrong, this route simply was not the one chosen.
-                    this.emit({
-                        Kind: 'TaskSkipped',
-                        ParentTaskID: parentID,
-                        OwnerUserID: await this.resolveOwner(provider, parentID),
-                        TaskID: taskID,
-                        TaskName: entity.Name,
-                        Status: 'Skipped',
-                    });
-                    // Keep the in-memory graph consistent so the blocking pass below and the rollup
-                    // both see the skip rather than a stale Pending.
-                    const node = graph.nodes.find((n) => n.id === taskID);
-                    if (node) node.status = 'Skipped';
-                }
-            }
-
-            // A human step reached by a route the workflow did not take has the same zombie request
-            // as one skipped by an early finish (R2-10): notified, `Requested` forever, and invisible
-            // to the settle and expiry sweeps because they filter on Pending tasks and this one is
-            // not Pending any more. Same treatment, different reason.
-            await this.withdrawOpenRequests(
-                provider, skippedByRoute, 'The workflow took a different route, so this step is no longer needed.',
-            );
-
-            // Only failure-driven unsatisfiability reaches here now; not-taken branches were skipped
-            // above. A task already Skipped is left alone rather than overwritten — the two passes
-            // must not fight over the same row.
-            const toBlock = [...ComputeTasksToBlock(graph.nodes, graph.edges, graph.handledFailureIDs)]
-                .filter((id) => !toSkip.has(id));
-            for (const taskID of toBlock) {
-                const entity = graph.entityById.get(taskID);
-                if (!entity) continue;
-                entity.Status = 'Blocked';
-                if (await entity.Save()) {
-                    const node = graph.nodes.find((n) => n.id === taskID);
-                    if (node) node.status = 'Blocked';
-                    LogStatus(`[TaskGraphDispatcher] Blocked '${entity.Name}' (${taskID}) — a dependency can never be satisfied.`);
-                    // Worth announcing on its own: a blocked step is the one outcome a viewer would
-                    // otherwise see as a task that simply never starts.
-                    this.emit({
-                        Kind: 'TaskBlocked',
-                        ParentTaskID: parentID,
-                        OwnerUserID: await this.resolveOwner(provider, parentID),
-                        TaskID: taskID,
-                        TaskName: entity.Name,
-                        Status: 'Blocked',
-                    });
-                }
-            }
-
-            graph = await this.coordinateSagaCompensation(provider, parentID, graph, debug);
-
-            // Holds are passed in, or the detector reports a held graph as healthy: a held target's
-            // gating edge is still live and its origin Complete, so ComputeEligibleTasks counts it
-            // as eligible and "something is eligible" reads as "not stalled". A graph waiting
-            // forever on a broken condition then produced no diagnostics at all.
-            if (IsGraphStalled(graph.nodes, graph.edges, graph.holdTaskIDs)) {
-                LogError(`[TaskGraphDispatcher] Graph ${parentID} is stalled: pending work with no satisfiable path.`);
-            }
-
-            // Reuse the in-memory `graph` (whose `nodes` and `entityById` were updated in-place as
-            // skips and blocks landed) and its pre-loaded `graph.parent` instead of reloading the
-            // graph state and parent task a second time.
-            const rollup = ComputeParentRollup(graph.nodes, graph.handledFailureIDs);
-            let parent = graph.parent;
-            if (!parent) {
-                const fallbackParent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
-                if (!(await fallbackParent.Load(parentID))) continue;
-                parent = fallbackParent;
-                graph.parent = parent;
-            }
-            // A graph starts when its first step does.
-            //
-            // `StartedAt` is stamped by the CLAIM, and a parent is never claimed — it is a container,
-            // not a unit of work — so the graph row carried no start time even after it completed.
-            // A settled workflow therefore reported a CompletedAt with no beginning: it sorted as
-            // "not started" in the run tree, showed no timestamp, and no duration could be computed
-            // for the thing whose duration people actually ask about.
-            //
-            // Taken from the earliest child rather than from the clock, because that is when work
-            // genuinely began — a graph can sit Pending for a long time between submission (already
-            // recorded as CreatedAt) and a dispatcher picking up its first task.
-            // Column-scoped for the same reason the terminal write is: a full-row save here would
-            // carry this instance's `InputPayload` snapshot and could erase a continuation marker
-            // another instance had just claimed. Guarded on `StartedAt IS NULL`, so calling it on
-            // every pass is free.
-            const earliestChildStart = this.earliestStart(graph.entityById);
-            if (parent.StartedAt == null && earliestChildStart != null) {
-                await this.claims.TryStampParentStart(provider, parentID, earliestChildStart, this.contextUser);
-                parent.StartedAt = earliestChildStart;
-            }
-
-            // THE TERMINAL WRITE IS GUARDED AND COLUMN-SCOPED, not a full-row save.
-            //
-            // `GenerateSaveSQL` sends every updateable column on every save, so a full-row save
-            // carries the whole in-memory snapshot — including `InputPayload`, where the continuation
-            // marker lives. Two instances both compute the terminal rollup; if one claims the marker
-            // and the other then saves its pre-marker snapshot, the marker is ERASED and the
-            // settlement delivers twice. For `reinvoke` that is a second billed agent turn.
-            //
-            // Guarding on "not already terminal" also makes the write idempotent across the
-            // re-entrant settle path below, and replaces an unchecked `Save()` whose failure left the
-            // graph active — re-emitting frames and recomputing cost every poll, forever.
-            if (rollup.outcome === 'settled') {
-                const settled = await this.claims.TrySettleParent(
-                    provider, parentID, rollup.status, rollup.percentComplete, this.contextUser,
-                );
-                if (!settled && !TERMINAL_TASK_STATUSES.has(parent.Status)) {
-                    // Neither "already terminal" nor a successful write: the statement failed. Leave
-                    // the graph active so the next pass retries rather than settling on a status the
-                    // database never accepted. Re-queued explicitly, because a failed write is
-                    // exactly the case where the row's own timestamp does not advance.
-                    LogError(`[TaskGraphDispatcher] Could not write terminal status for graph ${parentID}; leaving it active to retry.`);
-                    this.keepRetryingSettlement(parentID);
-                    continue;
-                }
-                parent.Status = rollup.status;
-            } else {
-                if (parent.Status !== rollup.status || parent.PercentComplete !== rollup.percentComplete) {
-                    // Guarded and column-scoped for the same reason the terminal write is — and the race
-                    // here needs no exotic timing. This instance may have computed a non-terminal rollup
-                    // from a snapshot taken before another instance settled the graph; a full-row save
-                    // would then REVERT the status and erase the continuation marker with it, and the
-                    // next pass would settle and deliver a second time. See TryUpdateParentProgress.
-                    await this.claims.TryUpdateParentProgress(
-                        provider, parentID, rollup.status, rollup.percentComplete, this.contextUser,
-                    );
-                }
-                survivingGraphs.push(graph);
-            }
-
-            if (rollup.outcome === 'settled') {
-                // ANNOUNCE ONCE PER PROCESS, RETRY THE REST (R2-12). Layout and the frame are
-                // idempotent facts about a finished graph; the cost, lifecycle and delivery writes
-                // below are the ones re-entry exists to retry. Without this split, a graph that keeps
-                // failing to settle re-persisted geometry and re-emitted the same frame every poll
-                // for the whole rescue window.
-                if (!this.announcedSettlements.has(parentID)) {
-                    // Geometry is settled once, here, so every viewer of this run agrees on it.
-                    await this.persistComputedLayout(graph);
-                    // Emitted before the continuation is delivered, and outside its once-only guard: a
-                    // viewer watching the run should learn it finished whether or not this instance is
-                    // the one that wins the delivery CAS.
-                    this.emit({
-                        Kind: 'GraphSettled',
-                        ParentTaskID: parentID,
-                        OwnerUserID: await this.resolveOwner(provider, parentID),
-                        Status: rollup.status,
-                        CompletedCount: graph.nodes.filter((n) => n.status === 'Complete').length,
-                        TotalCount: graph.nodes.length,
-                    });
-                    this.announcedSettlements.add(parentID);
-                }
-                // READ-ONLY GATE, before any write to the submitting run's half (R2-2).
-                //
-                // A graph can settle before the run that submitted it has parked at all. `BaseAgent`
-                // sets `Paused` in `finalizeAgentRun`, AFTER the graph is durable and dispatchable —
-                // so a fast graph finishes first, and both writes below then land wrong: the
-                // lifecycle write silently returns (its guard is `Status === 'Paused'`), and the cost
-                // write is overwritten moments later by finalize's own full-row save, which carries
-                // the in-memory nulls it had before the dispatcher wrote anything.
-                //
-                // Deferring the whole half — rather than doing the parts that happen to work — is
-                // what keeps the marker honest: nothing below claims it, so the graph stays
-                // terminal-and-undelivered and the rescue sweep brings it back next pass, by which
-                // time finalize has parked the run and both writes land.
-                const readiness = await this.submittingRunReadiness(provider, parent);
-                if (readiness.Verdict === 'defer') { this.keepRetryingSettlement(parentID); continue; }
-
-                // A settled graph will not produce another verdict, claim or progress report, so the
-                // per-graph observability caches for it are dead weight from here. Unbounded, they
-                // are a slow leak in a process that runs for weeks — one that grows with every
-                // workflow the server has ever seen rather than with anything live. (A deferred
-                // settlement below repopulates them naturally on the retry pass.)
-                this.forgetGraphObservability(parentID);
-                // R3-8: the rollup gets a verdict, and a TRANSIENT failure defers exactly as a
-                // failed lifecycle write does. Continuing past one would settle the run and claim
-                // the marker, which permanently excludes the graph from the rescue sweep — making
-                // the rollup's own "retrying on a later settlement" log a promise it could not keep.
-                // Permanent refusals (truncated tree, graph not in the tree) proceed as before:
-                // those do not clear on their own, and deferring on them would stall forever.
-                if (await this.rollUpCostToSubmittingRun(provider, parent) === 'failed-transient') {
-                    this.keepRetryingSettlement(parentID);
-                    continue;
-                }
-                // Deliberately AFTER the rollup and OUTSIDE its refusal paths. The rollup declines
-                // to write a number it cannot stand behind — a truncated tree, an unreachable graph
-                // — and every one of those returns early. If the run's lifecycle were settled in
-                // there, a refused rollup would strand the run parked forever, which is a far worse
-                // failure than a missing cost figure. Cost and lifecycle are separate concerns with
-                // separate failure modes, so they get separate writes.
-                if (await this.settleSubmittingRun(provider, parent, rollup.status) === 'defer') {
-                    // The lifecycle write did not land. Delivering now would claim the marker and
-                    // make this the LAST pass to look at the graph — leaving the run Paused forever,
-                    // which is the exact permanence R2-2 removes. Leave the marker unset and retry.
-                    this.keepRetryingSettlement(parentID);
-                    continue;
-                }
-                if (await this.deliverContinuation(provider, parent, graph, readiness.SubmitterCancelled)) {
-                    // Delivered, expired, or lost the CAS to a peer — every one of those means this
-                    // graph is somebody's finished business and needs nothing further from here.
-                    this.retryingSettlement.delete(parentID);
-                    this.announcedSettlements.delete(parentID);
-                } else {
-                    // This instance cannot deliver. Stay quiet about it — the frame is already out —
-                    // and leave the graph for a capable peer via the sweep.
-                    this.keepRetryingSettlement(parentID);
-                }
+            // ONE GRAPH'S FAILURE IS ITS OWN (S6). Anything this throws (an inactive submitter in the
+            // saga's user resolution, an unreadable row) used to escape the loop and abort the whole
+            // pass, on every instance, every poll: no graph anywhere settled, skipped or claimed.
+            if (this.isBackingOffFailedGraph(parentID)) continue;
+            try {
+                const live = await this.propagateAndRollupGraph(provider, parentID);
+                this.failedGraphs.Delete(parentID);
+                if (live) survivingGraphs.push(live);
+            } catch (e) {
+                this.backOffFailedGraph(parentID, e);
             }
         }
         return survivingGraphs;
+    }
+
+    /** Whether a graph that threw is still inside its back-off on this instance. */
+    private isBackingOffFailedGraph(parentID: string): boolean {
+        const failed = this.failedGraphs.Get(parentID);
+        return failed !== undefined && Date.now() < failed.RetryAt;
+    }
+
+    /**
+     * Sets a graph whose processing threw aside for {@link FAILED_GRAPH_BACKOFF_MS}, so the other graphs
+     * go on settling and claiming. Logged on the first failure of a streak only.
+     */
+    private backOffFailedGraph(parentID: string, error: unknown): void {
+        const alreadyFailing = this.failedGraphs.Has(parentID);
+        this.failedGraphs.Set(parentID, { RetryAt: Date.now() + FAILED_GRAPH_BACKOFF_MS });
+        if (alreadyFailing) return;
+        LogError(
+            `[TaskGraphDispatcher] Graph ${parentID} could not be processed and is set aside for ` +
+            `${FAILED_GRAPH_BACKOFF_MS / 1000}s; the other graphs continue. ${error instanceof Error ? error.message : String(error)}`,
+        );
+    }
+
+    /**
+     * {@link propagateAndRollup} for one graph: returns the graph when it is still live (so claiming can
+     * reuse it), or `undefined` when it settled, emptied or is waiting on a retry.
+     */
+    private async propagateAndRollupGraph(provider: IMetadataProvider, parentID: string): Promise<GraphState | undefined> {
+        // Edge overrides apply to propagation exactly as they apply to claiming — a branch the
+        // operator answered 'false' must cascade its skips here, not merely stop being claimed.
+        // `loadGraphState` loads the parent row once and populates `debugStateByGraph` and
+        // `ownerByParentID` from it, avoiding a separate `primeDebugStates` RunView round-trip.
+        let graph = await this.loadGraphState(provider, parentID);
+        if (graph.nodes.length === 0) return undefined;
+        const debug = await this.readDebugState(provider, parentID);
+
+        // Human steps are only swept when the loaded graph actually contains at least one
+        // non-terminal Human task. When a graph has 0 pending human tasks (99% of graphs), this
+        // check short-circuits in memory with 0 DB queries instead of running 3 RunViews per graph.
+        const pendingHumanTasks = [...graph.entityById.values()].filter(
+            (t) => t.Status === 'Pending' && IsHumanTask(t),
+        );
+        if (pendingHumanTasks.length > 0) {
+            await this.expireOverdueRequests(provider, parentID, pendingHumanTasks);
+            const settledHumanCount = await this.settleAnsweredHumanTasks(provider, parentID, pendingHumanTasks);
+            await this.reconcileWaitingHumanTasks(provider, parentID, pendingHumanTasks);
+            if (settledHumanCount > 0) {
+                // Re-evaluate conditional edges and skip/block cascades now that a human step's
+                // answer and status have landed, reusing the already-loaded parent task.
+                graph = await this.loadGraphState(provider, parentID, debug, graph.parent);
+                if (graph.nodes.length === 0) return undefined;
+            }
+        }
+
+        // SKIPS FIRST — before blocking, before eligibility. A task whose gating predecessors
+        // are all Skipped is simultaneously "eligible" (Skipped satisfies a prerequisite) and
+        // "to be skipped"; deciding eligibility first would dispatch the branch nobody took.
+        //
+        // `unreachableTaskIDs` seeds this too, and that is a correction (R6). A target whose only
+        // route in was an ordinary conditional edge that evaluated DEFINITELY FALSE is a branch
+        // that was not taken — semantically identical to an XOR loser — yet it used to settle
+        // `Blocked`. That made `Blocked` mean two unrelated things: "the workflow chose another
+        // route" and "something upstream broke". A reader cannot tell those apart, so every
+        // conditional workflow looked half-failed and people went hunting for bugs that did not
+        // exist. `Blocked` is now reserved for FAILURE-driven unsatisfiability.
+        // Computed once in `loadGraphState` so the claim filter sees the same set this pass is
+        // about to write — see R2-14 there.
+        const toSkip = graph.cascadeSkipTaskIDs;
+        const skippedByRoute: string[] = [];
+        for (const taskID of toSkip) {
+            const entity = graph.entityById.get(taskID);
+            if (!entity || entity.Status !== 'Pending') continue;
+            // The in-memory check above is a cheap pre-filter; the guard that matters is IN the
+            // statement (R3-1's audit item). This snapshot was loaded at the top of the pass and
+            // a task can be claimed and started before its skip write lands — R2-14 closed that
+            // window for the claim filter, and this closes it for the write itself.
+            const skipTypeID = await this.workflowTaskTypeID(provider);
+            if (skipTypeID && await this.claims.TrySkipPending(provider, taskID, skipTypeID, this.contextUser)) {
+                entity.Status = 'Skipped';
+                skippedByRoute.push(taskID);
+                LogStatus(`[TaskGraphDispatcher] Skipped '${entity.Name}' (${taskID}) — another branch was taken.`);
+                // Announced separately from TaskBlocked because it means something different to
+                // a viewer: nothing went wrong, this route simply was not the one chosen.
+                this.emit({
+                    Kind: 'TaskSkipped',
+                    ParentTaskID: parentID,
+                    OwnerUserID: await this.resolveOwner(provider, parentID),
+                    TaskID: taskID,
+                    TaskName: entity.Name,
+                    Status: 'Skipped',
+                });
+                // Keep the in-memory graph consistent so the blocking pass below and the rollup
+                // both see the skip rather than a stale Pending.
+                const node = graph.nodes.find((n) => n.id === taskID);
+                if (node) node.status = 'Skipped';
+            }
+        }
+
+        // A human step reached by a route the workflow did not take has the same zombie request
+        // as one skipped by an early finish (R2-10): notified, `Requested` forever, and invisible
+        // to the settle and expiry sweeps because they filter on Pending tasks and this one is
+        // not Pending any more. Same treatment, different reason.
+        await this.withdrawOpenRequests(
+            provider, skippedByRoute, 'The workflow took a different route, so this step is no longer needed.',
+        );
+
+        // Only failure-driven unsatisfiability reaches here now; not-taken branches were skipped
+        // above. A task already Skipped is left alone rather than overwritten — the two passes
+        // must not fight over the same row.
+        const toBlock = [...ComputeTasksToBlock(graph.nodes, graph.edges, graph.handledFailureIDs)]
+            .filter((id) => !toSkip.has(id));
+        for (const taskID of toBlock) {
+            const entity = graph.entityById.get(taskID);
+            if (!entity) continue;
+            entity.Status = 'Blocked';
+            if (await entity.Save()) {
+                const node = graph.nodes.find((n) => n.id === taskID);
+                if (node) node.status = 'Blocked';
+                LogStatus(`[TaskGraphDispatcher] Blocked '${entity.Name}' (${taskID}) — a dependency can never be satisfied.`);
+                // Worth announcing on its own: a blocked step is the one outcome a viewer would
+                // otherwise see as a task that simply never starts.
+                this.emit({
+                    Kind: 'TaskBlocked',
+                    ParentTaskID: parentID,
+                    OwnerUserID: await this.resolveOwner(provider, parentID),
+                    TaskID: taskID,
+                    TaskName: entity.Name,
+                    Status: 'Blocked',
+                });
+            }
+        }
+
+        graph = await this.coordinateSagaCompensation(provider, parentID, graph, debug);
+
+        // Holds are passed in, or the detector reports a held graph as healthy: a held target's
+        // gating edge is still live and its origin Complete, so ComputeEligibleTasks counts it
+        // as eligible and "something is eligible" reads as "not stalled". A graph waiting
+        // forever on a broken condition then produced no diagnostics at all.
+        if (IsGraphStalled(graph.nodes, graph.edges, graph.holdTaskIDs)) {
+            LogError(`[TaskGraphDispatcher] Graph ${parentID} is stalled: pending work with no satisfiable path.`);
+        }
+
+        // Reuse the in-memory `graph` (whose `nodes` and `entityById` were updated in-place as
+        // skips and blocks landed) and its pre-loaded `graph.parent` instead of reloading the
+        // graph state and parent task a second time.
+        const rollup = ComputeParentRollup(graph.nodes, graph.handledFailureIDs);
+        let parent = graph.parent;
+        if (!parent) {
+            const fallbackParent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+            if (!(await fallbackParent.Load(parentID))) return undefined;
+            parent = fallbackParent;
+            graph.parent = parent;
+        }
+        // A graph starts when its first step does.
+        //
+        // `StartedAt` is stamped by the CLAIM, and a parent is never claimed — it is a container,
+        // not a unit of work — so the graph row carried no start time even after it completed.
+        // A settled workflow therefore reported a CompletedAt with no beginning: it sorted as
+        // "not started" in the run tree, showed no timestamp, and no duration could be computed
+        // for the thing whose duration people actually ask about.
+        //
+        // Taken from the earliest child rather than from the clock, because that is when work
+        // genuinely began — a graph can sit Pending for a long time between submission (already
+        // recorded as CreatedAt) and a dispatcher picking up its first task.
+        // Column-scoped for the same reason the terminal write is: a full-row save here would
+        // carry this instance's `InputPayload` snapshot and could erase a continuation marker
+        // another instance had just claimed. Guarded on `StartedAt IS NULL`, so calling it on
+        // every pass is free.
+        const earliestChildStart = this.earliestStart(graph.entityById);
+        if (parent.StartedAt == null && earliestChildStart != null) {
+            await this.claims.TryStampParentStart(provider, parentID, earliestChildStart, this.contextUser);
+            parent.StartedAt = earliestChildStart;
+        }
+
+        // THE TERMINAL WRITE IS GUARDED AND COLUMN-SCOPED, not a full-row save.
+        //
+        // `GenerateSaveSQL` sends every updateable column on every save, so a full-row save
+        // carries the whole in-memory snapshot — including `InputPayload`, where the continuation
+        // marker lives. Two instances both compute the terminal rollup; if one claims the marker
+        // and the other then saves its pre-marker snapshot, the marker is ERASED and the
+        // settlement delivers twice. For `reinvoke` that is a second billed agent turn.
+        //
+        // Guarding on "not already terminal" also makes the write idempotent across the
+        // re-entrant settle path below, and replaces an unchecked `Save()` whose failure left the
+        // graph active — re-emitting frames and recomputing cost every poll, forever.
+        if (rollup.outcome === 'settled') {
+            const settled = await this.claims.TrySettleParent(
+                provider, parentID, rollup.status, rollup.percentComplete, this.contextUser,
+            );
+            if (!settled && !TERMINAL_TASK_STATUSES.has(parent.Status)) {
+                // Neither "already terminal" nor a successful write: the statement failed. Leave
+                // the graph active so the next pass retries rather than settling on a status the
+                // database never accepted. Re-queued explicitly, because a failed write is
+                // exactly the case where the row's own timestamp does not advance.
+                LogError(`[TaskGraphDispatcher] Could not write terminal status for graph ${parentID}; leaving it active to retry.`);
+                this.keepRetryingSettlement(parentID);
+                return undefined;
+            }
+            parent.Status = rollup.status;
+        } else {
+            if (parent.Status !== rollup.status || parent.PercentComplete !== rollup.percentComplete) {
+                // Guarded and column-scoped for the same reason the terminal write is — and the race
+                // here needs no exotic timing. This instance may have computed a non-terminal rollup
+                // from a snapshot taken before another instance settled the graph; a full-row save
+                // would then REVERT the status and erase the continuation marker with it, and the
+                // next pass would settle and deliver a second time. See TryUpdateParentProgress.
+                await this.claims.TryUpdateParentProgress(
+                    provider, parentID, rollup.status, rollup.percentComplete, this.contextUser,
+                );
+            }
+            return graph;
+        }
+
+        if (rollup.outcome === 'settled') {
+            // ANNOUNCE ONCE PER PROCESS, RETRY THE REST (R2-12). Layout and the frame are
+            // idempotent facts about a finished graph; the cost, lifecycle and delivery writes
+            // below are the ones re-entry exists to retry. Without this split, a graph that keeps
+            // failing to settle re-persisted geometry and re-emitted the same frame every poll
+            // for the whole rescue window.
+            if (!this.announcedSettlements.has(parentID)) {
+                // Geometry is settled once, here, so every viewer of this run agrees on it.
+                await this.persistComputedLayout(graph);
+                // Emitted before the continuation is delivered, and outside its once-only guard: a
+                // viewer watching the run should learn it finished whether or not this instance is
+                // the one that wins the delivery CAS.
+                this.emit({
+                    Kind: 'GraphSettled',
+                    ParentTaskID: parentID,
+                    OwnerUserID: await this.resolveOwner(provider, parentID),
+                    Status: rollup.status,
+                    CompletedCount: graph.nodes.filter((n) => n.status === 'Complete').length,
+                    TotalCount: graph.nodes.length,
+                });
+                this.announcedSettlements.add(parentID);
+            }
+            // READ-ONLY GATE, before any write to the submitting run's half (R2-2).
+            //
+            // A graph can settle before the run that submitted it has parked at all. `BaseAgent`
+            // sets `Paused` in `finalizeAgentRun`, AFTER the graph is durable and dispatchable —
+            // so a fast graph finishes first, and both writes below then land wrong: the
+            // lifecycle write silently returns (its guard is `Status === 'Paused'`), and the cost
+            // write is overwritten moments later by finalize's own full-row save, which carries
+            // the in-memory nulls it had before the dispatcher wrote anything.
+            //
+            // Deferring the whole half — rather than doing the parts that happen to work — is
+            // what keeps the marker honest: nothing below claims it, so the graph stays
+            // terminal-and-undelivered and the rescue sweep brings it back next pass, by which
+            // time finalize has parked the run and both writes land.
+            const readiness = await this.submittingRunReadiness(provider, parent);
+            if (readiness.Verdict === 'defer') { this.keepRetryingSettlement(parentID); return undefined; }
+
+            // A settled graph will not produce another verdict, claim or progress report, so the
+            // per-graph observability caches for it are dead weight from here. Unbounded, they
+            // are a slow leak in a process that runs for weeks — one that grows with every
+            // workflow the server has ever seen rather than with anything live. (A deferred
+            // settlement below repopulates them naturally on the retry pass.)
+            this.forgetGraphObservability(parentID);
+            // R3-8: the rollup gets a verdict, and a TRANSIENT failure defers exactly as a
+            // failed lifecycle write does. Continuing past one would settle the run and claim
+            // the marker, which permanently excludes the graph from the rescue sweep — making
+            // the rollup's own "retrying on a later settlement" log a promise it could not keep.
+            // Permanent refusals (truncated tree, graph not in the tree) proceed as before:
+            // those do not clear on their own, and deferring on them would stall forever.
+            if (await this.rollUpCostToSubmittingRun(provider, parent) === 'failed-transient') {
+                this.keepRetryingSettlement(parentID);
+                return undefined;
+            }
+            // Deliberately AFTER the rollup and OUTSIDE its refusal paths. The rollup declines
+            // to write a number it cannot stand behind — a truncated tree, an unreachable graph
+            // — and every one of those returns early. If the run's lifecycle were settled in
+            // there, a refused rollup would strand the run parked forever, which is a far worse
+            // failure than a missing cost figure. Cost and lifecycle are separate concerns with
+            // separate failure modes, so they get separate writes.
+            if (await this.settleSubmittingRun(provider, parent, rollup.status) === 'defer') {
+                // The lifecycle write did not land. Delivering now would claim the marker and
+                // make this the LAST pass to look at the graph — leaving the run Paused forever,
+                // which is the exact permanence R2-2 removes. Leave the marker unset and retry.
+                this.keepRetryingSettlement(parentID);
+                return undefined;
+            }
+            if (await this.deliverContinuation(provider, parent, graph, readiness.SubmitterCancelled)) {
+                // Delivered, expired, or lost the CAS to a peer — every one of those means this
+                // graph is somebody's finished business and needs nothing further from here.
+                this.retryingSettlement.delete(parentID);
+                this.announcedSettlements.delete(parentID);
+            } else {
+                // This instance cannot deliver. Stay quiet about it — the frame is already out —
+                // and leave the graph for a capable peer via the sweep.
+                this.keepRetryingSettlement(parentID);
+            }
+        }
+        return undefined;
     }
 
     /**
