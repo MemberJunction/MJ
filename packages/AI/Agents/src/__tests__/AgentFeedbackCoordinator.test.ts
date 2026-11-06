@@ -650,6 +650,33 @@ describe('AgentFeedbackCoordinator', () => {
             );
         });
 
+        it('should rotate in RoundRobin order for a listStrategy it does not recognise, reading the RoundRobin cursor', async () => {
+            const strategy = ParseAssignmentStrategy(JSON.stringify({ type: 'List', listID: LIST_ID, listStrategy: 'Sequential' }));
+            mockRunViews
+                .mockResolvedValueOnce([
+                    makeViewResult([{ ID: LIST_ID, EntityID: 'e-users', Entity: 'MJ: Users' }]),
+                    makeViewResult([
+                        { ID: 'ld-1', RecordID: USER_1, Sequence: 1, Status: 'Pending' },
+                        { ID: 'ld-2', RecordID: USER_2, Sequence: 2, Status: 'Pending' },
+                    ]),
+                ])
+                .mockResolvedValueOnce([
+                    makeViewResult([
+                        { ID: USER_1, IsActive: true },
+                        { ID: USER_2, IsActive: true },
+                    ]),
+                    makeViewResult([{ ID: 'req-prev', AgentID: AGENT_ID, RequestForUserID: USER_1, RequestedAt: '2026-11-05T10:00:00Z' }]),
+                ]);
+
+            const picked = await coordinator.ResolveAssigneeUserID(strategy, createParamsStub());
+
+            expect(picked).toBe(USER_2);
+            const selectionViews = mockRunViews.mock.calls[1][0];
+            expect(selectionViews).toHaveLength(2);
+            expect(selectionViews[1].MaxRows).toBe(1);
+            expect(LogError).not.toHaveBeenCalled();
+        });
+
         it('should log an error via LogError and fall back to the first active list member when the RoundRobin or LeastBusy request query fails', async () => {
             mockRunViews
                 .mockResolvedValueOnce([

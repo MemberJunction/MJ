@@ -17,6 +17,7 @@ import {
     LogStatus,
     RunView,
     RunViewParams,
+    RunViewResult,
     UserInfo,
 } from '@memberjunction/core';
 import {
@@ -502,65 +503,51 @@ export class AgentFeedbackCoordinator {
             const effectiveProvider = provider ?? params.provider;
             // global-provider-ok: Falls back to default RunView only when caller did not supply a provider
             const rv = effectiveProvider ? RunView.FromMetadataProvider(effectiveProvider) : new RunView();
-            const escapedListId = EscapeSQLString(listId);
-
-            const [listResult, detailsResult] = await rv.RunViews(
-                [
-                    {
-                        EntityName: 'MJ: Lists',
-                        ExtraFilter: `ID = '${escapedListId}'`,
-                        Fields: ['ID', 'EntityID', 'Entity'],
-                        ResultType: 'simple',
-                    },
-                    {
-                        EntityName: 'MJ: List Details',
-                        ExtraFilter: `ListID = '${escapedListId}' AND (Status IS NULL OR Status NOT IN (${EXCLUDED_LIST_DETAIL_SQL_LIST}))`,
-                        OrderBy: 'Sequence ASC, ID ASC',
-                        Fields: ['ID', 'ListID', 'RecordID', 'Sequence', 'Status'],
-                        ResultType: 'simple',
-                    },
-                ],
-                params.contextUser
-            );
-
-            if (!listResult?.Success || !detailsResult?.Success) {
-                LogError(
-                    `Failed to load list ${listId} for assignment: ${listResult?.ErrorMessage || detailsResult?.ErrorMessage || 'unknown error'}`
-                );
+            const candidateUserIDs = await this.loadListCandidateUserIDs(rv, listId, params, effectiveProvider);
+            if (!candidateUserIDs) {
                 return params.contextUser?.ID ?? null;
             }
-
-            const lists = (listResult.Results as ListSummaryRow[]) ?? [];
-            const listRow = lists[0];
-            if (!listRow || !this.isUsersList(listRow, effectiveProvider)) {
-                LogStatus(
-                    `⚠️ List ${listId} does not exist or does not target 'MJ: Users'; ${this.describeListFallbackTarget(params)}`
-                );
-                return params.contextUser?.ID ?? null;
-            }
-
-            const detailRows = (detailsResult.Results as ListDetailSummaryRow[]) ?? [];
-            const candidateUserIDs = this.extractOrderedCandidateUserIDs(detailRows);
-            if (candidateUserIDs.length === 0) {
-                LogStatus(
-                    `ℹ️ List ${listId} has no active member rows; ${this.describeListFallbackTarget(params)}`
-                );
-                return params.contextUser?.ID ?? null;
-            }
-
             const mode: ListAssignmentMode = strategy.listStrategy ?? 'RoundRobin';
-            return await this.selectFromActiveListMembers(
-                rv,
-                mode,
-                listId,
-                candidateUserIDs,
-                params
-            );
+            return await this.selectFromActiveListMembers(rv, mode, listId, candidateUserIDs, params);
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : String(error);
             LogError(`Error resolving List assignment strategy for list ${listId}: ${message}`);
             return params.contextUser?.ID ?? null;
         }
+    }
+
+    /**
+     * Reads the list and its member rows in one batch and returns the member user IDs in list order,
+     * or `null` (logged) when the list cannot be read, does not target `MJ: Users`, or has no members.
+     */
+    private async loadListCandidateUserIDs(
+        rv: RunView,
+        listId: string,
+        params: ExecuteAgentParams,
+        provider?: IMetadataProvider
+    ): Promise<string[] | null> {
+        const [listResult, detailsResult] = await rv.RunViews(this.buildListViews(listId), params.contextUser);
+        if (!listResult?.Success || !detailsResult?.Success) {
+            LogError(
+                `Failed to load list ${listId} for assignment: ${listResult?.ErrorMessage || detailsResult?.ErrorMessage || 'unknown error'}`
+            );
+            return null;
+        }
+
+        const listRow = ((listResult.Results as ListSummaryRow[]) ?? [])[0];
+        if (!listRow || !this.isUsersList(listRow, provider)) {
+            LogStatus(
+                `⚠️ List ${listId} does not exist or does not target 'MJ: Users'; ${this.describeListFallbackTarget(params)}`
+            );
+            return null;
+        }
+
+        const candidateUserIDs = this.extractOrderedCandidateUserIDs((detailsResult.Results as ListDetailSummaryRow[]) ?? []);
+        if (candidateUserIDs.length === 0) {
+            LogStatus(`ℹ️ List ${listId} has no active member rows; ${this.describeListFallbackTarget(params)}`);
+            return null;
+        }
+        return candidateUserIDs;
     }
 
     private isUsersList(listRow: ListSummaryRow, provider?: IMetadataProvider): boolean {
@@ -613,6 +600,11 @@ export class AgentFeedbackCoordinator {
         return orderedUserIDs;
     }
 
+    /**
+     * Reads which candidates are active users, together with the request rows the mode needs, in one
+     * batch, then picks among the active members. A failed user read falls back to the caller; a failed
+     * request read falls back to the first active member, so the request still lands on the list.
+     */
     private async selectFromActiveListMembers(
         rv: RunView,
         mode: ListAssignmentMode,
@@ -620,109 +612,147 @@ export class AgentFeedbackCoordinator {
         candidateUserIDs: string[],
         params: ExecuteAgentParams
     ): Promise<string | null> {
-        const userInListClause = candidateUserIDs
-            .map((id) => `'${EscapeSQLString(id)}'`)
-            .join(', ');
+        const modeViews = this.buildListModeViews(mode, candidateUserIDs, params);
+        const [usersResult, ...modeResults] = await rv.RunViews(
+            [this.buildActiveUsersView(candidateUserIDs), ...modeViews],
+            params.contextUser
+        );
+        if (!usersResult?.Success) {
+            LogError(`Failed to load active users for list ${listId}: ${usersResult?.ErrorMessage || 'unknown error'}`);
+            return params.contextUser?.ID ?? null;
+        }
 
-        const batchParams: RunViewParams[] = [
+        const activeUserIDs = this.filterActiveUserIDs(candidateUserIDs, (usersResult.Results as UserActiveSummaryRow[]) ?? []);
+        if (activeUserIDs.length === 0) {
+            LogStatus(`ℹ️ List ${listId} has zero active users; ${this.describeListFallbackTarget(params)}`);
+            return params.contextUser?.ID ?? null;
+        }
+
+        const failedRead = this.findFailedRead(modeViews.length, modeResults);
+        if (failedRead !== null) {
+            LogError(
+                `Failed to load agent requests for list ${listId} (${mode}): ${failedRead}; falling back to first active list member`
+            );
+            return activeUserIDs[0];
+        }
+        return this.pickListMember(mode, activeUserIDs, modeResults);
+    }
+
+    /** The list row and its member rows (members in a disqualifying status are left out). */
+    private buildListViews(listId: string): RunViewParams[] {
+        const escapedListId = EscapeSQLString(listId);
+        return [
             {
-                EntityName: 'MJ: Users',
-                ExtraFilter: `ID IN (${userInListClause}) AND IsActive = 1`,
-                Fields: ['ID', 'IsActive'],
+                EntityName: 'MJ: Lists',
+                ExtraFilter: `ID = '${escapedListId}'`,
+                Fields: ['ID', 'EntityID', 'Entity'],
+                ResultType: 'simple',
+            },
+            {
+                EntityName: 'MJ: List Details',
+                ExtraFilter: `ListID = '${escapedListId}' AND (Status IS NULL OR Status NOT IN (${EXCLUDED_LIST_DETAIL_SQL_LIST}))`,
+                OrderBy: 'Sequence ASC, ID ASC',
+                Fields: ['ID', 'ListID', 'RecordID', 'Sequence', 'Status'],
                 ResultType: 'simple',
             },
         ];
+    }
 
+    /** IDs as a SQL `IN (...)` list body, each value escaped. */
+    private toSqlIdList(ids: string[]): string {
+        return ids.map((id) => `'${EscapeSQLString(id)}'`).join(', ');
+    }
+
+    private buildActiveUsersView(candidateUserIDs: string[]): RunViewParams {
+        return {
+            EntityName: 'MJ: Users',
+            ExtraFilter: `ID IN (${this.toSqlIdList(candidateUserIDs)}) AND IsActive = 1`,
+            Fields: ['ID', 'IsActive'],
+            ResultType: 'simple',
+        };
+    }
+
+    /**
+     * The `MJ: AI Agent Requests` reads a mode needs: none for `Random`; the agent's latest assignment to a
+     * member for `RoundRobin` (also used for an unrecognised mode); for `LeastBusy`, every open request of the
+     * members plus their newest assignments for the tie-break.
+     */
+    private buildListModeViews(
+        mode: ListAssignmentMode,
+        candidateUserIDs: string[],
+        params: ExecuteAgentParams
+    ): RunViewParams[] {
+        const userInListClause = this.toSqlIdList(candidateUserIDs);
+        if (mode === 'Random') {
+            return [];
+        }
         if (mode === 'LeastBusy') {
-            // Load: every open ('Requested') row with no row cap, so a high volume of recent closed
-            // rows never pushes older open requests out of the count.
-            batchParams.push({
-                EntityName: 'MJ: AI Agent Requests',
-                ExtraFilter: `RequestForUserID IN (${userInListClause}) AND Status = '${OPEN_AGENT_REQUEST_STATUS}'`,
-                OrderBy: 'RequestedAt DESC, ID DESC',
-                IgnoreMaxRows: true,
-                Fields: ['ID', 'RequestForUserID', 'Status', 'RequestedAt'],
-                ResultType: 'simple',
-            });
-            // Tie-break: each member's latest assignment of any status. The cap is safe here: a member
-            // with no row among the newest assignments was last assigned before all of them, so they
-            // already rank as the oldest assignment; only their order among themselves falls back to
-            // list sequence.
-            batchParams.push({
-                EntityName: 'MJ: AI Agent Requests',
-                ExtraFilter: `RequestForUserID IN (${userInListClause})`,
-                OrderBy: 'RequestedAt DESC, ID DESC',
-                MaxRows: LEAST_BUSY_RECENT_ASSIGNMENT_ROWS,
-                Fields: ['ID', 'RequestForUserID', 'RequestedAt'],
-                ResultType: 'simple',
-            });
-        } else if (mode === 'RoundRobin') {
-            const agentFilter = params.agent?.ID
-                ? `AgentID = '${EscapeSQLString(params.agent.ID)}' AND `
-                : '';
-            batchParams.push({
+            return [
+                // Load: every open ('Requested') row with no row cap, so a high volume of recent closed
+                // rows never pushes older open requests out of the count.
+                {
+                    EntityName: 'MJ: AI Agent Requests',
+                    ExtraFilter: `RequestForUserID IN (${userInListClause}) AND Status = '${OPEN_AGENT_REQUEST_STATUS}'`,
+                    OrderBy: 'RequestedAt DESC, ID DESC',
+                    IgnoreMaxRows: true,
+                    Fields: ['ID', 'RequestForUserID', 'Status', 'RequestedAt'],
+                    ResultType: 'simple',
+                },
+                // Tie-break: each member's latest assignment of any status. The cap is safe here: a member
+                // with no row among the newest assignments was last assigned before all of them, so they
+                // already rank as the oldest assignment; only their order among themselves falls back to
+                // list sequence.
+                {
+                    EntityName: 'MJ: AI Agent Requests',
+                    ExtraFilter: `RequestForUserID IN (${userInListClause})`,
+                    OrderBy: 'RequestedAt DESC, ID DESC',
+                    MaxRows: LEAST_BUSY_RECENT_ASSIGNMENT_ROWS,
+                    Fields: ['ID', 'RequestForUserID', 'RequestedAt'],
+                    ResultType: 'simple',
+                },
+            ];
+        }
+        const agentFilter = params.agent?.ID ? `AgentID = '${EscapeSQLString(params.agent.ID)}' AND ` : '';
+        return [
+            {
                 EntityName: 'MJ: AI Agent Requests',
                 ExtraFilter: `${agentFilter}RequestForUserID IN (${userInListClause})`,
                 OrderBy: 'RequestedAt DESC, ID DESC',
                 MaxRows: 1,
                 Fields: ['ID', 'AgentID', 'RequestForUserID', 'RequestedAt'],
                 ResultType: 'simple',
-            });
-        }
+            },
+        ];
+    }
 
-        const batchResults = await rv.RunViews(batchParams, params.contextUser);
-        const usersResult = batchResults[0];
-        if (!usersResult?.Success) {
-            LogError(
-                `Failed to load active users for list ${listId}: ${usersResult?.ErrorMessage || 'unknown error'}`
-            );
-            return params.contextUser?.ID ?? null;
-        }
+    /** The candidates the user read returned as active, in list order. */
+    private filterActiveUserIDs(candidateUserIDs: string[], activeUserRows: UserActiveSummaryRow[]): string[] {
+        const activeUserSet = new UUIDSet(activeUserRows.filter((u) => u.IsActive !== false).map((u) => u.ID));
+        return candidateUserIDs.filter((id) => activeUserSet.Has(id));
+    }
 
-        const activeUserRows = (usersResult.Results as UserActiveSummaryRow[]) ?? [];
-        const activeUserSet = new UUIDSet(
-            activeUserRows.filter((u) => u.IsActive !== false).map((u) => u.ID)
-        );
-        const activeUserIDs = candidateUserIDs.filter((id) => activeUserSet.Has(id));
-        if (activeUserIDs.length === 0) {
-            LogStatus(
-                `ℹ️ List ${listId} has zero active users; ${this.describeListFallbackTarget(params)}`
-            );
-            return params.contextUser?.ID ?? null;
-        }
-
-        const requestsResult = batchResults[1];
-        const recentAssignmentsResult = batchResults[2];
-        if (mode !== 'Random' && (!requestsResult?.Success || (mode === 'LeastBusy' && !recentAssignmentsResult?.Success))) {
-            // Query-level failure on MJ: AI Agent Requests when active list members are already
-            // known: log the failure and deterministically fall back to the first active list
-            // member (activeUserIDs[0]) so the request still lands on an eligible list member.
-            LogError(
-                `Failed to load agent requests for list ${listId} (${mode}): ${requestsResult?.ErrorMessage || 'unknown error'}; falling back to first active list member`
-            );
-            return activeUserIDs[0];
-        }
-        const requestRows = requestsResult?.Success
-            ? ((requestsResult.Results as AgentRequestSummaryRow[]) ?? [])
-            : [];
-
-        switch (mode) {
-            case 'RoundRobin':
-                return this.pickRoundRobinMember(activeUserIDs, requestRows);
-            case 'LeastBusy':
-                return this.pickLeastBusyMember(
-                    activeUserIDs,
-                    requestRows,
-                    (recentAssignmentsResult?.Results as AgentRequestSummaryRow[]) ?? []
-                );
-            case 'Random': {
-                const index = this.randomIntFn(activeUserIDs.length);
-                const boundedIndex = Math.max(0, Math.min(activeUserIDs.length - 1, index));
-                return activeUserIDs[boundedIndex];
+    /** The error of the first of `expected` results that is missing or failed, or `null` when all succeeded. */
+    private findFailedRead(expected: number, results: RunViewResult[]): string | null {
+        for (let i = 0; i < expected; i++) {
+            const result = results[i];
+            if (!result?.Success) {
+                return result?.ErrorMessage || 'unknown error';
             }
-            default:
-                return this.pickRoundRobinMember(activeUserIDs, requestRows);
         }
+        return null;
+    }
+
+    private pickListMember(mode: ListAssignmentMode, activeUserIDs: string[], modeResults: RunViewResult[]): string {
+        const rowsOf = (result: RunViewResult | undefined): AgentRequestSummaryRow[] =>
+            (result?.Results as AgentRequestSummaryRow[] | undefined) ?? [];
+        if (mode === 'Random') {
+            const index = this.randomIntFn(activeUserIDs.length);
+            return activeUserIDs[Math.max(0, Math.min(activeUserIDs.length - 1, index))];
+        }
+        if (mode === 'LeastBusy') {
+            return this.pickLeastBusyMember(activeUserIDs, rowsOf(modeResults[0]), rowsOf(modeResults[1]));
+        }
+        return this.pickRoundRobinMember(activeUserIDs, rowsOf(modeResults[0]));
     }
 
     // ponytail: Concurrent RoundRobin selections read the same latest `MaxRows: 1` request row
