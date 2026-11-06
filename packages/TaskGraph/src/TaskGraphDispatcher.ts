@@ -128,6 +128,7 @@ import {
     EnvelopeConstrains,
     RecordedOutputTaint,
     ResolveStoredNodeSecurity,
+    UpstreamCarriesTaint,
     WithInputTaint,
     type NodeSecurity,
     type UpstreamTaintLookup,
@@ -2268,6 +2269,7 @@ export class TaskGraphDispatcher implements IShutdownable {
 
         const summary = this.buildContinuationSummary(parent, graph);
         LogStatus(`[TaskGraphDispatcher] Graph ${parent.ID} finished — ${summary}`);
+        const security = this.continuationEnvelope(parent, graph);
 
         const params: TaskContinuationParams = {
             ParentTaskID: parent.ID,
@@ -2276,6 +2278,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             SubmittedByAgentRunID: meta.submittedByAgentRunID,
             SubmittedByUserID: meta.submittedByUserID ?? null,
             ReinvokeDepth: meta.reinvokeDepth,
+            ...('Envelope' in security && security.Envelope ? { SecurityEnvelope: security.Envelope } : {}),
             Tasks: [...graph.entityById.values()].map((t) => ({
                 TaskID: t.ID,
                 Name: t.Name,
@@ -2292,10 +2295,13 @@ export class TaskGraphDispatcher implements IShutdownable {
             // Reinvoke degrades to a message when the host cannot start agent turns. Degrading is
             // right rather than throwing: the work genuinely ran, and the user losing the results
             // because nobody could start a follow-up turn would be the worse outcome.
-            if (mode === 'reinvoke' && this.continuationDeliverer.Reinvoke) {
+            const reinvokeRefusal = mode === 'reinvoke' ? this.reinvokeRefusal(security) : null;
+            if (mode === 'reinvoke' && this.continuationDeliverer.Reinvoke && !reinvokeRefusal) {
                 await this.continuationDeliverer.Reinvoke(params);
             } else {
-                if (mode === 'reinvoke') {
+                if (reinvokeRefusal) {
+                    LogError(`[TaskGraphDispatcher] Graph ${parent.ID}: not starting a continuation turn (${reinvokeRefusal}); delivering as a message.`);
+                } else if (mode === 'reinvoke') {
                     LogStatus(`[TaskGraphDispatcher] Graph ${parent.ID}: host cannot reinvoke; delivering as a message.`);
                 }
                 await this.continuationDeliverer.PostMessage(params);
@@ -2311,6 +2317,39 @@ export class TaskGraphDispatcher implements IShutdownable {
         // and polluted R2-6's retry accounting. No double delivery, because the CAS holds; just a
         // wasted pass per settlement and a retry counter measuring the wrong thing.
         return true;
+    }
+
+    /**
+     * What a `reinvoke` continuation turn runs under (B1): the graph's stored envelope, tainted when the
+     * submitting run was or when any step's output carries taint — the turn reads every step's outcome,
+     * so a completed Human step clears only what it reviewed. A stored envelope that cannot be read is a
+     * refusal: the turn is then not started at all.
+     */
+    private continuationEnvelope(parent: MJTaskEntity, graph: GraphState): NodeSecurity {
+        const stored = ResolveStoredNodeSecurity(parent.SecurityEnvelope, null);
+        if ('Refusal' in stored) {
+            return stored;
+        }
+        const graphTainted = stored.Envelope?.IsRunTainted === true;
+        const lookup = this.upstreamLookupInGraph(graph);
+        const outputsTainted = [...graph.entityById.values()].some((task) => UpstreamCarriesTaint(task, graphTainted, lookup));
+        return { Envelope: WithInputTaint(stored.Envelope, graphTainted || outputsTainted) };
+    }
+
+    /**
+     * Why a `reinvoke` turn must not start, or null. A fresh agent turn that ran without the graph's
+     * constraints would search without its tenant and readers and post into a shared conversation, so a
+     * graph whose envelope cannot be read, or that constrains anything on a host whose deliverer does not
+     * enforce envelopes, is delivered as a message instead.
+     */
+    private reinvokeRefusal(security: NodeSecurity): string | null {
+        if ('Refusal' in security) {
+            return security.Refusal;
+        }
+        if (EnvelopeConstrains(security.Envelope) && this.continuationDeliverer?.EnforcesSecurityEnvelope !== true) {
+            return 'the graph carries security constraints and this host\'s deliverer does not start a turn under them';
+        }
+        return null;
     }
 
     /** Reads the parent's durable continuation metadata through the shared parser. */

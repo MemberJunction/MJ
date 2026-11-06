@@ -2,8 +2,8 @@
  * The dispatcher's enforcement of `MJ: Tasks.SecurityEnvelope`: where the envelope is read from, what
  * a node is refused for, who it runs as, and how taint flows from node to node.
  */
-import { describe, it, expect, vi } from 'vitest';
-import type { IMetadataProvider, TenantContext, UserInfo } from '@memberjunction/core';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { RunView, type IMetadataProvider, type TenantContext, type UserInfo } from '@memberjunction/core';
 import type { MJTaskEntity } from '@memberjunction/core-entities';
 import {
     SerializeTaskSecurityEnvelope,
@@ -20,6 +20,8 @@ import type {
     TaskActionRunResult,
     TaskActionRunner,
     TaskAgentRunner,
+    TaskContinuationDeliverer,
+    TaskContinuationParams,
     TaskDecisionRunner,
     TaskPromptRunner,
 } from '../types';
@@ -378,6 +380,105 @@ describe('TaskGraphDispatcher security envelope (WS-4.1)', () => {
             });
             expect(h.actionCalls[0].SecurityEnvelope?.IsRunTainted).toBeFalsy();
             expect(send.Status).toBe('Complete');
+        });
+    });
+
+    describe('a reinvoke continuation turn (B1)', () => {
+        afterEach(() => vi.restoreAllMocks());
+
+        const scoped = envelope({
+            RunScope: { PrimaryScopeEntityName: 'Organizations', PrimaryScopeRecordID: 'org-A', SecondaryScopes: null },
+            Audience: { ReaderUserIDs: ['00000000-0000-4000-8000-000000000002'] },
+            CallerTenantContext: TENANT,
+        });
+
+        /** A settled graph that asked to reinvoke, with its stored envelope column and its steps. */
+        function settled(column: string | null, steps: MJTaskEntity[]) {
+            const parent = makeParent();
+            const row = parent as unknown as { InputPayload: string; SecurityEnvelope: string | null; CompletedAt: Date; Status: string; ConversationDetailID: string | null };
+            row.InputPayload = JSON.stringify(BuildTaskGraphParentInputPayload({
+                continuation: 'reinvoke', reinvokeDepth: 0, failureSemantics: 'block', submittedByAgentRunID: 'run-1', submittedByUserID: TEST_USER.ID,
+            }));
+            row.SecurityEnvelope = column;
+            row.CompletedAt = new Date();
+            row.Status = 'Complete';
+            row.ConversationDetailID = 'detail-1';
+            const graph = {
+                parentTaskID: PARENT_ID, parent, parentMetadata: ParseTaskGraphParentMetadata(row.InputPayload), rawDependencies: [],
+                nodes: steps.map((t) => ({ id: t.ID, status: t.Status })), edges: [], entityById: new Map(steps.map((t) => [t.ID, t])),
+                unreachableTaskIDs: new Set(), cascadeSkipTaskIDs: new Set(), skipSeedTaskIDs: new Set(), holdTaskIDs: new Set(), handledFailureIDs: new Set(),
+            };
+            return { parent, graph };
+        }
+
+        async function deliver(deliverer: TaskContinuationDeliverer, column: string | null, steps: MJTaskEntity[]) {
+            vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+                RunView: vi.fn(async () => ({ Success: true, Results: [{ ID: 'workflow-type' }] })),
+            } as unknown as RunView);
+            const dispatcher = new TaskGraphDispatcher(
+                { CreateProvider: vi.fn() }, { RunAgentForTask: vi.fn() }, TEST_USER, { InstanceID: 'inst-cont' }, deliverer,
+            );
+            const internals = dispatcher as unknown as {
+                claims: { TryClaimContinuation: unknown };
+                deliverContinuation: (p: IMetadataProvider, parent: MJTaskEntity, graph: object, cancelled: boolean) => Promise<boolean>;
+            };
+            internals.claims.TryClaimContinuation = vi.fn(async () => true);
+            const { parent, graph } = settled(column, steps);
+            await internals.deliverContinuation({} as IMetadataProvider, parent, graph, false);
+        }
+
+        function recordingDeliverer(enforces: boolean) {
+            const reinvoked: TaskContinuationParams[] = [];
+            const posted: TaskContinuationParams[] = [];
+            const deliverer: TaskContinuationDeliverer = {
+                ...(enforces ? { EnforcesSecurityEnvelope: true } : {}),
+                PostMessage: async (p) => { posted.push(p); },
+                Reinvoke: async (p) => { reinvoked.push(p); },
+            };
+            return { deliverer, reinvoked, posted };
+        }
+
+        const fetched = () => makeTask({ ID: 'fetch', Status: 'Complete', Configuration: JSON.stringify({ runtime: { isOutputTainted: true } }) });
+        const clean = () => makeTask({ ID: 'tidy', Status: 'Complete', Configuration: JSON.stringify({ runtime: { isOutputTainted: false } }) });
+
+        it("starts the turn under the graph's envelope, tainted when a step's output is", async () => {
+            const d = recordingDeliverer(true);
+            await deliver(d.deliverer, SerializeTaskSecurityEnvelope(scoped), [clean(), fetched()]);
+            expect(d.posted).toHaveLength(0);
+            expect(d.reinvoked[0].SecurityEnvelope).toEqual({ ...scoped, IsRunTainted: true });
+        });
+
+        it('keeps the envelope untainted when no step output is tainted', async () => {
+            const d = recordingDeliverer(true);
+            await deliver(d.deliverer, SerializeTaskSecurityEnvelope(scoped), [clean()]);
+            expect(d.reinvoked[0].SecurityEnvelope).toEqual(scoped);
+        });
+
+        it('gives a turn of an unconstrained graph a taint-only envelope when a step read untrusted content', async () => {
+            const d = recordingDeliverer(true);
+            await deliver(d.deliverer, null, [fetched()]);
+            expect(d.reinvoked[0].SecurityEnvelope).toEqual({ Version: TASK_SECURITY_ENVELOPE_VERSION, IsRunTainted: true });
+        });
+
+        it('posts the outcome instead of reinvoking on a host whose deliverer does not enforce envelopes', async () => {
+            const d = recordingDeliverer(false);
+            await deliver(d.deliverer, SerializeTaskSecurityEnvelope(scoped), [clean()]);
+            expect(d.reinvoked).toHaveLength(0);
+            expect(d.posted).toHaveLength(1);
+        });
+
+        it('posts the outcome instead of reinvoking when the stored envelope cannot be read', async () => {
+            const d = recordingDeliverer(true);
+            await deliver(d.deliverer, '{"Version":2,"IsRunTainted":false}', [clean()]);
+            expect(d.reinvoked).toHaveLength(0);
+            expect(d.posted).toHaveLength(1);
+        });
+
+        it('still reinvokes an unconstrained, clean graph on any host', async () => {
+            const d = recordingDeliverer(false);
+            await deliver(d.deliverer, null, [clean()]);
+            expect(d.reinvoked).toHaveLength(1);
+            expect(d.reinvoked[0].SecurityEnvelope).toBeUndefined();
         });
     });
 });

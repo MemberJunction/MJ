@@ -476,6 +476,13 @@ export type TaskContinuationDeliverer = {
      * this, and the dispatcher degrades to `PostMessage` rather than dropping the completion.
      */
     Reinvoke?(params: TaskContinuationParams): Promise<void>;
+    /**
+     * True when `Reinvoke` starts the turn under `TaskContinuationParams.SecurityEnvelope` exactly as an
+     * agent node runs under its envelope: the same run scope, audience, bound parameters and tenant (on a
+     * per-run user clone), starting tainted when the outcome is. The dispatcher posts a message instead of
+     * reinvoking a graph whose envelope constrains anything when this is not true.
+     */
+    EnforcesSecurityEnvelope?: boolean;
 };
 
 /** Everything a continuation needs to say what happened. */
@@ -490,6 +497,12 @@ export type TaskContinuationParams = {
     SubmittedByUserID: string | null;
     /** How many continuation hops preceded this one, so a re-submitted graph can carry depth + 1. */
     ReinvokeDepth: number;
+    /**
+     * What a `reinvoke` turn runs under: the graph's stored security envelope (the submitting run's
+     * scope, audience, bound parameters and tenant), with `IsRunTainted` set when the submitting run was
+     * tainted or any step's output the outcome carries is. Absent when the graph carries neither.
+     */
+    SecurityEnvelope?: TaskSecurityEnvelope;
     /**
      * Per-task outcome. Deliberately carries a `summary` and an `outputRef`, not inline payloads —
      * a ten-task graph's full outputs would swamp the continuation turn's context window, and the
