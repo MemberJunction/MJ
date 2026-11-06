@@ -695,6 +695,31 @@ def test_a_forecast_heuristic_without_its_column_fails_at_baselines(server: File
     assert r.stage == "baselines" and "no incumbent-score column" in r.message, r.message
 
 
+def _heuristic_request_with_a_null_score(server: FileServer, holdout_row: bool, tag: str) -> tuple[JsonObject, str]:
+    """A binary request declaring the incumbent heuristic, whose score column is null on one row (a locked-holdout
+    row, or a development row): the request and the row id of the null."""
+    df = binary_frame()
+    planner = 1 / (1 + np.exp(-df["x2"].to_numpy(dtype=np.float64)))
+    hold = holdout_2024(df)
+    null_id = hold[0] if holdout_row else next(str(i) for i in df["ID"] if str(i) not in set(hold))
+    planner[df.index[df["ID"] == null_id][0]] = np.nan
+    m, n = snapshot_files(df.assign(Planner=planner), FEATS, hold, label_map=LABELS, decision=DECISION,
+                          incumbent_col="Planner")
+    req = request(server, m, n, TASK, protocol("binary"), candidates("binary", LOGISTIC_ONLY), tag=tag)
+    return _with_heuristic_baseline(req), null_id
+
+
+@pytest.mark.parametrize("holdout_row", [True, False], ids=["holdout-row", "development-row"])
+def test_a_null_incumbent_score_on_any_row_fails_at_load_snapshot_naming_the_row(server: FileServer,
+                                                                                 holdout_row: bool) -> None:
+    """The sidecar's own wall, matching the engine's `incumbent-score-missing`: one null heuristic score, on a holdout
+    row or a development row, stops the run before any fitting and names the row."""
+    req, null_id = _heuristic_request_with_a_null_score(server, holdout_row, f"heur-null-{holdout_row}")
+    r = _failed(req)
+    assert r.stage == "load-snapshot", r.message
+    assert "1 row" in r.message and null_id in r.message, r.message
+
+
 def _expected_fits(n: int, origins: int, h: int, gap: int, min_train: int, candidates_n: int,
                    diagnostics: bool) -> list[tuple[int, int]]:
     """Every fit window a forecast run makes, in order: per candidate its inner origins (ending one horizon apart at

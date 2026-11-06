@@ -51,8 +51,10 @@ export class IncumbentExpressions {
   }
 
   /**
-   * The row's heuristic score; null when any referenced value is missing or NaN (the trainer imputes in-fold, never
-   * 0), since a NaN would otherwise fail every comparison and score as a confident 0.
+   * The row's heuristic score; null when any referenced value is missing or NaN, never 0, since a NaN would otherwise
+   * fail every comparison and score as a confident 0. A null is never imputed: the snapshot builder refuses the run
+   * (`incumbent-score-missing`) before any file is written, and the sidecar refuses a snapshot whose incumbent-score
+   * column holds a null on any row at stage `load-snapshot`.
    */
   public static EvaluateIncumbentExpression(
     e: IncumbentExpression,

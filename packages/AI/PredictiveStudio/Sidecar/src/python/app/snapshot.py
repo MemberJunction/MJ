@@ -31,7 +31,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from typing import IO, Annotated, Dict, List, Literal, Mapping, Optional, Sequence, Tuple, Union
+from typing import IO, Annotated, Dict, Final, List, Literal, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import numpy.typing as npt
@@ -473,6 +473,23 @@ def _slices(header: _MatrixHeader, rows: Sequence[Sequence[Cell]], pos: Mapping[
     return out
 
 
+MAX_NAMED_ROW_IDS: Final = 5
+
+
+def _refuse_missing_incumbent_scores(incumbent: Optional[FArr], keys: Sequence[_RowKey]) -> None:
+    """Refuse a snapshot whose incumbent-score column holds no score on some row, development or holdout, before any
+    fitting: the engine's `incumbent-score-missing` wall, held here too for a snapshot built by hand. The message names
+    the count and the first five row ids from the manifest."""
+    if incumbent is None:
+        return
+    missing = [keys[i].rowId for i in np.flatnonzero(np.isnan(incumbent))]
+    if missing:
+        raise SnapshotLoadFailure(
+            "incumbent-score-missing",
+            f"the incumbent score is missing on {len(missing)} row(s) (first: {', '.join(missing[:MAX_NAMED_ROW_IDS])}); "
+            "every training-snapshot row must hold the incumbent heuristic's score", INCUMBENT_SCORE_COLUMN)
+
+
 def parse_snapshot(matrix: bytes, manifest: bytes, feature_schema_hash: str) -> Snapshot:
     """Parse verified snapshot files: matrix.jsonl (line 1 the header, then one JSON array per row) and
     manifest.jsonl (one SnapshotRowKey per line, line i the key of matrix row i).
@@ -482,7 +499,7 @@ def parse_snapshot(matrix: bytes, manifest: bytes, feature_schema_hash: str) -> 
     rather than recomputing a value that could differ for the same schema.
 
     Raises:
-        SnapshotLoadFailure: `malformed`, `non-numeric` or `infinite`.
+        SnapshotLoadFailure: `malformed`, `non-numeric`, `infinite` or `incumbent-score-missing`.
     """
     lines = _json_lines(matrix, MATRIX_FILE)
     if not lines:
@@ -497,13 +514,15 @@ def parse_snapshot(matrix: bytes, manifest: bytes, feature_schema_hash: str) -> 
     def score(col: Optional[str]) -> Optional[FArr]:
         return None if col is None else _numeric(col, [r[pos[col]] for r in rows])
 
+    incumbent = score(header.incumbentScoreColumn)
+    _refuse_missing_incumbent_scores(incumbent, keys)
     return Snapshot(
         columns=specs, frame=frame,
         label=np.asarray([r[pos[header.labelColumn]] for r in rows], dtype=object),
         row_ids=[k.rowId for k in keys], entity_keys=[k.entityKey for k in keys],
         group_keys=[k.groupKey for k in keys], decision_dates=[k.decisionDate for k in keys],
         periods=[k.period for k in keys], roles=[k.role for k in keys],
-        incumbent_score=score(header.incumbentScoreColumn), reference_score=score(header.referenceScoreColumn),
+        incumbent_score=incumbent, reference_score=score(header.referenceScoreColumn),
         slice_values=_slices(header, rows, pos),
         decision=DecisionSpec(header.decision.capacityPerPeriod, header.decision.period),
         feature_schema_hash=feature_schema_hash,

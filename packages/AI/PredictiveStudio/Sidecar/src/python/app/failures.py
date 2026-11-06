@@ -24,7 +24,10 @@ class TrainerFailure(Exception):
         self.message = message
 
 
-SnapshotProblem = Literal["expired-url", "download-failed", "hash-mismatch", "malformed", "non-numeric", "infinite"]
+# `incumbent-score-missing` mirrors the engine's refusal of that kind (Core `assembly-contract.ts`): the snapshot declares
+# an incumbent-score column and some row holds no score in it.
+SnapshotProblem = Literal["expired-url", "download-failed", "hash-mismatch", "malformed", "non-numeric", "infinite",
+                          "incumbent-score-missing"]
 
 
 class SnapshotLoadFailure(TrainerFailure):
