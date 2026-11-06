@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { existsSync, realpathSync } from 'node:fs';
 import { userInfo } from 'node:os';
 import { dirname } from 'node:path';
@@ -19,7 +20,19 @@ export class Sandbox {
     constructor(private readonly settings: Settings['Sandbox'], private readonly runner: CommandRunner = execFileRunner) {}
 
     public BuildArgs(o: SandboxRunOptions): string[] {
-        const args = ['run', '--rm', '--network', 'none', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
+        return this.buildArgsNamed(o, newContainerName());
+    }
+
+    /** Runs the command; after a timeout it kills the container by name, since killing the docker client leaves it running. */
+    public async Run(o: SandboxRunOptions): Promise<SandboxRunResult> {
+        const name = newContainerName();
+        const result = await this.runner('docker', this.buildArgsNamed(o, name), { timeoutMs: o.TimeoutMs });
+        if (result.TimedOut) await this.runner('docker', ['kill', name], { timeoutMs: 10_000 }).catch(() => undefined);
+        return result;
+    }
+
+    private buildArgsNamed(o: SandboxRunOptions, name: string): string[] {
+        const args = ['run', '--rm', '--name', name, '--network', 'none', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
             '--pids-limit', String(this.settings.PidsLimit), '--memory', `${this.settings.MemoryGB}g`, '--cpus', String(this.settings.Cpus),
             '--user', `${userInfo().uid}:${userInfo().gid}`, '--workdir', o.WorkDir];
         for (const m of o.Mounts) {
@@ -35,15 +48,16 @@ export class Sandbox {
         return [...args, this.settings.Image, ...o.Command];
     }
 
-    public async Run(o: SandboxRunOptions): Promise<SandboxRunResult> {
-        return this.runner('docker', this.BuildArgs(o), { timeoutMs: o.TimeoutMs });
-    }
-
     /** Builds the image from `dockerfileDir/Dockerfile` on the host (network allowed here; nothing untrusted runs). */
     public async EnsureImage(dockerfileDir: string): Promise<void> {
         const r = await this.runner('docker', ['build', '-q', '-t', this.settings.Image, dockerfileDir], { timeoutMs: 15 * 60_000 });
         if (r.ExitCode !== 0) throw new Error(`docker build failed: ${r.Stderr}`);
     }
+}
+
+/** A unique container name: `jit-` plus 12 hex characters. */
+function newContainerName(): string {
+    return `jit-${randomBytes(6).toString('hex')}`;
 }
 
 /** `realpath` of the path, or of its nearest existing parent joined with the rest, so a symlink cannot hide a denied folder. */
@@ -58,7 +72,8 @@ function execFileRunner(file: string, args: string[], options: { timeoutMs: numb
     return new Promise((resolve) => {
         const child = execFile(file, args, { timeout: options.timeoutMs, maxBuffer: MAX_OUTPUT, killSignal: 'SIGKILL', env: { PATH: process.env.PATH, HOME: process.env.HOME } }, (error, stdout, stderr) => {
             const timedOut = Boolean(error && 'killed' in error && error.killed);
-            resolve({ ExitCode: timedOut ? null : (child.exitCode ?? (error ? 1 : 0)), TimedOut: timedOut, Stdout: String(stdout), Stderr: String(stderr), DurationMs: Date.now() - started });
+            const errText = String(stderr) || (error ? error.message : '');
+            resolve({ ExitCode: timedOut ? null : (child.exitCode ?? (error ? 1 : 0)), TimedOut: timedOut, Stdout: String(stdout), Stderr: errText, DurationMs: Date.now() - started });
         });
     });
 }

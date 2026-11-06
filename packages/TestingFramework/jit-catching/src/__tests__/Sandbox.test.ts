@@ -11,7 +11,7 @@ const base = { Mounts: [{ Host: '/h/base', Container: '/work', Mode: 'ro' as con
 describe('Sandbox.BuildArgs', () => {
   it('always passes the hardening flags', () => {
     const a = sb.BuildArgs(base).join(' ');
-    for (const flag of ['--network none', '--cap-drop ALL', '--security-opt no-new-privileges', '--pids-limit 1024', '--memory 6g', '--cpus 3', '--rm', '--user ']) expect(a).toContain(flag);
+    for (const flag of ['--network none', '--cap-drop ALL', '--security-opt no-new-privileges', '--pids-limit 1024', '--memory 6g', '--cpus 3', '--rm', '--user ', '--name jit-']) expect(a).toContain(flag);
     expect(a).not.toContain('--privileged');
     expect(a).not.toContain('docker.sock');
   });
@@ -40,5 +40,18 @@ describe('Sandbox.Run', () => {
     const r = await fake.Run(base);
     expect(r.TimedOut).toBe(true);
     expect(r.ExitCode).toBeNull();
+  });
+  it('names the container and kills it by that name after a timeout', async () => {
+    const calls: { file: string; args: string[] }[] = [];
+    const fake = new Sandbox(DEFAULT_SETTINGS.Sandbox, async (file, args) => {
+      calls.push({ file, args });
+      return { ExitCode: null, TimedOut: args[0] === 'run', Stdout: '', Stderr: '', DurationMs: 1000 };
+    });
+    const r = await fake.Run(base);
+    expect(r.TimedOut).toBe(true);
+    const name = calls[0].args[calls[0].args.indexOf('--name') + 1];
+    expect(name).toMatch(/^jit-[0-9a-f]{12}$/);
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toEqual({ file: 'docker', args: ['kill', name] });
   });
 });
