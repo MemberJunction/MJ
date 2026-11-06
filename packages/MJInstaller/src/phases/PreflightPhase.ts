@@ -434,7 +434,8 @@ export class PreflightPhase {
       return {
         Name: `${server} connectivity`,
         Status: 'pass',
-        Message: `${server} reachable at ${host}:${port} (${result.LatencyMs}ms)`,
+        // A TCP probe only; the sign-in is checked by the database phase.
+        Message: `${server} port reachable at ${host}:${port} (${result.LatencyMs}ms); sign-in not checked yet`,
       };
     }
 
