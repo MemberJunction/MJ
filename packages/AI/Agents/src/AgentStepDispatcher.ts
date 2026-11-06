@@ -380,18 +380,26 @@ export class AgentStepDispatcher {
 
                 if (value !== undefined) {
                     const pathParts = parentPath.split('.');
+                    const hasBlockedSegment = pathParts.some((p) => {
+                        const clean = p.endsWith('[]') ? p.slice(0, -2) : p;
+                        return clean === '__proto__' || clean === 'constructor' || clean === 'prototype';
+                    });
+                    if (hasBlockedSegment) {
+                        continue;
+                    }
                     let current = updateObj;
 
                     for (let i = 0; i < pathParts.length - 1; i++) {
                         const part = pathParts[i];
                         const cleanPart = part.endsWith('[]') ? part.slice(0, -2) : part;
-                        if (!(cleanPart in current)) {
+                        if (!Object.prototype.hasOwnProperty.call(current, cleanPart)) {
                             current[cleanPart] = {};
                         }
                         current = current[cleanPart] as Record<string, unknown>;
                     }
 
-                    SetMappedValue(current, pathParts[pathParts.length - 1], value);
+                    const lastPart = pathParts[pathParts.length - 1];
+                    SetMappedValue(current, lastPart, value);
                 }
             }
 
@@ -432,17 +440,25 @@ export class AgentStepDispatcher {
 
                 if (value !== undefined) {
                     const pathParts = subAgentPath.split('.');
+                    const hasBlockedSegment = pathParts.some((p) => {
+                        const clean = p.endsWith('[]') ? p.slice(0, -2) : p;
+                        return clean === '__proto__' || clean === 'constructor' || clean === 'prototype';
+                    });
+                    if (hasBlockedSegment) {
+                        continue;
+                    }
                     let current = subAgentPayload;
 
                     for (let i = 0; i < pathParts.length - 1; i++) {
                         const part = pathParts[i];
-                        if (!(part in current)) {
+                        if (!Object.prototype.hasOwnProperty.call(current, part)) {
                             current[part] = {};
                         }
                         current = current[part] as Record<string, unknown>;
                     }
 
-                    current[pathParts[pathParts.length - 1]] = value;
+                    const lastPart = pathParts[pathParts.length - 1];
+                    current[lastPart] = value;
                 }
             }
 
@@ -797,18 +813,43 @@ export class AgentStepDispatcher {
         itemVariable: string,
         resolveValue?: (val: string, ctx: Record<string, unknown>, itemVar: string) => unknown,
     ): string {
+        if (!template || !template.includes('{{')) {
+            return template;
+        }
         const resolver =
             resolveValue ??
             ((val: string, ctx: Record<string, unknown>, itemVar: string) =>
                 this.ResolveValueFromContext(val, ctx, itemVar));
-        const expressionPattern = /\{\{\s*([^}]+?)\s*\}\}/g;
-        return template.replace(expressionPattern, (match: string, expr: string) => {
-            const resolved = resolver(expr.trim(), context, itemVariable);
-            if (resolved === expr.trim()) {
-                return match;
+
+        let result = '';
+        let cursor = 0;
+        while (cursor < template.length) {
+            const openIdx = template.indexOf('{{', cursor);
+            if (openIdx === -1) {
+                result += template.slice(cursor);
+                break;
             }
-            return String(resolved ?? '');
-        });
+            const closeIdx = template.indexOf('}}', openIdx + 2);
+            if (closeIdx === -1) {
+                result += template.slice(cursor);
+                break;
+            }
+            result += template.slice(cursor, openIdx);
+            const rawInner = template.slice(openIdx + 2, closeIdx);
+            const expr = rawInner.trim();
+            if (expr.length === 0 || rawInner.includes('}')) {
+                result += template.slice(openIdx, closeIdx + 2);
+            } else {
+                const resolved = resolver(expr, context, itemVariable);
+                if (resolved === expr) {
+                    result += template.slice(openIdx, closeIdx + 2);
+                } else {
+                    result += String(resolved ?? '');
+                }
+            }
+            cursor = closeIdx + 2;
+        }
+        return result;
     }
 }
 

@@ -2,6 +2,7 @@
 "@memberjunction/a2aserver": patch
 "@memberjunction/ai-agents": patch
 "@memberjunction/ai-core-plus": patch
+"@memberjunction/context-crush": patch
 "@memberjunction/core-actions": patch
 "@memberjunction/core-entities": patch
 "@memberjunction/core-entities-server": patch

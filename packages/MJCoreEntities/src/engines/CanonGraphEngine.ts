@@ -127,10 +127,7 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
 
         const graphEngine = GraphEngine.Instance;
         const canonGraphIds = this.resolveCanonGraphIds(graphEngine);
-        const queryTokens = query
-            .split(/[^a-z0-9_]+/)
-            .map((t) => t.trim())
-            .filter((t) => t.length >= 2);
+        const queryTokens = this.tokenizeAlphanumeric(query);
 
         const conceptMeta = this.resolveConceptEntityMetadata();
         if (conceptMeta) {
@@ -689,12 +686,7 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
         }
 
         if (queryTokens.length > 0) {
-            const candidateTokens = new Set(
-                [nameLower, ...synonyms]
-                    .join(' ')
-                    .split(/[^a-z0-9_]+/)
-                    .filter((t) => t.length >= 2),
-            );
+            const candidateTokens = new Set(this.tokenizeAlphanumeric([nameLower, ...synonyms].join(' ')));
             let hits = 0;
             for (const qt of queryTokens) {
                 if (candidateTokens.has(qt)) {
@@ -707,6 +699,29 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
         }
 
         return 0;
+    }
+
+    private tokenizeAlphanumeric(input: string): string[] {
+        const tokens: string[] = [];
+        let start = -1;
+        for (let i = 0; i <= input.length; i++) {
+            const code = i < input.length ? input.charCodeAt(i) : 0;
+            const isWordChar =
+                (code >= 97 && code <= 122) || // a-z
+                (code >= 48 && code <= 57) || // 0-9
+                code === 95; // _
+            if (isWordChar) {
+                if (start === -1) {
+                    start = i;
+                }
+            } else if (start !== -1) {
+                if (i - start >= 2) {
+                    tokens.push(input.slice(start, i));
+                }
+                start = -1;
+            }
+        }
+        return tokens;
     }
 
     private parseSynonyms(raw: string | null | undefined): string[] {

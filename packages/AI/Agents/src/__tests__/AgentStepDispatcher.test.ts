@@ -117,5 +117,21 @@ describe('AgentStepDispatcher', () => {
                 tags: ['Japan', 'literal'],
             });
         });
+
+        it('should evaluate pathological unclosed template strings in linear time and reject prototype-polluting keys', () => {
+            const dispatcher = new AgentStepDispatcher();
+            const pathological = `{{{{${'\t'.repeat(50_000)}`;
+            const startMs = Date.now();
+            const out = dispatcher.ResolveInlineTemplateExpressions(pathological, { item: 'x', index: 0 }, 'item');
+            expect(out).toBe(pathological);
+            expect(Date.now() - startMs).toBeLessThan(100);
+
+            const pollutedIn = dispatcher.ApplySubAgentInputMapping(
+                { secret: 'polluted' },
+                JSON.stringify({ secret: '__proto__.pollutedTestKey' })
+            );
+            expect(pollutedIn).toBeNull();
+            expect(({} as Record<string, unknown>).pollutedTestKey).toBeUndefined();
+        });
     });
 });

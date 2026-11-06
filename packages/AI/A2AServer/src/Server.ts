@@ -282,11 +282,17 @@ function setupRoutes() {
                 ? { apiKeyHash: reqWithUser.apiKeyHash, user: reqWithUser.authenticatedUser }
                 : undefined;
             const result = await handleTaskSend(req.body, reqWithUser.authenticatedUser, authContext);
+            if ('errorCode' in result) {
+                res.status(result.errorCode).json({
+                    error: { code: result.errorCode, message: result.errorMessage }
+                });
+                return;
+            }
             res.json(result);
         } catch (err: unknown) {
-            const statusErr = err as { error?: { code?: number; message?: string } };
-            res.status(statusErr?.error?.code ?? 500).json(statusErr?.error ? statusErr : {
-                error: { code: 500, message: err instanceof Error ? err.message : String(err) }
+            LogError('A2A Server: Task send failed', undefined, err);
+            res.status(500).json({
+                error: { code: 500, message: 'Internal server error while processing task request' }
             });
         }
     });
@@ -308,11 +314,17 @@ function setupRoutes() {
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
 
-        const reqWithUser = req as RequestWithUser;
-        const authContext = reqWithUser.apiKeyHash && reqWithUser.authenticatedUser
-            ? { apiKeyHash: reqWithUser.apiKeyHash, user: reqWithUser.authenticatedUser }
-            : undefined;
-        await handleTaskSendSubscribe(req.body, res, reqWithUser.authenticatedUser, authContext);
+        try {
+            const reqWithUser = req as RequestWithUser;
+            const authContext = reqWithUser.apiKeyHash && reqWithUser.authenticatedUser
+                ? { apiKeyHash: reqWithUser.apiKeyHash, user: reqWithUser.authenticatedUser }
+                : undefined;
+            await handleTaskSendSubscribe(req.body, res, reqWithUser.authenticatedUser, authContext);
+        } catch (err: unknown) {
+            LogError('A2A Server: Task sendSubscribe failed', undefined, err);
+            res.write(`data: ${JSON.stringify({ error: { code: 500, message: 'Internal server error while processing streaming task request' } })}\n\n`);
+            res.end();
+        }
     });
 
     // Get a task's status
@@ -570,7 +582,15 @@ function getMatchingEntitiesForConfig(allEntities: EntityInfo[], config: any) {
     });
 }
 
-async function handleTaskSend(requestBody: Record<string, unknown>, authenticatedUser?: UserInfo, authContext?: AuthorizationContext) {
+type TaskSendOutcome =
+    | { taskId: string; status: TaskStatus }
+    | { errorCode: 400 | 404; errorMessage: string };
+
+async function handleTaskSend(
+    requestBody: Record<string, unknown>,
+    authenticatedUser?: UserInfo,
+    authContext?: AuthorizationContext
+): Promise<TaskSendOutcome> {
     const { taskId, message } = requestBody as { taskId?: string; message?: { parts?: Part[] } };
 
     if (!taskId) {
@@ -614,20 +634,16 @@ async function handleTaskSend(requestBody: Record<string, unknown>, authenticate
             : undefined;
 
         if (!task) {
-            throw {
-                error: {
-                    code: 404,
-                    message: `Task with ID ${taskId} not found`
-                }
+            return {
+                errorCode: 404,
+                errorMessage: `Task with ID ${taskId} not found`
             };
         }
 
         if (task.status === 'completed' || task.status === 'cancelled' || task.status === 'failed') {
-            throw {
-                error: {
-                    code: 400,
-                    message: `Cannot update a task with status: ${task.status}`
-                }
+            return {
+                errorCode: 400,
+                errorMessage: `Cannot update a task with status: ${task.status}`
             };
         }
 
@@ -657,6 +673,11 @@ async function handleTaskSend(requestBody: Record<string, unknown>, authenticate
 
 async function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res: Response, authenticatedUser?: UserInfo, authContext?: AuthorizationContext) {
     const result = await handleTaskSend(requestBody, authenticatedUser, authContext);
+    if ('errorCode' in result) {
+        res.write(`data: ${JSON.stringify({ error: { code: result.errorCode, message: result.errorMessage } })}\n\n`);
+        res.end();
+        return;
+    }
     const task = authenticatedUser
         ? (tasks.GetForUser(result.taskId, authenticatedUser.ID)
             ?? (await tasks.LoadTaskForUser(result.taskId, authenticatedUser, resolveProviderForRequest())))
