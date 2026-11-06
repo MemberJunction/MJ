@@ -81,7 +81,8 @@ describe('VitestCatchTarget.Prepare', () => {
     const { target, calls, work } = prepWorld(async (File, Args, Cwd) => { host.push({ File, Args, Cwd, Files: readdirSync(Cwd).sort(), Lock: readFileSync(join(Cwd, 'pnpm-lock.yaml'), 'utf8') }); return Args[0] === '--version' ? '10.33.0\n' : ''; });
     await target.Prepare({ Kind: 'Head', SHA: 'h' });
     expect(host.map((h) => [h.File, ...h.Args])).toEqual([['pnpm', '--version'], ['pnpm', 'fetch', '--store-dir', join(work, 'store')]]);
-    expect(host[1].Cwd).not.toBe(join(work, 'head')); expect(host[1].Cwd).toBe(host[0].Cwd); expect(host[1].Files).toEqual(['package.json', 'pnpm-lock.yaml']);
+    expect(host[1].Cwd).not.toBe(join(work, 'head')); expect(host[1].Cwd).toBe(host[0].Cwd); expect(host[1].Files).toEqual(['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml']);
+    expect(readFileSync(join(host[1].Cwd, 'pnpm-workspace.yaml'), 'utf8')).toBe('supportedArchitectures:\n  os: [current, linux]\n  cpu: [current, x64, arm64]\n  libc: [current, glibc]\n');
     expect(JSON.parse(readFileSync(join(host[1].Cwd, 'package.json'), 'utf8'))).toEqual({ name: 'jit-fetch', private: true, packageManager: 'pnpm@10.33.0' });
     host.splice(0, 1);
     expect(host[0].Lock).not.toContain('patchedDependencies'); expect(host[0].Lock).not.toContain('patch_hash'); expect(host[0].Lock).toContain('version: 2.0.0-beta.3(graphql@16.12.0)');

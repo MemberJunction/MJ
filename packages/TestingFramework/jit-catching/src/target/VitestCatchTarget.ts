@@ -25,6 +25,11 @@ export class InfrastructureError extends Error {}
 const CONTAINER_ROOT = '/work';
 const CONTAINER_STORE = '/pnpm-store';
 const JIT_SUBDIR = 'src/__tests__/jit';
+/**
+ * Platforms `pnpm fetch` downloads native optional packages for: the host's own and the image's (linux x64 or arm64),
+ * so the offline install in the sandbox finds esbuild, rollup and swc binaries for linux.
+ */
+const FETCH_WORKSPACE_YAML = 'supportedArchitectures:\n  os: [current, linux]\n  cpu: [current, x64, arm64]\n  libc: [current, glibc]\n';
 const NO_TEST_RAN = 'no test ran: every test in the file was skipped or todo';
 /** States in which a test body actually ran, in the custom report and in vitest's JSON report. */
 const RAN_STATES = new Set(['passed', 'failed']);
@@ -58,8 +63,9 @@ export class VitestCatchTarget extends BaseCatchTarget {
 
     /**
      * `pnpm fetch` on the host, in a folder that holds only host-written files: the revision's lockfile with the
-     * patch information removed and a `package.json` whose `packageManager` pins the image's pnpm. pnpm switches
-     * itself to that version, so the store it writes has the layout the image reads. The version is checked first.
+     * patch information removed, a `package.json` whose `packageManager` pins the image's pnpm, and a
+     * `pnpm-workspace.yaml` that adds the image's platforms. pnpm switches itself to the pinned version, so the
+     * store it writes has the layout the image reads. The version is checked first.
      */
     private async hostFetch(revision: RevisionRef, worktree: string): Promise<void> {
         const fetchDir = join(this.o.WorkRoot, `${revision.Kind.toLowerCase()}-fetch`);
@@ -69,6 +75,7 @@ export class VitestCatchTarget extends BaseCatchTarget {
             rmSync(fetchDir, { recursive: true, force: true }); mkdirSync(fetchDir, { recursive: true }); mkdirSync(this.o.StoreDir, { recursive: true });
             writeFileSync(join(fetchDir, 'pnpm-lock.yaml'), StripPatchInfo(readFileSync(join(worktree, 'pnpm-lock.yaml'), 'utf8')));
             writeFileSync(join(fetchDir, 'package.json'), JSON.stringify({ name: 'jit-fetch', private: true, packageManager: `pnpm@${pinned}` }));
+            writeFileSync(join(fetchDir, 'pnpm-workspace.yaml'), FETCH_WORKSPACE_YAML);
         } catch (e) {
             throw new InfrastructureError(`could not write the fetch folder for ${revision.Kind}: ${(e as Error).message}`);
         }
