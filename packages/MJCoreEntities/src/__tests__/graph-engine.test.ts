@@ -991,7 +991,11 @@ describe('Semantic Graph Engine & Derived Edge Providers', () => {
             } as unknown as MJGraphEdgeProviderEntity;
 
             const rlsProvider = buildMockProvider(entities, async (params) => {
-                if (params.EntityName === 'Invoices' && params.ExtraFilter?.includes('MemberID IS NOT NULL')) {
+                if (
+                    params.EntityName === 'Invoices' &&
+                    typeof params.ExtraFilter === 'string' &&
+                    params.ExtraFilter.includes('MemberID IS NOT NULL')
+                ) {
                     // FK provider returns edges to MEM-VISIBLE and MEM-RLS-HIDDEN
                     return {
                         Success: true,
