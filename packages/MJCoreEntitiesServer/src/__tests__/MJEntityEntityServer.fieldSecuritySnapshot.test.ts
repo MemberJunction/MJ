@@ -100,6 +100,8 @@ describe('MJEntityEntityServer — enabling field-level security', () => {
         const params = runView.mock.calls[0][0];
         expect(params.EntityName).toBe('MJ: Entity Field Permissions');
         expect(params.BypassCache).toBe(true);
+        // Without it the entity's UserViewMaxRows (1000) caps the read and re-enabling a wide entity fails.
+        expect(params.IgnoreMaxRows).toBe(true);
         expect(params.ExtraFilter).toContain(SALARY_FIELD_ID);
     });
 

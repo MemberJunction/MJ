@@ -333,6 +333,26 @@ describe('SQLServerDataProvider save path (real Save() → GenerateSaveSQL → m
     expect(message).toContain('Parameters: None');
   });
 
+  it('a failed save gives a caller denied a field of the entity the message without the SQL or the quoted values', async () => {
+    const provider = makeProvider();
+    const entityInfo = makeWidgetEntityInfo();
+    vi.spyOn(entityInfo, 'FieldLevelSecurityApplies', 'get').mockReturnValue(true);
+    vi.spyOn(entityInfo, 'GetDeniedReadFields').mockReturnValue(new Set(['description']));
+    const entity = makeSavedWidgetEntity(entityInfo, TEST_USER);
+    entity.Set('Name', 'Doomed');
+    mssqlState.QueueResult({
+      error: new Error("Cannot insert duplicate key row in object 'dbo.Widget' with unique index 'UQ_Widget'. The duplicate key value is (Doomed, stored-secret)."),
+    });
+
+    await provider.Save(entity, TEST_USER, new EntitySaveOptions()).catch(() => undefined);
+
+    const message = entity.LatestResult?.Message ?? '';
+    expect(message).toContain("unique index 'UQ_Widget'");
+    expect(message).toContain('(values withheld)');
+    expect(message).not.toContain('stored-secret');
+    expect(message).not.toContain("N'Doomed'");
+  });
+
   it('CREATE: throws when the proc returns no rows, including literal SQL instead of @p$ placeholders', async () => {
     const provider = makeProvider();
     const entity = makeNewWidgetEntity(makeWidgetEntityInfo(), TEST_USER);

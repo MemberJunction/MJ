@@ -757,8 +757,9 @@ What holds full-width data, and why that is safe:
   stored row to complete the snapshot, so the payload never narrows to what the saver could see.
 
 - **Related rows loaded with an entity** (`Load` with `EntityRelationshipsToLoad`) are read with
-  the same column list and Read row filter as the parent row, and a relationship to an entity the
-  user cannot read is skipped.
+  the related entity's column list and Read row filter for the user, and a relationship to an
+  entity the user cannot read is skipped. A many-to-many load reads its join view without checking
+  the user's access to the join entity; no transport returns these rows today.
 - **A save that fails on a database constraint** returns the database's message without the
   column values it quotes (a unique-index violation lists the key, which can include a denied
   column) to a caller who is denied any field of the entity. The server log keeps the full message.

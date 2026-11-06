@@ -91,6 +91,9 @@ export class MJEntityEntityServer extends MJEntityEntityExtended {
                 Fields: ['ID', 'EntityFieldID', 'RoleID'],
                 ResultType: 'simple',
                 BypassCache: true,
+                // The entity's UserViewMaxRows would otherwise cap the read, so on an entity with
+                // more rules than that the rest would look missing and the delta would re-insert them.
+                IgnoreMaxRows: true,
             },
             this.ContextCurrentUser
         );
