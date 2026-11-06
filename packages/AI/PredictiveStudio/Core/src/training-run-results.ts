@@ -119,6 +119,7 @@ const assemblyRefusalSchema: z.ZodType<AssemblyRefusal> = z.discriminatedUnion('
   z.object({ kind: z.literal('unpinned-feature-version'), featureName: z.string() }),
   z.object({ kind: z.literal('scope-entity-mismatch'), modelEntity: z.string(), scopeEntity: z.string() }),
   z.object({ kind: z.literal('unresolved-column'), entity: z.string(), field: z.string() }),
+  z.object({ kind: z.literal('incumbent-score-missing'), entity: z.string(), rows: z.number(), firstRowIds: z.array(z.string()) }),
   z.object({ kind: z.literal('virtual-field'), entity: z.string(), field: z.string() }),
   z.object({ kind: z.literal('unsupported-step-kind'), stepId: z.string(), stepKind: z.string() }),
   z.object({ kind: z.literal('invalid-date-in-history'), entity: z.string(), field: z.string(), value: z.string() }),

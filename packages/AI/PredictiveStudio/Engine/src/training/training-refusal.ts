@@ -41,6 +41,7 @@ export class TrainingRefusedError extends Error {
       case 'unpinned-feature-version': return `Refused (unpinned-feature-version): feature ${reason.featureName} has no pinned version, so its past values cannot be reproduced.`;
       case 'scope-entity-mismatch': return `Refused (scope-entity-mismatch): the model scores ${reason.modelEntity} records but the scope holds ${reason.scopeEntity} records.`;
       case 'unresolved-column': return `Refused (unresolved-column): ${reason.entity}.${reason.field} is not a field the pipeline can read.`;
+      case 'incumbent-score-missing': return `Refused (incumbent-score-missing): the incumbent rule of ${reason.entity} has no value on ${reason.rows} row(s) (first: ${reason.firstRowIds.join(', ')}); every row the rule reads must hold the columns it names.`;
       case 'virtual-field': return `Refused (virtual-field): ${reason.entity}.${reason.field} is a virtual field joined from a related record, so its stored value is that record's value today and cannot be read for rows decided on earlier days; select the field from the related entity through its key (a select step with Entity and KeyField).`;
       case 'unsupported-step-kind': return `Refused (unsupported-step-kind): step ${reason.stepId} is a ${reason.stepKind} step, which has no as-of reading.`;
       case 'invalid-date-in-history': return `Refused (invalid-date-in-history): ${reason.entity}.${reason.field} holds "${reason.value}", written as a timestamp that names no valid instant, so its history cannot be checked; correct the value.`;

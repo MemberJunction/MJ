@@ -105,6 +105,8 @@ interface ExtraColumns {
 
 /** The value a slice column writes for a missing, null or empty value. */
 const MISSING_SLICE_VALUE = '(missing)';
+/** How many row ids an incumbent-score refusal names. */
+const MAX_NAMED_ROW_IDS = 5;
 
 /** Builds Training Snapshots; stateless, construct once and reuse. */
 export class TrainingSnapshotBuilder {
@@ -291,7 +293,7 @@ export class TrainingSnapshotBuilder {
     return columnNames.has(field) || unitRowSources.every((source) => field in source);
   }
 
-  /** `__ps_incumbent_score`: the unit's rule evaluated per row; a unit without a rule, or a rule naming an unassembled column, is refused. */
+  /** `__ps_incumbent_score`: the unit's rule evaluated per row; a unit without a rule, or a rule naming an unassembled column, or one with no value on some row, is refused. */
   private incumbentColumn(input: SnapshotBuildInput, position: ReadonlyMap<string, number>): ExtraColumn {
     const rule = input.Unit.incumbent;
     if (rule.kind !== 'rule') return TrainingSnapshotBuilder.refuseColumn(input, 'IncumbentHeuristic');
@@ -306,7 +308,12 @@ export class TrainingSnapshotBuilder {
       const v = k === undefined ? null : input.Assembled.Rows[i]?.Values[k];
       return typeof v === 'number' && Number.isFinite(v) ? v : null;
     };
-    return { Name: INCUMBENT_SCORE_COLUMN, Cell: (i) => IncumbentExpressions.EvaluateIncumbentExpression(expression, (column) => numberAt(i, column)) };
+    const score = (i: number): number | null => IncumbentExpressions.EvaluateIncumbentExpression(expression, (column) => numberAt(i, column));
+    const missing = input.Assembled.Rows.flatMap((row, i) => (score(i) === null ? [row.RowID] : []));
+    if (missing.length > 0) {
+      throw new TrainingRefusedError({ stage: 'assembly', reason: { kind: 'incumbent-score-missing', entity: input.Unit.name, rows: missing.length, firstRowIds: missing.slice(0, MAX_NAMED_ROW_IDS) } });
+    }
+    return { Name: INCUMBENT_SCORE_COLUMN, Cell: score };
   }
 
   /**

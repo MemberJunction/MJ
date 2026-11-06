@@ -44,6 +44,11 @@ describe('TrainingRunResultsParser', () => {
       expect(r.Ok && r.Value.status === 'refused' ? r.Value.refusal.reason : null).toEqual(reason);
     }
   });
+  it('reads an assembly refusal for an incumbent rule with no value on some rows', () => {
+    const reason = { kind: 'incumbent-score-missing', entity: 'yearly renewal unit', rows: 2, firstRowIds: ['r2', 'r3'] };
+    const r = TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'refused', refusal: { stage: 'assembly', reason } }));
+    expect(r.Ok && r.Value.status === 'refused' ? r.Value.refusal.reason : null).toEqual(reason);
+  });
   it('reads an assembly refusal for a timestamp in a record history that names no valid instant', () => {
     const reason = { kind: 'invalid-date-in-history', entity: 'People', field: 'Code', value: '2025-99-99T00:00' };
     const r = TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'refused', refusal: { stage: 'assembly', reason } }));

@@ -98,6 +98,8 @@ export type AssemblyRefusal =
   | { readonly kind: 'unpinned-feature-version'; readonly featureName: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
   | { readonly kind: 'scope-entity-mismatch'; readonly modelEntity: string; readonly scopeEntity: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
   | { readonly kind: 'unresolved-column'; readonly entity: string; readonly field: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  /** The unit's incumbent rule has no value on some rows (a column it reads is missing there); `firstRowIds` holds at most 5 ids in row order. */
+  | { readonly kind: 'incumbent-score-missing'; readonly entity: string; readonly rows: number; readonly firstRowIds: readonly string[] }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
   /** A virtual field read for a row decided before the assembly's day: its value is the joined record's value today; select it through that entity's key. */
   | { readonly kind: 'virtual-field'; readonly entity: string; readonly field: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
   | { readonly kind: 'unsupported-step-kind'; readonly stepId: string; readonly stepKind: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name

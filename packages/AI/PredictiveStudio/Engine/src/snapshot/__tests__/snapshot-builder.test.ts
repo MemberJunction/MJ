@@ -211,13 +211,23 @@ describe('TrainingSnapshotBuilder', () => {
     const ruled = { ...unit, incumbent: { kind: 'rule' as const, name: 'busy last year', scoreExpression: `${features[0].name} >= 2` } };
     const built = await new TrainingSnapshotBuilder().Build({ ...input(files), Unit: ruled, IncumbentScore: true, SliceFields: [features[0].name], ExistingByContentHash: async () => null });
     expect(built.Content.Header.columns.slice(-2)).toEqual(['__ps_incumbent_score', `__ps_slice:${features[0].name}`]);
-    expect(built.Content.Rows.every((r) => r[r.length - 2] === 0 || r[r.length - 2] === 1 || r[r.length - 2] === null)).toBe(true);
+    expect(built.Content.Rows.every((r) => r[r.length - 2] === 0 || r[r.length - 2] === 1)).toBe(true);
     expect(built.Content.Rows.map((r) => r[r.length - 2])).toEqual([0, 1, 1]);
     const missing = { ...unit, incumbent: { kind: 'rule' as const, name: 'x', scoreExpression: 'NotAssembled >= 1' } };
     await expect(new TrainingSnapshotBuilder().Build({ ...input(new InMemorySnapshotFileStore('p')), Unit: missing, IncumbentScore: true, ExistingByContentHash: async () => null }))
       .rejects.toMatchObject({ Refusal: { stage: 'assembly', reason: { kind: 'unresolved-column', entity: unit.name, field: 'NotAssembled' } } });
     await expect(new TrainingSnapshotBuilder().Build({ ...input(new InMemorySnapshotFileStore('p')), IncumbentScore: true }))
       .rejects.toMatchObject({ Refusal: { stage: 'assembly', reason: { kind: 'unresolved-column', entity: unit.name, field: 'IncumbentHeuristic' } } });
+  });
+
+  it('refuses before writing when the incumbent rule is null on any row, naming the count and the first row ids', async () => {
+    const ruled = { ...unit, incumbent: { kind: 'rule' as const, name: 'busy last year', scoreExpression: `${features[0].name} >= 2` } };
+    const base = input(new InMemorySnapshotFileStore('p'));
+    const rows = base.Assembled.Rows.map((r, i) => (i === 1 ? { ...r, Values: r.Values.map((v, k) => (k === 0 ? null : v)) } : r));
+    const files = new InMemorySnapshotFileStore('p');
+    await expect(new TrainingSnapshotBuilder().Build({ ...input(files), Assembled: { ...base.Assembled, Rows: rows }, Unit: ruled, IncumbentScore: true, ExistingByContentHash: async () => null }))
+      .rejects.toMatchObject({ Refusal: { stage: 'assembly', reason: { kind: 'incumbent-score-missing', entity: unit.name, rows: 1, firstRowIds: [rows[1].RowID] } } });
+    expect(files.Saved.size).toBe(0);
   });
 
   it('reuses the existing snapshot when the content hash already exists (identical data, one snapshot)', async () => {
