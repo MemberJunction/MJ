@@ -4012,6 +4012,36 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     /**************************************************************************/
 
     /**
+     * The `WHERE` predicate that selects one record by its composite key, using dialect-neutral
+     * quoting. Quoted key values have embedded single quotes escaped: a key value can contain
+     * apostrophes (an object-valued soft key whose JSON carries free text), and an unescaped quote
+     * both breaks the statement and is an injection vector.
+     */
+    protected BuildPrimaryKeyWhereClause(entityInfo: EntityInfo, compositeKey: CompositeKey): string {
+        return compositeKey.KeyValuePairs.map(val => {
+            const pk = entityInfo.PrimaryKeys.find(p => p.Name.trim().toLowerCase() === val.FieldName.trim().toLowerCase());
+            if (!pk) throw new Error(`Primary key ${val.FieldName} not found in entity ${entityInfo.Name}`);
+            return `${this.QuoteIdentifier(pk.CodeName)}=${this.RenderPrimaryKeyLiteral(pk, val.Value, entityInfo.Name)}`;
+        }).join(' AND ');
+    }
+
+    /**
+     * A primary key value as a SQL literal: quoted with embedded quotes escaped, or a plain number
+     * for a key that takes no quotes. These statements are built as text, and a key value can come
+     * from the client, so an unquoted value that isn't a number throws.
+     */
+    protected RenderPrimaryKeyLiteral(field: EntityFieldInfo | undefined, value: unknown, entityName: string): string {
+        if (field?.NeedsQuotes) {
+            return `'${String(value).replace(/'/g, "''")}'`;
+        }
+        const raw = String(value);
+        if (!/^-?\d+(\.\d+)?$/.test(raw)) {
+            throw new Error(`Invalid non-numeric value provided for numeric key field ${field?.Name} on entity ${entityName}`);
+        }
+        return raw;
+    }
+
+    /**
      * Loads a single entity record by composite key, with optional relationship loading.
      * Uses dialect-neutral quoting for all SQL construction.
      */
@@ -4053,16 +4083,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         }
 
         // Build WHERE from composite key
-        const where = compositeKey.KeyValuePairs.map(val => {
-            const pk = entityInfo.PrimaryKeys.find(p => p.Name.trim().toLowerCase() === val.FieldName.trim().toLowerCase());
-            if (!pk) throw new Error(`Primary key ${val.FieldName} not found in entity ${entityInfo.Name}`);
-            const quotes = pk.NeedsQuotes ? "'" : '';
-            // Escape embedded single quotes when the value is wrapped in quotes. A PK value can
-            // legitimately contain apostrophes (e.g. an object-valued soft key whose JSON carries
-            // free-text), and an unescaped quote both breaks the SQL string and is an injection vector.
-            const safeVal = quotes ? String(val.Value).replace(/'/g, "''") : val.Value;
-            return `${this.QuoteIdentifier(pk.CodeName)}=${quotes}${safeVal}${quotes}`;
-        }).join(' AND ');
+        const where = this.BuildPrimaryKeyWhereClause(entityInfo, compositeKey);
 
         // Append Read RLS filter (exemption check is centralized in GetUserRowLevelSecurityWhereClause)
         let fullWhere = where;
@@ -4153,10 +4174,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
         const pkWhere = entity.PrimaryKeys.map(pk => {
             const fieldInfo = entityInfo.FieldByName(pk.Name);
-            const quotes = fieldInfo?.NeedsQuotes ? "'" : '';
-            // Escape embedded single quotes when the value is wrapped in quotes — see Load() above.
-            const safeVal = quotes ? String(pk.Value).replace(/'/g, "''") : pk.Value;
-            return `${this.QuoteIdentifier(pk.Name)}=${quotes}${safeVal}${quotes}`;
+            // Rendered as on the Load()-by-PK path above. The PK value can be CLIENT-SUPPLIED here
+            // (the update resolver loads OldValues from the client for entities without record
+            // tracking), and this method's only job is an authorization decision — a crafted PK
+            // must not make the COUNT(*) pass RLS on rows the caller cannot see.
+            return `${this.QuoteIdentifier(pk.Name)}=${this.RenderPrimaryKeyLiteral(fieldInfo, pk.Value, entityInfo.Name)}`;
         }).join(' AND ');
 
         const sql = `SELECT COUNT(*) AS cnt FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)} WHERE ${pkWhere} AND (${rlsWhereClause})`;
