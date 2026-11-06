@@ -4156,10 +4156,11 @@ export class TaskGraphDispatcher implements IShutdownable {
         if (pending.length === 0) return;
         const typeID = await this.workflowTaskTypeID(provider);
         if (!typeID) return;
+        const nodeByID = IndexByUUID(graph.nodes, (n) => n.id);
         for (const task of pending) {
             if (!(await this.claims.TrySkipPending(provider, task.ID, typeID, this.contextUser))) continue;
             task.Status = 'Skipped';
-            const node = graph.nodes.find((n) => UUIDsEqual(n.id, task.ID));
+            const node = nodeByID.Get(task.ID);
             if (node) node.status = 'Skipped';
             LogStatus(`[TaskGraphDispatcher] Skipped '${task.Name}' (${task.ID}) — the workflow is rolling back.`);
         }
