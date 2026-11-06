@@ -41,51 +41,56 @@ export function BootGate({ children }: { children: ReactNode }) {
         setShowEscape(false);
     }, [status]);
 
-    if (status === 'loading') {
-        return (
-            <View style={styles.center}>
-                <ActivityIndicator color={Colors.brand} size="large" />
-                <Text style={styles.label}>Connecting…</Text>
-                {showEscape ? (
-                    <View style={styles.escape}>
-                        <Text style={styles.escapeCopy}>
-                            Taking longer than expected. The stored token may be invalid or MJAPI may
-                            be unreachable.
-                        </Text>
-                        <Pressable
-                            onPress={async () => { await signOut(); }}
-                            style={styles.escapeBtn}
-                        >
-                            <Text style={styles.escapeBtnText}>Clear tokens & sign in again</Text>
-                        </Pressable>
-                    </View>
-                ) : null}
-            </View>
-        );
-    }
-    if (status === 'error') {
-        // Show what went wrong before the user is sent back to sign in.
-        return (
-            <View style={styles.center}>
-                <Text style={styles.errorTitle}>Couldn't connect</Text>
-                <Text style={styles.errorBody}>{error?.message ?? 'Unknown error'}</Text>
-                <Pressable onPress={async () => { await signOut(); }} style={styles.escapeBtn}>
-                    <Text style={styles.escapeBtnText}>Sign in again</Text>
-                </Pressable>
-            </View>
-        );
-    }
-    if (status === 'ready') return <>{children}</>;
-    if (pathname === '/login') return <>{children}</>;
     return (
-        <>
-            {children}
-            <Redirect href="/login" />
-        </>
+        <View style={styles.container}>
+            <View
+                style={styles.container}
+                accessibilityElementsHidden={status === 'loading' || status === 'error'}
+                importantForAccessibility={status === 'loading' || status === 'error' ? 'no-hide-descendants' : 'auto'}
+            >
+                {children}
+            </View>
+            {status === 'loading' ? (
+                <View style={[StyleSheet.absoluteFill, styles.center]} pointerEvents="auto" accessibilityViewIsModal>
+                    <ActivityIndicator color={Colors.brand} size="large" />
+                    <Text style={styles.label}>Connecting…</Text>
+                    {showEscape ? (
+                        <View style={styles.escape}>
+                            <Text style={styles.escapeCopy}>
+                                Taking longer than expected. The stored token may be invalid or MJAPI may
+                                be unreachable.
+                            </Text>
+                            <Pressable
+                                onPress={async () => { await signOut(); }}
+                                style={styles.escapeBtn}
+                            >
+                                <Text style={styles.escapeBtnText}>Clear tokens & sign in again</Text>
+                            </Pressable>
+                        </View>
+                    ) : null}
+                </View>
+            ) : null}
+            {status === 'error' ? (
+                <View style={[StyleSheet.absoluteFill, styles.center]} pointerEvents="auto" accessibilityViewIsModal>
+                    <Text style={styles.errorTitle}>Couldn't connect</Text>
+                    <Text style={styles.errorBody}>{error?.message ?? 'Unknown error'}</Text>
+                    <Pressable onPress={async () => { await signOut(); }} style={styles.escapeBtn}>
+                        <Text style={styles.escapeBtnText}>Sign in again</Text>
+                    </Pressable>
+                </View>
+            ) : null}
+            {status === 'ready' && (pathname === '/login' || pathname === '/auth') ? (
+                <Redirect href="/" />
+            ) : null}
+            {status === 'no-token' && pathname !== '/login' ? (
+                <Redirect href="/login" />
+            ) : null}
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
+    container: { flex: 1 },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.bg, padding: 32, gap: 12 },
     label: { fontSize: 13.5, color: Colors.ink3, marginTop: 8 },
     errorTitle: { fontSize: 18, fontWeight: Type.semibold, color: Colors.ink },

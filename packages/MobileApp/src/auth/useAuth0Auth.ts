@@ -1,6 +1,10 @@
 import { useCallback } from 'react';
 import { useAuthRequest, ResponseType } from 'expo-auth-session';
+import * as WebBrowser from 'expo-web-browser';
 import { Env } from '@/config/env';
+
+// Complete any pending Custom Tabs / web-browser auth session when the app resumes on Android/Web.
+WebBrowser.maybeCompleteAuthSession();
 import { ClearFreshLoginRequired, IsFreshLoginRequired } from '@/auth/fresh-login';
 import {
     GetAuth0Discovery,

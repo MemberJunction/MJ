@@ -50,7 +50,7 @@ describe('tab destinations', () => {
     it('no drill-down screen sits on the root stack where it would cover the bar', () => {
         // Modes belong at the root (the voice call, login, full-screen previews). PLACES do not.
         const rootScreens = readdirSync(APP, { withFileTypes: true })
-            .filter((e) => e.name !== '_layout.tsx' && !e.name.startsWith('('))
+            .filter((e) => e.name !== '_layout.tsx' && !e.name.startsWith('(') && !e.name.startsWith('+'))
             .map((e) => e.name.replace(/\.tsx$/, ''));
         expect(rootScreens.sort()).toEqual(
             ['devchat', 'interactive-demo', 'login', 'markdown-preview', 'new-conversation', 'voice-mode'].sort(),
@@ -71,12 +71,36 @@ describe('tab destinations', () => {
 });
 
 describe('reachability', () => {
-    it('the ready path navigates nowhere — Home is the initial route', () => {
+    it('the ready path navigates nowhere — Home is the initial route and children stay mounted', () => {
         // As a route that redirected, the boot gate raced the user: the first tab press after a
-        // cold launch was swallowed while navigation settled. It wraps the shell now.
+        // cold launch was swallowed while navigation settled. It wraps the shell now and keeps
+        // {children} mounted underneath loading/error overlays so Android OAuth redirects do not
+        // remount the stack on `/auth`.
         const gate = readFileSync(join(__dirname, '..', 'boot', 'BootGate.tsx'), 'utf8');
-        expect(gate).toContain('return <>{children}</>');
+        expect(gate).toContain('{children}');
         expect(gate).not.toContain('href="/home"');
+    });
+
+    it('intercepts Android OAuth callback URLs (mjmobile://auth) before Expo Router hits 404', async () => {
+        const { redirectSystemPath } = await import('../../app/+native-intent');
+        expect(
+            redirectSystemPath({
+                path: 'mjmobile://auth?code=abc123&state=xyz',
+                initial: false,
+            }),
+        ).toBe('/login');
+        expect(
+            redirectSystemPath({
+                path: 'mjmobile://auth?code=abc123&state=xyz',
+                initial: true,
+            }),
+        ).toBe('/');
+        expect(
+            redirectSystemPath({
+                path: '/conversations',
+                initial: false,
+            }),
+        ).toBe('/conversations');
     });
 
     it('Home links to every destination that has no tab', () => {
