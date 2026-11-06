@@ -97,14 +97,16 @@ export function BuildOpenAppSchemaNamesSQL(dialect: SQLDialect, coreSchema: stri
 }
 
 /**
- * One UPDATE per assignment, keyed on the row ID and still guarded on NULL so a value written in
- * between is never overwritten.
+ * One UPDATE per assignment, keyed on `SchemaName` (unique on SchemaInfo) and still guarded on NULL
+ * so a value written in between is never overwritten. Not keyed on `ID`: each database generates
+ * its own SchemaInfo IDs, and the logged UPDATE must match the row in an Open App publisher's
+ * migration on every database that installs it.
  */
 export function BuildCanonicalSchemaUpdateSQL(dialect: SQLDialect, coreSchema: string, assignment: CanonicalSchemaAssignment): string {
     const q = (n: string) => dialect.QuoteIdentifier(n);
     return (
         `UPDATE ${dialect.QuoteSchema(coreSchema, 'SchemaInfo')} ` +
         `SET ${q('CanonicalSchemaName')} = ${dialect.QuoteStringLiteral(assignment.CanonicalSchemaName)} ` +
-        `WHERE ${q('ID')} = ${dialect.QuoteStringLiteral(assignment.ID)} AND ${q('CanonicalSchemaName')} IS NULL`
+        `WHERE ${q('SchemaName')} = ${dialect.QuoteStringLiteral(assignment.SchemaName)} AND ${q('CanonicalSchemaName')} IS NULL`
     );
 }

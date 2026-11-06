@@ -38,6 +38,7 @@ import {
     DescribeStatementFailure,
     SummarizeSqlParameters,
     FormatSqlParameterTypesForError,
+    MapTSQLCastTypesForPostgreSQL,
 } from '@memberjunction/generic-database-provider';
 import type { DatabasePoolStats, DescribeStatementResult } from '@memberjunction/generic-database-provider';
 import {
@@ -62,6 +63,14 @@ const pgDialect = new PostgreSQLDialect();
  */
 function escapeRegExp(literal: string): string {
     return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * `code` without a T-SQL `N` string prefix at its end: `x = N` (the code before `'abc'`) becomes
+ * `x = `. Only a standalone `N`/`n` counts; the end of a name such as `ColumnN` is left alone.
+ */
+function StripTrailingUnicodePrefix(code: string): string {
+    return /(^|[^\w$"])[Nn]$/.test(code) ? code.slice(0, -1) : code;
 }
 
 /**
@@ -859,6 +868,15 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
     }
 
     /**
+     * No `N` prefix on PostgreSQL. Metadata reports a text key as `nvarchar` here too, but `N'…'` is
+     * `bpchar` on PostgreSQL: a varchar key compared to it is cast to bpchar, so its index is not
+     * used and trailing spaces stop counting.
+     */
+    protected override KeyLiteralUnicodePrefix(_field: EntityFieldInfo): string {
+        return '';
+    }
+
+    /**
      * Transforms user-provided SQL clauses (ExtraFilter, OrderBy) to quote
      * mixed-case identifiers and convert [bracket] notation for PostgreSQL.
      * Also coerces SQL Server bit literals (`= 1` / `= 0`) on boolean fields
@@ -866,6 +884,8 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      * filters across the codebase (engines, dashboards, agents) use SQL
      * Server's bit-as-integer convention. Without this, PG rejects the
      * comparison with `operator does not exist: boolean = integer`.
+     * The identifier pass also drops T-SQL `N'…'` prefixes and maps
+     * `CAST(… AS uniqueidentifier)` to `uuid` (see {@link quoteIdentifiersInSQL}).
      */
     protected override TransformExternalSQLClause(clause: string, entityInfo: EntityInfo): string {
         if (!clause || clause.length === 0) return clause;
@@ -1411,15 +1431,23 @@ SELECT * FROM delete_result`;
         const n = sql.length;
         let codeBuf = '';
 
+        // Code (never literal text) also gets the T-SQL type a client clause casts to mapped to
+        // PostgreSQL's (`CAST(RecordID AS uniqueidentifier)` → `AS uuid`): metadata reports a
+        // PostgreSQL uuid column as `uniqueidentifier`, a type PostgreSQL does not have.
         const flushCode = () => {
             if (codeBuf.length === 0) return;
-            out += this.quoteFieldNamesInToken(codeBuf, fieldNames);
+            out += this.quoteFieldNamesInToken(MapTSQLCastTypesForPostgreSQL(codeBuf), fieldNames);
             codeBuf = '';
         };
 
         while (i < n) {
             const ch = sql[i];
             if (ch === "'") {
+                // A T-SQL `N'…'` prefix is dropped. On PostgreSQL `N'…'` is `bpchar`, so a varchar
+                // key compared to it is cast to bpchar: the key's index is not used and trailing
+                // spaces stop counting. Client-built key filters (`CompositeKey.ToWhereClause`,
+                // SearchEntity's id filter) add the prefix for SQL Server's nvarchar keys.
+                codeBuf = StripTrailingUnicodePrefix(codeBuf);
                 // Flush any pending code before opening the literal.
                 flushCode();
                 let j = i + 1;

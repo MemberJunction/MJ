@@ -49,6 +49,12 @@ describe('PostgreSQL user search predicate', () => {
         expect(p.Predicate(makeField({ predicate }), 'Smith', 'Smith')).toBe(expected);
     });
 
+    // Exact compares with =, so LIKE metacharacters in the term are data: it takes the raw term,
+    // never the LIKE-escaped one (which would search for a literal backslash).
+    it('Exact uses the raw term, not the LIKE-escaped one', () => {
+        expect(p.Predicate(makeField({ predicate: 'Exact' }), 'a\\_b\\%', 'a_b%')).toBe(` = LOWER('a_b%')`);
+    });
+
     it('lowercases the column for a text field', () => {
         expect(p.Column(makeField({}))).toBe('LOWER("LastName")');
     });

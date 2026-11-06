@@ -3,9 +3,13 @@
  *
  * `RecordID` is text. SQL Server converts it to the key's type on its own, but PostgreSQL has no
  * `uuid = text` or `integer = text` operator, so the plain form fails there for every non-text key.
- * The list side is cast to the key's own type — the type the metadata reports for this database
- * (`uuid` on PostgreSQL, `uniqueidentifier` on SQL Server, `integer`, ...) — which runs on both and
- * leaves the key column bare, so the primary-key index stays usable. Text keys compare as they are.
+ * The list side is cast to the key's type as metadata reports it, which leaves the key column bare,
+ * so the primary-key index stays usable. Text keys compare as they are. Metadata uses SQL Server's
+ * type names on both platforms, so a uuid key is `uniqueidentifier` on PostgreSQL too, a type
+ * PostgreSQL does not have: the PostgreSQL provider rewrites `CAST(… AS uniqueidentifier)` to
+ * `uuid` before running a client clause, and the client-clause screen parses it the same way
+ * (`MapTSQLCastTypesForPostgreSQL` in `@memberjunction/generic-database-provider`). Integer types
+ * (`int`, `bigint`) are valid on both as written.
  *
  * A composite key is stored in `RecordID` as `Field1|Value1||Field2|Value2` (the
  * {@link CompositeKey} delimiters), so the composite predicate builds the same string from the
@@ -42,7 +46,9 @@ export function RecordIDAsKeyType(pkField: ListMembershipKeyField, recordIdColum
  * The predicate selecting the rows of an entity that are members of a list.
  *
  * - One key field: `<pk> IN (SELECT <RecordID cast to the key type> FROM <view> WHERE ListID='<id>')`.
- * - Several key fields: `EXISTS (SELECT 1 FROM <view> ld WHERE ld.ListID='<id>' AND ld.RecordID = CONCAT('F1|', [F1], '||', 'F2|', [F2]))`.
+ * - Several key fields: `CONCAT('F1|', [F1], '||', 'F2|', [F2]) IN (SELECT RecordID FROM <view> WHERE ListID='<id>')`.
+ *   The key columns sit outside the subquery, so a key column that the List Details view also has
+ *   (such as `ID`) still names the entity's column.
  *
  * @param keyFields the entity's primary key fields (`EntityInfo.PrimaryKeys`), or a single key field
  * @param listDetailsView the schema-qualified List Details view, e.g. `__mj.vwListDetails`
@@ -63,7 +69,7 @@ export function ListMembershipFilter(
         const pk = fields[0];
         return `${pk.Name} IN (SELECT ${RecordIDAsKeyType(pk)} FROM ${listDetailsView} WHERE ListID=${listIdLiteral})`;
     }
-    return `EXISTS (SELECT 1 FROM ${listDetailsView} ld WHERE ld.ListID=${listIdLiteral} AND ld.RecordID = ${CompositeRecordIDExpression(fields)})`;
+    return `${CompositeRecordIDExpression(fields)} IN (SELECT RecordID FROM ${listDetailsView} WHERE ListID=${listIdLiteral})`;
 }
 
 /**

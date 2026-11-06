@@ -2,6 +2,7 @@ import type { IConversionRule, ConversionContext, StatementType } from './types.
 import { ConvertIdentifiers, RemoveCollate, ConvertCommonFunctions, TransformCodeOnly, RemoveNPrefix, ConvertBooleanLiteralComparisons, CollectBooleanColumnNames, QuoteConstraintNames } from './ExpressionHelpers.js';
 import { ResolveType } from './TypeResolver.js';
 import { BuildDependentRebuildBlock, ParseSchemaQualifiedName } from './DependentObjectRebuild.js';
+import { QuoteSchemaQualifiedPascalCaseNames } from './PostProcessor.js';
 
 export class AlterTableRule implements IConversionRule {
   Name = 'AlterTableRule';
@@ -319,7 +320,11 @@ export class AlterTableRule implements IConversionRule {
    */
   private wrapAlterColumnTypeInRebuild(sql: string): string {
     const re = /ALTER\s+TABLE\s+([^\s;]+)\s+(ALTER\s+COLUMN\s+"(\w+)"\s+TYPE\b[^;\n]*)(;?)/gi;
-    return sql.replace(re, (_match, table: string, clauses: string, col: string) => {
+    return sql.replace(re, (_match, rawTable: string, clauses: string, col: string) => {
+      // The final pass quotes a PascalCase name after a schema (`__mj.Foo` → `__mj."Foo"`), and
+      // PostgreSQL compares the block's name to pg_class as a string, so the reference is quoted
+      // the same way first: the name looked up is then the name the ALTER runs against.
+      const table = QuoteSchemaQualifiedPascalCaseNames(rawTable);
       const { Schema, Name } = ParseSchemaQualifiedName(table);
       const statement = `ALTER TABLE ${table} ${clauses.trimEnd()}`;
       return BuildDependentRebuildBlock({ Schema, Name, Kind: 'table', Columns: [col] }, statement);

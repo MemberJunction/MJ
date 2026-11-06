@@ -273,8 +273,8 @@ export async function SchemaExists(
  * privileges as the VIEW's owner), but CodeGen runs as the core schema's owner and must own the
  * app schema to create and replace its generated views and functions; a schema owned by the
  * installing login fails CodeGen with "must be owner of schema" (#5640). When the installing login
- * is a member of the owner role (`pg_has_role(current_user, owner, 'MEMBER')`, true for the owner
- * itself and for superusers) the schema is created `AUTHORIZATION <owner>`; otherwise it is created
+ * may act as the owner role ({@link POSTGRESQL_CAN_ACT_AS_OWNER_SQL}; true for the owner itself and
+ * for superusers) the schema is created `AUTHORIZATION <owner>`; otherwise it is created
  * plain and a {@link SchemaOperationResult.Warning} names the `ALTER SCHEMA … OWNER TO` /
  * `REASSIGN OWNED` remedy. Ownership of the objects the app's migrations create is unchanged.
  *
@@ -343,9 +343,9 @@ export async function CreateAppSchema(
  * PostgreSQL branch of {@link CreateAppSchema}: creates the schema owned by the core schema's
  * owner when the installing login may assign it, else plain with a Warning.
  *
- * `CREATE SCHEMA … AUTHORIZATION <role>` requires the executing role to be a member of `<role>`,
- * which {@link ResolvePostgreSQLCoreSchemaOwner} asks with `pg_has_role` before creating anything,
- * so a permission gap never surfaces as a failed CREATE.
+ * `CREATE SCHEMA … AUTHORIZATION <role>` requires the executing role to be able to act as `<role>`,
+ * which {@link ResolvePostgreSQLCoreSchemaOwner} asks with `pg_has_role` before creating anything
+ * ({@link POSTGRESQL_CAN_ACT_AS_OWNER_SQL}), so a permission gap never surfaces as a failed CREATE.
  */
 async function CreatePostgreSQLAppSchema(
   schemaName: string,
@@ -365,8 +365,23 @@ async function CreatePostgreSQLAppSchema(
 }
 
 /**
+ * True when the executing role can create a schema `AUTHORIZATION` the core schema's owner and then
+ * create objects in it. `'MEMBER'` is not enough: on PostgreSQL 16 and later a membership can carry
+ * `ADMIN` alone (the default for a `CREATEROLE` login that created the role), and `CREATE SCHEMA …
+ * AUTHORIZATION` then fails with "must be able to SET ROLE". So the check needs `'USAGE'` (the
+ * owner's privileges are inherited, which the app's migrations need to create objects in the
+ * schema) and, from 16 on, `'SET'` (which `AUTHORIZATION` needs). `'SET'` is an error before 16,
+ * where `'USAGE'` alone decides, so the CASE asks for it only on 16 and later.
+ */
+const POSTGRESQL_CAN_ACT_AS_OWNER_SQL =
+  `pg_has_role(current_user, n.nspowner, 'USAGE') AND ` +
+  `CASE WHEN current_setting('server_version_num')::int >= 160000 ` +
+  `THEN pg_has_role(current_user, n.nspowner, 'SET') ELSE TRUE END`;
+
+/**
  * PostgreSQL only. Reads who owns `coreSchema` (already canonical) and whether the executing role
- * is a member of that role. No row means the core schema is missing or invisible.
+ * may act as that role ({@link POSTGRESQL_CAN_ACT_AS_OWNER_SQL}). No row means the core schema is
+ * missing or invisible.
  */
 async function ResolvePostgreSQLCoreSchemaOwner(
   coreSchema: string,
@@ -374,7 +389,7 @@ async function ResolvePostgreSQLCoreSchemaOwner(
 ): Promise<CoreSchemaOwner> {
   const rows = await provider.ExecuteSQL<{ OwnerName: string | null; IsMember: boolean | null }>(
     `SELECT pg_get_userbyid(n.nspowner) AS "OwnerName", ` +
-    `pg_has_role(current_user, n.nspowner, 'MEMBER') AS "IsMember" ` +
+    `(${POSTGRESQL_CAN_ACT_AS_OWNER_SQL}) AS "IsMember" ` +
     `FROM pg_namespace n WHERE n.nspname = '${EscapeSQLString(coreSchema)}'`
   );
   const row = rows[0];
@@ -410,7 +425,7 @@ function BuildPostgreSQLOwnerFallbackWarning(
   const quotedOwner = `"${owner.OwnerName.replace(/"/g, '""')}"`;
   return (
     `Schema '${schemaName}' was created owned by the installing login, not '${owner.OwnerName}' ` +
-    `(the owner of core schema '${coreSchema}'), because the installing login is not a member of '${owner.OwnerName}'. ` +
+    `(the owner of core schema '${coreSchema}'), because the installing login cannot act as '${owner.OwnerName}' (it needs a membership with INHERIT and, on PostgreSQL 16 and later, SET). ` +
     consequence +
     `Remedy: as a superuser, run ALTER SCHEMA ${quotedSchema} OWNER TO ${quotedOwner}; and, for the objects the ` +
     `app's migrations created, REASSIGN OWNED BY <installing login> TO ${quotedOwner} (this moves every object that ` +

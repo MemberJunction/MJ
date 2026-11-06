@@ -203,6 +203,28 @@ describe('AlterTableRule', () => {
       expect(result.trimEnd().endsWith('$do$;')).toBe(true);
     });
 
+    // PostgreSQL compares v_target_name to pg_class as a string, so it must be the name the ALTER
+    // runs against. The final pass quotes a PascalCase name after a schema (`__mj.Foo` → `__mj."Foo"`),
+    // so an unbracketed reference keeps its case; a lower-case one is left to PostgreSQL's folding.
+    it('looks up an unbracketed PascalCase table under the name the ALTER runs against', () => {
+      const result = convert(`ALTER TABLE __mj.DuplicateRun ALTER COLUMN EntityDocumentID UNIQUEIDENTIFIER NULL`);
+      expect(result).toContain(`v_target_name CONSTANT TEXT := 'DuplicateRun';`);
+      expect(result).toContain('$vsql$ALTER TABLE __mj."DuplicateRun" ALTER COLUMN "EntityDocumentID" TYPE UUID');
+    });
+
+    it('gives the same lookup for the bracketed and unbracketed forms of a statement', () => {
+      const bracketed = convert(`ALTER TABLE [__mj].[DuplicateRun] ALTER COLUMN [EntityDocumentID] UNIQUEIDENTIFIER NULL`);
+      const bare = convert(`ALTER TABLE __mj.DuplicateRun ALTER COLUMN EntityDocumentID UNIQUEIDENTIFIER NULL`);
+      const lookup = (sql: string) => sql.match(/v_target_(?:schema|name) CONSTANT TEXT := '[^']*';/g);
+      expect(lookup(bare)).toEqual(lookup(bracketed));
+    });
+
+    it('folds an unquoted lower-case table name, as PostgreSQL does when the ALTER runs', () => {
+      const result = convert(`ALTER TABLE __mj.lower_tbl ALTER COLUMN Baz NVARCHAR(500) NOT NULL`);
+      expect(result).toContain(`v_target_name CONSTANT TEXT := 'lower_tbl';`);
+      expect(result).toContain('$vsql$ALTER TABLE __mj.lower_tbl ALTER COLUMN');
+    });
+
     it('leaves ALTER COLUMN SET DEFAULT unwrapped', () => {
       const result = convert(`ALTER TABLE [__mj].[Foo] ADD CONSTRAINT DF_X DEFAULT (0) FOR [Flag]`);
       expect(result).toContain('ALTER COLUMN "Flag" SET DEFAULT 0');

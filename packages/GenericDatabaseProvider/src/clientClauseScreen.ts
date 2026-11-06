@@ -9,6 +9,7 @@ import {
     type StrictValidationResult,
 } from '@memberjunction/sql-parser';
 import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
+import { MapTSQLCastTypesForPostgreSQL } from './postgresqlClauseTypes.js';
 
 /** A client-supplied SQL fragment: plain text, or a set of per-platform variants. */
 export type ClientClauseText = string | PlatformSQL | null | undefined;
@@ -515,10 +516,14 @@ export class ClientClauseScreen {
      * does not quote with brackets. The PostgreSQL provider accepts `[Name]` in a client clause and
      * converts it the same way before running it (`PostgreSQLDataProvider.quoteIdentifiersInSQL`).
      * Only a bracket around a plain name changes; any other bracket stays as written, and the
-     * grammar refuses it.
+     * grammar refuses it. Under PostgreSQL, `CAST(… AS uniqueidentifier)` also becomes
+     * `CAST(… AS uuid)`, as the provider rewrites it before running it
+     * ({@link MapTSQLCastTypesForPostgreSQL}); the type name is not a read, so this changes nothing
+     * the screen judges.
      */
     private static toDialectQuoting(clause: string, dialect: SQLParserDialect): string {
         if (dialect.QuoteIdentifier('x').startsWith('[')) return clause;
-        return clause.replace(/\[(\w[\w\s]*)\]/g, (_bracketed: string, name: string) => dialect.QuoteIdentifier(name));
+        const quoted = clause.replace(/\[(\w[\w\s]*)\]/g, (_bracketed: string, name: string) => dialect.QuoteIdentifier(name));
+        return dialect.ParserDialect === 'PostgresQL' ? MapTSQLCastTypesForPostgreSQL(quoted) : quoted;
     }
 }

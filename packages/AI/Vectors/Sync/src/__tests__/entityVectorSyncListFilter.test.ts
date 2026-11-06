@@ -53,20 +53,19 @@ function entityWithKeys(keys: Array<{ Name: string; Type: string }>): EntityInfo
 const syncer = new TestSyncer({} as IMetadataProvider);
 
 describe('EntityVectorSyncer.BuildListFilter', () => {
-    it('casts RecordID to a single uuid key and escapes the list id', () => {
-        const filter = syncer.ListFilter(entityWithKeys([{ Name: 'ID', Type: 'uuid' }]), '__mj', "l'1");
-        expect(filter).toBe("ID IN (SELECT CAST(RecordID AS uuid) FROM __mj.vwListDetails WHERE ListID='l''1')");
+    it('casts RecordID to a single uuid key (typed uniqueidentifier by metadata) and escapes the list id', () => {
+        const filter = syncer.ListFilter(entityWithKeys([{ Name: 'ID', Type: 'uniqueidentifier' }]), '__mj', "l'1");
+        expect(filter).toBe("ID IN (SELECT CAST(RecordID AS uniqueidentifier) FROM __mj.vwListDetails WHERE ListID='l''1')");
     });
 
     it('matches a composite key with CONCAT, not T-SQL + concatenation', () => {
         const filter = syncer.ListFilter(
-            entityWithKeys([{ Name: 'OrderID', Type: 'uuid' }, { Name: 'LineNo', Type: 'integer' }]),
+            entityWithKeys([{ Name: 'OrderID', Type: 'uniqueidentifier' }, { Name: 'LineNo', Type: 'int' }]),
             'mj_core',
             'list-1'
         );
         expect(filter).toBe(
-            "EXISTS (SELECT 1 FROM mj_core.vwListDetails ld WHERE ld.ListID='list-1' AND ld.RecordID = " +
-            "CONCAT('OrderID|', [OrderID], '||', 'LineNo|', [LineNo]))"
+            "CONCAT('OrderID|', [OrderID], '||', 'LineNo|', [LineNo]) IN (SELECT RecordID FROM mj_core.vwListDetails WHERE ListID='list-1')"
         );
         expect(filter).not.toContain('NVARCHAR');
         expect(filter).not.toContain(' + ');

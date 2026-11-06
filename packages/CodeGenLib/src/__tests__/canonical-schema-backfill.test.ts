@@ -61,7 +61,9 @@ describe('canonical schema SQL', () => {
         expect(candidates).toMatch(/^SELECT "ID", "SchemaName" FROM .*"SchemaInfo" WHERE "CanonicalSchemaName" IS NULL$/);
         const sql = BuildCanonicalSchemaUpdateSQL(d, '__mj', assignment);
         expect(sql).toContain(`SET "CanonicalSchemaName" = 'C''RM'`);
-        expect(sql).toContain(`WHERE "ID" = 'b2' AND "CanonicalSchemaName" IS NULL`);
+        // Keyed on SchemaName, which matches on every database; SchemaInfo IDs differ per database.
+        expect(sql).toContain(`WHERE "SchemaName" = 'crm' AND "CanonicalSchemaName" IS NULL`);
+        expect(sql).not.toContain('b2');
         expect(BuildOpenAppSchemaNamesSQL(d, '__mj')).toContain('"SchemaName" IS NOT NULL');
     });
 
@@ -69,6 +71,6 @@ describe('canonical schema SQL', () => {
         const d = new SQLServerDialect();
         const sql = BuildCanonicalSchemaUpdateSQL(d, '__mj', assignment);
         expect(sql).toContain('UPDATE [__mj].[SchemaInfo] SET [CanonicalSchemaName] = ');
-        expect(sql).toContain("[ID] = 'b2' AND [CanonicalSchemaName] IS NULL");
+        expect(sql).toContain("[SchemaName] = 'crm' AND [CanonicalSchemaName] IS NULL");
     });
 });

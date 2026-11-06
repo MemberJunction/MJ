@@ -190,6 +190,13 @@ function makeEntity(opts: { ftx?: boolean; ftxFunction?: string | null; pkName?:
 
 const provider = new SearchSQLTestProvider();
 
+/** Folds the searched column, as the PostgreSQL provider does. */
+class LowerColumnSearchProvider extends SearchSQLTestProvider {
+    protected override buildUserSearchColumnExpression(field: EntityFieldInfo): string {
+        return `LOWER(${this.QuoteIdentifier(field.Name)})`;
+    }
+}
+
 describe('createViewUserSearchSQL — predicate routing', () => {
     it('Exact emits = N\'term\'', () => {
         const e = makeEntity({ fields: [makeField({ name: 'Code', predicate: 'Exact' })] });
@@ -252,6 +259,14 @@ describe('createViewUserSearchSQL — escaping', () => {
         const e = makeEntity({ fields: [makeField({ name: 'Code', predicate: 'Exact' })] });
         const sql = provider.buildSQL(e, '50%');
         expect(sql).toBe(`(([Code]  = N'50%'))`);
+    });
+
+    // The left-hand side comes from buildUserSearchColumnExpression, which a case-sensitive
+    // platform overrides (PostgreSQL: LOWER("Col")); the predicate loop must use it.
+    it('takes the column expression from buildUserSearchColumnExpression', () => {
+        const lowered = new LowerColumnSearchProvider();
+        const e = makeEntity({ fields: [makeField({ name: 'Name' }), makeField({ name: 'Code', predicate: 'Exact' })] });
+        expect(lowered.buildSQL(e, 'acme')).toBe(`((LOWER([Name])  LIKE N'%acme%' ESCAPE '\\') OR (LOWER([Code])  = N'acme'))`);
     });
 });
 

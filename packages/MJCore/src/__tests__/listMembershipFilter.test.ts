@@ -6,9 +6,18 @@ const VIEW = '__mj.vwListDetails';
 const LIST = 'list-1';
 
 describe('ListMembershipFilter', () => {
-    it('casts RecordID to a PostgreSQL uuid key, so uuid = text never reaches the server', () => {
-        expect(ListMembershipFilter({ Name: 'ID', Type: 'uuid' }, VIEW, LIST)).toBe(
-            "ID IN (SELECT CAST(RecordID AS uuid) FROM __mj.vwListDetails WHERE ListID='list-1')"
+    // Metadata reports a uuid key as `uniqueidentifier` on PostgreSQL too (vwSQLColumnsAndEntityFields
+    // maps it), so this is the form both platforms receive; the PostgreSQL provider and the
+    // client-clause screen map the type to `uuid`.
+    it('casts RecordID to a uuid key as metadata types it (uniqueidentifier, on both platforms)', () => {
+        expect(ListMembershipFilter({ Name: 'ID', Type: 'uniqueidentifier' }, VIEW, LIST)).toBe(
+            "ID IN (SELECT CAST(RecordID AS uniqueidentifier) FROM __mj.vwListDetails WHERE ListID='list-1')"
+        );
+    });
+
+    it('casts RecordID to a key typed with a PostgreSQL type name', () => {
+        expect(ListMembershipFilter({ Name: 'ID', Type: 'UUID' }, VIEW, LIST)).toBe(
+            "ID IN (SELECT CAST(RecordID AS UUID) FROM __mj.vwListDetails WHERE ListID='list-1')"
         );
     });
 
@@ -31,7 +40,7 @@ describe('ListMembershipFilter', () => {
     });
 
     it('escapes the list id, which is spliced into the SQL as a string literal', () => {
-        const filter = ListMembershipFilter({ Name: 'ID', Type: 'uuid' }, VIEW, "abc' OR 1=1--");
+        const filter = ListMembershipFilter({ Name: 'ID', Type: 'uniqueidentifier' }, VIEW, "abc' OR 1=1--");
         expect(filter).toContain("WHERE ListID='abc'' OR 1=1--')");
         expect(filter).not.toContain("ListID='abc' OR");
     });
@@ -51,15 +60,14 @@ describe('ListMembershipFilter', () => {
 
 describe('ListMembershipFilter — key field lists', () => {
     it('gives the single-key form, unchanged, for a one-element key list', () => {
-        expect(ListMembershipFilter([{ Name: 'ID', Type: 'uuid' }], VIEW, LIST)).toBe(
-            ListMembershipFilter({ Name: 'ID', Type: 'uuid' }, VIEW, LIST)
+        expect(ListMembershipFilter([{ Name: 'ID', Type: 'uniqueidentifier' }], VIEW, LIST)).toBe(
+            ListMembershipFilter({ Name: 'ID', Type: 'uniqueidentifier' }, VIEW, LIST)
         );
     });
 
     it('matches a two-column key (uuid + int) with CONCAT over the F1|v1||F2|v2 record id', () => {
-        expect(ListMembershipFilter([{ Name: 'OrderID', Type: 'uuid' }, { Name: 'LineNo', Type: 'integer' }], VIEW, LIST)).toBe(
-            "EXISTS (SELECT 1 FROM __mj.vwListDetails ld WHERE ld.ListID='list-1' AND ld.RecordID = " +
-            "CONCAT('OrderID|', [OrderID], '||', 'LineNo|', [LineNo]))"
+        expect(ListMembershipFilter([{ Name: 'OrderID', Type: 'uniqueidentifier' }, { Name: 'LineNo', Type: 'int' }], VIEW, LIST)).toBe(
+            "CONCAT('OrderID|', [OrderID], '||', 'LineNo|', [LineNo]) IN (SELECT RecordID FROM __mj.vwListDetails WHERE ListID='list-1')"
         );
     });
 
@@ -74,7 +82,7 @@ describe('ListMembershipFilter — key field lists', () => {
     it('builds the same string CompositeKey writes to RecordID', () => {
         const key = new CompositeKey([{ FieldName: 'OrderID', Value: 'A' }, { FieldName: 'LineNo', Value: 3 }]);
         // Evaluate the CONCAT arguments by hand: literals as written, columns by their values.
-        const args = CompositeRecordIDExpression([{ Name: 'OrderID', Type: 'uuid' }, { Name: 'LineNo', Type: 'int' }])
+        const args = CompositeRecordIDExpression([{ Name: 'OrderID', Type: 'uniqueidentifier' }, { Name: 'LineNo', Type: 'int' }])
             .slice('CONCAT('.length, -1)
             .split(', ')
             .map(arg => arg === '[OrderID]' ? 'A' : arg === '[LineNo]' ? '3' : arg.slice(1, -1));
@@ -83,7 +91,15 @@ describe('ListMembershipFilter — key field lists', () => {
 
     it('escapes the list id in the composite form', () => {
         const filter = ListMembershipFilter([{ Name: 'A', Type: 'int' }, { Name: 'B', Type: 'int' }], VIEW, "x' OR 1=1--");
-        expect(filter).toContain("ld.ListID='x'' OR 1=1--'");
+        expect(filter).toContain("WHERE ListID='x'' OR 1=1--')");
+    });
+
+    // A key column the List Details view also has (ID) must not bind to the view's column.
+    it('keeps the key columns outside the List Details subquery', () => {
+        const filter = ListMembershipFilter([{ Name: 'ID', Type: 'uniqueidentifier' }, { Name: 'Ver', Type: 'int' }], VIEW, LIST);
+        const subquery = filter.slice(filter.indexOf(' IN (SELECT'));
+        expect(filter.startsWith("CONCAT('ID|', [ID], '||', 'Ver|', [Ver]) IN (SELECT")).toBe(true);
+        expect(subquery).not.toContain('[ID]');
     });
 
     it('throws for an empty key list', () => {
@@ -93,7 +109,7 @@ describe('ListMembershipFilter — key field lists', () => {
 
 describe('RecordIDAsKeyType', () => {
     it('casts a named record-id column', () => {
-        expect(RecordIDAsKeyType({ Name: 'ID', Type: 'uuid' }, '"RecordID"')).toBe('CAST("RecordID" AS uuid)');
+        expect(RecordIDAsKeyType({ Name: 'ID', Type: 'uniqueidentifier' }, '"RecordID"')).toBe('CAST("RecordID" AS uniqueidentifier)');
     });
 
     it('leaves a text key uncast', () => {

@@ -278,11 +278,11 @@ describe('DuplicateRecordDetector — primary keys of any shape', () => {
         });
 
         it('reads List Details from the configured core schema and casts RecordID to the key type', async () => {
-            const uuidKeyed = { ...INDIVIDUALS, PrimaryKeys: [{ Name: 'ID', Type: 'uuid' }] } as unknown as EntityInfo;
+            const uuidKeyed = { ...INDIVIDUALS, PrimaryKeys: [{ Name: 'ID', Type: 'uniqueidentifier' }] } as unknown as EntityInfo;
             vi.mocked(detector.Metadata.EntityByID).mockReturnValue(uuidKeyed);
             mockRunViewFn.mockResolvedValueOnce({ Success: true, Results: [] });
             await detector.recordsByList("list'1", INDIVIDUALS.ID);
-            expect(lastRunViewParams().ExtraFilter).toBe("ID IN (SELECT CAST(RecordID AS uuid) FROM mj_core.vwListDetails WHERE ListID='list''1')");
+            expect(lastRunViewParams().ExtraFilter).toBe("ID IN (SELECT CAST(RecordID AS uniqueidentifier) FROM mj_core.vwListDetails WHERE ListID='list''1')");
             expect(String(lastRunViewParams().ExtraFilter)).not.toContain('__mj');
         });
 

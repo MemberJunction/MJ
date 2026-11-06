@@ -4017,7 +4017,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // The run details are keyed by the entity being run — the view's own entity. Its ID comes
         // from metadata, not the caller, but it is still escaped as the literal it becomes.
         const entityID = EscapeSQLString(entityInfo.ID ?? '');
-        const recordID = RecordIDAsKeyType(pk, this.QuoteIdentifier('RecordID'));
+        // Metadata types are SQL Server's vocabulary on every platform (a PostgreSQL uuid key is
+        // `uniqueidentifier`), so the cast type goes through the dialect, as in renderRLSProjectionValue.
+        const keyType = pk.Type ? (this.getDialect()?.MapDataTypeToString(pk.Type) ?? pk.Type) : pk.Type;
+        const recordID = RecordIDAsKeyType({ Name: pk.Name, Type: keyType }, this.QuoteIdentifier('RecordID'));
         const runDetails = this.QuoteSchemaAndView(this.MJCoreSchemaName, 'vwUserViewRunDetails');
         return `${this.QuoteIdentifier(pk.Name)} NOT IN (SELECT ${recordID} FROM ${runDetails} WHERE ${this.QuoteIdentifier('EntityID')}='${entityID}' AND ${scopeSQL})`;
     }
@@ -4104,12 +4107,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
-     * True if the field's column type is appropriate for text-pattern search.
-     * Non-text types are rejected because LIKE forces an implicit per-row CONVERT
-     * to nvarchar. Unbounded (MAX/ntext/text) columns are rejected because the
-     * LIKE path cannot seek them; FTX is the right tool for those.
-     */
-    /**
      * Left-hand side of a user-search predicate: the quoted column. A provider whose
      * comparisons are case-sensitive overrides this (with {@link buildPerFieldSearchPredicate})
      * to compare a case-folded column, e.g. PostgreSQL's `LOWER("Name")`.
@@ -4118,6 +4115,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         return this.QuoteIdentifier(field.Name);
     }
 
+    /**
+     * True if the field's column type is appropriate for text-pattern search.
+     * Non-text types are rejected because LIKE forces an implicit per-row CONVERT
+     * to nvarchar. Unbounded (MAX/ntext/text) columns are rejected because the
+     * LIKE path cannot seek them; FTX is the right tool for those.
+     */
     protected isTextSearchableType(field: EntityFieldInfo): boolean {
         const t = (field.Type ?? '').toLowerCase();
         if (t !== 'nvarchar' && t !== 'varchar' && t !== 'char' && t !== 'nchar') return false;
@@ -7519,6 +7522,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     /**************************************************************************/
 
     /**
+     * The prefix a quoted key value takes in SQL this provider builds: the field's
+     * {@link EntityFieldInfo.UnicodePrefix} (`N` for an nchar/nvarchar key). Metadata reports text
+     * columns as `nvarchar` on PostgreSQL too, where `N'…'` is `bpchar` and costs a varchar key its
+     * index, so the PostgreSQL provider returns an empty prefix.
+     */
+    protected KeyLiteralUnicodePrefix(field: EntityFieldInfo): string {
+        return field.UnicodePrefix;
+    }
+
+    /**
      * The `WHERE` predicate that selects one record by its composite key, using dialect-neutral
      * quoting. Quoted key values have embedded single quotes escaped: a key value can contain
      * apostrophes (an object-valued soft key whose JSON carries free text), and an unescaped quote
@@ -7529,9 +7542,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const pk = entityInfo.PrimaryKeys.find(p => p.Name.trim().toLowerCase() === val.FieldName.trim().toLowerCase());
             if (!pk) throw new Error(`Primary key ${val.FieldName} not found in entity ${entityInfo.Name}`);
             if (pk.NeedsQuotes) {
-                // N'' for an nchar/nvarchar key (empty on PostgreSQL), so non-ASCII keys match on
-                // SQL Server and the comparison can seek the key's index (#5664).
-                return `${this.QuoteIdentifier(pk.CodeName)}=${pk.UnicodePrefix}'${String(val.Value).replace(/'/g, "''")}'`;
+                // N'' for an nchar/nvarchar key on SQL Server, so non-ASCII keys match and the
+                // comparison can seek the key's index (#5664); see {@link KeyLiteralUnicodePrefix}.
+                return `${this.QuoteIdentifier(pk.CodeName)}=${this.KeyLiteralUnicodePrefix(pk)}'${String(val.Value).replace(/'/g, "''")}'`;
             }
             // An unquoted value is spliced in bare, so it must be a plain number.
             const raw = String(val.Value);

@@ -34,6 +34,7 @@ import { CompositeKey } from '@memberjunction/core';
 import { RecordMergeResult } from '@memberjunction/core';
 import { TransactionGroupBase } from '@memberjunction/core';
 import { QueryExecutionSpec } from '@memberjunction/core';
+import { PostgreSQLDialect, SQLServerDialect, type SQLDialect } from '@memberjunction/sql-dialect';
 
 vi.mock('sql-formatter', () => ({
     format: (sql: string) => sql,
@@ -132,6 +133,17 @@ class PrimaryKeyShapeTestProvider extends GenericDatabaseProviderTestBase {
     }
 }
 
+/** The same provider with a dialect, as the SQL Server and PostgreSQL providers have. */
+class DialectTestProvider extends PrimaryKeyShapeTestProvider {
+    constructor(private readonly _dialect: SQLDialect) { super(); }
+    protected override getDialect(): SQLDialect | null { return this._dialect; }
+}
+
+/** A provider that drops the N prefix, as the PostgreSQL provider does. */
+class NoUnicodePrefixTestProvider extends PrimaryKeyShapeTestProvider {
+    protected override KeyLiteralUnicodePrefix(_field: EntityFieldInfo): string { return ''; }
+}
+
 // ---------------------------------------------------------------------------
 // Fixtures — only the members the helpers read.
 // ---------------------------------------------------------------------------
@@ -212,6 +224,20 @@ describe('BuildUserViewRunExclusionSQL — prior view-run exclusion runs on both
         expect(provider.exclusion(keyedEntity('Code', 'nvarchar'), { UserViewRunID: RUN_ID })).toContain('SELECT [RecordID] FROM');
     });
 
+    // Metadata types a PostgreSQL uuid key `uniqueidentifier`, which PostgreSQL does not have, so
+    // the cast type goes through the provider's dialect.
+    it('casts to UUID for a key metadata types uniqueidentifier, under the PostgreSQL dialect', () => {
+        const pg = new DialectTestProvider(new PostgreSQLDialect());
+        expect(pg.exclusion(keyedEntity('ID', 'uniqueidentifier'), { UserViewRunID: RUN_ID })).toContain('CAST([RecordID] AS UUID)');
+        expect(pg.exclusion(keyedEntity('ID', 'int'), { UserViewRunID: RUN_ID })).toContain('CAST([RecordID] AS INTEGER)');
+        expect(pg.exclusion(keyedEntity('Code', 'nvarchar'), { UserViewRunID: RUN_ID })).toContain('SELECT [RecordID] FROM');
+    });
+
+    it('keeps UNIQUEIDENTIFIER under the SQL Server dialect', () => {
+        const mssql = new DialectTestProvider(new SQLServerDialect());
+        expect(mssql.exclusion(keyedEntity('ID', 'uniqueidentifier'), { UserViewRunID: RUN_ID })).toContain('CAST([RecordID] AS UNIQUEIDENTIFIER)');
+    });
+
     it('rejects a view-run ID that is not a GUID before it reaches the SQL', () => {
         expect(() => provider.exclusion(keyedEntity('ID', 'uuid'), { UserViewRunID: "x') OR 1=1 --" }))
             .toThrow(/Invalid ExcludeUserViewRunID: must be a GUID/);
@@ -236,7 +262,7 @@ describe('BuildPrimaryKeyWhereClause — key literals follow the key column type
         expect(provider.pkWhere(entity, CompositeKey.FromKeyValuePair('Code', "日本-'01"))).toBe("[Code]=N'日本-''01'");
     });
 
-    it('keeps a plain literal for a varchar or uuid key (UnicodePrefix is empty on PostgreSQL types too)', () => {
+    it('keeps a plain literal for a varchar or uuid key', () => {
         const entity = entityWithKeys([{ Name: 'ID', NeedsQuotes: true, UnicodePrefix: '' }]);
         expect(provider.pkWhere(entity, CompositeKey.FromKeyValuePair('ID', 'K12345'))).toBe("[ID]='K12345'");
     });
@@ -259,5 +285,10 @@ describe('BuildPrimaryKeyWhereClause — key literals follow the key column type
         ]);
         const key = new CompositeKey([{ FieldName: 'OrderID', Value: 7 }, { FieldName: 'LineCode', Value: 'Ä-3' }]);
         expect(provider.pkWhere(entity, key)).toBe("[OrderID]=7 AND [LineCode]=N'Ä-3'");
+    });
+
+    it('takes the prefix from KeyLiteralUnicodePrefix, which the PostgreSQL provider empties', () => {
+        const entity = entityWithKeys([{ Name: 'Code', NeedsQuotes: true, UnicodePrefix: 'N' }]);
+        expect(new NoUnicodePrefixTestProvider().pkWhere(entity, CompositeKey.FromKeyValuePair('Code', 'K777'))).toBe("[Code]='K777'");
     });
 });

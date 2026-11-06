@@ -31,7 +31,13 @@ describe('CreateAppSchema — PostgreSQL schema owner (#5640)', () => {
         const probe = sqlAt(executeSql, 1);
         expect(probe).toContain('pg_namespace');
         expect(probe).toContain('pg_get_userbyid(n.nspowner)');
-        expect(probe).toContain(`pg_has_role(current_user, n.nspowner, 'MEMBER')`);
+        // 'MEMBER' is true for an ADMIN-only membership (PG 16+), which cannot run AUTHORIZATION;
+        // the probe asks for inherited privileges and, from PG 16, SET.
+        expect(probe).not.toContain(`'MEMBER'`);
+        expect(probe).toContain(`pg_has_role(current_user, n.nspowner, 'USAGE')`);
+        expect(probe).toContain(
+            `CASE WHEN current_setting('server_version_num')::int >= 160000 THEN pg_has_role(current_user, n.nspowner, 'SET') ELSE TRUE END`
+        );
         // The core schema name is canonicalized (PG folds unquoted DDL to lowercase).
         expect(probe).toContain(`n.nspname = '__mj'`);
     });
@@ -50,12 +56,13 @@ describe('CreateAppSchema — PostgreSQL schema owner (#5640)', () => {
         expect(sqlAt(executeSql, 2)).toBe('CREATE SCHEMA "bcsaas" AUTHORIZATION "odd""role"');
     });
 
-    it('creates the schema plain with a Warning naming the remedy when the installer is not a member', async () => {
+    it('creates the schema plain with a Warning naming the remedy when the installer cannot act as the owner', async () => {
         const { provider, executeSql } = makeMockProvider([[], [{ OwnerName: 'mj_codegen', IsMember: false }]], 'postgresql');
         const result = await CreateAppSchema('bcsaas', provider);
         expect(result.Success).toBe(true);
         expect(sqlAt(executeSql, 2)).toBe('CREATE SCHEMA "bcsaas"');
         expect(result.Warning).toContain('mj_codegen');
+        expect(result.Warning).toContain('cannot act as');
         expect(result.Warning).toContain('must be owner of schema');
         expect(result.Warning).toContain('ALTER SCHEMA "bcsaas" OWNER TO "mj_codegen"');
         expect(result.Warning).toContain('REASSIGN OWNED');
