@@ -20,9 +20,9 @@ export function FailingTestLine(c: CatchContext): number | null {
     const m = testFramePattern(c).exec(c.Head[0]?.Failure?.StackExcerpt ?? '');
     return m ? Number(m[1]) : null;
 }
-/** Line number of the first `❯` stack frame when that frame is in the test file; null when it is elsewhere or missing. */
+/** Line number of the first stack frame (the first non-empty line, in any format) when that frame is in the test file; null otherwise. */
 export function FirstFrameTestLine(c: CatchContext): number | null {
-    const first = (c.Head[0]?.Failure?.StackExcerpt ?? '').split('\n').find((l) => l.includes('❯'));
+    const first = (c.Head[0]?.Failure?.StackExcerpt ?? '').split('\n').find((l) => l.trim() !== '');
     const m = first ? testFramePattern(c).exec(first) : null;
     return m ? Number(m[1]) : null;
 }

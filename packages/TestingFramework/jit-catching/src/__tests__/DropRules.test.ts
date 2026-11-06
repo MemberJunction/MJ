@@ -111,3 +111,8 @@ describe('drop rules never drop a regression reached through calls', () => {
     expect(new BrokenMock().Evaluate(ctx(src, { StackExcerpt: '❯ src/__tests__/jit/at.jit.test.ts:3:9', ErrorName: 'Error' })).Fired).toBe(false);
   });
 });
+describe("drop rules read the reporter's single-frame format", () => {
+  it('TestOwnError fires on an `at <path>` frame in the test file', () => {
+    expect(new TestOwnError().Evaluate(ctx(`${imp}\nit('t', () => {\n  const v = undefinedThing;\n  expect(v).toBe(1);\n});`, { ErrorName: 'ReferenceError', Message: 'ReferenceError: undefinedThing is not defined', Assertion: null, StackExcerpt: 'at /work/packages/X/src/__tests__/jit/t.jit.test.ts:3:13' })).Fired).toBe(true);
+  });
+});
