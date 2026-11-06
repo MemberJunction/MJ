@@ -1469,10 +1469,10 @@ export class BaseAgent {
      * Starts a run tainted when it executes a task-graph node whose input is tainted
      * (`ExecuteAgentParams.SecurityEnvelope.IsRunTainted`): the node's input derives from untrusted content no
      * completed Human step reviewed, so the run is tainted before it reads anything itself, exactly as the run
-     * that ingested the content was.
-     * @protected
+     * that ingested the content was. Private: a security seed is not an extension point, and an override that
+     * skipped it would start a tainted run clean.
      */
-    protected seedTaintFromSecurityEnvelope(params: ExecuteAgentParams): void {
+    private seedTaintFromSecurityEnvelope(params: ExecuteAgentParams): void {
         if (params.SecurityEnvelope?.IsRunTainted === true) {
             this.recordTaintedSource(0, 'task-graph:security-envelope', 'Untrusted');
         }
