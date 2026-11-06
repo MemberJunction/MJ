@@ -9,8 +9,10 @@ import {
     AvatarVideoUnpricedReason,
     BasePriceUnitType,
     BuildCostLines,
+    CapPricedAudioTokens,
     ExcludeAudioTokens,
     ExcludeAvatarVideoTokens,
+    MoveCachedInputTokens,
     NormalizedUsage,
     PricedAudioTokens,
     PricedAvatarVideo,
@@ -295,6 +297,11 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
      * on an `'Audio'` line. Audio tokens without a usable price stay on the default line at the row's rate, as before;
      * that line is then marked `Blended` and the run logs it once. A run priced in seconds prices its audio in those
      * seconds, so its audio tokens are left alone.
+     *
+     * A token-priced realtime run's cache hits (`RealtimeUsage.Input.CachedTokens`) move from the default line's
+     * uncached input to its cache-read bucket, priced at the row's `CacheReadPricePerUnit`, unless the run's token
+     * columns already carry cache reads. The input audio line prices only the uncached audio, and only as many audio
+     * tokens as actually left the bucket, so a line never bills more than the run recorded.
      */
     protected async CalculateAndSetCost(): Promise<void> {
         try {
@@ -312,8 +319,9 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
             // none to give.
             const byTokens = pricing.Calculator.UnitKind === 'Tokens';
             const withoutVideo = video && byTokens ? this.withoutVideoTokens(pricing.Usage, video) : pricing.Usage;
-            const audio: RunAudioPricing = record && byTokens ? this.priceAudioTokens(record, pricing.CostRow.Currency) : { Lines: [], Blended: false };
-            const usage = audio.Lines.length > 0 ? this.withoutAudioTokens(withoutVideo, audio.Lines) : withoutVideo;
+            const cacheAware = record && byTokens ? MoveCachedInputTokens(withoutVideo, record).Usage : withoutVideo;
+            const priced: RunAudioPricing = record && byTokens ? this.priceAudioTokens(record, pricing.CostRow.Currency) : { Lines: [], Blended: false };
+            const { Usage: usage, Audio: audio } = this.withoutAudioTokens(cacheAware, priced);
             const audioCost = audio.Lines.reduce((sum, line) => sum + line.Cost, 0);
 
             // Token pricing prices each input bucket at its own rate: uncached/net-new (TokensPrompt)
@@ -432,18 +440,28 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
         return { Lines: lines, Blended: blended.length > 0 };
     }
 
-    /** The default row's quantities without the audio tokens the priced audio lines cover (logged when they ran out). */
-    private withoutAudioTokens(usage: NormalizedUsage, lines: readonly PricedAudioTokens[]): NormalizedUsage {
-        const input = lines.find((line) => line.Direction === 'Input')?.Tokens ?? 0;
-        const output = lines.find((line) => line.Direction === 'Output')?.Tokens ?? 0;
+    /**
+     * The default row's quantities without the audio tokens the priced audio lines cover, and those lines limited to
+     * the tokens that actually left each bucket (logged when the stored audio tokens ran past it).
+     */
+    private withoutAudioTokens(usage: NormalizedUsage, audio: RunAudioPricing): { Usage: NormalizedUsage; Audio: RunAudioPricing } {
+        if (audio.Lines.length === 0) {
+            return { Usage: usage, Audio: audio };
+        }
+        const input = audio.Lines.find((line) => line.Direction === 'Input')?.Tokens ?? 0;
+        const output = audio.Lines.find((line) => line.Direction === 'Output')?.Tokens ?? 0;
         const exclusion = ExcludeAudioTokens(usage, input, output);
         if (exclusion.ClampedInput || exclusion.ClampedOutput) {
             LogStatus(
                 `[AIPromptRun cost] AIPromptRun ${this.ID}: audio tokens (${input} input, ${output} output) exceed the ` +
-                `${usage.input} input and ${usage.output} output tokens left on the default line; that bucket stops at 0.`
+                `${usage.input} uncached input and ${usage.output} output tokens left on the default line; that bucket ` +
+                `stops at 0 and the audio line prices only what left it.`
             );
         }
-        return exclusion.Usage;
+        const lines = audio.Lines
+            .map((line) => CapPricedAudioTokens(line, line.Direction === 'Input' ? exclusion.RemovedInput : exclusion.RemovedOutput))
+            .filter((line): line is PricedAudioTokens => line !== null);
+        return { Usage: exclusion.Usage, Audio: { Lines: lines, Blended: audio.Blended } };
     }
 
     /** Sets the run's cost; a root run's total is its cost, a child's is rolled up by its parent. */

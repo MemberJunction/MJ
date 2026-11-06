@@ -6,6 +6,9 @@
  * `AudioOutput`, per 1M tokens); those tokens leave the default row's input or output bucket. Audio tokens without a
  * usable price stay on the default line at the row's rate, which is then marked `Blended`, with one log line.
  *
+ * Cache hits the record counts (`Input.CachedTokens`, cached audio included) price at the row's cache-read rate, and
+ * the input audio line prices only the uncached audio (`AudioTokens` less `CachedAudioTokens`).
+ *
  * Same harness as the avatar video suite: a stub generated base, the engine's catalog lookups stubbed, the real
  * pricing math. Numbers: a GPT Realtime style cost row at $4 / $16 per 1M text tokens, audio at $32 in / $64 out.
  */
@@ -177,12 +180,86 @@ describe('MJAIPromptRunEntityServer pricing: the audio lines', () => {
             expect(run.Cost).toBeCloseTo(1000 * 4e-6 + 1000 * 4e-6 + 500 * 16e-6 + AUDIO_INPUT_COST + AUDIO_OUTPUT_COST, 10);
         });
 
-        it('stops a bucket at 0 when the audio tokens exceed it, and logs that', async () => {
+        it('stops a bucket at 0 when the audio tokens exceed it, prices only the audio that left it, and logs that', async () => {
             const run = makeRun({ RealtimeUsage: { Input: { AudioTokens: 12000 }, Output: { AudioTokens: 1500 } } });
             await run.Price();
 
-            expect(run.Cost).toBeCloseTo(500 * 16e-6 + 12000 * 32e-6 + AUDIO_OUTPUT_COST, 10);
+            // 10,000 input tokens recorded, so the audio input line prices 10,000, not the 12,000 the record claims.
+            expect(run.Cost).toBeCloseTo(500 * 16e-6 + 10000 * 32e-6 + AUDIO_OUTPUT_COST, 10);
+            expect(ReadCostLines(run.ModelSpecificResponseDetails)).toEqual([
+                { Modality: null, CostRowID: 'cost-row-openai', Measure: 'Tokens', Input: 0, Output: 500, Cost: 0.008 },
+                { Modality: 'Audio', CostRowID: null, Measure: 'Tokens', Input: 10000, Output: 0, Cost: 0.32 },
+                { Modality: 'Audio', CostRowID: null, Measure: 'Tokens', Input: 0, Output: 1500, Cost: 0.096 },
+            ]);
             expect(loggedStatus('audio tokens (12000 input, 1500 output) exceed')).toBe(1);
+        });
+    });
+
+    describe('cached input', () => {
+        /** The CALL with 7,000 of its 10,000 input tokens cache hits, 6,000 of them audio. */
+        const CACHED_CALL = {
+            RealtimeUsage: {
+                Input: { TextTokens: 2000, AudioTokens: 8000, CachedTokens: 7000, CachedAudioTokens: 6000 },
+                Output: { TextTokens: 500, AudioTokens: 1500 },
+            },
+        };
+        /** The GPT Realtime 2.1 row's cache rate, $0.40 per 1M. */
+        const CACHED_ROW = { ...COST_ROW, CacheReadPricePerUnit: 0.4 } as unknown as MJAIModelCostEntity;
+
+        it("prices cached audio at the row's cache-read rate and only the uncached audio on the Audio line", async () => {
+            vi.spyOn(AIEngineBase.Instance, 'GetActiveModelCost').mockReturnValue(CACHED_ROW);
+            const run = makeRun(CACHED_CALL);
+            await run.Price();
+
+            // 1,000 uncached text in at $4, 7,000 cached at $0.40, 500 text out at $16, 2,000 uncached audio in at $32,
+            // 1,500 audio out at $64.
+            const expected = 1000 * 4e-6 + 7000 * 0.4e-6 + 500 * 16e-6 + 2000 * 32e-6 + AUDIO_OUTPUT_COST;
+            expect(run.Cost).toBeCloseTo(expected, 10);
+            expect(run.Cost).toBeCloseTo(0.1748, 10);
+            expect(ReadCostLines(run.ModelSpecificResponseDetails)).toEqual([
+                { Modality: null, CostRowID: 'cost-row-openai', Measure: 'Tokens', Input: 8000, Output: 500, Cost: 0.0148 },
+                { Modality: 'Audio', CostRowID: null, Measure: 'Tokens', Input: 2000, Output: 0, Cost: 0.064 },
+                { Modality: 'Audio', CostRowID: null, Measure: 'Tokens', Input: 0, Output: 1500, Cost: 0.096 },
+            ]);
+            expect(logs.LogStatus).not.toHaveBeenCalled();
+        });
+
+        it('makes a cache hit cheaper than the same call uncached', async () => {
+            vi.spyOn(AIEngineBase.Instance, 'GetActiveModelCost').mockReturnValue(CACHED_ROW);
+            const cached = makeRun(CACHED_CALL);
+            const uncached = makeRun(CALL);
+            await cached.Price();
+            await uncached.Price();
+
+            expect(uncached.Cost).toBeCloseTo(0.368, 10);
+            expect(cached.Cost ?? 0).toBeLessThan(uncached.Cost ?? 0);
+        });
+
+        it("falls back to the row's input rate for a row without a cache-read rate", async () => {
+            const run = makeRun(CACHED_CALL);
+            await run.Price();
+
+            expect(run.Cost).toBeCloseTo(1000 * 4e-6 + 7000 * 4e-6 + 500 * 16e-6 + 2000 * 32e-6 + AUDIO_OUTPUT_COST, 10);
+        });
+
+        it('moves cache hits to the cache rate without audio prices too, and still blends the audio', async () => {
+            vi.spyOn(AIEngineBase.Instance, 'GetActiveModelCost').mockReturnValue(CACHED_ROW);
+            configuration.mockReturnValue(null);
+            const run = makeRun(CACHED_CALL);
+            await run.Price();
+
+            expect(run.Cost).toBeCloseTo(3000 * 4e-6 + 7000 * 0.4e-6 + 2000 * 16e-6, 10);
+            expect(ReadCostLines(run.ModelSpecificResponseDetails)[0]).toMatchObject({ Input: 10000, Output: 2000, Blended: true });
+            expect(loggedStatus('2000 audio input tokens')).toBe(1);
+        });
+
+        it("trusts a run's own cache-read column and moves nothing more", async () => {
+            vi.spyOn(AIEngineBase.Instance, 'GetActiveModelCost').mockReturnValue(CACHED_ROW);
+            const run = makeRun(CACHED_CALL, { Prompt: 3000 });
+            run.TokensCacheRead = 7000;
+            await run.Price();
+
+            expect(run.Cost).toBeCloseTo(1000 * 4e-6 + 7000 * 0.4e-6 + 500 * 16e-6 + 2000 * 32e-6 + AUDIO_OUTPUT_COST, 10);
         });
     });
 

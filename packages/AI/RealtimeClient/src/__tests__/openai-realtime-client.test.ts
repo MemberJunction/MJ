@@ -870,7 +870,7 @@ describe('OpenAIRealtimeClient', () => {
                     usage: {
                         input_tokens: 100,
                         output_tokens: 50,
-                        input_token_details: { text_tokens: 20, audio_tokens: 80, cached_tokens: 10 },
+                        input_token_details: { text_tokens: 20, audio_tokens: 80, cached_tokens: 10, cached_tokens_details: { audio_tokens: 6, text_tokens: 4 } },
                         output_token_details: { text_tokens: 10, audio_tokens: 40 },
                     },
                 },
@@ -879,7 +879,7 @@ describe('OpenAIRealtimeClient', () => {
             expect(usages[0]).toMatchObject({
                 InputTokens: 100,
                 OutputTokens: 50,
-                InputTokenDetails: { TextTokens: 20, AudioTokens: 80, CachedTokens: 10 },
+                InputTokenDetails: { TextTokens: 20, AudioTokens: 80, CachedTokens: 10, CachedAudioTokens: 6 },
                 OutputTokenDetails: { TextTokens: 10, AudioTokens: 40 },
             });
         });

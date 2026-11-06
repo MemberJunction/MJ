@@ -86,11 +86,19 @@ export interface RealtimeWireUsageModalityDetail {
     audio_tokens?: number;
     image_tokens?: number;
     cached_tokens?: number;
+    /** The cached tokens by modality; `audio_tokens` here is a subset of the block's `audio_tokens`. */
+    cached_tokens_details?: {
+        text_tokens?: number;
+        audio_tokens?: number;
+        image_tokens?: number;
+    };
 }
 
 /**
  * The per-modality token counts of one OpenAI-protocol usage block, in the Core
- * {@link RealtimeUsageModalityDetail} shape (`TextTokens`, `AudioTokens`, `ImageTokens`, `CachedTokens`).
+ * {@link RealtimeUsageModalityDetail} shape (`TextTokens`, `AudioTokens`, `ImageTokens`, `CachedTokens`, and
+ * `CachedAudioTokens` from `cached_tokens_details.audio_tokens`). `AudioTokens` keeps the provider's figure, cached
+ * audio included, so `AudioTokens` less `CachedAudioTokens` is the uncached audio pricing charges at the audio rate.
  * Only fields the provider sent as finite numbers of at least 0 are kept. `undefined` when the block
  * is absent, not an object, or holds none of those fields (a totals-only payload).
  *
@@ -113,7 +121,14 @@ export function MapRealtimeUsageModalityDetail(detail: unknown): RealtimeUsageMo
     if (audio !== undefined) mapped.AudioTokens = audio;
     if (image !== undefined) mapped.ImageTokens = image;
     if (cached !== undefined) mapped.CachedTokens = cached;
+    const cachedAudio = wireCount(cachedDetail(wire.cached_tokens_details)?.audio_tokens);
+    if (cachedAudio !== undefined) mapped.CachedAudioTokens = cachedAudio;
     return Object.keys(mapped).length > 0 ? mapped : undefined;
+}
+
+/** The `cached_tokens_details` block when it is an object, its fields still unchecked. */
+function cachedDetail(value: unknown): Record<string, unknown> | undefined {
+    return value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
 }
 
 /** A wire token count when it is a finite number of at least 0. */

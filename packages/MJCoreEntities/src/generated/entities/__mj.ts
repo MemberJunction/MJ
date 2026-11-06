@@ -58882,7 +58882,7 @@ export interface MJAIModelTypeEntity_RealtimePricingSettings {
      * The price of audio input tokens, charged on a line of its own instead of at the cost row's
      * input rate. Realtime providers bill audio tokens at a different rate from text tokens (GPT
      * Realtime: several times the text rate), and a cost row holds one input rate. `'Per 1M Tokens'`
-     * only; any other unit is not applied. Cached input tokens stay on the cost row. Without this
+     * only; any other unit is not applied. Cached audio input tokens are priced at the cost row's cache-read rate, not here. Without this
      * price, audio input tokens are priced at the cost row's input rate and the run's default cost
      * line is marked as blended.
      */
@@ -59596,7 +59596,7 @@ export interface MJAIModelVendorEntity_RealtimePricingSettings {
      * The price of audio input tokens, charged on a line of its own instead of at the cost row's
      * input rate. Realtime providers bill audio tokens at a different rate from text tokens (GPT
      * Realtime: several times the text rate), and a cost row holds one input rate. `'Per 1M Tokens'`
-     * only; any other unit is not applied. Cached input tokens stay on the cost row. Without this
+     * only; any other unit is not applied. Cached audio input tokens are priced at the cost row's cache-read rate, not here. Without this
      * price, audio input tokens are priced at the cost row's input rate and the run's default cost
      * line is marked as blended.
      */
@@ -60502,7 +60502,7 @@ export interface MJAIModelEntity_RealtimePricingSettings {
      * The price of audio input tokens, charged on a line of its own instead of at the cost row's
      * input rate. Realtime providers bill audio tokens at a different rate from text tokens (GPT
      * Realtime: several times the text rate), and a cost row holds one input rate. `'Per 1M Tokens'`
-     * only; any other unit is not applied. Cached input tokens stay on the cost row. Without this
+     * only; any other unit is not applied. Cached audio input tokens are priced at the cost row's cache-read rate, not here. Without this
      * price, audio input tokens are priced at the cost row's input rate and the run's default cost
      * line is marked as blended.
      */
@@ -62131,7 +62131,7 @@ export interface MJAIPromptModelEntity_RealtimePricingSettings {
      * The price of audio input tokens, charged on a line of its own instead of at the cost row's
      * input rate. Realtime providers bill audio tokens at a different rate from text tokens (GPT
      * Realtime: several times the text rate), and a cost row holds one input rate. `'Per 1M Tokens'`
-     * only; any other unit is not applied. Cached input tokens stay on the cost row. Without this
+     * only; any other unit is not applied. Cached audio input tokens are priced at the cost row's cache-read rate, not here. Without this
      * price, audio input tokens are priced at the cost row's input rate and the run's default cost
      * line is marked as blended.
      */
@@ -64983,7 +64983,7 @@ export interface MJAIPromptEntity_RealtimePricingSettings {
      * The price of audio input tokens, charged on a line of its own instead of at the cost row's
      * input rate. Realtime providers bill audio tokens at a different rate from text tokens (GPT
      * Realtime: several times the text rate), and a cost row holds one input rate. `'Per 1M Tokens'`
-     * only; any other unit is not applied. Cached input tokens stay on the cost row. Without this
+     * only; any other unit is not applied. Cached audio input tokens are priced at the cost row's cache-read rate, not here. Without this
      * price, audio input tokens are priced at the cost row's input rate and the run's default cost
      * line is marked as blended.
      */
@@ -68419,7 +68419,7 @@ export interface MJAIVendorEntity_RealtimePricingSettings {
      * The price of audio input tokens, charged on a line of its own instead of at the cost row's
      * input rate. Realtime providers bill audio tokens at a different rate from text tokens (GPT
      * Realtime: several times the text rate), and a cost row holds one input rate. `'Per 1M Tokens'`
-     * only; any other unit is not applied. Cached input tokens stay on the cost row. Without this
+     * only; any other unit is not applied. Cached audio input tokens are priced at the cost row's cache-read rate, not here. Without this
      * price, audio input tokens are priced at the cost row's input rate and the run's default cost
      * line is marked as blended.
      */

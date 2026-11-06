@@ -20,8 +20,19 @@ describe('MapRealtimeUsageModalityDetail', () => {
         expect(MapRealtimeUsageModalityDetail({ image_tokens: 2, cached_tokens: 0 })).toEqual({ ImageTokens: 2, CachedTokens: 0 });
     });
 
-    it('ignores nested blocks and unknown keys', () => {
-        expect(MapRealtimeUsageModalityDetail({ audio_tokens: 5, cached_tokens_details: { audio_tokens: 1 }, other: 9 })).toEqual({ AudioTokens: 5 });
+    it("maps the cached audio from cached_tokens_details, keeping the audio total as the provider sent it", () => {
+        const detail = { audio_tokens: 850, text_tokens: 150, cached_tokens: 700, cached_tokens_details: { audio_tokens: 600, text_tokens: 100 } };
+        expect(MapRealtimeUsageModalityDetail(detail)).toEqual({ AudioTokens: 850, TextTokens: 150, CachedTokens: 700, CachedAudioTokens: 600 });
+    });
+
+    it('ignores a cached audio count that is not a finite number of at least 0, and a details block that is not an object', () => {
+        expect(MapRealtimeUsageModalityDetail({ audio_tokens: 5, cached_tokens_details: { audio_tokens: -1 } })).toEqual({ AudioTokens: 5 });
+        expect(MapRealtimeUsageModalityDetail({ audio_tokens: 5, cached_tokens_details: [3] })).toEqual({ AudioTokens: 5 });
+        expect(MapRealtimeUsageModalityDetail({ cached_tokens_details: { audio_tokens: 0 } })).toEqual({ CachedAudioTokens: 0 });
+    });
+
+    it('ignores unknown keys', () => {
+        expect(MapRealtimeUsageModalityDetail({ audio_tokens: 5, other: 9 })).toEqual({ AudioTokens: 5 });
     });
 
     it('drops values that are not finite numbers of at least 0', () => {

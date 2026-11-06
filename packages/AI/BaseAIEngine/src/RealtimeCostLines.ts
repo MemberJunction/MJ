@@ -14,6 +14,13 @@
  * per 1M tokens), each direction's audio tokens leave the default line's bucket and are priced on an `'Audio'` line.
  * Without one, they stay on the default line at the row's rate, and that line is marked `Blended`.
  *
+ * Cached input is priced at the cost row's cache-read rate. A realtime run's `TokensPrompt` holds the provider's whole
+ * input, cache hits included, and nothing writes `TokensCacheRead` on it; the record's `Input.CachedTokens` (every
+ * modality) says how much of that input was a cache hit. {@link MoveCachedInputTokens} moves those tokens from the
+ * default line's uncached bucket to its cache-read bucket, and the input audio line prices only the uncached audio
+ * (`AudioTokens` less `CachedAudioTokens`). Cached audio is therefore priced at the row's `CacheReadPricePerUnit`
+ * (the row's input rate when it has none): the configuration has no cached-audio price.
+ *
  * Pure: no entity or engine access; `MJAIPromptRunEntityServer` resolves the cost row and the configuration.
  */
 import type { AIModelConfiguration, JSONObject, JSONValue, RealtimeUnitPrice } from '@memberjunction/ai';
@@ -178,10 +185,15 @@ export type AudioTokensUnpricedReason = 'no-price' | 'unit' | 'currency';
 export interface PricedAudioTokens {
     Priced: true;
     Direction: RealtimeAudioDirection;
-    /** The audio tokens the run stored for the direction, which leave the default line's bucket. */
+    /**
+     * The audio tokens the line prices, which leave the default line's bucket: on the input side, the uncached audio
+     * (`AudioTokens` less `CachedAudioTokens`).
+     */
     Tokens: number;
     /** The line's cost, to 8 decimals. */
     Cost: number;
+    /** The configured price per 1M audio tokens the line was priced at. */
+    UnitPrice: number;
 }
 
 /** One direction's audio tokens that stay on the default line at the cost row's rate, and why. */
@@ -205,6 +217,17 @@ export interface AudioTokenExclusion {
     ClampedInput: boolean;
     /** The audio output tokens were more than the output bucket held, so the bucket stopped at 0. */
     ClampedOutput: boolean;
+    /** The input audio tokens that left the input bucket: what the input audio line may price. */
+    RemovedInput: number;
+    /** The output audio tokens that left the output bucket: what the output audio line may price. */
+    RemovedOutput: number;
+}
+
+/** The default line's quantities after the cached input moved to the cache-read bucket. */
+export interface CachedInputMove {
+    Usage: NormalizedUsage;
+    /** The input tokens moved from the uncached bucket to the cache-read bucket (0 when none moved). */
+    Moved: number;
 }
 
 /**
@@ -227,9 +250,59 @@ const AUDIO_PRICE_UNITS: ReadonlyMap<string, number> = new Map([['Per 1M Tokens'
 export function PriceAudioTokens(record: RealtimeUsageRecord | null, configuration: AIModelConfiguration | null, rowCurrency: string): AudioTokensPricing {
     const pricing = configuration?.Realtime?.Pricing;
     return {
-        Input: priceAudioDirection('Input', record?.Input?.AudioTokens ?? 0, pricing?.AudioInput ?? null, rowCurrency),
+        Input: priceAudioDirection('Input', UncachedInputAudioTokens(record), pricing?.AudioInput ?? null, rowCurrency),
         Output: priceAudioDirection('Output', record?.Output?.AudioTokens ?? 0, pricing?.AudioOutput ?? null, rowCurrency),
     };
+}
+
+/**
+ * The input audio tokens a run stored that were not cache hits: `Input.AudioTokens` less `Input.CachedAudioTokens`,
+ * never below 0. Providers count cached audio in the audio total (OpenAI's `cached_tokens_details.audio_tokens` is a
+ * subset of `audio_tokens`), and cached audio is priced at the cache-read rate, not the audio rate.
+ *
+ * @param record The run's stored usage record.
+ */
+export function UncachedInputAudioTokens(record: RealtimeUsageRecord | null): number {
+    const audio = record?.Input?.AudioTokens ?? 0;
+    const cached = record?.Input?.CachedAudioTokens ?? 0;
+    return Math.max(0, audio - cached);
+}
+
+/**
+ * Moves the input tokens a realtime run's record counts as cache hits (`Input.CachedTokens`, every modality) from the
+ * default line's uncached input bucket to its cache-read bucket, so the cost row prices them at its cache-read rate.
+ * Nothing moves when the run already has cache reads in its token columns (they are then already net of the cache), or
+ * the record holds no cached tokens. The uncached bucket never goes below 0.
+ *
+ * @param usage The default line's quantities.
+ * @param record The run's stored usage record.
+ */
+export function MoveCachedInputTokens(usage: NormalizedUsage, record: RealtimeUsageRecord | null): CachedInputMove {
+    const cached = record?.Input?.CachedTokens ?? 0;
+    if ((usage.cacheRead ?? 0) > 0 || !Number.isFinite(cached) || cached <= 0) {
+        return { Usage: usage, Moved: 0 };
+    }
+    const moved = Math.min(usage.input, cached);
+    return { Usage: { ...usage, input: usage.input - moved, cacheRead: moved }, Moved: moved };
+}
+
+/**
+ * An audio line limited to the tokens that actually left the default line's bucket, re-priced at its unit price. A run
+ * whose stored audio tokens exceed its token columns would otherwise bill more audio than the run recorded. The line
+ * is returned unchanged when its tokens fit; `null` when no tokens are left to price.
+ *
+ * @param line The priced audio line.
+ * @param available The audio tokens that left the bucket for the line's direction.
+ */
+export function CapPricedAudioTokens(line: PricedAudioTokens, available: number): PricedAudioTokens | null {
+    const tokens = Math.max(0, Math.min(line.Tokens, available));
+    if (tokens <= 0) {
+        return null;
+    }
+    if (tokens === line.Tokens) {
+        return line;
+    }
+    return { ...line, Tokens: tokens, Cost: RoundCost((tokens / 1_000_000) * line.UnitPrice) };
 }
 
 /**
@@ -250,6 +323,8 @@ export function ExcludeAudioTokens(usage: NormalizedUsage, inputAudioTokens: num
         Usage: { ...usage, input: usage.input - removedInput, output: usage.output - removedOutput },
         ClampedInput: removedInput < wantedInput,
         ClampedOutput: removedOutput < wantedOutput,
+        RemovedInput: removedInput,
+        RemovedOutput: removedOutput,
     };
 }
 
@@ -354,7 +429,7 @@ function priceAudioDirection(
     if (typeof usable === 'string') {
         return { Priced: false, Direction: direction, Tokens: tokens, Reason: usable };
     }
-    return { Priced: true, Direction: direction, Tokens: tokens, Cost: RoundCost((tokens / usable.Unit) * usable.Price) };
+    return { Priced: true, Direction: direction, Tokens: tokens, Cost: RoundCost((tokens / usable.Unit) * usable.Price), UnitPrice: usable.Price };
 }
 
 /**

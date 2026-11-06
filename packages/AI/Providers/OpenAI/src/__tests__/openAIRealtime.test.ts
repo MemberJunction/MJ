@@ -1454,7 +1454,7 @@ describe('C2: per-modality usage detail mapping', () => {
                 usage: {
                     input_tokens: 100,
                     output_tokens: 50,
-                    input_token_details: { text_tokens: 20, audio_tokens: 70, cached_tokens: 10 },
+                    input_token_details: { text_tokens: 20, audio_tokens: 70, cached_tokens: 10, cached_tokens_details: { audio_tokens: 7, text_tokens: 3 } },
                     output_token_details: { text_tokens: 10, audio_tokens: 40 },
                 },
             },
@@ -1462,7 +1462,7 @@ describe('C2: per-modality usage detail mapping', () => {
         expect(usage[0]).toEqual({
             InputTokens: 100,
             OutputTokens: 50,
-            InputTokenDetails: { TextTokens: 20, AudioTokens: 70, CachedTokens: 10 },
+            InputTokenDetails: { TextTokens: 20, AudioTokens: 70, CachedTokens: 10, CachedAudioTokens: 7 },
             OutputTokenDetails: { TextTokens: 10, AudioTokens: 40 },
         });
     });
