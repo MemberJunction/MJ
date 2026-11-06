@@ -125,9 +125,10 @@ export class TrainingEngine {
       });
 
       const dominance = this.checkLeakage(response, resolved.leakageGuard);
+      const constantFeatures = ConstantFeatureColumns(split.Training, assembly.featureSchema, resolved.targetVariable);
       const model = await this.createModelRow(resolved, input, assembly, split, response, evaluation, deps);
-      await this.finalizeRunSuccess(run, model, assembly, resolved, response, dominance, evaluation, deps);
-      return { model, run };
+      await this.finalizeRunSuccess(run, model, assembly, resolved, response, dominance, evaluation, deps, constantFeatures);
+      return { model, run, constantFeatures };
     } catch (err) {
       await this.finalizeRunFailure(run, err, deps);
       throw err;
@@ -197,6 +198,7 @@ export class TrainingEngine {
     dominance: DominanceResult,
     evaluation: EvaluationRecord,
     deps: TrainingDeps,
+    constantFeatures: string[] = [],
   ): Promise<void> {
     run.ResultingModelID = model.ID;
     run.FeaturesUsed = JSON.stringify(assembly.featureSchema.map((s) => s.Name));
@@ -209,7 +211,7 @@ export class TrainingEngine {
     run.Status = 'Completed';
     run.CompletedAt = new Date();
     run.ComputeCost = 0;
-    run.Notes = this.buildRunNotes(dominance, evaluation);
+    run.Notes = AppendConstantFeatureWarning(this.buildRunNotes(dominance, evaluation), constantFeatures);
     await this.saveOrThrow(run, 'finalize ML Training Run');
   }
 
@@ -440,4 +442,34 @@ function parseJson<T>(raw: string | null | undefined, fallback: T): T {
 /** Decode a base64 artifact string into raw bytes (no Buffer dependency leak in types). */
 function decodeArtifact(b64: string): Uint8Array {
   return new Uint8Array(Buffer.from(b64 ?? '', 'base64'));
+}
+
+/**
+ * #3104 — the feature columns whose value was the same on every training row (null counted as a value). Such a column
+ * teaches the model nothing; it usually means the source column could not be read as a number.
+ */
+export function ConstantFeatureColumns(matrix: MatrixData, schema: FeatureSchemaEntry[], targetVariable: string): string[] {
+  if (matrix.rows.length < 2) {
+    return [];
+  }
+  const constant: string[] = [];
+  for (const entry of schema) {
+    if (entry.Name === targetVariable) continue;
+    const idx = matrix.columns.indexOf(entry.Name);
+    if (idx < 0) continue;
+    const first = matrix.rows[0][idx] ?? null;
+    if (matrix.rows.every((r) => (r[idx] ?? null) === first)) {
+      constant.push(entry.Name);
+    }
+  }
+  return constant;
+}
+
+/** Adds the constant-feature warning to a run's notes. */
+export function AppendConstantFeatureWarning(notes: string, constantFeatures: string[]): string {
+  if (constantFeatures.length === 0) {
+    return notes;
+  }
+  const names = constantFeatures.map((c) => `"${c}"`).join(', ');
+  return `${notes} WARNING: feature ${names} ${constantFeatures.length === 1 ? 'was' : 'were'} constant across all training rows, so ${constantFeatures.length === 1 ? 'it' : 'they'} added nothing to the model.`;
 }

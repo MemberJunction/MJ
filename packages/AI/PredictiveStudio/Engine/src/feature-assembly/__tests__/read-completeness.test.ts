@@ -7,7 +7,7 @@ import type { IFeatureDataAccess, FetchRowsParams, FetchRowsResult, SourceRow } 
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 
 /** The read scope every assembly needs. Reads go through the injected `dataAccess`, so the provider is never called. */
-const testScope: Pick<FeatureAssemblyParams, 'contextUser' | 'provider'> = { contextUser: { ID: 'user-1' } as UserInfo, provider: {} as IMetadataProvider };
+const testScope: Pick<FeatureAssemblyParams, 'contextUser' | 'provider'> = { contextUser: { ID: 'user-1' } as UserInfo, provider: { EntityByName: () => undefined } as unknown as IMetadataProvider };
 
 /**
  * Read completeness (gate W1 → S7.5, findings F-L3-1 / F-PIT-4). The data-access fake behaves like RunView:

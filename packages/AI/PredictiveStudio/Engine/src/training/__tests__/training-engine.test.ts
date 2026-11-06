@@ -252,7 +252,7 @@ const cleanResponse: TrainResponse = {
  * Handed to the engine through one deliberate test-double cast at the seam boundary.
  */
 const fakeProvider = {
-  EntityByName: (name: string) => (name === 'Members' ? { PrimaryKeys: [{ Name: 'ID' }] } : undefined),
+  EntityByName: (name: string) => (name === 'Members' ? { PrimaryKeys: [{ Name: 'ID' }], Fields: [] } : undefined),
 } as unknown as IMetadataProvider;
 const fakeUser = { ID: 'user-1', Email: 'trainer@example.com' } as UserInfo;
 

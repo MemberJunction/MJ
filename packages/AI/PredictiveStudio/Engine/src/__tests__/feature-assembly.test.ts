@@ -16,7 +16,7 @@ import {
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 
 /** The read scope every assembly needs. Reads go through the injected `dataAccess`, so the provider is never called. */
-const testScope: Pick<FeatureAssemblyParams, 'contextUser' | 'provider'> = { contextUser: { ID: 'user-1' } as UserInfo, provider: {} as IMetadataProvider };
+const testScope: Pick<FeatureAssemblyParams, 'contextUser' | 'provider'> = { contextUser: { ID: 'user-1' } as UserInfo, provider: { EntityByName: () => undefined } as unknown as IMetadataProvider };
 
 /**
  * Unit tests for the FeatureAssembly executor + as-of / leakage primitives.

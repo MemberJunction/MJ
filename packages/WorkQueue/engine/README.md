@@ -152,6 +152,8 @@ imported by the application. A key that resolves to nothing plans as `HandlerNot
 | Backlog for an autoscaler | `mj queue backlog --subscription s` | `WorkQueue.GetBacklog` |
 | Check bindings | `mj queue validate-bindings [--transport t]` | `WorkQueue.ValidateBindings` |
 | Run work in a container job | `mj queue work --subscription s --once` | — |
+| Run work until stopped | `mj queue work --subscription s [--concurrency n] [--sweeper-interval-ms ms] [--reconcile-interval-ms ms]` | — |
+| One sweeper pass (cron) | `mj queue sweep` | — |
 
 **Who may call the operations.** Every caller needs entity permissions: **Read** on `MJ: Work Queue Deliveries` for
 the read operations (stats, dead letters, partitions, backlog, validate-bindings) and **Update** on
@@ -183,6 +185,23 @@ mj queue work --subscription venue-import --once --max 5 --concurrency 2 --max-d
 `--max` bounds deliveries **received**, so a job never claims work it will not run. `--max-duration-ms` stops claiming
 after that long and drains; keep it below the scheduler's job deadline. `SIGTERM` and `SIGINT` drain the host in both
 `--once` and long-running modes.
+
+**Concurrency.** With `--concurrency` above 1, each delivery gets its own connection-scoped provider
+(`IndependentProviderSource`, as MJAPI does), released when the delivery settles, so parallel handlers never share
+transaction state. At 1, one provider is shared.
+
+**Long-running mode.** Without `--once`, the worker re-plans its subscriptions every `--reconcile-interval-ms`
+(default 30000, MJAPI's default) and runs the sweeper — lease expiry, retention and dedup purge — every
+`--sweeper-interval-ms` (default 300000). `0` turns either off. `--once` runs neither.
+
+**When no host sweeps.** Retention and dedup purge only happen in a sweeper pass. If every MJAPI instance is
+publish-only and workers run `--once`, schedule `mj queue sweep` (one pass, prints the per-step counts), or enable
+the sweeper on a publish-only MJAPI:
+
+```javascript
+// mj.config.cjs — an MJAPI that publishes and sweeps but runs no handlers
+workQueue: { enabled: true, subscriptions: [], sweeperEnabled: true },
+```
 
 **Exit codes.** `0` when the host ran — including "the queue was empty", a spent budget, `--max-duration-ms`, a
 signal, or a subscription an operator paused — so a scheduler never records a failure for idleness. **Non-zero** when

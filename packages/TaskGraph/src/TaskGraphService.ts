@@ -100,7 +100,7 @@ export type TaskGraphSubmitContext = {
      */
     Invocation?: TaskGraphInvocationEnvelope;
     /** Seed `$.debug` on the parent at insert. See `TaskGraphStartDebug`. */
-    Debug?: { paused?: boolean };
+    Debug?: { paused?: boolean; breakpointStepIDs?: string[] };
 };
 
 /**
@@ -285,6 +285,30 @@ export function BuildTaskGraphParentInputPayload(args: {
             }
             : {}),
     };
+}
+
+/**
+ * #3798 — maps remembered breakpoints, held as stable step IDs (the spec's `tempId`), to this run's task IDs.
+ * A step ID the graph no longer has (the step was removed) is dropped.
+ */
+export function MapBreakpointStepIDs(stepIDs: readonly string[] | undefined, taskIDsByStepID: ReadonlyMap<string, string>): string[] {
+    const out: string[] = [];
+    for (const stepID of stepIDs ?? []) {
+        const taskID = taskIDsByStepID.get(stepID);
+        if (taskID && !out.includes(taskID)) out.push(taskID);
+    }
+    return out;
+}
+
+/** A JSON object from a payload column, or `{}` for empty or unparseable text. */
+function SafeParseObject(raw: string | null | undefined): Record<string, unknown> {
+    if (!raw) return {};
+    try {
+        const parsed: unknown = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+    } catch {
+        return {};
+    }
 }
 
 /**
@@ -745,6 +769,11 @@ export class TaskGraphService {
                         spec, parentID, taskTypeID, agentIDsByName.Map!, actionIDsByName.Map!, promptIDsByName.Map!, context,
                     );
                     await this.persistDependencies(spec, map, context);
+                    // Remembered breakpoints arrive as stable step IDs; seed them now that task IDs exist (#3798).
+                    const breakpoints = MapBreakpointStepIDs(context.Debug?.breakpointStepIDs, map);
+                    if (breakpoints.length > 0) {
+                        await this.seedBreakpoints(parentID, breakpoints, context);
+                    }
                     return { parentTaskID: parentID, taskIDMap: map };
                 },
             );
@@ -1655,6 +1684,24 @@ export class TaskGraphService {
     }
 
     /** Writes the parent task that represents the graph as a whole. */
+    /**
+     * Writes the starting breakpoints into the parent's `$.debug` after the children exist. Inside the Submit
+     * transaction, so a graph never becomes visible to a dispatcher without them.
+     */
+    private async seedBreakpoints(parentID: string, taskIDs: string[], context: TaskGraphSubmitContext): Promise<void> {
+        const parent = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
+        if (!(await parent.Load(parentID))) {
+            throw new Error(`Could not load parent task ${parentID} to seed breakpoints`);
+        }
+        const bag = SafeParseObject(parent.InputPayload);
+        const debug = bag.debug && typeof bag.debug === 'object' && !Array.isArray(bag.debug) ? bag.debug as Record<string, unknown> : {};
+        bag.debug = { ...debug, breakpoints: taskIDs };
+        parent.InputPayload = JSON.stringify(bag);
+        if (!(await parent.Save())) {
+            throw new Error(`Could not seed breakpoints on parent task ${parentID}: ${parent.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+    }
+
     private async persistParent(spec: TaskGraphSpec, taskTypeID: string, context: TaskGraphSubmitContext): Promise<string> {
         const parent = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
         parent.NewRecord();
@@ -1835,6 +1882,9 @@ export class TaskGraphService {
                     ...buildStepConfiguration(node),
                     ...(stepActionIds && Object.keys(stepActionIds).length > 0 ? { stepActionIds } : {}),
                     sequence: ranks.get(node.tempId),
+                    // The step's identity across runs of the same workflow (task IDs are per run), so a
+                    // person's remembered breakpoints can find this step next time (#3798).
+                    stepId: node.tempId,
                 };
                 task.Configuration = JSON.stringify(configuration);
 

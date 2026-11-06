@@ -164,3 +164,28 @@ describe('TournamentRanking — measured scores only (C1)', () => {
     expect(rows.some((r) => r.isWinner)).toBe(false);
   });
 });
+
+describe('PredictiveStudioPipelineBuilder — select column kinds at validation (#3104)', () => {
+  const entity = {
+    Name: 'Members',
+    Fields: [
+      { Name: 'Renewed', TSType: 'number', ValueListType: 'None', EntityFieldValues: [] },
+      { Name: 'JoinedAt', TSType: 'Date', ValueListType: 'None', EntityFieldValues: [] },
+      { Name: 'Tenure', TSType: 'number', ValueListType: 'None', EntityFieldValues: [] },
+    ],
+  };
+  type Validator = { validatePlanFields(config: unknown, entity: unknown): void };
+  const validate = (columns: string[]) =>
+    (new PredictiveStudioPipelineBuilder() as unknown as Validator).validatePlanFields(
+      { targetVariable: 'Renewed', featureSteps: { Steps: [{ Id: 's1', Kind: 'select', Columns: columns }] } },
+      entity,
+    );
+
+  it('refuses a datetime select column, naming it and the fix', () => {
+    expect(() => validate(['Tenure', 'JoinedAt'])).toThrow(/JoinedAt.*days since/);
+  });
+
+  it('accepts numeric columns', () => {
+    expect(() => validate(['Tenure'])).not.toThrow();
+  });
+});
