@@ -31,7 +31,7 @@ async function probe(name, envVar, LLMClass, model, extra = {}) {
 
 const models = {
   anthropic: process.env.Q4_ANTHROPIC_MODEL ?? 'claude-haiku-5-5',
-  openai: process.env.Q4_OPENAI_MODEL ?? 'gpt-5.1-mini',
+  openai: process.env.Q4_OPENAI_MODEL ?? 'gpt-4.1-mini',
   gemini: process.env.Q4_GEMINI_MODEL ?? 'gemini-3.5-flash-lite',
 };
 
