@@ -353,7 +353,10 @@ describe('ShadowScoringCoordinator', () => {
           return entity as T;
         },
         EntityByName: () => ({ ID: 'Ent-Members' } as ReturnType<IMetadataProvider['EntityByName']>),
-      } as Pick<IMetadataProvider, 'GetEntityObject' | 'EntityByName'> as IMetadataProvider;
+        RunView: async () => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' }),
+        RunViews: async (views: unknown[]) =>
+          views.map(() => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' })),
+      } as unknown as IMetadataProvider;
 
       const coordinator = new ShadowScoringCoordinator({
         ChallengerRunner: new MLModelChallengerScoreRunner(deps),
@@ -372,30 +375,114 @@ describe('ShadowScoringCoordinator', () => {
         FrozenFeatures: { tenure: 18, city: 'NYC', ignored_extra: 'drop' },
         ChampionScore: 0.65,
         ChampionLabel: 'renew',
+        ChampionConfidence: 0.65,
         DispatchedAt: '2026-11-02T12:00:00.000Z',
       };
 
-      coordinator.DispatchShadowScore(envelope, {} as UserInfo, fakeProvider);
+      coordinator.DispatchShadowScore(envelope, { ID: 'user-1' } as UserInfo, fakeProvider);
       await coordinator.FlushInFlight();
 
       expect(capturedRequests).toHaveLength(1);
       expect(capturedRequests[0].rows).toEqual([{ tenure: 18, city: 'NYC' }]);
 
-      expect(createdEntities).toHaveLength(1);
-      const saved = createdEntities[0];
-      expect(saved.NewRecordCalled).toBe(true);
-      expect(saved.SaveCalled).toBe(true);
-      expect(saved.Role).toBe('Challenger');
-      expect(saved.ValueKeyHash).toBeNull();
-      expect(saved.RecordProcessID).toBe('RP-100');
-      expect(saved.ProcessRunID).toBe('Run-200');
-      expect(saved.EntityID).toBe('Ent-Members');
-      expect(saved.RecordID).toBe('Mem-42');
-      expect(saved.FeatureName).toBe('Renewed');
-      expect(saved.AIModelID).toBe('Model-Challenger-V2');
-      expect(saved.ValueNumeric).toBe(0.87);
-      expect(saved.ValueText).toBe('renew');
-      expect(saved.Confidence).toBeCloseTo(0.87, 5);
+      expect(createdEntities).toHaveLength(2);
+      const championSaved = createdEntities.find((e) => e.Role === 'Champion');
+      const challengerSaved = createdEntities.find((e) => e.Role === 'Challenger');
+
+      expect(championSaved).toBeDefined();
+      expect(championSaved!.SaveCalled).toBe(true);
+      expect(championSaved!.Role).toBe('Champion');
+      expect(championSaved!.ValueKeyHash).toMatch(/^[0-9a-f]{64}$/);
+      expect(championSaved!.RecordProcessID).toBe('RP-100');
+      expect(championSaved!.ProcessRunID).toBe('Run-200');
+      expect(championSaved!.EntityID).toBe('Ent-Members');
+      expect(championSaved!.RecordID).toBe('Mem-42');
+      expect(championSaved!.FeatureName).toBe('Renewed');
+      expect(championSaved!.AIModelID).toBe('Model-Champion-V1');
+      expect(championSaved!.ValueNumeric).toBe(0.65);
+      expect(championSaved!.Confidence).toBeCloseTo(0.65, 5);
+
+      expect(challengerSaved).toBeDefined();
+      expect(challengerSaved!.NewRecordCalled).toBe(true);
+      expect(challengerSaved!.SaveCalled).toBe(true);
+      expect(challengerSaved!.Role).toBe('Challenger');
+      expect(challengerSaved!.ValueKeyHash).toBeNull();
+      expect(challengerSaved!.RecordProcessID).toBe('RP-100');
+      expect(challengerSaved!.ProcessRunID).toBe('Run-200');
+      expect(challengerSaved!.EntityID).toBe('Ent-Members');
+      expect(challengerSaved!.RecordID).toBe('Mem-42');
+      expect(challengerSaved!.FeatureName).toBe('Renewed');
+      expect(challengerSaved!.AIModelID).toBe('Model-Challenger-V2');
+      expect(challengerSaved!.ValueNumeric).toBe(0.87);
+      expect(challengerSaved!.ValueText).toBe('renew');
+      expect(challengerSaved!.Confidence).toBeCloseTo(0.87, 5);
+    });
+
+    it('re-checks modelLoader.loadModel with each caller contextUser and reloads the artifact when ArtifactFileID changes (R9)', async () => {
+      const observedModelLoadUsers: Array<string | undefined> = [];
+      const observedArtifactLoads: string[] = [];
+      const capturedPredictArtifacts: string[] = [];
+
+      let currentArtifactFileId = 'challenger-artifact-v1';
+      const artifacts = new InMemoryArtifactLoader();
+      artifacts.set('challenger-artifact-v1', new TextEncoder().encode('bytes-v1'));
+      artifacts.set('challenger-artifact-v2', new TextEncoder().encode('bytes-v2'));
+
+      const deps: MLInferenceDeps = {
+        modelLoader: {
+          loadModel: async (id, contextUser) => {
+            observedModelLoadUsers.push(contextUser?.ID);
+            if (id !== 'Model-Challenger-V2') {
+              return null;
+            }
+            return {
+              ID: 'Model-Challenger-V2',
+              Status: 'Validated',
+              ArtifactFileID: currentArtifactFileId,
+              FittedPreprocessing: '{}',
+              FeatureSchema: JSON.stringify([{ Name: 'tenure', Kind: 'numeric' }]),
+              ProblemType: 'classification',
+              TargetVariable: 'Renewed',
+            } as MJMLModelEntity;
+          },
+        },
+        artifactLoader: {
+          load: async (fileId, contextUser) => {
+            observedArtifactLoads.push(fileId);
+            return artifacts.load(fileId, contextUser);
+          },
+        },
+        sidecar: {
+          predict: async (req: PredictRequest): Promise<PredictResponse> => {
+            capturedPredictArtifacts.push(req.artifact_b64);
+            return { predictions: [{ score: 0.8, class: 'renew' }] };
+          },
+        },
+      };
+
+      const runner = new MLModelChallengerScoreRunner(deps);
+      const envelope: ShadowScoreEnvelope = {
+        RecordID: 'Mem-1',
+        ChallengerConfig: baseConfig,
+        FrozenFeatures: { tenure: 12 },
+        DispatchedAt: '2026-11-02T12:00:00.000Z',
+      };
+
+      await runner.RunChallenger(envelope, { ID: 'user-A' } as UserInfo);
+      await runner.RunChallenger(envelope, { ID: 'user-B' } as UserInfo);
+
+      expect(observedModelLoadUsers).toEqual(['user-A', 'user-B']);
+      // Artifact v1 was loaded only once across the two runs because ArtifactFileID did not change
+      expect(observedArtifactLoads).toEqual(['challenger-artifact-v1']);
+
+      // Retrain updates ArtifactFileID on the model row
+      currentArtifactFileId = 'challenger-artifact-v2';
+      await runner.RunChallenger(envelope, { ID: 'user-C' } as UserInfo);
+
+      expect(observedModelLoadUsers).toEqual(['user-A', 'user-B', 'user-C']);
+      expect(observedArtifactLoads).toEqual(['challenger-artifact-v1', 'challenger-artifact-v2']);
+      expect(capturedPredictArtifacts[0]).toBe(Buffer.from('bytes-v1').toString('base64'));
+      expect(capturedPredictArtifacts[2]).toBe(Buffer.from('bytes-v2').toString('base64'));
     });
   });
 });

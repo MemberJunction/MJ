@@ -38,7 +38,6 @@ import {
   FeatureValueShadowAuditSink,
   MLModelChallengerScoreRunner,
   ShadowScoringCoordinator,
-  type IRecordProcessChallengerConfig,
 } from './shadow-scoring';
 import type { DatedSourceSpec } from '../feature-assembly';
 
@@ -123,8 +122,6 @@ export interface MLScoringConfiguration {
   datedSources?: DatedSourceSpec[];
   /** Opt-in train-if-untrained (see {@link MLAutoTrainConfig}). Off unless declared. */
   autoTrain?: MLAutoTrainConfig;
-  /** Legacy fallback for WS-4.4 shadow challenger configuration when not set on `RecordProcess.ChallengerConfigurationObject`. */
-  challengerConfiguration?: IRecordProcessChallengerConfig;
 }
 
 /**
@@ -165,12 +162,7 @@ export function RegisterMLScoringProcessor(
       );
     }
     const rpEntity = context.RecordProcess as Partial<MJRecordProcessEntity> | undefined;
-    const challengerFromObject = rpEntity?.ChallengerConfigurationObject ?? undefined;
-    const challengerFromJson =
-      !challengerFromObject && typeof rpEntity?.ChallengerConfiguration === 'string'
-        ? (SafeJSONParse<IRecordProcessChallengerConfig>(rpEntity.ChallengerConfiguration) ?? undefined)
-        : undefined;
-    const challengerConfig = challengerFromObject ?? challengerFromJson ?? config.challengerConfiguration;
+    const challengerConfig = rpEntity?.ChallengerConfigurationObject ?? undefined;
 
     const options: MLModelInferenceProcessorOptions = {
       modelId: config.modelId ?? '',

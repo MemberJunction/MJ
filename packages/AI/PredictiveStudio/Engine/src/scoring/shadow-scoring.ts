@@ -5,8 +5,12 @@
  *
  * Guarantees:
  * 1. **Champion Isolation**: Champion executes synchronously/normally and writes authoritative target
- *    entity fields + champion audit rows (`Role: 'Champion'`). Challenger errors or timeouts
- *    (`MaxLatencyMs`) NEVER fail or delay the champion execution.
+ *    entity fields + champion audit rows (`Role: 'Champion'`). For `'ML Model'` Record Processes,
+ *    the records sampled by {@link ShadowScoringCoordinator} form the drift-evaluation population:
+ *    each sampled record's champion prediction is persisted to `MJ: Feature Values` with
+ *    `Role = 'Champion'` and a computed `ValueKeyHash` via
+ *    {@link FeatureValueCacheService.RecordFeatureValues} before the challenger runs. Challenger
+ *    errors or timeouts (`MaxLatencyMs`) NEVER fail or delay the champion execution.
  * 2. **Zero Business-Entity Mutation**: Challenger runs against the exact same frozen feature snapshot
  *    and writes only to the feature/prediction audit log with `Role: 'Challenger'`, never mutating
  *    target business entity records.
@@ -21,6 +25,7 @@ import type {
   MJMLModelEntity,
   MJRecordProcessEntity_IRecordProcessChallengerConfig,
 } from '@memberjunction/core-entities';
+import { FeatureValueCacheService } from '@memberjunction/feature-pipelines';
 import type {
   FeatureSchemaEntry,
   FittedPreprocessing,
@@ -374,6 +379,8 @@ export class ShadowScoringCoordinator {
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
   ): Promise<void> {
+    await this.recordChampionFeatureValue(envelope, contextUser, provider);
+
     if (this.workQueuePublisher) {
       try {
         await this.workQueuePublisher.PublishShadowItem(envelope, contextUser, provider);
@@ -388,6 +395,60 @@ export class ShadowScoringCoordinator {
 
     if (this.challengerRunner || this.auditSink) {
       await this.ExecuteChallengerEnvelope(envelope, contextUser, provider);
+    }
+  }
+
+  private async recordChampionFeatureValue(
+    envelope: ShadowScoreEnvelope,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<void> {
+    if (
+      !envelope.RecordProcessID ||
+      !envelope.RecordID ||
+      !contextUser ||
+      (envelope.ChampionScore === undefined && envelope.ChampionLabel === undefined)
+    ) {
+      return;
+    }
+    try {
+      const activeProvider = provider ?? Metadata.Provider; // global-provider-ok: fallback when caller does not supply a per-request provider
+      const resolvedEntityId =
+        envelope.EntityID ??
+        (envelope.EntityName ? activeProvider.EntityByName?.(envelope.EntityName)?.ID : undefined);
+      if (!resolvedEntityId) {
+        return;
+      }
+      const championValue =
+        envelope.ChampionScore !== undefined ? envelope.ChampionScore : (envelope.ChampionLabel ?? null);
+      await FeatureValueCacheService.Instance.RecordFeatureValues({
+        recordProcessID: envelope.RecordProcessID,
+        entityID: resolvedEntityId,
+        recordID: envelope.RecordID,
+        outputs: [
+          {
+            featureName: envelope.FeatureName || 'Prediction',
+            value: championValue,
+            confidence: envelope.ChampionConfidence ?? null,
+          },
+        ],
+        promptID: null,
+        promptVersionHash: null,
+        constraintHash: null,
+        processRunID: envelope.ProcessRunID ?? null,
+        pipelineVersion: null,
+        aiModelID: envelope.ChampionModelID ?? null,
+        parametersHash: null,
+        inputHash: null,
+        source: 'Pipeline',
+        contextUser,
+        provider: activeProvider,
+      });
+    } catch (champErr: unknown) {
+      const msg = champErr instanceof Error ? champErr.message : String(champErr);
+      LogError(
+        `ShadowScoringCoordinator: failed to persist Champion Feature Value row for '${envelope.RecordID}': ${msg}`,
+      );
     }
   }
 
@@ -416,7 +477,7 @@ export class ShadowScoringCoordinator {
   }
 }
 
-interface CachedChallengerModel {
+interface LoadedChallengerModel {
   modelId: string;
   artifactB64: string;
   fittedPreprocessing: FittedPreprocessing;
@@ -433,7 +494,7 @@ interface CachedChallengerModel {
  * `MLModelInferenceProcessor`, without touching the target business entity.
  */
 export class MLModelChallengerScoreRunner implements IChallengerScoreRunner {
-  private readonly modelCache = new Map<string, Promise<CachedChallengerModel>>();
+  private readonly artifactCache = new Map<string, { artifactFileId: string; artifactB64Promise: Promise<string> }>();
 
   constructor(private readonly deps: MLInferenceDeps) {}
 
@@ -451,7 +512,7 @@ export class MLModelChallengerScoreRunner implements IChallengerScoreRunner {
     }
 
     const activeProvider = provider ?? Metadata.Provider; // global-provider-ok: fallback when caller does not supply a per-request provider
-    const loaded = await this.ensureChallengerModel(challengerModelId, contextUser, activeProvider);
+    const loaded = await this.loadChallengerModel(challengerModelId, contextUser, activeProvider);
     this.throwIfAborted(signal);
 
     const featureRow = this.projectFrozenRow(envelope.FrozenFeatures, loaded.featureSchema);
@@ -492,47 +553,53 @@ export class MLModelChallengerScoreRunner implements IChallengerScoreRunner {
     }
   }
 
-  private ensureChallengerModel(
-    modelId: string,
-    contextUser: UserInfo | undefined,
-    provider: IMetadataProvider,
-  ): Promise<CachedChallengerModel> {
-    const existing = this.modelCache.get(modelId);
-    if (existing) {
-      return existing;
-    }
-    const loadPromise = this.loadChallengerModel(modelId, contextUser, provider).catch((err: unknown) => {
-      this.modelCache.delete(modelId);
-      throw err;
-    });
-    this.modelCache.set(modelId, loadPromise);
-    return loadPromise;
-  }
-
   private async loadChallengerModel(
     modelId: string,
     contextUser: UserInfo | undefined,
     provider: IMetadataProvider,
-  ): Promise<CachedChallengerModel> {
+  ): Promise<LoadedChallengerModel> {
     const model = await this.deps.modelLoader.loadModel(modelId, contextUser, provider);
     if (!model) {
       throw new ModelNeedsTrainingError(`MLModelChallengerScoreRunner: ML Model '${modelId}' not found`);
     }
     this.assertStatusCanScore(modelId, model);
-    const bytes = await this.deps.artifactLoader.load(model.ArtifactFileID, contextUser);
-    if (!bytes) {
-      throw new ModelNeedsTrainingError(
-        `MLModelChallengerScoreRunner: ${ModelArtifactMissingMessage(modelId, model.ArtifactFileID)}`,
-      );
-    }
+    const artifactB64 = await this.ensureArtifactB64(modelId, model.ArtifactFileID, contextUser);
     return {
       modelId: model.ID,
-      artifactB64: Buffer.from(bytes).toString('base64'),
+      artifactB64,
       fittedPreprocessing: parseJsonOrDefault<FittedPreprocessing>(model.FittedPreprocessing, {}),
       featureSchema: parseJsonOrDefault<FeatureSchemaEntry[]>(model.FeatureSchema, []),
       problemType: (model.ProblemType as ProblemType) ?? 'classification',
       targetVariable: model.TargetVariable,
     };
+  }
+
+  private ensureArtifactB64(
+    modelId: string,
+    artifactFileId: string,
+    contextUser: UserInfo | undefined,
+  ): Promise<string> {
+    const cached = this.artifactCache.get(modelId);
+    if (cached && cached.artifactFileId === artifactFileId) {
+      return cached.artifactB64Promise;
+    }
+    const artifactB64Promise = (async () => {
+      const bytes = await this.deps.artifactLoader.load(artifactFileId, contextUser);
+      if (!bytes) {
+        throw new ModelNeedsTrainingError(
+          `MLModelChallengerScoreRunner: ${ModelArtifactMissingMessage(modelId, artifactFileId)}`,
+        );
+      }
+      return Buffer.from(bytes).toString('base64');
+    })().catch((err: unknown) => {
+      const current = this.artifactCache.get(modelId);
+      if (current && current.artifactFileId === artifactFileId) {
+        this.artifactCache.delete(modelId);
+      }
+      throw err;
+    });
+    this.artifactCache.set(modelId, { artifactFileId, artifactB64Promise });
+    return artifactB64Promise;
   }
 
   private assertStatusCanScore(modelId: string, model: MJMLModelEntity): void {

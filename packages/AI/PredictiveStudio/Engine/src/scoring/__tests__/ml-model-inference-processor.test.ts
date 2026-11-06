@@ -569,4 +569,53 @@ describe('MLModelInferenceProcessor — shadow scoring integration (D3, D10, D13
       RenewalStatus: 'Existing',
     });
   });
+
+  it('skips challengerConfig with WorkType !== "ML Model" and logs a single error on construction instead of per record (R7)', async () => {
+    const { deps } = buildDeps();
+    const errorLogs: string[] = [];
+    const origConsoleError = console.error;
+    console.error = (...args: unknown[]) => {
+      errorLogs.push(args.map((a) => String(a)).join(' '));
+    };
+
+    try {
+      let publishedCount = 0;
+      const shadowCoordinator = new ShadowScoringCoordinator({
+        WorkQueuePublisher: {
+          PublishShadowItem: async () => {
+            publishedCount++;
+          },
+        },
+      });
+
+      const proc = new MLModelInferenceProcessor(
+        {
+          modelId: 'model-1',
+          deps,
+          recordProcessId: 'rp-mismatched-wt',
+          challengerConfig: {
+            Enabled: true,
+            SampleRate: 1.0,
+            WorkType: 'Infer',
+            ChallengerPromptID: 'prompt-challenger-1',
+            ChallengerModelID: 'model-challenger-ignored',
+          },
+          shadowCoordinator,
+        },
+        new TestAssembler(new InMemoryDataAccess()),
+      );
+
+      expect(errorLogs.filter((m) => m.includes('WorkType')).length).toBe(1);
+
+      await proc.ProcessRecord(memberRecord('m1', 10, 1, 'NYC'), CTX);
+      await proc.ProcessRecord(memberRecord('m2', 20, 2, 'LA'), CTX);
+      await proc.ProcessRecord(memberRecord('m3', 30, 3, 'NYC'), CTX);
+      await shadowCoordinator.FlushInFlight();
+
+      expect(publishedCount).toBe(0);
+      expect(errorLogs.filter((m) => m.includes('WorkType')).length).toBe(1);
+    } finally {
+      console.error = origConsoleError;
+    }
+  });
 });

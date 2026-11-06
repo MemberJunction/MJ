@@ -135,4 +135,34 @@ describe('registerMLScoringProcessor', () => {
     expect(Reflect.get(proc, 'challengerConfig')).toEqual(challengerConfig);
     expect(Reflect.get(proc, 'shadowCoordinator')).toBeDefined();
   });
+
+  it('reads ChallengerConfigurationObject only and ignores raw ChallengerConfiguration string or Configuration.challengerConfiguration (R10)', () => {
+    RegisterMLScoringProcessor(deps);
+    const proc = RecordProcessorRegistry.Instance.Resolve({
+      WorkType: ML_INFERENCE_WORK_TYPE,
+      RecordProcessID: 'rp-shadow-legacy',
+      Configuration: JSON.stringify({
+        modelId: 'champion-model-1',
+        challengerConfiguration: {
+          Enabled: true,
+          SampleRate: 1.0,
+          WorkType: 'ML Model',
+          ChallengerModelID: 'legacy-config-challenger',
+        },
+      }),
+      RecordProcess: {
+        ID: 'rp-shadow-legacy',
+        ChallengerConfiguration: JSON.stringify({
+          Enabled: true,
+          SampleRate: 1.0,
+          WorkType: 'ML Model',
+          ChallengerModelID: 'legacy-string-challenger',
+        }),
+        ChallengerConfigurationObject: null,
+      },
+    }) as MLModelInferenceProcessor;
+
+    expect(proc).toBeInstanceOf(MLModelInferenceProcessor);
+    expect(Reflect.get(proc, 'challengerConfig')).toBeUndefined();
+  });
 });

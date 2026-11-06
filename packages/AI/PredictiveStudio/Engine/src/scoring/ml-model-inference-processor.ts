@@ -127,7 +127,14 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     this.autoTrain = options.autoTrain;
     this.autoTrainer = options.autoTrainer;
     this.recordProcessId = options.recordProcessId;
-    this.challengerConfig = options.challengerConfig;
+    if (options.challengerConfig && options.challengerConfig.WorkType !== 'ML Model') {
+      LogError(
+        `MLModelInferenceProcessor: skipping ChallengerConfigurationObject with mismatched WorkType '${String(options.challengerConfig.WorkType)}' (expected 'ML Model').`,
+      );
+      this.challengerConfig = undefined;
+    } else {
+      this.challengerConfig = options.challengerConfig;
+    }
     this.shadowCoordinator = options.shadowCoordinator;
     this.assembler = assembler ?? new FeatureAssemblyExecutor();
   }
@@ -273,7 +280,12 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     championLatencyMs: number,
     context: RecordProcessorContext,
   ): void {
-    if (!this.shadowCoordinator || !this.challengerConfig || context.DryRun) {
+    if (
+      !this.shadowCoordinator ||
+      !this.challengerConfig ||
+      this.challengerConfig.WorkType !== 'ML Model' ||
+      context.DryRun
+    ) {
       return;
     }
     try {
@@ -281,11 +293,15 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       if (!this.shadowCoordinator.ShouldSample(this.challengerConfig)) {
         return;
       }
+      const championConfidence =
+        model.problemType === 'classification' && Number.isFinite(prediction.score)
+          ? Math.max(prediction.score, 1 - prediction.score)
+          : undefined;
       this.shadowCoordinator.DispatchShadowScore(
         {
           RecordProcessID: context.RecordProcessID ?? this.recordProcessId,
           ProcessRunID: context.ProcessRunID ?? null,
-          EntityID: record.EntityID,
+          EntityID: record.EntityID || context.EntityID,
           EntityName: model.targetEntityName,
           RecordID: record.RecordID,
           FeatureName: model.targetVariable || 'Prediction',
@@ -294,6 +310,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
           FrozenFeatures: Object.freeze({ ...featureRow }),
           ChampionScore: prediction.score,
           ChampionLabel: prediction.class != null ? String(prediction.class) : undefined,
+          ChampionConfidence: championConfidence,
           ChampionLatencyMs: championLatencyMs,
           DispatchedAt: new Date().toISOString(),
         },
