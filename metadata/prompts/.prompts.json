@@ -194,8 +194,8 @@
       "ID": "FF7D441F-36E1-458A-B548-0FC2208923BE"
     },
     "sync": {
-      "lastModified": "2026-10-28T00:35:28.288Z",
-      "checksum": "4c06850e9eb87846bb6f184d643bbbb4bb09ff56406bdf8dd1ade9c006b627bb"
+      "lastModified": "2026-11-01T22:53:41.995Z",
+      "checksum": "99c0bc77372529835a66cf9f9765168416a43b7604066c526b061add9de1751f"
     }
   },
   {
@@ -1508,8 +1508,8 @@
       "ID": "49B60EDF-8E51-4406-9471-7B95F80A6D81"
     },
     "sync": {
-      "lastModified": "2026-10-20T23:19:21.669Z",
-      "checksum": "632d1ab0cd18f3f1eba131190e4dba41fc0e8e691aa3aa144aed67c5992b90c2"
+      "lastModified": "2026-11-03T23:46:12.316Z",
+      "checksum": "ca2a0440e97ad13e223698577f46189d6336431f3105231e2734b5eeecf2b495"
     }
   },
   {
@@ -1812,6 +1812,35 @@
     "sync": {
       "lastModified": "2026-08-07T23:58:25.816Z",
       "checksum": "05e7c1f89fec03dbd13514f5e06d769ba71dedaec03bd87869825f4384bfaed6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Anchored Comment Restricted Field Classifier",
+      "Description": "Classifies whether an anchored record comment semantically references any Field-Level Security (FLS) restricted fields on the linked entity so restrictedFields can be stamped into AnchorMetadata.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/system/anchored-comment-restricted-field-classifier.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Default",
+      "PowerPreference": "Lowest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "@file:output/system/anchored-comment-restricted-field-classifier.example.json",
+      "ValidationBehavior": "Warn",
+      "MaxRetries": 1,
+      "RetryDelayMS": 500,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "primaryKey": {
+      "ID": "9B96AFAE-6C09-4C78-9C60-690BC5807A76"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:20.231Z",
+      "checksum": "cc141dacc62ac27a33ca582dfaa5a4adda1c856c2f914e852d725c7f60829e0c"
     }
   }
 ]

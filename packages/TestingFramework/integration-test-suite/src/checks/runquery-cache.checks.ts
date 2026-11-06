@@ -19,7 +19,7 @@ import type { IRunQueryProvider, RunQueryResult, DatabaseProviderBase } from '@m
 import { QueryEngine } from '@memberjunction/core-entities';
 import type { MJQueryCategoryEntity, MJQueryEntity, MJQueryEntityEntity, MJQueryParameterEntity, MJQuerySQLEntity, MJUserSettingEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext, RunQueryFixtures } from '@memberjunction/testing-integration';
 import { FixtureQuerySaveOptions } from './query-fixture-save-options';
@@ -39,7 +39,7 @@ let noGrantMemo: { User: UserInfo | undefined } | undefined;
 /**
  * Load the seeded role-less user as a real `UserInfo` for Q12. Role-less by definition, so the
  * reconstructed principal needs no UserRoles rows — an empty roles array IS the fixture's shape
- * (asserted). Returns undefined (⇒ skip-as-pass) when the seed has not been pushed.
+ * (asserted). Returns undefined (⇒ Q12 skips) when the seed has not been pushed or is unusable.
  */
 async function loadNoGrantUser(ctx: { User: UserInfo; Provider: import('@memberjunction/core').IMetadataProvider }): Promise<UserInfo | undefined> {
     if (noGrantMemo !== undefined) {
@@ -593,8 +593,7 @@ export const RunQueryCacheChecks: NamedCheck[] = [
             // user cannot read (full check says NO). A warmed slot must NOT be served to that user.
             const noGrant = await loadNoGrantUser(ctx);
             if (!noGrant) {
-                console.warn(`  ⚠ runquery-cache.Q12 SKIPPED — seeded user '${NOGRANT_EMAIL}' not found. Seed with: npx mj sync push --dir=metadata-optional/integration-test`);
-                return;
+                SkipCheck(`seeded role-less user '${NOGRANT_EMAIL}' not found (or has roles, which invalidates the fixture). Seed with: npx mj sync push --dir=metadata-optional/integration-test`);
             }
             const { Category } = requireFixtures(ctx);
             const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design

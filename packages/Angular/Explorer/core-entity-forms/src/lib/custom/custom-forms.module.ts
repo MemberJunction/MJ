@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 import { HIERARCHY_FORM_PANELS } from './HierarchyPanels/hierarchy-form-panels';
-import { MJButtonDirective, MJAccordionModule, MJDropdownComponent, MJComboboxComponent, MJSwitchComponent, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJNumericInputComponent, MJWindowComponent, MJWindowTitlebarComponent, MJProgressBarComponent, MjSlidePanelComponent, MJEmptyStateComponent, MJAlertComponent, MJTabNavComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJAccordionModule, MJDropdownComponent, MJComboboxComponent, MJSwitchComponent, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJNumericInputComponent, MJWindowComponent, MJWindowTitlebarComponent, MJProgressBarComponent, MjSlidePanelComponent, MJEmptyStateComponent, MJAlertComponent, MJTabNavComponent, MJSectionPickerComponent, MJAccordionSectionsComponent } from '@memberjunction/ng-ui-components';
 import { AngularSplitModule } from 'angular-split';
 import { AgGridModule } from 'ag-grid-angular';
 import { BaseFormsModule, MjFormDialogComponent } from '@memberjunction/ng-base-forms';
@@ -106,6 +106,9 @@ import { FeatureValuesPanel } from "../panels/feature-values/feature-values.pane
 // dialog + SKILL.md export/import actions, mounted on the generated MJ: AI
 // Skills form. Imported so the @RegisterClassEx decorator runs at module load.
 import { AISkillSharingPanel } from "../panels/ai-skill-sharing/ai-skill-sharing-panel.component";
+// Revoke / Reactivate toolbar actions for MJ: Diagnostic Sender Registrations. The loader call
+// below the imports keeps the file in the bundle so its @RegisterFormToolbarAction decorators run.
+import { LoadDiagnosticSenderRegistrationToolbarActions } from "./DiagnosticSenderRegistrations/sender-registration-toolbar-actions";
 import { EntityFormChromeEditorComponent } from "../panels/form-chrome/entity-form-chrome-editor.component";
 import { EntityRelationshipFormRolePanel } from "../panels/form-chrome/entity-relationship-form-role.panel";
 import { EntityCloneConfigEditorComponent } from "../panels/record-clone/entity-clone-config-editor.component";
@@ -119,6 +122,11 @@ import { MJRubricEvaluationFormComponentExtended, RubricEvaluationComparePanel, 
 import { MJRubricScaleFormComponentExtended, RubricScaleLevelsPanel } from "./Rubrics/scale-form.component";
 import { MJAIAgentRubricFormComponentExtended, MJRubricBandFormComponentExtended, MJRubricCategoryFormComponentExtended, MJRubricCriterionFormComponentExtended, MJRubricEvaluationScoreFormComponentExtended, MJRubricScaleLevelFormComponentExtended, MJRubricVersionFormComponentExtended, RubricVersionSummaryPanel } from "./Rubrics/record-forms.component";
 import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
+import { BrandKitsModule } from "@memberjunction/ng-brand-kits";
+import { BrandKitAssetsPanelComponent } from "../panels/brand-kits/brand-kit-assets.panel";
+import { BrandKitGenerationPolicyPanelComponent } from "../panels/brand-kits/brand-kit-generation-policy.panel";
+
+LoadDiagnosticSenderRegistrationToolbarActions();
 
 @NgModule({
     declarations: [
@@ -196,9 +204,12 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         EntityCloneConfigEditorComponent,
         MJFileFormComponentExtended,
         MLModelFormComponentExtended,
+        BrandKitAssetsPanelComponent,
+        BrandKitGenerationPolicyPanelComponent,
     ],
     imports: [
     ArtifactsModule,
+        BrandKitsModule,
         CommonModule,
         RubricsModule,
         RubricAuthorPanel,
@@ -217,6 +228,8 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         MJEmptyStateComponent,
         MJAlertComponent,
         MJTabNavComponent,
+        MJSectionPickerComponent,
+        MJAccordionSectionsComponent,
         MJButtonDirective,
         MJAccordionModule,
         MJDropdownComponent,
@@ -307,7 +320,9 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         ActionsModule,
         RecordProcessFormComponentExtended,
         MLModelFormComponentExtended,
-        PSModelDetailComponent
+        PSModelDetailComponent,
+        BrandKitAssetsPanelComponent,
+        BrandKitGenerationPolicyPanelComponent,
     ],
     providers: [
         NewAgentDialogService,

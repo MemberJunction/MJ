@@ -1537,7 +1537,7 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
           ResultType: 'count_only' as const
         })));
         countResults.forEach((res, idx) => {
-          itemCounts.set(lists[idx].ID, res.Success ? res.TotalRowCount : 0);
+          itemCounts.set(lists[idx].ID, res.Success ? res.TotalRowCount ?? 0 : 0);
         });
       }
 

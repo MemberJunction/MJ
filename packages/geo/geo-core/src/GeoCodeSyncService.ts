@@ -267,7 +267,8 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
             EntityName: 'MJ: Record Geo Codes',
             ExtraFilter: `EntityID='${entityID}' AND RecordID='${recordID}' AND LocationType='${locationType}'`,
             ResultType: 'entity_object',
-            MaxRows: 1
+            MaxRows: 1,
+            SkipTotalRowCount: true
         }, contextUser);
         if (result.Success && result.Results.length > 0) {
             return result.Results[0];

@@ -47,7 +47,7 @@ import {
     MJProcessRunEntity,
     RecordProcessRunNowOperation
 } from '@memberjunction/core-entities';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -61,12 +61,6 @@ const TEST_TAG = '(mj-integration-test — safe to delete)';
  * run sequentially, so a single module-level handle is safe (mirrors permission-engine's memo).
  */
 let fixture: { RpId: string; CatIds: string[] } | null = null;
-
-/** Loud, uniform skip-as-pass note. Returns false so a caller can `if (!skip(...)) return;`. */
-function skipNote(checkId: string, reason: string): false {
-    console.warn(`  ⚠ subscription-isolation.${checkId} SKIPPED — ${reason}`);
-    return false;
-}
 
 /** Collected progress for one operation, with the discriminators SI1 uses to detect cross-channel leaks. */
 interface OpProbe {
@@ -126,8 +120,7 @@ function totalsOf(probe: OpProbe): Set<number> {
  */
 export async function CheckSi1RemoteOpChannelIsolation(ctx: IntegrationCheckContext): Promise<void> {
     if (!fixture) {
-        skipNote('SI1', 'fixture missing (bundle Setup did not run — MJAPI likely unreachable)');
-        return;
+        SkipCheck('fixture missing: the bundle Setup did not run, most likely because MJAPI is unreachable. Start MJAPI and rerun.');
     }
     const { RpId, CatIds } = fixture;
     Assert(CatIds.length >= 2, `need >= 2 fixture records, have ${CatIds.length}`);
@@ -188,8 +181,8 @@ export async function CheckSi1_RemoteOpChannelIsolation(ctx: IntegrationCheckCon
  * SI2 — DOCUMENTED OMISSION: the cross-USER `statusUpdates` leak (SEC6) and the unfiltered
  * `cacheInvalidation` broadcast (SEC7) are NOT headlessly reproducible here. This check does not
  * assert against a fabricated surface — it records precisely WHY, so the gap is visible in every run
- * and a future harness (a real dual-identity WS rig) knows exactly what to build. It is a skip-as-pass
- * marker for a GENUINE gap, not a filler assertion.
+ * and a future harness (a real dual-identity WS rig) knows exactly what to build. It is a recorded skip
+ * for a GENUINE gap, not a filler assertion.
  *
  * THE TWO FINDINGS (research-confirmed against `@memberjunction/server`):
  *   • SEC6 — `PushStatusResolver.statusUpdates` filters `payload.sessionId === args.sessionId`, trusting
@@ -212,7 +205,7 @@ export async function CheckSi1_RemoteOpChannelIsolation(ctx: IntegrationCheckCon
  * wire; these two remain a documented live-WS omission.
  */
 export async function CheckSi2ServerFilterOmission(ctx: IntegrationCheckContext): Promise<void> {
-    skipNote('SI2',
+    SkipCheck(
         'cross-user statusUpdates leak (SEC6) + unfiltered cacheInvalidation broadcast (SEC7) require a ' +
         'dual-identity live WebSocket; the single-system-API-key client transport cannot reproduce them, ' +
         'and the inline server filters are un-importable (the @memberjunction/server barrel throws on ' +

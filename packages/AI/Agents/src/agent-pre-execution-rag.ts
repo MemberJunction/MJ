@@ -684,6 +684,7 @@ export class AgentPreExecutionRAG {
             ExtraFilter: `TemplateID='${templateID}'`,
             OrderBy: 'Priority DESC, __mj_CreatedAt ASC',
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'entity_object'
         }, contextUser);
         const content = cResult.Success && cResult.Results.length > 0 ? cResult.Results[0] : null;

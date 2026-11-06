@@ -22,6 +22,8 @@ import {
     type ClientRealtimeSessionConfig,
     type IRealtimeSession,
     type RealtimeSessionParams,
+    type RealtimeDriverFacts,
+    RealtimeDriverFactsOf,
 } from '@memberjunction/ai';
 import {
     BuildGeminiLiveModelPath,
@@ -165,6 +167,13 @@ class GeminiEnterpriseAuthCache extends BaseSingleton<GeminiEnterpriseAuthCache>
  */
 @RegisterClass(BaseRealtimeModel, 'GeminiEnterpriseRealtime')
 export class GeminiEnterpriseRealtime extends GeminiRealtime {
+    /** Declared on its own so inheritance never hides a missing override; same 30-minute Gemini Live ceiling, applied through the MJ relay. */
+    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = {
+        ProviderMaxSessionSeconds: 1800,
+        // Inherits GeminiRealtime's turn mapping, so it declares the same set (in its own static).
+        SupportedTurnSettings: { Eagerness: 'approximate', SilenceDurationMs: 'exact', Threshold: 'approximate', Coverage: 'exact' },
+    };
+
     private readonly credentials: VertexAICredentials | null;
     private readonly credentialsProblem: string | null;
     /** Whether the key is the platform's environment key, the only key that may name a key file. */
@@ -213,12 +222,14 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
             Setup: BuildGeminiLiveSetup(GeminiEnterpriseRealtime.setupTarget(credentials, params.Model, location), config),
             UpstreamHeaders: () => this.upstreamHeaders(upstreamUrl),
         });
+        // Computed once: the ClientConfig reports the same cap the relay enforces on the ticket.
+        const maxSessionSeconds = this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds);
         const ticket = RealtimeProxyRegistry.Instance.IssueRelaySession({
             UpstreamUrl: upstreamUrl,
             Policy: policy,
             UserID: params.UserID,
             DriverClass: DRIVER_CLASS,
-            MaxSessionSeconds: params.MaxSessionSeconds,
+            MaxSessionSeconds: maxSessionSeconds,
         });
         const avatarStatus = this.AvatarStatusFor(params, config);
         return {
@@ -231,6 +242,7 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
             RelayUrl: BuildRealtimeRelayUrl(ResolveRealtimeProxyBaseWsUrl(params), ticket.ID),
             SessionConfig: this.SessionPactFor(params.Model, config, GeminiEnterpriseRealtime.browserConnectConfig(config)),
             ...(avatarStatus ? { AvatarStatus: avatarStatus } : {}),
+            MaxSessionSeconds: maxSessionSeconds,
         };
     }
 

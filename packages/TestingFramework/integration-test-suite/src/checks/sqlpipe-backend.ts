@@ -62,6 +62,7 @@ export class ServerBackend implements MatrixBackend {
 
     async SaveQuery(categoryID: string, spec: SaveSpec): Promise<{ Record: SavedRecord | null; Message: string }> {
         const record = await NewFixtureQuery(this.ctx, categoryID, { Name: spec.Name, SQL: spec.SQL, Reusable: spec.Reusable ?? false });
+        record.SkipEmbeddings = true;
         if (spec.Cached) {
             record.CacheEnabled = true;
             record.CacheTTLMinutes = 5;
@@ -95,7 +96,7 @@ async function countQueries(user: UserInfo, categoryID: string, name: string): P
     const result = await new RunView().RunView({
         EntityName: 'MJ: Queries', ExtraFilter: `CategoryID='${categoryID}' AND Name='${name.replace(/'/g, "''")}'`, ResultType: 'count_only', BypassCache: true,
     }, user);
-    return result.TotalRowCount;
+    return result.TotalRowCount ?? 0;
 }
 
 /** Over GraphQL. */
