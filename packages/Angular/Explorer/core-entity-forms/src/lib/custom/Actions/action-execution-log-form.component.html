@@ -1,7 +1,7 @@
 <div class="record-form-container action-execution-log-form" style="height: 100%; display: flex; flex-direction: column;">
     <div class="record-form" style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
         <!-- Header -->
-        <div class="header">
+        <div class="header phone-hero" [class.hero-view]="!EditMode" [class.hero-compact]="!EditMode && !HeroDetailsOpen">
             <div class="header-content">
                 <div class="header-left">
                     <div class="icon-wrapper">
@@ -17,7 +17,7 @@
                     </div>
                     <div class="header-info">
                         <h2>Action Execution Log</h2>
-                        <div class="meta-info">
+                        <div class="meta-info phone-hero-detail">
                             @if (action) {
                                 <span class="action-name">{{ action.Name }}</span>
                             }
@@ -30,13 +30,13 @@
                         <i class="fas" [ngClass]="getResultCodeIcon()"></i>
                         {{ record.ResultCode || 'UNKNOWN' }}
                     </div>
-                    <div class="execution-time">
+                    <div class="execution-time phone-hero-detail">
                         <i class="fas fa-clock"></i>
                         {{ formatDuration(getExecutionDuration()) }}
                     </div>
                 </div>
             </div>
-            <div class="header-stats">
+            <div class="header-stats phone-hero-detail phone-hero-stats">
                 <div class="stat">
                     <span class="label">Started</span>
                     <span class="value">{{ record.StartedAt | date:'short' }}</span>
@@ -70,13 +70,21 @@
                     </div>
                 }
             </div>
+          @if (!EditMode && HeroSummary) {
+            <button type="button" class="phone-hero-summary" [attr.aria-expanded]="HeroDetailsOpen" (click)="ToggleHeroDetails()">
+              <span class="phone-hero-summary-text">{{ HeroSummary }}</span>
+              <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+            </button>
+          }
         </div>
 
         <!-- Content Area -->
         <div class="content-area">
             <div class="accordion-container">
+                <!-- Phone: one section at a time behind a picker; desktop keeps the accordions -->
+                <mj-accordion-sections [Enabled]="Phone.IsPhone" [ActiveKey]="Phone.Section" (ActiveKeyChange)="Phone.Pick($event)">
                 <!-- Execution Details -->
-                <mj-accordion-panel [Expanded]="true">
+                <mj-accordion-panel SectionKey="details" SectionTitle="Execution Details" SectionIcon="fas fa-info-circle" [Expanded]="true">
                     <ng-template mjAccordionTitle>
                       <i class="fas fa-info-circle"></i> Execution Details
                     </ng-template>
@@ -113,7 +121,7 @@
 
                 <!-- Unified Parameters section -->
                 @if (hasAnyParameters) {
-                    <mj-accordion-panel [Expanded]="true">
+                    <mj-accordion-panel SectionKey="parameters" SectionTitle="Parameters" SectionIcon="fas fa-sliders-h" [SectionCount]="paramCounts.All" [Expanded]="true">
                         <ng-template mjAccordionTitle>
                           <i class="fas fa-sliders-h"></i>
                           Parameters
@@ -298,7 +306,7 @@
 
                 <!-- Output Message -->
                 @if (record.Message) {
-                    <mj-accordion-panel [Expanded]="true">
+                    <mj-accordion-panel SectionKey="message" SectionTitle="Output Message" SectionIcon="fas fa-comment-alt" [Expanded]="true">
                         <ng-template mjAccordionTitle>
                           <i class="fas fa-comment-alt"></i> Output Message
                         </ng-template>
@@ -323,7 +331,7 @@
 
                 <!-- Empty States for missing data -->
                 @if (!record.Params && !record.Message && !hasAnyParameters) {
-                    <mj-accordion-panel [Expanded]="true">
+                    <mj-accordion-panel SectionKey="data" SectionTitle="Execution Data" SectionIcon="fas fa-database" [Expanded]="true">
                         <ng-template mjAccordionTitle>
                           <i class="fas fa-database"></i> Execution Data
                         </ng-template>
@@ -333,6 +341,7 @@
                                 Title="No execution data recorded" />
                     </mj-accordion-panel>
                 }
+                </mj-accordion-sections>
             </div>
         </div>
     </div>
