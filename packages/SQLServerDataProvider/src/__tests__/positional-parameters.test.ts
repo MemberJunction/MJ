@@ -100,4 +100,104 @@ describe('SQLServerDataProvider.ExecuteSQL parameter binding', () => {
     expect(mssqlState.Queries[0].sql).toBe(plan!.sql);
     expect(mssqlState.Queries[0].inputs.map((i) => [i.name, i.value])).toEqual([['mj_p0', 'Open']]);
   });
+
+  it('ExecuteSQLBatch with NamedQueryParameter[][]: deduplicates shared @p0 across batched statements without rewriting `?`', async () => {
+    const sharedParams = [new NamedQueryParameter('p0', 'Active'), new NamedQueryParameter('p1', 1)];
+    await makeProvider().ExecuteSQLBatch(
+      [
+        "SELECT 'Why?' AS Q, * FROM [__mj].[vwUsers] WHERE Status = @p0 AND IsActive = @p1",
+        "SELECT COUNT(*) AS TotalRowCount FROM [__mj].[vwUsers] WHERE Status = @p0 AND IsActive = @p1",
+        "SELECT COUNT(ID) AS Agg0 FROM [__mj].[vwUsers] WHERE Status = @p0 AND IsActive = @p1",
+      ],
+      [sharedParams, sharedParams, sharedParams],
+    );
+
+    expect(mssqlState.Queries).toHaveLength(1);
+    expect(mssqlState.Queries[0].sql).toContain("SELECT 'Why?' AS Q");
+    expect(mssqlState.Queries[0].inputs).toEqual([
+      { name: 'p0', value: 'Active' },
+      { name: 'p1', value: 1 },
+    ]);
+  });
+
+  it('ExecuteSQLBatch with NamedQueryParameter[][]: scopes colliding parameter names with different values without touching string literals or comments', async () => {
+    await makeProvider().ExecuteSQLBatch(
+      [
+        "SELECT * FROM [__mj].[vwUsers] WHERE Status = @p0",
+        "SELECT 'user@p0.com' AS Email, [@p0] FROM [__mj].[vwUsers] WHERE Status = @p0 AND Other = @p0_extra -- keep @p0 in comment",
+      ],
+      [
+        [new NamedQueryParameter('p0', 'Active')],
+        [new NamedQueryParameter('p0', 'Pending'), new NamedQueryParameter('p0_extra', 42)],
+      ],
+    );
+
+    expect(mssqlState.Queries).toHaveLength(1);
+    expect(mssqlState.Queries[0].sql).toBe(
+      "SELECT * FROM [__mj].[vwUsers] WHERE Status = @p0;\n" +
+      "SELECT 'user@p0.com' AS Email, [@p0] FROM [__mj].[vwUsers] WHERE Status = @q1_p0 AND Other = @p0_extra -- keep @p0 in comment",
+    );
+    expect(mssqlState.Queries[0].inputs).toEqual([
+      { name: 'p0', value: 'Active' },
+      { name: 'q1_p0', value: 'Pending' },
+      { name: 'p0_extra', value: 42 },
+    ]);
+  });
+
+  it('ExecuteSQLBatch with TypedQueryParameter[][]: scopes colliding parameter names with different values while preserving SQL types', async () => {
+    await makeProvider().ExecuteSQLBatch(
+      [
+        "SELECT [ID] FROM [__mj].[materialized_vwT] WHERE [Status] = @mj_p0",
+        "SELECT [ID] FROM [__mj].[materialized_vwT] WHERE [Status] = @mj_p0",
+      ],
+      [
+        [new TypedQueryParameter('mj_p0', 'varchar(20)', 'Open')],
+        [new TypedQueryParameter('mj_p0', 'varchar(20)', 'Closed')],
+      ],
+    );
+
+    expect(mssqlState.Queries).toHaveLength(1);
+    expect(mssqlState.Queries[0].sql).toBe(
+      "SELECT [ID] FROM [__mj].[materialized_vwT] WHERE [Status] = @mj_p0;\n" +
+      "SELECT [ID] FROM [__mj].[materialized_vwT] WHERE [Status] = @q1_mj_p0",
+    );
+    expect(mssqlState.Queries[0].inputs.map(i => [i.name, i.value])).toEqual([
+      ['mj_p0', 'Open'],
+      ['q1_mj_p0', 'Closed'],
+    ]);
+  });
+
+  it('ExecuteSQLBatch scopes colliding parameters using dialect lexer (ignoring nested T-SQL block comments)', async () => {
+    await makeProvider().ExecuteSQLBatch(
+      [
+        "SELECT * FROM [__mj].[vwUsers] WHERE Status = @p0",
+        "SELECT /* outer /* @p0 inside nested block comment */ still comment @p0 */ * FROM [__mj].[vwUsers] WHERE Status = @p0",
+      ],
+      [
+        [new NamedQueryParameter('p0', 'Active')],
+        [new NamedQueryParameter('p0', 'Closed')],
+      ],
+    );
+
+    expect(mssqlState.Queries[0].sql).toBe(
+      "SELECT * FROM [__mj].[vwUsers] WHERE Status = @p0;\n" +
+      "SELECT /* outer /* @p0 inside nested block comment */ still comment @p0 */ * FROM [__mj].[vwUsers] WHERE Status = @q1_p0",
+    );
+  });
+
+  it('ExecuteSQL rejects duplicate parameter names within a single statement when values or types conflict', async () => {
+    await expect(
+      makeProvider().ExecuteSQL("SELECT * FROM [__mj].[vwUsers] WHERE Status = @p0", [
+        new NamedQueryParameter('p0', 'Active'),
+        new NamedQueryParameter('p0', 'Pending'),
+      ]),
+    ).rejects.toThrow(/Duplicate query parameter '@p0' bound with conflicting values/);
+
+    await expect(
+      makeProvider().ExecuteSQL("SELECT * FROM [__mj].[vwUsers] WHERE Status = @p0", [
+        new TypedQueryParameter('p0', 'varchar(20)', 'Active'),
+        new TypedQueryParameter('p0', 'varchar(20)', 'Pending'),
+      ]),
+    ).rejects.toThrow(/Duplicate typed query parameter '@p0' bound with conflicting type or value/);
+  });
 });
