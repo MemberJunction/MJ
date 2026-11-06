@@ -5,6 +5,7 @@
  * and `PredictiveStudioEvaluateDriftAction` end-to-end execution over `MJ: Feature Values`.
  */
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
     MJFeatureValueEntity,
     MJMLModelEntity,
@@ -199,8 +200,8 @@ export const PredictiveShadowDriftChecks: NamedCheck[] = [
                 const deps: MLInferenceDeps = {
                     modelLoader: {
                         loadModel: async (id) => {
-                            if (id === champRef.ID) return champRef;
-                            if (id === challRef.ID) return challRef;
+                            if (UUIDsEqual(id, champRef.ID)) return champRef;
+                            if (UUIDsEqual(id, challRef.ID)) return challRef;
                             return null;
                         },
                     },
