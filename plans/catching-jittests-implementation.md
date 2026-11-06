@@ -1974,17 +1974,19 @@ function safeJson(text: string): unknown { try { return JSON.parse(text); } catc
 ### Task 1.11: `VitestCatchTarget` — prepare, run, type-check, coverage
 
 **Files:**
-- Create: `src/target/VitestCatchTarget.ts`
-- Test: `src/__tests__/VitestCatchTarget.test.ts`
+- Create: `src/target/VitestCatchTarget.ts`, `src/target/LockfileStrip.ts`
+- Test: `src/__tests__/VitestCatchTarget.test.ts`, `src/__tests__/LockfileStrip.test.ts`
 
 **Interfaces:**
 - Consumes: `Sandbox`, `GitRepo`, `PackageMap`, `ParseVitestReport`, `Settings`.
 - Produces:
   ```ts
-  interface TargetOptions { Repo: GitRepo; Sandbox: Sandbox; Settings: Settings; WorkRoot: string /* where worktrees go */; PackageMap: PackageMap; HostRunner?: CommandRunner }
+  interface TargetOptions { Repo: GitRepo; Sandbox: Sandbox; Settings: Settings; WorkRoot: string /* where worktrees go */; PackageMap: PackageMap; StoreDir: string /* pnpm store, one per run */; HostRunner?: HostRunner }
+  function StripPatchInfo(lockfile: string): string;                     // removes `patchedDependencies:` and every `(patch_hash=…)`
+  class InfrastructureError extends Error {}                             // the revision could not be prepared; not a test result
   class VitestCatchTarget extends BaseCatchTarget {
     constructor(o: TargetOptions);
-    Prepare(revision: RevisionRef): Promise<PreparedRevision>;            // worktree + install (+ sandbox rebuild/build for Head)
+    Prepare(revision: RevisionRef): Promise<PreparedRevision>;            // worktree + host fetch (stripped lockfile copy) + sandbox install and rebuild
     BuildPackages(revision: PreparedRevision, packages: string[]): Promise<void>;
     WriteTests(revision: PreparedRevision, tests: CandidateTest[]): Promise<void>;   // writes sources into packages/<X>/src/__tests__/jit/
     TypeCheck(revision: PreparedRevision, tests: CandidateTest[]): Promise<Map<string, string | null>>;  // test ID → error text or null
@@ -1994,16 +1996,16 @@ function safeJson(text: string): unknown { try { return JSON.parse(text); } catc
   }
   ```
 
-The sandbox is used for **every** `pnpm install`, `pnpm rebuild`, `turbo`, vitest and tsc invocation, on base too (generated tests are untrusted even on base). The host runs only `git` and `pnpm fetch`, and the fetch runs in a folder that holds nothing but the revision's `pnpm-lock.yaml`: `pnpm install --ignore-scripts` on the host would still load `.pnpmfile.cjs` and follow `packageManager`, both PR-controlled (design §5.4). Two mount phases: `Prepare` and `BuildPackages` mount the worktree read-write (they write `node_modules`, `dist`, `.turbo`); `Run`, `TypeCheck` and `Coverage` mount it read-only plus the jit folders. Base is prepared before any head code exists and is never mounted read-write afterwards.
+The sandbox is used for **every** `pnpm install`, `pnpm rebuild`, `turbo`, vitest and tsc invocation, on base too (generated tests are untrusted even on base). The host runs only `git`, `StripPatchInfo` and `pnpm fetch`: `pnpm install --ignore-scripts` on the host would still load `.pnpmfile.cjs` and follow `packageManager`, both PR-controlled (design §5.4). The fetch runs in a folder that holds nothing but a copy of the revision's `pnpm-lock.yaml` with the patch information removed (D35): with the patch entries in place, `pnpm fetch` needs `patches/`, and with `patches/` it applies the PR's diffs on the host (spike §8). The host never reads a patch file. The sandbox install uses the real lockfile and `patches/`, so pnpm applies the patches there and writes the patched files into the store; `StoreDir` is therefore one folder per run (Task 1.23 puts it in the run directory), never shared between runs. A failed host fetch or sandbox install throws `InfrastructureError` and is not retried with network access. Two mount phases: `Prepare` and `BuildPackages` mount the worktree read-write (they write `node_modules`, `dist`, `.turbo`); `Run`, `TypeCheck` and `Coverage` mount it read-only plus the jit folders. Base is prepared before any head code exists and is never mounted read-write afterwards.
 
 - [ ] **Step 1: Failing tests** (pure parts: command construction and result assembly; docker and git are injected)
 
 ```ts
 import { describe, it, expect, vi } from 'vitest';
-import { mkdtempSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { VitestCatchTarget } from '../target/VitestCatchTarget';
+import { InfrastructureError, VitestCatchTarget } from '../target/VitestCatchTarget';
 import { Sandbox, type SandboxRunOptions } from '../sandbox/Sandbox';
 import { DEFAULT_SETTINGS } from '../settings';
 import type { CandidateTest } from '../types';
@@ -2012,7 +2014,7 @@ function fakeTarget(onRun: (o: SandboxRunOptions) => { Stdout: string; ExitCode:
   const calls: SandboxRunOptions[] = [];
   const sandbox = new Sandbox(DEFAULT_SETTINGS.Sandbox, async (_f, _a) => ({ ExitCode: 0, TimedOut: false, Stdout: '', Stderr: '', DurationMs: 1 }));
   vi.spyOn(sandbox, 'Run').mockImplementation(async (o) => { calls.push(o); const r = onRun(o); return { ExitCode: r.ExitCode, TimedOut: false, Stdout: r.Stdout, Stderr: '', DurationMs: 1 }; });
-  const target = new VitestCatchTarget({ Repo: { Root: '/repo' } as never, Sandbox: sandbox, Settings: DEFAULT_SETTINGS, WorkRoot: '/work', PackageMap: { Get: (n: string) => ({ Name: n, Dir: 'packages/MJCore', HasVitest: true, HasTests: true }) } as never });
+  const target = new VitestCatchTarget({ Repo: { Root: '/repo' } as never, Sandbox: sandbox, Settings: DEFAULT_SETTINGS, WorkRoot: '/work', StoreDir: '/work/pnpm-store', PackageMap: { Get: (n: string) => ({ Name: n, Dir: 'packages/MJCore', HasVitest: true, HasTests: true }) } as never });
   return { target, calls };
 }
 const test = (id: string): CandidateTest => ({ ID: id, RunID: 'r', Package: '@memberjunction/core', Method: 'DodgyDiff', RiskID: null, RiskText: null, Mutant: null, MutantFailure: null,
@@ -2040,16 +2042,28 @@ describe('VitestCatchTarget.Run', () => {
 });
 
 describe('VitestCatchTarget.Prepare', () => {
-  it('runs pnpm on the host only as `fetch` in a folder holding just the lockfile, then installs offline in the sandbox with the worktree and store mounted rw', async () => {
-    const host: { File: string; Args: string[]; Cwd: string }[] = [];
+  const LOCK = 'lockfileVersion: 9.0\n\npatchedDependencies:\n  type-graphql@2.0.0-beta.3:\n    hash: abc123\n    path: patches/type-graphql@2.0.0-beta.3.patch\n\nimporters:\n  .:\n    dependencies:\n      type-graphql:\n        version: 2.0.0-beta.3(patch_hash=abc123)(graphql@16.12.0)\n';
+  function prepWorld(hostRunner: (f: string, a: string[], cwd: string) => Promise<void>) {
     const { target, calls } = fakeTarget(() => ({ Stdout: '', ExitCode: 0 }));
-    const work = mkdtempSync(join(tmpdir(), 'jit-prep-')); writeFileSync(join(work, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n'); writeFileSync(join(work, '.pnpmfile.cjs'), 'throw new Error("must not load")');
-    (target as never as { o: { WorkRoot: string; StoreDir: string; HostRunner: (f: string, a: string[], cwd: string) => Promise<void>; Repo: { AddWorktree: () => Promise<void>; RemoveWorktree: () => Promise<void> } } }).o = { ...(target as never as { o: object }).o, WorkRoot: work, StoreDir: join(work, 'store'), HostRunner: async (File, Args, Cwd) => { host.push({ File, Args, Cwd }); }, Repo: { AddWorktree: async () => { mkdirSync(join(work, 'head'), { recursive: true }); writeFileSync(join(work, 'head', 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n'); writeFileSync(join(work, 'head', '.pnpmfile.cjs'), 'bad'); }, RemoveWorktree: async () => {} } } as never;
+    const work = mkdtempSync(join(tmpdir(), 'jit-prep-'));
+    (target as never as { o: object }).o = { ...(target as never as { o: object }).o, WorkRoot: work, StoreDir: join(work, 'store'), HostRunner: hostRunner,
+      Repo: { AddWorktree: async () => { mkdirSync(join(work, 'head', 'patches'), { recursive: true }); writeFileSync(join(work, 'head', 'pnpm-lock.yaml'), LOCK); writeFileSync(join(work, 'head', '.pnpmfile.cjs'), 'bad'); writeFileSync(join(work, 'head', 'patches', 'type-graphql@2.0.0-beta.3.patch'), 'diff'); }, RemoveWorktree: async () => {} } } as never;
+    return { target, calls, work };
+  }
+  it('runs pnpm on the host only as `fetch`, in a folder holding just a lockfile copy without patch information, then installs offline in the sandbox with the worktree and the run store mounted rw', async () => {
+    const host: { File: string; Args: string[]; Cwd: string; Files: string[]; Lock: string }[] = [];
+    const { target, calls, work } = prepWorld(async (File, Args, Cwd) => { host.push({ File, Args, Cwd, Files: readdirSync(Cwd), Lock: readFileSync(join(Cwd, 'pnpm-lock.yaml'), 'utf8') }); });
     await target.Prepare({ Kind: 'Head', SHA: 'h' });
-    expect(host).toHaveLength(1); expect(host[0].File).toBe('pnpm'); expect(host[0].Args[0]).toBe('fetch');
-    expect(host[0].Cwd).not.toBe(join(work, 'head')); expect(readdirSync(host[0].Cwd)).toEqual(['pnpm-lock.yaml']);
+    expect(host).toHaveLength(1); expect(host[0].File).toBe('pnpm'); expect(host[0].Args).toEqual(['fetch', '--store-dir', join(work, 'store')]);
+    expect(host[0].Cwd).not.toBe(join(work, 'head')); expect(host[0].Files).toEqual(['pnpm-lock.yaml']);
+    expect(host[0].Lock).not.toContain('patchedDependencies'); expect(host[0].Lock).not.toContain('patch_hash'); expect(host[0].Lock).toContain('version: 2.0.0-beta.3(graphql@16.12.0)');
     const install = calls[0]; expect(install.Command.join(' ')).toContain('pnpm install --offline --frozen-lockfile --ignore-scripts');
-    expect(install.Mounts.find((m) => m.Container === '/work')?.Mode).toBe('rw'); expect(install.Mounts.find((m) => m.Container === '/pnpm-store')?.Mode).toBe('rw');
+    expect(install.Mounts.find((m) => m.Container === '/work')?.Mode).toBe('rw'); expect(install.Mounts.find((m) => m.Container === '/pnpm-store')).toEqual({ Host: join(work, 'store'), Container: '/pnpm-store', Mode: 'rw' });
+  });
+  it('turns a failed host fetch into an InfrastructureError and never starts the sandbox', async () => {
+    const { target, calls } = prepWorld(async () => { throw new Error('ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED'); });
+    await expect(target.Prepare({ Kind: 'Head', SHA: 'h' })).rejects.toBeInstanceOf(InfrastructureError);
+    expect(calls).toHaveLength(0);
   });
 });
 
@@ -2063,13 +2077,55 @@ describe('VitestCatchTarget.TypeCheck', () => {
 });
 ```
 
-Run → FAIL.
-
-- [ ] **Step 2: VitestCatchTarget.ts**
+`LockfileStrip.test.ts`:
 
 ```ts
+import { describe, it, expect } from 'vitest';
+import { StripPatchInfo } from '../target/LockfileStrip';
+
+describe('StripPatchInfo', () => {
+  const lock = ['lockfileVersion: 9.0', '', 'patchedDependencies:', '  type-graphql@2.0.0-beta.3:', '    hash: abc123', '    path: patches/type-graphql@2.0.0-beta.3.patch', '', 'importers:', '  .:',
+    '    dependencies:', '      type-graphql:', '        version: 2.0.0-beta.3(patch_hash=abc123)(class-validator@0.14.3)(graphql@16.12.0)', 'packages:', '  type-graphql@2.0.0-beta.3(patch_hash=abc123)(graphql@16.12.0):', '    resolution: {}', ''].join('\n');
+  it('removes the patchedDependencies block and every patch_hash segment, and keeps every other line', () => {
+    expect(StripPatchInfo(lock)).toBe(['lockfileVersion: 9.0', '', 'importers:', '  .:', '    dependencies:', '      type-graphql:',
+      '        version: 2.0.0-beta.3(class-validator@0.14.3)(graphql@16.12.0)', 'packages:', '  type-graphql@2.0.0-beta.3(graphql@16.12.0):', '    resolution: {}', ''].join('\n'));
+  });
+  it('returns a lockfile without patches unchanged', () => {
+    const plain = 'lockfileVersion: 9.0\n\nimporters:\n  .: {}\n';
+    expect(StripPatchInfo(plain)).toBe(plain);
+  });
+});
+```
+
+Run → FAIL.
+
+- [ ] **Step 2: LockfileStrip.ts and VitestCatchTarget.ts**
+
+```ts
+// LockfileStrip.ts
+/**
+ * Removes pnpm patch information from lockfile text: the top-level `patchedDependencies:` block and every
+ * `(patch_hash=…)` segment in keys and version strings. The host fetches with this copy, so it needs no patch file (D35).
+ */
+export function StripPatchInfo(lockfile: string): string {
+    const out: string[] = []; let inBlock = false;
+    for (const line of lockfile.split('\n')) {
+        if (/^patchedDependencies:\s*$/.test(line)) { inBlock = true; continue; }
+        if (inBlock) { if (line === '' || /^\s/.test(line)) continue; inBlock = false; }
+        out.push(line.replace(/\(patch_hash=[^)]*\)/g, ''));
+    }
+    const text = out.join('\n');
+    if (/patch_hash=|^patchedDependencies:/m.test(text)) throw new Error('lockfile still holds patch information after stripping');
+    return text;
+}
+```
+
+The blank line between the block and the next top-level key goes with the block, as in the spike's stripped copy (spike §8, "Option (b) test").
+
+```ts
+// VitestCatchTarget.ts
 import { execFile } from 'node:child_process';
-import { mkdirSync, writeFileSync, existsSync, rmSync, copyFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, existsSync, rmSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { promisify } from 'node:util';
 import { BaseCatchTarget } from '../contracts/BaseCatchTarget';
@@ -2079,12 +2135,16 @@ import type { GitRepo } from '../git/GitRepo';
 import type { PackageMap } from '../analyzer/PackageMap';
 import type { Settings } from '../settings';
 import { ParseVitestReport, RunnerErrorResult } from './VitestJsonReport';
+import { StripPatchInfo } from './LockfileStrip';
 
 const execFileAsync = promisify(execFile);
 /** Runs one trusted command on the host. Injected so tests see the calls; the default is execFile. */
 export type HostRunner = (file: string, args: string[], cwd: string) => Promise<void>;
 const DEFAULT_HOST_RUNNER: HostRunner = async (file, args, cwd) => { await execFileAsync(file, args, { cwd, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, CI: '1' } }); };
-export interface TargetOptions { Repo: GitRepo; Sandbox: Sandbox; Settings: Settings; WorkRoot: string; PackageMap: PackageMap; StoreDir?: string; HostRunner?: HostRunner; }
+/** pnpm store for one run only: the sandbox install writes patched files into it, so no other run may use it. */
+export interface TargetOptions { Repo: GitRepo; Sandbox: Sandbox; Settings: Settings; WorkRoot: string; PackageMap: PackageMap; StoreDir: string; HostRunner?: HostRunner; }
+/** A revision could not be prepared (host fetch or sandbox install). The PR is an infrastructure failure, not a test result. */
+export class InfrastructureError extends Error {}
 const CONTAINER_ROOT = '/work';
 const CONTAINER_STORE = '/pnpm-store';
 
@@ -2096,19 +2156,21 @@ export class VitestCatchTarget extends BaseCatchTarget {
     /**
      * Worktree on the host, then dependencies. The host never runs pnpm inside the worktree:
      * `pnpm install --ignore-scripts` would still load the revision's `.pnpmfile.cjs` and follow its
-     * `packageManager`. The host fetches from a copy of the lockfile alone; the sandbox installs offline.
+     * `packageManager`. The host fetches from a copy of the lockfile without patch information and reads
+     * no patch file; the sandbox installs offline with the real lockfile and `patches/` and applies the patches.
      */
     public async Prepare(revision: RevisionRef): Promise<PreparedRevision> {
         const dir = join(this.o.WorkRoot, revision.Kind.toLowerCase());
         if (existsSync(dir)) await this.o.Repo.RemoveWorktree(dir).catch(() => rmSync(dir, { recursive: true, force: true }));
         await this.o.Repo.AddWorktree(dir, revision.SHA);
         const fetchDir = join(this.o.WorkRoot, `${revision.Kind.toLowerCase()}-fetch`);
-        rmSync(fetchDir, { recursive: true, force: true }); mkdirSync(fetchDir, { recursive: true }); mkdirSync(this.storeDir(), { recursive: true });
-        copyFileSync(join(dir, 'pnpm-lock.yaml'), join(fetchDir, 'pnpm-lock.yaml'));
-        await (this.o.HostRunner ?? DEFAULT_HOST_RUNNER)('pnpm', ['fetch', '--store-dir', this.storeDir()], fetchDir);
+        rmSync(fetchDir, { recursive: true, force: true }); mkdirSync(fetchDir, { recursive: true }); mkdirSync(this.o.StoreDir, { recursive: true });
+        writeFileSync(join(fetchDir, 'pnpm-lock.yaml'), StripPatchInfo(readFileSync(join(dir, 'pnpm-lock.yaml'), 'utf8')));
+        try { await (this.o.HostRunner ?? DEFAULT_HOST_RUNNER)('pnpm', ['fetch', '--store-dir', this.o.StoreDir], fetchDir); }
+        catch (e) { throw new InfrastructureError(`host pnpm fetch failed on ${revision.Kind}: ${(e as Error).message.slice(-4000)}`); }
         const prepared = { Ref: revision, RootDir: dir };
         const r = await this.inSandbox(prepared, 'rw', ['sh', '-c', 'pnpm install --offline --frozen-lockfile --ignore-scripts && pnpm rebuild'], 30 * 60_000);
-        if (r.ExitCode !== 0) throw new Error(`install failed on ${revision.Ref.Kind}: ${r.Stderr.slice(-4000)}`);
+        if (r.ExitCode !== 0) throw new InfrastructureError(`install failed on ${revision.Kind}: ${r.Stderr.slice(-4000)}`);
         return prepared;
     }
 
@@ -2167,12 +2229,10 @@ export class VitestCatchTarget extends BaseCatchTarget {
     private byPackage(tests: CandidateTest[]): Map<string, CandidateTest[]> { const m = new Map<string, CandidateTest[]>(); for (const t of tests) (m.get(t.Package) ?? m.set(t.Package, []).get(t.Package)!).push(t); return m; }
     private packageDir(name: string): string { const p = this.o.PackageMap.Get(name); if (!p) throw new Error(`unknown package ${name}`); return p.Dir; }
 
-    private storeDir(): string { return this.o.StoreDir ?? join(this.o.WorkRoot, 'pnpm-store'); }
-
     /** 'rw' is the prepare phase (install, rebuild, build) and also mounts the store; 'ro' is the test phase. */
     private inSandbox(revision: PreparedRevision, mode: 'ro' | 'rw', command: string[], timeoutMs: number, env: Record<string, string> = {}, tmpfs: string[] = []) {
         const mounts: SandboxMount[] = [{ Host: revision.RootDir, Container: CONTAINER_ROOT, Mode: mode }];
-        if (mode === 'rw') mounts.push({ Host: this.storeDir(), Container: CONTAINER_STORE, Mode: 'rw' });
+        if (mode === 'rw') mounts.push({ Host: this.o.StoreDir, Container: CONTAINER_STORE, Mode: 'rw' });
         if (mode === 'ro') for (const jitDir of this.jitDirs(revision)) mounts.push({ Host: join(revision.RootDir, jitDir), Container: `${CONTAINER_ROOT}/${jitDir}`, Mode: 'rw' });
         for (const t of tmpfs) mkdirSync(join(revision.RootDir, t.slice(CONTAINER_ROOT.length + 1)), { recursive: true });
         return this.sandbox.Run({ Mounts: mounts, Tmpfs: tmpfs, WorkDir: CONTAINER_ROOT, Command: command, TimeoutMs: timeoutMs, Env: { HOME: '/tmp', CI: '1', ...env } });
@@ -3768,9 +3828,9 @@ export class FileCatchStore extends BaseCatchStore {
   ```
   `Deps` objects let tests inject `Target`, `Generator`, `Analyzer`, `JudgePanel`, `Rules`, `Store`, `GitHub`, `Repo`; defaults build the real ones.
 
-**Generate** (job 1): resolve PR (gh) or take `--base/--head`; `Run` record; `Prepare(Base)` (host install, sandbox rebuild); `BuildPackages(base, all changed packages with vitest)`; `ChangeAnalyzer.Analyze`; for each package in `PackagesToTest`: one `DodgyDiff` request + one `IntentAware` request per risk in that package (up to `RisksPerPackage`), run with `ParallelSessions` concurrency; collect `CandidateTest`s; write `generation.json`; keep the base worktree (job 2 reuses it locally; in CI it is the hand-off artifact).
+**Generate** (job 1): resolve PR (gh) or take `--base/--head`; `Run` record; `Prepare(Base)` (host fetch from the stripped lockfile copy, sandbox install and rebuild); `BuildPackages(base, all changed packages with vitest)`; `ChangeAnalyzer.Analyze`; for each package in `PackagesToTest`: one `DodgyDiff` request + one `IntentAware` request per risk in that package (up to `RisksPerPackage`), run with `ParallelSessions` concurrency; collect `CandidateTest`s; write `generation.json`; keep the base worktree (job 2 reuses it locally; in CI it is the hand-off artifact).
 
-**Execute** (job 2): read `generation.json`; `Prepare(Head)`; `BuildPackages(head, packages of produced tests)`; `WriteTests` into both revisions; `TypeCheck` both; `Run` both with `Repeats`; `Coverage` on head for tests that are `PassesBoth`; write `execution.json` with results and coverage (and the type-check errors in `Tests[].FailureReason`? No — add `TypeErrors: Record<string, { Base: string | null; Head: string | null }>` to `ExecutionFileSchema`); `Cleanup(head)`.
+**Execute** (job 2): read `generation.json`; `Prepare(Head)`; `BuildPackages(head, packages of produced tests)`; `WriteTests` into both revisions; `TypeCheck` both; `Run` both with `Repeats`; `Coverage` on head for tests that are `PassesBoth`; write `execution.json` with results and coverage (and the type-check errors in `Tests[].FailureReason`? No — add `TypeErrors: Record<string, { Base: string | null; Head: string | null }>` to `ExecutionFileSchema`); `Cleanup(head)`. The default `Target` gets `StoreDir: join(<run directory>, 'pnpm-store')`, so every run has its own pnpm store (D35). An `InfrastructureError` from `Prepare` ends the step with a non-zero exit and its message, writes no `execution.json`, and is not retried.
 
 **Assess** (job 3): read `generation.json` + `execution.json` (schema-validated, never executed); per produced test: `AllRunsAgreeVerdict`; for `WeakCatch`: `RuleFilter.Apply` (needs base worktree for the AST — keep base until assess finishes locally; in CI the base hand-off artifact includes the sources), then `JudgePanel.Judge` for survivors; `RankCatches` + `SelectReported` with the `Label` threshold (phase 1 has no comments; `Reported` is informational); `PromotionCandidate`s from `PassesBoth` tests with `CoveredChangedLines > 0`, top 3 by coverage; save everything to the store; write `assessment.json`; print a summary table.
 

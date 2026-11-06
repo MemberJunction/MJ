@@ -130,13 +130,14 @@ stubs (`DatabaseProviderStub`, `EntitiesOnlyProvider`, `TestLLM`); `@vitest/cove
 | D25 | Gemini judge | `gemini-4-argon` | Strongest Gemini on the price list; judge cost is negligible |
 | D26 | Gate 1 clean-set labels | The original PR author labels each catch; a reviewer of that PR if the author is gone or silent for a week | Only the author knows the intent; Meta also asks the author |
 | D27 | Nightly start | 07:45 UTC, inside MJ's existing 06:00–08:30 UTC nightly window; at most 2 PRs in parallel | Follows `test.yml`'s 07:00 rebuild of `next` (warm turbo cache); avoids the top of the hour, when GitHub delays scheduled runs |
-| D28 | Sandbox | PR code, its install and build scripts, and generated tests run only in a Docker container: own PID namespace, no network, no secrets, no runner credentials (checkouts use `persist-credentials: false`). No tool on the host reads head as configuration: head's dependencies are fetched from its lockfile alone, and `pnpm install` runs offline inside the container. Head is writable while it is prepared, read-only while tests run; base is never writable from a container that runs head code | Same-user processes can read each other's environment, and the GitHub-hosted runner user has passwordless `sudo`, so code on the runner itself can reach keys and runner credentials. `pnpm install --ignore-scripts` still loads `.pnpmfile.cjs` and switches to the `packageManager` version named by the project, so a host install of head runs PR code |
+| D28 | Sandbox | PR code, its install and build scripts, and generated tests run only in a Docker container: own PID namespace, no network, no secrets, no runner credentials (checkouts use `persist-credentials: false`). No tool on the host reads head as configuration: head's dependencies are fetched from a copy of its lockfile with the patch information removed (D35), and `pnpm install` runs offline inside the container, where pnpm applies the patches. Head is writable while it is prepared, read-only while tests run; base is never writable from a container that runs head code | Same-user processes can read each other's environment, and the GitHub-hosted runner user has passwordless `sudo`, so code on the runner itself can reach keys and runner credentials. `pnpm install --ignore-scripts` still loads `.pnpmfile.cjs` and switches to the `packageManager` version named by the project, so a host install of head runs PR code |
 | D29 | Caches | No catching job saves a cache; jobs restore caches only and do not use `mj-setup` | Nightly runs execute in the default-branch context, where a saved cache reaches `next` and the release workflows |
 | D30 | On-demand runs | The `jit-catch` label only; no comment command; to run again, remove and re-add the label | Anyone can comment on this public repo; adding a label needs triage access, and label runs are scoped to the PR |
 | D31 | Base build hand-off | Job 1 builds base with read-only remote turbo cache access and passes the outputs and its local turbo cache to job 2 | Job 2 has no `TURBO_TOKEN`; with the hand-off, only the packages a PR changed build cold |
 | D32 | Redaction | Every artifact, store record and comment is checked for secret values before it is written | Workflow artifacts and the data branch are public on this repo |
 | D33 | Gate 1 corpus | ~45 + ~45 PRs; tune on two thirds, decide on a held-out third; base is the landing merge commit's first parent, head is the merge commit | Tuning on the deciding set flatters the winner; `merge-base` returns the head itself for a merged PR |
 | D34 | Gate 2 | Counts label and nightly catches (nightly ones sent to authors directly); reports the answer rate; 8 weeks at most, with a defined outcome if not reached | Label runs alone cannot reach 15 answered catches |
+| D35 | Host fetch | The host fetches head's dependencies with a copy of head's lockfile from which a script removes the `patchedDependencies:` block and every `(patch_hash=…)` segment; the sandbox installs offline with the real lockfile and `patches/` and applies the patches; each run has its own store; a failed host fetch is an infrastructure failure for that PR, never retried with network | With `patches/` present, `pnpm fetch` applies PR-supplied diffs on the host and follows symlinks out of `patches/`; without it, the real lockfile fails (`ERR_PNPM_PATCH_NOT_FOUND`). The stripped copy works and the sandbox applies the patch (spike §8, option (b)). The sandbox writes patched files into the store, so a store is not shared |
 
 ---
 
@@ -239,7 +240,7 @@ PR selector → Change analyzer → Generator (base only)
 | Job | Does | Secrets | Untrusted code | Checks out tool from |
 |---|---|---|---|---|
 | 1 Generate | Select, analyze; build base; generate | Anthropic key, `TURBO_TOKEN` (orchestrating process only) | Generated tests, in the sandbox only | `next` |
-| 2 Execute | Fetch head's dependencies from its lockfile (host); install, rebuild and build head in the sandbox; run tests on base and head; verdicts; coverage | **None**; `contents: read` | PR code, in the sandbox only | `next` |
+| 2 Execute | Fetch head's dependencies from a copy of its lockfile with the patch information removed (host); install, rebuild and build head in the sandbox; run tests on base and head; verdicts; coverage | **None**; `contents: read` | PR code, in the sandbox only | `next` |
 | 3 Assess | Rules (with base's types, from a checkout of the base commit), judges, store, PR comment | Anthropic, OpenAI and Gemini keys; `contents: write`, `pull-requests: write` | None; reads job 2 output as data | `next` |
 | Feedback | Record answers; commit promoted tests | App token for commits; `contents: write` | None | `next` |
 
@@ -262,11 +263,25 @@ any head code exists, and job 2 only reads it.
 **No tool on the host reads head as configuration.** `pnpm install --ignore-scripts` skips lifecycle scripts, but it
 still loads the project's `.pnpmfile.cjs` and, because `manage-package-manager-versions` defaults to on, downloads and
 runs the pnpm version named in the project's `packageManager` field. Both are PR-controlled, so neither `pnpm install`
-nor any other tool runs in the head worktree on the host. The host runs `git` to create the worktree, then
-`pnpm fetch` in an empty folder that holds only head's `pnpm-lock.yaml` (no manifest, no `.npmrc`, no `.pnpmfile.cjs`),
-with the pnpm version from the tool's own checkout. Everything else — the install, `pnpm rebuild` and the build — runs
-inside the sandbox from that store, offline. The image pins pnpm and turns `manage-package-manager-versions` off, so a
-PR that changes `packageManager` fails to prepare and is recorded as an infrastructure failure, not run on the host.
+nor any other tool runs in the head worktree on the host. The host runs `git` to create the worktree, then fetches
+head's dependencies in three steps (D35):
+
+1. Copy head's `pnpm-lock.yaml` into an empty folder (no manifest, no `.npmrc`, no `.pnpmfile.cjs`, no `patches/`).
+2. Remove the patch information from that copy with a small script in the tool: the top-level `patchedDependencies:`
+   block and every `(patch_hash=…)` segment in package keys and version strings. Without this, `pnpm fetch` needs the
+   patch files the lockfile names, and with them it applies the PR's diffs on the host and follows a symlink out of
+   `patches/` (spike §3 probe 10b, §8).
+3. Run `pnpm fetch --store-dir <store>` in that folder, with the pnpm version from the tool's own checkout. The store
+   then holds the unpatched packages only.
+
+The host never reads a patch file. Everything else runs inside the sandbox from that store, offline:
+`pnpm install --offline --frozen-lockfile --ignore-scripts && pnpm rebuild` with head's real lockfile and `patches/`,
+so pnpm applies the patches inside the sandbox, then the build. The sandbox writes the patched files back into the
+store, so each run gets its own store folder, which no other run uses and no job saves (a read-only store mount is not
+tested). The image pins pnpm and turns `manage-package-manager-versions` off, so a PR that changes `packageManager`
+fails to prepare and is recorded as an infrastructure failure, not run on the host. A host fetch that fails is also an
+infrastructure failure for that PR and is not retried with network access: for example, `pnpm fetch` refuses to prepare
+a git dependency that has build scripts (`ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`).
 
 **Checkout credentials.** Every checkout whose worktree the sandbox mounts uses `persist-credentials: false`, as
 `test.yml` does, so no token sits in `.git/config` inside the container.
@@ -314,16 +329,17 @@ package, and 49% changed two or more. Tests read their own package from `src/` b
 
 1. **Default path.** Two worktrees, `base/` and `head/`. Base comes from job 1's hand-off (§5.4): job 1 built it with
    read-only remote turbo cache access. For head, job 2 runs `pnpm fetch` on the host in an empty folder that holds only
-   head's `pnpm-lock.yaml` (restored pnpm store; the lockfile is data, nothing from head is read as configuration), then,
-   inside the sandbox with the head worktree and the store mounted read-write,
-   `pnpm install --offline --frozen-lockfile --ignore-scripts`, `pnpm rebuild` (the allowlisted dependency build scripts
-   in `pnpm-workspace.yaml`) and `turbo run build --filter=<package under test>...` with the local turbo cache seeded from
-   base. Job 2 has no `TURBO_TOKEN` and the sandbox has no network, so packages the PR did not change are local cache
-   hits and the changed packages and their dependents build cold. The store is a bind mount, so pnpm copies instead of
-   hard-linking (`package-import-method=copy`); the spike measures the time and disk this costs. If `pnpm fetch` cannot
-   serve the workspace lockfile, the fallback is an *install container*: the same image with network access but still no
-   secrets, no runner credentials and its own PID namespace, used only for `pnpm install`; tests still run with
-   `--network none`.
+   a copy of head's `pnpm-lock.yaml` with the patch information removed (§5.4, D35; the lockfile is data, nothing from
+   head is read as configuration, and no patch file is read), into a store folder used by this run only. Then, inside
+   the sandbox with the head worktree and the store mounted read-write, it runs
+   `pnpm install --offline --frozen-lockfile --ignore-scripts` with the real lockfile and `patches/` (pnpm applies the
+   patches here), `pnpm rebuild` (the allowlisted dependency build scripts in `pnpm-workspace.yaml`) and
+   `turbo run build --filter=<package under test>...` with the local turbo cache seeded from base. Job 2 has no
+   `TURBO_TOKEN` and the sandbox has no network, so packages the PR did not change are local cache hits and the changed
+   packages and their dependents build cold. The store is a bind mount, so pnpm copies instead of hard-linking
+   (`package-import-method=copy`); the spike measured 32–57 s for this copy and 3.2 GB of store. If the host fetch
+   fails, the PR is recorded as an infrastructure failure. There is no install-container fallback with network access:
+   it would run the PR's `.pnpmfile.cjs` with a way to send data out (spike §8 option (c)).
 2. **Fast path.** If the PR changes only `src/` files of one package (no `package.json`, lockfile or config changes), use
    a copy of the base build from job 1 and put head's version of the changed files in it, in the sandbox, for the head
    run. Vitest reads the package's own source directly, so nothing builds cold.
@@ -550,8 +566,10 @@ and fails the run.
 **Untrusted code runs only in the sandbox (§5.4, D28).** PR code, its install and build scripts, and generated tests never
 run directly on the runner. Keys exist only in the orchestrating processes of jobs 1 and 3.
 
-- Job 2 holds no secrets and `contents: read`. On the host it runs only `git` and `pnpm fetch` against head's lockfile
-  in a folder that holds nothing else; the install, every build, script and test run in the sandbox. No tool on the host
+- Job 2 holds no secrets and `contents: read`. On the host it runs only `git`, the tool's script that removes the patch
+  information from a copy of head's lockfile, and `pnpm fetch` against that copy in a folder that holds nothing else
+  (D35). The host never reads a patch file; pnpm applies patches only in the sandbox. The install, every build, script
+  and test run in the sandbox. No tool on the host
   reads head as configuration (§5.4): `--ignore-scripts` alone is not enough, because pnpm still loads `.pnpmfile.cjs`
   and follows `packageManager`.
 - Checkouts that the sandbox mounts use `persist-credentials: false`, so the container holds no token.
@@ -756,7 +774,8 @@ judges, reporting model and gates carry over.
 | Most generated tests fail on base, so few reach head | Agent loop; prompt includes MJ test examples and stubs; three-model comparison |
 | Noise erodes trust | Two gates; one comment per PR; thresholds as settings; nightly comments only after gate 2 |
 | The sandbox is misconfigured and untrusted code reaches a key or the cache token | Spike question 3 attacks it from inside and checks the host side (`.pnpmfile.cjs`, `packageManager`); restore-only caches (D29); redaction check on every output (D32) |
-| `pnpm fetch` cannot serve the workspace lockfile, or the copied store is too slow | Spike question 8 measures it on the real lockfile; fallback is the install container (§7): network for the install only, still no secrets or credentials |
+| The host fetch fails for a PR (for example a git dependency with build scripts, which `pnpm fetch` refuses), or the copied store is too slow | The PR is recorded as an infrastructure failure, not retried with network; spike question 8 measured the copy import at 32–57 s |
+| A PR's lockfile or patch files make the host apply or read PR content | The host fetches with a copy of the lockfile without patch information and reads no patch file (D35); patches apply only in the sandbox; each run has its own store |
 | Cold head builds are too slow or fill the runner's disk | Base hand-off and seeded local turbo cache; one-package fast path; spike question 1 measures time and disk |
 | Gate 2 does not reach 15 answered catches | Nightly catches count (D34); 8-week limit with a defined outcome |
 | Agent SDK cannot enforce the tool limits | Spike question 2; fall back to a hand-written tool loop with the Anthropic SDK |
