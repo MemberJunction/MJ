@@ -22,6 +22,7 @@ export class MJTestSuiteRunFormComponent extends BaseFormComponent {
             { sectionKey: 'technicalOutput', sectionName: 'Technical Output', isExpanded: true },
             { sectionKey: 'executionHost', sectionName: 'Execution Host', isExpanded: true },
             { sectionKey: 'userDetails', sectionName: 'User Details', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJTestRuns', sectionName: 'Test Runs', isExpanded: false }
         ]);

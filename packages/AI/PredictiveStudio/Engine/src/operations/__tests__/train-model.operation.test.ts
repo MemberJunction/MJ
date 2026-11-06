@@ -147,3 +147,23 @@ describe('PredictiveStudioTrainModelServerOperation — errors', () => {
     expect(result.ErrorMessage).toContain('sidecar unreachable');
   });
 });
+
+describe('PredictiveStudioTrainModelServerOperation — asOf input (W4 → S2.1, F-PIT-7)', () => {
+  it('refuses an asOf input that would change nothing, before calling the engine', async () => {
+    const engine = new MockTrainingEngine({ model: fakeModel(), run: fakeRun(null) });
+    const result = await new TestableTrainOp(engine).ExecuteServer(
+      { pipelineId: 'p1', asOf: { Mode: 'offset', OffsetDays: 30 } },
+      new CapturingContext(),
+    );
+    expect(result.Success).toBe(false);
+    expect(result.ErrorMessage).toContain("the Train operation's asOf input (Mode='offset') has no effect");
+    expect(engine.CallCount).toBe(0);
+  });
+
+  it("accepts asOf { Mode: 'none' }", async () => {
+    const engine = new MockTrainingEngine({ model: fakeModel(), run: fakeRun(null) });
+    const result = await new TestableTrainOp(engine).ExecuteServer({ pipelineId: 'p1', asOf: { Mode: 'none' } }, new CapturingContext());
+    expect(result.Success).toBe(true);
+    expect(engine.CallCount).toBe(1);
+  });
+});

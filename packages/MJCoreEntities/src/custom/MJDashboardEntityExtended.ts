@@ -62,10 +62,13 @@ export class MJDashboardEntityExtended extends MJDashboardEntity  {
 
             const configJSON = JSON.stringify(defaultConfigDetails);
             this.Set("UIConfigDetails", configJSON);
+            // Re-arm the first set, so a later load sets both the value and the old value
+            this.GetFieldByName("UIConfigDetails")?.ResetNeverSetFlag();
 
             const md = this.ProviderToUse as unknown as IMetadataProvider;
             if(md.CurrentUser){
                 this.Set("UserID", md.CurrentUser.ID);
+                this.GetFieldByName("UserID")?.ResetNeverSetFlag();
             }
 
             return true;

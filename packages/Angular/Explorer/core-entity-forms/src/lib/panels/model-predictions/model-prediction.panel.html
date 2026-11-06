@@ -6,6 +6,7 @@
 @if (HasPredictions) {
   <mj-collapsible-panel
       SectionKey="modelPredictions"
+      [Order]="DisplayOrder"
       SectionName="Model Predictions"
       Icon="fa-solid fa-wand-magic-sparkles"
       [Form]="FormComponent"
@@ -89,6 +90,14 @@
                     </span>
                   </div>
                 }
+              </div>
+            } @else if (card.DriversHidden) {
+              <div class="mpp-drivers" data-testid="mpp-drivers-hidden">
+                <div class="mpp-drivers-title">
+                  <i class="fa-solid fa-ranking-star" aria-hidden="true"></i>
+                  Top drivers
+                </div>
+                <div class="mpp-drivers-note">{{ DriversHiddenNote }}</div>
               </div>
             }
 

@@ -41,6 +41,9 @@ export class PinnedMessagesPanelComponent {
     return this.IsLoading;
   }
 
+  /** When false, pins stay listed and jumpable but Unpin is hidden. */
+  @Input() public AllowUnpin = true;
+
   @Output() public Closed = new EventEmitter<void>();
 
   /**
@@ -93,6 +96,9 @@ export class PinnedMessagesPanelComponent {
   }
 
   public OnUnpin(message: MJConversationDetailEntity): void {
+    if (!this.AllowUnpin) {
+      return;
+    }
     this.UnpinningIds.add(message.ID);
     // Let the card animate out before the parent removes it from the list
     setTimeout(() => {

@@ -24,12 +24,27 @@ import {
  * @returns Formatted entity metadata ready for AI prompts
  */
 export function FormatEntityMetadataForPrompt(entity: EntityInfo, allEntities: EntityInfo[]): EntityMetadataForPrompt {
+  const usableAlternateViews = (entity.AlternateBaseViews ?? []).filter(
+    (v) => (v.IsUsable ?? v.Status !== 'Disabled') && !(v.IsDeprecated ?? v.Status === 'Deprecated')
+  );
   return {
     entityName: entity.Name,
     description: entity.Description || '',
     schemaName: entity.SchemaName || 'dbo',
     baseTable: entity.BaseTable || entity.Name,
     baseView: entity.BaseView || `vw${entity.Name}`,
+    ...(usableAlternateViews.length > 0
+      ? {
+          alternateBaseViews: usableAlternateViews.map((v) => ({
+            name: v.Name,
+            displayName: v.EffectiveDisplayName,
+            schemaName: v.EffectiveSchemaName,
+            viewName: v.ViewName,
+            description: v.Description || '',
+            ...(v.ParentView ? { parentName: v.ParentView.Name } : {}),
+          })),
+        }
+      : {}),
     fields: formatEntityFields(entity),
     relationships: formatEntityRelationships(entity, allEntities),
   };

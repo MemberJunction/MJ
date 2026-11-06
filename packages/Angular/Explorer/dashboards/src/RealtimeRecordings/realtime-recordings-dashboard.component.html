@@ -46,7 +46,7 @@
                 (click)="SelectSession(session)"
                 (keydown)="OnRowKeydown($event, session)">
                 <div class="rr-list-item-icon" aria-hidden="true">
-                  <i [class]="session.RecordingMedia === 'AudioVideo' ? 'fa-solid fa-video' : 'fa-solid fa-waveform-lines'"></i>
+                  <i [class]="session.RecordingMedia === 'AudioVideo' ? 'fa-solid fa-video' : 'fa-solid fa-wave-square'"></i>
                 </div>
                 <div class="rr-list-item-body">
                   <div class="rr-list-item-title">{{ session.AgentName }}</div>

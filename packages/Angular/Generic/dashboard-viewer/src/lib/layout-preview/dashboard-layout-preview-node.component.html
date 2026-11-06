@@ -1,0 +1,12 @@
+@if (Panel; as panel) {
+  <span class="dlp-panel">
+    @if (panel.Icon) {
+      <span class="dlp-icon"><i [class]="panel.Icon"></i></span>
+    }
+    <span class="dlp-title">{{ panel.Title }}</span>
+  </span>
+} @else if (Group; as group) {
+  @for (child of group.Children; track $index) {
+    <mj-dashboard-layout-preview-node [Node]="child"></mj-dashboard-layout-preview-node>
+  }
+}

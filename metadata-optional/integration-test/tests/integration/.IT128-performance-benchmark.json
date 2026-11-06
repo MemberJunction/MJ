@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT128 - Performance and Agent Overhead Benchmark",
+    "Description": "Measures MemberJunction framework performance, CPU/memory microbenchmarks across core primitives (PB1 ClassFactory & ObjectCache, PB2 BaseEntity hydration & FLS, PB3 LocalCacheManager writes & stats, PB4 TemplateEngineServer & NunjucksSandbox, PB5 SnapshotActionParams & AIEngineBase permissions, PB6 PayloadManager.applyAgentChangeRequest & DeepDiffer), deterministic multi-turn agent loop execution with TestLLM stand-in against SQL Server for shipped agents (PB7 Sage 4-turn loop with 3 Calculate Expression actions and payload mutation, PB8 Query Builder + Query Strategist sub-agent tree, PB9 Research Agent + Research Report Writer sub-agent synthesis tree), opt-in live-model shipped agent runs when RUN_AGENT_TESTS=1 (PB10 Sage live conversation-linked run, PB11 Query Builder live query synthesis, PB12 Research Agent live synthesis), and PB13 SaveReturnMode datestamps_only catalog audit & 10-save roundtrip benchmark on large NVARCHAR(MAX) log rows. Captures wall time, LLM time vs. MJ framework overhead, step counts, and persisted SQL Server byte counts across AIAgentRunStep.PayloadAtStart, PayloadAtEnd, InputData, and OutputData (including PayloadAtStartSourceStepID and PayloadAtEndSourceStepID pointer deduplication). Emits a formatted console table, persists historical benchmark logs to benchmark-logs/ (latest.json, latest.md, history.jsonl), and writes optional JSON output to MJ_PERF_BENCHMARK_OUT before cleaning up all created rows in Teardown.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "All primitive microbenchmarks (PB1-PB6, PB13) and 3 deterministic multi-turn shipped-agent runs (PB7-PB9) pass and record timing and SQL Server storage metrics to benchmark-logs/; PB10-PB12 run against live LLM models when RUN_AGENT_TESTS=1."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "performance-benchmark"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "9E412A8C-73F1-4D25-8B19-6A5E2C90D417"
+  },
+  "sync": {
+    "lastModified": "2026-10-17T19:21:20.559Z",
+    "checksum": "4999eb472b000faec2b73d50e62038b71b3a7f7ef9ae13762203c7cab2841b06"
+  }
+}

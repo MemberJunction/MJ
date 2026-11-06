@@ -139,3 +139,22 @@ describe('a member-change metadata refresh waits for the ambient transaction (MJ
         expect(provider.RefreshMustWait).toBe(false);
     });
 });
+
+describe('GetDatasetByName converts binary values to base64 (binary fields guide §1)', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('turns a driver Buffer into base64 even with no context user and no entity metadata (boot)', async () => {
+        const provider = new TestProvider();
+        provider.datasetItems = [item('Queries', 'MJ: Queries', 'vwQueries')];
+        vi.spyOn(LocalCacheManager.Instance, 'IsInitialized', 'get').mockReturnValue(false);
+        provider.batchBehavior = async () => [[{ ID: 'q1', EmbeddingVectorBinary: Buffer.from([0, 1, 254, 255]), Name: 'Q' }]];
+
+        const result = await provider.GetDatasetByName('MJ_Metadata', undefined, undefined);
+
+        const row = result.Results[0].Results[0];
+        expect(row['EmbeddingVectorBinary']).toBe('AAH+/w==');
+        // JSON-safe: no {"type":"Buffer","data":[...]} reaches the metadata cache or the wire.
+        expect(JSON.stringify(row)).not.toContain('"type":"Buffer"');
+        expect(row['Name']).toBe('Q');
+    });
+});

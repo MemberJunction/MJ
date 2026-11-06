@@ -1,17 +1,18 @@
 import { AfterViewChecked, ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, Output, ViewChild, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DatePipe } from '@angular/common';
-import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import type { LiveKitChatMessage } from '../models';
 
 /**
  * The room chat panel — renders data-channel messages and a composer. Purely presentational: it emits
- * {@link Send} with the composed text and {@link Close}; the host publishes via the controller.
+ * {@link Send} with the composed text, {@link Retry} with a message marked not sent, and {@link Close}; the host
+ * publishes via the controller.
  */
 @Component({
   selector: 'mj-livekit-chat-panel',
   standalone: true,
-  imports: [FormsModule, DatePipe, MJEmptyStateComponent],
+  imports: [FormsModule, DatePipe, MJEmptyStateComponent, MJButtonDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="lk-chat">
@@ -27,6 +28,14 @@ import type { LiveKitChatMessage } from '../models';
               <span class="lk-chat__time">{{ msg.Timestamp | date: 'shortTime' }}</span>
             </div>
             <div class="lk-chat__bubble">{{ msg.Text }}</div>
+            @if (msg.NotSent) {
+              <div class="lk-chat__not-sent">
+                <span class="lk-chat__not-sent-label"><i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i> Not sent</span>
+                <button type="button" mjButton Variant="flat" Size="sm" title="Send this message again" (click)="Retry.emit(msg)">
+                  <i class="fa-solid fa-rotate-right" aria-hidden="true"></i> Retry
+                </button>
+              </div>
+            }
           </div>
         } @empty {
           <mj-empty-state class="lk-chat__empty" Size="compact" Icon="" Title="No messages yet." />
@@ -109,6 +118,22 @@ import type { LiveKitChatMessage } from '../models';
         background: var(--mj-brand-primary, #0076b6);
         color: var(--mj-text-inverse, #fff);
       }
+      .lk-chat__not-sent {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 2px;
+      }
+      .lk-chat__not-sent-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.75rem;
+        color: var(--mj-status-error-text, #b91c1c);
+      }
+      .lk-chat__not-sent-label i {
+        color: var(--mj-status-error, #dc2626);
+      }
       .lk-chat__composer {
         display: flex;
         gap: 8px;
@@ -150,6 +175,8 @@ export class LiveKitChatPanelComponent implements AfterViewChecked {
   @Input() public Messages: LiveKitChatMessage[] = [];
   /** Emits the composed text when the user sends. */
   @Output() public Send = new EventEmitter<string>();
+  /** Emits a message marked not sent ({@link LiveKitChatMessage.NotSent}) when the user asks to send it again. */
+  @Output() public Retry = new EventEmitter<LiveKitChatMessage>();
   /** Emits when the user closes the panel. */
   @Output() public Close = new EventEmitter<void>();
 

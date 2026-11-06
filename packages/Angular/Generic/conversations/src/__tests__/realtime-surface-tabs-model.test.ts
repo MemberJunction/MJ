@@ -57,6 +57,34 @@ describe('RealtimeSurfaceTabsModel', () => {
     });
   });
 
+  describe('ActiveChannelKey (which surface the user is looking at)', () => {
+    it('is null on an empty strip and while the Activity tab is focused', () => {
+      expect(model.ActiveChannelKey).toBeNull();
+      model.SetShowActivityTab(true);
+      expect(model.ActiveChannelKey).toBeNull();
+    });
+
+    it('is the focused channel tab, and follows focus between channels and back to Activity', () => {
+      model.SetShowActivityTab(true);
+      model.RegisterChannelTab({ Key: 'Whiteboard', Title: 'Whiteboard', Icon: 'fa-solid fa-chalkboard' });
+      model.RegisterChannelTab({ Key: 'Media', Title: 'Media', Icon: 'fa-solid fa-images' });
+      model.Focus('Media');
+      expect(model.ActiveChannelKey).toBe('Media');
+      model.Focus('Whiteboard');
+      expect(model.ActiveChannelKey).toBe('Whiteboard');
+      model.Focus('activity');
+      expect(model.ActiveChannelKey).toBeNull();
+    });
+
+    it('falls back to null when the focused channel tab is removed and Activity takes over', () => {
+      model.SetShowActivityTab(true);
+      model.RegisterChannelTab({ Key: 'Media', Title: 'Media', Icon: 'fa-solid fa-images', Focus: true });
+      expect(model.ActiveChannelKey).toBe('Media');
+      model.RemoveTab('Media');
+      expect(model.ActiveChannelKey).toBeNull();
+    });
+  });
+
   describe('RegisterChannelTab', () => {
     it('adds a channel tab in the left cluster, with a derived color, without stealing focus', () => {
       model.RegisterChannelTab({ Key: 'Whiteboard', Title: 'Whiteboard', Icon: 'fa-solid fa-chalkboard' });

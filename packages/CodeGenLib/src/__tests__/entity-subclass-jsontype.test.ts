@@ -3,7 +3,8 @@
  *
  * Tests the JSONType system in CodeGen:
  * - Standard string getter preserved for JSONType fields
- * - Object-suffixed typed accessor with JSON.parse/stringify + caching
+ * - Object-suffixed typed accessor delegating to BaseEntity.GetJSONFieldObject / SetJSONFieldObject
+ *   (live object <-> string sync lives once, in core; see jsonFieldBinding)
  * - Entity-prefixed interface names (e.g., TestEntityEntity_IMyConfig)
  * - Array<T> syntax for array types
  * - JSONTypeDefinition emission with name prefixing
@@ -169,7 +170,7 @@ describe('EntitySubClassGeneratorBase - JSONType', () => {
     });
 
     describe('generateEntitySubClass - JSONType Object accessor', () => {
-        it('should keep standard string getter and emit Object accessor with JSON.parse', async () => {
+        it('should keep standard string getter and emit Object accessor delegating to GetJSONFieldObject', async () => {
             const fields = [
                 makePrimaryKeyField(),
                 makeField({
@@ -190,12 +191,13 @@ describe('EntitySubClassGeneratorBase - JSONType', () => {
             // Standard getter stays as string
             expect(result).toContain("get Config(): string | null");
             expect(result).toContain("return this.Get('Config');");
-            // Object accessor has typed getter with JSON.parse
+            // Object accessor has a typed getter that delegates to the framework
             expect(result).toContain("get ConfigObject(): TestEntityEntity_IMyConfig | null");
-            expect(result).toContain("JSON.parse(raw)");
+            expect(result).toContain("return this.GetJSONFieldObject<TestEntityEntity_IMyConfig>('Config');");
+            expect(result).not.toContain("JSON.parse(raw)");
         });
 
-        it('should emit Object accessor with JSON.stringify setter', async () => {
+        it('should emit Object accessor setter delegating to SetJSONFieldObject', async () => {
             const fields = [
                 makePrimaryKeyField(),
                 makeField({
@@ -214,7 +216,8 @@ describe('EntitySubClassGeneratorBase - JSONType', () => {
             );
 
             expect(result).toContain("set ConfigObject(value: TestEntityEntity_IMyConfig | null)");
-            expect(result).toContain("JSON.stringify(value)");
+            expect(result).toContain("this.SetJSONFieldObject<TestEntityEntity_IMyConfig>('Config', value);");
+            expect(result).not.toContain("JSON.stringify(value)");
         });
 
         it('should use Array<T> syntax with entity prefix when JSONTypeIsArray is true', async () => {
@@ -309,7 +312,7 @@ describe('EntitySubClassGeneratorBase - JSONType', () => {
             expect(result).not.toContain("DescriptionObject");
         });
 
-        it('should emit cache fields for Object accessor', async () => {
+        it('should no longer emit per-accessor cache fields (the binding in core owns the cache)', async () => {
             const fields = [
                 makePrimaryKeyField(),
                 makeField({
@@ -327,8 +330,8 @@ describe('EntitySubClassGeneratorBase - JSONType', () => {
                 false, true
             );
 
-            expect(result).toContain("private _ConfigObject_cached");
-            expect(result).toContain("private _ConfigObject_lastRaw");
+            expect(result).not.toContain("_ConfigObject_cached");
+            expect(result).not.toContain("_ConfigObject_lastRaw");
         });
     });
 

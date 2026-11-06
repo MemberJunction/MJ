@@ -2,7 +2,7 @@
  * Categorizes error types that can occur during AI model operations.
  * These categories help determine appropriate retry and failover strategies.
  *
- * @typedef {'RateLimit' | 'NoCredit' | 'Authentication' | 'ServiceUnavailable' | 'InternalServerError' | 'NetworkError' | 'InvalidRequest' | 'VendorValidationError' | 'ContextLengthExceeded' | 'ModelError' | 'Unknown'} AIErrorType
+ * @typedef {'RateLimit' | 'NoCredit' | 'Authentication' | 'ServiceUnavailable' | 'InternalServerError' | 'NetworkError' | 'InvalidRequest' | 'VendorValidationError' | 'ContextLengthExceeded' | 'ModelError' | 'Cancelled' | 'Unknown'} AIErrorType
  *
  * @description
  * - `RateLimit`: Rate limit exceeded - typically HTTP 429. Suggests switching to another provider or waiting
@@ -16,6 +16,7 @@
  * - `VendorValidationError`: Vendor-specific schema or field validation error - typically HTTP 400/422. Field requirements, missing properties, schema validation that may be vendor-specific
  * - `ContextLengthExceeded`: Context length exceeded - typically HTTP 400 with context_length_exceeded code. Suggests switching to a model with larger context window
  * - `ModelError`: Model-specific errors. Model not found, model overloaded, etc.
+ * - `Cancelled`: The caller cancelled the request through its abort signal. Fatal, and never failed over or retried: doing either would defeat the cancellation. An abort caused by a timeout is a `NetworkError` instead
  * - `Unknown`: Unknown or unclassified error
  *
  * @since 2.47.0
@@ -32,6 +33,7 @@ export type AIErrorType =
     | 'VendorValidationError'
     | 'ContextLengthExceeded'
     | 'ModelError'
+    | 'Cancelled'
     | 'Unknown';
 
 /**

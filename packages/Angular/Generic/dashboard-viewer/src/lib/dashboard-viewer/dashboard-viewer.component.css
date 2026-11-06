@@ -25,11 +25,6 @@
     background: var(--dashboard-bg, var(--mj-bg-surface-card));
 }
 
-.dashboard-viewer.editing .layout-container {
-    outline: 2px dashed var(--dashboard-edit-outline, var(--mj-brand-primary));
-    outline-offset: -2px;
-}
-
 /* ========================================
    Toolbar
    ======================================== */
@@ -145,24 +140,12 @@
    Dashboard Panel Content (our wrapper)
    ======================================== */
 
-/* Dashboard panel wrapper (header + content) */
+/* Dashboard panel wrapper (holds the part content) */
 :host ::ng-deep .dashboard-part-wrapper {
     display: flex;
     flex-direction: column;
     height: 100%;
     background: var(--mj-bg-surface);
-}
-
-/* Dashboard part header */
-:host ::ng-deep .dashboard-part-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
-    background: var(--mj-bg-surface-card);
-    border-bottom: 1px solid var(--mj-border-default);
-    min-height: 40px;
-    flex-shrink: 0;
 }
 
 /* Dashboard part content */
@@ -266,10 +249,9 @@ mj-dashboard-viewer .lm_item {
     overflow: hidden !important;
 }
 
-/* Fix for .lm_items - the content container inside stacks */
+/* Fix for .lm_items - the content container inside stacks (its height is set with the stack header below) */
 mj-dashboard-viewer .lm_items {
     width: 100% !important;
-    height: calc(100% - 38px) !important; /* Account for header height (38px) */
     box-sizing: border-box !important;
     position: relative !important;
 }
@@ -317,118 +299,202 @@ mj-dashboard-viewer .lm_item_container {
     background: var(--mj-bg-surface) !important;
 }
 
-/* Tab header styling */
-mj-dashboard-viewer .lm_header {
-    height: 38px !important;
-    padding-top: 2px !important;
-    padding-left: 4px !important;
-    background: var(--mj-bg-surface-card) !important;
+/* ===== Golden Layout: part tabs and part buttons =====
+   The shell's tab-container and theme rules reach this nested layout. These selectors add
+   .dashboard-viewer to outrank them, with !important where those rules use it. */
+
+/* Stack header: tab track on the left, part buttons on the right (DASHBOARD_STACK_HEADER_HEIGHT) */
+mj-dashboard-viewer .dashboard-viewer .lm_header {
+    display: block !important;
+    height: 44px !important;
+    max-height: none !important;            /* shell.component.css caps nested headers at 40px */
+    padding: 0 !important;
+    background: var(--mj-bg-surface) !important;
     border-bottom: 1px solid var(--mj-border-default) !important;
     overflow: visible !important;
     box-sizing: border-box !important;
+    z-index: auto;                          /* no stacking context, so the tab dropdown list can rise above the part */
+}
+mj-dashboard-viewer .dashboard-viewer .lm_items {
+    height: calc(100% - 44px) !important;
 }
 
-mj-dashboard-viewer .lm_tabs {
-    height: 36px !important;
+/* The tab track, styled like mj-tab-nav. Golden Layout counts each tab's width and right margin; the rest of the
+   spacing beside the tabs is DASHBOARD_TAB_CONTROL_OFFSET (78px): the track's 12px inset, 1px borders and 4px left
+   padding, an 8px gap, the 34px tab dropdown button and its 6px gap, and the controls' 12px inset. */
+mj-dashboard-viewer .dashboard-viewer .lm_header .lm_tabs {
+    top: 5px !important;
+    left: var(--mj-space-3) !important;
+    right: auto !important;                 /* shell sets left:0; right:0; overflow-x:auto */
+    height: auto !important;
+    overflow: visible !important;
+    padding: var(--mj-space-1) 0 var(--mj-space-1) var(--mj-space-1);   /* the last tab's margin closes the right side */
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-lg);
 }
-
-/* Hide Golden Layout window controls (popout, maximize) */
-mj-dashboard-viewer .lm_controls {
-    display: none !important;
-}
-
-/* Tab styling */
-mj-dashboard-viewer .lm_header .lm_tab {
-    padding: 0 16px 0 28px !important; /* Extra left padding for icon */
+mj-dashboard-viewer .dashboard-viewer .lm_header .lm_tab {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: var(--mj-space-2) !important;
+    flex: 0 0 auto !important;
+    height: auto !important;
+    margin: 0 var(--mj-space-1) 0 0 !important;
+    padding: 4px var(--mj-space-3) !important;
+    font-family: inherit !important;
     font-size: 13px !important;
-    height: 35px !important;
-    line-height: 35px !important;
-    box-sizing: border-box !important;
-    cursor: pointer !important;
-    user-select: none !important;
+    font-weight: 500 !important;
+    line-height: 1.2 !important;
+    color: var(--mj-text-secondary) !important;
     background: transparent !important;
     border: none !important;
-    border-bottom: 1px solid var(--mj-border-default) !important;
-    transition: all 0.15s ease !important;
-    position: relative !important;
-    z-index: 1 !important;
-    margin-right: 1px !important;
+    border-radius: var(--mj-radius-md) !important;
+    box-shadow: none !important;
+    cursor: pointer !important;
+    transition: background-color var(--mj-transition-fast), color var(--mj-transition-fast) !important;
 }
-
-mj-dashboard-viewer .lm_header .lm_tab:hover {
-    background: var(--mj-bg-surface-sunken) !important;
+mj-dashboard-viewer .dashboard-viewer .lm_header .lm_tab::after { content: none !important; }  /* shell pipe separators */
+mj-dashboard-viewer .dashboard-viewer .lm_header .lm_tab:hover:not(.lm_active) {
+    background: color-mix(in srgb, var(--mj-bg-surface) 70%, transparent) !important;
+    color: var(--mj-text-primary) !important;
 }
-
-mj-dashboard-viewer .lm_header .lm_tab.lm_active {
+/* The shell's active tab rule is as specific as the tab rule above, so the tab's box is repeated here */
+mj-dashboard-viewer .dashboard-viewer .lm_header .lm_tab.lm_active {
+    height: auto !important;
+    margin: 0 var(--mj-space-1) 0 0 !important;
+    border: none !important;
+    border-radius: var(--mj-radius-md) !important;
     background: var(--mj-bg-surface) !important;
-    height: 36px !important;
-    margin-bottom: -1px !important;
-    margin-right: 0 !important;
-    border: 1px solid var(--mj-border-default) !important;
-    border-bottom-color: var(--mj-bg-surface) !important;
-    border-radius: 4px 4px 0 0 !important;
-    z-index: 2 !important;
-}
-
-mj-dashboard-viewer .lm_title {
-    cursor: pointer !important;
-    user-select: none !important;
-}
-
-/* Panel icon styling - icon is direct child of .lm_tab to preserve GL's drag/drop */
-/* Positioned absolutely in the left padding area so it doesn't affect GL's title structure */
-mj-dashboard-viewer .lm_header .lm_tab .panel-icon {
-    position: absolute !important;
-    left: 10px !important;
-    top: 50% !important;
-    transform: translateY(-30%) !important;
-    font-family: "Font Awesome 6 Free", "Font Awesome 6 Pro", "Font Awesome 5 Free", "Font Awesome 5 Pro", FontAwesome !important;
-    font-weight: 900 !important; /* Required for solid icons */
-    font-size: 12px !important;
     color: var(--mj-brand-primary) !important;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    box-shadow: var(--mj-shadow-sm) !important;
+}
+mj-dashboard-viewer .dashboard-viewer .lm_header .lm_tab:focus-visible {
+    outline: 2px solid var(--mj-border-focus) !important;
+    outline-offset: -2px !important;
+}
+mj-dashboard-viewer .dashboard-viewer.editing .lm_header .lm_tab { cursor: grab !important; }
+mj-dashboard-viewer .dashboard-viewer .lm_header .lm_title {
+    cursor: inherit !important;
+    line-height: normal !important;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+mj-dashboard-viewer .dashboard-viewer .lm_header .lm_tab .panel-icon {   /* the part's icon */
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    transform: none !important;
+    font-size: 13px !important;
+    color: inherit !important;
 }
 
-mj-dashboard-viewer .lm_close_tab {
-    position: absolute !important;
-    right: 4px !important;
-    top: 50% !important;
-    transform: translateY(-50%) !important;
-    width: 16px !important;
-    height: 16px !important;
-    cursor: pointer !important;
-    opacity: 0 !important;
-    transition: all 0.15s ease !important;
+/* Parts are removed only through Remove (with a confirmation): hide GL's close buttons */
+mj-dashboard-viewer .dashboard-viewer .lm_close_tab,
+mj-dashboard-viewer .dashboard-viewer .lm_controls .lm_close,
+mj-dashboard-viewer .dashboard-viewer .lm_controls .lm_popout,
+mj-dashboard-viewer .dashboard-viewer .lm_controls .lm_maximise { display: none !important; }
+
+/* Part buttons (Edit part, Remove) in the header's controls area */
+mj-dashboard-viewer .dashboard-viewer .lm_header .lm_controls {
+    top: 0 !important;
+    bottom: 0 !important;
+    right: var(--mj-space-3) !important;
+    z-index: 3;                  /* above tabs that run into it (the shell gives tabs 1 and 2), under the tab dropdown list */
+    align-items: center;
+    gap: 6px;
+}
+mj-dashboard-viewer .dashboard-viewer .lm_header .lm_controls > .dashboard-stack-actions {
+    display: flex !important;
+    align-items: center;
+    gap: 6px;
+    width: auto !important;      /* GL base: .lm_controls > * is 18x18 and floats */
+    height: auto !important;
+    float: none !important;
+    opacity: 1 !important;       /* MJ theme: .lm_controls > * is at 0.6 */
+    cursor: default !important;
 }
 
-mj-dashboard-viewer .lm_header .lm_tab:hover .lm_close_tab {
-    opacity: 0.7 !important;
+/* Golden Layout's tab dropdown button, sized like the part buttons and placed left of them. It sits outside the
+   controls' measured width, because Golden Layout shows it only after it measures the tabs. Golden Layout shows
+   and hides it with an inline display, so display here carries no !important. */
+mj-dashboard-viewer .dashboard-viewer .lm_header .lm_controls > .lm_tabdropdown {
+    display: inline-flex;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 100%;
+    margin: auto 6px auto 0;
+    width: 32px !important;      /* GL base: .lm_controls > * is 18x18 and floats */
+    height: 32px !important;
+    float: none !important;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid transparent;
+    border-radius: var(--mj-radius-md);
+    color: var(--mj-text-secondary);
+    opacity: 1 !important;       /* MJ theme: .lm_controls > * is at 0.6 */
+    cursor: pointer;
+}
+mj-dashboard-viewer .dashboard-viewer .lm_header .lm_controls > .lm_tabdropdown:hover {
+    background-color: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+}
+mj-dashboard-viewer .dashboard-viewer .lm_header .lm_controls > .lm_tabdropdown::before {
+    content: '\f078';            /* chevron-down, in place of GL's border triangle */
+    width: auto;
+    height: auto;
+    border: none;
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    font-size: 12px;
+    line-height: 1;
+    color: inherit;
 }
 
-mj-dashboard-viewer .lm_close_tab:hover {
-    opacity: 1 !important;
-    color: var(--mj-status-error) !important;
+/* Tabs that do not fit: Golden Layout's tab dropdown list, as a menu below the header. Golden Layout shows and
+   hides it with an inline display, so display here carries no !important. */
+mj-dashboard-viewer .dashboard-viewer .lm_header .lm_tabdropdown_list {
+    display: flex;
+    flex-direction: column;
+    top: calc(100% + var(--mj-space-1));
+    right: var(--mj-space-3);
+    z-index: var(--mj-z-dropdown);
+    min-width: 200px;
+    max-height: 290px;
+    overflow-y: auto;
+    padding: var(--mj-space-1);
+    background: var(--mj-bg-surface-elevated);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-md);
+    box-shadow: var(--mj-shadow-md);
+}
+mj-dashboard-viewer .dashboard-viewer .lm_header .lm_tabdropdown_list .lm_tab {
+    display: flex !important;
+    margin: 0 !important;
+    padding: 6px var(--mj-space-2) !important;
+    border-radius: var(--mj-radius-sm) !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+mj-dashboard-viewer .dashboard-viewer .lm_header .lm_tabdropdown_list .lm_tab:hover:not(.lm_active) {
+    background: var(--mj-bg-surface-hover) !important;
+}
+mj-dashboard-viewer .dashboard-viewer .lm_header .lm_tabdropdown_list .lm_title {
+    width: auto;                 /* GL base: 100px */
 }
 
-/* Add padding for close button when editing */
-mj-dashboard-viewer .dashboard-viewer.editing .lm_header .lm_tab {
-    padding-right: 24px !important;
+/* Each stack (a panel of part tabs) is a card */
+mj-dashboard-viewer .dashboard-viewer .lm_stack {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default) !important;
+    border-radius: var(--mj-radius-lg);
 }
 
 /* ========================================
    View Mode (Not Editing) - Lock Layout
    ======================================== */
-
-/* Hide close buttons on tabs when not editing */
-mj-dashboard-viewer .dashboard-viewer:not(.editing) .lm_close_tab {
-    display: none !important;
-}
-
-/* Remove extra padding for close button when not editing */
-mj-dashboard-viewer .dashboard-viewer:not(.editing) .lm_header .lm_tab {
-    padding-right: 16px !important;
-}
 
 /* Disable splitter dragging when not editing */
 mj-dashboard-viewer .dashboard-viewer:not(.editing) .lm_splitter {

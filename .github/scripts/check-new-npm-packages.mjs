@@ -77,6 +77,8 @@ export const SEED_WORKFLOW_NAME = 'Build and publish new package versions';
 export const SEED_DISPATCH_INPUT = 'seed_package';
 /** The matching double-entry input; must repeat the package name exactly. */
 export const SEED_CONFIRM_INPUT = 'confirm_seed_package';
+/** Human-run helper that performs the create, trust and seed steps, skipping any already done. */
+export const SEED_SCRIPT_PATH = '.github/scripts/seed-new-npm-package.sh';
 
 /** The repository provenance must name, as `owner/repo`. */
 export const GITHUB_REPO = 'MemberJunction/MJ';
@@ -94,20 +96,24 @@ export const MIN_NPM_VERSION = '11.15.0';
 export const NPM_MEMBERS_URL = 'https://www.npmjs.com/settings/memberjunction/members';
 
 /**
- * Who to tag on the PR when the author cannot do the npm setup themselves.
+ * GitHub handles of @memberjunction npm org members who can do new-package setup. Any
+ * member can, not only owners. Shown without "@" so pasting the message pings nobody;
+ * the author tags ONE of them. cadam11 is left out on purpose so routine setup does not
+ * all land on one person.
  *
- * Hardcoded on purpose. The authoritative list of who can perform the setup lives on npm,
- * and reading it (`npm org ls memberjunction`) requires an authenticated org member —
- * unauthenticated the endpoint returns `{}`. Resolving it at runtime would mean an npm
- * token in CI, would fail on fork PRs where secrets are unavailable, and would still yield
- * npm usernames, which are not GitHub handles and cannot be mentioned here.
- *
- * Sourced from .github/CODEOWNERS, which assigns publish.yml to this handle.
- *
- * TO REFRESH: `npm login && npm org ls memberjunction`, map to GitHub handles by hand. If
- * a GitHub team is ever created for npm publishers, use that handle so it self-maintains.
+ * Hand-maintained: the npm member list is only visible to members, and npm usernames are
+ * not GitHub handles. TO REFRESH: `npm org ls memberjunction`, then map by hand.
  */
-export const NPM_ESCALATION_HANDLE = '@cadam11';
+export const NPM_SETUP_GITHUB_HANDLES = [
+    'CaelebB-BC',
+    'EL-BC',
+    'hiltongr',
+    'izygmunt-BC',
+    'jordanfanapour',
+    'MS-BC',
+    'rkihm-BC',
+    'SDesai-BC',
+];
 
 /** Public registry origin. */
 export const REGISTRY_URL = 'https://registry.npmjs.org';
@@ -294,6 +300,11 @@ token may satisfy. Doing it here, at PR time, keeps it off the release critical 
 HOW TO FIX (about 5 minutes, plus one 2FA prompt)
 --------------------------------------------------------------------------------
 
+Shortcut: after steps 1 and 2, run steps 3 to 5 in one go from a checkout of this repo.
+It skips any step already done, so it is safe to re-run, and waits for the attestation:
+
+     ${SEED_SCRIPT_PATH} ${names.join(' ')}
+
 1. Upgrade your npm CLI. \`npm trust\` requires ${MIN_NPM_VERSION} or newer:
 
      npm install -g npm@^11.15.0
@@ -335,25 +346,24 @@ You can check the same thing yourself at any time:
 IF YOU DO NOT HAVE NPM ACCESS
 --------------------------------------------------------------------------------
 
-Publishing rights on the @memberjunction org are deliberately narrow, so most authors
-cannot run steps 1 to 4. That is expected — hand it off:
+Any member of the @memberjunction npm org can run steps 1 to 6 — owner rights are not
+needed. Most PR authors are not members. That is expected — hand it off:
 
-1. Comment on this PR with exactly this, so whoever picks it up needs no other context:
+1. Before asking, check this PR really needs a new published package. Every package is
+   permanent npm surface and install weight for every consumer. If the code can live in
+   an existing package, or several new packages can be one, do that instead.
 
-     ${NPM_ESCALATION_HANDLE} — new package npm setup needed before merge:
+2. Ask ONE org member, ideally your PR reviewer if they are one, and give them this so
+   they need no other context. Members on GitHub (tag just one):
+
+     ${NPM_SETUP_GITHUB_HANDLES.join(', ')}
+
+   Members can see the authoritative list at ${NPM_MEMBERS_URL}.
+
+     New package npm setup needed before merge:
 ${names.map((name) => `       ${name}`).join('\n')}
-     Repo ${GITHUB_REPO}, workflow ${PUBLISH_WORKFLOW_FILE}, allow-publish, no environment.
-     Then run the "${SEED_WORKFLOW_NAME}" workflow for each, with ${SEED_DISPATCH_INPUT}
-     and ${SEED_CONFIRM_INPUT} both set to the package name.
-
-2. If nobody responds within one working day, escalate to any MemberJunction npm org
-   owner or admin. The current list is visible to org members via:
-
-     npm org ls memberjunction
-
-   or on the web at:
-
-     ${NPM_MEMBERS_URL}
+     Run: ${SEED_SCRIPT_PATH} ${names.join(' ')}
+     (Repo ${GITHUB_REPO}, workflow ${PUBLISH_WORKFLOW_FILE}, allow-publish, no environment.)
 
 3. If a release is imminent, raise it with the build engineer running it — a missing
    package stops the publish partway through, which is far more expensive to unwind

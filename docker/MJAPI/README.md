@@ -40,6 +40,8 @@ sequenceDiagram
 docker build -f docker/MJAPI/Dockerfile -t memberjunction/api .
 ```
 
+The image includes a headless Chromium (about 650 MB) so `Create Mermaid Diagram` can render. To build a smaller image without it, pass `--build-arg INSTALL_CHROMIUM=false`; the action then returns `BROWSER_UNAVAILABLE`.
+
 ## Running
 
 ### Minimal Example

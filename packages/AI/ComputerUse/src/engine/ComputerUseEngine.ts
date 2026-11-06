@@ -2947,7 +2947,9 @@ export class ComputerUseEngine {
      */
     private createLLMInstance(modelConfig: ModelConfig): BaseLLM {
         const driverClass = modelConfig.DriverClass ?? this.vendorToDriverClass(modelConfig.Vendor);
-        const apiKey = GetAIAPIKey(driverClass);
+        // The caller's resolver first, then the platform key, per driver class — the one funnel both
+        // the controller and the judge LLM pass through on the direct-LLM path.
+        const apiKey = this.getActiveParams()?.APIKeyResolver?.(driverClass) || GetAIAPIKey(driverClass);
         const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
             BaseLLM,
             driverClass,

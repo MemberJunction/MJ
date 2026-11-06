@@ -3,12 +3,15 @@
  *
  * The OmnibarProvider base registers via the MJ ClassFactory; these tests register
  * fakes under the same base and verify discovery ordering/exclusion, then exercise
- * each shipping provider's suggestion mapping with a mocked OmnibarContext — no
- * Angular TestBed, no network.
+ * each shipping provider's suggestion mapping with a mocked OmnibarContext (and a
+ * stubbed DashboardEngine for the search provider's Dashboards group) — no Angular
+ * TestBed, no network.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { of } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { DashboardEngine } from '@memberjunction/core-entities';
 import { MentionSuggestion, ComposerSuggestionRequest } from '@memberjunction/ng-composer';
 import {
     DiscoverOmnibarProviders, GetOmnibarNavPayload, OmnibarProvider, OMNIBAR_NAV_KEY,
@@ -163,6 +166,233 @@ describe('OmnibarSearchProvider', () => {
         const provider = new OmnibarSearchProvider();
         provider.Attach({});
         expect(await provider.GetSuggestions({ ...REQ, Query: 'x' })).toEqual([]);
+    });
+});
+
+describe('OmnibarSearchProvider — Dashboards group', () => {
+    type EngineDashboard = ReturnType<DashboardEngine['GetAccessibleDashboards']>[number];
+    type DashboardEngineDouble = Pick<DashboardEngine, 'Loaded' | 'GetAccessibleDashboards'>;
+
+    const USER_ID = 'user-ana';
+    const ANA = { ID: USER_ID } satisfies Pick<UserInfo, 'ID'> as unknown as UserInfo;
+    const RECORD: Partial<SearchResultItem> = { Title: 'Pipeline review', Snippet: '', EntityName: 'Members', RecordID: 'r1', ResultType: 'entity-record', Score: 0.8 };
+
+    type DashboardFields = Pick<EngineDashboard, 'ID' | 'Name' | 'Description' | 'Category' | 'User' | 'Type' | 'DriverClass'>;
+    const dashboard = (ID: string, Name: string, Type: EngineDashboard['Type'] = 'Config', DriverClass: string | null = null): EngineDashboard => {
+        const fields: DashboardFields = { ID, Name, Description: null, Category: 'Sales', User: 'Ana', Type, DriverClass };
+        return fields as unknown as EngineDashboard;
+    };
+
+    /** A Config dashboard with its own description or category. */
+    const describedDashboard = (ID: string, Name: string, details: Partial<Pick<DashboardFields, 'Description' | 'Category'>>): EngineDashboard =>
+        Object.assign(dashboard(ID, Name), details);
+
+    /** The live checkpoint's "weekly" record: its name matches the query. */
+    const WEEKLY_DIGEST: Partial<SearchResultItem> = { ...RECORD, Title: 'Weekly Entity Digest', RecordID: 'r-digest' };
+    const REVENUE_BOARD_ID = 'rb';
+    const revenueBoard = () => describedDashboard(REVENUE_BOARD_ID, 'Revenue Board', { Description: 'Weekly sales numbers by team' });
+
+    /** Engine double holding `dashboards`; the global DashboardEngine.Instance returns it. */
+    const stubEngine = (loaded: boolean, dashboards: EngineDashboard[]): DashboardEngineDouble => {
+        const engine: DashboardEngineDouble = { Loaded: loaded, GetAccessibleDashboards: vi.fn(() => dashboards) };
+        vi.spyOn(DashboardEngine, 'Instance', 'get').mockReturnValue(engine as unknown as DashboardEngine);
+        return engine;
+    };
+
+    /** Metadata provider double whose only member is the signed-in user. */
+    const providerFor = (userId: string): IMetadataProvider =>
+        ({ CurrentUser: { ID: userId } }) satisfies { CurrentUser: Pick<UserInfo, 'ID'> } as unknown as IMetadataProvider;
+
+    /** Search double that returns `results` for every preview, so each test can read the requested count. */
+    const previewReturning = (results: Array<Partial<SearchResultItem>>) =>
+        vi.fn(async (query: string, maxResults?: number) => {
+            void query;
+            void maxResults;
+            return searchResponse(results);
+        });
+
+    const kinds = (out: MentionSuggestion[]) => out.map((s) => GetOmnibarNavPayload(s)?.kind);
+    const dashboardIds = (out: MentionSuggestion[]) =>
+        out.map((s) => GetOmnibarNavPayload(s)).flatMap((nav) => (nav?.kind === 'dashboard' ? [nav.dashboardId] : []));
+
+    const searchProvider = (search: SearchService): OmnibarSearchProvider => {
+        const provider = new OmnibarSearchProvider();
+        provider.Attach({ Search: search });
+        return provider;
+    };
+
+    it('lists dashboards whose name matches first, in a Dashboards group, before the search results and see-all', async () => {
+        const engine = stubEngine(true, [dashboard('d1', 'Sales pipeline'), dashboard('d2', 'Ops health'), dashboard('d3', 'Pipeline forecast')]);
+        const provider = searchProvider(asSearch({ PreviewSearch: previewReturning([RECORD]) }));
+
+        const out = await provider.GetSuggestions({ ...REQ, Query: 'pipe', ContextUser: ANA });
+
+        expect(engine.GetAccessibleDashboards).toHaveBeenCalledWith(USER_ID);
+        expect(out.map((s) => s.data?.['group'])).toEqual(['Dashboards', 'Dashboards', 'Records', '']);
+        // A name that starts with the query ranks before a name that only contains it.
+        expect(GetOmnibarNavPayload(out[0])).toEqual({ kind: 'dashboard', dashboardId: 'd3', dashboardName: 'Pipeline forecast' });
+        expect(GetOmnibarNavPayload(out[1])).toEqual({ kind: 'dashboard', dashboardId: 'd1', dashboardName: 'Sales pipeline' });
+        expect(out[0]).toMatchObject({
+            type: 'dashboard', id: 'dashboard:d3', name: 'Pipeline forecast', displayName: 'Pipeline forecast',
+            description: 'Sales · Ana', icon: 'fa-solid fa-gauge-high',
+        });
+        expect(kinds(out).slice(2)).toEqual(['record', 'search']);
+    });
+
+    it('lists a dashboard that matches only by description after the search results, so a record whose name matches stays first', async () => {
+        stubEngine(true, [revenueBoard(), dashboard('d2', 'Ops health')]);
+        const provider = searchProvider(asSearch({ PreviewSearch: previewReturning([WEEKLY_DIGEST]) }));
+
+        const out = await provider.GetSuggestions({ ...REQ, Query: 'weekly', ContextUser: ANA });
+
+        expect(out.map((s) => s.name)).toEqual(['Weekly Entity Digest', 'Revenue Board', 'See all results for “weekly”']);
+        expect(out.map((s) => s.data?.['group'])).toEqual(['Records', 'Dashboards', '']);
+    });
+
+    it('lists name matches before the search results and description or category matches after them, both as Dashboards', async () => {
+        stubEngine(true, [revenueBoard(), dashboard('wk', 'Weekly KPIs'), describedDashboard('ops', 'Ops board', { Category: 'Weekly reviews' })]);
+        const provider = searchProvider(asSearch({ PreviewSearch: previewReturning([WEEKLY_DIGEST]) }));
+
+        const out = await provider.GetSuggestions({ ...REQ, Query: 'weekly', ContextUser: ANA });
+
+        expect(kinds(out)).toEqual(['dashboard', 'record', 'dashboard', 'dashboard', 'search']);
+        expect(dashboardIds(out)).toEqual(['wk', REVENUE_BOARD_ID, 'ops']);
+        expect(out.map((s) => s.data?.['group'])).toEqual(['Dashboards', 'Records', 'Dashboards', 'Dashboards', '']);
+    });
+
+    it('shares the three-dashboard cap, name matches first, and asks search for the rows left', async () => {
+        stubEngine(true, [
+            revenueBoard(),
+            describedDashboard('churn', 'Churn', { Description: 'Weekly churn' }),
+            dashboard('wk', 'Weekly KPIs'),
+            dashboard('ops', 'Ops weekly'),
+        ]);
+        const preview = previewReturning(Array.from({ length: 5 }, (_, i) => ({ ...RECORD, RecordID: `r${i}` })));
+        const provider = searchProvider(asSearch({ PreviewSearch: preview }));
+
+        const out = await provider.GetSuggestions({ ...REQ, Query: 'weekly', ContextUser: ANA });
+
+        // 9 rows = 2 name matches + 5 search results + 1 description match + see-all
+        expect(preview).toHaveBeenCalledWith('weekly', REQ.MaxResults - 1 - 3);
+        expect(kinds(out)).toEqual(['dashboard', 'dashboard', 'record', 'record', 'record', 'record', 'record', 'dashboard', 'search']);
+        expect(dashboardIds(out)).toEqual(['wk', 'ops', REVENUE_BOARD_ID]);
+        expect(out).toHaveLength(REQ.MaxResults);
+    });
+
+    it('keeps a dashboard whose exact name was typed among the three rows, before longer names that contain it', async () => {
+        stubEngine(true, [dashboard('d1', 'Sales pipeline'), dashboard('d2', 'Sales by region'), dashboard('d3', 'Sales forecast'), dashboard('d4', 'Sales')]);
+        const provider = searchProvider(asSearch({ PreviewSearch: previewReturning([]) }));
+
+        const out = await provider.GetSuggestions({ ...REQ, Query: 'Sales', ContextUser: ANA });
+
+        expect(dashboardIds(out)).toEqual(['d4', 'd1', 'd2']);
+    });
+
+    it('shows at most three dashboards and asks search for the rest of MaxResults', async () => {
+        stubEngine(true, ['a', 'b', 'c', 'd', 'e'].map((id) => dashboard(id, `Pipeline ${id}`)));
+        const preview = previewReturning(Array.from({ length: 5 }, (_, i) => ({ ...RECORD, RecordID: `r${i}` })));
+        const provider = searchProvider(asSearch({ PreviewSearch: preview }));
+
+        const out = await provider.GetSuggestions({ ...REQ, Query: 'pipe', ContextUser: ANA });
+
+        // 9 rows = 3 dashboards + 5 search results + see-all
+        expect(preview).toHaveBeenCalledWith('pipe', REQ.MaxResults - 1 - 3);
+        expect(dashboardIds(out)).toEqual(['a', 'b', 'c']);
+        expect(out).toHaveLength(REQ.MaxResults);
+    });
+
+    it('asks search for MaxResults - 1 when no dashboard matches', async () => {
+        stubEngine(true, [dashboard('d2', 'Ops health')]);
+        const preview = previewReturning([RECORD]);
+        const provider = searchProvider(asSearch({ PreviewSearch: preview }));
+
+        const out = await provider.GetSuggestions({ ...REQ, Query: 'pipe', ContextUser: ANA });
+
+        expect(preview).toHaveBeenCalledWith('pipe', REQ.MaxResults - 1);
+        expect(kinds(out)).toEqual(['record', 'search']);
+    });
+
+    it('lists only dashboards the dashboard tab can render: Config, and Code with a driver class', async () => {
+        stubEngine(true, [
+            dashboard('dyn', 'Pipeline sandbox', 'Dynamic Code'),
+            dashboard('code', 'Pipeline admin', 'Code', 'PipelineAdmin'),
+            dashboard('no-driver', 'Pipeline draft', 'Code'),
+            dashboard('cfg', 'Pipeline board'),
+        ]);
+        const provider = searchProvider(asSearch({ PreviewSearch: previewReturning([]) }));
+
+        const out = await provider.GetSuggestions({ ...REQ, Query: 'pipe', ContextUser: ANA });
+
+        expect(dashboardIds(out)).toEqual(['code', 'cfg']);
+    });
+
+    it('adds no dashboards while the engine is not loaded', async () => {
+        const engine = stubEngine(false, [dashboard('d1', 'Sales pipeline')]);
+        const preview = previewReturning([RECORD]);
+        const provider = searchProvider(asSearch({ PreviewSearch: preview }));
+
+        const out = await provider.GetSuggestions({ ...REQ, Query: 'pipe', ContextUser: ANA });
+
+        expect(engine.GetAccessibleDashboards).not.toHaveBeenCalled();
+        expect(preview).toHaveBeenCalledWith('pipe', REQ.MaxResults - 1);
+        expect(kinds(out)).toEqual(['record', 'search']);
+    });
+
+    it('uses the search provider user when ContextUser is null', async () => {
+        const engine = stubEngine(true, [dashboard('d1', 'Sales pipeline')]);
+        const searchWithUser: Pick<SearchService, 'PreviewSearch' | 'Provider'> = { PreviewSearch: previewReturning([]), Provider: providerFor(USER_ID) };
+        const provider = searchProvider(searchWithUser as unknown as SearchService);
+
+        const out = await provider.GetSuggestions({ ...REQ, Query: 'pipe' });
+
+        expect(engine.GetAccessibleDashboards).toHaveBeenCalledWith(USER_ID);
+        expect(kinds(out)).toEqual(['dashboard', 'search']);
+    });
+
+    it('still returns search results when ContextUser is null and no user is known', async () => {
+        const engine = stubEngine(true, [dashboard('d1', 'Sales pipeline')]);
+        const preview = previewReturning([RECORD]);
+        const provider = searchProvider(asSearch({ PreviewSearch: preview }));
+
+        const out = await provider.GetSuggestions({ ...REQ, Query: 'pipe' });
+
+        expect(engine.GetAccessibleDashboards).not.toHaveBeenCalled();
+        expect(preview).toHaveBeenCalledWith('pipe', REQ.MaxResults - 1);
+        expect(kinds(out)).toEqual(['record', 'search']);
+    });
+
+    it('keeps the dashboards and see-all when the search service throws', async () => {
+        stubEngine(true, [dashboard('d1', 'Sales pipeline')]);
+        const provider = searchProvider(asSearch({ PreviewSearch: async () => { throw new Error('down'); } }));
+
+        const out = await provider.GetSuggestions({ ...REQ, Query: 'pipe', ContextUser: ANA });
+
+        expect(kinds(out)).toEqual(['dashboard', 'search']);
+    });
+
+    it('keeps name matches before description matches when the search service throws', async () => {
+        stubEngine(true, [revenueBoard(), dashboard('wk', 'Weekly KPIs')]);
+        const provider = searchProvider(asSearch({ PreviewSearch: async () => { throw new Error('down'); } }));
+
+        const out = await provider.GetSuggestions({ ...REQ, Query: 'weekly', ContextUser: ANA });
+
+        expect(dashboardIds(out)).toEqual(['wk', REVENUE_BOARD_ID]);
+        expect(kinds(out)).toEqual(['dashboard', 'dashboard', 'search']);
+    });
+
+    it('reads the DashboardEngine of the provider on the request', async () => {
+        const globalEngine = stubEngine(true, [dashboard('g1', 'Global pipeline')]);
+        const scopedEngine: DashboardEngineDouble = { Loaded: true, GetAccessibleDashboards: vi.fn(() => [dashboard('s1', 'Scoped pipeline')]) };
+        const getProviderInstance = vi.spyOn(DashboardEngine, 'GetProviderInstance').mockReturnValue(scopedEngine as unknown as DashboardEngine);
+        const scopedProvider = providerFor('user-bo');
+        const provider = searchProvider(asSearch({ PreviewSearch: previewReturning([]) }));
+
+        const out = await provider.GetSuggestions({ ...REQ, Query: 'pipe', Provider: scopedProvider });
+
+        expect(getProviderInstance).toHaveBeenCalledWith(scopedProvider, DashboardEngine);
+        expect(scopedEngine.GetAccessibleDashboards).toHaveBeenCalledWith('user-bo');
+        expect(globalEngine.GetAccessibleDashboards).not.toHaveBeenCalled();
+        expect(dashboardIds(out)).toEqual(['s1']);
     });
 });
 

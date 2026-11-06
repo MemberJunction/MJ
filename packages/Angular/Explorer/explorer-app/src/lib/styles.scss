@@ -56,7 +56,7 @@
 
 .link-text {
     cursor: pointer;
-    color: darkblue;
+    color: var(--mj-text-link);
     font-size: 14px;
 }
 
@@ -108,6 +108,9 @@
 
 // Header
 .material-bg {
+    // Kendo leftover. This file ships as dist/styles.scss, so apps may still
+    // use the class; it can be removed in a major release.
+    // color-exception: published legacy class kept for compatibility
     color: white;
 }
 

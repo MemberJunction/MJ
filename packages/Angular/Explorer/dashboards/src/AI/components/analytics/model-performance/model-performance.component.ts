@@ -6,7 +6,7 @@
  */
 
 import {
-    Component, Input,
+    Component, ChangeDetectionStrategy, Input,
     OnInit, OnDestroy,
     ChangeDetectorRef, inject
 } from '@angular/core';
@@ -39,7 +39,7 @@ interface PromptRunRecord {
 
 interface ModelLeaderboardRow {
     Rank: number;
-    RankClass: string;
+    ModelID: string;
     ModelName: string;
     ApiId: string;
     Vendor: string;
@@ -49,9 +49,14 @@ interface ModelLeaderboardRow {
     AvgLatencyColor: string;
     P95LatencyMs: number;
     SuccessRate: number;
-    CostPer1KTokens: number;
+    /** Null when no run in this group could be priced — never 0, which would read as free. */
+    CostPer1KTokens: number | null;
     CacheHitRate: number;
-    TotalCost: number;
+    /** Null when no run in this group could be priced. */
+    TotalCost: number | null;
+    /** Runs whose Cost is NULL: unpriceable, not free. Surfaced so a total is never read as complete. */
+    UnpricedRuns: number;
+    RankClass: string;
 }
 
 type SortByOption = 'cost-efficiency' | 'speed' | 'reliability' | 'usage-volume';
@@ -64,6 +69,7 @@ const FIELDS = [
 
 @Component({
     standalone: false,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     selector: 'app-analytics-model-performance',
     template: `
         @if (IsLoading) {
@@ -73,6 +79,13 @@ const FIELDS = [
         } @else {
             <!-- Leaderboard Table -->
             <div class="leaderboard-panel">
+                <div class="panel-header">
+                    <div class="panel-header__title">
+                        <i class="fa-solid fa-trophy panel-header__icon"></i>
+                        Model Performance Leaderboard
+                    </div>
+                    <span class="panel-header__subtitle">sampled from {{ AllRuns.length | number }} recent runs</span>
+                </div>
                 <div class="table-wrapper">
                     <table class="leaderboard-table">
                         <thead>
@@ -91,7 +104,7 @@ const FIELDS = [
                         </thead>
                         <tbody>
                             @if (Rows.length === 0) {
-                                <tr><td colspan="10" class="empty-row">No model data for selected period</td></tr>
+                                <tr><td colspan="10" class="empty-row"><mj-empty-state Variant="no-results" Size="compact" Title="No model data" Message="No model activity in the selected period."></mj-empty-state></td></tr>
                             }
                             @for (row of Rows; track row.ModelName) {
                                 <tr>
@@ -124,7 +137,7 @@ const FIELDS = [
                                     </td>
                                     <td class="cell-numeric">{{ row.CacheHitRate > 0 ? ((row.CacheHitRate * 100 | number:'1.0-0') + '%') : '—' }}</td>
                                     <td class="cell-numeric">{{ FormatCurrency(row.CostPer1KTokens, 4) }}</td>
-                                    <td class="cell-numeric cell-cost">{{ FormatCurrency(row.TotalCost) }}</td>
+                                    <td class="cell-numeric cell-cost">{{ FormatCurrency(row.TotalCost) }}@if (row.UnpricedRuns > 0) {<span class="cell-unpriced" [title]="row.UnpricedRuns + ' run(s) could not be priced'"> ({{ row.UnpricedRuns }} unpriced)</span>}</td>
                                 </tr>
                             }
                         </tbody>
@@ -149,6 +162,33 @@ const FIELDS = [
             border: 1px solid var(--mj-border-default);
             border-radius: 12px;
             overflow: hidden;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--mj-border-subtle);
+        }
+
+        .panel-header__title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--mj-text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .panel-header__icon {
+            font-size: 13px;
+            color: var(--mj-brand-primary);
+        }
+
+        .panel-header__subtitle {
+            font-size: 12px;
+            color: var(--mj-text-muted);
         }
 
         .table-wrapper {
@@ -265,6 +305,12 @@ const FIELDS = [
             color: var(--mj-text-primary);
         }
 
+        .cell-unpriced {
+            font-weight: 400;
+            font-size: 0.85em;
+            color: var(--mj-text-muted);
+        }
+
         /* ── Success Rate Mini Bar ── */
         .success-rate-cell {
             display: flex;
@@ -343,7 +389,7 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
     public IsLoading = false;
     public Rows: ModelLeaderboardRow[] = [];
 
-    private allRuns: PromptRunRecord[] = [];
+    public AllRuns: PromptRunRecord[] = [];
 
     async ngOnInit(): Promise<void> {
         // AIEngineBase is deferred at startup — make sure it's loaded before
@@ -363,7 +409,9 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
         return (ms / 1000).toFixed(2) + 's';
     }
 
-    public FormatCurrency(value: number, decimals = 2): string {
+    public FormatCurrency(value: number | null, decimals = 2): string {
+        // Unpriced is not free — an em dash, never $0.00.
+        if (value == null) return '—';
         if (value === 0) return '$0.00';
         if (value < 0.01 && decimals < 4) decimals = 4;
         return '$' + value.toFixed(decimals);
@@ -384,10 +432,11 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
                 ExtraFilter: dateFilter,
                 Fields: FIELDS,
                 OrderBy: 'RunAt DESC',
+                MaxRows: 1000,
                 ResultType: 'simple'
             });
 
-            this.allRuns = (result?.Results ?? []) as PromptRunRecord[];
+            this.AllRuns = (result?.Results ?? []) as PromptRunRecord[];
             this.buildRows();
         } catch (e) {
             console.error('Model Performance load error:', e);
@@ -401,7 +450,7 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
 
     private buildRows(): void {
         // Filter by vendor if needed
-        let runs = this.allRuns;
+        let runs = this.AllRuns;
         if (this.SelectedVendor) {
             runs = runs.filter(r => r.VendorID === this.SelectedVendor);
         }
@@ -454,8 +503,14 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
         const cacheRead = runs.reduce((s, r) => s + (r.TokensCacheRead ?? 0), 0);
         const cacheWrite = runs.reduce((s, r) => s + (r.TokensCacheWrite ?? 0), 0);
         const totalTokens = runs.reduce((s, r) => s + (r.TokensUsed ?? 0), 0) + cacheRead + cacheWrite;
-        const totalCost = runs.reduce((s, r) => s + (r.Cost ?? r.TotalCost ?? 0), 0);
-        const costPer1K = totalTokens > 0 ? (totalCost / totalTokens) * 1000 : 0;
+        // Own cost only (AIPromptRun.Cost). NOT TotalCost — that is Cost + DescendantCost, so summing
+        // it across runs double-counts a child's spend against its parent. And an unpriced run (Cost
+        // IS NULL) is not a free one: it is excluded from the sum and counted separately, so the
+        // column can say "unpriced" instead of quietly reporting a smaller number as if it were whole.
+        const priced = runs.filter((r) => r.Cost != null);
+        const unpricedRuns = runs.length - priced.length;
+        const totalCost = priced.length > 0 ? priced.reduce((s, r) => s + (r.Cost as number), 0) : null;
+        const costPer1K = totalCost != null && totalTokens > 0 ? (totalCost / totalTokens) * 1000 : null;
 
         const inputForHit = runs.reduce((s, r) => s + (r.TokensPrompt ?? 0), 0) + cacheRead + cacheWrite;
         const cacheHitRate = inputForHit > 0 ? cacheRead / inputForHit : 0;
@@ -475,6 +530,7 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
         return {
             Rank: 0,
             RankClass: 'rank-neutral',
+            ModelID: modelId,
             ModelName: firstName?.Model ?? 'Unknown',
             ApiId: apiId,
             Vendor: firstVendor?.Vendor ?? 'Unknown',
@@ -486,14 +542,16 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
             SuccessRate: successRate,
             CostPer1KTokens: costPer1K,
             CacheHitRate: cacheHitRate,
-            TotalCost: totalCost
+            TotalCost: totalCost,
+            UnpricedRuns: unpricedRuns
         };
     }
 
     private sortRows(rows: ModelLeaderboardRow[]): void {
         switch (this.SortBy) {
             case 'cost-efficiency':
-                rows.sort((a, b) => a.CostPer1KTokens - b.CostPer1KTokens);
+                // Unpriced rows sort last rather than masquerading as the cheapest.
+                rows.sort((a, b) => (a.CostPer1KTokens ?? Number.POSITIVE_INFINITY) - (b.CostPer1KTokens ?? Number.POSITIVE_INFINITY));
                 break;
             case 'speed':
                 rows.sort((a, b) => a.AvgLatencyMs - b.AvgLatencyMs);

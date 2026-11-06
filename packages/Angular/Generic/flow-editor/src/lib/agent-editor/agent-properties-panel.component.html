@@ -41,6 +41,16 @@
       </div>
     </div>
     <div class="mj-agent-props-content">
+      <!-- The flow run check's problems on this step (the runtime compiler's and validator's). -->
+      @if (StepRunProblemMessages.length > 0) {
+        <mj-alert class="mj-agent-props-run-problems" Variant="warning" Size="sm" Title="This flow would not run">
+          <ul class="mj-agent-props-run-problems-list">
+            @for (message of StepRunProblemMessages; track $index) {
+              <li>{{ message }}</li>
+            }
+          </ul>
+        </mj-alert>
+      }
       <!-- ── General Section ─────────────────── -->
       <mj-accordion-panel class="mj-agent-props-accordion" Size="sm" [FlushBody]="true" [Expanded]="!IsSectionCollapsed('general')" (ExpandedChange)="ToggleSection('general')">
         <ng-template mjAccordionTitle><span>General</span></ng-template>
@@ -204,6 +214,257 @@
                   (change)="OnConfigurationChange($any($event))">
                 </mj-code-editor>
               </div>
+            }
+            <!-- Decision Step Properties -->
+            @if (ShowDecisionConfig) {
+              <!-- Key -->
+              <div class="mj-agent-props-field">
+                <label>Key <span class="mj-agent-props-required">*</span></label>
+                @if (!ReadOnly) {
+                  <!-- Typing only records the key; it is stored, and the paths that read it follow, on
+                       commit (blur or Enter). -->
+                  <input type="text" [value]="DecisionKeyText"
+                    (input)="OnDecisionKeyChange(InputValue($event))"
+                    (change)="OnDecisionKeyCommit()"
+                    (keydown.enter)="OnDecisionKeyCommit()"
+                    placeholder="e.g. triage" class="mj-agent-props-input"
+                    [class.mj-agent-props-input--error]="!!DecisionKeyError">
+                }
+                @if (ReadOnly) {
+                  <div class="mj-agent-props-readonly-value">{{ DecisionConfig.key }}</div>
+                }
+                @if (DecisionKeyError) {
+                  <span class="mj-agent-props-error">{{ DecisionKeyError }}</span>
+                }
+                <span class="mj-agent-props-hint">Names the step in path conditions: decisions.&lt;key&gt;.&lt;question&gt;</span>
+              </div>
+
+              <!-- Decision Prompt -->
+              <div class="mj-agent-props-field">
+                <label>Decision Prompt</label>
+                @if (!ReadOnly) {
+                  <select [value]="Step!.PromptID || ''"
+                    (change)="OnDecisionPromptChange(InputValue($event))"
+                    class="mj-agent-props-input">
+                    <option value="">Default Decision (system default)</option>
+                    @for (prompt of DecisionPrompts; track prompt.ID) {
+                      <option [value]="prompt.ID">{{ prompt.Name }}</option>
+                    }
+                  </select>
+                }
+                @if (ReadOnly) {
+                  <div class="mj-agent-props-readonly-value">{{ SelectedDecisionPromptName }}</div>
+                }
+                <span class="mj-agent-props-hint">Optional prompt bound to the Decision model type.</span>
+              </div>
+
+              <!-- State -->
+              <div class="mj-agent-props-field">
+                <label>State</label>
+                @if (!ReadOnly) {
+                  <input type="text" [value]="DecisionConfig.state ?? ''"
+                    (input)="OnDecisionStateChange(InputValue($event))"
+                    placeholder="payload" class="mj-agent-props-input">
+                }
+                @if (ReadOnly) {
+                  <div class="mj-agent-props-readonly-value">{{ DecisionConfig.state || 'payload' }}</div>
+                }
+                <span class="mj-agent-props-hint">What the questions are about: "payload" (default) or "payload.&lt;path&gt;"</span>
+              </div>
+
+              <!-- Questions List Header & Add Button -->
+              <div class="mj-agent-props-questions-header">
+                <label class="mj-agent-props-questions-label">
+                  Questions ({{ DecisionQuestionsList.length }})
+                </label>
+                @if (!ReadOnly) {
+                  <button type="button" class="mj-agent-props-btn mj-agent-props-btn--sm"
+                    (click)="OnAddDecisionQuestion()">
+                    <i class="fa-solid fa-plus"></i> Add Question
+                  </button>
+                }
+              </div>
+
+              <!-- Questions List -->
+              <div class="mj-agent-props-questions-list">
+                @for (item of DecisionQuestionsList; track item.key) {
+                  <div class="mj-agent-props-question-card">
+                    <div class="mj-agent-props-question-card-header">
+                      <span class="mj-agent-props-question-card-title">
+                        <i class="fa-solid fa-question-circle"></i>
+                        <code>{{ item.key }}</code>
+                      </span>
+                      <span class="mj-agent-props-question-kind-badge">{{ item.question.kind }}</span>
+                      @if (!ReadOnly) {
+                        <button type="button" class="mj-agent-props-icon-btn mj-agent-props-icon-btn--danger"
+                          title="Remove Question"
+                          (click)="OnRemoveDecisionQuestion(item.key)">
+                          <i class="fa-solid fa-trash"></i>
+                        </button>
+                      }
+                    </div>
+
+                    <div class="mj-agent-props-question-card-body">
+                      <!-- Question Key -->
+                      <div class="mj-agent-props-field">
+                        <label>Question Key</label>
+                        @if (!ReadOnly) {
+                          <input type="text" [value]="item.key"
+                            (change)="OnDecisionQuestionKeyChange(item.key, InputValue($event))"
+                            (keydown.enter)="BlurTarget($event)"
+                            class="mj-agent-props-input"
+                            [class.mj-agent-props-input--error]="!!QuestionKeyError(item.key)">
+                        }
+                        @if (ReadOnly) {
+                          <div class="mj-agent-props-readonly-value">{{ item.key }}</div>
+                        }
+                        @if (QuestionKeyError(item.key); as keyError) {
+                          <span class="mj-agent-props-error">{{ keyError }}</span>
+                        }
+                      </div>
+
+                      <!-- Question Kind -->
+                      <div class="mj-agent-props-field">
+                        <label>Kind</label>
+                        @if (!ReadOnly) {
+                          <select [value]="item.question.kind"
+                            (change)="OnDecisionQuestionKindSelect(item.key, InputValue($event))"
+                            class="mj-agent-props-input">
+                            <option value="Likelihood">Likelihood (yes/no probability)</option>
+                            <option value="Choice">Choice (pick one option)</option>
+                            <option value="Score">Score (ordered rubric)</option>
+                          </select>
+                        }
+                        @if (ReadOnly) {
+                          <div class="mj-agent-props-readonly-value">{{ item.question.kind }}</div>
+                        }
+                      </div>
+
+                      <!-- Instructions -->
+                      <div class="mj-agent-props-field">
+                        <label>Instructions <span class="mj-agent-props-required">*</span></label>
+                        @if (!ReadOnly) {
+                          <textarea [value]="item.question.instructions || ''"
+                            (input)="OnDecisionQuestionInstructionsChange(item.key, InputValue($event))"
+                            rows="2" class="mj-agent-props-input mj-agent-props-textarea"
+                            placeholder="Full sentence instructions for the model..."></textarea>
+                        }
+                        @if (ReadOnly) {
+                          <div class="mj-agent-props-readonly-value">{{ item.question.instructions || '—' }}</div>
+                        }
+                      </div>
+
+                      <!-- Min Confidence -->
+                      <div class="mj-agent-props-field">
+                        <label>Min Confidence (optional, 0..1)</label>
+                        @if (!ReadOnly) {
+                          <input type="number" min="0" max="1" step="0.05"
+                            [value]="item.question.minConfidence ?? ''"
+                            (input)="OnDecisionQuestionMinConfidenceChange(item.key, InputValue($event))"
+                            placeholder="e.g. 0.8" class="mj-agent-props-input">
+                        }
+                        @if (ReadOnly) {
+                          <div class="mj-agent-props-readonly-value">{{ item.question.minConfidence ?? 'None' }}</div>
+                        }
+                      </div>
+
+                      <!-- Choice Options -->
+                      @if (item.question.kind === 'Choice') {
+                        <div class="mj-agent-props-options-section">
+                          <div class="mj-agent-props-options-header">
+                            <label>Options (2..255)</label>
+                            @if (!ReadOnly) {
+                              <button type="button" class="mj-agent-props-btn mj-agent-props-btn--xs"
+                                (click)="OnAddChoiceOption(item.key)">
+                                <i class="fa-solid fa-plus"></i> Add Option
+                              </button>
+                            }
+                          </div>
+                          @for (opt of ChoiceOptionsOf(item.question); track $index) {
+                            <div class="mj-agent-props-option-row">
+                              <!-- Committed on change: paths compare against the value, and follow it when it is renamed. -->
+                              <input type="text" [value]="opt.value"
+                                [readonly]="ReadOnly"
+                                (change)="OnChoiceOptionValueChange(item.key, $index, InputValue($event))"
+                                (keydown.enter)="BlurTarget($event)"
+                                placeholder="Value (e.g. billing)" class="mj-agent-props-input mj-agent-props-input--sm"
+                                [class.mj-agent-props-input--error]="!!OptionValueError(item.key, $index)">
+                              <input type="text" [value]="opt.description"
+                                [readonly]="ReadOnly"
+                                (input)="OnChoiceOptionChange(item.key, $index, 'description', InputValue($event))"
+                                placeholder="Description for model..." class="mj-agent-props-input mj-agent-props-input--sm">
+                              @if (!ReadOnly) {
+                                <button type="button" class="mj-agent-props-icon-btn mj-agent-props-icon-btn--danger"
+                                  title="Remove Option"
+                                  (click)="OnRemoveChoiceOption(item.key, $index)">
+                                  <i class="fa-solid fa-times"></i>
+                                </button>
+                              }
+                            </div>
+                            @if (OptionValueError(item.key, $index); as valueError) {
+                              <span class="mj-agent-props-error">{{ valueError }}</span>
+                            }
+                          }
+                          <!-- Choice Coverage Hint -->
+                          <div class="mj-agent-props-coverage-hint">
+                            <i class="fa-solid fa-code-fork"></i>
+                            <span>{{ GetChoiceCoverageHint(item.key, ChoiceOptionsOf(item.question)) }}</span>
+                          </div>
+                        </div>
+                      }
+
+                      <!-- Score Levels -->
+                      @if (item.question.kind === 'Score') {
+                        <div class="mj-agent-props-levels-section">
+                          <div class="mj-agent-props-options-header">
+                            <label>Levels (2..10, lowest first)</label>
+                            @if (!ReadOnly) {
+                              <button type="button" class="mj-agent-props-btn mj-agent-props-btn--xs"
+                                (click)="OnAddScoreLevel(item.key)">
+                                <i class="fa-solid fa-plus"></i> Add Level
+                              </button>
+                            }
+                          </div>
+                          @for (level of ScoreLevelsOf(item.question); track $index) {
+                            <div class="mj-agent-props-level-row">
+                              <span class="mj-agent-props-level-badge">{{ $index }}</span>
+                              <input type="text" [value]="level"
+                                [readonly]="ReadOnly"
+                                (input)="OnScoreLevelChange(item.key, $index, InputValue($event))"
+                                placeholder="Description for level..." class="mj-agent-props-input mj-agent-props-input--sm">
+                              @if (!ReadOnly) {
+                                <button type="button" class="mj-agent-props-icon-btn"
+                                  [disabled]="$first"
+                                  title="Move Up"
+                                  (click)="OnMoveScoreLevel(item.key, $index, 'up')">
+                                  <i class="fa-solid fa-arrow-up"></i>
+                                </button>
+                                <button type="button" class="mj-agent-props-icon-btn"
+                                  [disabled]="$last"
+                                  title="Move Down"
+                                  (click)="OnMoveScoreLevel(item.key, $index, 'down')">
+                                  <i class="fa-solid fa-arrow-down"></i>
+                                </button>
+                                <button type="button" class="mj-agent-props-icon-btn mj-agent-props-icon-btn--danger"
+                                  title="Remove Level"
+                                  (click)="OnRemoveScoreLevel(item.key, $index)">
+                                  <i class="fa-solid fa-times"></i>
+                                </button>
+                              }
+                            </div>
+                          }
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+
+              <!-- Why the runtime would refuse this step, in the runtime reader's own words -->
+              @if (DecisionValidationError) {
+                <mj-alert class="mj-agent-props-run-problems" Variant="error" Size="sm"
+                  Title="This step cannot run" [Message]="DecisionValidationError"></mj-alert>
+              }
             }
           </div>
           </ng-template>
@@ -418,7 +679,94 @@
                   JavaScript expression evaluated at runtime. Leave empty for unconditional.
                 </span>
               }
+              <!-- The flow run check's problems with this condition (the runtime validator's). -->
+              @if (PathRunProblemMessages.length > 0) {
+                <mj-alert class="mj-agent-props-run-problems" Variant="warning" Size="sm" Title="This condition would stop the flow">
+                  <ul class="mj-agent-props-run-problems-list">
+                    @for (message of PathRunProblemMessages; track $index) {
+                      <li>{{ message }}</li>
+                    }
+                  </ul>
+                </mj-alert>
+              }
             </div>
+            <!-- Route on Answer Helper (when origin step is a Decision step) -->
+            @if (OriginDecisionStep && OriginDecisionConfig) {
+              <div class="mj-agent-props-route-helper">
+                <div class="mj-agent-props-route-helper-header">
+                  <span class="mj-agent-props-route-helper-title">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Route on Answer
+                  </span>
+                </div>
+
+                <div class="mj-agent-props-field">
+                  <label>Decision Question</label>
+                  <select [value]="SelectedRouteQuestionKey"
+                    (change)="OnRouteQuestionChange(InputValue($event))"
+                    class="mj-agent-props-input">
+                    @for (q of OriginDecisionQuestions; track q.key) {
+                      <option [value]="q.key">{{ q.key }} ({{ q.question.kind }})</option>
+                    }
+                  </select>
+                </div>
+
+                @if (RouteSelectedQuestion?.kind === 'Choice') {
+                  <div class="mj-agent-props-field">
+                    <label>Choice Option</label>
+                    <select [value]="SelectedRouteChoiceOption"
+                      (change)="OnRouteChoiceOptionChange(InputValue($event))"
+                      class="mj-agent-props-input">
+                      @for (opt of RouteChoiceOptions; track opt.value) {
+                        <option [value]="opt.value">{{ opt.value }} — {{ opt.description }}</option>
+                      }
+                    </select>
+                  </div>
+                  @if (RouteChoiceCoverageHint) {
+                    <div class="mj-agent-props-coverage-hint">
+                      <i class="fa-solid fa-code-fork"></i>
+                      <span>{{ RouteChoiceCoverageHint }}</span>
+                    </div>
+                  }
+                }
+
+                @if (RouteSelectedQuestion?.kind === 'Likelihood') {
+                  <div class="mj-agent-props-field">
+                    <label>Probability Threshold (0..1)</label>
+                    <input type="number" min="0" max="1" step="0.05"
+                      [value]="RouteThresholdText"
+                      (input)="OnRouteLikelihoodThresholdChange(InputValue($event))"
+                      class="mj-agent-props-input"
+                      [class.mj-agent-props-input--error]="RouteLikelihoodThreshold === null">
+                    <span class="mj-agent-props-hint">Route taken when probability &gt;= threshold</span>
+                  </div>
+                }
+
+                @if (RouteSelectedQuestion?.kind === 'Score') {
+                  <div class="mj-agent-props-field">
+                    <label>Minimum Level (Score &gt;= Index)</label>
+                    <select [value]="RouteScoreLevelIndex"
+                      (change)="OnRouteScoreLevelChange(NumericValue($event))"
+                      class="mj-agent-props-input">
+                      @for (level of RouteScoreLevels; track $index) {
+                        <option [value]="$index">Level {{ $index }}: {{ level }}</option>
+                      }
+                    </select>
+                  </div>
+                }
+
+                @if (RouteConditionProblem; as routeProblem) {
+                  <span class="mj-agent-props-error">{{ routeProblem }}</span>
+                }
+
+                @if (!ReadOnly) {
+                  <button type="button" class="mj-agent-props-btn mj-agent-props-btn--secondary"
+                    [disabled]="!GetGeneratedRouteCondition()"
+                    (click)="ApplyRouteCondition()">
+                    <i class="fa-solid fa-code"></i> Apply to Condition
+                  </button>
+                }
+              </div>
+            }
             <div class="mj-agent-props-field">
               <label>Priority</label>
               @if (!ReadOnly) {

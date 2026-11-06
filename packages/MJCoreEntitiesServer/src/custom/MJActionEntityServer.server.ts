@@ -70,7 +70,7 @@ export class MJActionEntityServer extends MJActionEntityExtended {
             
             if ( this.Type === 'Generated' && // only generate when the type is Generated
                  !this.CodeLocked && // only generate when the code is not locked
-                 (this.GetFieldByName('UserPrompt').Dirty || !this.IsSaved || this.ForceCodeGeneration)  // only generate when the UserPrompt field is dirty or this is a new record or we are being asked to FORCE code generation
+                 (this.GetFieldByName('UserPrompt').Dirty || (!this.IsSaved && !this.Code) || this.ForceCodeGeneration)  // only generate when the UserPrompt field is dirty or this is a new record without code or we are being asked to FORCE code generation
                ) {
                 // UserPrompt field is dirty, or this is a new record, either way, this is the condition where we want to generate the Code.
                 const result = await this.GenerateCode();

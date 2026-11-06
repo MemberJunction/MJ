@@ -79,9 +79,13 @@ describe('AdhocQueryResolver pagination source-shape contract', () => {
         expect(/TotalRowCount:\s*recordset\.length/.test(src)).toBe(false);
     });
 
-    it('must consume the RenderPipeline PagingResult.CountSQL', () => {
+    it('must page through the read-only provider, passing MaxRows, StartRow and the timeout', () => {
         const src = readResolverSource();
-        expect(/PagingResult\??\.CountSQL/.test(src)).toBe(true);
+        // The provider's ad-hoc path renders, pages in the database and counts; the resolver
+        // must hand it the paging inputs rather than run SQL itself.
+        expect(/GetReadOnlyProvider\(/.test(src)).toBe(true);
+        expect(/\.RunQuery\(\{[\s\S]*SQL: input\.SQL[\s\S]*MaxRows: input\.MaxRows[\s\S]*StartRow: startRow[\s\S]*TimeoutSeconds/.test(src)).toBe(true);
+        expect(/from 'mssql'|new sql\.Request/.test(src)).toBe(false);
     });
 });
 

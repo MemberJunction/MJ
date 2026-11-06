@@ -320,6 +320,7 @@ export class CalendarWatcher {
                 ExtraFilter: `ExternalConnectionID='${escaped}' AND JoinMethod='Invite'`,
                 ResultType: 'simple',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             },
             this.contextUser,
         );
@@ -361,6 +362,7 @@ export class CalendarWatcher {
         row.Direction = 'Inbound';
         row.JoinMethod = 'Invite';
         row.TurnMode = 'Passive';
+        row.TurnAddressing = 'Regex';
         row.Status = 'Scheduled';
         row.ScheduledStartTime = invite.StartTime;
         row.Address = invite.JoinUrl ?? null;

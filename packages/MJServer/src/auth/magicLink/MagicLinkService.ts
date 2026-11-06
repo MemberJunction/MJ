@@ -34,11 +34,15 @@ import { ResolveConfiguredPrincipal } from '../principals.js';
 import { CommunicationEngine } from '@memberjunction/communication-engine';
 import { Message } from '@memberjunction/communication-types';
 import { configInfo, type MagicLinkConfig } from '../../config.js';
+import { CreateIsolatedProvider } from '../../isolatedProvider.js';
 import { MagicLinkKeyManager } from './MagicLinkKeys.js';
-import { GenerateRawToken, GenerateSessionId, HashToken, EvaluateInvite, BuildSessionClaims, BuildConsumeInviteSQL, CanIssueInvites, IsRoleGrantable, MAGIC_LINK_TOKEN_PREFIX } from './magicLinkCore.js';
+import { GenerateRawToken, GenerateSessionId, HashToken, EvaluateInvite, BuildSessionClaims, BuildConsumeInvitePostgresSQL, CanIssueInvites, IsRoleGrantable, MAGIC_LINK_TOKEN_PREFIX } from './magicLinkCore.js';
+import type { IServerExtensionMagicLinkService } from '@memberjunction/server-extensions-core';
 import type {
   CreateMagicLinkInviteParams,
   CreateMagicLinkInviteResult,
+  ManageMagicLinkInviteResult,
+  MagicLinkJWTClaims,
   RedeemMagicLinkResult,
   RedeemAuditContext,
 } from './types.js';
@@ -47,6 +51,21 @@ const INVITE_ENTITY = 'MJ: Magic Link Invites';
 const REDEMPTION_ENTITY = 'MJ: Magic Link Redemptions';
 /** Shared Anonymous principal — seeded by the Phase-4 migration; must match that UUID. */
 const ANONYMOUS_USER_ID = '273910DF-28F1-45C1-A8F8-6E9AD8E5F008';
+
+/** Outcome of the atomic single-use consume — see {@link MagicLinkService.consumeInvite}. */
+type ConsumeOutcome = 'won' | 'lost' | 'failed';
+
+/**
+ * The SQL Server guarded single-use procedure (migration V202609291627__v6.2.x__MagicLink_Consume_Invite_Sproc).
+ * A procedure, not raw DML, because on SQL Server MJ grants its runtime roles EXECUTE on procedures
+ * and SELECT on views — never DML on base tables — so on any host whose MJAPI login is not db_owner
+ * a raw UPDATE is refused (#4753). Ownership chaining lets the procedure update the table on the
+ * caller's behalf. PostgreSQL has no counterpart function; see {@link BuildConsumeInvitePostgresSQL}.
+ */
+const CONSUME_INVITE_PROC = 'spConsumeMagicLinkInvite';
+
+/** MagicLinkInvite base table (core schema) — the PostgreSQL consume updates it directly. */
+const INVITE_TABLE = 'MagicLinkInvite';
 
 /** Outcome of provisioning a redeeming user. */
 interface ProvisionResult {
@@ -60,10 +79,52 @@ interface ProvisionResult {
 }
 
 /**
- * Magic-link service. One instance per server, constructed with the resolved
- * public URL and the validated config.
+ * Validates that a candidate `redirectUrl` is a well-formed `http:` or `https:` URL whose
+ * origin matches at least one concrete normalized entry in `allowedOrigins`.
+ * Wildcard `'*'` entries are explicitly ignored/rejected so session tokens can never be
+ * redirected to unvalidated origins.
  */
-export class MagicLinkService {
+export function IsMagicLinkRedirectUrlAllowed(redirectUrl: string, allowedOrigins: readonly string[]): boolean {
+  const trimmed = redirectUrl.trim();
+  if (!trimmed) {
+    return false;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return false;
+  }
+  const normalizedTargetOrigin = parsed.origin.toLowerCase();
+  for (const rawAllowed of allowedOrigins) {
+    const candidate = (rawAllowed ?? '').trim();
+    if (!candidate || candidate === '*') {
+      continue;
+    }
+    try {
+      const allowedUrl = new URL(candidate);
+      if (allowedUrl.origin.toLowerCase() === normalizedTargetOrigin) {
+        return true;
+      }
+    } catch {
+      if (candidate.replace(/\/$/, '').toLowerCase() === normalizedTargetOrigin) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Magic-link service. One instance per server, constructed with the resolved
+ * public URL and the validated config. Implements {@link IServerExtensionMagicLinkService}
+ * so `BaseServerExtension` implementations can mint, revoke, extend, and verify invites
+ * via `context.services.GetMagicLinkService?.()`.
+ */
+export class MagicLinkService implements IServerExtensionMagicLinkService {
   constructor(
     private readonly publicUrl: string,
     private readonly config: MagicLinkConfig,
@@ -71,7 +132,7 @@ export class MagicLinkService {
 
   /**
    * Creates a single-use, app-scoped invite, persists its hashed token, and
-   * (when a communication provider is configured) emails the link.
+   * (when a communication provider is configured and `params.SendEmail !== false`) emails the link.
    *
    * @param params  invite parameters
    * @param creatingUser  the authenticated internal user issuing the invite
@@ -92,6 +153,15 @@ export class MagicLinkService {
       const callerRoleNames = (creatingUser.UserRoles ?? []).map((r) => r.Role).filter((n): n is string => !!n);
       if (!CanIssueInvites(creatingUser.Type, callerRoleNames, this.config.inviteIssuerRoleNames)) {
         return { success: false, errorCode: 'forbidden', error: 'Not authorized to issue magic-link invites.' };
+      }
+
+      const validatedRedirectUrl = params.RedirectUrl?.trim() ? params.RedirectUrl.trim() : undefined;
+      if (validatedRedirectUrl && !IsMagicLinkRedirectUrlAllowed(validatedRedirectUrl, this.allowedRedirectOrigins())) {
+        return {
+          success: false,
+          errorCode: 'invalid_redirect_url',
+          error: `RedirectUrl '${validatedRedirectUrl}' is not permitted by the server's allowed frontend origins.`,
+        };
       }
 
       const roleId = params.RoleId ?? this.resolveRestrictedRoleId(md);
@@ -120,12 +190,13 @@ export class MagicLinkService {
       }
 
       const rawToken = GenerateRawToken();
+      const tokenHash = HashToken(rawToken);
       const expiresInHours = params.ExpiresInHours ?? this.config.defaultExpiresInHours;
       const expiresAt = new Date(Date.now() + expiresInHours * 3600 * 1000);
 
       const invite = await md.GetEntityObject<MJMagicLinkInviteEntity>(INVITE_ENTITY, creatingUser);
       invite.NewRecord();
-      invite.TokenHash = HashToken(rawToken);
+      invite.TokenHash = tokenHash;
       invite.Email = params.email;
       invite.ApplicationID = params.ApplicationId;
       invite.RoleID = roleId;
@@ -145,10 +216,22 @@ export class MagicLinkService {
       // multi-scope reads. Best-effort so a child-row hiccup never fails issuance.
       await this.writeInviteScopeChildRows(invite.ID, params.ApplicationId, roleId, creatingUser, md);
 
-      const redemptionUrl = this.buildRedemptionUrl(rawToken);
+      let redirectBindingToken: string | undefined;
+      if (validatedRedirectUrl) {
+        if (!MagicLinkKeyManager.Instance.IsInitialized) {
+          MagicLinkKeyManager.Instance.Initialize(this.config.rsaPrivateKey);
+        }
+        redirectBindingToken = MagicLinkKeyManager.Instance.SignRedirectBinding(
+          tokenHash,
+          validatedRedirectUrl,
+          Math.floor(expiresAt.getTime() / 1000),
+        );
+      }
+
+      const redemptionUrl = this.buildRedemptionUrl(rawToken, redirectBindingToken);
 
       let emailSent = false;
-      if (this.config.communicationProvider) {
+      if (params.SendEmail !== false && this.config.communicationProvider) {
         emailSent = await this.sendInviteEmail(params.email, redemptionUrl, app.Name, creatingUser);
       }
 
@@ -156,7 +239,7 @@ export class MagicLinkService {
         success: true,
         inviteId: invite.ID,
         redemptionUrl,
-        // Surface the raw token only when we couldn't deliver it ourselves.
+        // Surface the raw token only when we couldn't (or were asked not to) deliver it ourselves.
         rawToken: emailSent ? undefined : rawToken,
         emailSent,
         expiresAt: expiresAt.toISOString(),
@@ -168,14 +251,166 @@ export class MagicLinkService {
   }
 
   /**
+   * Revokes an existing invite so subsequent redemptions fail with `'revoked'`.
+   * Requires the acting user to hold invite-issuance authority (`CanIssueInvites`).
+   */
+  public async RevokeInvite(
+    inviteId: string,
+    actingUser: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<ManageMagicLinkInviteResult> {
+    try {
+      const callerRoleNames = (actingUser.UserRoles ?? []).map((r) => r.Role).filter((n): n is string => !!n);
+      if (!CanIssueInvites(actingUser.Type, callerRoleNames, this.config.inviteIssuerRoleNames)) {
+        return { success: false, errorCode: 'forbidden', error: 'Not authorized to revoke magic-link invites.' };
+      }
+      if (!inviteId?.trim()) {
+        return { success: false, errorCode: 'not_found', error: 'Invite ID is required.' };
+      }
+
+      const md = provider ?? Metadata.Provider;
+      const invite = await md.GetEntityObject<MJMagicLinkInviteEntity>(INVITE_ENTITY, actingUser);
+      const loaded = await invite.Load(inviteId.trim());
+      if (!loaded) {
+        return { success: false, errorCode: 'not_found', error: `Invite '${inviteId}' not found.` };
+      }
+
+      if (invite.Status === 'Revoked') {
+        return {
+          success: true,
+          inviteId: invite.ID,
+          status: invite.Status,
+          expiresAt: invite.ExpiresAt.toISOString(),
+        };
+      }
+
+      invite.Status = 'Revoked';
+      if (!(await invite.Save())) {
+        return {
+          success: false,
+          errorCode: 'server_error',
+          error: `Failed to revoke invite: ${invite.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+        };
+      }
+
+      return {
+        success: true,
+        inviteId: invite.ID,
+        status: invite.Status,
+        expiresAt: invite.ExpiresAt.toISOString(),
+      };
+    } catch (e) {
+      LogError(e);
+      return { success: false, errorCode: 'server_error', error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  /**
+   * Updates the expiration timestamp of an existing non-revoked, non-consumed invite.
+   * Requires the acting user to hold invite-issuance authority (`CanIssueInvites`).
+   */
+  public async UpdateInviteExpiry(
+    inviteId: string,
+    expiresAt: Date,
+    actingUser: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<ManageMagicLinkInviteResult> {
+    try {
+      const callerRoleNames = (actingUser.UserRoles ?? []).map((r) => r.Role).filter((n): n is string => !!n);
+      if (!CanIssueInvites(actingUser.Type, callerRoleNames, this.config.inviteIssuerRoleNames)) {
+        return { success: false, errorCode: 'forbidden', error: 'Not authorized to update magic-link invites.' };
+      }
+      if (!(expiresAt instanceof Date) || Number.isNaN(expiresAt.getTime())) {
+        return { success: false, errorCode: 'invalid_expiry', error: 'expiresAt must be a valid Date.' };
+      }
+      if (!inviteId?.trim()) {
+        return { success: false, errorCode: 'not_found', error: 'Invite ID is required.' };
+      }
+
+      const md = provider ?? Metadata.Provider;
+      const invite = await md.GetEntityObject<MJMagicLinkInviteEntity>(INVITE_ENTITY, actingUser);
+      const loaded = await invite.Load(inviteId.trim());
+      if (!loaded) {
+        return { success: false, errorCode: 'not_found', error: `Invite '${inviteId}' not found.` };
+      }
+
+      if (invite.Status === 'Revoked' || invite.Status === 'Consumed') {
+        return {
+          success: false,
+          errorCode: 'invalid_state',
+          error: `Cannot update expiry on invite '${invite.ID}' because its status is '${invite.Status}'.`,
+        };
+      }
+
+      const nowMs = Date.now();
+      invite.ExpiresAt = expiresAt;
+      if (invite.Status === 'Expired' && expiresAt.getTime() > nowMs && invite.UseCount < invite.MaxUses) {
+        invite.Status = 'Active';
+      } else if (invite.Status === 'Active' && expiresAt.getTime() <= nowMs) {
+        invite.Status = 'Expired';
+      }
+
+      if (!(await invite.Save())) {
+        return {
+          success: false,
+          errorCode: 'server_error',
+          error: `Failed to update invite expiry: ${invite.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+        };
+      }
+
+      return {
+        success: true,
+        inviteId: invite.ID,
+        status: invite.Status,
+        expiresAt: invite.ExpiresAt.toISOString(),
+      };
+    } catch (e) {
+      LogError(e);
+      return { success: false, errorCode: 'server_error', error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  /**
+   * Verifies a magic-link session JWT against this service's configured issuer and audience.
+   */
+  public VerifySessionToken(token: string): MagicLinkJWTClaims | null {
+    if (!token || !MagicLinkKeyManager.Instance.IsInitialized) {
+      return null;
+    }
+    return MagicLinkKeyManager.Instance.VerifySessionToken(token, {
+      issuer: this.publicUrl,
+      audience: this.config.audience,
+    });
+  }
+
+  /**
+   * Verifies a signed redirect binding (`rt`) against the raw invite token's hash AND the host's
+   * allowed frontend origins. Returns the verified redirect URL, or `undefined` if absent/invalid.
+   */
+  public ResolveVerifiedRedirectUrl(rawToken: string, redirectBindingToken: string | undefined): string | undefined {
+    if (!rawToken || !redirectBindingToken || !MagicLinkKeyManager.Instance.IsInitialized) {
+      return undefined;
+    }
+    const tokenHash = HashToken(rawToken);
+    const boundUrl = MagicLinkKeyManager.Instance.VerifyRedirectBinding(redirectBindingToken, tokenHash);
+    if (!boundUrl) {
+      return undefined;
+    }
+    if (!IsMagicLinkRedirectUrlAllowed(boundUrl, this.allowedRedirectOrigins())) {
+      return undefined;
+    }
+    return boundUrl;
+  }
+
+  /**
    * Redeems a raw token: validates the invite, atomically consumes one use,
    * provisions/links the user with the restricted role + app, and mints a
    * session JWT. Runs in the public (pre-auth) path, so it uses the global
    * provider and a configured provisioning context user.
    *
-   * Single-use is enforced by a compare-and-swap UPDATE ({@link consumeInvite})
-   * BEFORE the token is minted — two concurrent redemptions of a single-use
-   * link race on the same row and exactly one wins. The consume is the gate:
+   * Single-use is enforced by the guarded UPDATE inside the `spConsumeMagicLinkInvite`
+   * procedure ({@link consumeInvite}) BEFORE the token is minted — two concurrent
+   * redemptions of a single-use link race on the same row and exactly one wins. The consume is the gate:
    * if a later step fails, the use is already burned (fail-closed). That is the
    * correct trade-off for a single-use credential — burning a token on a server
    * error is recoverable (re-issue); allowing replay is not.
@@ -252,10 +487,14 @@ export class MagicLinkService {
         return done({ success: false, errorCode: 'server_error', error: 'Invite role not found.' });
       }
 
-      // Atomic consume BEFORE minting. If we lose the race (0 rows updated), the
-      // invite was concurrently consumed/expired — re-evaluate the now-stale
-      // in-memory copy only to surface a precise code; default to 'consumed'.
-      if (!(await this.consumeInvite(invite, provider, contextUser))) {
+      // Atomic consume BEFORE minting. A statement that never ran (permissions,
+      // missing procedure, connection) is a server fault, not a lost race — report
+      // it as such so operators aren't sent hunting a double-redeem (#4753).
+      const consume = await this.consumeInvite(invite, provider, contextUser);
+      if (consume === 'failed') {
+        return done({ success: false, errorCode: 'server_error', error: 'Could not redeem the invite due to a server error.' });
+      }
+      if (consume === 'lost') {
         // Lost the race or the invite expired between the pre-check and the
         // consume. The in-memory copy still looks eligible if only the DB-side
         // use count changed, so default that case to 'consumed'.
@@ -400,10 +639,31 @@ export class MagicLinkService {
     return role?.ID;
   }
 
-  /** Builds the shareable redemption URL. */
-  private buildRedemptionUrl(rawToken: string): string {
+  /** Builds the shareable redemption URL (including `&rt=...` when a per-invite RedirectUrl was signed). */
+  private buildRedemptionUrl(rawToken: string, redirectBindingToken?: string): string {
     const base = this.publicUrl.replace(/\/$/, '');
-    return `${base}/magic-link/redeem?token=${encodeURIComponent(rawToken)}`;
+    const rtParam = redirectBindingToken ? `&rt=${encodeURIComponent(redirectBindingToken)}` : '';
+    return `${base}/magic-link/redeem?token=${encodeURIComponent(rawToken)}${rtParam}`;
+  }
+
+  /**
+   * Collects concrete frontend origins a caller-supplied per-invite `RedirectUrl` is permitted
+   * to target (`explorerUrl`, `magicLink.allowedRedirectOrigins`, and non-wildcard `cors.allowedOrigins`).
+   */
+  private allowedRedirectOrigins(): string[] {
+    const origins: string[] = [];
+    const candidates: readonly (string | undefined)[] = [
+      this.config.explorerUrl ?? configInfo.magicLink?.explorerUrl,
+      ...(this.config.allowedRedirectOrigins ?? configInfo.magicLink?.allowedRedirectOrigins ?? []),
+      ...(configInfo.cors?.allowedOrigins ?? []),
+    ];
+    for (const raw of candidates) {
+      const trimmed = raw?.trim();
+      if (trimmed && trimmed !== '*') {
+        origins.push(trimmed);
+      }
+    }
+    return origins;
   }
 
   /**
@@ -502,9 +762,11 @@ export class MagicLinkService {
   /** Creates a new user with exactly the restricted role + single app, transactionally. */
   private async createScopedUser(invite: MJMagicLinkInviteEntity, role: RoleInfo, contextUser: UserInfo): Promise<ProvisionResult> {
     // Single provider for BOTH the transaction and the entity writes, so the
-    // BeginTransaction/Save/Commit are provably on the same connection.
-    // global-provider-ok: redemption runs in the pre-auth flow, no per-request provider yet.
-    const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: server-side magic-link service; runs under the server's single default provider
+    // BeginTransaction/Save/Commit are provably on the same connection. Redemption runs
+    // pre-auth, with no per-request provider yet, and the global Metadata.Provider is shared
+    // by every concurrent request: a transaction opened there nests into anyone else's and
+    // swallows their writes. So it gets its own (see CreateIsolatedProvider).
+    const provider = await CreateIsolatedProvider();
     const email = invite.Email;
     // The invite does not persist a name; provision a sensible default. (The
     // create-invite params accept first/last name but there is no column to
@@ -639,39 +901,39 @@ export class MagicLinkService {
   }
 
   /**
-   * Atomically consumes one use of the invite via a compare-and-swap UPDATE.
-   * The WHERE clause re-checks every eligibility condition (Active, not
-   * exhausted, not expired) at the DB level, so the increment and the guard are
-   * a single atomic operation. Returns true ONLY when this call updated the row
-   * (won the race); concurrent redemptions of a single-use link see 0 rows.
+   * Atomically consumes one use of the invite with a single guarded UPDATE that re-checks every
+   * eligibility condition (Active, not exhausted, not expired) at the DB level, so the increment and
+   * the guard are one atomic operation. Concurrent redemptions of a single-use link race on the row
+   * and exactly one gets the row back.
    *
-   * Dialect-aware: SQL Server uses an `OUTPUT`-into-table-variable win-detect;
-   * PostgreSQL uses `UPDATE … WHERE … RETURNING` (the WHERE guard is itself the
-   * atomic single-use gate). The platform is read from the provider itself
-   * (`PlatformKey`), not from process env, so this is correct even under a
-   * non-default per-connection provider. The invite ID always binds as a
-   * parameter (`@p0` / `$1`), never interpolated.
+   * The statement differs per platform because the grants do:
+   * - **SQL Server** calls {@link CONSUME_INVITE_PROC} (`EXEC … @ID=@p0`). Runtime roles have
+   *   EXECUTE on procedures but no DML on base tables (#4753).
+   * - **PostgreSQL** runs {@link BuildConsumeInvitePostgresSQL}'s `UPDATE … RETURNING` directly.
+   *   Runtime roles hold table DML there, and no PG counterpart of the procedure exists.
+   * The ID is always a bound parameter.
    *
-   * Fail-closed: any DB error returns false and the redemption is rejected.
+   * Returns `'won'` (this call consumed a use), `'lost'` (the guard matched nothing: consumed,
+   * revoked or expired concurrently) or `'failed'` (the statement never ran — permissions, a missing
+   * procedure, a connection error). `'failed'` is kept distinct from `'lost'` on purpose: collapsing
+   * them is what made #4753's permission error surface to users as "already redeemed".
    */
-  private async consumeInvite(invite: MJMagicLinkInviteEntity, provider: DatabaseProviderBase, contextUser: UserInfo): Promise<boolean> {
+  private async consumeInvite(invite: MJMagicLinkInviteEntity, provider: DatabaseProviderBase, contextUser: UserInfo): Promise<ConsumeOutcome> {
+    const isPg = provider.PlatformKey === 'postgresql';
+    const statement = isPg ? `PostgreSQL guarded UPDATE on ${INVITE_TABLE}` : CONSUME_INVITE_PROC;
     try {
-      const entityInfo = provider.EntityByName(INVITE_ENTITY);
-      if (!entityInfo) {
-        LogError(`[MagicLink] Entity metadata for '${INVITE_ENTITY}' not found; cannot consume invite.`);
-        return false;
+      const sql = isPg
+        ? BuildConsumeInvitePostgresSQL(`${provider.MJCoreSchemaName}.${INVITE_TABLE}`)
+        : provider.Dialect.ProcedureCallSyntax(provider.MJCoreSchemaName, CONSUME_INVITE_PROC, [`@ID=${provider.BuildParameterPlaceholder(0)}`]);
+      const rows = await provider.ExecuteSQL<{ ID: string }>(sql, [invite.ID], { isMutation: true, description: `MagicLink ${statement}` }, contextUser);
+      if (!Array.isArray(rows)) {
+        LogError(`[MagicLink] ${statement} returned no result set for invite ${invite.ID}; treating the consume as failed.`);
+        return 'failed';
       }
-      const isPg = provider.PlatformKey === 'postgresql';
-      // PG identifiers are auto-quoted by PostgreSQLDataProvider.ExecuteSQL, so
-      // pass the bare `schema.table`; SQL Server takes the bracket-quoted form.
-      const table = isPg ? `${entityInfo.SchemaName}.${entityInfo.BaseTable}` : `[${entityInfo.SchemaName}].[${entityInfo.BaseTable}]`;
-      // OUTPUT/RETURNING yields one row iff the WHERE matched — the atomic single-use gate.
-      const sql = BuildConsumeInviteSQL(table, isPg ? 'postgresql' : 'sqlserver');
-      const rows = await provider.ExecuteSQL<{ ID: string }>(sql, [invite.ID], { isMutation: true }, contextUser);
-      return Array.isArray(rows) && rows.length === 1;
+      return rows.length === 1 ? 'won' : 'lost';
     } catch (e) {
-      LogError(`[MagicLink] Atomic consume failed for invite ${invite.ID}: ${e instanceof Error ? e.message : String(e)}`);
-      return false;
+      LogError(`[MagicLink] ${statement} FAILED for invite ${invite.ID} — the statement never ran, so this is NOT a lost race: ${e instanceof Error ? e.message : String(e)}`);
+      return 'failed';
     }
   }
 

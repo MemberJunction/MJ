@@ -11,6 +11,18 @@
   --sage-bg: color-mix(in srgb, var(--mj-color-violet-400, #a78bfa) 14%, transparent);
   --sage-border: color-mix(in srgb, var(--mj-color-violet-400, #a78bfa) 45%, transparent);
   --sage-chip-bg: color-mix(in srgb, var(--mj-color-violet-500, #8b5cf6) 32%, var(--mj-bg-surface-sunken));
+  /* Sticky "paper" is deliberately the same in both themes (a yellow note is yellow on a dark
+     board too), so it is built from the warning (amber) primitive ramp, not a surface token.
+     Ink is a warm near-black mixed from the same ramp; Sage's paper and ink derive from --sage
+     so re-tinting the agent accent re-tints its notes. */
+  --sticky-amber-top: var(--mj-color-warning-300, #fcd34d);
+  --sticky-amber-bottom: var(--mj-color-warning-400, #fbbf24);
+  --sticky-amber-light-top: var(--mj-color-warning-200, #fde68a);
+  --sticky-amber-light-bottom: var(--mj-color-warning-300, #fcd34d);
+  --sticky-ink: color-mix(in srgb, var(--mj-color-warning-900, #78350f) 50%, var(--mj-color-neutral-950, #020617));
+  --sticky-sage-top: color-mix(in srgb, var(--sage) 30%, var(--mj-color-neutral-900, #0f172a));
+  --sticky-sage-bottom: color-mix(in srgb, var(--sage) 18%, var(--mj-color-neutral-900, #0f172a));
+  --sage-ink: color-mix(in srgb, var(--sage) 14%, var(--mj-color-neutral-950, #020617));
 
   display: block;
   position: absolute;
@@ -44,6 +56,21 @@
   height: 0;
   transform-origin: 0 0;
   overflow: visible;
+}
+
+/* Stepped (button) zoom only: the presets jump 11%, 25%, 33% between consecutive clicks, so the
+   transform eases for one step. The wheel/pinch and hold-to-zoom paths never carry this class —
+   a transition on a continuous gesture lags it.
+   The 180ms MUST match ZOOM_STEP_TRANSITION_MS in whiteboard-board.component.ts: the component
+   drops the class on that timer, so a longer transition here would be cut short (visible snap). */
+.board-viewport--stepping {
+  transition: transform 180ms cubic-bezier(0.33, 1, 0.68, 1); /* = ZOOM_STEP_TRANSITION_MS */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-viewport--stepping {
+    transition: none;
+  }
 }
 
 /* ---------- ink + connector svg layer ---------- */
@@ -134,10 +161,10 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
-.sticky--amber { background: linear-gradient(180deg, #fcd34d, #f5b831); color: #3f2d04; }
-.sticky--amber2 { background: linear-gradient(180deg, #fde68a, #f8ca4d); color: #3f2d04; }
+.sticky--amber { background: linear-gradient(180deg, var(--sticky-amber-top), var(--sticky-amber-bottom)); color: var(--sticky-ink); }
+.sticky--amber2 { background: linear-gradient(180deg, var(--sticky-amber-light-top), var(--sticky-amber-light-bottom)); color: var(--sticky-ink); }
 .sticky--sage {
-  background: linear-gradient(180deg, #38306b, #2c2455);
+  background: linear-gradient(180deg, var(--sticky-sage-top), var(--sticky-sage-bottom));
   color: var(--mj-color-violet-300, #c4b5fd);
   border: 1px solid var(--sage);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--sage) 20%, transparent), var(--mj-shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.3));
@@ -205,7 +232,7 @@
   background: transparent;
   box-shadow: none;
   letter-spacing: 0.01em;
-  text-shadow: 0 1px 6px rgba(2, 6, 23, 0.8);
+  text-shadow: 0 1px 6px color-mix(in srgb, var(--mj-color-neutral-950, #020617) 80%, transparent);
   /* WRAP by default: long labels fold at the default max width; an explicit item
      width (resize / the tool's w param) binds inline and wins. */
   white-space: pre-wrap;
@@ -339,7 +366,7 @@
   height: 100%;
   border: 0;
   display: block;
-  background: #ffffff; /* widgets author against a plain document background */
+  background: var(--mj-color-neutral-0, #ffffff); /* widgets author against a plain document background: fixed white in both themes */
 }
 /* While a board gesture is in flight, frames must not swallow pointermove —
    otherwise dragging a widget by its header dies the moment the pointer crosses an iframe. */
@@ -672,7 +699,7 @@
   display: grid;
   place-items: center;
   background: var(--sage);
-  color: #1b1438;
+  color: var(--sage-ink);
   font-size: 11px;
   box-shadow: 0 0 14px color-mix(in srgb, var(--sage) 60%, transparent);
 }

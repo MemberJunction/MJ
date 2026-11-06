@@ -1,5 +1,6 @@
 import { Args, Command, Flags } from '@oclif/core';
 import { existsSync, mkdirSync, cpSync, copyFileSync, readFileSync, writeFileSync } from 'node:fs';
+import * as net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
@@ -45,7 +46,8 @@ export default class AgentInit extends Command {
       description: 'Open App Git URL to install for business context (default: More Cheese).',
     }),
     'skip-docker-check': Flags.boolean({
-      description: 'Skip verifying whether Docker Desktop is currently running.',
+      description:
+        'Skip the Docker availability check and assume Docker is running (the stack still starts unless --no-start is passed).',
       default: false,
     }),
   };
@@ -65,8 +67,10 @@ export default class AgentInit extends Command {
       );
     }
 
-    // 2. Check Docker availability & attempt auto-launch if stopped on macOS
-    const dockerAvailable = flags['skip-docker-check'] ? false : this.ensureDockerRunning();
+    // 2. Check Docker availability & attempt auto-launch if stopped on macOS. --skip-docker-check
+    //    skips the probe and ASSUMES Docker is available (remote daemon, colima, Podman shim...);
+    //    it must not decide Docker is absent, or the stack never starts for exactly those users.
+    const dockerAvailable = flags['skip-docker-check'] ? true : this.ensureDockerRunning();
 
     // 3. Ensure target directory exists
     if (!existsSync(targetDir)) {
@@ -96,14 +100,25 @@ export default class AgentInit extends Command {
         copyFileSync(envExamplePath, envPath);
       }
 
-      // If custom app URL was supplied, update .env
-      if (flags.app && existsSync(envPath)) {
-        let envContent = readFileSync(envPath, 'utf8');
-        envContent = envContent.replace(
-          /OPEN_APP_INSTALL_URL=.*/,
-          `OPEN_APP_INSTALL_URL=${flags.app}`
-        );
-        writeFileSync(envPath, envContent, 'utf8');
+      if (existsSync(envPath)) {
+        // Pin the workspace to this CLI's own release. docker-compose.yml requires MJ_VERSION: the
+        // container installs this exact CLI and passes it to `mj install --tag`, so the stack cannot
+        // drift onto whatever npm's `latest` or the newest GitHub release happens to be.
+        this.upsertEnvValue(envPath, 'MJ_VERSION', this.cliVersion());
+
+        // Set a workspace-unique COMPOSE_PROJECT_NAME so multiple Citizen Builder workspaces on one
+        // machine don't collide on Docker container/volume names.
+        const slug = path
+          .basename(targetDir)
+          .toLowerCase()
+          .replace(/[^a-z0-9_-]+/g, '-')
+          .replace(/^-+|-+$/g, '') || 'citizen';
+        this.upsertEnvValue(envPath, 'COMPOSE_PROJECT_NAME', `mj-${slug}`);
+
+        // If a custom app URL was supplied, point the workspace at it
+        if (flags.app) {
+          this.upsertEnvValue(envPath, 'OPEN_APP_INSTALL_URL', flags.app);
+        }
       }
 
       spinner.succeed(chalk.green('Workspace scaffolded successfully!'));
@@ -114,6 +129,13 @@ export default class AgentInit extends Command {
     }
 
     // 6. Start Docker and bootstrap if requested and available
+    if (!flags['skip-docker-check']) {
+      if (dockerAvailable) {
+        this.checkDockerMemory();
+      }
+      await this.checkPortsAvailable(targetDir);
+    }
+
     if (flags.start && dockerAvailable) {
       this.startEnvironment(targetDir);
     } else {
@@ -122,6 +144,144 @@ export default class AgentInit extends Command {
       }
       this.printNextSteps(targetDir, dockerAvailable);
     }
+  }
+
+  private checkDockerMemory(): void {
+    try {
+      const memBytesRaw = execSync("docker info --format '{{.MemTotal}}'", {
+        stdio: ['ignore', 'pipe', 'ignore'],
+      })
+        .toString()
+        .trim();
+      const memBytes = Number(memBytesRaw);
+      const minRecommendedBytes = 6 * 1024 * 1024 * 1024; // 6 GB
+      if (Number.isFinite(memBytes) && memBytes > 0 && memBytes < minRecommendedBytes) {
+        const memGb = (memBytes / (1024 * 1024 * 1024)).toFixed(1);
+        this.log(
+          chalk.yellow(
+            `⚠️  Docker has ${memGb} GB RAM allocated. SQL Server + MJExplorer recommend at least 8 GB RAM in Docker Desktop settings.`
+          )
+        );
+      }
+    } catch {
+      // Ignore if docker info format is unsupported
+    }
+  }
+
+  private async checkPortsAvailable(targetDir: string): Promise<void> {
+    let apiPort = 4000;
+    let dbPort = 1433;
+    let explorerPort = 4202;
+    const envPath = path.join(targetDir, '.env');
+    if (existsSync(envPath)) {
+      const content = readFileSync(envPath, 'utf8');
+      const apiMatch = content.match(/^API_PORT=(\d+)/m);
+      if (apiMatch) apiPort = Number(apiMatch[1]);
+      const dbMatch = content.match(/^DB_PORT=(\d+)/m);
+      if (dbMatch) dbPort = Number(dbMatch[1]);
+      const explorerMatch = content.match(/^EXPLORER_PORT=(\d+)/m);
+      if (explorerMatch) explorerPort = Number(explorerMatch[1]);
+    }
+
+    const portsToCheck: Array<{ port: number; envVar: string; label: string }> = [
+      { port: dbPort, envVar: 'DB_PORT', label: 'SQL Server' },
+      { port: apiPort, envVar: 'API_PORT', label: 'MJAPI' },
+      { port: explorerPort, envVar: 'EXPLORER_PORT', label: 'MJExplorer' },
+    ];
+
+    for (const item of portsToCheck) {
+      const available = await this.isPortAvailable(item.port);
+      if (!available) {
+        const replacement = await this.findAvailablePort(item.port + 1);
+        if (replacement && existsSync(envPath)) {
+          this.upsertEnvValue(envPath, item.envVar, String(replacement));
+          this.log(
+            chalk.yellow(
+              `⚠️  Port ${item.port} (${item.label}) is already in use on localhost. Automatically set ${item.envVar}=${replacement} in .env.`
+            )
+          );
+        } else {
+          this.log(
+            chalk.yellow(
+              `⚠️  Port ${item.port} (${item.label}) is already in use on localhost. Update ${item.envVar} in .env before starting Docker if needed.`
+            )
+          );
+        }
+      }
+    }
+  }
+
+  private async findAvailablePort(startPort: number): Promise<number | null> {
+    for (let port = startPort; port < startPort + 50; port++) {
+      if (await this.isPortAvailable(port)) {
+        return port;
+      }
+    }
+    return null;
+  }
+
+  private isPortAvailable(port: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      // 1. First probe whether anything is already accepting connections on 127.0.0.1:port.
+      //    On macOS/Windows, Docker Desktop's port proxy binds wildcard/IPv6 in a way that
+      //    can allow net.createServer().listen(port, '127.0.0.1') to succeed even when
+      //    Docker has already allocated the port.
+      const socket = net.createConnection({ port, host: '127.0.0.1' });
+      socket.setTimeout(250);
+      socket.once('connect', () => {
+        socket.destroy();
+        resolve(false);
+      });
+      socket.once('timeout', () => {
+        socket.destroy();
+        this.canBindPort(port).then(resolve);
+      });
+      socket.once('error', () => {
+        socket.destroy();
+        this.canBindPort(port).then(resolve);
+      });
+    });
+  }
+
+  private canBindPort(port: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      const server = net.createServer();
+      server.once('error', () => resolve(false));
+      server.once('listening', () => {
+        server.close(() => resolve(true));
+      });
+      server.listen(port, '0.0.0.0');
+    });
+  }
+
+  /**
+   * This CLI's own version, read from its package.json. Not `this.config.version`: that is the
+   * version of whatever package root oclif resolved, which is this CLI only when the command runs
+   * through the `mj` binary. Invoked programmatically it can be oclif's own, and a wrong pin here
+   * would silently install an unrelated release into the container.
+   */
+  private cliVersion(): string {
+    // Same depth from src/commands/agent and dist/commands/agent, and package.json always ships.
+    const pkgPath = path.join(__dirname, '..', '..', '..', 'package.json');
+    const pkg: { name?: string; version?: string } = JSON.parse(readFileSync(pkgPath, 'utf8'));
+    if (pkg.name !== '@memberjunction/cli' || !pkg.version) {
+      throw new Error(`Could not determine the @memberjunction/cli version from ${pkgPath}`);
+    }
+    return pkg.version;
+  }
+
+  /**
+   * Set `key=value` in a dotenv file: replace the active assignment if there is one, otherwise
+   * append it. Commented-out example lines are left untouched.
+   */
+  private upsertEnvValue(envPath: string, key: string, value: string): void {
+    const content = readFileSync(envPath, 'utf8');
+    const assignment = `${key}=${value}`;
+    const activeLine = new RegExp(`^${key}=.*$`, 'm');
+    const updated = activeLine.test(content)
+      ? content.replace(activeLine, () => assignment)
+      : `${content}${content.endsWith('\n') ? '' : '\n'}${assignment}\n`;
+    writeFileSync(envPath, updated, 'utf8');
   }
 
   private resolveTemplateDir(): string | null {

@@ -1,0 +1,117 @@
+{
+  "fields": {
+    "Name": "Procurement",
+    "Status": "Active",
+    "Description": "Security and delivery groups. Encryption cannot be not-applicable. Schedule excludes and redistributes. See guides/RUBRICS_GUIDE.md."
+  },
+  "primaryKey": {
+    "ID": "908F94AC-70A9-4D15-8638-579581C07140"
+  },
+  "relatedEntities": {
+    "MJ: Rubric Versions": [
+      {
+        "fields": {
+          "RubricID": "@parent:ID",
+          "Status": "Draft",
+          "NotApplicablePolicy": "ExcludeAndRedistribute",
+          "ScoreDisplayMin": 0,
+          "ScoreDisplayMax": 1,
+          "ChangeSummary": "Worked example from guides/RUBRICS_GUIDE.md. Draft because publish stamps are not set here."
+        },
+        "primaryKey": {
+          "ID": "94173D4D-B11B-4BE8-873A-8CBADA6253E3"
+        },
+        "relatedEntities": {
+          "MJ: Rubric Criteria": [
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "security",
+                "Name": "Security",
+                "NodeType": "Group",
+                "Weight": 1,
+                "IsGate": false,
+                "Sequence": 0
+              },
+              "primaryKey": {
+                "ID": "5CC13384-009F-49D6-A630-7C98A46B0B9D"
+              },
+              "sync": {
+                "lastModified": "2026-10-02T21:42:23.605Z",
+                "checksum": "29f5dc65f48ae85b85745b55e34602337bbc9ff14e949aafb9991415f05cd729"
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "delivery",
+                "Name": "Delivery",
+                "NodeType": "Group",
+                "Weight": 1,
+                "IsGate": false,
+                "Sequence": 1
+              },
+              "primaryKey": {
+                "ID": "5A003EFF-7499-4EEB-82C6-AAA5AB166A45"
+              },
+              "sync": {
+                "lastModified": "2026-10-02T21:42:23.619Z",
+                "checksum": "23b96c3cb0489a74b8b4b1ffc76a6789a63aa46453c5ed546f8131b298b775c8"
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "encryption",
+                "Name": "Encryption",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "Sequence": 2,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Compliance (Compliant / Partial / Non-compliant)",
+                "NotApplicablePolicy": "NotAllowed",
+                "ParentID": "5CC13384-009F-49D6-A630-7C98A46B0B9D"
+              },
+              "primaryKey": {
+                "ID": "03E72EF0-1FD7-4E69-81A4-AA4C36EF1CAC"
+              },
+              "sync": {
+                "lastModified": "2026-10-02T21:42:23.638Z",
+                "checksum": "08b100e282499facfa4f9f03a634ffcd76e108deb5b2cef89f8b3fd6f8b5a198"
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "schedule",
+                "Name": "Schedule",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "Sequence": 3,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "NotApplicablePolicy": "ExcludeAndRedistribute",
+                "ParentID": "5A003EFF-7499-4EEB-82C6-AAA5AB166A45"
+              },
+              "primaryKey": {
+                "ID": "69F43200-7DFD-4658-8A11-8D54A50B374A"
+              },
+              "sync": {
+                "lastModified": "2026-10-02T21:42:23.652Z",
+                "checksum": "3dda19e133b29849dc30c75806a60c4ac63d91af30dbcf159c7633492af40b41"
+              }
+            }
+          ]
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:23.587Z",
+          "checksum": "cd86b41e7b398f2c297d060995a4e90031836ecca3424192d493e6fa7ee2a4b8"
+        }
+      }
+    ]
+  },
+  "sync": {
+    "lastModified": "2026-10-02T21:42:23.571Z",
+    "checksum": "ef0c09526d83b908cb7cc8c710770bf84c95af39515882e51c506e8efb2eee41"
+  }
+}

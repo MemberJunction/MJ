@@ -16,45 +16,10 @@
     flex-wrap: wrap;
 }
 
-.subtabs {
-    display: flex;
-    gap: 4px;
-    flex-wrap: wrap;
+.subtab-nav {
     flex: 1;
-    background: var(--mj-bg-surface-card);
-    border: 1px solid var(--mj-border-default);
-    border-radius: 12px;
-    padding: 4px;
+    min-width: 0;
 }
-
-.subtab {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    border: none;
-    background: transparent;
-    color: var(--mj-text-secondary);
-    font-size: 13px;
-    font-weight: 500;
-    padding: 7px 14px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: background 0.15s, color 0.15s;
-    white-space: nowrap;
-}
-
-.subtab:hover {
-    background: var(--mj-bg-surface-hover);
-    color: var(--mj-text-primary);
-}
-
-.subtab--active {
-    background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
-    color: var(--mj-brand-primary);
-    font-weight: 600;
-}
-
-.subtab i { font-size: 12px; }
 
 /* ── Panel + table (matches sibling analytics sections) ── */
 .panel {
@@ -141,14 +106,12 @@
 .type-icon { color: var(--mj-brand-primary); }
 
 .mono {
-    font-family: var(--mj-font-mono, monospace);
+    font-family: var(--mj-font-family-mono);
     font-size: 12px;
 }
 
-.empty-row {
-    text-align: center;
-    color: var(--mj-text-disabled);
-    padding: 24px;
+.data-table td.empty-cell {
+    padding: 0;
 }
 
 /* ── Pills ── */

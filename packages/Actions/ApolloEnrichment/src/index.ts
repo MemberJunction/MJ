@@ -13,6 +13,12 @@ export * from './lists/ApolloMoveActions';
 export * from './lists/credentials';
 export * from './lists/params';
 
+// Shared HTTP plumbing and the table-agnostic people client (bulk_match, organizations/enrich),
+// which the enrichment actions and the BizApps Common person-enrichment engine both use.
+export * from './http/ApolloHttp';
+export * from './people/apollo-people.types';
+export * from './people/ApolloPeopleClient';
+
 // ApolloEnrichContact this Action would use the www.apollo.io enrichment service and enrich a "contact" type of record. The parameters to this Action would be:
 // EntityName - entity in question that contacts "contact" types of records
 // EmailField - string - field name in the target entity that contains the email to be used for lookups

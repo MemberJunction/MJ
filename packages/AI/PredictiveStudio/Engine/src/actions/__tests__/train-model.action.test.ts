@@ -4,6 +4,7 @@ import type { MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/cor
 
 import { PredictiveStudioTrainModelAction } from '../train-model.action';
 import { TrainingEngine } from '../../training/training-engine';
+import { AsOfSettingHasNoEffectError } from '../../training/as-of-refusal';
 import type { TrainModelInput, TrainModelResult, TrainingDeps } from '../../training/types';
 
 /**
@@ -39,6 +40,8 @@ function inertDeps(): TrainingDeps {
     recordLoader: {} as TrainingDeps['recordLoader'],
     sidecar: {} as TrainingDeps['sidecar'],
     artifactStore: {} as TrainingDeps['artifactStore'],
+    contextUser: {} as TrainingDeps['contextUser'],
+    provider: {} as TrainingDeps['provider'],
   };
 }
 
@@ -134,5 +137,18 @@ describe('PredictiveStudioTrainModelAction — engine error', () => {
     expect(result.Success).toBe(false);
     expect(result.ResultCode).toBe('TRAINING_FAILED');
     expect(result.Message).toContain('sidecar unreachable');
+  });
+
+  it('keeps a refusal\'s typed code instead of TRAINING_FAILED', async () => {
+    class RefusingEngine extends TrainingEngine {
+      public override async trainModel(): Promise<TrainModelResult> {
+        throw new AsOfSettingHasNoEffectError('pipeline', 'column', 'pipe-1');
+      }
+    }
+    const result = await new TestableTrainAction(new RefusingEngine()).run(
+      params([{ Name: 'PipelineID', Type: 'Input', Value: 'pipe-1' }]),
+    );
+    expect(result.Success).toBe(false);
+    expect(result.ResultCode).toBe('AS_OF_NO_EFFECT');
   });
 });

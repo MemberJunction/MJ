@@ -58,6 +58,66 @@ const result = await llm.ChatCompletion({
 console.log(result.data.choices[0].message.content);
 ```
 
+## Typed decisions (Jev)
+
+`OpenRouterDecision` is a `BaseDecision` driver for OpenRouter's Decisions API
+(`POST https://openrouter.ai/api/alpha/decisions`), which serves TypeSafe's Jev decision model.
+It answers Likelihood, Choice and Score questions with typed probabilities, so nothing is parsed
+from prose. Most callers reach it through `AIDecisionRunner` (`@memberjunction/ai-prompts`) and the
+`Default Decision` prompt, where the `Jev` model is the first choice.
+
+```typescript
+import { OpenRouterDecision } from '@memberjunction/ai-openrouter';
+
+const jev = new OpenRouterDecision('your-openrouter-api-key');
+const result = await jev.Decide({
+    Model: 'typesafe/jev-1.13-20260917',
+    State: 'I was charged twice for March. Please refund the duplicate.',
+    Questions: {
+        refund: { Kind: 'Likelihood', Instructions: 'Is the customer asking for money back?' },
+    },
+});
+// result.Answers.refund → { Kind: 'Likelihood', Probability: 0.97 }
+```
+
+**Credentials.** When it runs through `AIDecisionRunner`, the key resolves like any model's: an AI
+Credential Binding on the `Default Decision` prompt's Jev row or on the Jev model-vendor row, or else
+the legacy environment variable. The legacy variable is keyed by driver class, so Jev needs its own:
+
+```bash
+AI_VENDOR_API_KEY__OPENROUTERDECISION=sk-or-...   # the same OpenRouter key as AI_VENDOR_API_KEY__OPENROUTERLLM
+```
+
+Without a key the runner skips Jev and falls back to the next decision model (`LLM Decision`), and
+logs that once per process.
+
+A bound AI Credential reaches the driver as its values in JSON (`{"apiKey":"…"}`). The driver sends
+that credential's `apiKey` as the bearer token; a raw key from the environment variable is sent as
+given.
+
+**Kev-4B.** OpenRouter also serves Jared Palmer's Kev-4B (`jaredpalmer/kev-4b-20260924`, hosted by
+SiliconFlow) through the same Decisions API, so the `Kev-4B` model's OpenRouter row uses
+`OpenRouterDecision` and the same key. Its other route, a self-hosted Kev server, uses
+`SystemOneDecision` in [`@memberjunction/ai-systemone`](../SystemOne/README.md).
+`Default Decision` does not bind Kev-4B, but as an active Decision model it is one of the
+power-matched fallbacks, after Jev and `LLM Decision`, for any host that has this key.
+
+**Mercury Decide.** OpenRouter also serves it through the same Decisions API, in the System One format,
+so the model's OpenRouter row uses `OpenRouterDecision` and the same key, with a pinned slug:
+`inception/mercury-decide-20260930`, served by Inception, 65,536-token context, text only. Its own
+vendor route, `InceptionDecision` in [`@memberjunction/ai-inception`](../Inception/README.md), has the
+higher priority. The free variant (`inception/mercury-decide:free`) is not in the catalog: it has its
+own rate limits and data policy.
+
+It is a `Default Decision` power-matched fallback for a host with this key, among the last, because the
+fallbacks follow PowerRank distance from `Default Decision`'s target rank.
+
+**The wire format.** Jev and Kev speak the System One decisions format. `OpenRouterDecision` extends
+`BaseSystemOneDecision` (`@memberjunction/ai`), which owns the request and answer mapping; this class
+supplies only the endpoint and the default model. Cloudflare's Clef models speak the same format on
+Workers AI, through `CloudflareDecision` in
+[`@memberjunction/ai-cloudflare`](../Cloudflare/README.md).
+
 ## How It Works
 
 `OpenRouterLLM` is a thin subclass of `OpenAILLM` that redirects all API calls to OpenRouter's endpoint at `https://openrouter.ai/api/v1`. Since OpenRouter implements an OpenAI-compatible API, all chat, streaming, and parameter handling logic is inherited from the OpenAI provider.
@@ -75,7 +135,7 @@ OpenRouter provides access to models from many providers. Use the provider-prefi
 
 ## Class Registration
 
-Registered as `OpenRouterLLM` via `@RegisterClass(BaseLLM, 'OpenRouterLLM')`.
+Registered as `OpenRouterLLM` via `@RegisterClass(BaseLLM, 'OpenRouterLLM')`, and `OpenRouterDecision` via `@RegisterClass(BaseDecision, 'OpenRouterDecision')`.
 
 ## Dependencies
 

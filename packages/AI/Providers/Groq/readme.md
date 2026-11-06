@@ -86,6 +86,8 @@ Additionally, `assistantPrefill` is supported — Groq natively supports prefill
 
 Registered as `GroqLLM` via `@RegisterClass(BaseLLM, 'GroqLLM')`.
 
+`GroqAudioGenerator` (Whisper speech-to-text) is registered as `GroqAudioGenerator` against `BaseSpeechToText`, and against the deprecated `BaseAudioGenerator` for existing callers. Groq offers no text-to-speech, so it is not registered as `BaseTextToSpeech`.
+
 ## Dependencies
 
 - `@memberjunction/ai` - Core AI abstractions

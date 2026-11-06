@@ -15,6 +15,7 @@ import {
   AUDIO_PRESENCE_FLOOR,
   AUDIO_VISUAL_BIN_COUNT
 } from '../lib/components/realtime/realtime-audio-visuals';
+import { OVERLAY_SMOOTHER_GOLDEN } from './fixtures/overlay-smoother.golden';
 
 function activity(partial: Partial<RealtimeAudioActivity>): RealtimeAudioActivity {
   return { InputLevel: null, OutputLevel: null, InputBins: null, OutputBins: null, ...partial };
@@ -143,5 +144,22 @@ describe('noise gating (idle mic must not animate the visuals)', () => {
     const frame = s.Next(activity({ InputLevel: 0.5, InputBins: new Array(9).fill(0.6) }), 0)!;
     expect(frame.InputLevel).toBeGreaterThan(0.15);
     expect(frame.Direction).toBe('user');
+  });
+});
+
+describe('golden frames', () => {
+  it('match the frames captured before the smoother moved onto the shared /media smoothing', () => {
+    const smoother = new RealtimeAudioVisualSmoother();
+    for (const step of OVERLAY_SMOOTHER_GOLDEN) {
+      const frame = smoother.Next(step.In, step.NowMs);
+      if (step.Out === null) {
+        expect(frame).toBeNull();
+        continue;
+      }
+      expect(frame?.Direction).toBe(step.Out.Direction);
+      expect(frame?.OutputLevel).toBeCloseTo(step.Out.OutputLevel, 8);
+      expect(frame?.InputLevel).toBeCloseTo(step.Out.InputLevel, 8);
+      step.Out.Bins.forEach((bin, i) => expect(frame?.Bins[i]).toBeCloseTo(bin, 8));
+    }
   });
 });

@@ -14,18 +14,10 @@ import { MJGlobal } from '@memberjunction/global';
 import { MJDashboardPartTypeEntity } from '@memberjunction/core-entities';
 import { PanelConfig, DashboardPanel } from '../../models/dashboard-types';
 import { BaseConfigPanel, ConfigPanelResult } from '../../config-panels/base-config-panel';
+import type { DashboardPartDialogResult } from '../part-dialog/dashboard-part-dialog.component';
 
-/**
- * Result from the edit part dialog
- */
-export interface EditPartDialogResult {
-    /** The updated panel configuration */
-    Config: PanelConfig;
-    /** Updated title */
-    Title: string;
-    /** Updated icon (optional) */
-    Icon?: string;
-}
+/** @deprecated Use {@link DashboardPartDialogResult}. */
+export type EditPartDialogResult = Omit<DashboardPartDialogResult, 'PartType'>;
 
 /**
  * Generic dialog for editing dashboard part configuration.
@@ -35,6 +27,8 @@ export interface EditPartDialogResult {
  *
  * This allows new part types to be added without modifying this dialog -
  * just create a config panel, register it, and set the ConfigDialogClass.
+ *
+ * @deprecated Use `DashboardPartDialogComponent` (`<mj-dashboard-part-dialog Mode="edit">`), which adds and edits parts on `mj-dialog`.
  */
 @Component({
   standalone: false,

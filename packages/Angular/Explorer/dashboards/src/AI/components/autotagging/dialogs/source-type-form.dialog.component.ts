@@ -1107,11 +1107,13 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
             // Use KnowledgeHubMetadataEngine for cached reference data — instant, no RunView needed
             const engine = KnowledgeHubMetadataEngine.Instance;
             await engine.Config(false); // no-op if already loaded
+            // Vector indexes are cached by AIEngineBase (deferred at startup) — ensure it is loaded.
+            await AIEngineBase.Instance.EnsureLoaded();
 
             this.SourceTypeOptions = engine.ContentSourceTypes.map(t => ({ ID: t.ID, Name: t.Name }));
             this.ContentTypeOptions = engine.ContentTypes.map(t => ({ ID: t.ID, Name: t.Name }));
             this.FileTypeOptions = engine.ContentFileTypes.map(t => ({ ID: t.ID, Name: t.Name }));
-            this.VectorIndexOptions = engine.VectorIndexes.map(vi => ({ ID: vi.ID, Name: vi.Name }));
+            this.VectorIndexOptions = AIEngineBase.Instance.VectorIndexes.map(vi => ({ ID: vi.ID, Name: vi.Name }));
 
             // AI Models from AIEngineBase (already cached)
             if (this.AIModelOptions.length === 0) {
@@ -1152,6 +1154,7 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
             ExtraFilter: `Name = '${KNOWLEDGE_HUB_APPLICATION_NAME.replace(/'/g, "''")}'`,
             Fields: ['ID'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple',
         });
         this.khApplicationID = result.Success && result.Results.length > 0 ? result.Results[0].ID : null;

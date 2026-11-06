@@ -1,0 +1,56 @@
+<!-- Interactive Component Config Panel - Form content only, no dialog chrome -->
+<div class="config-panel">
+  @if (ShowCommonFields) {
+    <div class="form-group">
+      <label for="componentPartTitle">
+        <i class="fa-solid fa-heading"></i>
+        Part Title
+      </label>
+      <input type="text" id="componentPartTitle" class="form-input" [(ngModel)]="Title" placeholder="Enter a title for this part">
+    </div>
+  }
+
+  <div class="form-group">
+    <label for="componentSearch">
+      <i class="fa-solid fa-cubes"></i>
+      Component
+      <span class="required">*</span>
+    </label>
+    <input type="search" id="componentSearch" class="form-input" [(ngModel)]="SearchText" placeholder="Search components by name">
+    @if (IsLoadingList) {
+      <mj-loading text="Loading components..." size="small"></mj-loading>
+    } @else {
+      <div class="component-picker" role="listbox" aria-label="Components">
+        @for (item of Matches; track item.Namespace + '/' + item.Name) {
+          <button type="button" class="component-picker__item" role="option"
+                  [class.component-picker__item--chosen]="IsChosen(item)"
+                  [attr.aria-selected]="IsChosen(item)"
+                  (click)="Choose(item)">
+            <span class="component-picker__name">{{ item.Title || item.Name }}</span>
+            <span class="component-picker__meta">{{ item.Namespace ? item.Namespace + '/' : '' }}{{ item.Name }}</span>
+          </button>
+        } @empty {
+          <span class="form-hint">No components match.</span>
+        }
+      </div>
+    }
+    @if (ComponentError) {
+      <span class="form-error">{{ ComponentError }}</span>
+    }
+  </div>
+
+  @if (ComponentName) {
+    <div class="form-group">
+      <label for="componentVersion">
+        <i class="fa-solid fa-code-branch"></i>
+        Version
+      </label>
+      <select id="componentVersion" class="form-input" [(ngModel)]="ComponentVersion" (ngModelChange)="OnVersionChange()">
+        <option value="">Latest</option>
+        @for (version of Versions; track version) {
+          <option [value]="version">{{ version }}</option>
+        }
+      </select>
+    </div>
+  }
+</div>

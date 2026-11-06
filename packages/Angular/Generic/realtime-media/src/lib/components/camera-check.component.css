@@ -1,0 +1,103 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.check {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  height: 100%;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+/* The preview is letterboxed in black in both themes. */
+.check__preview {
+  position: relative;
+  width: 420px;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 1);
+}
+
+/* Mirrored, as in a mirror: what the user expects of their own camera. */
+.check__video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scaleX(-1);
+}
+
+.check__video--hidden {
+  display: none;
+}
+
+/* Text over the black preview stays light in both themes. */
+.check__camera-off {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.check__meter {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 36px;
+  height: 18px;
+}
+
+.check__controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 300px;
+  max-width: 100%;
+  color: var(--mj-text-primary);
+}
+
+.check__heading {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+/* Confirm first, then the way out: MJ's order for a dialog's buttons. */
+.check__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.check__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--mj-text-secondary);
+}
+
+.check__field input,
+.check__field select {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+}
+
+.check__field input:focus-visible,
+.check__field select:focus-visible {
+  outline: none;
+  box-shadow: var(--mj-focus-ring);
+}

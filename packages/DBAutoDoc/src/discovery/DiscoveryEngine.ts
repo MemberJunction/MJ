@@ -18,6 +18,7 @@ import {
   DiscoveryTriggerAnalysis
 } from '../types/discovery.js';
 import { RelationshipDiscoveryConfig, AIConfig } from '../types/config.js';
+import { SeedContextText } from '../utils/seed-context.js';
 
 export interface DiscoveryEngineOptions {
   Driver: BaseAutoDocDriver;
@@ -26,6 +27,8 @@ export interface DiscoveryEngineOptions {
   schemas: SchemaDefinition[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   OnProgress?: (message: string, data?: any) => void;
   OnCheckpoint?: (phase: RelationshipDiscoveryPhase) => Promise<void>;
+  /** The operator's seed context, passed to the LLM validator. */
+  SeedContext?: SeedContextText;
 }
 
 export interface DiscoveryResult {
@@ -71,7 +74,8 @@ export class DiscoveryEngine {
         this.config,
         this.aiConfig,
         this.statsCache,
-        this.schemas
+        this.schemas,
+        options.SeedContext
       );
     }
   }

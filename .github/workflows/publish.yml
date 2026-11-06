@@ -16,9 +16,10 @@ name: Build and publish new package versions
 #                 run — `latest` when this line already owns it, else lts-<line>.
 #
 #   Candidate cut — dispatch FROM next with cut_line=X.Y + confirm_branch=lts/X.Y.
-#                 Job: cut-candidate. Exits Edge pre-mode, versions to X.Y.0, builds,
-#                 publishes under lts-X.Y, creates lts/X.Y at the tag, re-enters
-#                 pre-mode so Edge resumes at X.(Y+1).0-edge.0. The logic lives in
+#                 Job: cut-candidate. From the newest vX.Y.0-edge.N tag (not the
+#                 tip of next): exits Edge pre-mode, versions to X.Y.0, builds,
+#                 publishes under lts-X.Y, creates lts/X.Y at the tag, merges it into
+#                 next and re-enters pre-mode so Edge resumes at X.(Y+1).0-edge.0. The logic lives in
 #                 ci/candidate-cut.mjs; the ledger entry for the line is a reviewed
 #                 PR that must merge BEFORE this is dispatched.
 #
@@ -237,7 +238,7 @@ jobs:
     name: Seed ${{ github.event.inputs.seed_package }} over OIDC
     if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.seed_package != '' }}
     needs: [dispatch-guard]
-    timeout-minutes: 10
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -324,10 +325,16 @@ jobs:
           set -euo pipefail
           encoded="${PACKAGE/\//%2f}"
           url="https://registry.npmjs.org/-/npm/v1/attestations/$encoded@$VERSION"
-          code=$(curl -s -o /tmp/att.json -w '%{http_code}' "$url")
-          echo "attestation endpoint returned HTTP $code"
+          # npm takes a few minutes to expose a fresh attestation ("Your package is being
+          # processed"), so a 404 straight after publish is normal. Poll before failing.
+          for attempt in $(seq 1 24); do
+            code=$(curl -s -o /tmp/att.json -w '%{http_code}' "$url")
+            echo "attempt $attempt: attestation endpoint returned HTTP $code"
+            [ "$code" = "200" ] && break
+            sleep 15
+          done
           if [ "$code" != "200" ]; then
-            echo "::error::Published, but no public attestation at $url. The gate will still block. Confirm 'npm trust list $PACKAGE' names publish.yml."
+            echo "::error::Published, but no public attestation at $url after 6 minutes. The gate will still block. Confirm 'npm trust list $PACKAGE' names publish.yml."
             exit 1
           fi
           node -e '
@@ -534,6 +541,50 @@ jobs:
               exit 1
             fi
           fi
+
+      # An Edge release of a stream whose line is already cut (vX.Y.0 tagged, or
+      # @memberjunction/core@X.Y.0 on npm) would publish X.Y.0-edge.(N+1) after X.Y.0 and
+      # back-merge Edge pre-mode for X.Y into a next that is already on X.(Y+1). It happens
+      # when a release/* PR merges to main during or after a candidate cut (the `publish`
+      # concurrency group only queues it). Refuse before the build, with nothing published.
+      - name: Refuse an Edge release of a line that is already cut
+        if: ${{ env.BRANCH == 'main' && steps.premode.outputs.MODE == 'pre' }}
+        run: |
+          set -euo pipefail
+          VERSION=$(jq -r .version packages/MJServer/package.json)
+          if ! [[ "$VERSION" =~ ^([0-9]+\.[0-9]+)\.0-edge\.[0-9]+$ ]]; then
+            echo "::error::Edge pre-mode produced $VERSION, not X.Y.0-edge.N."
+            exit 1
+          fi
+          CUT="${BASH_REMATCH[1]}.0"
+          LINE="${BASH_REMATCH[1]}"
+          # --exit-code: 0 = the tag exists, 2 = no such ref; anything else (network, auth)
+          # fails closed rather than reading as "not cut".
+          RC=0
+          git ls-remote --exit-code --tags origin "refs/tags/v$CUT" >/dev/null || RC=$?
+          if [ "$RC" -eq 0 ]; then
+            echo "::error::v$CUT already exists: line $LINE was cut, so $VERSION belongs to a closed stream. Nothing was published. Rebase this release onto next (now on the next stream) instead."
+            exit 1
+          elif [ "$RC" -ne 2 ]; then
+            echo "::error::git ls-remote for v$CUT failed (exit $RC); cannot prove line $LINE is still open. Nothing was published; re-run."
+            exit 1
+          fi
+          # A version npm does not have is E404 (absent); any other npm failure fails the
+          # step, closed: a release that cannot prove its line is open does not publish.
+          NPM_ERR=$(mktemp)
+          if ON_NPM=$(npm view "@memberjunction/core@$CUT" version 2>"$NPM_ERR"); then
+            : # stdout alone: the version string when it exists, nothing otherwise
+          elif grep -q E404 "$NPM_ERR"; then
+            ON_NPM=''
+          else
+            echo "::error::npm view @memberjunction/core@$CUT failed: $(cat "$NPM_ERR"). Cannot prove line $LINE is still open. Nothing was published; re-run."
+            exit 1
+          fi
+          if [ -n "$ON_NPM" ]; then
+            echo "::error::@memberjunction/core@$CUT is on npm: line $LINE was cut (tag not pushed yet?), so $VERSION belongs to a closed stream. Nothing was published."
+            exit 1
+          fi
+          echo "::notice::$VERSION: line $LINE not cut yet; Edge release allowed"
 
       # `pnpm run version` above rewrote ~300 manifests and nothing regenerated
       # pnpm-lock.yaml, so every edge release since the pnpm cutover pushed a main
@@ -1264,11 +1315,24 @@ jobs:
       # Tag and release steps tolerate a re-run of a partially completed publish
       # (publish succeeded, a later step failed): the publish step's "already
       # published" evidence passes, and these skip instead of dying on collisions.
+      #
+      # The build rewrites tracked generated files (today
+      # packages/GraphQLDataProvider/src/version.generated.ts, which carries the
+      # package version). Pushing without committing them left every line tag
+      # holding the PREVIOUS version in that file, and the integration tier's
+      # CodeGen drift gate went red on the line after 6.1.1, 6.1.3, 6.1.4 and
+      # 6.2.1. Same commit as the cut-candidate job's "post-release generated
+      # files" step, so the tag points at exactly what was built and published.
       - name: Push release commit and tag to the line branch
         env:
           VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
           set -euo pipefail
+          git add -A
+          if [ -n "$(git diff --cached --name-only)" ]; then
+            git --no-pager diff --cached --stat
+            git commit -m "chore: post-release generated files [skip ci]"
+          fi
           git push origin "HEAD:$LINE"
           if git ls-remote --tags origin "refs/tags/$VERSION" | grep -q .; then
             echo "::notice::Tag $VERSION already exists on origin - skipping (re-run of a partially completed publish)"
@@ -1602,16 +1666,23 @@ jobs:
   #
   # Why a job and not the runbook's hand steps: rehearsed 2026-09-03 on a scratch clone,
   # the hand version cannot run. publish-lts refuses a branch with zero changesets, and
-  # the candidate branch has zero by construction (the version step on next consumed
+  # the candidate branch has zero by construction (the version step at the Edge tag consumed
   # them); the ledger append throws on a line with no entry; and the seed changeset that
   # keeps Edge off the new line's patch tuple is load-bearing (without it the first
   # patch-only merge versions Edge to 6.1.1-edge.0). This job does the whole dance in
   # one run, ordered so that NOTHING IS PUSHED UNTIL THE PACKAGES ARE ON NPM:
   #
-  #   preflight -> pre exit + version + lockfile (local commits) -> build -> publish
-  #   6.1.0 under lts-6.1 -> commit generated files -> tag v6.1.0 -> re-enter pre-mode
-  #   + seed (local) -> push next (merge-and-retry) -> push tag, create lts/6.1 at it
-  #   -> GitHub Release (never latest) -> ledger append -> docs + release notes.
+  #   preflight (on next) -> check out the newest v6.1.0-edge.N tag -> pre exit +
+  #   version + lockfile (local commits) -> pre-publish check (main still at the tag,
+  #   trial merge into next) -> build -> re-check -> publish 6.1.0 under lts-6.1 ->
+  #   commit generated files -> tag v6.1.0 -> push tag, create lts/6.1 at it -> GitHub
+  #   Release (never latest) -> merge v6.1.0 into next + version/pin/lockfile sync +
+  #   re-enter pre-mode + seed (local) -> push next (merge-and-retry) -> ledger append
+  #   -> docs + notes.
+  #
+  # The candidate is the Edge tag's commit plus the version commits, never the tip of
+  # next: commits merged to next after the tag are not in 6.1.0, and their changesets
+  # stay on next for the 6.2 stream (merge-into-next proves the partition).
   #
   # A failure before the publish step leaves next, npm and GitHub exactly as they were:
   # re-dispatch. A failure after it is "released, not yet recorded", the same posture as
@@ -1622,7 +1693,10 @@ jobs:
   #     Status fields are release-lines-guard + CODEOWNERS territory (process doc 8), so
   #     that entry arrives by reviewed PR; this job appends only the mechanical fields.
   #   - lts/6.1, tag v6.1.0 and @memberjunction/core@6.1.0 do not exist yet.
-  #   - next is in Edge pre-mode with pending changesets.
+  #   - next is in Edge pre-mode; a v6.1.0-edge.N tag exists, its tree is that version
+  #     in Edge pre-mode with pending changesets, and npm's edge dist-tag is exactly it.
+  #   - main is still at that tag (re-checked before the build and the publish; merge
+  #     nothing into main during a cut) and the tag is an ancestor of next.
   # The lts/** branch ruleset is a repo setting an admin creates once; the job cannot.
   # ---------------------------------------------------------------------------
   cut-candidate:
@@ -1676,6 +1750,40 @@ jobs:
           node-version: 24
           cache: 'pnpm'
 
+      - name: Set up git credentials
+        env:
+          REPO_PAT: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
+        run: |
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "GitHub Actions"
+          git remote set-url origin "https://$REPO_PAT@github.com/${GITHUB_REPOSITORY}"
+
+      # The working tree moves to the Edge tag below, whose ci/ may predate this script.
+      # Run next's copy throughout; it imports only Node's stdlib plus ./back-merge.mjs
+      # (staged beside it) and works on the cwd.
+      - name: Stage next's candidate-cut script
+        run: cp ci/candidate-cut.mjs ci/back-merge.mjs "$RUNNER_TEMP/"
+
+      # Refuses unless: HEAD is next in Edge pre-mode, the stream produces the requested
+      # line, the ledger already carries the candidate entry, neither the branch, the tag
+      # nor the npm version exists, and the newest v<line>.0-edge.N tag is that version in
+      # its tree, in Edge pre-mode with pending changesets, and is what npm's edge dist-tag
+      # points at. Logs how many commits next is ahead of the tag (they are NOT in the
+      # candidate). Emits LINE/VERSION/TAG/BRANCH/NPMTAG/NEXTLINE/EDGETAG.
+      - name: Preflight
+        id: cut
+        run: node "$RUNNER_TEMP/candidate-cut.mjs" preflight --line "$CUT"
+
+      # The candidate is the Edge tag's commit. Detached on purpose: nothing below pushes
+      # HEAD as a branch until merge-into-next has moved onto next.
+      - name: Check out ${{ steps.cut.outputs.EDGETAG }}
+        env:
+          EDGE_TAG: ${{ steps.cut.outputs.EDGETAG }}
+        run: |
+          set -euo pipefail
+          git checkout --detach "refs/tags/$EDGE_TAG"
+          echo "::notice::Building the candidate from $EDGE_TAG at $(git rev-parse --short HEAD)"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -1688,40 +1796,23 @@ jobs:
       - name: Validate migration filenames
         run: ./.github/scripts/validate-migration-filenames.sh
 
-      - name: Set up git credentials
-        env:
-          REPO_PAT: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
-        run: |
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "GitHub Actions"
-          git remote set-url origin "https://$REPO_PAT@github.com/${GITHUB_REPOSITORY}"
-
-      # Refuses unless: HEAD is next in Edge pre-mode with pending changesets, the stream
-      # produces the requested line, the ledger already carries the candidate entry, and
-      # neither the branch, the tag nor the npm version exists. Emits LINE/VERSION/TAG/
-      # BRANCH/NPMTAG/NEXTLINE for the steps below.
-      - name: Preflight
-        id: cut
-        run: node ci/candidate-cut.mjs preflight --line "$CUT"
-
-      # Informational: how far the tip is from the last Edge build. The candidate is the
-      # tip by design (runbook operation 2), but a large unpublished batch is worth seeing
-      # in the log before the publish step makes it permanent.
-      - name: Report the distance from the last Edge build
-        run: |
-          set -euo pipefail
-          LAST_EDGE=$(git describe --tags --abbrev=0 --match 'v*-edge.*' HEAD)
-          COUNT=$(git rev-list --count "$LAST_EDGE..HEAD")
-          echo "::notice::$COUNT commits on next since $LAST_EDGE (npm edge is $(npm view @memberjunction/core dist-tags.edge))"
-
       - name: Exit Edge pre-mode and version to ${{ steps.cut.outputs.VERSION }}
-        run: node ci/candidate-cut.mjs version --line "$CUT"
+        run: node "$RUNNER_TEMP/candidate-cut.mjs" version --line "$CUT" --edge-tag "${{ steps.cut.outputs.EDGETAG }}"
+
+      # Refuses while nothing is published: main moved off the Edge tag, or the candidate
+      # could not merge into next mechanically (conflicts outside package.json/lockfile).
+      - name: Pre-publish check (main at the Edge tag; trial merge into next)
+        run: node "$RUNNER_TEMP/candidate-cut.mjs" pre-publish-check --line "$CUT" --edge-tag "${{ steps.cut.outputs.EDGETAG }}"
 
       - name: Build packages
         run: pnpm run build
 
       - name: Stage per-package LICENSE files
         run: node .github/scripts/stage-package-licenses.mjs
+
+      # Again, because next and main kept moving during the build.
+      - name: Re-check right before the publish
+        run: node "$RUNNER_TEMP/candidate-cut.mjs" pre-publish-check --line "$CUT" --edge-tag "${{ steps.cut.outputs.EDGETAG }}"
 
       # `latest` is read BEFORE the publish so the verification below can prove it did not
       # move. A candidate is never latest; certification promotes (ci/dist-tag-all.mjs).
@@ -1740,6 +1831,30 @@ jobs:
             echo "::error::changeset publish produced no evidence of a publish. Refusing to report success."
             exit 1
           fi
+
+      # Runs right after the publish, whatever its outcome, BEFORE Verify. Only a publish
+      # step that never started (skipped) skips it; a failed, cancelled or timed-out publish
+      # still runs it. A job killed mid-`changeset publish` is the destructive case
+      # (v6.1.0-edge.1, see build-and-publish's timeout note), and it reports as cancelled,
+      # which is why this is always(), not !cancelled(). A publish that half-failed or
+      # a Verify that timed out must still leave the commit npm was built from on origin,
+      # or nothing can rebuild it and re-dispatch refuses once any X.Y.0 package is live.
+      # One code path, no failure-only rescue step to rot. Tags are outside next-protect,
+      # so the PAT remote is enough. If npm turns out to hold nothing of this version
+      # (the publish died before uploading), delete the tag and re-dispatch (runbook §2).
+      - name: Commit post-release generated files, tag ${{ steps.cut.outputs.TAG }} and push the tag
+        if: ${{ always() && steps.publish.outcome != 'skipped' }}
+        env:
+          TAG: ${{ steps.cut.outputs.TAG }}
+        run: |
+          set -euo pipefail
+          git add -A
+          if [ -n "$(git diff --cached --name-only)" ]; then
+            git commit -m "chore: post-release generated files [skip ci]"
+          fi
+          git tag "$TAG"
+          git push origin "refs/tags/$TAG"
+          echo "::notice::Tagged and pushed $TAG at $(git rev-parse --short HEAD)"
 
       - name: Verify the publish reached npm and latest did not move
         env:
@@ -1773,21 +1888,42 @@ jobs:
           fi
           echo "::notice::Verified: @memberjunction/core@$VERSION is live under '$NPM_TAG'; latest unmoved at $PREV_LATEST"
 
-      # From here on the packages are on npm. Everything below records that fact.
-      - name: Commit post-release generated files and tag ${{ steps.cut.outputs.TAG }}
+      # Only once npm is verified, so a line branch is born for a build that is live.
+      # Still before anything touches next.
+      - name: Create ${{ steps.cut.outputs.BRANCH }} at ${{ steps.cut.outputs.TAG }}
         env:
           TAG: ${{ steps.cut.outputs.TAG }}
+          BRANCH: ${{ steps.cut.outputs.BRANCH }}
         run: |
           set -euo pipefail
-          git add -A
-          if [ -n "$(git diff --cached --name-only)" ]; then
-            git commit -m "chore: post-release generated files [skip ci]"
+          git push origin "refs/tags/$TAG:refs/heads/$BRANCH"
+          echo "::notice::$BRANCH created at $TAG"
+
+      - name: Create GitHub Release (never latest; certification promotes)
+        env:
+          GH_TOKEN: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
+          TAG: ${{ steps.cut.outputs.TAG }}
+          BRANCH: ${{ steps.cut.outputs.BRANCH }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release $TAG already exists - skipping creation"
+            exit 0
           fi
-          git tag "$TAG"
-          echo "::notice::Tagged $TAG at $(git rev-parse --short HEAD)"
+          gh release create "$TAG" --title "$TAG (LTS candidate)" --generate-notes --latest=false \
+            --target "$BRANCH" --repo "${{ github.repository }}"
+
+      # HEAD moves from the candidate tag onto origin/next with the tag merged in: next
+      # takes X.Y.0's versions and changelogs and drops the changesets the candidate
+      # consumed, and keeps every changeset merged after the Edge tag. package.json and
+      # lockfile conflicts resolve to next's side; then every X.Y.0-edge.N version and pin
+      # on next (packages added after the tag included) moves to X.Y.0, the lockfile is
+      # regenerated and proven, and the fixed group must be at X.Y.0. Local only.
+      - name: Merge ${{ steps.cut.outputs.TAG }} into next
+        run: node "$RUNNER_TEMP/candidate-cut.mjs" merge-into-next --line "$CUT" --edge-tag "${{ steps.cut.outputs.EDGETAG }}"
 
       - name: Re-enter Edge pre-mode and open the ${{ steps.cut.outputs.NEXTLINE }} stream
-        run: node ci/candidate-cut.mjs reenter --line "$CUT"
+        run: node "$RUNNER_TEMP/candidate-cut.mjs" reenter --line "$CUT"
 
       # `next` is protected and only the release App may push to it — see the edge path's
       # remote step for the reasoning. Minted here rather than at job start because an
@@ -1817,7 +1953,7 @@ jobs:
           echo "::notice::next-push remote configured as ${{ steps.next_token.outputs.app-slug }}"
 
       # next kept merging during the build. push-next merges next-push/next in and retries
-      # (bounded); only pnpm-lock.yaml may auto-resolve. Never force.
+      # (bounded), with merge-into-next's resolver and sync. Never force.
       #
       # --remote moves BOTH the fetch and the push onto the App-authenticated remote, which
       # is required: pushNext() merges `<remote>/next` between attempts, so the ref it reads
@@ -1825,31 +1961,7 @@ jobs:
       # the step below deliberately stay on `origin` — those are not covered by next-protect
       # and the App has no reason to hold them.
       - name: Push next
-        run: node ci/candidate-cut.mjs push-next --remote next-push
-
-      - name: Push the tag and create ${{ steps.cut.outputs.BRANCH }} at it
-        env:
-          TAG: ${{ steps.cut.outputs.TAG }}
-          BRANCH: ${{ steps.cut.outputs.BRANCH }}
-        run: |
-          set -euo pipefail
-          git push origin "refs/tags/$TAG"
-          git push origin "refs/tags/$TAG:refs/heads/$BRANCH"
-          echo "::notice::$BRANCH created at $TAG"
-
-      - name: Create GitHub Release (never latest; certification promotes)
-        env:
-          GH_TOKEN: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
-          TAG: ${{ steps.cut.outputs.TAG }}
-          BRANCH: ${{ steps.cut.outputs.BRANCH }}
-        run: |
-          set -euo pipefail
-          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            echo "Release $TAG already exists - skipping creation"
-            exit 0
-          fi
-          gh release create "$TAG" --title "$TAG (LTS candidate)" --generate-notes --latest=false \
-            --target "$BRANCH" --repo "${{ github.repository }}"
+        run: node "$RUNNER_TEMP/candidate-cut.mjs" push-next --line "$CUT" --remote next-push
 
       # Mechanical fields only: lines[X.Y].newest and lines[X.Y].releases[X.Y.0]. The
       # candidate entry itself was the reviewed precondition. --match 'v*' keeps

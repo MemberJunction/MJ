@@ -3,14 +3,18 @@
  * @module @memberjunction/testing-engine
  */
 
-import { UserInfo, Metadata, EntityInfo } from '@memberjunction/core';
-import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
+import { UserInfo, Metadata, EntityInfo, RunView } from '@memberjunction/core';
+import { MJLruCache, RegisterClass, SafeJSONParse } from '@memberjunction/global';
 import { MJAIAgentEntity, MJAIAgentRunEntity, MJTestEntity, MJTestRunEntity } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessage } from '@memberjunction/ai';
 import { BaseTestDriver } from './BaseTestDriver';
+import { BuildJudgeOutputEvidence, JudgeOutputEvidence } from '../utils/judge-evidence';
+import { ComponentRegistryFetcher, LoadJudgeArtifacts } from './agent-run-evidence';
+import { EnsureImplicitRubricOracle, PublishedVersionPin, ResolveRubric, WeightsForImplicitRubric, type RubricSuiteRow } from '../oracles/rubric-resolution';
 import {
     DriverExecutionContext,
+    SuiteFixtureContext,
     DriverExecutionResult,
     OracleInput,
     OracleResult,
@@ -19,6 +23,27 @@ import {
     ValidationError,
     ValidationWarning
 } from '../types';
+
+export interface AgentRubricResolution {
+    rubricId: string;
+    evaluatorConfig?: Record<string, unknown> | string;
+}
+
+/**
+ * Extract output payload from an agent run.
+ * Parses the FinalPayload string property; falls back to `{ message: agentRun.Message }`
+ * for conversational agents whose output sits in Message, or `{}` when both are empty.
+ */
+export function ExtractOutputPayload(agentRun: { FinalPayload?: string | null; Message?: string | null }): Record<string, unknown> {
+    const finalPayloadObject = SafeJSONParse(agentRun.FinalPayload ?? '');
+    if (finalPayloadObject && Object.keys(finalPayloadObject).length > 0) {
+        return finalPayloadObject;
+    }
+    if (agentRun.Message) {
+        return { message: agentRun.Message };
+    }
+    return finalPayloadObject ?? {};
+}
 
 /**
  * Configuration for Agent Evaluation tests.
@@ -55,7 +80,31 @@ export interface AgentEvalConfig {
      * - "all-turns-aggregate": Evaluate all turns together at the end
      */
     evaluationStrategy?: 'final-turn-only' | 'each-turn' | 'all-turns-aggregate';
+
+    /**
+     * What judge oracles (llm-judge, decision-judge, rubric) see besides the bare output. By default
+     * they see the agent's final message, final payload and output artifacts — with registry
+     * component manifests resolved to full specs — whenever that adds to the payload alone.
+     */
+    judgeEvidence?: AgentEvalJudgeEvidenceConfig;
 }
+
+/** Controls the evidence judge oracles see for an agent run. */
+export interface AgentEvalJudgeEvidenceConfig {
+    /** False sends judges only the bare output, as before this option existed. Default true. */
+    enabled?: boolean;
+    /** Include the run's output artifacts. Default true. */
+    includeArtifacts?: boolean;
+    /** Resolve `location: "registry"` component manifests to their full spec. Default true. */
+    resolveRegistryComponents?: boolean;
+    /** Characters any one item may contribute. Default 40,000. */
+    maxCharsPerItem?: number;
+    /** Characters all items together may contribute. Default 120,000. */
+    maxTotalChars?: number;
+}
+
+/** The oracle types that judge the output's substance and so read judge evidence. */
+export const JUDGE_ORACLE_TYPES: ReadonlySet<string> = new Set(['llm-judge', 'decision-judge', 'rubric']);
 
 /**
  * Single turn in a multi-turn test
@@ -206,6 +255,11 @@ export interface AgentEvalExpectedOutcomes {
  * }
  * ```
  */
+/** Said on a completed run whose oracle list is empty, so the failure is not a silent status. */
+export function MessageWhenNoOracleJudged(results: unknown[]): string | undefined {
+    return results.length === 0 ? 'No oracle judged this run.' : undefined;
+}
+
 @RegisterClass(BaseTestDriver, 'AgentEvalDriver')
 export class AgentEvalDriver extends BaseTestDriver {
     /**
@@ -333,12 +387,11 @@ export class AgentEvalDriver extends BaseTestDriver {
                 context
             );
 
-            // Calculate score and status
-            // When oracles are disabled, consider test passed if final agent run succeeded
+            // A completed run with no oracle results stays Failed. A resolved rubric
+            // adds an oracle before this point; an empty list means nothing judged the run.
             const score = this.calculateScore(oracleResults, config.scoringWeights);
-            const status = oracleResults.length === 0 && finalAgentRun.Status === 'Completed'
-                ? 'Passed'
-                : this.determineStatus(oracleResults);
+            const status = this.determineStatus(oracleResults);
+            const errorMessage = MessageWhenNoOracleJudged(oracleResults);
 
             // Count checks
             const passedChecks = oracleResults.filter(r => r.passed).length;
@@ -362,6 +415,7 @@ export class AgentEvalDriver extends BaseTestDriver {
                 inputData: input,
                 expectedOutput: expected,
                 actualOutput,
+                errorMessage,
                 totalCost,
                 durationMs,
                 // Multi-turn specific fields
@@ -751,15 +805,13 @@ export class AgentEvalDriver extends BaseTestDriver {
     }
 
     /**
-     * Extract output payload from agent run.
-     * Parses the FinalPayload string property to get the agent's output for chaining to next turn.
-     * @private
+     * The agent run's output, used both as the payload chained into the next
+     * turn and as `outputPayload`, the actualOutput every oracle judges.
+     * Delegates to {@link ExtractOutputPayload}: the parsed FinalPayload, else
+     * `{ message }` for conversational agents whose output is in Message, else `{}`.
      */
     private extractOutputPayload(agentRun: MJAIAgentRunEntity): Record<string, unknown> {
-        // Parse the FinalPayload string property (which exists on base MJAIAgentRunEntity)
-        // SafeJSONParse returns the parsed object or an empty object if parsing fails
-        const finalPayloadObject = SafeJSONParse(agentRun.FinalPayload ?? '');
-        return finalPayloadObject ?? {};
+        return ExtractOutputPayload(agentRun);
     }
 
 
@@ -834,6 +886,142 @@ export class AgentEvalDriver extends BaseTestDriver {
      * Run oracles for multi-turn evaluation.
      * @private
      */
+    private readonly versionPins = new PublishedVersionPin();
+    // Bounded for the same reason as PublishedVersionPin: this driver is cached for the process lifetime.
+    private readonly versionLabels = new MJLruCache<string, string>({ maxSize: 5000, ttlMs: 6 * 60 * 60 * 1000 });
+
+    /** Pins the suite's rubric version before any test runs. */
+    public override async SetupSuite(context: SuiteFixtureContext, contextUser: UserInfo): Promise<void> {
+        await super.SetupSuite(context, contextUser);
+        const execution = {
+            contextUser,
+            fixtures: context,
+            test: { ID: '' },
+            testRun: { ID: context.SuiteRunID, TestSuiteRunID: context.SuiteRunID },
+            options: {},
+            oracleRegistry: new Map(),
+        } as unknown as DriverExecutionContext;
+        const loaded = await this.LoadSuites(execution);
+        const choice = ResolveRubric({ suites: loaded.suites, suiteId: loaded.suiteId });
+        if (!choice.RubricId || context.PinnedRubricVersions?.[choice.RubricId]) return;
+        const found = await this.LookupLatestPublished(execution, choice.RubricId);
+        if (!found) return;
+        context.PinnedRubricVersions = { ...context.PinnedRubricVersions, [choice.RubricId]: found };
+    }
+
+    protected async WithResolvedRubric(config: AgentEvalConfig, context: DriverExecutionContext): Promise<AgentEvalConfig> {
+        const named = config.oracles?.find(oracle => oracle.type === 'rubric')?.config as { rubricId?: string; rubricVersionId?: string; evaluator?: Record<string, unknown> | string } | undefined;
+        const loaded = await this.LoadSuites(context);
+        const agentRubricRaw = context.options.agentEvaluationRubricId
+            ? { rubricId: context.options.agentEvaluationRubricId }
+            : await this.LoadAgentEvaluationRubric(context, config.agentId);
+        const choice = ResolveRubric({
+            run: context.options.rubricId ? { rubricId: context.options.rubricId, versionId: context.options.rubricVersionId } : undefined,
+            oracle: named,
+            testRubricId: context.test.RubricID,
+            suites: loaded.suites,
+            suiteId: loaded.suiteId,
+            agentRubricId: agentRubricRaw?.rubricId,
+            agentEvaluatorConfig: agentRubricRaw?.evaluatorConfig,
+        });
+        const hadRubric = (config.oracles ?? []).some(oracle => oracle.type === 'rubric');
+        const suiteRunId = (context.testRun as { TestSuiteRunID?: string }).TestSuiteRunID || context.testRun.ID;
+        const labelKey = choice.RubricId ? `${suiteRunId}:${choice.RubricId}` : '';
+        let versionId: string | undefined;
+        let versionLabel: string | undefined;
+        if (choice.RubricId && choice.ExplicitVersion && choice.VersionId) {
+            versionId = choice.VersionId;
+            versionLabel = await this.LookupVersionLabel(context, choice.VersionId);
+        } else if (choice.RubricId) {
+            const pinned = context.fixtures?.PinnedRubricVersions?.[choice.RubricId];
+            if (pinned) {
+                versionId = pinned.id;
+                versionLabel = pinned.label;
+            } else {
+                versionId = await this.versionPins.Remember(suiteRunId, choice.RubricId, undefined, async () => {
+                    const found = await this.LookupLatestPublished(context, choice.RubricId!);
+                    if (found) this.versionLabels.Set(labelKey, found.label);
+                    return found?.id;
+                });
+                versionLabel = this.versionLabels.Get(labelKey);
+                if (versionId && context.fixtures) {
+                    context.fixtures.PinnedRubricVersions = {
+                        ...context.fixtures.PinnedRubricVersions,
+                        [choice.RubricId]: { id: versionId, label: versionLabel ?? '' },
+                    };
+                }
+            }
+        }
+        const oracles = EnsureImplicitRubricOracle(config.oracles, choice, versionId, versionLabel);
+        return { ...config, oracles, scoringWeights: WeightsForImplicitRubric(config.scoringWeights, oracles.length > (config.oracles?.length ?? 0) && !hadRubric) };
+    }
+
+    /**
+     * Suites for this run, loaded once. The suite id comes from the test run's
+     * Test Suite Run. MJ: Tests has no suite id. ResolveRubric walks ParentID
+     * on these rows in memory. A test subclass can supply this without a database.
+     */
+    protected async LoadSuites(context: DriverExecutionContext): Promise<{ suiteId?: string; suites: RubricSuiteRow[] }> {
+        const suiteRunId = context.testRun.TestSuiteRunID;
+        if (!suiteRunId) return { suites: [] };
+        const suiteRun = await this.ReadOne(context, 'MJ: Test Suite Runs', `ID='${suiteRunId.replace(/'/g, "''")}'`);
+        const suiteId = suiteRun?.SuiteID == null || suiteRun.SuiteID === '' ? undefined : String(suiteRun.SuiteID);
+        if (!suiteId) return { suites: [] };
+        const rows = await this.ReadMany(context, 'MJ: Test Suites', '', 5000);
+        return {
+            suiteId,
+            suites: rows.map(row => ({
+                Id: String(row.ID ?? ''),
+                ParentId: row.ParentID == null ? null : String(row.ParentID),
+                RubricId: row.RubricID == null ? null : String(row.RubricID),
+            })).filter(row => row.Id.length > 0),
+        };
+    }
+
+    /** The agent's Active default Evaluation rubric, when this test is an agent eval. */
+    protected async LoadAgentEvaluationRubric(context: DriverExecutionContext, agentId: string): Promise<AgentRubricResolution | undefined> {
+        const rows = await this.ReadMany(context, 'MJ: AI Agent Rubrics', `AgentID='${agentId}' AND Purpose='Evaluation' AND Status='Active'`);
+        const chosen = rows.find(row => row.IsDefault === true || row.IsDefault === 1) ?? rows[0];
+        if (!chosen || chosen.RubricID == null) return undefined;
+        const rawConfig = chosen.EvaluatorConfig;
+        const evaluatorConfig = (typeof rawConfig === 'string' || (typeof rawConfig === 'object' && rawConfig !== null))
+            ? (rawConfig as Record<string, unknown> | string)
+            : undefined;
+        return {
+            rubricId: String(chosen.RubricID),
+            evaluatorConfig,
+        };
+    }
+
+    /** Latest Published version of the chosen rubric. The suite pin stores the first answer. */
+    protected async LookupLatestPublished(context: DriverExecutionContext, rubricId: string): Promise<{ id: string; label: string } | undefined> {
+        const rows = await this.ReadMany(context, 'MJ: Rubric Versions', `RubricID='${rubricId}' AND Status='Published'`);
+        const best = [...rows].sort((a, b) => Number(b.MajorVersion ?? 0) - Number(a.MajorVersion ?? 0) || Number(b.MinorVersion ?? 0) - Number(a.MinorVersion ?? 0) || Number(b.PatchVersion ?? 0) - Number(a.PatchVersion ?? 0))[0];
+        if (!best) return undefined;
+        return { id: String(best.ID), label: `${best.MajorVersion ?? 0}.${best.MinorVersion ?? 0}.${best.PatchVersion ?? 0}` };
+    }
+
+    /** Major.Minor.Patch for an explicitly named version. This does not change the suite pin. */
+    protected async LookupVersionLabel(context: DriverExecutionContext, versionId: string): Promise<string | undefined> {
+        const row = await this.ReadOne(context, 'MJ: Rubric Versions', `ID='${versionId}'`);
+        if (!row) return undefined;
+        return `${row.MajorVersion ?? 0}.${row.MinorVersion ?? 0}.${row.PatchVersion ?? 0}`;
+    }
+
+    protected async ReadOne(context: DriverExecutionContext, entityName: string, filter: string): Promise<Record<string, unknown> | undefined> {
+        const rows = await this.ReadMany(context, entityName, filter);
+        return rows[0];
+    }
+
+    protected async ReadMany(context: DriverExecutionContext, entityName: string, filter: string, maxRows = 100): Promise<Record<string, unknown>[]> {
+        const provider = this.Provider;
+        if (!provider) throw new Error(`Could not read ${entityName}.`);
+        const view = RunView.FromMetadataProvider(provider);
+        const found = await view.RunView({ EntityName: entityName, ExtraFilter: filter, ResultType: 'simple', MaxRows: maxRows }, context.contextUser);
+        if (!found.Success) throw new Error(found.ErrorMessage || `Could not read ${entityName}.`);
+        return (found.Results ?? []) as Record<string, unknown>[];
+    }
+
     private async runOraclesForMultiTurn(
         config: AgentEvalConfig,
         turns: AgentEvalTurn[],
@@ -841,15 +1029,7 @@ export class AgentEvalDriver extends BaseTestDriver {
         expected: AgentEvalExpectedOutcomes,
         context: DriverExecutionContext
     ): Promise<OracleResult[]> {
-        // TODO: Temporarily skip oracle execution while oracles are being finalized
-        // Remove this flag once oracles are ready (SQL schema fixes, LLM Judge prompt creation, etc.)
-        const skipOracles = true;
-
-        if (skipOracles) {
-            this.log('⚠️  Oracle execution temporarily disabled', context.options.verbose);
-            return [];
-        }
-
+        config = await this.WithResolvedRubric(config, context);
         const strategy = config.evaluationStrategy || 'final-turn-only';
 
         switch (strategy) {
@@ -934,6 +1114,7 @@ export class AgentEvalDriver extends BaseTestDriver {
         context: DriverExecutionContext
     ): Promise<OracleResult[]> {
         const oracleResults: OracleResult[] = [];
+        const judgeEvidence = await this.buildJudgeEvidence(config, turnResults[turnResults.length - 1], context);
 
         for (const oracleConfig of config.oracles) {
             const oracle = context.oracleRegistry.get(oracleConfig.type);
@@ -957,7 +1138,10 @@ export class AgentEvalDriver extends BaseTestDriver {
                         finalOutput: turnResults[turnResults.length - 1].outputPayload
                     },
                     targetEntity: turnResults[turnResults.length - 1].agentRun,
-                    contextUser: context.contextUser
+                    contextUser: context.contextUser,
+                    testRunId: context.testRun.ID,
+                    provider: this.Provider ?? undefined,
+                    judgeEvidence,
                 };
 
                 const result = await oracle.evaluate(oracleInput, oracleConfig.config || {});
@@ -995,6 +1179,7 @@ export class AgentEvalDriver extends BaseTestDriver {
         messagePrefix: string = ''
     ): Promise<OracleResult[]> {
         const oracleResults: OracleResult[] = [];
+        const judgeEvidence = await this.buildJudgeEvidence(config, turnResult, context);
 
         for (const oracleConfig of config.oracles) {
             const oracle = context.oracleRegistry.get(oracleConfig.type);
@@ -1009,7 +1194,10 @@ export class AgentEvalDriver extends BaseTestDriver {
                     expectedOutput: expected,
                     actualOutput: turnResult.outputPayload,
                     targetEntity: turnResult.agentRun,
-                    contextUser: context.contextUser
+                    contextUser: context.contextUser,
+                    testRunId: context.testRun.ID,
+                    provider: this.Provider ?? undefined,
+                    judgeEvidence,
                 };
 
                 const result = await oracle.evaluate(oracleInput, oracleConfig.config || {});
@@ -1038,6 +1226,48 @@ export class AgentEvalDriver extends BaseTestDriver {
         }
 
         return oracleResults;
+    }
+
+    /**
+     * Builds the evidence judge oracles see for one turn: the agent's final message, final payload
+     * and output artifacts (registry component manifests resolved to full specs). Returns undefined
+     * when no judge oracle is configured, when evidence is disabled, or when it would add nothing to
+     * the bare output — so agents whose payload is the whole answer are judged exactly as before.
+     * Never throws; a failure is logged and judging proceeds on the bare output.
+     * @private
+     */
+    private async buildJudgeEvidence(
+        config: AgentEvalConfig,
+        turnResult: TurnResult | undefined,
+        context: DriverExecutionContext
+    ): Promise<JudgeOutputEvidence | undefined> {
+        const settings = config.judgeEvidence ?? {};
+        if (!turnResult || settings.enabled === false || !config.oracles.some(oracle => JUDGE_ORACLE_TYPES.has(oracle.type))) {
+            return undefined;
+        }
+        try {
+            const agentRun = turnResult.agentRun;
+            const provider = this.Provider;
+            const artifacts = settings.includeArtifacts === false || !provider
+                ? []
+                : await LoadJudgeArtifacts(
+                    agentRun.ConversationDetailID,
+                    provider,
+                    context.contextUser,
+                    settings.resolveRegistryComponents === false ? undefined : new ComponentRegistryFetcher(provider)
+                );
+            const evidence = BuildJudgeOutputEvidence(
+                { FinalPayload: agentRun.FinalPayload, Message: agentRun.Message, Artifacts: artifacts },
+                { MaxCharsPerItem: settings.maxCharsPerItem, MaxTotalChars: settings.maxTotalChars }
+            );
+            if (evidence) {
+                this.logToTestRun(context, 'info', `Judge evidence: ${evidence.Items.map(item => item.Label).join('; ')}${evidence.Truncated ? ' (truncated)' : ''}`);
+            }
+            return evidence;
+        } catch (error) {
+            this.logError('Could not build judge evidence; judging the bare output', error as Error);
+            return undefined;
+        }
     }
 
     /**

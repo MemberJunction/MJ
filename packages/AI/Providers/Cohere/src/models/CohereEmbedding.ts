@@ -12,6 +12,7 @@ import {
     FileCapabilities,
     ChatMessageContent,
     ChatMessageContentBlock,
+    EmbeddingInputType,
 } from '@memberjunction/ai';
 import { CohereClient, Cohere } from 'cohere-ai';
 
@@ -79,13 +80,15 @@ export class CohereEmbedding extends BaseEmbeddings {
         try {
             const response = await this._client.v2.embed({
                 model,
-                inputType: this.inputType,
+                inputType: this.resolveInputType(params.inputType),
                 embeddingTypes: ['float'],
                 texts: [params.text],
                 ...(params.dimensions ? { outputDimension: params.dimensions } : {}),
-            });
+            }, { abortSignal: params.CancellationToken });
             return { object: 'object', model, ModelUsage: new ModelUsage(0, 0), vector: response.embeddings.float?.[0] ?? [] };
         } catch (error) {
+            // An aborted request is reported as cancelled, not as an empty (failed) result.
+            this.ThrowIfRequestAborted(error, params.CancellationToken);
             console.error('Cohere embedding error:', ErrorAnalyzer.analyzeError(error, 'Cohere'));
             return { object: 'object', model, ModelUsage: new ModelUsage(0, 0), vector: [] };
         }
@@ -96,13 +99,15 @@ export class CohereEmbedding extends BaseEmbeddings {
         try {
             const response = await this._client.v2.embed({
                 model,
-                inputType: this.inputType,
+                inputType: this.resolveInputType(params.inputType),
                 embeddingTypes: ['float'],
                 texts: params.texts,
                 ...(params.dimensions ? { outputDimension: params.dimensions } : {}),
-            });
+            }, { abortSignal: params.CancellationToken });
             return { object: 'list', model, ModelUsage: new ModelUsage(0, 0), vectors: response.embeddings.float ?? [] };
         } catch (error) {
+            // An aborted request is reported as cancelled, not as an empty (failed) result.
+            this.ThrowIfRequestAborted(error, params.CancellationToken);
             console.error('Cohere embedding error:', ErrorAnalyzer.analyzeError(error, 'Cohere'));
             return { object: 'list', model, ModelUsage: new ModelUsage(0, 0), vectors: [] };
         }
@@ -120,13 +125,14 @@ export class CohereEmbedding extends BaseEmbeddings {
             this.ValidateContentSupported(params.content);
             const response = await this._client.v2.embed({
                 model,
-                inputType: this.inputType,
+                inputType: this.resolveInputType(params.inputType),
                 embeddingTypes: ['float'],
                 inputs: [this.mapContentToEmbedInput(params.content)],
                 ...(params.dimensions ? { outputDimension: params.dimensions } : {}),
-            });
+            }, { abortSignal: params.CancellationToken });
             return { object: 'object', model, ModelUsage: new ModelUsage(0, 0), vector: response.embeddings.float?.[0] ?? [] };
         } catch (error) {
+            this.ThrowIfRequestAborted(error, params.CancellationToken);
             console.error('Cohere embedding (content) error:', ErrorAnalyzer.analyzeError(error, 'Cohere'));
             return { object: 'object', model, ModelUsage: new ModelUsage(0, 0), vector: [] };
         }
@@ -142,8 +148,14 @@ export class CohereEmbedding extends BaseEmbeddings {
         ];
     }
 
-    /** Cohere's required input_type, overridable via AdditionalSettings; defaults to search_document. */
-    private get inputType(): Cohere.EmbedInputType {
+    /**
+     * Cohere's required input_type: the call's `inputType` when given (query → `search_query`,
+     * document → `search_document`), else the AdditionalSettings override, else search_document.
+     */
+    private resolveInputType(requested: EmbeddingInputType | undefined): Cohere.EmbedInputType {
+        if (requested) {
+            return requested === 'query' ? 'search_query' : 'search_document';
+        }
         const it = this._additionalSettings['inputType'];
         return typeof it === 'string' ? (it as Cohere.EmbedInputType) : DEFAULT_INPUT_TYPE;
     }

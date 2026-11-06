@@ -173,6 +173,33 @@ export interface SearchScoreBreakdown {
 }
 
 /**
+ * One event of a streaming search (`GraphQLSearchClient.StreamSearch`), as the `SearchStreamEvents`
+ * subscription delivers it.
+ */
+export interface SearchStreamClientEvent {
+    StreamID: string;
+    /** 'provider' | 'fused' | 'reranked' | 'final' | 'error' */
+    Phase: string;
+    /** Set on `provider` events (and on `reranked`, as the reranker's name). */
+    ProviderName?: string;
+    /** Set on `provider` events. */
+    DurationMs?: number;
+    /** Set on `provider` events: how many hits that provider returned, capped at `MaxResults`. */
+    ResultCount?: number;
+    /**
+     * Set on `fused`, `reranked` and `final` events. Always empty on a `provider` event: a provider's hits arrive
+     * before the server's permission pass, so they are never streamed.
+     */
+    Results?: SearchClientResultItem[];
+    /** Set on `final` events. */
+    SourceCounts?: { Vector: number; FullText: number; Entity: number; Storage: number };
+    /** Set on `final` events. */
+    ElapsedMs?: number;
+    /** Set on `error` events. */
+    ErrorMessage?: string;
+}
+
+/**
  * Internal response type for GraphQL score breakdown (matches GQL field names).
  * @internal
  */
@@ -592,17 +619,12 @@ export class GraphQLSearchClient {
      *   - filter on `Phase === 'final'` for the canonical result set
      *   - listen for `Phase === 'error'` to surface failures to the user
      *   - call `.unsubscribe()` after the terminal event
+     *
+     * A `Phase === 'provider'` event is progress only: `ProviderName`, `DurationMs` and `ResultCount`
+     * (that provider's hit count, capped at `MaxResults`). Its `Results` is always empty — a provider's
+     * hits arrive before the server's permission pass, so they are never streamed.
      */
-    public StreamSearch(params: SearchClientParams): Observable<{
-        StreamID: string;
-        Phase: string;
-        ProviderName?: string;
-        DurationMs?: number;
-        Results?: SearchClientResultItem[];
-        SourceCounts?: { Vector: number; FullText: number; Entity: number; Storage: number };
-        ElapsedMs?: number;
-        ErrorMessage?: string;
-    }> {
+    public StreamSearch(params: SearchClientParams): Observable<SearchStreamClientEvent> {
         return new Observable(observer => {
             // Step 1: kick off the stream. We don't have an existing helper
             // that combines mutation + subscription, so we invoke them
@@ -652,6 +674,7 @@ export class GraphQLSearchClient {
                                 Phase
                                 ProviderName
                                 DurationMs
+                                ResultCount
                                 Results { ID EntityName EntityDisplayName RecordID SourceType Title Snippet Score Tags MatchedAt ProviderId ProviderLabel ProviderIcon }
                                 SourceCounts { Vector FullText Entity Storage }
                                 ElapsedMs
@@ -660,7 +683,7 @@ export class GraphQLSearchClient {
                         }`;
                     inner = this._dataProvider.subscribe(subQuery, { streamID: start.StreamID }).subscribe({
                         next: (data: Record<string, unknown>) => {
-                            const ev = data?.['SearchStreamEvents'] as { StreamID: string; Phase: string; ProviderName?: string; DurationMs?: number; Results?: SearchClientResultItem[]; SourceCounts?: { Vector: number; FullText: number; Entity: number; Storage: number }; ElapsedMs?: number; ErrorMessage?: string } | undefined;
+                            const ev = data?.['SearchStreamEvents'] as SearchStreamClientEvent | undefined;
                             if (!ev) return;
                             observer.next(ev);
                             if (ev.Phase === 'final') {

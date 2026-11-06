@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { IsVerboseLoggingEnabled } from '../generic/logging';
+import { IsVerboseLoggingEnabled, LogStatusEx } from '../generic/logging';
 
 /**
  * Regression tests for the environment guard inside `runningOnNode()` in
@@ -62,5 +62,20 @@ describe('runningOnNode() env guard (via IsVerboseLoggingEnabled)', () => {
     vi.stubGlobal('process', undefined);
     expect(() => IsVerboseLoggingEnabled()).not.toThrow();
     expect(IsVerboseLoggingEnabled()).toBe(false);
+  });
+
+  it('routes verboseOnly LogStatusEx messages to console.debug in browser environments when MJ_VERBOSE is off', () => {
+    vi.stubGlobal('process', undefined);
+    vi.stubGlobal('window', { location: { search: '' } });
+    const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    LogStatusEx({ message: '[Test] Verbose browser trace', verboseOnly: true });
+
+    expect(debugSpy).toHaveBeenCalledWith('[Test] Verbose browser trace');
+    expect(logSpy).not.toHaveBeenCalled();
+
+    debugSpy.mockRestore();
+    logSpy.mockRestore();
   });
 });

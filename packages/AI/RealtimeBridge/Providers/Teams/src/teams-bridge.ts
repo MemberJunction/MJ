@@ -6,8 +6,9 @@
  * Structurally mirrors `ZoomBridge` (the reference driver) — only the platform names + join-coordinate
  * parsing differ.
  *
- * Teams capability coverage (per the §8 seed row): on-demand + scheduled + invite + native-invite join,
- * inbound routing, audio in/out (video/screen directional flags carried by transport), a diarized roster
+ * Teams capability coverage (per the seed row): on-demand + scheduled + invite + native-invite join,
+ * inbound routing, audio in/out (no video or screen in either direction: the {@link ITeamsMeetingSdk} seam
+ * carries audio only, so the seed row claims none of the video and screen flags), a diarized roster
  * (`SpeakerDiarization`), participant mute + Teams meeting chat (via the Meeting Controls channel). Native
  * raised-hand is ⚠️ partial over the calling-bot API — wired where the platform surfaces it, tolerant of
  * it never firing. Telephony features (DTMF / transfer / recording) are NOT Teams-meeting features here,
@@ -184,8 +185,8 @@ export class TeamsBridge extends BaseRealtimeBridge {
 
     /**
      * Sends an outbound media frame into the meeting. Audio is fed to the SDK's outbound audio-socket
-     * path; video/screen frames are gated by the directional capability flags (the transport carries
-     * them, and the SDK send is a deployment-time binding TODO — today the models emit audio).
+     * path; `video-out` and `screen-out` frames are dropped: the SDK seam has no video or screen send, so
+     * the provider row claims neither `VideoOut` nor `ScreenOut`.
      *
      * @param track The outbound track the frame targets.
      * @param frame The media frame to send.
@@ -204,8 +205,8 @@ export class TeamsBridge extends BaseRealtimeBridge {
             }
             case 'video-out':
             case 'screen-out':
-                // Directional video/screen capability is declared; the SDK send binding lands with the
-                // first realtime model that emits these tracks (TODO at deployment). No-op for now.
+                // Dropped: the SDK seam has no video or screen send yet, and the provider row claims neither flag.
+                // Carrying one takes a seam method, its real binding, and the flag on the provider row.
                 break;
             default:
                 // An inbound track was passed to SendMedia — ignore (defensive).
@@ -358,8 +359,27 @@ export class TeamsBridge extends BaseRealtimeBridge {
                 return address;
             }
         })();
-        const match = decoded.match(/(19:meeting_[^/@]+@thread\.v2)/i);
-        return match ? match[1] : undefined;
+        // Found by index, not a regex: an unanchored `19:meeting_[^/@]+` backtracks quadratically on a string that
+        // repeats `19:meeting_`. Same match: the first `19:meeting_` whose run up to the next `@` holds no `/`, is not
+        // empty, and continues `@thread.v2`.
+        const lower = decoded.replace(/[A-Z]/g, (c) => c.toLowerCase()); // ASCII only, so indexes line up with `decoded`
+        const prefix = '19:meeting_';
+        const suffix = '@thread.v2';
+        let at = -1;
+        for (let start = lower.indexOf(prefix); start >= 0; start = lower.indexOf(prefix, start + 1)) {
+            const bodyStart = start + prefix.length;
+            if (at < bodyStart) {
+                at = lower.indexOf('@', bodyStart);
+                if (at < 0) {
+                    return undefined;
+                }
+            }
+            const body = decoded.slice(bodyStart, at);
+            if (body.length > 0 && !body.includes('/') && lower.startsWith(suffix, at)) {
+                return decoded.slice(start, at + suffix.length);
+            }
+        }
+        return undefined;
     }
 
     /** Returns the PCM bytes of an outbound audio frame, preferring the binary payload. */

@@ -52,7 +52,7 @@ The `RedisProviderConfig` object supports the following options:
 | `url` | `string` | — | Redis connection URL (`redis://` or `rediss://` for TLS). Mutually exclusive with `options`. |
 | `options` | `RedisOptions` | — | Full [`ioredis` options](https://github.com/redis/ioredis#connect-to-redis) object. Mutually exclusive with `url`. |
 | `keyPrefix` | `string` | `'mj'` | Prefix for all Redis keys. Useful for isolating MJ data in a shared Redis instance. |
-| `defaultTTLSeconds` | `number` | `undefined` | Default time-to-live for all cached entries. `undefined` means keys persist until explicitly removed. |
+| `defaultTTLSeconds` | `number` | `3600` | Default time-to-live for all cached entries. `0` means keys persist until explicitly removed. |
 | `maxRetries` | `number` | `10` | Maximum reconnection attempts with exponential backoff before giving up. |
 | `enableLogging` | `boolean` | `true` | Whether to log connection events via MJ's `LogStatus`/`LogError`. |
 
@@ -170,20 +170,37 @@ mj:DatasetCache:MyDataset_items
 mj:default:some-arbitrary-key
 ```
 
-### Category Tracking
+### Index Groups
 
-Each category has an associated Redis Set at `{prefix}:__categories__:{category}` that tracks all member keys. This enables efficient:
+A write can name an index group (`SetItem(key, value, category, { IndexGroup })`). The key is then
+recorded in a Redis Set at `{prefix}:__group__:{category}:{group}`. `LocalCacheManager` passes the
+entity name for every RunView cache entry, so any server can find the entries any other server wrote
+for an entity:
 
-- **`ClearCategory()`** — Deletes all keys in a category in a single pipeline
-- **`GetCategoryKeys()`** — Lists all keys without scanning the entire keyspace
+- **`GetIndexGroupKeys(category, group)`** — returns the group's keys that still exist, and removes
+  the ones that have expired from the set.
+- The set is kept alive at least as long as its longest-lived member (an atomic Lua script that uses
+  only Redis 6-compatible commands).
+
+There is no category-wide set. Expiry never removes set members, so such a set grows without bound
+once keys carry a TTL. Category-wide operations use `SCAN` instead:
+
+- **`ClearCategory()`** — deletes every key in the category, its index-group sets, and the
+  `{prefix}:__categories__:{category}` set that earlier versions of this provider maintained
+- **`GetCategoryKeys()`** — lists every live key in the category (cost grows with the keyspace; meant
+  for administration)
 
 ### TTL (Time-to-Live)
 
 Redis has native key expiration, so TTL is handled efficiently at the server level:
 
-1. **Config default** — `defaultTTLSeconds` applies to every `SetItem()` call
-2. **Per-call override** — `SetItem(key, value, category, ttlSeconds)` overrides the default
-3. **No TTL** — If neither is set, keys persist until explicitly removed or `ClearCategory()` is called
+1. **Config default** — `defaultTTLSeconds` applies to every `SetItem()` call. It defaults to **3600 (one hour)**.
+2. **Per-call override** — `SetItem(key, value, category, { TTLSeconds })` (or a bare number) overrides the default
+3. **No TTL** — `0`, either as the default or per call, stores the key without expiry
+
+Event-driven invalidation stays the primary freshness mechanism. The TTL bounds how long an entry written by
+something that never publishes (direct SQL, another application) can be served, and gives a `volatile-*`
+eviction policy something to evict — Redis never evicts a key without an expiry under those policies.
 
 ### Error Handling
 
@@ -215,10 +232,11 @@ The interface is **generic-typed** — `T` flows from caller through to retrieve
 |--------|-------------|
 | `GetItem<T>(key, category?)` | Retrieves a cached value. **JSON-deserializes internally** — returns the typed object. Returns `null` on miss, corrupt entry, or Redis unavailability. |
 | `GetItems<T>(keys, category?)` | **Batched read via Redis `MGET`** — one command, one network round-trip, N values. Returns `Map<string, T \| null>`. Missing/corrupt entries map to `null` per-key without failing the batch. ~N× faster than individual `GetItem` calls which each pay full RTT. |
-| `SetItem<T>(key, value, category?, ttlSeconds?)` | Stores a value with optional TTL. **JSON-serializes internally** — pass plain objects/arrays/primitives. Uses pipeline for atomic set + category tracking. |
-| `Remove(key, category?)` | Deletes a key and removes it from category tracking. |
-| `ClearCategory(category)` | Deletes all keys in a category using the tracking Set. |
-| `GetCategoryKeys(category)` | Returns all key names in a category. |
+| `SetItem<T>(key, value, category?, options?)` | Stores a value. `options` is `{ TTLSeconds?, IndexGroup? }` or a bare TTL number. **JSON-serializes internally** — pass plain objects/arrays/primitives. One pipeline for the write and the index-group update. |
+| `Remove(key, category?)` | Deletes a key. Index-group membership is pruned the next time the group is read. |
+| `ClearCategory(category)` | Deletes all keys in a category (found with `SCAN`) and the category's index-group sets. |
+| `GetCategoryKeys(category)` | Returns all live key names in a category (`SCAN`). |
+| `GetIndexGroupKeys(category, group)` | Returns the live keys written with that index group, pruning expired members. |
 
 **Internal serialization**: Redis stores strings, so `SetItem` calls `JSON.stringify(value)` and `GetItem` calls `JSON.parse(raw)` automatically. Callers see a typed object interface — no manual `JSON.parse`/`JSON.stringify` needed.
 
@@ -263,7 +281,38 @@ if (session) {
 | Property | Type | Description |
 |----------|------|-------------|
 | `IsConnected` | `boolean` | Whether the client has an active connection (transient — auto-reconnects). |
-| `Client` | `Redis` | The underlying `ioredis` client for advanced operations (pub/sub, streams, etc.). |
+| `IsPubSubEnabled` | `boolean` | Whether the provider was created with `enablePubSub`. When `false`, the channel methods below do nothing. |
+| `Client` | `Redis` | The underlying `ioredis` client, for commands the provider does not wrap (streams, etc.). Use the channel methods below for pub/sub. |
+
+#### Named Channels (Application Pub/Sub)
+
+Besides cache invalidation, the provider carries messages on channels you name. They use the provider's existing publisher and subscriber connections, so an application needs no Redis clients of its own.
+
+| Method | Description |
+|--------|-------------|
+| `PublishMessage(channel, payload)` | Fire-and-forget. A failure is logged, never raised. |
+| `PublishMessageAndWait(channel, payload)` | Resolves to the number of subscribers that received the message (`0` = nobody listening). Rejects if pub/sub is disabled or Redis rejects the publish. While disconnected it waits for the connection, so race it against a timeout if you need a deadline. |
+| `SubscribeToChannel(channel, handler)` | Registers a handler (sync or async) and returns an unsubscribe function. Removing a channel's last handler unsubscribes it in Redis. |
+
+```typescript
+const redis = new RedisLocalStorageProvider({ url: process.env.REDIS_URL, keyPrefix: 'myapp', enablePubSub: true });
+await redis.StartListening();
+
+// Every replica listens; the one that owns the request acts on it.
+const stop = await redis.SubscribeToChannel('abort', (raw) => {
+    const { requestId, origin } = JSON.parse(raw) as { requestId: string; origin: string };
+    if (origin !== replicaId) abortLocally(requestId);
+});
+
+// Any replica can ask, and learns whether anyone heard it.
+const receivers = await redis.PublishMessageAndWait('abort', JSON.stringify({ requestId, origin: replicaId }));
+```
+
+Things to know:
+
+- **Channels are prefixed.** `'abort'` becomes `myapp:abort`, so applications sharing one Redis under different key prefixes do not hear each other. The name `__pubsub__` is reserved for cache invalidation and is refused.
+- **No echo suppression.** A process subscribed to a channel receives its own messages. Stamp an origin on the payload and check it, as above.
+- **No replay.** Messages published while a subscriber is disconnected are never delivered to it.
 
 ## Testing
 

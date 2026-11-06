@@ -1,12 +1,25 @@
-import { Component, ElementRef, EventEmitter, HostListener, Input, Output, OnDestroy, AfterViewInit, ChangeDetectorRef, NgZone, TemplateRef, ViewChild, inject } from '@angular/core';
+import { Component, ElementRef, EventEmitter, HostListener, Input, Output, OnDestroy, AfterViewInit, AfterViewChecked, ChangeDetectorRef, NgZone, TemplateRef, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
+import type { VideoSourceState } from '@memberjunction/ai-realtime-client';
 import { UserInfo } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJStorageMediaPlayerComponent, MediaTranscriptCue } from '@memberjunction/ng-media-player';
-import { RealtimeConnectionState } from '@memberjunction/realtime-runtime';
+import {
+  DescribeCallEnd,
+  REALTIME_CAPTURES_OFF,
+  REALTIME_CAPTURE_OFFERS_NONE,
+  REALTIME_MICROPHONE_NONE,
+  type RealtimeAvatarNotice,
+  type RealtimeCaptureOffers,
+  type RealtimeCaptureState,
+  type RealtimeCaptureStates,
+  type RealtimeConnectionState,
+  type RealtimeMicrophoneState,
+} from '@memberjunction/realtime-runtime';
+import { MJAlertComponent } from '@memberjunction/ng-ui-components';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 import { ParsedDelegationArtifact } from '@memberjunction/realtime-runtime';
 import { BuildReviewThreadItems, RealtimeSessionReview, RealtimeSessionReviewTurn } from '../../services/realtime-session-review.service';
@@ -14,8 +27,14 @@ import { RealtimeSessionState } from './realtime-session-state';
 import { RealtimeAgentBannerComponent } from './realtime-agent-banner.component';
 import { RealtimeSessionThreadComponent } from './realtime-session-thread.component';
 import { RealtimeChannelStripComponent } from './realtime-channel-strip.component';
+import { RealtimePerceptionChipComponent, RealtimePerceptionToggle } from './realtime-perception-chip.component';
 import { RealtimeComposerComponent } from './realtime-composer.component';
-import { RealtimeSurfaceTabsComponent } from './realtime-surface-tabs.component';
+import { RealtimeSurfaceTabsComponent, RealtimeChannelSlot } from './realtime-surface-tabs.component';
+import { RealtimeSurfaceStageModel } from './realtime-surface-stage.model';
+import { AgentOrbStateFor, RealtimeAgentOrbComponent, type RealtimeAgentOrbState } from './realtime-agent-orb.component';
+import { RealtimeCameraCheckCardComponent } from './capture/realtime-camera-check-card.component';
+import { SURFACE_PIP_PREF_KEY, SURFACE_PLACEMENT_PREF_KEY } from './realtime-surface-placement-prefs';
+import { RealtimeChannelPaneComponent } from './channels/realtime-channel-pane.component';
 import {
   ClampSurfacePanelWidth, DefaultSurfacePanelWidth, IsSurfacePanelDrag, ParseSurfacePanelPref,
   SerializeSurfacePanelPref, SurfacePanelDragWidth,
@@ -32,6 +51,24 @@ import { RealtimeChannelTabRegistration, ShouldRemoveReviewWhiteboardTab } from 
 import { ShouldRegisterChannelTabUpFront } from './realtime-surface-tab-style';
 import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 import { RealtimeWhiteboardBoardComponent, WhiteboardState } from '@memberjunction/ng-whiteboard';
+import {
+  AvatarNoticeText, MediaMoveMenuComponent, MediaStageComponent, MediaStagePipActionsDirective, MediaStageSurfaceDirective,
+  SharePanelDirective, SharePanelRegistry,
+  type AvatarNoticeOverrides, type MediaMoveRequest, type MediaSharePanel, type MediaShareRequest, type MediaStagePipRectChange
+} from '@memberjunction/ng-realtime-media';
+import { MediaLayoutPrefs, RecordPipRect, type MediaDevice, type MediaDeviceSelection, type MediaPipRect } from '@memberjunction/ai-realtime-client/media';
+
+/** How long the call's avatar notice stays before it hides itself (N5: it also has a dismiss button). */
+const AVATAR_NOTICE_VISIBLE_MS = 10_000;
+
+/**
+ * What the call says while no microphone works, by why: a microphone the browser blocked must be allowed before a pick
+ * can open it. `{Agent}` stands for the agent's name. The arrow is the device chevron on the microphone button.
+ */
+const MICROPHONE_NOTICE_TEXT = {
+  Blocked: "{Agent} can't hear you: the browser blocked the microphone. Allow it for this site, then choose it from the arrow next to the microphone button.",
+  Lost: "{Agent} can't hear you: no microphone is working. Connect one, or choose one from the arrow next to the microphone button.",
+} as const;
 
 /**
  * A request to open an entity record, emitted by the call overlay's gear-gated developer
@@ -61,6 +98,12 @@ export interface RealtimeStartLiveRequest {
   LastSessionId: string;
 }
 
+/** A caption as it runs over the agent's video: who said it (`null` for the agent, whose video it is) and what. */
+export interface RealtimeAvatarCaption {
+  Speaker: string | null;
+  Text: string;
+}
+
 
 /**
  * The "call mode" overlay for a live real-time voice session. Hosted by the
@@ -82,11 +125,18 @@ export interface RealtimeStartLiveRequest {
  *
  * INTERACTIVE CHANNELS ARE PLUGINS — this shell is channel-agnostic. It subscribes
  * {@link RealtimeSessionService.ActiveChannels$} and registers one surface tab per
- * {@link BaseRealtimeChannelClient} (key/title/icon from the plugin); the tab pane creates
- * the plugin's surface component dynamically and the PLUGIN wires its own inputs/outputs.
- * The only channel-generic affordance the shell owns is the FOCUS layout: any channel may
- * request it (via its context's `SetFocusMode` → {@link RealtimeSessionService.ChannelFocus$}),
- * which collapses the main call column (`.board-focus`) and shows the floating call pill.
+ * {@link BaseRealtimeChannelClient} (key/title/icon from the plugin). Every plugin's surface
+ * lives on ONE STAGE (`mj-media-stage`) over the whole overlay: created the first time it is
+ * seen, laid over its tab's pane while that tab is active, and kept until its channel leaves
+ * (see {@link RealtimeSurfaceStageModel}). The PLUGIN wires its own inputs/outputs.
+ * Each surface starts where its channel's registry row places it (its tab unless the row says
+ * otherwise). The user moves it with "Move to…" (beside its tab, in the call pill, or on a
+ * picture-in-picture box): to the STAGE, a picture-in-picture box, its tab, or out of sight,
+ * as far as its channel allows. The moves are saved per user and carry over to later
+ * sessions. A surface on the stage is the FOCUS layout: the main call column collapses
+ * (`.board-focus`), the surface fills the overlay and the floating call pill appears. A channel
+ * may ask for it too (via its context's `SetFocusMode` → {@link RealtimeSessionService.ChannelFocus$}),
+ * which moves its surface to the stage or back.
  *
  * Owns the shared {@link RealtimeSessionState} — the SINGLE merge of the service's
  * caption/delegation/narration streams — and passes it to both thread and rail via
@@ -116,17 +166,27 @@ export interface RealtimeStartLiveRequest {
     CommonModule,
     SharedGenericModule,
     RealtimeAgentBannerComponent,
+    RealtimeAgentOrbComponent,
+    RealtimeCameraCheckCardComponent,
     RealtimeSessionThreadComponent,
     RealtimeChannelStripComponent,
+    RealtimePerceptionChipComponent,
     RealtimeComposerComponent,
     RealtimeSurfaceTabsComponent,
+    RealtimeChannelPaneComponent,
+    MediaMoveMenuComponent,
+    MediaStageComponent,
+    MediaStageSurfaceDirective,
+    MediaStagePipActionsDirective,
+    SharePanelDirective,
     RealtimeWhiteboardBoardComponent,
-    MJStorageMediaPlayerComponent
+    MJStorageMediaPlayerComponent,
+    MJAlertComponent
   ],
   templateUrl: './realtime-session-overlay.component.html',
   styleUrl: './realtime-session-overlay.component.css'
 })
-export class RealtimeSessionOverlayComponent extends BaseAngularComponent implements AfterViewInit, OnDestroy {
+export class RealtimeSessionOverlayComponent extends BaseAngularComponent implements AfterViewInit, AfterViewChecked, OnDestroy {
   private _agentName = 'Sage';
 
   /**
@@ -152,6 +212,30 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /** The active environment id, threaded to the surface panel's artifact viewer. */
   @Input() EnvironmentID = '';
+
+  /**
+   * The host's own words for why the call shows no avatar, per reason (for example its product's name for "this app").
+   * A reason it leaves out keeps the stock line from `ng-realtime-media` (`AVATAR_NOTICE_TEXT`). `unknown` words a reason
+   * this version doesn't know, such as a newer server's, in place of `AVATAR_NOTICE_CALL_UNKNOWN_REASON_TEXT`.
+   */
+  @Input() AvatarNoticeLabels: AvatarNoticeOverrides | null = null;
+
+  /**
+   * Whether the top "Audio only: this voice model can't show an avatar" notice banner is shown when
+   * an audio-only call connects. Default `false` so standard voice sessions stay calm and uncluttered
+   * unless a host explicitly opts into showing avatar capability notices.
+   */
+  @Input() ShowAvatarNotice = false;
+
+  /**
+   * Whether the bottom "Agent can see" perception chip is always shown even when only background channel
+   * bridges exist. Default `false`: the chip is only shown when the user actively captures their camera or
+   * screen ({@link CameraOn} / {@link Sharing}), or when explicitly enabled via `[ShowPerceptionChip]="true"`.
+   */
+  @Input() ShowPerceptionChip = false;
+
+  /** Whether inline markdown links in the session thread open in a new browser tab. Default true. */
+  @Input() OpenLinksInNewTab = true;
 
   // ── Declarative UI configuration (host controls every aspect of the surface) ──
   //
@@ -196,10 +280,12 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   set Compact(value: boolean | undefined) { this.setUiInput('compact', value); }
   get Compact(): boolean | undefined { return this._uiInputs.compact; }
 
-  /** Fade non-essential controls when the session is idle (orb chrome only). Default `true`. */
+  /**
+   * @deprecated No-op since 6.2: the idle fade was never implemented. Kept so existing bindings compile.
+   */
   @Input()
-  set AutoHideControls(value: boolean | undefined) { this.setUiInput('autoHideControls', value); }
-  get AutoHideControls(): boolean | undefined { return this._uiInputs.autoHideControls; }
+  set AutoHideControls(value: boolean | undefined) { void value; }
+  get AutoHideControls(): boolean | undefined { return undefined; }
 
   /**
    * May the user reveal the transcript at all? `false` makes the widget a pure voice orb
@@ -208,6 +294,18 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   @Input()
   set AllowTextReveal(value: boolean | undefined) { this.setUiInput('allowTextReveal', value); }
   get AllowTextReveal(): boolean | undefined { return this._uiInputs.allowTextReveal; }
+
+  /**
+   * May the user type into the live session? Default `true`. Mirrors {@link RealtimeUiInputs.allowTyping}.
+   *
+   * Invariant: `false` removes every road to the composer (the strip's Type button, the lean sheet's Type
+   * button, the type-to-compose hotkey, and a programmatic open) and nothing else. It does not touch the
+   * transcript, captions, the surface panel or the channel strip. `AllowTextReveal=false` implies
+   * `AllowTyping=false`. Turning it off while the dock is open closes the dock; the draft is kept.
+   */
+  @Input()
+  set AllowTyping(value: boolean | undefined) { this.setUiInput('allowTyping', value); }
+  get AllowTyping(): boolean | undefined { return this._uiInputs.allowTyping; }
 
   /** Show the captions toggle. Default `true`. */
   @Input()
@@ -301,6 +399,12 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     return this._reviewData;
   }
 
+  /**
+   * Review mode: whether the "Start live session" action is offered. A host turns it off where
+   * a voice session cannot start (the chat area does so while a draft fork is open).
+   */
+  @Input() AllowStartLive = true;
+
   /** Emitted after the call ends so the host can react (visibility is driven by Active$). */
   @Output() Ended = new EventEmitter<void>();
 
@@ -347,7 +451,8 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /**
    * A generic hook fired when ANY control is invoked — even one the host hid via inputs
    * and re-rendered itself. Lets a host observe/react to the full control surface from a
-   * single binding.
+   * single binding. An open of the typing box that first reveals the conversation reports
+   * `'captions'` and `'reveal-text'` before `'type'`.
    */
   @Output() ControlInvoked = new EventEmitter<RealtimeControlId>();
 
@@ -502,6 +607,13 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    */
   public ShowCaptions = false;
 
+  /**
+   * Whether the user asked for the conversation itself (the hero's "Show the conversation", {@link RevealText}), not only
+   * captions. While the agent's video presents in the hero, captions alone keep the hero and run over the video; this
+   * opens the thread. Cleared when captions turn off.
+   */
+  private conversationShown = false;
+
   /** UserInfoEngine key for the persisted captions (text-vs-orb) preference. */
   private static readonly captionsPrefKey = 'mj.realtimeVoice.captions.v1';
 
@@ -526,7 +638,14 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   @ViewChild(RealtimeSurfaceTabsComponent)
   private set surfaceTabsRef(ref: RealtimeSurfaceTabsComponent | undefined) {
     this.surfaceTabs = ref;
-    if (ref) {
+    if (!ref) {
+      // The panel went away with its slots. StageSlot reads null while it is away, so the bindings don't change.
+      this.channelSlot = null;
+      this.SurfaceStage.SetActiveTab(null);
+      // The panel that comes back is a new one, which starts as PanelCollapsed says: expanded unless only the call's
+      // width hid this one (#5387, #5433).
+      this.resetPanelCollapseUnlessWaitingForRoom();
+    } else {
       // A (re)created panel starts with a FRESH tab model. Re-register the live channel set
       // here (gated to whiteboard + already-used channels) so hiding the panel (pure-audio
       // return, Details off) never loses the Whiteboard or an already-used channel's tab.
@@ -547,6 +666,13 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
           // lead the strip — NOT the Activity rail; agent-run plumbing is opt-in only.
           // (Review channel tabs register a beat later and take focus themselves.)
           ref.FocusFirstTab();
+          // The panel reports its wide tier only when it flips, from a start that is not wide, so landing on Activity
+          // reports nothing. PanelWide may still hold the tier of the panel before, whose focused channel left the call
+          // while it was away, so it takes the tier of the tab this one landed on (#5433). Only a different tier moves
+          // the width. A reveal always lands on a channel's tab, which the panel reports itself.
+          if (ref.IsWide !== this.PanelWide) {
+            this.OnPanelWideChanged(ref.IsWide);
+          }
         }
       });
     }
@@ -579,22 +705,99 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   // ── Channel FOCUS layout (channel-generic — any plugin may request it) ─────
 
   /**
-   * True while a channel surface is in FOCUS mode: the main call column collapses
+   * True while a channel's surface is on the stage (FOCUS mode): the main call column collapses
    * (`.board-focus` on the overlay) and a compact floating call pill (orb + state +
-   * mute / show-thread / end) rides over the surface.
+   * mute / show-thread / move / end) rides over the surface. A surface that presents the agent
+   * ({@link PresenterOnStage}) takes the agent's place in the call instead, so it is not focus mode.
    */
-  public ChannelFocusMode = false;
+  public get ChannelFocusMode(): boolean {
+    return this.SurfaceStage.StageKey !== null && !this.PresenterOnStage;
+  }
+
+  /**
+   * Whether the surface on the stage presents the agent: its channel shows the agent's video (the Avatar). It lies over
+   * {@link PresenterSlot}, in the agent's place in the call (the hero, or above the thread in the console), rather than
+   * filling the overlay.
+   */
+  public get PresenterOnStage(): boolean {
+    return this.StagePlugin?.ShowsAgentVideo ?? false;
+  }
+
+  /** Whether captions run over the agent's video: they are on, and the video presents in the hero. */
+  public get ShowAvatarCaptions(): boolean {
+    return this._ui.allowTextReveal && this.ShowCaptions && this.ShowHero && this.PresenterOnStage;
+  }
+
+  /**
+   * Whether the call body shows the connecting screen for `state`: while the call connects, outside review, unless the
+   * agent's video presents in the hero. The hero then stays, so a resume on a new connection keeps the video in its place
+   * with its last frame on screen, and the video's tile says the call is connecting. Taking the hero away would take the
+   * video's place with it, and the stage would lay the video over the whole call until the hero came back.
+   */
+  public ShowConnectingScreen(state: RealtimeConnectionState): boolean {
+    return !this.IsReviewing && state === 'connecting' && !(this.ShowHero && this.PresenterOnStage);
+  }
+
+  /** The newest caption, as the captions over the agent's video show it: the user's is marked "You". `null` before any. */
+  public get AvatarCaption(): RealtimeAvatarCaption | null {
+    const items = this.State.Items;
+    for (let i = items.length - 1; i >= 0; i--) {
+      const item = items[i];
+      if (item.Kind === 'caption') {
+        return { Speaker: item.Role === 'User' ? 'You' : null, Text: item.Text };
+      }
+    }
+    return null;
+  }
+
+  /** The agent's place in the call, as last reported to the stage, or `null` while the call shows none. */
+  public PresenterSlot: HTMLElement | null = null;
+
+  /** The element the stage lays its stage surface over: the agent's place while it presents, else none (it fills the stage). */
+  public get StageSurfaceSlot(): HTMLElement | null {
+    return this.PresenterOnStage ? this.PresenterSlot : null;
+  }
+
+  /** The agent's place in the call: in the hero, or above the thread in the console. */
+  @ViewChild('presenterSlot') private presenterSlotRef?: ElementRef<HTMLElement>;
+
+  /** The presenter slot last reported through {@link PresenterSlot}. */
+  private reportedPresenterSlot: HTMLElement | null = null;
 
   /** Mic-muted state reflected on the focus pill's mute button. */
   public FocusPillMuted = false;
 
-  /** The channel currently holding the focus layout (the pill's exit routes back to it). */
-  private focusChannel: BaseRealtimeChannelClient | null = null;
+  /** The channel whose surface is on the stage (the pill's exit routes back to it), or `null`. */
+  public get StagePlugin(): BaseRealtimeChannelClient | null {
+    const key = this.SurfaceStage.StageKey;
+    return key ? this.SurfaceStage.PluginFor(key) : null;
+  }
+
+  // ── The stage: every channel surface, in one layer over the overlay ─────────
+
+  /** Which channel surfaces the stage holds and where each shows. */
+  public readonly SurfaceStage = new RealtimeSurfaceStageModel();
+
+  /** The active channel tab's slot, as the panel last reported it. */
+  private channelSlot: RealtimeChannelSlot | null = null;
+
+  /** The slot the stage lays the active channel tab's surface over: none while the panel is away. */
+  public get StageSlot(): RealtimeChannelSlot | null {
+    return this.ShowPanelArea ? this.channelSlot : null;
+  }
+
+  /** The panel's active channel slot moved, or went away. */
+  public OnChannelSlotChange(slot: RealtimeChannelSlot | null): void {
+    this.channelSlot = slot;
+    this.SurfaceStage.SetActiveTab(slot?.Key ?? null);
+    this.cdr.markForCheck();
+  }
 
   private subs: Subscription[] = [];
 
   constructor() {
     super();
+    this.loadPlacementPref();
     this.loadPanelWidthPref();
     this.loadDisclosurePref();
     this.loadCaptionsPref();
@@ -605,16 +808,348 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       // Disclosure ratchet moved — re-resolve the view-model (thread/composer/gear gates).
       this.Disclosure.Changed$.subscribe(() => this.recomputeUi()),
       // One surface tab per registry-resolved channel plugin (replays the current set).
-      this.realtime.ActiveChannels$.subscribe(channels => { this.registerChannelTabs(channels); this.recomputeUi(); }),
+      this.realtime.ActiveChannels$.subscribe(channels => this.onActiveChannelsChanged(channels)),
       // Any channel may request the focus layout through its host context.
       this.realtime.ChannelFocus$.subscribe(event => this.onChannelFocus(event.Channel, event.Focused)),
       // The agent ACTED on a channel — auto-reveal its surface tab on first activity.
       this.realtime.ChannelActivity$.subscribe(plugin => this.onChannelActivity(plugin)),
+      // What the agent can see (frames flowing from a whiteboard, browser, shared screen): feeds the
+      // "agent can see" chip. Not gated by disclosure level — it is a privacy indicator, never earned.
+      this.realtime.VideoSources$.subscribe(sources => { this.VideoSources = sources; this.cdr.markForCheck(); }),
+      // The camera and screen share, and which of them the call offers: the composer's Camera and Share follow both.
+      this.realtime.Captures$.subscribe(states => this.onCapturesChanged(states)),
+      this.realtime.CaptureOffers$.subscribe(offers => { this.CaptureOffers = offers; this.cdr.markForCheck(); }),
+      // The call's microphone and the ones it can move to: the composer's device menu lists them.
+      this.realtime.Microphone$.subscribe(microphone => this.onMicrophoneChanged(microphone)),
+      // The panels of the page on screen, which the Share menu offers under "This panel"; a shared one that goes away
+      // ends its share.
+      this.sharePanelRegistry.PanelsFor$(this.hostRef.nativeElement).subscribe(panels => {
+        this.SharePanels = panels;
+        this.cdr.markForCheck();
+      }),
+      this.sharePanelRegistry.Removed$.subscribe(key => this.onSharePanelRemoved(key)),
       // Live/idle flips: reset/ratchet disclosure + re-evaluate the review-vs-live branch.
       this.realtime.Active$.subscribe(active => this.onActiveChanged(active)),
       // Connection lifecycle drives chrome (the `connecting` loader) + the public output.
-      this.realtime.ConnectionState$.subscribe(state => this.onConnectionStateChanged(state))
+      this.realtime.ConnectionState$.subscribe(state => this.onConnectionStateChanged(state)),
+      // Why the call shows no avatar its agent asked for: once per call, after it connects.
+      this.realtime.AvatarNotice$.subscribe(notice => this.onAvatarNotice(notice))
     );
+  }
+
+  /** The runtime's notice for this call (`null` when none). */
+  private avatarNotice: RealtimeAvatarNotice | null = null;
+
+  /** The notice the user dismissed or that hid itself; this call does not show it again. */
+  private avatarNoticeDone: RealtimeAvatarNotice | null = null;
+
+  /** Hides the notice {@link AVATAR_NOTICE_VISIBLE_MS} after it appears. */
+  private avatarNoticeTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Why this live call shows no avatar its agent asked for, while the notice shows: from the moment the call connects
+   * until the user dismisses it or it hides itself. `null` otherwise, when {@link ShowAvatarNotice} is off, and always in review.
+   */
+  public get AvatarNotice(): RealtimeAvatarNotice | null {
+    const notice = this.avatarNotice;
+    return this.ShowAvatarNotice && notice && notice !== this.avatarNoticeDone && !this.IsReviewing ? notice : null;
+  }
+
+  /**
+   * The notice's line, in the host's words when it gave some ({@link AvatarNoticeLabels}); a notice without a reason (one
+   * this version doesn't know) reads the call's line for it.
+   */
+  public get AvatarNoticeMessage(): string {
+    const notice = this.AvatarNotice;
+    return notice ? AvatarNoticeText(notice.Reason ?? null, this.AvatarNoticeLabels, this.AgentName) : '';
+  }
+
+  /** The user dismissed the notice: it does not come back in this call. */
+  public OnAvatarNoticeDismissed(): void {
+    this.finishAvatarNotice();
+  }
+
+  /** A new notice starts its timer; a call's end (`null`) takes it away. */
+  private onAvatarNotice(notice: RealtimeAvatarNotice | null): void {
+    if (notice === this.avatarNotice) {
+      return;
+    }
+    this.clearAvatarNoticeTimer();
+    this.avatarNotice = notice;
+    if (notice && notice !== this.avatarNoticeDone) {
+      this.avatarNoticeTimer = setTimeout(() => this.ngZone.run(() => this.finishAvatarNotice()), AVATAR_NOTICE_VISIBLE_MS);
+    }
+    this.cdr.markForCheck();
+  }
+
+  /** Hides the current notice for the rest of its call. */
+  private finishAvatarNotice(): void {
+    this.clearAvatarNoticeTimer();
+    this.avatarNoticeDone = this.avatarNotice;
+    this.cdr.markForCheck();
+  }
+
+  private clearAvatarNoticeTimer(): void {
+    if (this.avatarNoticeTimer !== null) {
+      clearTimeout(this.avatarNoticeTimer);
+      this.avatarNoticeTimer = null;
+    }
+  }
+
+  /** The video sources the agent can or could see right now (see {@link RealtimeSessionService.VideoSources$}). */
+  public VideoSources: readonly VideoSourceState[] = [];
+
+  /**
+   * The video sources surfaced to `<mj-realtime-perception-chip>`.
+   * By default (`ShowPerceptionChip = false`), the chip only appears when the user has an active camera or
+   * screen capture (`CameraOn`, `Sharing`, or an enabled `'camera'` / `'screen'` source), preventing
+   * background channel bridges from cluttering pure-voice calls.
+   */
+  public get VisibleVideoSources(): readonly VideoSourceState[] {
+    const hasUserCapture =
+      this.CameraOn ||
+      this.Sharing ||
+      this.VideoSources.some((s) => (s.Kind === 'camera' || s.Kind === 'screen') && s.Enabled);
+    if (!this.ShowPerceptionChip && !hasUserCapture) {
+      return [];
+    }
+    return this.VideoSources;
+  }
+
+  /** The user's camera and screen share (see {@link RealtimeSessionService.Captures$}). */
+  public CaptureStates: RealtimeCaptureStates = REALTIME_CAPTURES_OFF;
+
+  /** Which captures the call offers (see {@link RealtimeSessionService.CaptureOffers$}); the composer shows Camera and Share from it. */
+  public CaptureOffers: RealtimeCaptureOffers = REALTIME_CAPTURE_OFFERS_NONE;
+
+  /** Whether the camera is on or starting: the composer's Camera button reads as on. */
+  public get CameraOn(): boolean {
+    return isCapturing(this.CaptureStates.Camera);
+  }
+
+  /** The camera while the user checks it, before the agent sees it; `null` otherwise. The camera check card shows it. */
+  public get CameraCheck(): RealtimeCaptureState | null {
+    return this.CaptureStates.Camera.Checking ? this.CaptureStates.Camera : null;
+  }
+
+  /** The camera check's "Turn on camera": the agent sees the camera from now on. */
+  public OnCameraCheckConfirmed(): void {
+    this.realtime.ConfirmCamera();
+  }
+
+  /** The camera check's "Not now": the camera turns off. */
+  public OnCameraCheckDeclined(): void {
+    this.realtime.StopCamera();
+  }
+
+  /** Moves the camera being checked to another device: the camera check's picker. */
+  public readonly SwitchCheckedCamera = (deviceId: string): Promise<RealtimeCaptureState> => this.realtime.SwitchCamera(deviceId);
+
+  /** Whether a share is on or starting: the composer's Share button reads as sharing. */
+  public get Sharing(): boolean {
+    return isCapturing(this.CaptureStates.Screen);
+  }
+
+  /**
+   * The composer's Camera button. The session starts or stops the camera; its channel's box shows it, or why it could not
+   * start.
+   */
+  public OnCameraToggled(on: boolean): void {
+    if (on) {
+      void this.realtime.StartCamera();
+    } else {
+      this.realtime.StopCamera();
+    }
+    this.ControlInvoked.emit('camera');
+  }
+
+  /** The app's shareable panels: what the Share menu offers under "This panel", and the panel a pick names. */
+  private readonly sharePanelRegistry = inject(SharePanelRegistry);
+
+  /**
+   * The panels of the page the Share menu offers under "This panel": those on screen, in page order, leaving out any that
+   * holds this call. Empty where the browser cannot share a single panel.
+   */
+  public SharePanels: readonly MediaSharePanel[] = [];
+
+  /** The key of the panel being shared, while a share of one panel starts or runs; `null` otherwise. */
+  private sharedPanelKey: string | null = null;
+
+  /**
+   * The composer's Share button or menu: the session asks the browser's picker, offering the kind of surface picked first,
+   * or this tab, to share the picked panel alone.
+   */
+  public OnShareRequested(request: MediaShareRequest): void {
+    if (request.Kind === 'display') {
+      void this.realtime.StartScreenShare(request.PreferredSurface ? { PreferredSurface: request.PreferredSurface } : undefined);
+    } else {
+      this.startPanelShare(request.PanelKey);
+    }
+    this.ControlInvoked.emit('share');
+  }
+
+  /** The composer's Stop sharing. */
+  public OnStopShareRequested(): void {
+    this.realtime.StopScreenShare();
+    this.ControlInvoked.emit('share');
+  }
+
+  /** Shares one panel of the page, named by its label. A panel that went away since the menu listed it shares nothing. */
+  private startPanelShare(key: string): void {
+    const panel = this.sharePanelRegistry.Get(key);
+    if (!panel) {
+      return;
+    }
+    this.sharedPanelKey = key;
+    void this.realtime.StartScreenShare({ Panel: panel.Element, PanelLabel: panel.Label });
+  }
+
+  /**
+   * A panel went away, such as the whiteboard when its channel leaves the call. When it is the one shared, the share ends:
+   * no frame comes from an element that is gone. A panel that is only out of sight keeps its share.
+   */
+  private onSharePanelRemoved(key: string): void {
+    if (key === this.sharedPanelKey) {
+      this.sharedPanelKey = null;
+      this.realtime.StopScreenShare();
+    }
+  }
+
+  /** The captures changed: the composer follows them, and a share that is over no longer holds its panel. */
+  private onCapturesChanged(states: RealtimeCaptureStates): void {
+    this.CaptureStates = states;
+    if (!isCapturing(states.Screen)) {
+      this.sharedPanelKey = null;
+    }
+    this.refreshCallDevices();
+    this.cdr.markForCheck();
+  }
+
+  /** The call's microphone (see {@link RealtimeSessionService.Microphone$}). */
+  private microphone: RealtimeMicrophoneState = REALTIME_MICROPHONE_NONE;
+
+  /** The microphone and the camera the user picked in the device menu, each while the call switches to it. */
+  private switchingTo: { microphone: string | null; camera: string | null } = { microphone: null, camera: null };
+
+  /**
+   * The microphones and cameras the composer's device menu offers: the call's microphones, and its cameras while the
+   * camera is open (a browser names cameras only once the user has allowed one).
+   */
+  public CallDevices: readonly MediaDevice[] = [];
+
+  /** The microphone the device menu shows: the one being switched to, else the one in use. */
+  public get SelectedMicrophoneID(): string | null {
+    return this.switchingTo.microphone ?? this.microphone.DeviceID ?? null;
+  }
+
+  /** The camera the device menu shows: the one being switched to, else the one in use. */
+  public get SelectedCameraID(): string | null {
+    return this.switchingTo.camera ?? this.CaptureStates.Camera.DeviceID ?? null;
+  }
+
+  /**
+   * What the call says while no microphone works: the call lost its microphone (the one in use failed and so did the
+   * default, or the last one went away), so the agent hears nothing until the user picks one in the device menu. Shown
+   * under the banner for as long as that lasts. `null` while the microphone works, outside a call, and always in review.
+   */
+  public get MicrophoneNotice(): string | null {
+    const failure = this.microphone.Failure;
+    if (!failure || this.IsReviewing) {
+      return null;
+    }
+    const line = failure === 'denied' ? MICROPHONE_NOTICE_TEXT.Blocked : MICROPHONE_NOTICE_TEXT.Lost;
+    return line.split('{Agent}').join(this.AgentName);
+  }
+
+  /**
+   * A microphone or camera picked in the composer's device menu: the session switches to it. The menu shows the pick
+   * while the switch runs, then the device in use: the new one, or the old one when the new one could not open. A pick of
+   * the device in use changes nothing. While no microphone works, the session opens the picked microphone, and the menu
+   * then shows it, or none when it could not open.
+   */
+  public async OnDeviceSelected(selection: MediaDeviceSelection): Promise<void> {
+    if (selection.Kind !== 'microphone' && selection.Kind !== 'camera') {
+      return;
+    }
+    const kind = selection.Kind;
+    const inUse = kind === 'microphone' ? this.microphone.DeviceID : this.CaptureStates.Camera.DeviceID;
+    if (selection.DeviceID === inUse && this.switchingTo[kind] === null) {
+      return;
+    }
+    this.ControlInvoked.emit('devices');
+    this.switchingTo = { ...this.switchingTo, [kind]: selection.DeviceID };
+    this.cdr.markForCheck();
+    try {
+      if (kind === 'microphone') {
+        await this.realtime.SwitchMicrophone(selection.DeviceID);
+      } else {
+        await this.realtime.SwitchCamera(selection.DeviceID);
+      }
+    } finally {
+      if (this.switchingTo[kind] === selection.DeviceID) {
+        this.switchingTo = { ...this.switchingTo, [kind]: null };
+      }
+      this.cdr.markForCheck();
+    }
+  }
+
+  /** The microphone changed: the device menu follows it. */
+  private onMicrophoneChanged(microphone: RealtimeMicrophoneState): void {
+    this.microphone = microphone;
+    this.refreshCallDevices();
+    this.cdr.markForCheck();
+  }
+
+  /** Lists the call's microphones and its cameras for the device menu, as a new list only when one of them changed. */
+  private refreshCallDevices(): void {
+    const cameras = this.CaptureStates.Camera.Devices ?? [];
+    const devices = [...this.microphone.Devices, ...cameras];
+    const same = devices.length === this.CallDevices.length && devices.every((d, i) => d === this.CallDevices[i]);
+    if (!same) {
+      this.CallDevices = devices;
+    }
+  }
+
+  /**
+   * The user switched one of the agent's video sources on or off in the "agent can see" chip. The session
+   * applies it (and remembers it per channel) and tells the agent.
+   */
+  public OnVideoSourceToggled(toggle: RealtimePerceptionToggle): void {
+    this.realtime.SetVideoSourceEnabled(toggle.SourceID, toggle.Enabled);
+  }
+
+  /**
+   * The user picked the video source the agent sees in the "agent can see" chip, or let the call choose again (`null`).
+   * The session's arbiter applies it and tells the agent.
+   */
+  public OnVideoSourcePicked(sourceId: string | null): void {
+    this.realtime.SelectVideoSource(sourceId);
+  }
+
+  /**
+   * The user moved to another channel's tab (or to a tab that is not a channel). When the model can watch only one
+   * video source, the channel the user is looking at is the one it sees.
+   */
+  public OnActiveChannelChange(channelKey: string | null): void {
+    this.realtime.SetFocusedChannel(channelKey);
+  }
+
+  ngAfterViewChecked(): void {
+    this.reportPresenterSlot();
+  }
+
+  /** Reports the agent's place in the call when the element changed (the chrome switched, or the call body changed). */
+  private reportPresenterSlot(): void {
+    const element = this.presenterSlotRef?.nativeElement ?? null;
+    if (element === this.reportedPresenterSlot) {
+      return;
+    }
+    this.reportedPresenterSlot = element;
+    // The view was just checked and the stage binds the slot, so it hears about it in a fresh turn.
+    queueMicrotask(() => {
+      this.PresenterSlot = element;
+      this.cdr.markForCheck();
+    });
   }
 
   ngAfterViewInit(): void {
@@ -685,9 +1220,10 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       // (the captions toggle, the hero's "Show the conversation", RevealText(), and SetCaptions()
       // all route through ShowCaptions). NOT the disclosure ratchet: a power user still opens to
       // the calm orb until they ask for text, matching the historical ShowHero = !ShowCaptions.
-      TextRevealed: this.ShowCaptions,
+      // While the agent's video presents, captions alone keep the hero (they run over the video);
+      // only asking for the conversation opens the thread.
+      TextRevealed: this.ShowCaptions && (this.conversationShown || !this.PresenterOnStage),
       DisclosureShowThread: disclosure.ShowThread,
-      DisclosureShowComposer: disclosure.ShowComposer,
       DisclosureShowPanel: disclosure.ShowPanel,
       DisclosureShowGear: disclosure.ShowGear,
       // A surface to populate: the on-demand Details peek, or review (always has a surface).
@@ -711,9 +1247,15 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     const next = ResolveRealtimeUi(this.mergedUiInputs, this.buildSignals());
     const prevChrome = this._ui.chrome;
     this._ui = next;
+    // The host just took typing away: close an open dock (the composer keeps its draft).
+    if (!next.allowTyping && this.ComposerOpen) {
+      this.ComposerOpen = false;
+    }
     if (next.chrome !== prevChrome) {
       this.ChromeChanged.emit(next.chrome);
     }
+    // The panel's area may have just hidden, or, while it waited for room, been hidden for another reason too.
+    this.resetPanelCollapseUnlessWaitingForRoom();
     this.cdr.markForCheck();
   }
 
@@ -786,9 +1328,17 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   // (width follows the pointer delta) and the click-vs-drag guard keeps it from being
   // adopted or persisted.
 
-  /** Whether the surface panel is collapsed to its slim strip (reported by the panel). */
+  /**
+   * Whether the surface panel is collapsed to its slim strip, as the panel reports it. A panel created again starts this
+   * way (the overlay binds the panel's `Collapsed`). Back to `false` while the panel's area is hidden for any reason but
+   * room, so the panel comes back expanded after Details, a channel on the stage or a review turning into a live call,
+   * and as the user left it when only the call's width hid it.
+   */
   public PanelCollapsed = false;
-  /** Wide tier active (a content tab is focused) — drives the DEFAULT width only. */
+  /**
+   * Wide tier active (a content tab is focused) — drives the DEFAULT width only. The panel reports it when it flips; a
+   * panel created again also sets it from the tab it lands on.
+   */
   public PanelWide = false;
   /** The user's explicit dragged width (persisted); null = follow the default tiers. */
   private userPanelWidth: number | null = null;
@@ -810,19 +1360,41 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /**
    * Resizing is meaningless while collapsed or when the surface fills (focus mode), and a
-   * host may hard-disable it via `[AllowResize]="false"` — in review the resolver's
-   * `allowResize` is false (no live surface to resize), so this also reads the host flag
-   * directly (defaulting to the historical `true`) rather than the resolved value, keeping
-   * drag available in review exactly as before.
+   * host may hard-disable it via `[AllowResize]="false"`. The resolver has no resize output,
+   * so this reads the host flag directly (defaulting to the historical `true`), which keeps
+   * drag available in review too.
    */
   public get PanelResizeDisabled(): boolean {
     const hostAllows = this.mergedUiInputs.allowResize ?? DEFAULT_REALTIME_UI_INPUTS.allowResize;
     return this.PanelCollapsed || this.ChannelFocusMode || !hostAllows;
   }
 
+  /**
+   * The host's ceiling on developer links (`[ShowDevLinks]` / the bag), for the banner's gear toggle. Not the
+   * resolved `Ui.showDevLinks`: that one is already ANDed with {@link DevMode}, which the toggle itself sets, so
+   * binding it would hide the toggle until it was on.
+   */
+  public get AllowDevLinks(): boolean {
+    return this.mergedUiInputs.showDevLinks ?? DEFAULT_REALTIME_UI_INPUTS.showDevLinks;
+  }
+
   public OnPanelCollapsedChange(collapsed: boolean): void {
     this.PanelCollapsed = collapsed;
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Resets {@link PanelCollapsed} while the panel's area is hidden for any reason but room. Details, a channel taking the
+   * stage and a reviewed session turning into a live call hide the panel on purpose, and what brings it back asks to see
+   * it, so it comes back expanded (#5387). A call that only got too narrow asked for nothing, so the panel comes back as
+   * the user left it (#5433). Runs when the panel goes away and on every re-resolve, so a panel that waits for room and
+   * is then hidden on purpose (Details closed meanwhile) comes back expanded too. No binding reads PanelCollapsed while
+   * the area is hidden, so a change here trips no NG0100 check.
+   */
+  private resetPanelCollapseUnlessWaitingForRoom(): void {
+    if (!this.ShowPanelArea && !this._ui.SurfacePanelWaitsForRoom) {
+      this.PanelCollapsed = false;
+    }
   }
 
   /** Wide-tier flips only move the DEFAULT width — an explicit user width always wins. */
@@ -974,17 +1546,20 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     return this._ui.showSurfacePanel || this.IsReviewing;
   }
 
-  /** The Details (tabs) toggle is offered while live — it's the panel's one door. */
+  /**
+   * The Details (tabs) toggle is offered while live — it's the panel's one door — unless the host turned the surface
+   * panel off. Reads the host ceiling, not the resolved {@link Ui.showSurfacePanel}: that one also needs the panel to be
+   * earned, and Details is what earns it (same shape as {@link AllowDevLinks}).
+   */
   public get ShowDetailsControl(): boolean {
-    return !this.IsReviewing;
+    return !this.IsReviewing && (this.mergedUiInputs.showSurfacePanel ?? DEFAULT_REALTIME_UI_INPUTS.showSurfacePanel);
   }
 
   /**
-   * Whether the active-channels strip renders. Preserves the historical disclosure gate
-   * (level 2+, {@link RealtimeDisclosureModel.ShowComposer}) AND honours the host's
-   * `[ShowChannels]` input + the resolver's focus rule: a host that sets `[ShowChannels]`
-   * false hard-disables the strip, and channel-focus mode hides it. The strip component
-   * itself self-hides when no channels are active, so this stays decluttered.
+   * Whether the active-channels strip renders: the resolved {@link Ui.showChannelStrip}, which
+   * honours the host's `[ShowChannels]` input (false hard-disables the strip), needs an active
+   * channel and console chrome, and hides it in channel-focus mode. The strip component itself
+   * self-hides when no channels are active, so this stays decluttered.
    */
   public get ChannelStripVisible(): boolean {
     // Reads the RESOLVED Ui.showChannelStrip flag — which already ANDs the host's
@@ -1067,6 +1642,10 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       return;
     }
     this.revealedChannelKeys.add(plugin.ChannelName);
+    if (plugin.ShowsAgentVideo) {
+      this.revealPresenter(plugin);
+      return;
+    }
     this.DetailsPeek = true; // the panel shows via the same on-demand mechanism Details uses
     // FIRST USE: a non-whiteboard channel was tab-less until now — register its tab
     // SYNCHRONOUSLY (before the reveal/focus below) so the channel exists to be revealed.
@@ -1085,6 +1664,17 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       this.pendingRevealKey = plugin.ChannelName;
     }
     // DetailsPeek flipped — surfacePanelEarned changed; re-resolve (marks for check).
+    this.recomputeUi();
+  }
+
+  /**
+   * The agent's video arrived: its channel's surface goes where its row places it (the stage is the agent's place in the
+   * call) and gets its tab, where it can be moved from, without opening the panel: the video shows in the call itself.
+   */
+  private revealPresenter(plugin: BaseRealtimeChannelClient): void {
+    if (plugin.HasSurface()) {
+      this.registerPluginChannelTab(plugin);
+    }
     this.recomputeUi();
   }
 
@@ -1216,8 +1806,12 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.recomputeUi();
   }
 
-  /** The hero's "Show the conversation" affordance — turns the text preference on. */
+  /** The hero's "Show the conversation" affordance — turns the text preference on, and opens the thread even over the agent's video. */
   public OnTextReveal(): void {
+    if (!this._ui.allowTextReveal) {
+      return;
+    }
+    this.conversationShown = true;
     this.OnCaptionsToggled(true);
     this.TextRevealed.emit();
     this.ControlInvoked.emit('reveal-text');
@@ -1238,12 +1832,16 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   }
 
   /** Maps the realtime state onto the hero orb's `data-state` (active turn-states only). */
-  public HeroOrbState(state: RealtimeConnectionState): 'speaking' | 'listening' | 'thinking' {
-    switch (state) {
-      case 'speaking': return 'speaking';
-      case 'thinking': return 'thinking';
-      default: return 'listening';
-    }
+  public HeroOrbState(state: RealtimeConnectionState): RealtimeAgentOrbState {
+    return AgentOrbStateFor(state);
+  }
+
+  /**
+   * Why the call ended, when its client said so (a relayed call that reached its time limit): the label the banner and the
+   * hero show in the `'error'` state in place of "Connection error"; `null` otherwise.
+   */
+  public get CallEndLabel(): string | null {
+    return DescribeCallEnd(this.realtime.LastSessionError)?.Label ?? null;
   }
 
   /** Short first-person status line for the pure-audio hero. */
@@ -1253,7 +1851,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       case 'thinking': return `${this.AgentName} is working…`;
       case 'listening': return 'Listening';
       case 'connecting': return 'Connecting…';
-      case 'error': return 'Connection error';
+      case 'error': return this.CallEndLabel ?? 'Connection error';
       default: return 'On call';
     }
   }
@@ -1271,7 +1869,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    */
   @HostListener('document:keydown', ['$event'])
   public OnDocumentKeydown(event: KeyboardEvent): void {
-    if (this.Hidden || this.IsReviewing || !this.realtime.IsActive) {
+    if (this.Hidden || this.IsReviewing || !this.realtime.IsActive || !this._ui.allowTyping) {
       return;
     }
     if (event.metaKey || event.ctrlKey || event.altKey) {
@@ -1287,7 +1885,10 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     const typedChar = event.key;
     this.OnComposerOpenChanged(true);
     // The dock may have just been created — seed the typed character + focus after this CD pass.
-    setTimeout(() => this.composer?.AppendAndFocus(typedChar));
+    setTimeout(() => {
+      this.composer?.AppendAndFocus(typedChar);
+      this.cdr.markForCheck();
+    });
   }
 
   /**
@@ -1320,10 +1921,30 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    * The composer dock opened (strip Type control / type-to-compose keystroke) or closed (the
    * dock's hide control). Opening raises the 'engaged' milestone for the cross-session ratchet —
    * but the dock itself stays a per-session, user-owned toggle either way.
+   *
+   * Invariant: the typing box is open only while the conversation is readable — a participant must
+   * see what they type (Caliber). Readable = the thread is shown AND captions are on: a console keeps
+   * the thread with captions off, but the thread then hides every caption turn. (While the agent's
+   * video presents in the hero, captions run over the video instead, and the thread waits for an
+   * explicit reveal.) So an open while the conversation is unreadable reveals it first, through the
+   * same path as the hero's "Show the conversation" ({@link OnTextReveal}: captions on and persisted,
+   * {@link TextRevealed} emitted). Every road to the box (Type buttons, the hotkey, a programmatic
+   * open) funnels through here; {@link OnCaptionsToggled} holds the other half.
    */
   public OnComposerOpenChanged(open: boolean): void {
+    // The host disallows typing: refuse any open (closing is always allowed). Checked before the reveal,
+    // so a refused open reveals nothing.
+    if (open && !this._ui.allowTyping) {
+      return;
+    }
+    if (open && !(this._ui.showThread && this.ShowCaptions)) {
+      this.OnTextReveal();
+    }
     this.ComposerOpen = open;
     if (open) {
+      // Opening the box asks for the conversation, like "Show the conversation": pin the thread, so the agent's video
+      // arriving later (which keeps the hero for captions alone) does not hide it under an open box.
+      this.conversationShown = true;
       this.Disclosure.Raise('engaged'); // emits Changed$ → recomputeUi()
       this.ControlInvoked.emit('type');
       setTimeout(() => this.composer?.FocusInput());
@@ -1334,6 +1955,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   ngOnDestroy(): void {
     this.stopAudioVisualLoop();
     this.stopResizeObserver();
+    this.clearAvatarNoticeTimer();
     if (this.IsPanelResizing) {
       this.teardownPanelResize();
       this.IsPanelResizing = false;
@@ -1399,8 +2021,68 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.cdr.markForCheck();
   }
 
-  /** Registers (or upgrades) one channel plugin's surface tab on the panel. */
+  /**
+   * The session's channel set changed: surfaces whose channel left are dropped (focus ends with a surface that leaves
+   * the stage this way, while the user's move stays saved) and the channels in play get their tabs.
+   */
+  private onActiveChannelsChanged(channels: BaseRealtimeChannelClient[]): void {
+    this.SurfaceStage.KeepOnly(channels);
+    this.registerChannelTabs(channels);
+    this.recomputeUi();
+  }
+
+  // ── Moving surfaces: "Move to…", saved per user ────────────────────────────
+
+  /** The user moved a channel's surface ("Move to…", "Bring it here"). */
+  public OnMoveRequested(move: MediaMoveRequest): void {
+    this.moveSurface(move);
+  }
+
+  /** The user put every surface back where its channel places it (and every picture-in-picture box back in its corner). */
+  public OnResetLayout(): void {
+    this.SurfaceStage.ResetLayout();
+    this.PipRects = new Map();
+    this.layoutPrefs.SaveMoves(this.SurfaceStage.Moves);
+    this.layoutPrefs.SavePipRects(this.PipRects);
+    this.recomputeUi();
+  }
+
+  /** Where the user put each picture-in-picture box, by channel key, as fractions of the stage. */
+  public PipRects: ReadonlyMap<string, MediaPipRect> = new Map();
+
+  /** The user's saved layout of the call's surfaces, per user, under the call's own keys. */
+  private readonly layoutPrefs = new MediaLayoutPrefs(() => UserInfoEngine.Instance, {
+    Moves: SURFACE_PLACEMENT_PREF_KEY,
+    PipRects: SURFACE_PIP_PREF_KEY,
+  });
+
+  /** The user moved or resized a picture-in-picture box: keep it and save it. */
+  public OnPipRectChange(change: MediaStagePipRectChange): void {
+    this.PipRects = RecordPipRect(this.PipRects, change.Key, change.Rect);
+    this.layoutPrefs.SavePipRects(this.PipRects);
+  }
+
+  /** Moves a surface, saves the layout, and re-resolves the UI (a surface on the stage is the focus layout). */
+  private moveSurface(move: MediaMoveRequest): void {
+    if (!this.SurfaceStage.Move(move.Key, move.Placement)) {
+      return;
+    }
+    this.layoutPrefs.SaveMoves(this.SurfaceStage.Moves);
+    this.recomputeUi();
+  }
+
+  /**
+   * Starts from the user's saved layout and picture-in-picture boxes. While `UserInfoEngine` is not configured (plain
+   * node tests, early bootstrap), nothing is saved and every surface starts where its channel places it.
+   */
+  private loadPlacementPref(): void {
+    this.SurfaceStage.LoadMoves(this.layoutPrefs.LoadMoves());
+    this.PipRects = this.layoutPrefs.LoadPipRects();
+  }
+
+  /** Registers (or upgrades) one channel plugin's surface tab on the panel, and its surface on the stage. */
   private registerPluginChannelTab(plugin: BaseRealtimeChannelClient): void {
+    this.SurfaceStage.Register(plugin);
     this.RegisterChannelTab({
       Key: plugin.ChannelName,
       Title: plugin.TabTitle,
@@ -1446,11 +2128,25 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    * The captions toggle = the persisted text-vs-orb switch: on → the thread renders
    * (raising the text disclosure milestone); off → the orb hero owns the screen again,
    * at any level. Persisted per-user so the choice survives refresh and devices.
+   *
+   * Invariant: the typing box is open only while the conversation is readable (thread shown AND
+   * captions on) — a participant must see what they type (Caliber). So turning captions off closes an
+   * open box, in a console too, where the thread stays but hides its caption turns; the composer instance
+   * is kept, so its draft survives and comes back with the next open. Every captions road (the CC
+   * buttons, {@link SetCaptions}, {@link ToggleCaptions}) funnels through here;
+   * {@link OnComposerOpenChanged} holds the other half.
    */
   public OnCaptionsToggled(on: boolean): void {
+    // The host disallows text: refuse turning captions on (nothing persisted or emitted). Off is always allowed.
+    if (on && !this._ui.allowTextReveal) {
+      return;
+    }
     this.ShowCaptions = on;
     if (on) {
       this.Disclosure.Raise('text'); // emits Changed$ → recomputeUi()
+    } else {
+      this.conversationShown = false;
+      this.ComposerOpen = false;
     }
     this.persistCaptionsPref();
     this.ControlInvoked.emit('captions');
@@ -1506,7 +2202,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    */
   public OnStartLive(): void {
     const review = this._reviewData;
-    if (!review) {
+    if (!review || !this.AllowStartLive) {
       return;
     }
     this.pendingLiveContinuation = true;
@@ -1704,12 +2400,17 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   // ── Focus layout + pill ────────────────────────────────────────────────────
 
-  /** A channel requested (or released) the focus layout via its host context. */
+  /**
+   * A channel asked for the focus layout via its host context (the whiteboard's "Move to stage"): its surface moves to
+   * the stage, or, when released, back where its channel places it.
+   */
   private onChannelFocus(channel: BaseRealtimeChannelClient, focused: boolean): void {
-    this.ChannelFocusMode = focused;
-    this.focusChannel = focused ? channel : null;
-    // channelFocus drives the resolver (hides panel + strip) — re-resolve (marks for check).
-    this.recomputeUi();
+    const key = channel.ChannelName;
+    if (focused) {
+      this.moveSurface({ Key: key, Placement: 'stage' });
+    } else if (this.SurfaceStage.StageKey === key) {
+      this.moveSurface({ Key: key, Placement: this.SurfaceStage.OffStagePlacement(key) });
+    }
   }
 
   /** Focus pill: toggle the mic mute (routes through the overlay's single mute path). */
@@ -1717,14 +2418,16 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.ToggleMute();
   }
 
-  /** Focus pill: leave focus mode (show the thread column again). */
+  /** Focus pill: leave focus mode: the surface on the stage goes back where its channel places it (show the thread column again). */
   public OnFocusPillExit(): void {
-    // Route through the focus-holding channel so ITS surface toggle stays in sync — it
-    // re-emits SetFocusMode(false) → onChannelFocus. Defensively clear the layout flag
-    // too (idempotent), covering channels whose surface isn't instantiated.
-    this.focusChannel?.RequestFocusExit();
-    this.ChannelFocusMode = false;
-    this.focusChannel = null;
+    const key = this.SurfaceStage.StageKey;
+    // Route through the channel on the stage so ITS surface toggle stays in sync — it may
+    // re-emit SetFocusMode(false) → onChannelFocus. Move it here too (idempotent), covering
+    // channels that don't.
+    this.StagePlugin?.RequestFocusExit();
+    if (key) {
+      this.moveSurface({ Key: key, Placement: this.SurfaceStage.OffStagePlacement(key) });
+    }
   }
 
   /** Focus pill: end the call (mirrors the controls row's End button). */
@@ -1777,7 +2480,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /**
    * Reveal the transcript programmatically — the imperative twin of the orb's "Show the
    * conversation" affordance. Raises the text disclosure level, turns captions on, and
-   * emits {@link TextRevealed}.
+   * emits {@link TextRevealed}. Does nothing when the host disallows text (`AllowTextReveal=false`).
    */
   public RevealText(): void {
     this.OnTextReveal();
@@ -1811,7 +2514,8 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /**
    * Set captions (the text-vs-orb preference) to an explicit state. Persisted per-user;
-   * turning them on also raises the text disclosure level.
+   * turning them on also raises the text disclosure level. Turning them on does nothing when
+   * the host disallows text (`AllowTextReveal=false`); turning them off is always allowed.
    *
    * @param on whether captions/text should be shown.
    */
@@ -1877,4 +2581,9 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   public EndSession(): void {
     void this.OnEndCall();
   }
+}
+
+/** Whether a capture is on or on its way, as the composer's buttons show it. */
+function isCapturing(capture: RealtimeCaptureState): boolean {
+  return capture.Status === 'on' || capture.Status === 'starting';
 }

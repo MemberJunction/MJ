@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RunViewParams } from '@memberjunction/core';
-import { createFakeProvider, useFakeGlobalProvider, query, queryAll, StubLoadingComponent } from '@memberjunction/ng-test-utils';
+import { createFakeProvider, useFakeGlobalProvider, query, queryAll, StubLoadingComponent, StubEmptyStateComponent } from '@memberjunction/ng-test-utils';
 import { AnalyticsModelPerformanceComponent } from './model-performance.component';
 
 /**
@@ -20,7 +20,7 @@ const RUNS = [
 ];
 
 async function render(rows: unknown[]): Promise<ComponentFixture<AnalyticsModelPerformanceComponent>> {
-  TestBed.configureTestingModule({ declarations: [AnalyticsModelPerformanceComponent], imports: [StubLoadingComponent] });
+  TestBed.configureTestingModule({ declarations: [AnalyticsModelPerformanceComponent], imports: [StubLoadingComponent, StubEmptyStateComponent] });
   const fixture = TestBed.createComponent(AnalyticsModelPerformanceComponent);
   fixture.componentRef.setInput('Provider', createFakeProvider({ runViewResults: (_p: RunViewParams) => rows }));
   fixture.detectChanges(false);
@@ -44,7 +44,7 @@ describe('AnalyticsModelPerformanceComponent (DOM)', () => {
   it('shows the empty row when there are no runs', async () => {
     installProvider({ runViewResults: [] });
     const fixture = await render([]);
-    expect(query(fixture, '.empty-row')?.textContent).toContain('No model data for selected period');
+    expect(query(fixture, '.empty-row')?.textContent).toContain('No model data');
     expect(queryAll(fixture, 'tbody tr').length).toBe(1);
   });
 
@@ -70,6 +70,6 @@ describe('AnalyticsModelPerformanceComponent (DOM)', () => {
     fixture.componentInstance.SelectedVendor = 'nonexistent-vendor';
     fixture.componentRef.changeDetectorRef.markForCheck();
     fixture.detectChanges(false);
-    expect(query(fixture, '.empty-row')?.textContent).toContain('No model data for selected period');
+    expect(query(fixture, '.empty-row')?.textContent).toContain('No model data');
   });
 });

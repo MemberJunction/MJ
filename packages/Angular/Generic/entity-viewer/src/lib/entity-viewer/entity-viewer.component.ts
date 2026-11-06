@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, AfterViewIni
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
-import { EntityInfo, EntityFieldInfo, RunView, LogError } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, RunView, RunViewParams, LogError, ViewPropertyValues, ViewPropertyValuesKey } from '@memberjunction/core';
 import { ExportColumn } from '@memberjunction/export-engine';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJUserViewEntityExtended, UserInfoEngine } from '@memberjunction/core-entities';
@@ -22,6 +22,7 @@ import {
   ViewGridState
 } from '../types';
 import { IViewTypeDescriptor, IViewRenderer, ViewTypeEngine, ViewDataRequest, ViewRelatedRecordNavigation } from '../view-types';
+import { BuildViewPropertyChips, ViewPropertyChip } from './view-property-chips';
 
 /**
  * A single entry in the view-type switcher, built from the {@link ViewTypeEngine} registry
@@ -160,6 +161,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   private _filterText: string | null = null;
   private _sortState: SortState | null = null;
   private _viewEntity: MJUserViewEntityExtended | null = null;
+  private _alternateBaseView: string | null = null;
   private _initialized = false;
 
   /**
@@ -443,6 +445,10 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       }
     }
 
+    if (this._initialized) {
+      this.pushDynamicRendererInputs();
+    }
+
     if (this._initialized && this._entity && !this._records) {
       // Apply view's sort state if available, then defer the reload.
       // Deferring ensures all sibling input bindings (gridState, etc.) are
@@ -453,6 +459,81 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     }
   }
 
+  /**
+   * ID of the persisted `MJ: User Views` record backing the current view, or `null` for a dynamic /
+   * unsaved view. Pushed to view-type plug-ins so saved-view affordances (e.g. Open in Excel) work.
+   */
+  public get EffectiveSavedViewID(): string | null {
+    const view = this._viewEntity;
+    if (!view || view.IsSaved === false) {
+      return null;
+    }
+    return view.ID?.trim() || null;
+  }
+
+  /**
+   * Optional semantic `Name` of a registered alternate base view on the entity (`MJ: Entity Alternate Base Views.Name`).
+   * When provided, takes precedence over `ViewEntity.AlternateBaseView` for all `RunView` / `RunViews` queries.
+   */
+  @Input()
+  get AlternateBaseView(): string | null {
+    return this._alternateBaseView;
+  }
+  set AlternateBaseView(value: string | null) {
+    const normalized = value?.trim() || null;
+    const previous = this._alternateBaseView;
+    this._alternateBaseView = normalized;
+
+    if (this._initialized && normalized !== previous) {
+      this.pushDynamicRendererInputs();
+      if (this._entity && !this._records) {
+        this.resetPaginationState(false);
+        this.deferReload();
+      }
+    }
+  }
+
+  /**
+   * Effective alternate base view semantic name: explicit `[AlternateBaseView]` input wins over
+   * `ViewEntity.AlternateBaseView`.
+   */
+  public get EffectiveAlternateBaseView(): string | null {
+    const raw = this._alternateBaseView ?? this.ViewEntity?.AlternateBaseView ?? null;
+    return raw?.trim() || null;
+  }
+
+  /**
+   * Values for the view's declared properties (`MJ: User Views.Properties`), keyed by property
+   * name. Used only when the view declares properties: the viewer then runs the view by its ID with
+   * these values, so the server applies the view's own filter and every property, including those
+   * only the server may set. The server refuses a value for a property that does not allow override.
+   */
+  @Input()
+  get Properties(): ViewPropertyValues | null {
+    return this._properties;
+  }
+  set Properties(value: ViewPropertyValues | null) {
+    const changed = ViewPropertyValuesKey(value ?? undefined) !== ViewPropertyValuesKey(this._properties ?? undefined);
+    this._properties = value;
+    if (changed && this._initialized && this._entity && !this._records && this.ViewHasProperties) {
+      this.resetPaginationState();
+      this.deferReload();
+    }
+  }
+  private _properties: ViewPropertyValues | null = null;
+
+  /** True when the current view declares properties, so its rows are loaded by running it by ID. */
+  public get ViewHasProperties(): boolean {
+    return (this._viewEntity?.PropertiesObject?.length ?? 0) > 0;
+  }
+
+  /** The read-only chips above the grid: one per view property, with the value this run gives it. */
+  public get PropertyChips(): ViewPropertyChip[] {
+    return this.ViewHasProperties ? BuildViewPropertyChips(this._viewEntity?.PropertiesObject, this._properties) : [];
+  }
+
+  /** The server's message when a view with properties could not be run (for example, a refused value). */
+  public ViewRunError: string | null = null;
   private _gridState: ViewGridState | null = null;
 
   /**
@@ -652,6 +733,14 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    * it has been persisted). Notification only.
    */
   @Output() AfterViewTypeChange = new EventEmitter<ViewTypeChangeEventArgs>();
+
+  /**
+   * Emitted whenever the active view type changes — including the initial registry reconciliation
+   * (where {@link AfterViewTypeChange} is intentionally suppressed because the user didn't initiate
+   * a switch). Hosts use this to sync fallback chrome (such as a fallback Export button for view
+   * types whose descriptor does not set `ProvidesOwnExport`).
+   */
+  @Output() ActiveViewTypeResolved = new EventEmitter<void>();
 
   /**
    * Emitted (cancelable) BEFORE a plug-in renderer's configuration change is applied/persisted.
@@ -1211,10 +1300,14 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   private _loadSequence = 0;
   // Flag: a reload was requested while a load was already in progress
   private _pendingReload = false;
+  // Whether that pending reload keeps the user's page: only when every request behind it was
+  // RefreshInPlace (a change made elsewhere); any other reload starts again at page 1.
+  private _pendingReloadKeepsPage = false;
 
   /**
    * Fetches the FULL result set for the current entity/view (up to {@link EXPORT_MAX_RECORDS}),
-   * honoring the active sort, business filter (WhereClause) and user search — used by the grid's
+   * honoring the active sort, business filter (`WhereClause`, or running by `ViewID` with
+   * `Properties` when the view declares properties) and user search — used by the grid's
    * export and add-all-to-list flows so they aren't capped at the on-screen page (bugs C1/E3). Bound
    * as an arrow property so it can be pushed to a dynamically-mounted renderer's `exportDataProvider`
    * input without losing `this`. If the true result count exceeds the cap, the user is warned that
@@ -1243,14 +1336,13 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       }
 
       const result = await rv.RunView<Record<string, unknown>>({
-        EntityName: entity.Name,
+        ...this.BuildViewTargetParams(entity),
         ResultType: 'simple',
         // No page window — load every matching row up to the safety cap, honoring the same
-        // business filter + user search as the paged load path.
+        // business filter, view properties and user search as the paged load path.
         MaxRows: EntityViewerComponent.EXPORT_MAX_RECORDS,
         StartRow: 0,
         OrderBy: orderBy,
-        ExtraFilter: this.ViewEntity?.WhereClause || undefined,
         UserSearchString: config.serverSideFiltering && !this.ViewEntity?.SmartFilterEnabled
           ? this.DebouncedFilterText || undefined
           : undefined
@@ -1258,10 +1350,10 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       if (result.Success) {
         // Non-silent cap: if the entity has more matching rows than we're allowed to pull at once,
         // tell the user the operation covered the first N — don't let it look like the full set.
-        if (result.TotalRowCount > EntityViewerComponent.EXPORT_MAX_RECORDS) {
+        if ((result.TotalRowCount ?? 0) > EntityViewerComponent.EXPORT_MAX_RECORDS) {
           MJNotificationService.Instance.CreateSimpleNotification(
             `This operation is limited to the first ${EntityViewerComponent.EXPORT_MAX_RECORDS.toLocaleString()} of ` +
-            `${result.TotalRowCount.toLocaleString()} matching records. Narrow the view with a filter to include the rest.`,
+            `${(result.TotalRowCount ?? 0).toLocaleString()} matching records. Narrow the view with a filter to include the rest.`,
             'warning',
             6000
           );
@@ -1273,6 +1365,31 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     }
     return this.InternalRecords;
   };
+
+  /**
+   * The params that aim a run at this view's rows. A view with properties runs by its ID, with
+   * {@link Properties}, so the server applies the view's own filter and every property, including
+   * those only it may set. Every other view keeps the dynamic run it has always had: the entity
+   * plus the view's WhereClause as ExtraFilter.
+   */
+  public BuildViewTargetParams(entity: EntityInfo): RunViewParams {
+    const view = this._viewEntity;
+    const altBaseView = this.EffectiveAlternateBaseView || undefined;
+    const abvSpread = altBaseView ? { AlternateBaseView: altBaseView } : {};
+    if (!view || !this.ViewHasProperties) {
+      return { EntityName: entity.Name, ExtraFilter: view?.WhereClause || undefined, ...abvSpread };
+    }
+    return {
+      EntityName: entity.Name,
+      ViewID: view.ID,
+      ViewEntity: view,
+      Properties: { ...(this._properties ?? {}) },
+      ...abvSpread,
+      // A stored view returns only its saved columns; ask for what the dynamic run returns, so
+      // every view type and the export get the same columns either way.
+      Fields: entity.Fields.filter(f => !f.IsBinaryFieldType).map(f => f.Name),
+    };
+  }
 
   /**
    * Load data for the current entity with server-side filtering/sorting/pagination
@@ -1294,6 +1411,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     // fire while isLoading is still true, causing an infinite loop.
     if (this.IsLoading) {
       this._pendingReload = true;
+      this._pendingReloadKeepsPage = false;
       return;
     }
 
@@ -1330,9 +1448,9 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       const maxRows = this._loadAllRecords ? EntityViewerComponent.LOAD_ALL_MAX_RECORDS : config.pageSize;
       const startRow = this._loadAllRecords ? 0 : this.Pagination.currentPage * config.pageSize;
 
-      // Build ExtraFilter from view's WhereClause if available
-      // The view's WhereClause is the "business filter" - UserSearchString is additive
-      const extraFilter = this.ViewEntity?.WhereClause || undefined;
+      // The view's WhereClause is the "business filter" (or, for a view with properties, the view
+      // itself run by ID) - UserSearchString is additive
+      const target = this.BuildViewTargetParams(entity);
       const userSearchString = config.serverSideFiltering && !this.ViewEntity?.SmartFilterEnabled
         ? this.DebouncedFilterText || undefined
         : undefined;
@@ -1342,18 +1460,16 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       // page length whenever the server skipped COUNT.
       const [result, countResult] = await rv.RunViews<Record<string, unknown>>([
         {
-          EntityName: entity.Name,
+          ...target,
           ResultType: 'simple',
           MaxRows: maxRows,
           StartRow: startRow,
           OrderBy: orderBy,
-          ExtraFilter: extraFilter,
           UserSearchString: userSearchString,
         },
         {
-          EntityName: entity.Name,
+          ...target,
           ResultType: 'count_only',
-          ExtraFilter: extraFilter,
           UserSearchString: userSearchString,
           IgnoreMaxRows: true,
         },
@@ -1364,6 +1480,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
         return;
       }
 
+      this.ViewRunError = !result.Success && target.ViewID ? result.ErrorMessage || 'The view could not be run.' : null;
       if (result.Success) {
 
         // Always replace records (page-based navigation, not accumulation)
@@ -1371,7 +1488,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
 
         const total = countResult?.Success && countResult.TotalRowCount != null
           ? countResult.TotalRowCount
-          : result.TotalRowCount;
+          : result.TotalRowCount ?? 0;
         this.TotalRecordCount = total;
         this.FilteredRecordCount = this.InternalRecords.length;
 
@@ -1391,18 +1508,23 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
           totalCount: total
         });
       } else {
-        if (this.isInitialLoad) {
-          this.InternalRecords = [];
-        }
+        this.InternalRecords = [];
         this.TotalRecordCount = 0;
         this.FilteredRecordCount = 0;
+        this.Pagination.totalRecords = 0;
+        if (result.ErrorMessage) {
+          LogError(`[EntityViewer] Failed to load data for "${entity.Name}": ${result.ErrorMessage}`);
+          MJNotificationService.Instance?.CreateSimpleNotification(result.ErrorMessage, 'error', 5000);
+        }
       }
     } catch (error) {
-      if (this.isInitialLoad) {
-        this.InternalRecords = [];
-      }
+      this.ViewRunError = this.ViewHasProperties ? (error instanceof Error ? error.message : String(error)) : null;
+      this.InternalRecords = [];
       this.TotalRecordCount = 0;
       this.FilteredRecordCount = 0;
+      this.Pagination.totalRecords = 0;
+      const errMsg = error instanceof Error ? error.message : String(error);
+      LogError(`[EntityViewer] Exception loading data for "${entity.Name}": ${errMsg}`);
     } finally {
       // Use ngZone.run() to ensure state changes trigger change detection.
       // With es2022 native async/await + zone.js 0.16, the await resumes
@@ -1418,8 +1540,10 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       // If a reload was requested while we were loading, trigger it now.
       // isLoading is false at this point so loadData() won't re-enter the pending path.
       if (this._pendingReload) {
+        const keepPage = this._pendingReloadKeepsPage;
         this._pendingReload = false;
-        this.resetPaginationState();
+        this._pendingReloadKeepsPage = false;
+        if (!keepPage) this.resetPaginationState();
         this.LoadData();
       }
     }
@@ -1443,6 +1567,22 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       this.resetPaginationState(false);
       this.LoadData();
     }
+  }
+
+  /**
+   * Re-loads the page the user is on, with the same sort and filters, keeping the rows visible
+   * meanwhile. For refreshes the user didn't ask for (another tab or the server changed rows):
+   * unlike {@link Refresh}, it doesn't send them back to page 1.
+   */
+  public RefreshInPlace(): void {
+    if (this.Records) return;
+    if (this.IsLoading) {
+      // Reload when the current load finishes, still on this page (unless another reload also waits).
+      if (!this._pendingReload) this._pendingReloadKeepsPage = true;
+      this._pendingReload = true;
+      return;
+    }
+    this.LoadData();
   }
 
   // ========================================
@@ -1596,7 +1736,10 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   public get ActiveViewTypeHasOwnExport(): boolean {
     const opt = this.ActiveDynamicOption;
     if (!opt) {
-      return false;
+      // Before ViewTypeEngine finishes initial resolution, no renderer is mounted yet and Grid is
+      // the default view type; return true so hosts don't flash a duplicate fallback Export button
+      // ahead of ActiveViewTypeResolved.
+      return true;
     }
     // Primary signal: the descriptor's declarative capability flag. Belt-and-suspenders: also match
     // the grid's stable DriverClass key, in case a descriptor was resolved via the hardcoded fallback
@@ -1767,6 +1910,10 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       this.LoadData();
     }
 
+    if (typeChanged) {
+      this.ActiveViewTypeResolved.emit();
+    }
+
     if (emit) {
       if (this.AutoSaveView) {
         void this.persistActiveViewType(option);
@@ -1790,7 +1937,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    * per-user User Settings (the default-view case), or nowhere.
    */
   private persistenceTarget(): ViewPersistenceTarget {
-    if (this._viewEntity?.ID) {
+    if (this._viewEntity?.ID && this._viewEntity.UserCanEdit) {
       return 'record';
     }
     if (this.EffectiveEntity) {
@@ -2062,6 +2209,8 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     this.setDynamicInput(ref, 'page', this.Pagination.currentPage + 1);
     this.setDynamicInput(ref, 'pageSize', this.Pagination.pageSize);
     this.setDynamicInput(ref, 'isLoading', this.IsLoading);
+    this.setDynamicInput(ref, 'alternateBaseView', this.EffectiveAlternateBaseView);
+    this.setDynamicInput(ref, 'SavedViewID', this.EffectiveSavedViewID);
   }
 
   // ========================================

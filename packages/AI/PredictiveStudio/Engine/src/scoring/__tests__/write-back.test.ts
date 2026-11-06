@@ -38,6 +38,7 @@ const FROZEN_SCHEMA: FeatureSchemaEntry[] = [
 
 class FakeMLModel {
   public ID = 'model-1';
+  public Status: MJMLModelEntity['Status'] = 'Published';
   public ArtifactFileID: string | null = 'file-1';
   public FittedPreprocessing: string | null = JSON.stringify({});
   public FeatureSchema = JSON.stringify(FROZEN_SCHEMA);
@@ -67,7 +68,7 @@ class FakeSidecar implements ISidecarPredictor {
 
 class InMemoryDataAccess implements IFeatureDataAccess {
   async fetchRows(_params: FetchRowsParams): Promise<FetchRowsResult> {
-    return { Success: true, Rows: [] };
+    return { Success: true, Rows: [], TotalRowCount: 0 };
   }
   async fetchEmbedding(): Promise<number[] | null> {
     return null;
@@ -110,8 +111,8 @@ class TestWriteBackWrapper implements IRecordProcessor {
 }
 
 const CTX: RecordProcessorContext = {
-  contextUser: undefined as unknown as UserInfo,
-  provider: undefined as unknown as IMetadataProvider,
+  ContextUser: undefined as unknown as UserInfo,
+  Provider: undefined as unknown as IMetadataProvider,
 };
 
 function record(id: string): RecordRef {

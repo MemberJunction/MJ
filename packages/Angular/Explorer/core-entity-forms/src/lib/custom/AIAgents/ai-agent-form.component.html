@@ -10,9 +10,9 @@
     <form class="record-form" #form="ngForm">
       <!-- Agent Header — expanded view -->
       @if (!HeaderCollapsed) {
-        <div class="agent-header">
+        <div class="agent-header phone-hero" [class.hero-view]="!EditMode" [class.hero-compact]="!EditMode && !HeroDetailsOpen">
           <div class="agent-header-content">
-            <button class="agent-header-toggle" (click)="ToggleHeaderCollapsed()"
+            <button class="agent-header-toggle phone-hero-hide" (click)="ToggleHeaderCollapsed()"
               title="Minimize header">
               <i class="fa-solid fa-chevron-up"></i>
             </button>
@@ -41,12 +41,12 @@
                     </span>
                   }
                   @if (record.Type) {
-                    <span class="execution-mode">
+                    <span class="execution-mode phone-hero-detail">
                       Agent Type: {{ record.Type }}
                     </span>
                   }
                   @if (record.Parent) {
-                    <span class="parent-agent clickable"
+                    <span class="parent-agent clickable phone-hero-detail"
                       (click)="navigateToParentAgent()"
                       title="Open parent agent: {{ record.Parent }}">
                       <i class="fa-solid fa-sitemap"></i>
@@ -59,13 +59,13 @@
             </div>
             <div class="agent-actions">
               @if (record.ID) {
-                <button mjButton variant="primary" size="lg"
+                <button mjButton variant="primary" size="lg" class="phone-hero-run"
                   (click)="openTestHarness()"
                   [disabled]="record.Status !== 'Active'"
                   title="Run this AI agent">
                   <i class="fa-solid fa-play"></i> Run
                 </button>
-                <button mjButton size="lg"
+                <button mjButton size="lg" class="phone-hero-detail"
                   (click)="openPermissionsDialog()"
                   [title]="IsOpenToEveryone ? 'Open to everyone — click to manage permissions' : 'Restricted — click to manage permissions'">
                   <i class="fa-solid" [class.fa-lock-open]="IsOpenToEveryone" [class.fa-lock]="!IsOpenToEveryone"
@@ -73,11 +73,17 @@
                   {{ IsOpenToEveryone ? 'Open' : 'Restricted' }}
                 </button>
               }
-              <button mjButton variant="outline" size="sm" (click)="refreshRelatedData()" title="Refresh all data">
+              <button mjButton variant="outline" size="sm" class="phone-hero-detail" (click)="refreshRelatedData()" title="Refresh all data">
                 <i class="fa-solid fa-refresh"></i>
               </button>
             </div>
           </div>
+          @if (!EditMode && HeroSummary) {
+            <button type="button" class="phone-hero-summary" [attr.aria-expanded]="HeroDetailsOpen" (click)="ToggleHeroDetails()">
+              <span class="phone-hero-summary-text">{{ HeroSummary }}</span>
+              <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+            </button>
+          }
         </div>
       }
       <!-- Agent Header — minimized floating bar -->
@@ -128,6 +134,11 @@
              I'm not looking?" is a question you can ask of any of them. -->
         @if (FormTabs.length > 1) {
           <div class="agent-tabbar">
+            <!-- Phone: the tabs become one button that opens the Sections sheet -->
+            <mj-section-picker class="phone-section-picker"
+                               [Items]="SectionPickerItems"
+                               [ActiveKey]="ActiveFormTab || ''"
+                               (ActiveKeyChange)="OnSectionPicked($event)"></mj-section-picker>
             <mj-tab-nav [Tabs]="FormTabs" [ActiveKey]="ActiveFormTab || ''" (TabChange)="OnFormTabChange($event)"></mj-tab-nav>
           </div>
         }
@@ -155,6 +166,13 @@
               [ParentAgentID]="record.ParentID"
               (RecordOpenRequested)="OnInvocationOpenRequested($event)">
             </mj-agent-invocations>
+          </div>
+          <div class="agent-pane agent-pane--rubrics" [class.agent-pane--hidden]="ActiveFormTab !== 'rubrics'">
+            <mj-agent-rubrics
+              [Provider]="Provider"
+              [AgentID]="record.ID"
+              [Active]="ActiveFormTab === 'rubrics'">
+            </mj-agent-rubrics>
           </div>
         }
 
@@ -429,7 +447,7 @@
                                     }
                                   </div>
                                 </div>
-                                @if (execution.Result) {
+                                @if (HasExecutionResult(execution)) {
                                   <div class="result-section">
                                     <h5><i class="fa-solid fa-file-text"></i> Result</h5>
                                     <mj-code-editor
@@ -1022,7 +1040,7 @@
                         <i class="fa-solid fa-user-check"></i>
                         <div class="agent-search-access-text">
                           <div class="agent-search-access-title">Assigned</div>
-                          <div class="agent-search-access-desc">Can use ONLY scopes listed below. Other scopes are rejected with ACCESS_DENIED.</div>
+                          <div class="agent-search-access-desc">Can use ONLY scopes listed below, for users with a Search grant on the scope (directly or through a role). Other scopes are rejected with ACCESS_DENIED.</div>
                         </div>
                       </label>
                       <label class="agent-search-access-option" [class.active]="record.SearchScopeAccess === 'None'">
@@ -1030,7 +1048,7 @@
                         <i class="fa-solid fa-ban"></i>
                         <div class="agent-search-access-text">
                           <div class="agent-search-access-title">None</div>
-                          <div class="agent-search-access-desc">No search capability. The Scoped Search action is disabled for this agent.</div>
+                          <div class="agent-search-access-desc">No search capability. The Scoped Search action and pre-execution retrieval are disabled for this agent.</div>
                         </div>
                       </label>
                     </div>
@@ -1040,7 +1058,7 @@
                       <div class="agent-search-grid-header">
                         <h4>Assigned Scopes</h4>
                         <p class="section-description">
-                          <strong>Pre-Execution</strong> scopes are injected automatically before the first LLM call.
+                          <strong>Pre-Execution</strong> scopes are searched before the first LLM call, for users who may search them.
                           <strong>Agent-Invoked</strong> scopes are callable via the Scoped Search tool during execution.
                           <strong>Both</strong> covers both paths.
                         </p>
@@ -1080,7 +1098,7 @@
                               <div style="font-weight: 600; margin-bottom: 4px;">{{ s.ScopeName }}</div>
                               @if (s.Permissions.length === 0) {
                                 <div style="color: var(--mj-text-muted); font-size: 0.9em;">
-                                  No explicit permissions. Access falls back to this agent's <code>SearchScopeAccess</code> setting.
+                                  No explicit permissions. Users need a Search grant (directly or through a role) unless this agent's access is <code>All</code>.
                                 </div>
                               } @else {
                                 <ul style="margin: 4px 0 0 16px; padding: 0;">

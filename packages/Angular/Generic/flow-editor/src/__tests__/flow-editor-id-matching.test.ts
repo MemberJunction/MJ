@@ -85,6 +85,22 @@ describe('FlowEditorComponent ID matching', () => {
         });
     });
 
+    describe('onNodesMoved', () => {
+        it('moves each dragged node, matching IDs case-insensitively, and emits one NodeMoved per node', () => {
+            const moves: Array<[string, number, number]> = [];
+            component.NodeMoved.subscribe((e) => moves.push([e.NodeID, e.NewPosition.X, e.NewPosition.Y]));
+            (component as unknown as { onNodesMoved(e: unknown): void }).onNodesMoved({
+                fNodes: [
+                    { id: C.toUpperCase(), position: { x: 30, y: 31 } },
+                    { id: A, position: { x: 10, y: 11 } },
+                    { id: 'not-a-node', position: { x: 99, y: 99 } },
+                ],
+            });
+            expect(moves).toEqual([[C, 30, 31], [A, 10, 11]]);
+            expect(component.Nodes.map((n) => [n.ID, n.Position.X, n.Position.Y])).toEqual([[A, 10, 11], [B, 0, 0], [C, 30, 31], [D, 0, 0]]);
+        });
+    });
+
     describe('DeleteSelected', () => {
         it('removes selected connections (case-insensitive), emitting each, and keeps the rest in order', () => {
             const removed: string[] = [];

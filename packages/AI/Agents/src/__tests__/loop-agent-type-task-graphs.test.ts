@@ -182,16 +182,22 @@ describe('LoopAgentType — the Tasks primitive', () => {
             expect(result.taskGraph?.folded).toBe(false);
         });
 
-        it('does not fold when continuation is non-default', async () => {
-            // Folding runs the work in-turn, so there is no completion event to continue FROM.
-            const result = await agent.DetermineNextStep(emit(singleNode({ continuation: 'reinvoke' })), paramsWith(true), {}, {});
+        it('does not fold when continuation is none (fire-and-forget)', async () => {
+            // 'none' means fire-and-forget with no continuation back to the conversation.
+            const result = await agent.DetermineNextStep(emit(singleNode({ continuation: 'none' })), paramsWith(true), {}, {});
             expect(result.step).toBe('Tasks');
             expect(result.taskGraph?.folded).toBe(false);
         });
 
-        it('folds when continuation is explicitly the default', async () => {
-            const result = await agent.DetermineNextStep(emit(singleNode({ continuation: 'message' })), paramsWith(true), {}, {});
-            expect(result.step).toBe('Sub-Agent');
+        it('folds when continuation is explicitly message or reinvoke', async () => {
+            const msgResult = await agent.DetermineNextStep(emit(singleNode({ continuation: 'message' })), paramsWith(true), {}, {});
+            expect(msgResult.step).toBe('Sub-Agent');
+
+            // An in-run Sub-Agent call with terminateAfter: false naturally reinvokes the parent loop
+            // agent on the next turn with the sub-agent's output, so 'reinvoke' folds cleanly when not durable.
+            const reinvokeResult = await agent.DetermineNextStep(emit(singleNode({ continuation: 'reinvoke' })), paramsWith(true), {}, {});
+            expect(reinvokeResult.step).toBe('Sub-Agent');
+            expect(reinvokeResult.subAgent?.terminateAfter).toBe(false);
         });
 
         it('does not fold a lone HUMAN node — there is no sub-agent to call', async () => {
@@ -216,5 +222,29 @@ describe('LoopAgentType — the Tasks primitive', () => {
             // which is itself the signal that it went to the dispatcher.
             expect(result.taskGraph?.foldReason).toBeUndefined();
         });
+
+        it('normalizes legacy v1 flat agentName task nodes into Spec v2 kind="Agent" + configuration.agentName and folds single-node delegations', async () => {
+            const legacySingle = {
+                workflowName: 'Delegate to Query Builder',
+                reasoning: 'User wants a SQL query',
+                tasks: [
+                    {
+                        tempId: 'task1',
+                        name: 'Build Query',
+                        description: 'Write a SQL query for order revenue by status',
+                        agentName: 'Query Builder',
+                        dependsOn: [],
+                        inputPayload: { request: 'order revenue by status' },
+                    },
+                ],
+            };
+            const result = await agent.DetermineNextStep(emit(legacySingle), paramsWith(true), {}, {});
+            expect(result.step).toBe('Sub-Agent');
+            expect(result.subAgent?.name).toBe('Query Builder');
+            expect(result.taskGraph?.folded).toBe(true);
+            expect(result.taskGraph?.spec.tasks[0]?.kind).toBe('Agent');
+            expect(result.taskGraph?.spec.tasks[0]?.configuration).toEqual({ agentName: 'Query Builder' });
+        });
     });
 });
+

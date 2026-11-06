@@ -19,6 +19,15 @@ import { BeforeSkillsOpenedEventArgs } from '../../events/composer-events';
  * - Artifact creation
  * - Conversation management
  */
+/**
+ * What the composer's send slot is doing. The slot is ONE button whose look, label and click
+ * target follow this mode, so focus survives the change from Send to Stop and back.
+ * - `send`: the send button, as always.
+ * - `stop`: a stop control; the click emits `StopClicked`. The host decides what that stops.
+ * - `stopping`: a stop was asked for and has not landed yet; the slot is disabled with a spinner.
+ */
+export type SendSlotMode = 'send' | 'stop' | 'stopping';
+
 @Component({
   standalone: false,
   selector: 'mj-message-input-box',
@@ -76,6 +85,57 @@ export class MessageInputBoxComponent {
    * should advertise them, since `/` is otherwise invisible.
    */
   @Input() EnableSkills: boolean = false;
+
+  // ── The send slot as a stop control (semantics belong to the host) ──────────────────────
+  /** What the send slot is doing; see {@link SendSlotMode}. The box never decides this itself. */
+  @Input() SendSlotMode: SendSlotMode = 'send';
+  /** How many things a stop would stop. Above 1 in `stop` mode the slot reads "Stop all" with this count. */
+  @Input() StopCount: number = 0;
+  /** Tooltip and accessible name of the slot in `stop` mode, e.g. "Stop Sage" or "Stop all 2 runs". */
+  @Input() StopLabel: string = 'Stop';
+  /**
+   * A status line rendered bottom-left inside the box while non-null, e.g. "Sage is working". It is
+   * a polite live region, so a change is announced once; keep it short.
+   */
+  @Input() StatusText: string | null = null;
+  /**
+   * An elapsed time shown after {@link StatusText}, e.g. "41s". Separate from the text so it is kept
+   * out of the live region (a ticking clock must not be announced every second) and dropped on
+   * narrow screens.
+   */
+  @Input() StatusElapsed: string | null = null;
+
+  /** True when the slot reads "Stop all": `stop` mode with more than one thing to stop. */
+  get IsStopAll(): boolean {
+    return this.SendSlotMode === 'stop' && this.StopCount > 1;
+  }
+
+  /** The slot's disabled state per mode: Send follows {@link CanSend}; Stop is always live; Stopping waits. */
+  get SendSlotDisabled(): boolean {
+    switch (this.SendSlotMode) {
+      case 'stop': return false;
+      case 'stopping': return true;
+      default: return !this.CanSend;
+    }
+  }
+
+  /** The slot's tooltip and accessible name per mode. */
+  get SendSlotLabel(): string {
+    switch (this.SendSlotMode) {
+      case 'stop': return this.StopLabel;
+      case 'stopping': return 'Stopping';
+      default: return 'Send message (Enter)';
+    }
+  }
+
+  /** The slot's click: a stop request in `stop` mode, a send in `send` mode, nothing while stopping. */
+  OnSendSlotClick(): void {
+    switch (this.SendSlotMode) {
+      case 'stop': this.StopClicked.emit(); return;
+      case 'stopping': return;
+      default: this.OnSendClick();
+    }
+  }
   /**
    * True while the skill dropdown is open, driving the button's expanded state.
    *
@@ -110,6 +170,11 @@ export class MessageInputBoxComponent {
   @Output() VoiceOptionsRequested = new EventEmitter<void>();
   /** Emitted when the user clicks the in-composer Plan Mode toggle button. */
   @Output() PlanModeToggle = new EventEmitter<void>();
+  /**
+   * Fired when the send slot is clicked in `stop` mode. The box only reports the click; what is
+   * stopped, and how, is the host's business (this widget knows nothing about agents or runs).
+   */
+  @Output() StopClicked = new EventEmitter<void>();
   /**
    * Fired BEFORE the Skills button opens the dropdown. Flip `Cancel` to veto — a host gating
    * skills by entitlement, or surfacing them elsewhere, blocks it here.

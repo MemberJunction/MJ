@@ -98,6 +98,7 @@ Rules if you touch this:
   `generateIfViewExistsSQL`, or the run that is supposed to bootstrap the arrangement fails.
 - **CRUD routines stay on `BaseView`.** They return the affected row, so custom columns come back on
   create/update/delete. Do not point them at the inner view.
+- **Alternate base views** (`EntityAlternateBaseView`) are refreshed/rebound in topological `ParentID` order and granted `BaseView`'s permissions + FLS DENYs — see [`guides/ALTERNATE_BASE_VIEWS_GUIDE.md`](../../guides/ALTERNATE_BASE_VIEWS_GUIDE.md).
 
 ## When CodeGen runs
 

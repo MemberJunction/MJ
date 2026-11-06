@@ -1,4 +1,4 @@
-# Predictive Studio ML sidecar — pinned for Python 3.9+ (3.11 in Docker).
+# Predictive Studio ML sidecar — pinned for CPython 3.11–3.12 (3.11 in Docker). numpy 1.26.4 has no wheels for >= 3.13.
 # These versions are mutually compatible and provide manylinux/macos wheels so
 # no source builds are needed (xgboost/lightgbm still need an OpenMP runtime:
 # libomp on macOS, libgomp1 on Linux — see README / Dockerfile).
@@ -10,6 +10,7 @@ xgboost==2.0.3
 lightgbm==4.3.0
 scikit-learn==1.4.2
 numpy==1.26.4
+scipy==1.17.1  # transitive via scikit-learn; pinned so the sidecar and the truth-suite judges compute with the same scipy
 pandas==2.2.2
 joblib==1.4.2
 

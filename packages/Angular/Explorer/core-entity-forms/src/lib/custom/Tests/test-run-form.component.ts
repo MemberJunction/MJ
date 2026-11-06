@@ -11,6 +11,7 @@ import { MJTestRunFormComponent } from '../../generated/Entities/MJTestRun/mjtes
 import { TestingDialogService, TagsHelper } from '@memberjunction/ng-testing';
 import { createCopyOnlyToolbar, ToolbarConfig } from '@memberjunction/ng-code-editor';
 import { CheckResult, ParseCheckResults } from './test-run-checks';
+import { SectionPickerItem } from '@memberjunction/ng-ui-components';
 
 interface ParsedData {
   input?: Record<string, unknown>;
@@ -342,6 +343,7 @@ export class MJTestRunFormComponentExtended extends MJTestRunFormComponent imple
   }
 
   ngOnDestroy() {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -525,6 +527,24 @@ export class MJTestRunFormComponentExtended extends MJTestRunFormComponent imple
     } catch (error) {
       console.error('Error parsing JSON fields:', error);
     }
+  }
+
+  /** The tab strip as `mj-section-picker` items: strip order, counts once loaded, Log only when the record has one. */
+  get SectionPickerItems(): SectionPickerItem[] {
+    const items: SectionPickerItem[] = [
+      { Key: 'overview', Title: 'Overview', Icon: 'fas fa-chart-pie' },
+      { Key: 'details', Title: 'Details', Icon: 'fas fa-info-circle' },
+      { Key: 'ai-runs', Title: 'AI Runs', Icon: 'fas fa-robot', Count: this.AiRunsLoaded ? this.AiAgentRuns.length + this.AiPromptRuns.length : null },
+      { Key: 'feedback', Title: 'Feedback', Icon: 'fas fa-comments', Count: this.FeedbackLoaded ? this.Feedbacks.length : null },
+      { Key: 'execution', Title: 'Execution', Icon: 'fas fa-microchip' },
+    ];
+    if (this.record.Log) items.push({ Key: 'log', Title: 'Log', Icon: 'fas fa-terminal' });
+    return items;
+  }
+
+  /** A pick from the phone section sheet; goes through ChangeTab so lazy loads fire. An unknown key is ignored. */
+  OnSectionPicked(key: string): void {
+    if (this.SectionPickerItems.some((i) => i.Key === key)) this.ChangeTab(key);
   }
 
   ChangeTab(tab: string) {

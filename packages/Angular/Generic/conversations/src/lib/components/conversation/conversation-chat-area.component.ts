@@ -1,19 +1,20 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ContentChildren, TemplateRef, ElementRef, AfterViewChecked, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
-import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ConversationDetailComplete, RatingJSON, ArtifactJSON } from '@memberjunction/core-entities';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand, AppContextSnapshot, ConversationUtility, OpenResourceCommand } from "@memberjunction/ai-core-plus";
+import { UserInfo, RunView, RunQuery, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
+import { MJConversationEntity, MJConversationDetailEntity, type MJUserEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ShouldReplaceDetailAgentRun, CONVERSATIONS_FORK_AUTHORIZATION, CONVERSATIONS_FORKING_SETTING_KEY, UserInfoEngine, ConversationDetailComplete, RatingJSON, ArtifactJSON, ConversationBranchRow, WorkflowSaveOperation, type ConversationScope, type CreateForkInput, type MJConversationBranchEntity, type ForkPoint, type ForkKind, type ForkParticipant, type ForkSummary } from '@memberjunction/core-entities';
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand, AppContextSnapshot, ConversationUtility, OpenResourceCommand, type WorkflowSpec, type TaskGraphSpec } from "@memberjunction/ai-core-plus";
 import { ActionableCommandRequest, UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { AgentStateService } from '../../services/agent-state.service';
+import { ConversationLivenessDomService } from '../../services/conversation-liveness-dom.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import {
   ConversationDetailWindowStore,
   ConversationDetailWindowSnapshot
 } from '../../services/conversation-detail-window.store';
 import { ActiveTasksService } from '../../services/active-tasks.service';
-import { PendingAttachment } from '@memberjunction/ng-composer';
+import { PendingAttachment, SendSlotMode } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
 import { ConversationAttachmentService } from '../../services/conversation-attachment.service';
@@ -21,26 +22,30 @@ import { MJResourcePermissionShareAdapter, ResourceShareContext } from '@memberj
 
 /** `MJ: Resource Types.ID` for Conversations. */
 const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
-import { MessageAttachment } from '../message/message-item.component';
+import { STOP_RETRY_AFTER_MS, MessageAttachment } from '../message/message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MessageInputComponent } from '../message/message-input.component';
 import { ArtifactViewerPanelComponent, NavigationRequest, AnalyzeArtifactService, InteractiveFormApplyService } from '@memberjunction/ng-artifacts';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
+import type { FormAgentContext } from '@memberjunction/ng-base-forms';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ComposerDraftStore } from '../../services/composer-draft-store';
 import { ConversationEmptyStateComponent } from './conversation-empty-state.component';
 import { TestFeedbackDialogData, TestFeedbackDialogResult } from '@memberjunction/ng-testing';
 import { DialogService as ConversationsDialogService } from '../../services/dialog.service';
-import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { ConfirmMoveIntoFolder } from '../../utils/folder-move';
+import { Subject, firstValueFrom } from 'rxjs';
+import { map, takeUntil } from 'rxjs/operators';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ConversationsRuntime, type MentionPerson } from '@memberjunction/conversations-runtime';
+import type { SessionEndReason } from '@memberjunction/realtime-runtime';
 import type { AgentReplyMode, AgentTurnHandler } from '../../models/agent-turn.model';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
+import { UserHoldsAuthorization } from '../../services/user-authorization';
 import { RealtimeSessionReview, RealtimeSessionReviewService } from '../../services/realtime-session-review.service';
-import { GenerateAndApplyConversationName } from '../../services/conversation-naming';
+import { GenerateAndApplyConversationName, GenerateAndApplyForkName, SaveForkName } from '../../services/conversation-naming';
 import type { ExportBranding } from '../../services/export.service';
 import { RealtimeNavigateRequest, RealtimeStartLiveRequest } from '../realtime/realtime-session-overlay.component';
 import {
@@ -58,12 +63,66 @@ import {
   type DateJumpPeriod,
   type DateJumpOutcome
 } from '../../utils/date-jump';
+import { CompareMessagesByCreatedAt, UpsertMessageById } from '../../utils/message-list-order';
+import { SavePinState } from '../../utils/pin-state';
+import { InjectFrameZone } from '../../util/frame-zone';
 import { MessageListComponent } from '../message/message-list.component';
+import { IsForkPointOrEarlier } from '../../utils/conversation-branching';
+import {
+  BackLabelOf,
+  BuildForkBreadcrumbs,
+  BuildForkHeaderPath,
+  BuildForkMarkerText,
+  BuildForkComposerHint,
+  BuildForkViewLayout,
+  BuildViewForkChipMap,
+  CanForkFrom,
+  FindLatestTurn,
+  FirstOwnRowID,
+  ForkDependsOnRows,
+  IsRowInOpenView,
+  MAIN_COMPOSER_PLACEHOLDER,
+  MAIN_OPEN_VIEW,
+  ParentForkIdOf,
+  ReadBranchIdOf,
+  SameOpenView,
+  SplitForkRows,
+  TurnRowsAfter,
+  FORK_COMPOSER_PLACEHOLDER,
+  ForkInitials,
+  ForkKindIcon,
+  DRAFT_FORK_TITLE,
+  type ConversationOpenView,
+  type DraftForkOpenView,
+  type ForkBreadcrumb,
+  type ForkChainRow,
+  type ForkHeaderPath,
+  type ForkChipAvatar,
+  type ForkChipOpenRequest,
+  type ForkRows,
+  type ForkViewLayout,
+  type LatestTurn,
+  type MessageForkChip
+} from '../../utils/conversation-forks';
 import { DecideArtifactPanelAction, SnapshotArtifactVersions, ArtifactPanelAction, ArtifactPanelBaseline, ArtifactVersionRef } from '../../utils/artifact-panel-action';
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { GetThreadReplyRoots, type ThreadReplyRevealRequest } from '../../utils/thread-replies';
+import { NormalizeUUID, UUIDsEqual, UUIDSet, UUIDMap, IndexByUUID, IsValidUUID } from '@memberjunction/global';
+import { AgentAccentVar, type MessageHandoffInfo } from '../message/agent-handoff-card.component';
+import {
+  BuildHandoffsByDetailId,
+  LoadHandoffStepsForRuns,
+  type HandoffRunStepRow,
+} from '../../utils/agent-handoff-map';
+import { FindContinuityAgentMessage } from '../../utils/agent-turn-routing';
+
+const EMPTY_THREAD_REPLY_ROOTS = new UUIDMap<string>();
 
 // PR 2c — Widget extension surface
 import { ChatSlotDirective, type MJChatSlotName } from '../../directives/chat-slot.directive';
+import { ConversationCallStartOptions } from '../realtime/capture/realtime-capture-channel';
+import { ConversationRemoteBrowserController } from './conversation-remote-browser-controller';
+import { RemoteBrowserSurfaceComponent } from '../realtime/remote-browser/remote-browser-surface.component';
+import { DescribeCallFailureNotice } from '../realtime/realtime-call-failure-notice';
 import type {
   IMJChatAgentPresenceComponent,
   MJChatAgentPresenceState,
@@ -76,6 +135,8 @@ import {
   AfterToolInvokedEventArgs,
   BeforeResponseFormSubmittedEventArgs,
   AfterResponseFormSubmittedEventArgs,
+  BeforeStopClickedEventArgs,
+  AfterStopClickedEventArgs,
   SessionStartedEventArgs,
   SessionChannelStateChangedEventArgs,
   SessionEndedEventArgs,
@@ -108,8 +169,45 @@ export interface EmptyStateConfig {
   hideDefaultPrompts?: boolean;
 }
 
+/** Run statuses that mean the run is over, for the run-list fallback. `Paused` is still working. */
+const RUN_LIST_TERMINAL_STATUSES: string[] = ['Completed', 'AwaitingFeedback', 'Failed', 'Cancelled'];
+
 /** Default width (percentage) for the artifact viewer pane */
 export const DEFAULT_ARTIFACT_PANE_WIDTH = 40;
+
+/**
+ * ReadReplyFromTop: how long bottom-follow stays off after a turn lands at its top, so a status
+ * row or a repeated completion emit arriving right behind the landing cannot yank the reader
+ * back down. Re-armed per frame while a streamed reply grows beneath an anchored turn, so a turn
+ * that never settles (a cancelled run, a dropped socket) releases it a moment after its last delta.
+ */
+const POST_LANDING_FOLLOW_HOLD_MS = 1500;
+/** A scroll position this far from where the stream last pinned it means the reader moved. */
+const STREAM_ANCHOR_TOLERANCE_PX = 2;
+/** Numbers the forks popovers of the chat areas on a page, so each popover id is unique. */
+let forksPopoverCount = 0;
+
+/** How many times a new fork's composer prefill waits for the composer to render, and how long each wait is. */
+const PREFILL_MAX_ATTEMPTS = 10;
+const PREFILL_RETRY_MS = 100;
+
+/** True when a key event comes from a text field or an editable element, where Escape belongs to the field. */
+function isTextEntryTarget(target: EventTarget | null): boolean {
+  const el = target as Partial<Pick<HTMLElement, 'isContentEditable' | 'tagName'>> | null;
+  const tag = el?.tagName ?? '';
+  return !!el?.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+}
+
+/** True when a key event comes from inside an open menu's trigger (`aria-expanded="true"`), which closes on Escape itself. */
+function isInOpenMenuTrigger(target: EventTarget | null): boolean {
+  const el = target as Partial<Pick<Element, 'closest'>> | null;
+  return !!el?.closest?.('[aria-expanded="true"]');
+}
+
+/** No rows; one shared instance so {@link ConversationChatAreaComponent.InPlaceTurn} can compare by identity. */
+const NO_DETAILS: MJConversationDetailEntity[] = [];
+/** No fork rows; one shared instance for the same reason. */
+const NO_BRANCHES: ConversationBranchRow[] = [];
 
 @Component({
   standalone: false,
@@ -173,7 +271,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.ConversationId = value;
   }
 
-  @Input() Conversation: MJConversationEntity | null = null;
+  private _conversation: MJConversationEntity | null = null;
+  @Input()
+  set Conversation(value: MJConversationEntity | null) {
+    this._conversation = value;
+    if (value?.ID && value.Name) {
+      this.syncCachedMessageInputName(value.ID, value.Name);
+    }
+  }
+  get Conversation(): MJConversationEntity | null {
+    return this._conversation;
+  }
 
   /** @deprecated Use {@link Conversation}. */
   @Input() set conversation(value: MJConversationEntity | null) {
@@ -183,17 +291,6 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   get conversation(): MJConversationEntity | null {
     return this.Conversation;
   }
-  @Input() ThreadId: string | null = null;
-
-  /** @deprecated Use {@link ThreadId}. */
-  @Input() set threadId(value: string | null) {
-    this.ThreadId = value;
-  }
-  /** @deprecated Use {@link ThreadId}. */
-  get threadId(): string | null {
-    return this.ThreadId;
-  }
-
   /**
    * When true, render the normal message-list + message-input layout even
    * before a conversation exists, instead of the centered empty-state
@@ -319,6 +416,33 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
+   * Host-level cap for starting conversation forks: Fork from here, and Edit or
+   * Regenerate as a fork. Defaults true (current behavior). Hosts with no forking
+   * experience set false; Edit and Regenerate then change the latest turn in place,
+   * as for a person without the `Conversations: Fork` authorization. UI only: deny
+   * that authorization to a role to stop the server creating forks as well.
+   */
+  @Input() AllowForking = true;
+
+  /**
+   * Host-level opt-in for the conversation's Remote Browser: the header's Browser button, its drawer,
+   * and the `browser_*` tools that let this conversation's agents drive it. Defaults false; a host
+   * that wants an agent-driven browser beside the chat sets true.
+   */
+  @Input() AllowRemoteBrowser = false;
+
+  /**
+   * Host-level cap for stopping and continuing agent runs: the composer's Stop and Stop all, the
+   * Stop pill on an in-progress reply, the Continue button on a stopped reply, and the "Continue,
+   * or tell {agent} what to do differently" placeholder. Defaults true (current behavior). Hosts
+   * with no stop experience (a review surface, a space whose runs are managed elsewhere) set false
+   * without making the conversation read-only. UI only: a run stopped from another client still
+   * shows as stopped, and the next message still continues it. The composer's status line
+   * ({@link StatusText}) is not part of the cap: it reports that a reply is in flight either way.
+   */
+  @Input() public AllowStopRun = true;
+
+  /**
    * Whether the message list renders its built-in "No messages yet" filler
    * when a conversation has zero messages. Defaults true. Hosts that render
    * their own empty-state chrome around the chat area set false.
@@ -374,6 +498,15 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   get readReplyFromTop(): ConversationChatAreaComponent['ReadReplyFromTop'] {
     return this.ReadReplyFromTop;
   }
+
+  /**
+   * Whether inline markdown links in conversation messages open in a new browser tab
+   * (`target="_blank"` with `rel="noopener noreferrer"`). In-page fragment links (`#heading`)
+   * and `mailto:` / `tel:` / `sms:` links stay in the current tab. Default `true` so clicking
+   * an external link in a reply does not navigate away from the active conversation; set `false`
+   * to open links in the current tab.
+   */
+  @Input() OpenLinksInNewTab = true;
 
   // --- Additional host-level feature gates (all default true; false removes the
   //     affordance entirely). Forwarded to the message list / message items / empty
@@ -445,6 +578,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   get allowMessageDelete(): ConversationChatAreaComponent['AllowMessageDelete'] {
     return this.AllowMessageDelete;
   }
+  /**
+   * Host-forced read-only. Hides every composer. A View share
+   * ({@link IsReadOnlyView}) with this left false keeps today's disabled composer.
+   */
+  @Input() ReadOnly = false;
+
+  /** Banner copy when {@link ReadOnly} is set. Null uses the View-share text. */
+  @Input() ReadOnlyMessage: string | null = null;
   /** Show the empty-state's built-in suggested-prompt chips (and the @mention tip). */
   @Input() ShowSuggestedPrompts = true;
 
@@ -813,6 +954,22 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @Input() AutoNameConversation: boolean = true;
 
   /**
+   * Whether an untagged message asks one fast typed decision which agent in the conversation
+   * should answer it, instead of always going back to the last agent that answered. It replaces
+   * that agent only when the answer is confident and arrives within `DECISION_ROUTING_TIMEOUT_MS`
+   * (250 ms). False (the default)
+   * changes nothing: no decision call, and today's routing. See
+   * `MessageInputComponent.EnableDecisionRouting`.
+   *
+   * Turning it on sends conversation text to the model behind the `Default Decision` prompt, which
+   * can be a different vendor from the agents' own: the first 1,000 characters of the new message,
+   * the last 6 turns (150 characters each), each participant's name, description and last reply,
+   * and the names of their artifact versions. Each call writes an `MJ: AI Prompt Runs` row, even
+   * when the answer comes too late to be used.
+   */
+  @Input() EnableDecisionRouting: boolean = false;
+
+  /**
    * Scope to apply when this surface CREATES a new conversation. Forwarded
    * to `ConversationEngine.CreateConversation` so the new row's
    * `ApplicationScope` column is stamped correctly. Embedded surfaces
@@ -954,10 +1111,113 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   public get ModePickerTargetAgentId(): string | null {
-    return this.Conversation?.DefaultAgentID
+    return this.CurrentOwnerAgent?.ID
+        ?? this.Conversation?.DefaultAgentID
         ?? this.DefaultAgentId
         ?? this.conversationManagerAgent?.ID
         ?? null;
+  }
+
+  private _cachedOwnerAgentKey?: string;
+  private _cachedOwnerAgent: { ID: string; Name: string; IsConversationManager: boolean } | null = null;
+
+  /**
+   * Current conversation owner agent for the header `.with-chip` and composer
+   * placeholder: continuity (last non-Sage reply not preceded by a newer
+   * `@Sage` user message) -> pinned/default agent -> conversation manager.
+   * Memoized by message count and active routing inputs so template evaluation
+   * does not scan `messages` on every change-detection cycle.
+   */
+  public get CurrentOwnerAgent(): { ID: string; Name: string; IsConversationManager: boolean } | null {
+    const managerId = this.conversationManagerAgent?.ID ?? null;
+    const rows = this.DisplayMessages?.length ? this.DisplayMessages : this.messages ?? [];
+    const lastRow = rows.length > 0 ? rows[rows.length - 1] : null;
+    const defaultId = this.Conversation?.DefaultAgentID ?? this.DefaultAgentId ?? null;
+    const floorMs = this.AgentHistoryFrom ? new Date(this.AgentHistoryFrom).getTime() : '';
+    const allowedKey = this.AllowedAgentIDs ? this.AllowedAgentIDs.join(',') : '';
+    const cacheKey = `${rows.length}|${lastRow?.ID ?? ''}|${lastRow?.AgentID ?? ''}|${defaultId ?? ''}|${managerId ?? ''}|${floorMs}|${allowedKey}`;
+    if (this._cachedOwnerAgentKey === cacheKey) {
+      return this._cachedOwnerAgent ?? null;
+    }
+
+    const continuity = FindContinuityAgentMessage(
+      rows,
+      managerId,
+      {
+        conversationManagerName: this.conversationManagerAgent?.Name ?? 'Sage',
+        isWithinFloor: msg => !this.AgentHistoryFrom || msg.__mj_CreatedAt >= this.AgentHistoryFrom,
+      },
+    );
+    let targetId: string | null = null;
+    if (continuity?.AgentID && this.isOwnerAgentAllowed(continuity.AgentID)) {
+      targetId = continuity.AgentID;
+    } else {
+      const fallbackId = defaultId ?? managerId;
+      if (fallbackId && this.isOwnerAgentAllowed(fallbackId)) {
+        targetId = fallbackId;
+      }
+    }
+    if (!targetId) {
+      this._cachedOwnerAgentKey = cacheKey;
+      this._cachedOwnerAgent = null;
+      return null;
+    }
+    const meta = this.resolveHandoffAgentMeta(targetId);
+    const isManager = managerId ? UUIDsEqual(targetId, managerId) : false;
+    const owner = {
+      ID: targetId,
+      Name: meta?.Name || (isManager ? (this.conversationManagerAgent?.Name || 'Sage') : 'Agent'),
+      IsConversationManager: isManager,
+    };
+    this._cachedOwnerAgentKey = cacheKey;
+    this._cachedOwnerAgent = owner;
+    return owner;
+  }
+
+  public get CurrentOwnerAgentName(): string {
+    return this.CurrentOwnerAgent?.Name || this.conversationManagerAgent?.Name || 'Sage';
+  }
+
+  public get CurrentOwnerAccentVar(): string {
+    return AgentAccentVar(this.CurrentOwnerAgent?.ID);
+  }
+
+  private isOwnerAgentAllowed(agentId: string | null | undefined): boolean {
+    if (!agentId) {
+      return false;
+    }
+    if (this.AllowedAgentIDs == null) {
+      return true;
+    }
+    return this.AllowedAgentIDs.some(allowed => UUIDsEqual(allowed, agentId));
+  }
+
+  private resolveHandoffAgentMeta(agentId: string): {
+    Name?: string | null;
+    LogoURL?: string | null;
+    IconClass?: string | null;
+  } | null {
+    if (this.conversationManagerAgent && UUIDsEqual(this.conversationManagerAgent.ID, agentId)) {
+      return {
+        Name: this.conversationManagerAgent.Name,
+        LogoURL: this.conversationManagerAgent.LogoURL,
+        IconClass: this.conversationManagerAgent.IconClass,
+      };
+    }
+    const agents = AIEngineBase.Instance?.Agents;
+    const found = agents?.find(a => UUIDsEqual(a.ID, agentId));
+    if (found) {
+      return {
+        Name: found.Name,
+        LogoURL: found.LogoURL,
+        IconClass: found.IconClass,
+      };
+    }
+    const msg = this.messages?.find(m => UUIDsEqual(m.AgentID, agentId) && m.Agent);
+    if (msg) {
+      return { Name: msg.Agent };
+    }
+    return null;
   }
 
   /**
@@ -1207,6 +1467,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   @Output() afterResponseFormSubmitted = this.AfterResponseFormSubmitted;
 
+  /**
+   * Fired BEFORE an in-progress agent run is stopped from its reply. Cancelable: set
+   * `event.Cancel = true` to keep the run going; `AfterStopClicked` then does not fire.
+   */
+  @Output() BeforeStopClicked = new EventEmitter<BeforeStopClickedEventArgs>();
+
+  /**
+   * Fired AFTER a stop was attempted, with whether the run's row was marked Cancelled.
+   * Not fired when `BeforeStopClicked` was canceled.
+   */
+  @Output() AfterStopClicked = new EventEmitter<AfterStopClickedEventArgs>();
+
   /** Informational. */
   @Output() SessionStarted = new EventEmitter<SessionStartedEventArgs>();
 
@@ -1325,26 +1597,6 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() conversationCreated = this.ConversationCreated;
-  @Output() ThreadOpened = new EventEmitter<string>();
-
-  /**
-   * @deprecated Use {@link ThreadOpened}.
-   *
-   * The same emitter under the old binding name, so a template still binding
-   * (threadOpened) keeps working. Must stay AFTER ThreadOpened: class fields
-   * initialise in order, and the other way round this captures undefined.
-   */
-  @Output() threadOpened = this.ThreadOpened;
-  @Output() ThreadClosed = new EventEmitter<void>();
-
-  /**
-   * @deprecated Use {@link ThreadClosed}.
-   *
-   * The same emitter under the old binding name, so a template still binding
-   * (threadClosed) keeps working. Must stay AFTER ThreadClosed: class fields
-   * initialise in order, and the other way round this captures undefined.
-   */
-  @Output() threadClosed = this.ThreadClosed;
   @Output() PendingArtifactConsumed = new EventEmitter<void>();
 
   /**
@@ -1377,7 +1629,31 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   @Output() pendingMessageRequested = this.PendingMessageRequested;
 
-  @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
+  private scrollContainer?: ElementRef<HTMLElement>;
+
+  /** The transcript scroller; watched so the scroll-to-bottom arrow follows content that grows or shrinks without a scroll. */
+  @ViewChild('scrollContainer') private set scrollContainerRef(ref: ElementRef<HTMLElement> | undefined) {
+    this.scrollContainer = ref;
+    this.watchScrollContent(ref?.nativeElement ?? null);
+  }
+
+  /** Re-checks the scroll state when the transcript or its content changes size; null when nothing is watched. */
+  private scrollResizeObserver: ResizeObserver | null = null;
+
+  /** Watches `container` and its content for size changes (a new view, removed rows), which fire no scroll event. */
+  private watchScrollContent(container: HTMLElement | null): void {
+    this.scrollResizeObserver?.disconnect();
+    this.scrollResizeObserver = null;
+    if (!container || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    const observer = new ResizeObserver(() => this.CheckScroll());
+    observer.observe(container);
+    for (const child of Array.from(container.children)) {
+      observer.observe(child);
+    }
+    this.scrollResizeObserver = observer;
+  }
   @ViewChildren('messageInput') private messageInputComponents!: QueryList<MessageInputComponent>;
 
   /**
@@ -1467,7 +1743,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private readonly initialDraftSnapshots = new Map<string, string | null>();
 
   public GetInitialDraftFor(conversationId: string | null): string | null {
-    const key = conversationId ? conversationId.trim().toLowerCase() : 'new';
+    const key = conversationId ? NormalizeUUID(conversationId) : 'new';
     if (!this.initialDraftSnapshots.has(key)) {
       let snapshot: string | null;
       if (this._composerAgentMention) {
@@ -1504,14 +1780,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
     // New/unsaved conversations render the empty-state composer; established ones
     // use the active cached input. Both resolve the agent to a pill.
-    const target = this.emptyStateComponent ? 'empty-state' : this.messageInputComponents?.first ? 'active-input' : null;
+    const activeInput =
+      this.getActiveMessageInputComponent() ??
+      this.messageInputComponents?.last ??
+      this.messageInputComponents?.first;
+    const target = this.emptyStateComponent ? 'empty-state' : activeInput ? 'active-input' : null;
     if (attempt === 0 || attempt % 10 === 0 || target) {
       console.log(`[Omnibar→Chat] chat-area apply('${agentName}') attempt ${attempt}: target=${target ?? 'none-mounted'}`);
     }
     const insert: Promise<boolean> | null = this.emptyStateComponent
       ? this.emptyStateComponent.InsertAgentMention(agentName, true)
-      : this.messageInputComponents?.first
-        ? this.messageInputComponents.first.InsertAgentMention(agentName, true)
+      : activeInput
+        ? activeInput.InsertAgentMention(agentName, true)
         : null;
     if (insert) {
       void insert.then((applied: boolean) => {
@@ -1590,12 +1870,48 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * last progress updates must not fire and drag the reader back down.
    */
   private bottomFollowSuppressedUntil = 0;
+  /**
+   * ReadReplyFromTop while a reply streams: the scroll position the turn's top was last pinned
+   * to, `'declined'` once the reader has moved away (they are then left alone and completion
+   * decides as it always has), null before the turn's first delta. Reset where the turn opens.
+   */
+  private streamAnchor: number | 'declined' | null = null;
+  /**
+   * The turn's first message as rendered, and the clearance above it, resolved once per turn for
+   * the stream pin: both are stable across frames and finding them is a timeline walk plus a
+   * computed style, which is not work for a 60fps path. Re-resolved only if the node leaves the DOM.
+   */
+  private streamPin: { target: HTMLElement; clearance: number } | null = null;
+  private readonly ngZone = InjectFrameZone();
   private turnStartRetryHandle: ReturnType<typeof setTimeout> | null = null;
   /** Gap kept between the pane's top edge and the turn's first message. */
   private static readonly TURN_TOP_GAP_PX = 16;
   private lastLoadedConversationId: string | null = null; // Track which conversation's peripheral data was loaded
+  /**
+   * The conversation whose artifacts are currently held in {@link ArtifactsByDetailId}.
+   * Unlike {@link lastLoadedConversationId} (which {@link resetComponentState} zeroes on every
+   * message send / agent response to force {@link loadPeripheralData} to re-run), this stays set
+   * to the owning conversation until {@link ArtifactsByDetailId} is actually cleared or rebuilt
+   * for another conversation.
+   */
+  private artifactMapConversationId: string | null = null;
   private currentlyLoadingConversationId: string | null = null; // Track which conversation is currently being loaded
   private conversationLoadToken = 0; // Monotonic token to discard stale async conversation loads
+  /** The conversation whose load has ended; null while a load runs and before the first one. */
+  private readyConversationId: string | null = null;
+  /** Emits each time a conversation load ends. */
+  private readonly conversationLoadEnded$ = new Subject<void>();
+  /** The reconcile passes in progress, shared by every caller that arrives while they run. */
+  private reconcileInFlight: Promise<void> | null = null;
+  /** Reason for one more reconcile pass, requested while a pass was running. */
+  private reconcileRerunReason: string | null = null;
+  /**
+   * Set when a TRANSPORT reconnect asks for a pass; consumed by the next pass that starts. Held as a
+   * flag rather than read off the pass's reason because {@link ReconcileNow} folds requests that
+   * arrive mid-pass into one follow-up carrying only the LAST reason — a reconnect followed by a
+   * tab-visible would otherwise lose the window refresh the reconnect needs.
+   */
+  private reconcileWindowRefreshPending = false;
   public IsProcessing: boolean = false;
 
   /** @deprecated Use {@link IsProcessing}. */
@@ -1740,6 +2056,49 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.ShowProjectSelector = value;
   }
   public ShowArtifactPanel: boolean = false;
+  public SelectedTaskGraphPanel: { parentTaskId: string; workflowTitle: string } | null = null;
+  public ShowRemoteBrowserPanel: boolean = false;
+  public RemoteBrowserUrlInput: string = '';
+  public IsRemoteBrowserNavigating: boolean = false;
+
+  /** Whether this conversation's browser is running, shown or not (the header button stays lit while it is). */
+  public get IsRemoteBrowserLive(): boolean {
+    return this.remoteBrowser?.ConversationId != null;
+  }
+
+  /** The conversation's browser, built on first open so a chat area that never opens one pays nothing. */
+  private remoteBrowser: ConversationRemoteBrowserController | null = null;
+
+  private ensureRemoteBrowser(): ConversationRemoteBrowserController {
+    if (!this.remoteBrowser) {
+      const browser = new ConversationRemoteBrowserController({
+        OnAutoOpenSurface: () => this.OpenRemoteBrowserPanel(),
+        // Fires on open, close and a real URL change, never per screencast frame.
+        OnStateChange: () => {
+          this.RemoteBrowserUrlInput = browser.CurrentUrl ?? '';
+          this.cdr.detectChanges();
+        },
+        OnSessionRefused: (message) => {
+          this.ShowRemoteBrowserPanel = false;
+          MJNotificationService.Instance.CreateSimpleNotification(message, 'error', 6000);
+          this.cdr.detectChanges();
+        },
+      });
+      const provider = this.ProviderToUse;
+      browser.Initialize(this.agentClientService, provider instanceof GraphQLDataProvider ? provider : null);
+      this.remoteBrowser = browser;
+    }
+    return this.remoteBrowser;
+  }
+
+  @ViewChild('conversationRemoteBrowserSurface')
+  set ConversationRemoteBrowserSurface(surface: RemoteBrowserSurfaceComponent | undefined) {
+    if (surface) {
+      this.remoteBrowser?.BindSurface(surface);
+    } else {
+      this.remoteBrowser?.UnbindSurface();
+    }
+  }
 
   /** @deprecated Use {@link ShowArtifactPanel}. */
   public get showArtifactPanel(): boolean {
@@ -1988,6 +2347,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
+   * Handoff metadata by source conversation detail ID, built from the source
+   * run's `Handoff` step (`MJ: AI Agent Run Steps`) and subsequent target reply.
+   */
+  public HandoffsByDetailId = new Map<string, MessageHandoffInfo>();
+
+  private handoffStepsByRunId = new Map<string, HandoffRunStepRow>();
+
+  /**
    * Ratings by conversation detail ID (parsed from RatingsJSON)
    */
   public RatingsByDetailId = new Map<string, RatingJSON[]>();
@@ -2019,7 +2386,208 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * In-progress message IDs for streaming reconnection
    * Passed to message-input component to reconnect PubSub updates
    */
-  public InProgressMessageIds: string[] = [];
+  public get InProgressMessageIds(): string[] {
+    return this._inProgressMessageIds ?? [];
+  }
+  public set InProgressMessageIds(value: string[]) {
+    this._inProgressMessageIds = value;
+    this.syncSendSlot();
+  }
+  private _inProgressMessageIds: string[] = [];
+  /** Tracks the ID each in-progress reply entity was last registered under so adopting the server's row ID drops the local placeholder UUID. */
+  private inProgressIdByEntity?: WeakMap<MJConversationDetailEntity, string>;
+
+  // ── The composer's send slot as the stop control ──────────────────────────────────────
+  // While replies are in flight the composer's send slot is the stop control (one run: "Stop
+  // {agent}"; several: "Stop all N", and each reply shows its own pill as well). The slot's mode,
+  // label and status line are derived here from the in-flight replies; the generic composer box
+  // knows nothing about runs. A stop goes through the same cancelable path as the per-reply pill.
+
+  /** Replies the person asked to stop that have not left In-Progress yet. */
+  public StoppingDetailIds = new Set<string>();
+  private _stopFallbackTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private _sendSlotTicker: ReturnType<typeof setInterval> | null = null;
+  /** The elapsed time of the in-flight reply, ticked once a second while one is in flight. */
+  public SendSlotElapsed: string | null = null;
+
+  /** How many agent replies are in flight in the open view. */
+  public get InFlightCount(): number {
+    return this.InProgressMessageIds.length;
+  }
+
+  /** What the composer's send slot is: Stop while replies are in flight and the viewer may stop them. */
+  public get SendSlotMode(): SendSlotMode {
+    if (this.InFlightCount === 0 || this.EffectiveReadOnly || !this.AllowStopRun) {
+      return 'send';
+    }
+    return this.isAnyStopping() ? 'stopping' : 'stop';
+  }
+
+  /** The count the slot shows: the in-flight replies, or none when the slot is Send. */
+  public get StopCount(): number {
+    return this.SendSlotMode === 'send' ? 0 : this.InFlightCount;
+  }
+
+  /** The slot's tooltip and accessible name: "Stop {agent}", or "Stop all N runs". */
+  public get StopLabel(): string {
+    const count = this.InFlightCount;
+    if (count > 1) {
+      return `Stop all ${count} runs`;
+    }
+    const agent = this.inFlightAgentName();
+    return agent ? `Stop ${agent}` : 'Stop';
+  }
+
+  /**
+   * The composer's status line: who is working, or what is being stopped. Null with nothing in
+   * flight. It is information, not a control, so it shows whenever a reply is in flight, whether
+   * or not the viewer may stop it (a read-only viewer, or a host with {@link AllowStopRun} off);
+   * only the send slot is gated. The stopping text likewise reads the stopping state itself, not
+   * the slot's mode.
+   */
+  public get StatusText(): string | null {
+    const count = this.InFlightCount;
+    if (count === 0) {
+      return null;
+    }
+    const agent = this.inFlightAgentName();
+    if (this.isAnyStopping()) {
+      return count > 1 ? `Stopping ${count} runs…` : `Stopping ${agent ?? 'the run'}…`;
+    }
+    return count > 1 ? `${count} agents working` : `${agent ?? 'The agent'} is working`;
+  }
+
+  /** The elapsed time after the status line, for a single run that is working (not one being stopped). */
+  public get StatusElapsed(): string | null {
+    return this.InFlightCount === 1 && !this.isAnyStopping() ? this.SendSlotElapsed : null;
+  }
+
+  /**
+   * The composer's stop control. Every in-flight reply is stopped through the same path as the
+   * per-reply pill: `BeforeStopClicked` first (a listener that cancels keeps that run going),
+   * then {@link OnStopMessage}, which fires `AfterStopClicked` with the outcome. Each reply asked
+   * to stop reads as stopping until it leaves In-Progress, or until the retry window passes,
+   * when the slot offers Stop again and a toast says the stop did not take.
+   */
+  public async OnComposerStopClicked(): Promise<void> {
+    if (this.SendSlotMode !== 'stop') {
+      return;
+    }
+    const byId = IndexByUUID(this.messages);
+    for (const id of [...this.InProgressMessageIds]) {
+      const detail = byId.Get(id);
+      if (!detail) {
+        continue;
+      }
+      const before = new BeforeStopClickedEventArgs(detail.ID, this.AgentRunsByDetailId.get(detail.ID)?.ID ?? null);
+      this.BeforeStopClicked.emit(before);
+      if (before.Cancel) {
+        continue;
+      }
+      this.markStopping(detail.ID);
+      await this.OnStopMessage(detail);
+    }
+    this.cdr?.markForCheck?.();
+  }
+
+  /** The agent name of an in-flight reply: its run's agent, else the reply's, else the assistant name. */
+  private agentNameFor(detailId: string): string | null {
+    const run = this.AgentRunsByDetailId?.get(detailId);
+    const detail = this.messages?.find((m) => UUIDsEqual(m.ID, detailId));
+    return run?.Agent ?? detail?.Agent ?? this.assistantDisplayName ?? null;
+  }
+
+  private inFlightAgentName(): string | null {
+    const id = this.InProgressMessageIds[0];
+    return id ? this.agentNameFor(id) : null;
+  }
+
+  private isAnyStopping(): boolean {
+    const inFlight = new UUIDSet(this.InProgressMessageIds);
+    for (const id of this.StoppingDetailIds ?? []) {
+      if (inFlight.Has(id)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private markStopping(detailId: string): void {
+    this.StoppingDetailIds ??= new Set<string>();
+    this._stopFallbackTimers ??= new Map();
+    this.StoppingDetailIds.add(detailId);
+    this.clearStopFallbackTimer(detailId);
+    this._stopFallbackTimers.set(detailId, setTimeout(() => {
+      this._stopFallbackTimers.delete(detailId);
+      if (!this.StoppingDetailIds.delete(detailId)) {
+        return;
+      }
+      if (this.InProgressMessageIds.some((x) => UUIDsEqual(x, detailId))) {
+        MJNotificationService.Instance.CreateSimpleNotification(`${this.agentNameFor(detailId) ?? 'The run'} did not stop. Try again.`, 'warning', 4000);
+      }
+      this.cdr?.markForCheck?.();
+    }, STOP_RETRY_AFTER_MS));
+  }
+
+  private clearStopFallbackTimer(detailId: string): void {
+    const timer = this._stopFallbackTimers?.get(detailId);
+    if (timer) {
+      clearTimeout(timer);
+      this._stopFallbackTimers.delete(detailId);
+    }
+  }
+
+  /**
+   * Follows a change in the in-flight replies: a reply that left In-Progress is no longer
+   * stopping, and the one-second elapsed ticker runs only while something is in flight.
+   */
+  private syncSendSlot(): void {
+    // Specs build this component off its prototype, where field initializers never ran.
+    this.StoppingDetailIds ??= new Set<string>();
+    this._stopFallbackTimers ??= new Map();
+    const inFlightIds = new UUIDSet(this.InProgressMessageIds);
+    for (const id of [...this.StoppingDetailIds]) {
+      if (!inFlightIds.Has(id)) {
+        this.StoppingDetailIds.delete(id);
+        this.clearStopFallbackTimer(id);
+      }
+    }
+    const inFlight = this.InProgressMessageIds.length > 0;
+    if (inFlight && !this._sendSlotTicker) {
+      this.updateSendSlotElapsed();
+      this._sendSlotTicker = setInterval(() => {
+        this.updateSendSlotElapsed();
+        this.cdr?.markForCheck?.();
+      }, 1000);
+    } else if (!inFlight && this._sendSlotTicker) {
+      this.stopSendSlotTicker();
+    }
+  }
+
+  private updateSendSlotElapsed(): void {
+    const id = this.InProgressMessageIds[0];
+    const detail = id ? this.messages.find((m) => UUIDsEqual(m.ID, id)) : undefined;
+    const started = detail?.__mj_CreatedAt ? new Date(detail.__mj_CreatedAt).getTime() : NaN;
+    this.SendSlotElapsed = Number.isFinite(started) ? ConversationChatAreaComponent.FormatElapsed(Date.now() - started) : null;
+  }
+
+  private stopSendSlotTicker(): void {
+    if (this._sendSlotTicker) {
+      clearInterval(this._sendSlotTicker);
+      this._sendSlotTicker = null;
+    }
+    this.SendSlotElapsed = null;
+  }
+
+  /** `m:ss` (or `h:mm:ss`), the same shape as the reply's time pill. */
+  public static FormatElapsed(ms: number): string {
+    let seconds = Math.floor(Math.max(0, ms) / 1000);
+    let minutes = Math.floor(seconds / 60);
+    seconds = seconds % 60;
+    const hours = Math.floor(minutes / 60);
+    minutes = minutes % 60;
+    return (hours > 0 ? `${hours}:` : '') + (hours > 0 && minutes < 10 ? '0' : '') + `${minutes}:` + (seconds < 10 ? '0' : '') + `${seconds}`;
+  }
 
   /** @deprecated Use {@link InProgressMessageIds}. */
   public get inProgressMessageIds(): string[] {
@@ -2099,8 +2667,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private readonly boundOnResizeTouchMove = this.onResizeTouchMove.bind(this);
   private readonly boundOnResizeTouchEnd = this.onResizeTouchEnd.bind(this);
 
-  // LocalStorage key
-  private readonly ARTIFACT_PANE_WIDTH_KEY = 'mj-conversations-artifact-pane-width';
+  // UserInfoEngine setting key for artifact pane width
+  private readonly ARTIFACT_PANE_WIDTH_KEY = 'mj.conversations.artifactPaneWidth';
 
   // Pinned messages panel state
   public ShowPinsPanel: boolean = false;
@@ -2143,13 +2711,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
-   * Opens/closes the pins panel, hydrating its rows on first open.
+   * Opens/closes the pins panel, hydrating its rows on first open. Opening it closes the forks list.
    *
    * Lazy on purpose: the panel is closed by default, so loading pin entities during
    * conversation open costs every user for a panel most never open.
    */
   public async TogglePinsPanel(): Promise<void> {
     this.ShowPinsPanel = !this.ShowPinsPanel;
+    if (this.ShowPinsPanel) {
+      this.ShowForksPopover = false;
+    }
     if (this.ShowPinsPanel && !this.pinsHydrated && this.ConversationId) {
       this.IsLoadingPins = true;
       this.cdr.detectChanges();
@@ -2163,11 +2734,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
-   * All currently pinned messages in the active conversation, newest pin first.
+   * The pinned messages on the open view's path, newest pin first.
    *
    * Read from the window store's separate pin set, NOT filtered out of `messages` — a pin
-   * older than the loaded window would otherwise vanish from the panel. Loaded by its own
-   * `IsPinned=1` query in {@link loadMessages}, already ordered `Sequence DESC`.
+   * older than the loaded window would otherwise vanish from the panel. Loaded by
+   * {@link hydratePinnedMessages} when the pins panel first opens, already ordered `Sequence DESC`.
    *
    * This and the three getters around it are TEMPLATE-BOUND, so they run on every change
    * detection cycle. They read the store's cheap single-value accessors rather than
@@ -2464,6 +3035,186 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   private windowStore = new ConversationDetailWindowStore(ConversationEngine.Instance);
 
+  /**
+   * This chat area's fork rows of the active conversation, loaded with the transcript. The scope of the
+   * open view is built from them; no other chat area reads or changes them.
+   */
+  private branches: ConversationBranchRow[] = [];
+  /** The conversation whose fork rows {@link branches} holds; null when none are loaded. */
+  private branchRowsConversationId: string | null = null;
+  /** The conversation and branch of the last Main fallback that {@link openViewScope} logged. */
+  private scopeFallbackLogged: string | null = null;
+
+  /** What this chat area shows of the active conversation: Main or one fork. Per instance, in memory only. */
+  private openView: ConversationOpenView = MAIN_OPEN_VIEW;
+  /**
+   * The view the loaded rows belong to: the open view once its window is applied. While a view change
+   * reloads, the rows on screen keep the layout of this view.
+   */
+  private windowView: ConversationOpenView = MAIN_OPEN_VIEW;
+  /** True while a view change ends a voice session and reloads; other view changes are ignored meanwhile. */
+  private viewChangeInFlight = false;
+  /** True while a fork is being created and opened; other start actions are ignored meanwhile. */
+  private forkStartInFlight = false;
+  /** True while an in-place rerun hides a turn's answer and starts the agent again; other reruns are ignored meanwhile. */
+  private inPlaceRerunInFlight = false;
+  /** The in-place turn built for a window, with the inputs it was built from. */
+  private inPlaceTurnCache: {
+    Messages: MJConversationDetailEntity[];
+    View: ConversationOpenView;
+    Branches: ConversationBranchRow[];
+    CanFork: boolean;
+    CollapseThreads: boolean;
+    Turn: LatestTurn | null;
+  } | null = null;
+  /** The draft whose fork a first send is creating, with that creation; a send in the same draft awaits it. */
+  private draftForkStart: { View: DraftForkOpenView; ForkID: Promise<string | undefined> } | null = null;
+  /** The fork a draft's first send created; the first user message sent into it names it ({@link nameForkFromFirstSend}). */
+  private forkNamedByFirstSend: { ConversationID: string; ForkID: string } | null = null;
+  /** True while the header title (the conversation name in Main, the fork name in a fork) is edited. */
+  public IsRenamingTitle = false;
+  /** The text of the title name field. */
+  public TitleRenameText = '';
+  /** The title name field; focused when renaming starts. */
+  @ViewChild('titleNameInput') private titleNameInput?: ElementRef<HTMLInputElement>;
+  /** The rename button of the header title; focus goes back to it when the name field closes from the keyboard. */
+  @ViewChild('titleRenameButton', { read: ElementRef }) private titleRenameButton?: ElementRef<HTMLButtonElement>;
+  /** The breadcrumb built for a view, with the inputs it was built from. */
+  private breadcrumbCache: {
+    View: ConversationOpenView;
+    Branches: ConversationBranchRow[];
+    Summaries: ForkSummary[];
+    ConversationName: string;
+    Crumbs: ForkBreadcrumb[];
+  } | null = null;
+  /** Increments on every view reload; a reload whose token is no longer current stops. */
+  private viewReloadToken = 0;
+  /**
+   * The pins recorded before a view reload reset the store, with the conversation load they belong
+   * to. A reload that replaces a running one in the same conversation load reuses them.
+   */
+  private pinsDuringViewReload: { LoadToken: number; Count: number; Details: MJConversationDetailEntity[] } | null = null;
+  /** The fork summaries of the active conversation: chips, the fork header and the forks list read them. */
+  public ForkSummaries: ForkSummary[] = [];
+  /** True while the forks list is open. */
+  public ShowForksPopover = false;
+  /** The id of this chat area's forks popover; the header Forks button points at it. */
+  public readonly ForksPopoverID = `mj-conversation-forks-popover-${++forksPopoverCount}`;
+  /** The header Forks button; focus goes back to it when the forks list closes. */
+  @ViewChild('forksButton', { read: ElementRef }) private forksButton?: ElementRef<HTMLButtonElement>;
+  private forkSummaryRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Numbers each fork summary read, so an older read cannot overwrite a newer one. */
+  private forkSummaryReadSequence = 0;
+  /** The number of the newest fork summary read whose result is shown. */
+  private forkSummaryShownSequence = 0;
+  /**
+   * The chip map built from {@link ForkSummaries} for a window view, with the summaries, the view, the
+   * fork's first own row and the avatar map (and its version) it was built from.
+   */
+  private forkChipCache: {
+    Summaries: ForkSummary[];
+    View: ConversationOpenView;
+    FirstOwnID: string | null;
+    AvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}>;
+    AvatarVersion: number;
+    Map: ReadonlyMap<string, readonly MessageForkChip[]>;
+  } | null = null;
+  /** Increments each time {@link UserAvatarMap} is filled, so the chip map is built again with the new avatars. */
+  private userAvatarMapVersion = 0;
+  /** The loaded rows split for the window view, and the rows shown from that split. */
+  private displayCache: {
+    Messages: MJConversationDetailEntity[];
+    View: ConversationOpenView;
+    CollapseThreads: boolean;
+    ThreadReplyRoots: UUIDMap<string>;
+    MainFlow: MJConversationDetailEntity[];
+    Split: ForkRows<MJConversationDetailEntity>;
+    Rows: MJConversationDetailEntity[];
+  } | null = null;
+  /** The layout and composer hint of the rows shown, with the inputs they were built from. */
+  private layoutCache: {
+    Rows: MJConversationDetailEntity[];
+    View: ConversationOpenView;
+    Summaries: ForkSummary[];
+    Layout: ForkViewLayout | null;
+    Hint: string | null;
+  } | null = null;
+
+  /** The open view; Main when none was set. */
+  public get OpenView(): ConversationOpenView {
+    return this.openView ?? MAIN_OPEN_VIEW;
+  }
+
+  /** The branch whose path the open view reads; null is Main. */
+  public get OpenViewBranchId(): string | null {
+    return ReadBranchIdOf(this.OpenView);
+  }
+
+  /** The branch a composer of `conversationId` writes to: the open view's for the active conversation, else Main. */
+  public TargetBranchIdFor(conversationId: string | null | undefined): string | null {
+    return conversationId && UUIDsEqual(conversationId, this.ConversationId) ? this.OpenViewBranchId : null;
+  }
+
+  /**
+   * The scope of what this chat area shows of a conversation: the open view's path for the active
+   * conversation, Main for any other. Built from this chat area's own fork rows. While the rows of
+   * the open fork are not loaded yet, returns Main and logs once per conversation and branch.
+   */
+  private openViewScope(conversationId: string): ConversationScope {
+    const branchId = UUIDsEqual(conversationId, this.ConversationId) ? this.OpenViewBranchId : null;
+    if (!branchId) {
+      return ConversationEngine.TrunkScope(conversationId);
+    }
+    const branches = UUIDsEqual(this.branchRowsConversationId, conversationId) ? this.branches : [];
+    const branch = branches.find(b => UUIDsEqual(b.ID, branchId));
+    if (branch) {
+      return { ConversationID: conversationId, BranchID: branch.ID, Branches: branches };
+    }
+    const key = `${NormalizeUUID(conversationId)}|${NormalizeUUID(branchId)}`;
+    if (this.scopeFallbackLogged !== key) {
+      this.scopeFallbackLogged = key;
+      console.warn(`Conversation ${conversationId} is read in Main until the rows of fork ${branchId} are loaded`);
+    }
+    return ConversationEngine.TrunkScope(conversationId);
+  }
+
+  /** The open view's scope, passed to the artifact viewer; null with no conversation. */
+  public get ArtifactViewerScope(): ConversationScope | null {
+    const conversationId = this.ConversationId;
+    return conversationId ? this.openViewScope(conversationId) : null;
+  }
+
+  /** The open view's scope, passed to the export modal; null with no conversation. */
+  public get ExportScope(): ConversationScope | null {
+    return this.ArtifactViewerScope;
+  }
+
+  /**
+   * Answers the active composer's "which branch does this new message go to": the open fork, or null
+   * for Main. In a draft fork, creates the fork first and opens it; undefined (the send stops) when
+   * that fails. Bound to the composer's ResolveTargetBranch input, so it is one stable function.
+   */
+  public readonly ResolveComposerBranch = (): Promise<string | null | undefined> => this.resolveComposerBranch();
+
+  private async resolveComposerBranch(): Promise<string | null | undefined> {
+    const view = this.OpenView;
+    if (view.Kind === 'DraftFork') {
+      return this.materializeDraftFork(view);
+    }
+    if (view.Kind === 'Fork') {
+      return view.BranchID;
+    }
+    return null;
+  }
+
+  /**
+   * Keeps the fork rows loaded for a conversation as this chat area's rows, so
+   * {@link openViewScope} can build the scope of the open fork.
+   */
+  private setBranchRows(conversationId: string, rows: ConversationBranchRow[]): void {
+    this.branches = rows;
+    this.branchRowsConversationId = conversationId;
+  }
 
   /**
    * Voice session service — exposed to the template so the realtime "call mode"
@@ -2519,6 +3270,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   constructor(
     private agentStateService: AgentStateService,
+    private livenessDom: ConversationLivenessDomService,
     private conversationAgentService: ConversationAgentService,
     private activeTasks: ActiveTasksService,
     private cdr: ChangeDetectorRef,
@@ -2535,16 +3287,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   super();}
 
   /**
-   * Apply a form-role artifact's spec as an EntityFormOverride for the
-   * current user. The service handles the Create-vs-Modify decision (based
-   * on whether an Active override already exists), confirms via dialog,
-   * and surfaces success/failure via notification.
+   * Apply a form-role artifact's spec for the current user — an EntityFormOverride for a
+   * whole form, a form contribution for a panel. The service picks the path, handles the
+   * Create-vs-Modify decision, confirms via dialog, and notifies.
+   *
+   * The agent context names the record form the user has open (`AdditionalContext.Form`,
+   * published by the record tab). The service reads that form's full composition from the
+   * `FormCompositionRegistry`, to check a panel's placement against the live form and detect
+   * an installed contribution holding the same key. With no open form it asks the server for
+   * the composition instead.
    */
   async OnApplyFormRequested(event: { spec: unknown; entityName: string }): Promise<void> {
+    const additional = (this.AppContext?.['AdditionalContext'] ?? null) as { Form?: FormAgentContext } | null;
     await this.interactiveFormApplyService.ConfirmAndApply(
       event.spec as ComponentSpec,
       event.entityName,
       this.ProviderToUse,
+      additional?.Form ?? null,
     );
   }
 
@@ -2570,18 +3329,26 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       .pipe(takeUntil(this.destroy$))
       .subscribe((request: ActionableCommandRequest) => {
         const { command, conversationId } = request;
+        if (conversationId && !this.isActiveConversation(conversationId)) {
+          return;
+        }
         if (command.type === 'client:capture-data-snapshot') {
-          if (conversationId && !this.isActiveConversation(conversationId)) {
-            return;
-          }
           void this.handleCaptureDataSnapshotCommand(command);
           return;
         }
-        if (command.type === 'open:resource' && command.resourceType === 'Record' && command.entityName) {
-          if (conversationId && !this.isActiveConversation(conversationId)) {
+        if (command.type === 'open:resource') {
+          if (this.isConversationArtifactCommand(command)) {
+            if (this.OpenConversationArtifactForCommand(command)) {
+              return;
+            }
+          }
+          if (command.resourceType === 'Record' && command.entityName) {
+            this.emitOpenResourceRecord(command);
             return;
           }
-          this.emitOpenResourceRecord(command);
+          if (this.OverlayMode) {
+            this.handleOverlayOpenResourceCommand(command);
+          }
         }
       });
 
@@ -2600,6 +3367,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         namedThisSession = false;
         this.onRealtimeSessionStarted();
       });
+    // A call that ends over a failure (a failed start, a dropped connection, a time limit) is ended by the
+    // runtime itself, which closes the call surface with it: say why, or the call just vanishes.
+    this.RealtimeSession.SessionEnded$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((ended) => this.notifyIfCallFailed(ended.reason));
     let voiceWasActive = false;
     this.RealtimeSession.Active$
       .pipe(takeUntil(this.destroy$))
@@ -2757,7 +3529,47 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         const message = this.messages.find(m => UUIDsEqual(m.ID, event.conversationDetailId));
         if (message && conversationId) {
           await this.handleMessageCompletion(message, event.agentRunId, conversationId);
+        } else if (conversationId) {
+          // A completion for an unloaded ConversationDetailID may be a server-created workflow
+          // continuation reply (from TaskGraphContinuationDeliverer) in the active conversation,
+          // or a scrolled-out message. Reload the active window first so new continuation messages
+          // and their artifacts appear immediately in real time without leaving the chat.
+          const artifactBaseline = this.snapshotArtifactPanelBaseline();
+          await this.reloadMessagesForActiveConversation();
+          const newlyLoaded = event.conversationDetailId
+            ? this.messages.find(m => UUIDsEqual(m.ID, event.conversationDetailId))
+            : undefined;
+          if (newlyLoaded) {
+            await this.reloadArtifactsForMessage(newlyLoaded.ID, conversationId);
+            // Also refresh artifacts on any preceding AI messages that may have received task-step artifacts
+            const aiMessages = this.messages.filter(m => m.Role === 'AI');
+            for (const aiMsg of aiMessages.slice(-3)) {
+              if (!UUIDsEqual(aiMsg.ID, newlyLoaded.ID)) {
+                await this.reloadArtifactsForMessage(aiMsg.ID, conversationId);
+              }
+            }
+            this.resetComponentState(conversationId);
+            await this.decideAndApplyArtifactPanel(artifactBaseline, conversationId);
+            this.messages = [...this.messages];
+            this.followTranscript('new', newlyLoaded);
+            this.cdr.detectChanges();
+          } else {
+            await this.ReconcileNow('completion-for-unloaded-message');
+          }
         }
+      });
+
+    // Reconciliation triggers that do NOT depend on a clean socket close. This is the
+    // independent second layer: `retryAttempts`, `_socketStateSubject`,
+    // `ServerConnectivityService`, `scheduleReconnection()` and `FireAndForgetHelper.onStreamEnd`
+    // are all downstream of `on('closed')`, so on a half-open socket they fail together. The
+    // supervisor coalesces socket-reconnect, stream-reconnect, tab-visible and browser-online
+    // into one pass (MJ #4222).
+    this.livenessDom.Start();
+    ConversationsRuntime.Instance.Liveness.ReconciliationRequired$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((reason) => {
+        void this.ReconcileNow(reason);
       });
 
     // Subscribe to polling-based agent state as a secondary fallback for completion detection.
@@ -2906,20 +3718,40 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   ngOnDestroy() {
+    this.scrollResizeObserver?.disconnect();
+    this.scrollResizeObserver = null;
     // Stop polling when component is destroyed
     this.agentStateService.stopPolling();
+    if (this.forkSummaryRefreshTimer) {
+      clearTimeout(this.forkSummaryRefreshTimer);
+      this.forkSummaryRefreshTimer = null;
+    }
 
     // Complete destroy subject to cleanup subscriptions
     this.destroy$.next();
     this.destroy$.complete();
 
     this.clearTurnTracking();
+    this.stopSendSlotTicker();
+    for (const id of [...(this._stopFallbackTimers?.keys() ?? [])]) {
+      this.clearStopFallbackTimer(id);
+    }
+
+    // Leaving the chat surface altogether ends any live voice call (including
+    // minimized calls or calls minted from the empty state).
+    if (this.RealtimeSession?.IsActive) {
+      void this.RealtimeSession.EndRealtimeSession();
+    }
 
     // Remove resize listeners
-    window.removeEventListener('mousemove', this.boundOnResizeMove);
-    window.removeEventListener('mouseup', this.boundOnResizeEnd);
-    window.removeEventListener('touchmove', this.boundOnResizeTouchMove);
-    window.removeEventListener('touchend', this.boundOnResizeTouchEnd);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('mousemove', this.boundOnResizeMove);
+      window.removeEventListener('mouseup', this.boundOnResizeEnd);
+      window.removeEventListener('touchmove', this.boundOnResizeTouchMove);
+      window.removeEventListener('touchend', this.boundOnResizeTouchEnd);
+    }
+
+    this.remoteBrowser?.Dispose();
   }
 
   private isActiveConversation(conversationId: string | null | undefined): boolean {
@@ -2939,6 +3771,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private resetConversationScopedViewState(): void {
     this.clearTurnTracking();
     this.ShowArtifactPanel = false;
+    this.SelectedTaskGraphPanel = null;
+    // A conversation's browser ends with it: the next conversation starts without one. Reloading the SAME
+    // conversation (the overlay-to-workspace handoff) keeps it.
+    const browserConversation = this.remoteBrowser?.ConversationId;
+    if (!browserConversation || !UUIDsEqual(browserConversation, this._conversationId)) {
+      this.ShowRemoteBrowserPanel = false;
+      void this.remoteBrowser?.Close();
+    }
     this.SelectedArtifactId = null;
     this.SelectedVersionNumber = undefined;
     this.CanShareSelectedArtifact = false;
@@ -2974,6 +3814,19 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.IsUploadingAttachments = false;
     this.UploadingMessage = '';
     this.intentCheckMessage = null;
+    this.branches = [];
+    this.branchRowsConversationId = null;
+    this.openView = MAIN_OPEN_VIEW;
+    this.windowView = MAIN_OPEN_VIEW;
+    this.ForkSummaries = [];
+    this.ShowForksPopover = false;
+    this.IsRenamingTitle = false;
+    this.HandoffsByDetailId = new Map();
+    this.handoffStepsByRunId?.clear();
+    if (this.forkSummaryRefreshTimer) {
+      clearTimeout(this.forkSummaryRefreshTimer);
+      this.forkSummaryRefreshTimer = null;
+    }
 
     // Reset width along with the flag — otherwise a pane maximized in the
     // previous conversation leaves artifactPaneWidth at 100, and the next
@@ -2996,6 +3849,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     const loadToken = ++this.conversationLoadToken;
+    this.readyConversationId = null;
 
     this.resetConversationScopedViewState();
 
@@ -3005,13 +3859,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     if (conversationId) {
       this.currentlyLoadingConversationId = conversationId;
-
-      if (!this.messageInputMetadataCache.has(conversationId)) {
-        this.messageInputMetadataCache.set(conversationId, {
-          conversationId: conversationId,
-          conversationName: this.Conversation?.Name || null
-        });
+      if ((this.ArtifactsByDetailId?.size ?? 0) === 0 && this.artifactMapConversationId === null) {
+        this.artifactMapConversationId = conversationId;
       }
+
+      this.touchMessageInputCache(conversationId);
 
       // Only show loading spinner if the engine doesn't have cached data for this conversation.
       // This prevents the "no messages" flash when switching between conversations.
@@ -3032,7 +3884,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
           return;
         }
         // TODO: Replace polling with PubSub - see plans/repair-conversations-ui-performance.md
-        this.agentStateService.startPolling(this.CurrentUser, conversationId);
+        this.agentStateService.startPolling(this.CurrentUser, conversationId, this.openViewScope(conversationId));
       } catch (error) {
         if (!this.isActiveConversationLoad(conversationId, loadToken)) {
           return;
@@ -3049,6 +3901,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         // Create new array reference to trigger Angular change detection
         this.messages = [...this.messages];
         this.cdr.detectChanges();
+        this.readyConversationId = conversationId;
+        // Optional-chained: harness-constructed instances may skip field initializers.
+        this.conversationLoadEnded$?.next();
 
         // Defensive fallback: force another change detection cycle after async ops complete
         setTimeout(() => {
@@ -3061,20 +3916,156 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     } else {
       // No active conversation - show empty state
       this.messages = [];
+      this.ArtifactsByDetailId?.clear();
+      this.SystemArtifactsByDetailId?.clear();
       this.IsLoadingConversation = false;
       this.currentlyLoadingConversationId = null;
       this.lastLoadedConversationId = null;
+      this.artifactMapConversationId = null;
       this.agentStateService.stopPolling();
+      this.conversationLoadEnded$?.next();
+    }
+  }
+
+  private _cachedInputsArray: Array<{conversationId: string; conversationName: string | null}> = [];
+  private _cachedInputsKey = '';
+
+  /** Max hidden composers kept mounted for draft/state preservation; older idle ones are unmounted. */
+  private static readonly MAX_CACHED_MESSAGE_INPUTS = 10;
+
+  /** Stable case-normalized track key for `@for` so case-only UUID changes reuse the mounted composer. */
+  public NormalizeCachedInputId(conversationId: string): string {
+    return NormalizeUUID(conversationId);
+  }
+
+  private findMessageInputCacheEntry(
+    conversationId: string
+  ): { key: string; meta: { conversationId: string; conversationName: string | null } } | undefined {
+    const exact = this.messageInputMetadataCache.get(conversationId);
+    if (exact) {
+      return { key: conversationId, meta: exact };
+    }
+    for (const [key, meta] of this.messageInputMetadataCache.entries()) {
+      if (UUIDsEqual(key, conversationId)) {
+        return { key, meta };
+      }
+    }
+    return undefined;
+  }
+
+  private resolveConversationNameForCache(conversationId: string): string | null {
+    const activeConv = this.Conversation;
+    if (activeConv?.Name && (!activeConv.ID || UUIDsEqual(activeConv.ID, conversationId))) {
+      return activeConv.Name;
+    }
+    return this.engine?.GetConversation?.(conversationId)?.Name || null;
+  }
+
+  private syncCachedMessageInputName(conversationId: string, name: string): void {
+    if (!this.messageInputMetadataCache || !conversationId || !name) {
+      return;
+    }
+    const found = this.findMessageInputCacheEntry(conversationId);
+    if (found && found.meta.conversationName !== name) {
+      this.messageInputMetadataCache.set(found.key, {
+        ...found.meta,
+        conversationName: name,
+      });
+    }
+  }
+
+  private findMessageInputComponent(conversationId: string): MessageInputComponent | undefined {
+    if (!this.messageInputComponents || !conversationId) {
+      return undefined;
+    }
+    return this.messageInputComponents.find(component =>
+      UUIDsEqual(component.ConversationId ?? component.conversationId, conversationId)
+    );
+  }
+
+  /**
+   * True when a cached hidden composer for `candidateId` is idle and safe to unmount.
+   * Never evicts the newly-activated conversation, a conversation awaiting auto-send of
+   * `PendingMessage`, a conversation hosting a live voice session, a conversation with
+   * running tasks in `ActiveTasksService`, or a mounted composer with in-flight streaming
+   * callbacks / DB watches / unsent file attachments (`HasActiveWork`).
+   */
+  private canEvictCachedMessageInput(candidateId: string, activeConversationId: string): boolean {
+    if (UUIDsEqual(candidateId, activeConversationId) || UUIDsEqual(candidateId, this.ConversationId)) {
+      return false;
+    }
+    if (this._pendingMessage && this.ShouldDeliverPendingMessageTo(candidateId)) {
+      return false;
+    }
+    if (this.RealtimeSession?.IsActiveFor?.(candidateId)) {
+      return false;
+    }
+    if (this.activeTasks?.HasActiveTasksForConversation?.(candidateId)) {
+      return false;
+    }
+    const mounted = this.findMessageInputComponent(candidateId);
+    if (mounted?.HasActiveWork) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Registers `conversationId` as the most-recently-used composer and unmounts the
+   * least-recently-used idle ones beyond the cap. Each cache entry keeps a live
+   * `mj-message-input` component, so without a bound memory grows with every
+   * conversation visited. Composers actively running an agent turn, holding unsent
+   * file attachments, or hosting a live voice call are skipped until idle. Drafts
+   * live in the draft store, so an evicted composer's frozen restore snapshot is
+   * dropped to let a remount re-read the latest draft.
+   */
+  private touchMessageInputCache(conversationId: string): void {
+    const existing = this.findMessageInputCacheEntry(conversationId);
+    if (existing) {
+      this.messageInputMetadataCache.delete(existing.key); // re-insert to refresh recency & align casing
+    }
+    const conversationName =
+      existing?.meta.conversationName ?? this.resolveConversationNameForCache(conversationId);
+    this.messageInputMetadataCache.set(conversationId, {
+      conversationId,
+      conversationName,
+    });
+
+    if (this.messageInputMetadataCache.size <= ConversationChatAreaComponent.MAX_CACHED_MESSAGE_INPUTS) {
+      return;
+    }
+
+    for (const [candidateKey, entry] of [...this.messageInputMetadataCache.entries()]) {
+      if (this.messageInputMetadataCache.size <= ConversationChatAreaComponent.MAX_CACHED_MESSAGE_INPUTS) {
+        break;
+      }
+      if (!this.canEvictCachedMessageInput(entry.conversationId, conversationId)) {
+        continue;
+      }
+      this.messageInputMetadataCache.delete(candidateKey);
+      this.initialDraftSnapshots?.delete(NormalizeUUID(entry.conversationId));
     }
   }
 
   /**
-   * Returns array of cached message-input metadata for rendering
+   * Returns array of cached message-input metadata for rendering.
    * This allows multiple message-input components to exist simultaneously (hidden)
-   * preserving their state when switching conversations
+   * preserving their state when switching conversations.
+   * Memoized on cache contents so template `@for` loops receive a stable array reference across CD ticks.
    */
   public GetCachedInputs(): Array<{conversationId: string; conversationName: string | null}> {
-    return Array.from(this.messageInputMetadataCache.values());
+    if (this.messageInputMetadataCache.size === 0) {
+      return this._cachedInputsArray.length === 0 ? this._cachedInputsArray : (this._cachedInputsArray = []);
+    }
+    let key = '';
+    for (const [id, meta] of this.messageInputMetadataCache.entries()) {
+      key += `${id}:${meta.conversationName ?? ''}|`;
+    }
+    if (key !== this._cachedInputsKey) {
+      this._cachedInputsKey = key;
+      this._cachedInputsArray = Array.from(this.messageInputMetadataCache.values());
+    }
+    return this._cachedInputsArray;
   }
 
   /** @deprecated Use {@link GetCachedInputs}. */
@@ -3100,12 +4091,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * we need to find the one that matches the current conversationId.
    */
   private getActiveMessageInputComponent(): MessageInputComponent | undefined {
-    if (!this.messageInputComponents || !this.ConversationId) {
+    if (!this.ConversationId) {
       return undefined;
     }
-    return this.messageInputComponents.find(
-      component => component.conversationId === this.ConversationId
-    );
+    return this.findMessageInputComponent(this.ConversationId);
   }
 
   private async loadMessages(conversationId: string, loadToken: number): Promise<void> {
@@ -3130,52 +4119,36 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // complete history. A separate `_partialDetailCache` is the shape to reach for if
       // measurement says re-entry is worth it. Measure before building it.
       // Pins are counted separately: a pin can sit far below the window's oldest Sequence,
-      // and the pins panel must list ALL of them, not just the ones currently on screen.
-      // Concurrent with the window — the two share only the conversation id, and running the
-      // pin read after the window made it delay first paint for no reason.
-      await Promise.all([
-        this.windowStore.LoadLatest(conversationId, this.CurrentUser),
-        this.loadPinnedMessageCount(conversationId, loadToken)
+      // and the pins panel must list ALL of them on the open view's path, not just the ones
+      // currently on screen.
+      // Fork rows load alongside the window: the scope and the fork summaries need them. The
+      // pin count reads after the fork rows, because its filter is the scope of the open view's
+      // path. First paint waits for the longer of the window read and the fork rows plus the pin
+      // count. The count stays awaited: the load token only stops a count whose conversation load
+      // was replaced, so a count still running when a view change starts in this load could
+      // overwrite the new view's count.
+      const [, branches] = await Promise.all([
+        this.loadWindowForOpenView(conversationId),
+        this.loadBranchesAndPinCount(conversationId, loadToken)
       ]);
       if (!this.isActiveConversationLoad(conversationId, loadToken)) {
         return;
       }
-
-      // Read the loaded window back off the store
+      this.setBranchRows(conversationId, branches);
+      this.applyWindowSnapshot();
       const snapshot = this.windowStore.GetSnapshot();
-      this.messages = snapshot.Details;
-
-      // Copy user avatars from the window result
-      this.UserAvatarMap.clear();
-      for (const [userId, avatar] of snapshot.UserAvatars) {
-        this.UserAvatarMap.set(userId, {
-          imageUrl: avatar.ImageURL,
-          iconClass: avatar.IconClass
-        });
-      }
-
-      this.updateAttachmentSupport();
-
-      // Detect in-progress messages for streaming reconnection
-      this.InProgressMessageIds = [...this.messages
-        .filter(m => m.Status === 'In-Progress')
-        .map(m => m.ID)];
-
-      if (this.InProgressMessageIds.length > 0) {
-        LogStatusEx({message: `🔌 Detected ${this.InProgressMessageIds.length} in-progress messages for reconnection`, verboseOnly: true});
-      }
 
       // Check for missed completions (user navigated away, agent completed, user returned)
       for (const message of this.messages) {
         if (message.Status === 'In-Progress' && message.ID) {
-          const recentCompletion = this.streamingService.getRecentCompletion(message.ID);
+          const recentCompletion = this.streamingService.GetRecentCompletion(message.ID);
           if (recentCompletion) {
             LogStatusEx({message: `📥 Found missed completion for message ${message.ID}, handling...`, verboseOnly: true});
             await this.handleMessageCompletion(message, recentCompletion.agentRunId, conversationId, loadToken);
             if (!this.isActiveConversationLoad(conversationId, loadToken)) {
               return;
             }
-            this.streamingService.clearRecentCompletion(message.ID);
+            this.streamingService.ClearRecentCompletion(message.ID);
           }
         }
       }
@@ -3203,6 +4176,71 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
   }
 
+  /**
+   * Reads the store's loaded window into the transcript: messages, user avatars, attachment
+   * support and in-progress message IDs.
+   */
+  private applyWindowSnapshot(): void {
+    const snapshot = this.windowStore.GetSnapshot();
+    this.messages = snapshot.Details;
+    this.windowView = this.OpenView;
+
+    // Copy user avatars from the window result
+    this.UserAvatarMap.clear();
+    for (const [userId, avatar] of snapshot.UserAvatars) {
+      this.UserAvatarMap.set(userId, {
+        imageUrl: avatar.ImageURL,
+        iconClass: avatar.IconClass
+      });
+    }
+    this.markUserAvatarMapChanged();
+
+    this.updateAttachmentSupport();
+
+    // Detect in-progress messages for streaming reconnection
+    this.InProgressMessageIds = [...this.messages
+      .filter(m => m.Status === 'In-Progress')
+      .map(m => m.ID)];
+
+    if (this.InProgressMessageIds.length > 0) {
+      LogStatusEx({message: `🔌 Detected ${this.InProgressMessageIds.length} in-progress messages for reconnection`, verboseOnly: true});
+    }
+  }
+
+  /**
+   * The conversation's fork rows. An empty list when they cannot be read, so the transcript
+   * still loads.
+   */
+  private async loadBranchesOrEmpty(conversationId: string): Promise<ConversationBranchRow[]> {
+    return (await this.loadBranchesOrNull(conversationId)) ?? [];
+  }
+
+  /** The conversation's fork rows; null when they cannot be read. */
+  private async loadBranchesOrNull(conversationId: string): Promise<ConversationBranchRow[] | null> {
+    try {
+      return await ConversationEngine.LoadBranchesFresh(conversationId, this.CurrentUser, this.ProviderToUse);
+    } catch (error) {
+      console.error(`Failed to load branches for conversation ${conversationId}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Loads the fork rows and keeps them, starts the fork summary read, then counts the pins
+   * in the scope of the open view's path. Keeps and counts nothing when a newer conversation
+   * load started.
+   */
+  private async loadBranchesAndPinCount(conversationId: string, loadToken: number): Promise<ConversationBranchRow[]> {
+    const branches = await this.loadBranchesOrEmpty(conversationId);
+    if (!this.isActiveConversationLoad(conversationId, loadToken)) {
+      return branches;
+    }
+    this.setBranchRows(conversationId, branches);
+    void this.loadForkSummaries(conversationId, branches, loadToken);
+    await this.loadPinnedMessageCount(conversationId, loadToken);
+    return branches;
+  }
+
 
   /**
    * Reads only the PIN COUNT on conversation open.
@@ -3218,14 +4256,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJConversationDetailEntity>({
       EntityName: 'MJ: Conversation Details',
-      ExtraFilter: `ConversationID='${conversationId}' AND IsPinned=1`,
+      ExtraFilter: `${ConversationEngine.LiveRowsFilter(ConversationEngine.ScopeFilter(this.openViewScope(conversationId)))} AND [IsPinned]=1`,
       ResultType: 'count_only'
     }, this.CurrentUser);
 
     if (!this.isActiveConversationLoad(conversationId, loadToken)) {
       return;
     }
-    this.windowStore.SetPinnedCount(result.Success ? result.TotalRowCount : 0);
+    this.windowStore.SetPinnedCount(result.Success ? result.TotalRowCount ?? 0 : 0);
   }
 
   /**
@@ -3242,7 +4280,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJConversationDetailEntity>({
       EntityName: 'MJ: Conversation Details',
-      ExtraFilter: `ConversationID='${conversationId}' AND IsPinned=1`,
+      ExtraFilter: `${ConversationEngine.LiveRowsFilter(ConversationEngine.ScopeFilter(this.openViewScope(conversationId)))} AND [IsPinned]=1`,
       OrderBy: 'Sequence DESC',   // newest pin first — the panel's order
       ResultType: 'entity_object'
     }, this.CurrentUser);
@@ -3256,6 +4294,21 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
     this.windowStore.SetPinnedDetails(result.Results ?? []);
     this.pinsHydrated = true;
+  }
+
+  /**
+   * Reads the pin count in the scope of the open view's path and, when the pins panel's rows
+   * are loaded, reads those rows again too. A read that throws is logged and changes nothing.
+   */
+  private async reloadPinsForScope(conversationId: string, loadToken: number): Promise<void> {
+    try {
+      await this.loadPinnedMessageCount(conversationId, loadToken);
+      if (this.pinsHydrated && this.isActiveConversationLoad(conversationId, loadToken)) {
+        await this.hydratePinnedMessages(conversationId);
+      }
+    } catch (error) {
+      console.error(`Failed to read the pins for conversation ${conversationId}:`, error);
+    }
   }
 
 
@@ -3345,6 +4398,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.RealtimeSessionMetaMap = new Map([...this.RealtimeSessionMetaMap, ...sessionMeta]);
     }
 
+    const newRunIds = newIds
+      .map(id => this.AgentRunsByDetailId.get(id)?.ID)
+      .filter((id): id is string => !!id);
+    if (newRunIds.length > 0) {
+      await this.loadHandoffStepsForRunIds(newRunIds, conversationId);
+      if (!this.isActiveConversation(conversationId)) {
+        return;
+      }
+    } else {
+      this.rebuildHandoffsMap();
+    }
+
     // A page of OLDER artifacts just entered the map. Any artifact-panel baseline taken before
     // this point can no longer be diffed against the map for creations — these arrived from
     // history, not from a run. See snapshotArtifactPanelBaseline.
@@ -3396,6 +4461,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.ArtifactsByDetailId.clear();
       this.SystemArtifactsByDetailId.clear();
       this.RatingsByDetailId.clear();
+      this.handoffStepsByRunId.clear();
 
       // Copy agent runs from engine (cast to extended type for UI compatibility)
       for (const [detailId, agentRun] of cacheEntry.AgentRunsByDetailId) {
@@ -3406,6 +4472,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       for (const [detailId, artifacts] of cacheEntry.ArtifactsByDetailId) {
         this.applyArtifactsForDetail(detailId, artifacts);
       }
+      this.artifactMapConversationId = conversationId;
 
       // Copy ratings from engine cache
       for (const [detailId, ratings] of cacheEntry.RatingsByDetailId) {
@@ -3432,6 +4499,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         return;
       }
 
+      const runIds = Array.from(this.AgentRunsByDetailId.values())
+        .map(r => r?.ID)
+        .filter((id): id is string => !!id);
+      await this.loadHandoffStepsForRunIds(runIds, conversationId, loadToken);
+      if (!this.isCurrentConversationContext(conversationId, loadToken)) {
+        return;
+      }
+
       // Create new Map references to trigger Angular change detection
       this.AgentRunsByDetailId = new Map(this.AgentRunsByDetailId);
       this.ArtifactsByDetailId = new Map(this.ArtifactsByDetailId);
@@ -3454,7 +4529,56 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     } catch (error) {
       console.error('Failed to process peripheral data:', error);
       this.lastLoadedConversationId = null;
+      this.artifactMapConversationId = null;
     }
+  }
+
+  private async loadHandoffStepsForRunIds(
+    runIds: readonly string[],
+    conversationId?: string | null,
+    loadToken?: number,
+  ): Promise<void> {
+    if (runIds.length > 0) {
+      const steps = await LoadHandoffStepsForRuns(
+        this.ProviderToUse,
+        runIds,
+      );
+      if (
+        conversationId != null &&
+        !this.isCurrentConversationContext(conversationId, loadToken)
+      ) {
+        return;
+      }
+      for (const step of steps) {
+        if (step && step.ID && step.AgentRunID && (!step.StepType || step.StepType === 'Handoff')) {
+          this.handoffStepsByRunId.set(step.ID, step);
+        }
+      }
+    }
+    this.rebuildHandoffsMap();
+  }
+
+  private rebuildHandoffsMap(): void {
+    const stepsMap = this.handoffStepsByRunId;
+    if (!stepsMap || stepsMap.size === 0 || !this.AgentRunsByDetailId || this.AgentRunsByDetailId.size === 0) {
+      if (!this.HandoffsByDetailId || this.HandoffsByDetailId.size > 0) {
+        this.HandoffsByDetailId = new Map();
+      }
+      return;
+    }
+    const engineAgents = AIEngineBase.Instance?.Agents ?? [];
+    const agents =
+      this.conversationManagerAgent &&
+      !engineAgents.some(a => UUIDsEqual(a.ID, this.conversationManagerAgent?.ID))
+        ? [this.conversationManagerAgent, ...engineAgents]
+        : engineAgents;
+    this.HandoffsByDetailId = BuildHandoffsByDetailId({
+      Messages: this.messages ?? [],
+      AgentRunsByDetailId: this.AgentRunsByDetailId,
+      HandoffSteps: Array.from(stepsMap.values()),
+      Agents: agents,
+      Presets: AIEngineBase.Instance?.AgentConfigurations ?? [],
+    });
   }
 
   /**
@@ -3527,7 +4651,74 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // Database tasks are loaded separately by TasksDropdownComponent
   }
 
+  /**
+   * A streamed delta landed on an in-progress message (MessageInputComponent.MessageStreamed).
+   * Unlike {@link OnMessageSent} this does not replace the `messages` array: that rebuilt the
+   * whole timeline, re-measured the mounted range and armed a scroll-to-bottom timer on every
+   * delta, which is what made a streaming reply flash and jump. The bubble is refreshed in place
+   * and the viewport is kept steady. With `ReadReplyFromTop` the turn lands at its top once, on
+   * the first delta, and the reply grows beneath it; otherwise the bottom is pinned in the same
+   * frame as the DOM update, so the growth and the scroll paint together.
+   */
+  public OnMessageStreamed(message: MJConversationDetailEntity): void {
+    if (!this.isActiveConversation(message.ConversationID) || message.Status !== 'In-Progress') {
+      return;
+    }
+    // A frame of a reply written in another view is not on screen here: it only refreshes the fork summaries.
+    if (!IsRowInOpenView(this.OpenView, message)) {
+      if (message.BranchID != null) {
+        this.scheduleForkSummaryRefresh();
+      }
+      return;
+    }
+    const index = this.messages.findIndex(m => UUIDsEqual(m.ID, message.ID));
+    if (index >= 0 && this.messages[index] !== message) {
+      if (this.isSettled(this.messages[index])) {
+        return; // a frame that outlived completion; the completion path owns the bubble
+      }
+      // Keep the array and the window pointing at the entity the stream mutates, in place: a new
+      // array reference would rebuild the timeline, which is the cost this path exists to avoid.
+      this.messages[index] = message;
+      this.replaceDisplayedRow(message);
+      this.windowStore.ApplyLocalDetail(message);
+    }
+    const rootId = this.collapsedThreadRootId(message);
+    if (rootId !== null) {
+      if (index < 0) {
+        // A hidden reply's first frame: the full path adds the row once; later frames patch it in place above.
+        this.ngZone.run(() => void this.OnMessageSent(message));
+        return;
+      }
+      const root = (this.messages ?? []).find(m => UUIDsEqual(m.ID, rootId));
+      if (root) {
+        this.messageListComponent?.RefreshRenderedMessage(root);
+      }
+      return;
+    }
+    if (!this.messageListComponent?.RefreshRenderedMessage(message)) {
+      // The first delta can beat the bubble's own render; the full path handles that one update.
+      this.ngZone.run(() => void this.OnMessageSent(message));
+      return;
+    }
+    this.followTranscript('stream', message);
+  }
+
+  /** Drops a landing still queued or retrying, so it cannot resolve after a newer one. */
+  private cancelPendingLanding(): void {
+    this.pendingTurnStartMessageId = null;
+    if (this.turnStartRetryHandle) {
+      clearTimeout(this.turnStartRetryHandle);
+      this.turnStartRetryHandle = null;
+    }
+  }
+
   async OnMessageSent(message: MJConversationDetailEntity): Promise<void> {
+    this.nameForkFromFirstSend(message);
+    // A row of the active conversation written in another view (a turn started in Main while a
+    // fork is open) is not on screen here and is not this view's send: it changes no draft.
+    if (UUIDsEqual(message.ConversationID, this.ConversationId) && !this.acceptRowForOpenView(message)) {
+      return;
+    }
     // The draft became a message — remove it from the persisted map + snapshot.
     const sentKey = (message.ConversationID ?? this.ConversationId ?? '').trim().toLowerCase();
     this.draftStore.ClearDraft(message.ConversationID ?? this.ConversationId);
@@ -3557,19 +4748,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // Check if message already exists in the array (by ID) to prevent duplicates
     // Messages can be emitted multiple times as they're updated (e.g., status changes)
-    const existingIndex = this.messages.findIndex(m => UUIDsEqual(m.ID, message.ID));
+    // An agent reply's placeholder takes the server row's ID when the run is acknowledged; a refresh may already have
+    // brought that row in, so other copies of the ID are dropped.
+    const upsert = UpsertMessageById(this.messages, message);
+    this.messages = upsert.Messages;
 
-    if (existingIndex >= 0) {
-      // Update existing message in place (replace with updated version)
-      this.messages = [
-        ...this.messages.slice(0, existingIndex),
-        message,
-        ...this.messages.slice(existingIndex + 1)
-      ];
-    } else {
-      // Add new message to the list
-      this.messages = [...this.messages, message];
-
+    if (!upsert.Existed) {
       // Ensure current user is in the avatar map for new messages
       this.ensureCurrentUserInAvatarMap();
 
@@ -3586,20 +4770,43 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       if (!this.isActiveConversation(message.ConversationID)) {
         return;
       }
+    }
 
-      // CRITICAL: If this is a new In-Progress AI message, add it to inProgressMessageIds
-      // immediately so message-input registers a PubSub streaming callback for it.
-      // buildMessagesFromCache handles the nav-away/nav-back reconnection case;
-      // this handles the active-session case where the agent just started.
-      // Without this, inProgressMessageIds stays [] and the completion event is never received.
-      if (message.Status === 'In-Progress' && message.ID && !this.InProgressMessageIds.includes(message.ID)) {
-        this.InProgressMessageIds = [...this.InProgressMessageIds, message.ID];
+    // A host turn can finish before this row is on screen. The completion is already in the
+    // streaming service's replay window; apply it the way a conversation load does, so the
+    // row does not stay In-Progress until the conversation is opened again. Register the row
+    // for the live callback either way — an update of an existing In-Progress row included.
+    if (message.Status === 'In-Progress' && message.ID) {
+      const entityMap = (this.inProgressIdByEntity ??= new WeakMap());
+      const previousId = entityMap.get(message);
+      entityMap.set(message, message.ID);
+      const withoutPrevious =
+        previousId && !UUIDsEqual(previousId, message.ID)
+          ? this.InProgressMessageIds.filter((id) => !UUIDsEqual(id, previousId))
+          : this.InProgressMessageIds;
+      if (!withoutPrevious.some((id) => UUIDsEqual(id, message.ID))) {
+        this.InProgressMessageIds = [...withoutPrevious, message.ID];
+      } else if (withoutPrevious !== this.InProgressMessageIds) {
+        this.InProgressMessageIds = withoutPrevious;
       }
+      const recentCompletion = this.streamingService.GetRecentCompletion(message.ID);
+      if (recentCompletion) {
+        await this.handleMessageCompletion(message, recentCompletion.agentRunId, message.ConversationID);
+        if (this.isActiveConversation(message.ConversationID)) {
+          this.streamingService.ClearRecentCompletion(message.ID);
+        }
+      }
+    } else if (this.isSettled(message)) {
+      // The final frame of a reply can arrive as a plain send; it leaves the in-flight list here.
+      this.dropSettledFromInFlight();
     }
 
     // Where the viewport goes: a fresh send follows — an in-place update of a message that
-    // is already on screen must not re-run the send path's scroll.
-    this.followTranscript(existingIndex >= 0 ? 'update' : 'new', message);
+    // is already on screen must not re-run the send path's scroll or rebuild the handoffs map.
+    if (!upsert.Existed) {
+      this.rebuildHandoffsMap();
+    }
+    this.followTranscript(upsert.Existed ? 'update' : 'new', message);
 
     // Force change detection — zone.js 0.15 no longer patches graphql-ws WebSocket callbacks,
     // so progress updates that arrive via PubSub run outside Angular's zone. Without this,
@@ -3673,13 +4880,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // Load the current user's avatar data
     const md = this.ProviderToUse;
-    const userEntity = await md.GetEntityObject<any>('MJ: Users');
+    const userEntity = await md.GetEntityObject<MJUserEntity>('MJ: Users');
     await userEntity.Load(userId);
 
     this.UserAvatarMap.set(userId, {
       imageUrl: userEntity.UserImageURL || null,
       iconClass: userEntity.UserImageIconClass || null
     });
+    this.markUserAvatarMapChanged();
 
     LogStatusEx({message: `👤 Added current user to avatar map`, verboseOnly: true});
   }
@@ -3742,9 +4950,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         }
       }
 
+      await this.loadHandoffStepsForRunIds([existingAgentRun.ID], event.conversationId);
+      if (!this.isActiveConversation(event.conversationId)) {
+        return;
+      }
+
       // Trigger re-render to show updated status
       this.messages = [...this.messages];
       this.cdr.detectChanges();
+    } else {
+      this.rebuildHandoffsMap();
     }
 
     // Reload attachments for this message to pick up newly created media attachments
@@ -3775,23 +4990,33 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     if (event.agentRun) {
-      // Directly update map with fresh data from progress (no database query needed)
-      // Don't create new Map - message-list component needs to keep the same reference
-      this.AgentRunsByDetailId.set(event.conversationDetailId, event.agentRun);
+      const existingRun = this.AgentRunsByDetailId.get(event.conversationDetailId);
+      if (!existingRun || ShouldReplaceDetailAgentRun(existingRun, event.agentRun)) {
+        // Directly update map with fresh data from progress (no database query needed)
+        // Don't create new Map - message-list component needs to keep the same reference
+        this.AgentRunsByDetailId.set(event.conversationDetailId, event.agentRun);
 
-      // Also update ConversationEngine's cache for other consumers
-      if (event.conversationId) {
-        ConversationEngine.Instance.SetAgentRunForDetail(event.conversationId, event.conversationDetailId, event.agentRun);
+        // Also update ConversationEngine's cache for other consumers
+        if (event.conversationId) {
+          ConversationEngine.Instance.SetAgentRunForDetail(event.conversationId, event.conversationDetailId, event.agentRun);
+        }
+      }
+      if (!existingRun || !UUIDsEqual(existingRun.ID, event.agentRun.ID)) {
+        this.rebuildHandoffsMap();
       }
     }
     else {
       // no agent run, should have agentRunId
       await this.addAgentRunToMap(event.conversationId, event.conversationDetailId, event.agentRunId!);
+      return;
     }
 
-    // Force message list to re-render with updated agent run
-    // This ensures message components receive the fresh agent run data
-    this.messages = [...this.messages];
+    // Refresh the rendered message in place so its agentRun reference updates without
+    // cloning the entire messages array and triggering a full virtual-timeline rebuild.
+    const targetMessage = this.messages.find(m => UUIDsEqual(m.ID, event.conversationDetailId));
+    if (!targetMessage || !this.messageListComponent?.RefreshRenderedMessage(targetMessage, { markStreaming: false })) {
+      this.messages = [...this.messages];
+    }
     this.cdr.detectChanges();
   }
 
@@ -3843,7 +5068,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       const existingMessageIds = new Set(this.messages.map(m => m.ID));
 
       // Merge the refreshed window with existing client-side messages.
-      // Preserves messages added client-side (e.g., by handleSubAgentInvocation)
+      // Preserves messages added client-side (e.g., server-followed handoff rows)
       // that haven't been picked up by entity events yet due to timing.
       const merged = new Map<string, MJConversationDetailEntity>();
 
@@ -3858,28 +5083,1467 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         }
       }
 
-      this.messages = Array.from(merged.values())
-        .sort((a, b) => (a.__mj_CreatedAt?.getTime() || 0) - (b.__mj_CreatedAt?.getTime() || 0));
+      this.messages = Array.from(merged.values()).sort(CompareMessagesByCreatedAt);
 
       // Find newly discovered messages (delegated agents)
       const newMessages = engineDetails.filter(m => !existingMessageIds.has(m.ID));
 
       // Check engine cache for agent runs on new messages
+      const discoveredRunIds: string[] = [];
       for (const message of newMessages) {
         if (message.AgentID && message.ID) {
           const agentRun = this.engine.GetAgentRunForDetail(conversationId, message.ID);
           if (agentRun) {
             this.AgentRunsByDetailId.set(message.ID, agentRun as MJAIAgentRunEntityExtended);
+            if (agentRun.ID) {
+              discoveredRunIds.push(agentRun.ID);
+            }
             LogStatusEx({message: `✅ Found cached agent run for new delegated message ${message.ID}`, verboseOnly: true});
           }
         }
       }
+      await this.loadHandoffStepsForRunIds(discoveredRunIds, conversationId);
 
       LogStatusEx({message: `✅ Refreshed ${engineDetails.length} messages from engine cache (${newMessages.length} new)`, verboseOnly: true});
     } catch (error) {
       console.error('Failed to reload messages for active conversation:', error);
     }
   }
+
+  /**
+   * Shows `next` for the active conversation. Ends a voice session open for the conversation first (a
+   * session keeps the path it started on), then reloads the window, fork rows, artifact viewer, agent
+   * polling, peripherals and pins on the view's path (a draft reads its parent's path up to its
+   * anchor). A view equal to the open one changes nothing. Ignored while another view change runs.
+   * @returns true when `next` is shown; false when ignored, when there is no conversation, or when the reload failed.
+   */
+  private async changeOpenView(next: ConversationOpenView): Promise<boolean> {
+    const conversationId = this.ConversationId;
+    if (!conversationId || this.viewChangeInFlight) {
+      return false;
+    }
+    if (SameOpenView(this.OpenView, next)) {
+      return true;
+    }
+    this.viewChangeInFlight = true;
+    try {
+      await this.endRealtimeSessionForViewChange(conversationId);
+      if (!this.isActiveConversation(conversationId)) {
+        return false;
+      }
+      this.IsRenamingTitle = false;
+      this.openView = next;
+      return await this.reloadWindowForView();
+    } finally {
+      this.viewChangeInFlight = false;
+    }
+  }
+
+  /** Opens a fork of the active conversation in the full view. */
+  public async OpenFork(branchId: string): Promise<boolean> {
+    return this.changeOpenView({ Kind: 'Fork', BranchID: branchId });
+  }
+
+  /** Shows Main of the active conversation. */
+  public async BackToMain(): Promise<boolean> {
+    return this.changeOpenView(MAIN_OPEN_VIEW);
+  }
+
+  /**
+   * The fork the back button opens; null is Main. A fork's parent fork, or a draft's ParentBranchID
+   * (the view it started from).
+   */
+  public get BackForkId(): string | null {
+    return ParentForkIdOf(this.OpenView, this.knownForkRows());
+  }
+
+  /** The label and aria-label of the back button: "Back to <parent fork>", or "Back to Main". */
+  public get BackLabel(): string {
+    const parentId = this.BackForkId;
+    return BackLabelOf(parentId ? this.forkLabelOf(parentId) : null);
+  }
+
+  /** Goes up one level: opens the parent fork of the open fork or draft, else Main. */
+  public async GoBack(): Promise<boolean> {
+    const parentId = this.BackForkId;
+    return parentId ? this.OpenFork(parentId) : this.BackToMain();
+  }
+
+  /**
+   * The breadcrumb of the header in a fork: the conversation, each ancestor fork, then the open fork ("New fork"
+   * in a draft). Empty in Main. The same array until the view, the fork rows, the summaries or the
+   * conversation name change.
+   */
+  public get ForkBreadcrumbs(): ForkBreadcrumb[] {
+    const view = this.OpenView;
+    const branches = this.branches ?? [];
+    const summaries = this.ForkSummaries ?? [];
+    const conversationName = this.Conversation?.Name || 'Conversation';
+    const cache = this.breadcrumbCache;
+    if (cache && cache.View === view && cache.Branches === branches && cache.Summaries === summaries && cache.ConversationName === conversationName) {
+      return cache.Crumbs;
+    }
+    const crumbs = BuildForkBreadcrumbs(view, conversationName, this.knownForkRows(), id => this.forkLabelOf(id));
+    this.breadcrumbCache = { View: view, Branches: branches, Summaries: summaries, ConversationName: conversationName, Crumbs: crumbs };
+    return crumbs;
+  }
+
+  /** The header path of the open fork or draft: the breadcrumb with the crumbs that collapse into an ellipsis. */
+  public get HeaderPath(): ForkHeaderPath {
+    const crumbs = this.ForkBreadcrumbs;
+    if (this.headerPathCache?.Crumbs !== crumbs) {
+      this.headerPathCache = { Crumbs: crumbs, Path: BuildForkHeaderPath(crumbs) };
+    }
+    return this.headerPathCache.Path;
+  }
+  private headerPathCache: { Crumbs: ForkBreadcrumb[]; Path: ForkHeaderPath } | null = null;
+
+  /** The path's ellipsis was chosen: opens the forks list, which shows the whole chain. */
+  public ShowWholePath(): void {
+    if (!this.ShowForksPopover) {
+      this.ToggleForksPopover();
+    }
+  }
+
+  /**
+   * Escape in the header or the transcript of a fork view: closes the forks list when it is open, else goes
+   * up one level ({@link GoBack}). Ignored when an inner control handled the key (the rename field, a
+   * message editor, an open menu), in a text field, and in Main.
+   */
+  public OnViewEscape(event: Event): void {
+    if (this.OpenView.Kind === 'Main' || event.defaultPrevented || this.IsRenamingTitle || isTextEntryTarget(event.target)) {
+      return;
+    }
+    if (this.ShowForksPopover) {
+      event.preventDefault();
+      this.CloseForksPopover();
+      return;
+    }
+    if (isInOpenMenuTrigger(event.target)) {
+      return;
+    }
+    event.preventDefault();
+    void this.GoBack();
+  }
+
+  /** A crumb was chosen: opens its fork, or Main for the conversation crumb. The last crumb opens nothing. */
+  public async OpenCrumb(crumb: ForkBreadcrumb): Promise<boolean> {
+    if (crumb.IsCurrent) {
+      return false;
+    }
+    return crumb.BranchID ? this.OpenFork(crumb.BranchID) : this.BackToMain();
+  }
+
+  /** The fork rows this chat area knows: its loaded rows, then the rows of the fork summaries. */
+  private knownForkRows(): ForkChainRow[] {
+    const branches: ForkChainRow[] = this.branches ?? [];
+    const summaries = this.ForkSummaries ?? [];
+    return summaries.length === 0 ? branches : [...branches, ...summaries.map(s => s.Branch)];
+  }
+
+  /** A fork's row among the loaded rows or the summaries; null when neither has it. */
+  private knownForkRow(branchId: string): ConversationBranchRow | null {
+    return (this.branches ?? []).find(b => UUIDsEqual(b.ID, branchId))
+      ?? (this.ForkSummaries ?? []).find(s => UUIDsEqual(s.Branch.ID, branchId))?.Branch
+      ?? null;
+  }
+
+  /** The display name of a fork: its summary's, else the default from its row, else "Fork". */
+  private forkLabelOf(branchId: string): string {
+    const summary = (this.ForkSummaries ?? []).find(s => UUIDsEqual(s.Branch.ID, branchId));
+    if (summary) {
+      return summary.DisplayName;
+    }
+    const row = this.knownForkRow(branchId);
+    return row ? ConversationEngine.ForkDisplayName(row, null) : 'Fork';
+  }
+
+  /** True when the open fork may be renamed: a saved fork (not a draft) of a conversation the person may write to. */
+  public get CanRenameFork(): boolean {
+    return this.OpenView.Kind === 'Fork' && !this.EffectiveReadOnly;
+  }
+
+  /** True when the conversation may be renamed from the header: Main is open and the person may write to it. */
+  public get CanRenameConversation(): boolean {
+    return this.OpenView.Kind === 'Main' && !!this.Conversation && !this.EffectiveReadOnly;
+  }
+
+  /** True when the header title may be renamed: the conversation in Main, the fork in a fork. */
+  public get CanRenameTitle(): boolean {
+    return this.OpenView.Kind === 'Main' ? this.CanRenameConversation : this.CanRenameFork;
+  }
+
+  /** The header title: the conversation name in Main, the open fork's display name in a fork or draft. */
+  public get HeaderTitle(): string {
+    return this.OpenView.Kind === 'Main' ? (this.Conversation?.Name || '') : this.OpenViewTitle;
+  }
+
+  /** The label of the title rename button and name field. */
+  public get TitleRenameLabel(): string {
+    return this.OpenView.Kind === 'Main' ? 'Rename conversation' : 'Rename fork';
+  }
+
+  /** Turns the header title into a text field holding its current name, and focuses it. */
+  public StartTitleRename(): void {
+    if (!this.CanRenameTitle) {
+      return;
+    }
+    this.TitleRenameText = this.HeaderTitle;
+    this.IsRenamingTitle = true;
+    this.cdr.detectChanges();
+    const input = this.titleNameInput?.nativeElement;
+    input?.focus();
+    input?.select();
+  }
+
+  /** Closes the title name field without saving (Escape) and puts focus back on the rename button. */
+  public CancelTitleRename(): void {
+    if (!this.IsRenamingTitle) {
+      return;
+    }
+    this.IsRenamingTitle = false;
+    this.focusTitleRenameButton();
+  }
+
+  /** Puts focus on the title rename button once the name field is gone, when the button is on the page. */
+  private focusTitleRenameButton(): void {
+    this.cdr.detectChanges();
+    const button = this.titleRenameButton?.nativeElement;
+    if (button?.isConnected) {
+      button.focus();
+    }
+  }
+
+  /**
+   * Saves the title name field (Enter, or leaving the field) to the conversation in Main or to the open
+   * fork. With `restoreFocus` (Enter), focus goes back to the rename button.
+   * @returns true when saved or unchanged; false when nothing was being renamed or the save failed.
+   */
+  public async SaveTitleRename(restoreFocus = false): Promise<boolean> {
+    if (!this.IsRenamingTitle) {
+      return false;
+    }
+    this.IsRenamingTitle = false;
+    if (restoreFocus) {
+      this.focusTitleRenameButton();
+    }
+    const view = this.OpenView;
+    const conversationId = this.ConversationId;
+    if (!conversationId || this.EffectiveReadOnly) {
+      return false;
+    }
+    if (view.Kind === 'Main') {
+      return this.saveConversationName(conversationId);
+    }
+    return view.Kind === 'Fork' ? this.saveForkName(conversationId, view.BranchID) : false;
+  }
+
+  /**
+   * Saves the title field as the conversation's Name through the engine, then tells the host. A blank or
+   * unchanged name saves nothing. Shows "Could not rename the conversation" when the save fails.
+   */
+  private async saveConversationName(conversationId: string): Promise<boolean> {
+    const name = (this.TitleRenameText ?? '').trim();
+    const conversation = this.Conversation;
+    if (!conversation || !name || name === (conversation.Name ?? '').trim()) {
+      return true;
+    }
+    try {
+      await this.engine.SaveConversation(conversationId, { Name: name }, this.CurrentUser);
+    } catch (error) {
+      console.error(`Failed to rename conversation ${conversationId}:`, error);
+      MJNotificationService.Instance.CreateSimpleNotification('Could not rename the conversation', 'error', 3000);
+      return false;
+    }
+    if (conversation !== this.engine.GetConversation(conversationId)) {
+      conversation.SetMany({ Name: name }, true, true);
+    }
+    this.ConversationRenamed.emit({ conversationId, name, description: conversation.Description ?? '' });
+    return true;
+  }
+
+  /**
+   * Saves the title field as the fork's Name through the branch entity, then refreshes the fork summaries.
+   * A blank name clears the Name so the default label shows; an unchanged name saves nothing. Shows
+   * "Could not rename the fork" when the save fails.
+   */
+  private async saveForkName(conversationId: string, forkId: string): Promise<boolean> {
+    const name = (this.TitleRenameText ?? '').trim() || null;
+    const stored = this.knownForkRow(forkId)?.Name?.trim() || null;
+    if (name === stored || (stored === null && name === this.OpenViewTitle)) {
+      return true;
+    }
+    let saved = false;
+    try {
+      saved = await SaveForkName({ ForkId: forkId, Name: name, Provider: this.ProviderToUse, CurrentUser: this.CurrentUser });
+    } catch (error) {
+      console.error(`Failed to rename fork ${forkId}:`, error);
+    }
+    if (!saved) {
+      MJNotificationService.Instance.CreateSimpleNotification('Could not rename the fork', 'error', 3000);
+      return false;
+    }
+    if (this.isActiveConversation(conversationId)) {
+      await this.RefreshForkSummaries();
+    }
+    return true;
+  }
+
+  /**
+   * Names a new Fork or Edit fork from its first message, in the background: runs the Name Conversation
+   * prompt and saves the name only when the fork still has none, then refreshes the fork summaries. Off
+   * when {@link AutoNameConversation} is false. Failures are logged; no notice.
+   */
+  private nameForkInBackground(conversationId: string, forkId: string, message: string | null | undefined): void {
+    if (this.AutoNameConversation === false) {
+      return;
+    }
+    const text = ConversationEngine.ForkPlainText(message);
+    if (!text) {
+      return;
+    }
+    void GenerateAndApplyForkName({
+      ForkId: forkId,
+      MessageText: text,
+      Provider: this.ProviderToUse as GraphQLDataProvider,
+      CurrentUser: this.CurrentUser,
+    })
+      .then(name => {
+        if (name && this.isActiveConversation(conversationId)) {
+          return this.RefreshForkSummaries();
+        }
+        return undefined;
+      })
+      .catch(error => console.error(`Failed to name fork ${forkId}:`, error));
+  }
+
+  /** Names the fork a draft's first send created from the first user message sent into it; once per fork. */
+  private nameForkFromFirstSend(message: MJConversationDetailEntity): void {
+    const pending = this.forkNamedByFirstSend;
+    if (!pending || message.Role !== 'User' || !UUIDsEqual(message.ConversationID, pending.ConversationID)
+      || !UUIDsEqual(message.BranchID ?? null, pending.ForkID)) {
+      return;
+    }
+    this.forkNamedByFirstSend = null;
+    this.nameForkInBackground(pending.ConversationID, pending.ForkID, message.Message);
+  }
+
+  /**
+   * Opens a new fork that replaces `message` (Fork from here): the full fork view with no own rows,
+   * starting at the row before the message on its path (the same fork point as an edit). Nothing is
+   * created until the first send. Ends a voice session of the conversation first, then puts the
+   * message's text in the composer unless the composer holds unsent text.
+   * @returns false for a message of another conversation, when the row before it cannot be found (after
+   * a notice), or when the view change is ignored.
+   */
+  public async OpenDraftFork(message: MJConversationDetailEntity): Promise<boolean> {
+    const conversationId = this.ConversationId;
+    if (!conversationId || !UUIDsEqual(message.ConversationID, conversationId)) {
+      return false;
+    }
+    const forkPoint = await this.editForkPointOrNotify(message, 'Could not locate the message before this one');
+    if (forkPoint === undefined || !this.isActiveConversation(conversationId)) {
+      return false;
+    }
+    const opened = await this.changeOpenView({
+      Kind: 'DraftFork',
+      ParentBranchID: forkPoint.ParentBranchID,
+      ForkFromSequence: forkPoint.ForkFromSequence,
+      AnchorDetailID: this.loadedRowAt(forkPoint)?.ID ?? null,
+      SourceDetailID: message.ID,
+      SourceAuthorName: this.rowAuthorOf(message),
+    });
+    if (opened) {
+      const draftView = this.OpenView;
+      this.prefillComposer(message.Message, () => this.OpenView === draftView);
+    }
+    return opened;
+  }
+
+  /** The loaded row at a fork point (its branch and Sequence); null when there is none or it is not loaded. */
+  private loadedRowAt(forkPoint: ForkPoint): MJConversationDetailEntity | null {
+    const sequence = forkPoint.ForkFromSequence;
+    if (sequence == null) {
+      return null;
+    }
+    return (this.messages ?? []).find(m => m.Sequence === sequence && UUIDsEqual(m.BranchID ?? null, forkPoint.ParentBranchID)) ?? null;
+  }
+
+  /**
+   * Puts `text` in the active composer, unless the composer holds unsent text or there is no text. When the
+   * composer has not rendered yet after the view change, tries again shortly, while `stillOpen` holds.
+   */
+  private prefillComposer(text: string | null | undefined, stillOpen: () => boolean, attempt = 0): void {
+    if (!text?.trim() || !stillOpen()) {
+      return;
+    }
+    this.cdr.detectChanges();
+    const input = this.getActiveMessageInputComponent();
+    if (!input) {
+      if (attempt < PREFILL_MAX_ATTEMPTS) {
+        setTimeout(() => this.prefillComposer(text, stillOpen, attempt + 1), PREFILL_RETRY_MS);
+      }
+      return;
+    }
+    if (!input.GetSerializedDraft()) {
+      input.SetDraft(text);
+    }
+  }
+
+  /**
+   * A chip was clicked: opens its fork. An original chip opens its view (a fork, or Main) positioned at
+   * the replaced message, as a search hit does ({@link OpenMessage}).
+   */
+  public OnForkOpenRequested(event: ForkChipOpenRequest): void {
+    const conversationId = this.ConversationId;
+    if (event.Sequence != null && conversationId) {
+      void this.OpenMessage(conversationId, event.BranchID, event.Sequence);
+      return;
+    }
+    void (event.BranchID ? this.OpenFork(event.BranchID) : this.BackToMain());
+  }
+
+  /** Opens or closes the forks list. Opening it closes the pinned messages panel. */
+  public ToggleForksPopover(): void {
+    this.ShowForksPopover = !this.ShowForksPopover;
+    if (this.ShowForksPopover) {
+      this.ShowPinsPanel = false;
+    }
+  }
+
+  /** Closes the forks list and puts focus back on the header Forks button when it is on the page. */
+  public CloseForksPopover(): void {
+    this.ShowForksPopover = false;
+    const button = this.forksButton?.nativeElement;
+    if (button?.isConnected) {
+      button.focus();
+    }
+  }
+
+  /** A row of the forks list was chosen: close the list and open that fork. */
+  public OnForkSelectedFromList(branchId: string): void {
+    this.CloseForksPopover();
+    void this.OpenFork(branchId);
+  }
+
+  /**
+   * Ends the voice session open for `conversationId`, if any, and waits for it. Shows a notice when it
+   * ended. When ending fails, logs the error and returns, so the view change still goes on.
+   */
+  private async endRealtimeSessionForViewChange(conversationId: string): Promise<void> {
+    if (!this.RealtimeSession.IsActiveFor(conversationId)) {
+      return;
+    }
+    try {
+      await this.RealtimeSession.EndRealtimeSession();
+    } catch (error) {
+      console.error('Failed to end the voice session before changing the view:', error);
+      return;
+    }
+    MJNotificationService.Instance.CreateSimpleNotification('Voice session ended to change the view', 'info', 3000);
+  }
+
+  /**
+   * Creates a fork, refreshes the fork summaries and opens the fork. Shows `failureText` when the
+   * fork cannot be created, and `openFailureText` when it was created but could not be opened.
+   * @returns the new fork's id when it is open; null otherwise.
+   */
+  private async createForkAndOpen(
+    conversationId: string,
+    input: CreateForkInput,
+    failureText: string,
+    openFailureText = 'The fork was created but could not be opened'
+  ): Promise<string | null> {
+    let fork: MJConversationBranchEntity;
+    try {
+      fork = await ConversationEngine.Instance.CreateFork(input, this.CurrentUser);
+    } catch (error) {
+      console.error('Failed to create a fork:', error);
+      MJNotificationService.Instance.CreateSimpleNotification(failureText, 'error', 3000);
+      return null;
+    }
+    if (!this.isActiveConversation(conversationId)) {
+      return null;
+    }
+    this.addForkRow(conversationId, this.forkRowOf(fork));
+    void this.RefreshForkSummaries();
+    if (!(await this.OpenFork(fork.ID))) {
+      MJNotificationService.Instance.CreateSimpleNotification(openFailureText, 'error', 3000);
+      return null;
+    }
+    return fork.ID;
+  }
+
+  /**
+   * Creates the fork of a draft on its first send and opens it. A send in the same draft while that
+   * runs gets the same fork. Returns the new fork's id, or undefined (with a notice) when it could
+   * not be created or opened, or while another start action runs; undefined stops the send.
+   */
+  private materializeDraftFork(view: DraftForkOpenView): Promise<string | undefined> {
+    const running = this.draftForkStart;
+    if (running && SameOpenView(running.View, view)) {
+      return running.ForkID;
+    }
+    const conversationId = this.ConversationId;
+    if (!conversationId) {
+      return Promise.resolve(undefined);
+    }
+    if (this.forkStartInFlight) {
+      MJNotificationService.Instance.CreateSimpleNotification('Could not create the fork; the message was not sent', 'error', 3000);
+      return Promise.resolve(undefined);
+    }
+    const start = { View: view, ForkID: this.createDraftForkAndOpen(conversationId, view) };
+    this.draftForkStart = start;
+    return start.ForkID;
+  }
+
+  /**
+   * Creates and opens the fork of a draft (Kind Fork, SourceDetailID the replaced message), with
+   * {@link forkStartInFlight} set. Clears the draft's running creation when done; that runs after an
+   * await, so after {@link materializeDraftFork} has recorded it.
+   */
+  private async createDraftForkAndOpen(conversationId: string, view: DraftForkOpenView): Promise<string | undefined> {
+    this.forkStartInFlight = true;
+    try {
+      const forkId = await this.createForkAndOpen(
+        conversationId,
+        {
+          ConversationID: conversationId,
+          Kind: 'Fork',
+          ParentBranchID: view.ParentBranchID,
+          ForkFromSequence: view.ForkFromSequence,
+          SourceDetailID: view.SourceDetailID,
+        },
+        'Could not create the fork; the message was not sent',
+        'The fork was created but could not be opened; the message was not sent'
+      );
+      if (forkId) {
+        this.forkNamedByFirstSend = { ConversationID: conversationId, ForkID: forkId };
+      }
+      return forkId ?? undefined;
+    } finally {
+      this.forkStartInFlight = false;
+      this.draftForkStart = null;
+    }
+  }
+
+  /** The fork row of a saved `MJ: Conversation Branches` entity. */
+  private forkRowOf(fork: MJConversationBranchEntity): ConversationBranchRow {
+    return {
+      ID: fork.ID,
+      ConversationID: fork.ConversationID,
+      ParentBranchID: fork.ParentBranchID,
+      ForkFromSequence: fork.ForkFromSequence,
+      Name: fork.Name,
+      Kind: fork.Kind,
+      SourceDetailID: fork.SourceDetailID,
+      UserID: fork.UserID,
+      User: fork.User,
+      __mj_CreatedAt: fork.__mj_CreatedAt,
+    };
+  }
+
+  /** Adds a fork row to the conversation's rows, so the scope of the fork resolves at once. */
+  private addForkRow(conversationId: string, row: ConversationBranchRow): void {
+    this.setBranchRows(conversationId, [...this.branches.filter(b => !UUIDsEqual(b.ID, row.ID)), row]);
+  }
+
+  /**
+   * Fork from here: opens a new fork that replaces the message (the draft view, {@link OpenDraftFork}).
+   * Nothing is created until the first send, which creates the fork through {@link ResolveComposerBranch};
+   * with no name, the fork is named from that first message. Only for a user message the current person
+   * wrote. Ignored while another start action runs and when the person may not fork ({@link CanFork}).
+   */
+  async OnForkRequested(message: MJConversationDetailEntity): Promise<void> {
+    if (!this.CanFork || this.forkStartInFlight || this.EffectiveReadOnly || !this.ConversationId) {
+      return;
+    }
+    if (message.Role !== 'User' || !message.UserID || !UUIDsEqual(message.UserID, this.CurrentUser?.ID)) {
+      return;
+    }
+    this.forkStartInFlight = true;
+    try {
+      await this.OpenDraftFork(message);
+    } finally {
+      this.forkStartInFlight = false;
+    }
+  }
+
+  /**
+   * Saves an edit as a fork: creates an Edit fork at the row before the edited message,
+   * opens it, then sends the edited text into it. The original message stays where it was. Ignored
+   * while another start action runs and when the person may not fork ({@link CanFork}); makes no fork
+   * while the composer cannot send.
+   */
+  async OnEditResendRequested(event: { Message: MJConversationDetailEntity; NewText: string }): Promise<void> {
+    if (!this.CanFork) {
+      return;
+    }
+    const conversationId = this.ConversationId;
+    if (this.forkStartInFlight || !conversationId) {
+      return;
+    }
+    const input = this.composerReadyForResend();
+    if (!input) {
+      return;
+    }
+    const failureText = 'Could not create a fork for the edited message';
+    this.forkStartInFlight = true;
+    try {
+      const forkPoint = await this.editForkPointOrNotify(event.Message, failureText);
+      if (forkPoint === undefined) {
+        return;
+      }
+      const forkId = await this.createForkAndOpen(conversationId, {
+        ConversationID: conversationId,
+        Kind: 'Edit',
+        ParentBranchID: forkPoint.ParentBranchID,
+        ForkFromSequence: forkPoint.ForkFromSequence,
+        SourceDetailID: event.Message.ID,
+      }, failureText);
+      if (!forkId) {
+        return;
+      }
+      const sent = await input.SendMessageWithText(event.NewText, undefined, { IsResend: true, TargetBranchID: forkId });
+      if (!sent) {
+        MJNotificationService.Instance.CreateSimpleNotification('The fork was created but the message was not sent', 'error', 3000);
+        return;
+      }
+      this.nameForkInBackground(conversationId, forkId, event.NewText);
+    } finally {
+      this.forkStartInFlight = false;
+    }
+  }
+
+  /**
+   * Regenerates an answer as a fork: creates a Regenerate fork at the user message the
+   * answer replied to, opens it, then runs the agent for that message again inside it. The first answer
+   * stays where it was. Ignored while another start action runs; makes no fork while the composer cannot
+   * send or when the user message is not in the loaded window. When the person may not fork
+   * ({@link CanFork}), reruns the latest answer's turn in place instead ({@link InPlaceTurn}).
+   */
+  async OnRegenerateRequested(aiMessage: MJConversationDetailEntity): Promise<void> {
+    if (!this.CanFork) {
+      const turn = this.InPlaceTurn;
+      if (!turn?.AnswerDetailID || !UUIDsEqual(turn.AnswerDetailID, aiMessage.ID)) {
+        return;
+      }
+      const userMessage = (this.messages ?? []).find(m => UUIDsEqual(m.ID, turn.UserDetailID));
+      if (!userMessage) {
+        MJNotificationService.Instance.CreateSimpleNotification('Could not find the message this reply answers', 'error', 3000);
+        return;
+      }
+      await this.rerunTurnInPlace(userMessage);
+      return;
+    }
+    const conversationId = this.ConversationId;
+    if (this.forkStartInFlight || !conversationId) {
+      return;
+    }
+    const input = this.composerReadyForResend();
+    if (!input) {
+      return;
+    }
+    const userMessage = this.findUserMessageBefore(aiMessage);
+    if (!userMessage) {
+      MJNotificationService.Instance.CreateSimpleNotification('Could not find the message this reply answers', 'error', 3000);
+      return;
+    }
+    this.forkStartInFlight = true;
+    try {
+      const forkPoint = ConversationEngine.RegenerateForkPoint(userMessage);
+      const forkId = await this.createForkAndOpen(conversationId, {
+        ConversationID: conversationId,
+        Kind: 'Regenerate',
+        ParentBranchID: forkPoint.ParentBranchID,
+        ForkFromSequence: forkPoint.ForkFromSequence,
+        SourceDetailID: aiMessage.ID,
+      }, 'Could not create a fork for the regenerated reply');
+      if (!forkId) {
+        return;
+      }
+      let rerun = false;
+      try {
+        rerun = await input.RerunAgentForMessage(userMessage, forkId);
+      } catch (error) {
+        console.error('Failed to regenerate the reply:', error);
+      }
+      if (!rerun) {
+        MJNotificationService.Instance.CreateSimpleNotification('The fork was created but the reply was not regenerated', 'error', 3000);
+      }
+    } finally {
+      this.forkStartInFlight = false;
+    }
+  }
+
+  /**
+   * The latest turn that in-place Edit and Regenerate may change: the window view's last own user message
+   * and its answer. Null while the person may fork, in a draft, and when a fork depends on the turn's
+   * answer rows. The same object until the rows, the window view, the fork rows or CanFork change.
+   */
+  public get InPlaceTurn(): LatestTurn | null {
+    const messages = this.messages ?? NO_DETAILS;
+    const view = this.WindowView;
+    const branches = UUIDsEqual(this.branchRowsConversationId, this.ConversationId) ? (this.branches ?? NO_BRANCHES) : NO_BRANCHES;
+    const canFork = this.CanFork;
+    const collapseThreads = Boolean(this.CollapseThreadReplies);
+    const cache = this.inPlaceTurnCache;
+    if (
+      cache &&
+      cache.Messages === messages &&
+      cache.View === view &&
+      cache.Branches === branches &&
+      cache.CanFork === canFork &&
+      cache.CollapseThreads === collapseThreads
+    ) {
+      return cache.Turn;
+    }
+    const turn = canFork ? null : this.unblockedLatestTurn(messages, view, branches);
+    this.inPlaceTurnCache = {
+      Messages: messages,
+      View: view,
+      Branches: branches,
+      CanFork: canFork,
+      CollapseThreads: collapseThreads,
+      Turn: turn,
+    };
+    return turn;
+  }
+
+  /** The latest turn of the rows, or null when there is none or a fork depends on its answer rows. */
+  private unblockedLatestTurn(messages: MJConversationDetailEntity[], view: ConversationOpenView, branches: ReadonlyArray<ConversationBranchRow>): LatestTurn | null {
+    const mainFlow = this.CollapseThreadReplies ? this.displayState().MainFlow : messages;
+    const turn = FindLatestTurn(mainFlow, view);
+    const user = turn ? mainFlow.find(m => UUIDsEqual(m.ID, turn.UserDetailID)) : undefined;
+    if (!turn || !user) {
+      return null;
+    }
+    return ForkDependsOnRows(user.BranchID ?? null, this.turnRowsAfter(messages, user), branches) ? null : turn;
+  }
+
+  /** "Save and resend": the message item saved the new text of the latest user message; reruns its turn in place. */
+  async OnResendInPlaceRequested(userMessage: MJConversationDetailEntity): Promise<void> {
+    const turn = this.InPlaceTurn;
+    if (!turn || !UUIDsEqual(turn.UserDetailID, userMessage.ID)) {
+      return;
+    }
+    await this.rerunTurnInPlace(userMessage);
+  }
+
+  /**
+   * Runs the turn of `userMessage` again in place: reads the fork rows fresh and refuses when a fork
+   * depends on the turn's answer rows, hides those rows ({@link hideReplacedRows}), then reruns the agent
+   * for the user message on its own branch. Shows a notice for each failure.
+   */
+  private async rerunTurnInPlace(userMessage: MJConversationDetailEntity): Promise<void> {
+    const conversationId = this.ConversationId;
+    if (!conversationId || this.inPlaceRerunInFlight || this.forkStartInFlight || this.EffectiveReadOnly) {
+      return;
+    }
+    const input = this.composerReadyForResend();
+    if (!input) {
+      return;
+    }
+    const answerRows = this.turnRowsAfter(this.messages ?? [], userMessage);
+    if (answerRows.some(r => r.Status === 'In-Progress')) {
+      MJNotificationService.Instance.CreateSimpleNotification('Wait for the current reply to finish', 'error', 3000);
+      return;
+    }
+    this.inPlaceRerunInFlight = true;
+    try {
+      let branches: ConversationBranchRow[];
+      try {
+        branches = await ConversationEngine.LoadBranchesFresh(conversationId, this.CurrentUser, this.ProviderToUse);
+      } catch (error) {
+        console.error(`Failed to load the forks of conversation ${conversationId} before a rerun:`, error);
+        MJNotificationService.Instance.CreateSimpleNotification('Could not check the forks of this conversation; nothing was changed', 'error', 3000);
+        return;
+      }
+      if (!this.isActiveConversation(conversationId)) {
+        return;
+      }
+      this.setBranchRows(conversationId, branches);
+      if (ForkDependsOnRows(userMessage.BranchID ?? null, answerRows, branches)) {
+        MJNotificationService.Instance.CreateSimpleNotification('A fork depends on this answer, so it cannot be replaced', 'error', 3000);
+        return;
+      }
+      if (!(await this.hideReplacedRows(answerRows))) {
+        MJNotificationService.Instance.CreateSimpleNotification('Could not replace the answer', 'error', 3000);
+        await this.reloadWindowForView();
+        return;
+      }
+      let rerun = false;
+      try {
+        rerun = await input.RerunAgentForMessage(userMessage, userMessage.BranchID ?? null);
+      } catch (error) {
+        console.error('Failed to rerun the turn:', error);
+      }
+      if (!rerun) {
+        MJNotificationService.Instance.CreateSimpleNotification('The reply was not regenerated', 'error', 3000);
+      }
+    } finally {
+      this.inPlaceRerunInFlight = false;
+    }
+  }
+
+  /**
+   * The rows of `userMessage`'s turn that an in-place rerun replaces: when thread replies are
+   * collapsed, the main-flow rows after `userMessage` plus any thread replies rooted on those rows.
+   */
+  private turnRowsAfter(messages: MJConversationDetailEntity[], userMessage: MJConversationDetailEntity): MJConversationDetailEntity[] {
+    if (!this.CollapseThreadReplies) {
+      return TurnRowsAfter(messages, userMessage);
+    }
+    const roots = GetThreadReplyRoots(messages);
+    const mainFlow = messages.filter(m => !roots.Has(m.ID));
+    const mainAfter = TurnRowsAfter(mainFlow, userMessage);
+    const afterRoots = new UUIDSet(mainAfter.map(m => m.ID));
+    return TurnRowsAfter(messages, userMessage).filter(m => {
+      const rootId = roots.Get(m.ID);
+      return afterRoots.Has(m.ID) || (rootId !== undefined && afterRoots.Has(rootId));
+    });
+  }
+
+  /**
+   * Marks each row replaced, one save at a time (parallel saves race on the server's transaction
+   * counter): `ReplacedAt` set and `HiddenToUser` true; the rows are kept for audit. Takes the saved rows
+   * off the screen. Stops at the first failed save, puts back that row's values and returns false.
+   */
+  private async hideReplacedRows(rows: MJConversationDetailEntity[]): Promise<boolean> {
+    const replacedAt = new Date();
+    const hidden: string[] = [];
+    let allSaved = true;
+    for (const row of rows) {
+      const before = { HiddenToUser: row.HiddenToUser, ReplacedAt: row.ReplacedAt };
+      row.HiddenToUser = true;
+      row.ReplacedAt = replacedAt;
+      if (await row.Save()) {
+        hidden.push(row.ID);
+        continue;
+      }
+      row.HiddenToUser = before.HiddenToUser;
+      row.ReplacedAt = before.ReplacedAt;
+      console.error(`Failed to replace ConversationDetail ${row.ID}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+      allSaved = false;
+      break;
+    }
+    if (hidden.length > 0) {
+      for (const id of hidden) {
+        this.windowStore.RemoveDetail(id);
+      }
+      const gone = new Set(hidden.map(id => NormalizeUUID(id)));
+      this.messages = (this.messages ?? []).filter(m => !gone.has(NormalizeUUID(m.ID)));
+      this.cdr.detectChanges();
+    }
+    return allSaved;
+  }
+
+  /**
+   * The active composer when it can resend a message or rerun an agent now. Otherwise shows why
+   * and returns null: no composer is mounted, it is read-only, or it is still sending (an agent
+   * reply is running).
+   */
+  private composerReadyForResend(): MessageInputComponent | null {
+    const input = this.getActiveMessageInputComponent();
+    const problem = !input ? 'No composer is mounted for this conversation'
+      : input.ReadOnly ? 'This conversation is read-only'
+      : input.IsSending ? 'Wait for the current reply to finish'
+      : null;
+    if (problem) {
+      MJNotificationService.Instance.CreateSimpleNotification(problem, 'error', 3000);
+      return null;
+    }
+    return input ?? null;
+  }
+
+  /**
+   * Where an edit of `message`, or a fork that replaces it, starts; undefined after a notice: `Could not
+   * locate the message before this one` when the row before it is unknown, `failureText` when reading
+   * that row failed.
+   */
+  private async editForkPointOrNotify(message: MJConversationDetailEntity, failureText: string): Promise<ForkPoint | undefined> {
+    let forkPoint: ForkPoint | undefined;
+    try {
+      forkPoint = await this.resolveEditForkPoint(message);
+    } catch (error) {
+      console.error('Failed to read the message before the edited one:', error);
+      MJNotificationService.Instance.CreateSimpleNotification(failureText, 'error', 3000);
+      return undefined;
+    }
+    if (forkPoint === undefined) {
+      MJNotificationService.Instance.CreateSimpleNotification('Could not locate the message before this one', 'error', 3000);
+    }
+    return forkPoint;
+  }
+
+  /**
+   * Where an edit of `message`, or a fork that replaces it, starts: the row before it on the open path.
+   * Loads one older row when the window does not hold it. Undefined when it cannot be determined.
+   */
+  private async resolveEditForkPoint(message: MJConversationDetailEntity): Promise<ForkPoint | undefined> {
+    const snapshot = this.windowStore.GetSnapshot();
+    const inWindow = ConversationEngine.EditForkPoint(message, this.messages, snapshot.Cursor.HasMoreAbove);
+    if (inWindow !== undefined) {
+      return inWindow;
+    }
+    const older = await ConversationEngine.Instance.LoadDetailWindow(
+      { ConversationID: message.ConversationID, BeforeSequence: message.Sequence, PageSize: 1, RawOverread: 1, BranchID: this.OpenViewBranchId },
+      this.CurrentUser
+    );
+    if (older.Failed) {
+      return undefined;
+    }
+    const prev = older.Details[older.Details.length - 1];
+    return prev ? ConversationEngine.ForkPointFrom(prev) : { ParentBranchID: null, ForkFromSequence: null };
+  }
+
+  /** The nearest earlier User row in the loaded window; null when the window holds none. */
+  private findUserMessageBefore(aiMessage: MJConversationDetailEntity): MJConversationDetailEntity | null {
+    const sorted = [...this.displayState().MainFlow].sort((a, b) => a.Sequence - b.Sequence);
+    const index = sorted.findIndex(m => UUIDsEqual(m.ID, aiMessage.ID));
+    for (let i = index - 1; i >= 0; i--) {
+      if (sorted[i].Role === 'User') {
+        return sorted[i];
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Loads the fork summaries of a conversation load. Keeps the earlier ones when the read fails, and
+   * drops a result when a newer read's result is already shown.
+   */
+  private async loadForkSummaries(conversationId: string, branches: ReadonlyArray<ConversationBranchRow>, loadToken: number): Promise<void> {
+    const sequence = ++this.forkSummaryReadSequence;
+    try {
+      const summaries = await ConversationEngine.LoadForkSummaries(conversationId, this.CurrentUser, this.ProviderToUse, branches);
+      if (sequence < this.forkSummaryShownSequence || !this.isActiveConversationLoad(conversationId, loadToken)) {
+        return;
+      }
+      this.forkSummaryShownSequence = sequence;
+      this.ForkSummaries = summaries;
+      if (summaries.length === 0) {
+        // The header Forks button goes away with the last fork, so the list closes too.
+        this.ShowForksPopover = false;
+      }
+      this.cdr.markForCheck();
+    } catch (error) {
+      console.error(`Failed to load the forks of conversation ${conversationId}:`, error);
+    }
+  }
+
+  /**
+   * Reads the active conversation's fork rows again, keeps them, then reloads the fork
+   * summaries. Keeps the earlier rows and the summaries when the rows cannot be read.
+   */
+  public async RefreshForkSummaries(): Promise<void> {
+    const conversationId = this.ConversationId;
+    if (!conversationId) {
+      return;
+    }
+    const branches = await this.loadBranchesOrNull(conversationId);
+    if (!branches || !this.isActiveConversation(conversationId)) {
+      return;
+    }
+    this.setBranchRows(conversationId, branches);
+    await this.loadForkSummaries(conversationId, branches, this.conversationLoadToken);
+  }
+
+  /**
+   * The chips of each message, from the fork summaries; the same map until the summaries, the window
+   * view, the fork's first own row or the avatar map change. In a fork's full view, that fork's own
+   * chip is left out (it would open the view already open), and its first own row shows the fork's
+   * alternatives: the original view of the message it replaced and the other forks placed there.
+   */
+  public get ForkChipMap(): ReadonlyMap<string, readonly MessageForkChip[]> {
+    const summaries = this.ForkSummaries ?? [];
+    const view = this.WindowView;
+    const avatarMap = this.UserAvatarMap;
+    const avatarVersion = this.userAvatarMapVersion;
+    const firstOwnId = this.firstOwnRowIdOf(view);
+    const cache = this.forkChipCache;
+    if (cache && cache.Summaries === summaries && cache.View === view && cache.FirstOwnID === firstOwnId
+      && cache.AvatarMap === avatarMap && cache.AvatarVersion === avatarVersion) {
+      return cache.Map;
+    }
+    const map = BuildViewForkChipMap(summaries, view, firstOwnId, p => this.forkChipAvatar(p), new Date(), id => this.forkLabelOf(id));
+    this.forkChipCache = { Summaries: summaries, View: view, FirstOwnID: firstOwnId, AvatarMap: avatarMap, AvatarVersion: avatarVersion, Map: map };
+    return map;
+  }
+
+  /** The first own row of a fork view when the loaded window reaches it (see {@link FirstOwnRowID}); null in Main and in a draft. */
+  private firstOwnRowIdOf(view: ConversationOpenView): string | null {
+    if (view.Kind !== 'Fork') {
+      return null;
+    }
+    const split = this.displayState().Split;
+    return FirstOwnRowID(split, split.Inherited.length === 0 && this.HasMoreMessagesAbove);
+  }
+
+  /** Records that {@link UserAvatarMap} was filled, so the chip map is built again. */
+  private markUserAvatarMapChanged(): void {
+    this.userAvatarMapVersion = (this.userAvatarMapVersion ?? 0) + 1;
+  }
+
+  /** A person's entry in {@link UserAvatarMap}; ids compared without regard to case. */
+  private knownUserAvatar(userId: string): {imageUrl: string | null; iconClass: string | null} | undefined {
+    const avatars = this.UserAvatarMap;
+    if (!avatars) {
+      return undefined;
+    }
+    const direct = avatars.get(userId);
+    if (direct) {
+      return direct;
+    }
+    for (const [id, avatar] of avatars) {
+      if (UUIDsEqual(id, userId)) {
+        return avatar;
+      }
+    }
+    return undefined;
+  }
+
+  /** The avatar of a fork participant: a person's image or icon when known, an agent's logo or icon. */
+  private forkChipAvatar(participant: ForkParticipant): ForkChipAvatar {
+    if (participant.Kind === 'User') {
+      const known = this.knownUserAvatar(participant.ID);
+      const label = participant.Name ?? 'Someone';
+      return { Kind: 'User', ID: participant.ID, Label: label, Initials: ForkInitials(label), ImageURL: known?.imageUrl ?? null, IconClass: known?.iconClass ?? null };
+    }
+    const agent = AIEngineBase.Instance?.Agents?.find(a => UUIDsEqual(a.ID, participant.ID));
+    const label = participant.Name ?? agent?.Name ?? 'Agent';
+    return { Kind: 'Agent', ID: participant.ID, Label: label, Initials: ForkInitials(label), ImageURL: agent?.LogoURL ?? null, IconClass: agent?.IconClass ?? null };
+  }
+
+  /** The view the loaded rows belong to; Main when none was set. */
+  public get WindowView(): ConversationOpenView {
+    return this.windowView ?? MAIN_OPEN_VIEW;
+  }
+
+  /**
+   * When true, thread replies in the loaded window are omitted from top-level `DisplayMessages` so
+   * they can be rendered inside a collapsed thread under their root message (see
+   * {@link GetThreadReplyRoots}).
+   */
+  @Input() CollapseThreadReplies: boolean = false;
+
+  /**
+   * Emits when a jump targets a collapsed thread reply, after scrolling to its top-level root
+   * message, so the host can open the thread and reveal the reply.
+   */
+  @Output() ThreadReplyRevealRequested = new EventEmitter<ThreadReplyRevealRequest>();
+
+  /**
+   * The rows the message list shows for the window view; the same array until the rows or the view
+   * change. Main shows every loaded row; a fork shows every inherited row, then its own rows; a draft
+   * shows the rows up to its anchor.
+   */
+  public get DisplayMessages(): MJConversationDetailEntity[] {
+    return this.displayState().Rows;
+  }
+
+  /** The loaded rows split for the window view, and the rows shown; rebuilt only when one of their inputs changes. */
+  private displayState(): {
+    ThreadReplyRoots: UUIDMap<string>;
+    MainFlow: MJConversationDetailEntity[];
+    Split: ForkRows<MJConversationDetailEntity>;
+    Rows: MJConversationDetailEntity[];
+  } {
+    const messages = this.messages ?? [];
+    const view = this.WindowView;
+    const collapseThreads = Boolean(this.CollapseThreadReplies);
+    const cache = this.displayCache;
+    if (cache && cache.Messages === messages && cache.View === view && cache.CollapseThreads === collapseThreads) {
+      return cache;
+    }
+    const threadReplyRoots = collapseThreads ? GetThreadReplyRoots(messages) : EMPTY_THREAD_REPLY_ROOTS;
+    const mainFlow = collapseThreads ? messages.filter((m) => !threadReplyRoots.Has(m.ID)) : messages;
+    const split = SplitForkRows(mainFlow, view);
+    const rows = view.Kind === 'Main' ? mainFlow : [...split.Inherited, ...split.Own];
+    const next = {
+      Messages: messages,
+      View: view,
+      CollapseThreads: collapseThreads,
+      ThreadReplyRoots: threadReplyRoots,
+      MainFlow: mainFlow,
+      Split: split,
+      Rows: rows,
+    };
+    this.displayCache = next;
+    return next;
+  }
+
+  /**
+   * Top-level root ID for `message` when {@link CollapseThreadReplies} is on and `message` is a
+   * thread reply; null when thread collapsing is off or `message` belongs in the main flow.
+   */
+  private collapsedThreadRootId(message: MJConversationDetailEntity): string | null {
+    if (!this.CollapseThreadReplies) {
+      return null;
+    }
+    const fromLoaded = this.displayState().ThreadReplyRoots.Get(message.ID);
+    if (fromLoaded) {
+      return fromLoaded;
+    }
+    const loaded = this.messages ?? [];
+    if (loaded.some((m) => UUIDsEqual(m.ID, message.ID))) {
+      return null;
+    }
+    return GetThreadReplyRoots([...loaded, message]).Get(message.ID) ?? null;
+  }
+
+  /**
+   * Puts `message` in place of the row with its id in the displayed rows and their split, keeping those
+   * arrays. They are copies of `messages`, so an entity replaced in place there is replaced here too.
+   */
+  private replaceDisplayedRow(message: MJConversationDetailEntity): void {
+    const cache = this.displayCache;
+    if (!cache || cache.Messages !== this.messages) {
+      return;
+    }
+    this.replaceRowIn(cache.MainFlow, message);
+    this.replaceRowIn(cache.Rows, message);
+    this.replaceRowIn(cache.Split.Inherited, message);
+    this.replaceRowIn(cache.Split.Own, message);
+  }
+
+  /** Puts `message` in place of the row with its id in `rows`; leaves `messages` itself alone. */
+  private replaceRowIn(rows: MJConversationDetailEntity[], message: MJConversationDetailEntity): void {
+    if (rows === this.messages) {
+      return;
+    }
+    const index = rows.findIndex(m => UUIDsEqual(m.ID, message.ID));
+    if (index >= 0) {
+      rows[index] = message;
+    }
+  }
+
+  /** True when older rows remain above the loaded window of the open view's path, in every view. */
+  public get ListHasMoreAbove(): boolean {
+    return this.HasMoreMessagesAbove;
+  }
+
+  /** The summary of the open fork; null in Main, in a draft, or before the summaries load. */
+  public get OpenForkSummary(): ForkSummary | null {
+    return this.forkSummaryOf(this.OpenView);
+  }
+
+  /** The summary of the fork a view shows; null for Main, a draft, or before the summaries load. */
+  private forkSummaryOf(view: ConversationOpenView): ForkSummary | null {
+    if (view.Kind !== 'Fork') {
+      return null;
+    }
+    return (this.ForkSummaries ?? []).find(s => UUIDsEqual(s.Branch.ID, view.BranchID)) ?? null;
+  }
+
+  /** The title of the open fork: its display name, "New fork" for a draft. */
+  public get OpenViewTitle(): string {
+    const view = this.OpenView;
+    if (view.Kind === 'DraftFork') {
+      return DRAFT_FORK_TITLE;
+    }
+    return view.Kind === 'Fork' ? this.forkLabelOf(view.BranchID) : 'Fork';
+  }
+
+  /** The kind of the open fork (a draft is a Fork). */
+  public get OpenViewKind(): ForkKind {
+    return this.OpenForkSummary?.Kind ?? 'Fork';
+  }
+
+  /** The kind icon of the open fork. */
+  public get OpenViewIcon(): string {
+    return ForkKindIcon(this.OpenViewKind);
+  }
+
+  /** How the message list draws the rows shown; null in Main. */
+  public get ForkLayout(): ForkViewLayout | null {
+    return this.layoutState().Layout;
+  }
+
+  /** The composer placeholder of a conversation's composer: "Message this fork" in a fork or draft of the active conversation. */
+  public ComposerPlaceholderFor(conversationId: string | null | undefined): string {
+    const active = !!conversationId && UUIDsEqual(conversationId, this.ConversationId);
+    if (active && this.OpenView.Kind !== 'Main') {
+      return FORK_COMPOSER_PLACEHOLDER;
+    }
+    if (active && this.SendSlotMode === 'send' && this.AllowStopRun !== false) {
+      const stoppedAgent = this.stoppedLastReplyAgent();
+      if (stoppedAgent !== undefined) {
+        return `Continue, or tell ${stoppedAgent ?? 'the agent'} what to do differently`;
+      }
+      const owner = this.CurrentOwnerAgent;
+      if (owner && !owner.IsConversationManager) {
+        if (owner.Name.trim().toLowerCase() === 'video studio') {
+          return `Ask ${owner.Name} for changes, like "make the opening faster"`;
+        }
+        return `Ask ${owner.Name} for changes or a follow-up...`;
+      }
+    }
+    return MAIN_COMPOSER_PLACEHOLDER;
+  }
+
+  /**
+   * The agent of the last shown message when it is a reply the user stopped (null when its name
+   * is unknown); undefined when the last message is anything else. Any message sent now resumes
+   * that run, so the placeholder says so.
+   */
+  private stoppedLastReplyAgent(): string | null | undefined {
+    const rows = this.DisplayMessages;
+    const last = rows[rows.length - 1];
+    if (!last) {
+      return undefined;
+    }
+    const run = this.AgentRunsByDetailId?.get(last.ID);
+    if (!run?.WasStoppedByUser) {
+      return undefined;
+    }
+    return run.Agent ?? last.Agent ?? this.assistantDisplayName ?? null;
+  }
+
+  /** The hint under the composer while a fork or draft window is shown; null in Main. */
+  public get ComposerHint(): string | null {
+    return this.layoutState().Hint;
+  }
+
+  /** The layout of the rows shown and the composer hint; rebuilt only when the rows, the window view or the summaries change. */
+  private layoutState(): { Layout: ForkViewLayout | null; Hint: string | null } {
+    const rows = this.DisplayMessages;
+    const view = this.WindowView;
+    const summaries = this.ForkSummaries ?? [];
+    const cache = this.layoutCache;
+    if (cache && cache.Rows === rows && cache.View === view && cache.Summaries === summaries) {
+      return cache;
+    }
+    const isMain = view.Kind === 'Main';
+    const next = {
+      Rows: rows,
+      View: view,
+      Summaries: summaries,
+      Layout: BuildForkViewLayout(rows, view, isMain ? null : this.forkMarkerText(view)),
+      Hint: isMain ? null : this.composerHintFor(view),
+    };
+    this.layoutCache = next;
+    return next;
+  }
+
+  /** The composer hint of a fork or draft view; reads the anchor row only when the summary has no anchor time. */
+  private composerHintFor(view: ConversationOpenView): string {
+    const anchorAt = this.forkSummaryOf(view)?.AnchorAt ?? this.anchorTimeOf(view);
+    return BuildForkComposerHint(anchorAt, d => this.formatForkTime(d));
+  }
+
+  /**
+   * The fork marker text of a fork or draft view. The "from" part names the author of the replaced
+   * message (the fork's SourceDetailID) when the fork has one, else the anchor's author.
+   */
+  private forkMarkerText(view: ConversationOpenView): string {
+    const format = (d: Date) => this.formatForkTime(d);
+    if (view.Kind === 'DraftFork') {
+      const sourceAuthor = view.SourceAuthorName ?? this.loadedAuthorOf(view.SourceDetailID);
+      return BuildForkMarkerText({ IsDraft: true, StarterName: null, AnchorAuthorName: sourceAuthor, StartedAt: null }, format);
+    }
+    const summary = this.forkSummaryOf(view);
+    const created = summary?.Branch.__mj_CreatedAt;
+    return BuildForkMarkerText({
+      IsDraft: false,
+      StarterName: summary?.StartedByName ?? null,
+      AnchorAuthorName: this.forkFromAuthorOf(view, summary),
+      StartedAt: created ? new Date(created) : null,
+    }, format);
+  }
+
+  /**
+   * The author a fork's marker names: with a source message, the summary's source author, else that row's
+   * author when it is loaded; with none, the summary's anchor author, else the loaded anchor row's.
+   */
+  private forkFromAuthorOf(view: ConversationOpenView, summary: ForkSummary | null): string | null {
+    const sourceId = summary?.Branch.SourceDetailID ?? this.forkRowOfView(view)?.SourceDetailID ?? null;
+    if (sourceId) {
+      return summary?.SourceAuthorName ?? this.loadedAuthorOf(sourceId);
+    }
+    return summary?.AnchorAuthorName ?? this.anchorAuthorOf(view);
+  }
+
+  /** The fork row of a fork view among this chat area's fork rows; null for another view or when it is not loaded. */
+  private forkRowOfView(view: ConversationOpenView): ConversationBranchRow | null {
+    if (view.Kind !== 'Fork') {
+      return null;
+    }
+    return (this.branches ?? []).find(b => UUIDsEqual(b.ID, view.BranchID)) ?? null;
+  }
+
+  /** The time of a view's anchor row; null when it is not loaded. */
+  private anchorTimeOf(view: ConversationOpenView): Date | null {
+    const anchor = this.anchorRowOf(view);
+    return anchor?.__mj_CreatedAt ? new Date(anchor.__mj_CreatedAt) : null;
+  }
+
+  /** The author of a view's anchor row; null when it is not loaded. */
+  private anchorAuthorOf(view: ConversationOpenView): string | null {
+    const anchor = this.anchorRowOf(view);
+    return anchor ? this.rowAuthorOf(anchor) : null;
+  }
+
+  /** The author of a loaded row; null when the row is not loaded. */
+  private loadedAuthorOf(detailId: string): string | null {
+    const row = (this.messages ?? []).find(m => UUIDsEqual(m.ID, detailId));
+    return row ? this.rowAuthorOf(row) : null;
+  }
+
+  /** The author of a row: the agent of an agent row, else the person. */
+  private rowAuthorOf(row: MJConversationDetailEntity): string | null {
+    return (row.AgentID ? row.Agent : row.User) ?? null;
+  }
+
+  /**
+   * The anchor of a view among the loaded rows: a draft's anchor row when it is loaded, else the view's
+   * last inherited row.
+   */
+  private anchorRowOf(view: ConversationOpenView): MJConversationDetailEntity | null {
+    const messages = this.messages ?? [];
+    const anchorId = view.Kind === 'DraftFork' ? view.AnchorDetailID : null;
+    const anchor = anchorId ? messages.find(m => UUIDsEqual(m.ID, anchorId)) : undefined;
+    if (anchor) {
+      return anchor;
+    }
+    const state = this.displayState();
+    const inherited = view === this.WindowView ? state.Split.Inherited : SplitForkRows(state.MainFlow, view).Inherited;
+    return inherited.length > 0 ? inherited[inherited.length - 1] : null;
+  }
+
+  /** A short date and time for fork text, in the person's locale. */
+  private formatForkTime(d: Date): string {
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  }
+
+  /** Refreshes the fork summaries once, shortly after a burst of fork rows. */
+  private scheduleForkSummaryRefresh(): void {
+    if (this.forkSummaryRefreshTimer) {
+      clearTimeout(this.forkSummaryRefreshTimer);
+    }
+    this.forkSummaryRefreshTimer = setTimeout(() => {
+      this.forkSummaryRefreshTimer = null;
+      void this.RefreshForkSummaries();
+    }, 400);
+  }
+
+  /**
+   * Refreshes the fork summaries soon when `row` is a fork row, then tells whether the row belongs
+   * on screen in the open view. A row written in another view (a turn started in Main while a fork
+   * is open) does not.
+   */
+  private acceptRowForOpenView(row: { BranchID?: string | null }): boolean {
+    if (row.BranchID != null) {
+      this.scheduleForkSummaryRefresh();
+    }
+    return IsRowInOpenView(this.OpenView, row);
+  }
+
+  /**
+   * Has the open artifact viewer load again in the open view's scope; it reads its `Scope` input
+   * only when it loads. Asks for the selected version (0 asks for the newest); a version that
+   * is not in the scope shows the newest one with a notice. Does nothing while the pane is closed.
+   */
+  private refreshArtifactViewerForScope(): void {
+    if (!this.ShowArtifactPanel || !this.SelectedArtifactId) {
+      return;
+    }
+    // Renders first, so the viewer's Scope input holds the new scope when it reloads.
+    this.cdr.detectChanges();
+    this.ArtifactViewerRefresh$.next({ artifactId: this.SelectedArtifactId, versionNumber: this.SelectedVersionNumber ?? 0 });
+  }
+
+  /**
+   * Loads the window of the open view into the store: the newest page of the view's path; older pages
+   * load as the person scrolls up. A draft's path is its parent's, and its first page ends at its
+   * anchor; a draft with no anchor inherits nothing, so its window is empty.
+   */
+  private loadWindowForOpenView(conversationId: string): Promise<void> {
+    const view = this.OpenView;
+    const branchId = this.OpenViewBranchId;
+    if (view.Kind !== 'DraftFork') {
+      return this.windowStore.LoadLatest(conversationId, this.CurrentUser, branchId);
+    }
+    if (view.ForkFromSequence == null) {
+      this.windowStore.Reset(conversationId, branchId);
+      return Promise.resolve();
+    }
+    return this.windowStore.LoadLatest(conversationId, this.CurrentUser, branchId, view.ForkFromSequence);
+  }
+
+  /**
+   * Reloads the window of the open view's path (see {@link loadWindowForOpenView}), then the fork
+   * rows, the open artifact viewer, the agent runs, artifacts and ratings, and the pins in the scope
+   * of the open view's path. The earlier fork rows stay when the rows cannot be read. The pin count
+   * and the loaded pins keep their earlier values until that read lands. Restarts the agent-run poll
+   * in the new scope. Stops when a newer view reload or conversation load starts; the newer load
+   * reads the window, fork rows and pins again.
+   *
+   * @returns true when the window and peripherals loaded on the open view's path; false when there
+   *   is no conversation, a newer load replaced this one, the window read failed, or the reload failed.
+   */
+  private async reloadWindowForView(): Promise<boolean> {
+    const conversationId = this.ConversationId;
+    if (!conversationId) {
+      return false;
+    }
+    const reloadToken = ++this.viewReloadToken;
+    const loadToken = this.conversationLoadToken;
+    const isCurrent = (): boolean =>
+      reloadToken === this.viewReloadToken && this.isActiveConversationLoad(conversationId, loadToken);
+    try {
+      const recorded = this.pinsDuringViewReload;
+      const pins = recorded && recorded.LoadToken === loadToken
+        ? recorded
+        : { LoadToken: loadToken, Count: this.windowStore.PinnedTotalCount, Details: [...this.windowStore.PinnedDetails] };
+      this.pinsDuringViewReload = pins;
+
+      await this.loadWindowForOpenView(conversationId);
+      if (!isCurrent()) {
+        return false;
+      }
+      if (this.pinsHydrated) {
+        this.windowStore.SetPinnedDetails(pins.Details);
+      }
+      this.windowStore.SetPinnedCount(pins.Count);
+
+      const branches = await this.loadBranchesOrNull(conversationId);
+      if (!isCurrent()) {
+        return false;
+      }
+      if (branches) {
+        this.setBranchRows(conversationId, branches);
+      }
+      this.applyWindowSnapshot();
+      this.refreshArtifactViewerForScope();
+      this.agentStateService.startPolling(this.CurrentUser, conversationId, this.openViewScope(conversationId));
+
+      this.lastLoadedConversationId = null;
+      await Promise.all([
+        this.loadPeripheralData(conversationId, this.windowStore.GetSnapshot()),
+        this.reloadPinsForScope(conversationId, loadToken)
+      ]);
+      if (!isCurrent()) {
+        return false;
+      }
+      this.cdr.detectChanges();
+      return !this.windowStore.LoadFailed;
+    } catch (error) {
+      console.error('Failed to reload the conversation for the open view:', error);
+      if (isCurrent()) {
+        MJNotificationService.Instance.CreateSimpleNotification('Could not load this view of the conversation', 'error', 3000);
+      }
+      return false;
+    } finally {
+      // The newest reload owns the recorded pins; it clears them however it ends.
+      if (reloadToken === this.viewReloadToken) {
+        this.pinsDuringViewReload = null;
+      }
+    }
+  }
+
+  /** Detail ids whose completion this instance has already applied. A live callback and the replay window can both deliver one finish. */
+  private handledCompletionIds?: Set<string>;
 
   /**
    * Handle message completion triggered by PubSub completion event
@@ -3893,6 +6557,21 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     expectedConversationId: string | null | undefined = message.ConversationID,
     loadToken?: number
   ): Promise<void> {
+    const completionId = message.ID ? NormalizeUUID(message.ID) : '';
+    const existingAgentRun = this.AgentRunsByDetailId.get(message.ID);
+    const isNewContinuationRun = Boolean(
+      _agentRunId && existingAgentRun?.ID && !UUIDsEqual(existingAgentRun.ID, _agentRunId)
+    );
+    if (completionId) {
+      this.handledCompletionIds ??= new Set();
+      if (isNewContinuationRun) {
+        this.handledCompletionIds.delete(completionId);
+      } else if (this.handledCompletionIds.has(completionId)) {
+        return;
+      }
+      this.handledCompletionIds.add(completionId);
+    }
+    let finished = false;
     try {
       const isCurrent = () => this.isCurrentConversationContext(expectedConversationId, loadToken);
 
@@ -3908,12 +6587,36 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         return;
       }
 
+      // If this is a bottom continuation reply linked via ParentID to an earlier workflow message,
+      // also reload that originating message so its completion note and step artifacts stay fresh.
+      if (message.ParentID) {
+        const originMsg = (this.messages ?? []).find((m) => UUIDsEqual(m.ID, message.ParentID));
+        if (originMsg?.ID) {
+          await originMsg.Load(originMsg.ID);
+          if (!isCurrent()) {
+            return;
+          }
+          this.windowStore.ApplyLocalDetail(originMsg);
+        }
+      }
+
       // Reload agent run to get final status, timestamps, and cost
-      const agentRun = this.AgentRunsByDetailId.get(message.ID);
-      if (agentRun?.ID) {
-        await agentRun.Load(agentRun.ID);
+      if (isNewContinuationRun) {
+        await this.addAgentRunToMap(message.ConversationID, message.ID, _agentRunId, true);
         if (!isCurrent()) {
           return;
+        }
+      } else {
+        const agentRun = this.AgentRunsByDetailId.get(message.ID);
+        if (agentRun?.ID) {
+          await agentRun.Load(agentRun.ID);
+          if (!isCurrent()) {
+            return;
+          }
+          await this.loadHandoffStepsForRunIds([agentRun.ID], expectedConversationId, loadToken);
+          if (!isCurrent()) {
+            return;
+          }
         }
       }
 
@@ -3960,13 +6663,22 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.windowStore.ApplyLocalDetail(message);
 
       // Force re-render with updated agent run and artifacts
+      this.rebuildHandoffsMap();
       this.messages = [...this.messages];
       this.cdr.detectChanges();
 
       LogStatusEx({message: `✅ Completion handled for message ${message.ID}`, verboseOnly: true});
+      finished = true;
     } catch (error) {
       console.error(`Error handling message completion for ${message.ID}:`, error);
       this.cdr.detectChanges();
+    } finally {
+      // A switch away mid-reload must not consume the completion. The next load still has the replay entry.
+      if (!finished && completionId) {
+        this.handledCompletionIds?.delete(completionId);
+      }
+      // The row was loaded above whatever happened after; if it settled, it is no longer in flight.
+      this.dropSettledFromInFlight();
     }
   }
 
@@ -3977,6 +6689,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       if (event.message.ConversationID) {
         this.resetComponentState(event.message.ConversationID);
       }
+      return;
+    }
+    if (!this.acceptRowForOpenView(event.message)) {
       return;
     }
 
@@ -4044,31 +6759,50 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   private async addAgentRunToMap(conversationId: string | null | undefined, conversationDetailId: string, agentRunId: string, forceRefresh: boolean = false): Promise<MJAIAgentRunEntityExtended> {
     try {
+      const existingRun = this.AgentRunsByDetailId.get(conversationDetailId);
       // Always refresh if forced, or if not in map yet
-      if (forceRefresh || !this.AgentRunsByDetailId.has(conversationDetailId)) {
+      if (forceRefresh || !existingRun) {
         const md = this.ProviderToUse;
         const agentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', this.CurrentUser);
         if (await agentRun.Load(agentRunId)) {
           if (!this.isActiveConversation(conversationId)) {
             return agentRun;
           }
-          this.AgentRunsByDetailId.set(conversationDetailId, agentRun);
 
-          // Also update ConversationEngine's cache for other consumers
-          if (conversationId) {
-            ConversationEngine.Instance.SetAgentRunForDetail(conversationId, conversationDetailId, agentRun);
+          if (!existingRun || ShouldReplaceDetailAgentRun(existingRun, agentRun)) {
+            this.AgentRunsByDetailId.set(conversationDetailId, agentRun);
+
+            // Also update ConversationEngine's cache for other consumers
+            if (conversationId) {
+              ConversationEngine.Instance.SetAgentRunForDetail(conversationId, conversationDetailId, agentRun);
+            }
+          } else if (forceRefresh && !UUIDsEqual(existingRun.ID, agentRun.ID)) {
+            // A continuation synthesis run completed, but existingRun is the primary
+            // root orchestrating run — reload existingRun so its final status/timestamps are fresh.
+            await existingRun.Load(existingRun.ID);
+            if (conversationId) {
+              ConversationEngine.Instance.SetAgentRunForDetail(conversationId, conversationDetailId, existingRun);
+            }
           }
 
-          // Force message list to re-render with updated agent run
-          // Keep same Map reference so message-list component can access updates
-          this.messages = [...this.messages];
+          await this.loadHandoffStepsForRunIds([agentRunId], conversationId);
+          if (!this.isActiveConversation(conversationId)) {
+            return agentRun;
+          }
+
+          // Refresh the target message in place when already rendered; fall back to
+          // shallow array copy only when the message is not yet mounted in the list.
+          const targetMessage = this.messages.find(m => UUIDsEqual(m.ID, conversationDetailId));
+          if (!targetMessage || !this.messageListComponent?.RefreshRenderedMessage(targetMessage, { markStreaming: false })) {
+            this.messages = [...this.messages];
+          }
           this.cdr.detectChanges();
 
         }
-        return agentRun;
+        return this.AgentRunsByDetailId.get(conversationDetailId) ?? agentRun;
       } 
       else {
-        return this.AgentRunsByDetailId.get(conversationDetailId)!;
+        return existingRun;
       }
     } catch (error) {
       console.error('Failed to load agent run for map:', error);
@@ -4117,6 +6851,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   OpenProjectSelector(): void {
+    if (this.EffectiveReadOnly) {
+      return;
+    }
     this.ShowProjectSelector = true;
   }
 
@@ -4208,7 +6945,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return {
       Versions: SnapshotArtifactVersions(this.allArtifactRefs()),
       conversationId: this.ConversationId,
-      MapConversationId: this.lastLoadedConversationId,
+      MapConversationId: this.artifactMapConversationId ?? this.lastLoadedConversationId,
       MapGeneration: this.artifactMapGeneration,
       SelectionEpoch: this.artifactSelectionEpoch,
     };
@@ -4359,11 +7096,21 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return this.HasSystemArtifacts;
   }
 
+  private _artifactsArrayCache: Array<{
+    artifactId: string;
+    versionId: string;
+    name: string;
+    versionCount: number;
+    visibility: string;
+    versions: Array<{versionId: string; versionNumber: number}>;
+  }> = [];
+  private _artifactsArrayKey = '';
+
   /**
-   * Get unique artifacts grouped by artifact ID (not by conversation detail)
-   * Returns the latest version info for each unique artifact with all versions
-   * Works with LazyArtifactInfo - uses display data without loading full entities
-   * Respects showSystemArtifacts toggle
+   * Get unique artifacts grouped by artifact ID (not by conversation detail).
+   * Returns the latest version info for each unique artifact with all versions.
+   * Works with LazyArtifactInfo - uses display data without loading full entities.
+   * Respects showSystemArtifacts toggle and memoizes the result across CD passes.
    */
   GetArtifactsArray(): Array<{
     artifactId: string;
@@ -4373,6 +7120,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     visibility: string;
     versions: Array<{versionId: string; versionNumber: number}>
   }> {
+    const effectiveMap = this.EffectiveArtifactsMap;
+    let sig = `${this.ShowSystemArtifacts ? 1 : 0}|${effectiveMap.size}|`;
+    for (const artifactList of effectiveMap.values()) {
+      for (const info of artifactList) {
+        sig += `${info.artifactVersionId}:${info.artifactName ?? ''};`;
+      }
+    }
+    if (sig === this._artifactsArrayKey) {
+      return this._artifactsArrayCache;
+    }
+    this._artifactsArrayKey = sig;
+
     const artifactMap = new Map<string, {
       artifactId: string;
       versionId: string;
@@ -4383,7 +7142,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // Group by artifactId, collecting all version details
     // Use effectiveArtifactsMap to respect showSystemArtifacts toggle
-    for (const artifactList of this.EffectiveArtifactsMap.values()) {
+    for (const artifactList of effectiveMap.values()) {
       for (const info of artifactList) {
         const artifactId = info.artifactId;
         const versionId = info.artifactVersionId;
@@ -4411,7 +7170,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
 
     // Convert to array with version count, sorted by version number descending
-    return Array.from(artifactMap.values()).map(item => ({
+    this._artifactsArrayCache = Array.from(artifactMap.values()).map(item => ({
       artifactId: item.artifactId,
       versionId: item.versionId,
       name: item.name,
@@ -4419,6 +7178,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       versionCount: item.versions.length,
       versions: item.versions.sort((a, b) => b.versionNumber - a.versionNumber)
     }));
+    return this._artifactsArrayCache;
   }
 
   /** @deprecated Use {@link GetArtifactsArray}. */
@@ -4494,29 +7254,20 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   async OnProjectSelected(project: any): Promise<void> {
-    if (this.Conversation && project) {
-      try {
-        await this.engine.SaveConversation(
-          this.Conversation.ID,
-          { ProjectID: project.ID },
-          this.CurrentUser
-        );
-        this.ShowProjectSelector = false;
-      } catch (error) {
-        console.error('Failed to assign project:', error);
-      }
-    } else if (this.Conversation && !project) {
-      // Remove project assignment
-      try {
-        await this.engine.SaveConversation(
-          this.Conversation.ID,
-          { ProjectID: null },
-          this.CurrentUser
-        );
-        this.ShowProjectSelector = false;
-      } catch (error) {
-        console.error('Failed to remove project:', error);
-      }
+    if (!this.Conversation) return;
+    const projectId: string | null = project?.ID ?? null;
+    // Only the owner moves a conversation (the server refuses anyone else), and a move of an inheriting
+    // conversation into a Shared or Public folder shares it, so it asks first: the same rules as the list.
+    if (!this.CurrentUser || !this.engine.CanMoveConversation(this.Conversation, this.CurrentUser.ID)) {
+      await this.confirmDialog.alert('Cannot Move', "Only the conversation's owner can move it to another folder.");
+      return;
+    }
+    if (!(await ConfirmMoveIntoFolder(this.confirmDialog, this.engine, projectId, [this.Conversation]))) return;
+    try {
+      await this.engine.SaveConversation(this.Conversation.ID, { ProjectID: projectId }, this.CurrentUser);
+      this.ShowProjectSelector = false;
+    } catch (error) {
+      console.error(projectId ? 'Failed to assign project:' : 'Failed to remove project:', error);
     }
   }
 
@@ -4586,6 +7337,34 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return this.IsReadOnlyView;
   }
 
+  /** Read-only for any reason: the host said so, or the conversation is shared with View access. */
+  public get EffectiveReadOnly(): boolean {
+    return this.ReadOnly || this.IsReadOnlyView;
+  }
+
+  /**
+   * True when this person may start forks in the open conversation: the host allows forking
+   * ({@link AllowForking}), the person holds `Conversations: Fork`, has not switched forking off in My
+   * Profile, and may write. When false, no fork action is offered and Edit and Regenerate change the
+   * latest turn in place.
+   */
+  public get CanFork(): boolean {
+    return this.AllowForking !== false && CanForkFrom({
+      HoldsAuthorization: UserHoldsAuthorization(this.CurrentUser, CONVERSATIONS_FORK_AUTHORIZATION, this.ProviderToUse),
+      SettingValue: this.forkingSettingValue(),
+      MayWrite: !this.EffectiveReadOnly,
+    });
+  }
+
+  /** The person's stored forking setting; undefined when there is none or the settings cannot be read. */
+  private forkingSettingValue(): string | undefined {
+    try {
+      return UserInfoEngine.Instance.GetSetting(CONVERSATIONS_FORKING_SETTING_KEY);
+    } catch {
+      return undefined;
+    }
+  }
+
   /**
    * `true` when the current user is allowed to create new shares on this
    * conversation: the owner, or a user with an Owner-level grant. Uses the same
@@ -4599,54 +7378,6 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /** @deprecated Use {@link CanShareConversation}. */
   public get canShareConversation(): boolean {
     return this.CanShareConversation;
-  }
-
-  OnReplyInThread(message: MJConversationDetailEntity): void {
-    // Open thread panel for this message - emit to parent
-    this.ThreadOpened.emit(message.ID);
-  }
-
-  /** @deprecated Use {@link OnReplyInThread}. */
-  onReplyInThread(message: MJConversationDetailEntity): void {
-    return this.OnReplyInThread(message);
-  }
-
-  OnViewThread(message: MJConversationDetailEntity): void {
-    // Open thread panel for this message - emit to parent
-    this.ThreadOpened.emit(message.ID);
-  }
-
-  /** @deprecated Use {@link OnViewThread}. */
-  onViewThread(message: MJConversationDetailEntity): void {
-    return this.OnViewThread(message);
-  }
-
-  OnLocalThreadClosed(): void {
-    // Close the thread panel - emit to parent
-    this.ThreadClosed.emit();
-  }
-
-  /** @deprecated Use {@link OnLocalThreadClosed}. */
-  onLocalThreadClosed(): void {
-    return this.OnLocalThreadClosed();
-  }
-
-  OnThreadReplyAdded(reply: MJConversationDetailEntity): void {
-    // Optionally refresh the message list to update thread counts
-    // For now, we'll just log it
-    LogStatusEx({message: 'Thread reply added', verboseOnly: true, additionalArgs: [reply]});
-
-    // Reload messages to get updated thread counts
-    if (this.ConversationId) {
-      const conversationId = this.ConversationId;
-      const loadToken = ++this.conversationLoadToken;
-      void this.loadMessages(conversationId, loadToken);
-    }
-  }
-
-  /** @deprecated Use {@link OnThreadReplyAdded}. */
-  onThreadReplyAdded(reply: MJConversationDetailEntity): void {
-    return this.OnThreadReplyAdded(reply);
   }
 
   OnToggleAgentPanel(): void {
@@ -4725,15 +7456,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // region the list unmounts into spacers — so this button silently did nothing for any pin
     // that wasn't already on screen. The list resolves through the timeline key, which a
     // spacer shares with the item it stands in for.
-    if (this.messageListComponent?.ScrollToMessage(messageId)) {
-      this.beaconMessage(messageId);
+    if (this.scrollToMessageOrThreadRoot(messageId)) {
       return;
     }
 
     // Not in the loaded window. Pins are fetched by their own query precisely so the panel can
     // list pins older than the transcript, so this is the EXPECTED case for an old pin, not an
     // error — page back until it is loaded, the same way a date jump does.
-    const reached = await this.loadUntilMessageIsWindowed(messageId);
+    const reached = (await this.loadUntilMessageIsWindowed(messageId)) && (await this.loadUntilThreadRootIsWindowed(messageId));
     if (!reached) {
       MJNotificationService.Instance.CreateSimpleNotification(
         'Could not reach that message — it is further back than this jump loads.', 'info', 3000
@@ -4744,8 +7474,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // The paging loop deliberately skipped the per-page peripheral rebuild — pay it once,
     // here, before asking the list for element positions.
     await this.refreshAfterPaging(this.ConversationId!);
-    if (this.messageListComponent?.ScrollToMessage(messageId)) {
-      this.beaconMessage(messageId);
+    if (!this.scrollToMessageOrThreadRoot(messageId)) {
+      MJNotificationService.Instance.CreateSimpleNotification('Could not find that message in this conversation', 'info', 3000);
     }
   }
 
@@ -4755,24 +7485,155 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
-   * Pages older history until `messageId` falls inside the loaded window.
+   * Opens a message, such as a search hit, in the active conversation: waits for the
+   * conversation's load to end, opens the hit's fork (a Main hit opens Main) when it is not the
+   * open view, pages older history until the window holds `sequence`, then scrolls to the row and
+   * highlights it for 2 s.
    *
-   * Deterministic rather than heuristic: a pin carries its own `Sequence`, so the stop
+   * @param conversationId The conversation of the message. The caller activates it first.
+   * @param branchId The message's fork; null is Main. Compared without case.
+   * @param sequence The message's sequence in its conversation.
+   * @returns true when the row was found and scrolled to; false when the conversation is not the
+   *   active one, the view change was ignored or failed, or the row is not on the view's path.
+   */
+  public async OpenMessage(conversationId: string, branchId: string | null, sequence: number): Promise<boolean> {
+    if (!this.isActiveConversation(conversationId) || !(await this.waitForConversationLoad(conversationId))) {
+      return false;
+    }
+    const target: ConversationOpenView = branchId == null ? MAIN_OPEN_VIEW : { Kind: 'Fork', BranchID: branchId };
+    if (!SameOpenView(this.OpenView, target) && !(await this.changeOpenView(target))) {
+      return false;
+    }
+    if (!this.isActiveConversation(conversationId)) {
+      return false;
+    }
+    await this.loadUntilSequenceIsWindowed(sequence);
+    const hit = this.windowStore.GetSnapshot().Details.find(m => m.Sequence === sequence && UUIDsEqual(m.BranchID ?? null, branchId));
+    if (hit) {
+      await this.loadUntilThreadRootIsWindowed(hit.ID);
+    }
+    if (!this.isActiveConversation(conversationId)) {
+      return false;
+    }
+    await this.refreshAfterPaging(conversationId);
+    const row = this.messages.find(m => m.Sequence === sequence && UUIDsEqual(m.BranchID ?? null, branchId));
+    if (row) {
+      // The bottom-follow of the load that just ended must not scroll away from the row.
+      this.scrollToBottom = false;
+      this.bottomFollowSuppressedUntil = Date.now() + 1500;
+    }
+    if (!row || !this.scrollToMessageOrThreadRoot(row.ID, 'search-hit-highlight', 2000)) {
+      MJNotificationService.Instance.CreateSimpleNotification('Could not find that message in this conversation', 'info', 3000);
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Scrolls to `messageId`, or when {@link CollapseThreadReplies} hides `messageId` under a thread
+   * root, scrolls to that root and emits {@link ThreadReplyRevealRequested} so the host can open
+   * the thread. False when the row (or its root) is not loaded, so the caller can page back for it.
+   */
+  private scrollToMessageOrThreadRoot(
+    messageId: string,
+    cssClass: string = 'pin-beacon',
+    durationMs: number = 1500,
+  ): boolean {
+    const rootId = this.CollapseThreadReplies
+      ? this.displayState().ThreadReplyRoots.Get(messageId)
+      : undefined;
+    if (rootId) {
+      if (!this.messageListComponent?.ScrollToMessage(rootId)) {
+        return false;
+      }
+      this.beaconMessage(rootId, cssClass, durationMs);
+      this.emitThreadReplyReveal(messageId, rootId);
+      return true;
+    }
+    if (this.messageListComponent?.ScrollToMessage(messageId)) {
+      this.beaconMessage(messageId, cssClass, durationMs);
+      return true;
+    }
+    return false;
+  }
+
+  private emitThreadReplyReveal(replyId: string, rootId: string): void {
+    const loadedReply = (this.messages ?? []).find(m => UUIDsEqual(m.ID, replyId));
+    const loadedRoot = (this.messages ?? []).find(m => UUIDsEqual(m.ID, rootId));
+    this.ThreadReplyRevealRequested.emit({
+      ReplyID: loadedReply?.ID ?? replyId,
+      RootID: loadedRoot?.ID ?? rootId,
+    });
+  }
+
+  /**
+   * Waits until the load of `conversationId` has ended. False when another conversation
+   * becomes active first or the component is destroyed.
+   */
+  private async waitForConversationLoad(conversationId: string): Promise<boolean> {
+    while (this.isActiveConversation(conversationId) && !UUIDsEqual(this.readyConversationId, conversationId)) {
+      const ended = await firstValueFrom(
+        this.conversationLoadEnded$.pipe(map(() => true), takeUntil(this.destroy$)),
+        { defaultValue: false }
+      );
+      if (!ended) {
+        return false;
+      }
+    }
+    return this.isActiveConversation(conversationId);
+  }
+
+  /** Pages older history until the pinned message `messageId` falls inside the loaded window. */
+  private async loadUntilMessageIsWindowed(messageId: string): Promise<boolean> {
+    const target = this.PinnedMessages?.find(p => UUIDsEqual(p.ID, messageId));
+    if (!target) {
+      return false;   // not a loaded pin — nothing tells us how far back to page
+    }
+    return this.loadUntilSequenceIsWindowed(target.Sequence);
+  }
+
+  /**
+   * With {@link CollapseThreadReplies} on, pages older history until the top-level root of the loaded
+   * thread reply `messageId` is loaded too, since the jump lands on the root. True when nothing more is
+   * needed (collapsing off, `messageId` not a loaded thread reply, or its root loaded).
+   */
+  private async loadUntilThreadRootIsWindowed(messageId: string): Promise<boolean> {
+    if (!this.CollapseThreadReplies) {
+      return true;
+    }
+    const conversationId = this.ConversationId;
+    for (let page = 0; page < DATE_JUMP_MAX_PAGES; page++) {
+      const snapshot = this.windowStore.GetSnapshot();
+      // Recomputed per page: a loaded parent that is itself a reply moves the root further up.
+      const rootId = GetThreadReplyRoots(snapshot.Details).Get(messageId);
+      if (!rootId || new UUIDSet(snapshot.Details.map(m => m.ID)).Has(rootId)) {
+        return true;
+      }
+      if (!snapshot.Cursor.HasMoreAbove) {
+        return false;
+      }
+      await this.windowStore.LoadOlder(this.CurrentUser);
+      if (!this.isActiveConversation(conversationId)) {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Pages older history until the loaded window reaches back to `sequence`.
+   *
+   * Deterministic rather than heuristic: the target's `Sequence` is known, so the stop
    * condition is simply "the window now reaches at least that far back" — no equivalent of
    * the date jump's `NeedsOlder` probing is needed. Bounded by the same page cap, for the same
    * reason: an unbounded walk back is the thing windowing exists to avoid.
    */
-  private async loadUntilMessageIsWindowed(messageId: string): Promise<boolean> {
-    const target = this.PinnedMessages.find(p => UUIDsEqual(p.ID, messageId));
-    if (!target) {
-      return false;   // not a loaded pin — nothing tells us how far back to page
-    }
-
+  private async loadUntilSequenceIsWindowed(sequence: number): Promise<boolean> {
     const conversationId = this.ConversationId;
     for (let page = 0; page < DATE_JUMP_MAX_PAGES; page++) {
       const snapshot = this.windowStore.GetSnapshot();
       const oldest = snapshot.Cursor.OldestSequence;
-      if (oldest !== null && oldest <= target.Sequence) {
+      if (oldest !== null && oldest <= sequence) {
         return true;                        // the window now covers it
       }
       if (!snapshot.Cursor.HasMoreAbove) {
@@ -4788,8 +7649,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return false;                           // hit the page cap
   }
 
-  /** Flashes the beacon on a message once its scroll has settled. */
-  private beaconMessage(messageId: string): void {
+  /**
+   * Adds `cssClass` to a message for `durationMs` once its scroll has settled. Defaults to the
+   * pin beacon.
+   */
+  private beaconMessage(messageId: string, cssClass: string = 'pin-beacon', durationMs: number = 1500): void {
     // Re-queried rather than captured: the target may have been a spacer when the scroll
     // started and been remounted as a real bubble by the time it lands.
     setTimeout(() => {
@@ -4797,8 +7661,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       if (!el) {
         return;
       }
-      el.classList.add('pin-beacon');
-      setTimeout(() => el.classList.remove('pin-beacon'), 1500);
+      el.classList.add(cssClass);
+      setTimeout(() => el.classList.remove(cssClass), durationMs);
     }, 350);
   }
 
@@ -4807,11 +7671,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Unpins a message from the pins panel — saves to DB and patches the cache.
    */
   async OnUnpinFromPanel(message: MJConversationDetailEntity): Promise<void> {
+    if (this.EffectiveReadOnly) {
+      return;
+    }
     const previous = message.IsPinned;
     message.IsPinned = false;
     this.cdr.detectChanges();
     try {
-      await message.Save();
+      if (!(await SavePinState(this.ProviderToUse, message.ID, false))) {
+        throw new Error(`the pin on message ${message.ID} could not be saved`);
+      }
       this.OnMessagePinToggled(message);
     } catch (err) {
       console.error('Failed to unpin message from panel:', err);
@@ -4830,6 +7699,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Sends the selected response as a new user message WITHOUT modifying the visible input
    */
   async OnSuggestedResponseSelected(event: {text: string; customInput?: string}): Promise<void> {
+    if (this.EffectiveReadOnly) {
+      return;
+    }
     const messageText = event.customInput || event.text;
 
     // Get the active message input for the current conversation
@@ -4855,15 +7727,31 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   async OnDeleteMessage(message: MJConversationDetailEntity): Promise<void> {
     if (!UUIDsEqual(this.Conversation?.UserID, this.CurrentUser?.ID)) return;
+    const conversationId = this.ConversationId;
+    if (!conversationId) return;
 
-    // Find this message and all messages after it sorted by creation time
-    const sortedMessages = [...this.messages].sort((a, b) =>
-      new Date(a.__mj_CreatedAt!).getTime() - new Date(b.__mj_CreatedAt!).getTime()
-    );
-    const targetIndex = sortedMessages.findIndex(m => UUIDsEqual(m.ID, message.ID));
-    if (targetIndex === -1) return;
+    // The delete cannot be undone, so the branch rows are read fresh: the list held since the
+    // transcript loaded is empty when that read failed and misses forks made in another session.
+    // When the rows cannot be read, nothing is deleted.
+    let branches: ConversationBranchRow[];
+    try {
+      branches = await ConversationEngine.LoadBranchesFresh(conversationId, this.CurrentUser, this.ProviderToUse);
+    } catch (error) {
+      console.error(`Failed to load branches for conversation ${conversationId} before a delete:`, error);
+      MJNotificationService.Instance.CreateSimpleNotification('Could not verify branches; the message was not deleted', 'error', 3000);
+      return;
+    }
+    if (!this.isActiveConversation(conversationId)) return;
+    this.setBranchRows(conversationId, branches);
+    if (IsForkPointOrEarlier(message.Sequence, branches)) {
+      MJNotificationService.Instance.CreateSimpleNotification('A fork depends on this message, so it cannot be deleted', 'error', 3000);
+      return;
+    }
 
-    const toHide = sortedMessages.slice(targetIndex);
+    // Find this message and all messages after it sorted by Sequence
+    const sortedMessages = [...this.messages].sort((a, b) => a.Sequence - b.Sequence);
+    const toHide = this.rowsToDeleteFrom(sortedMessages, message.ID);
+    if (toHide.length === 0) return;
     const count = toHide.length;
 
     const confirmed = await this.confirmDialog.confirm({
@@ -4900,14 +7788,55 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
     }
 
-    const hideIds = new Set(toHide.map(m => m.ID));
+    const hideIds = new UUIDSet(toHide.map(m => m.ID));
     // Drop them from the window too, or the next RefreshLatest merge reinstates them.
-    for (const id of hideIds) {
-      this.windowStore.RemoveDetail(id);
+    for (const m of toHide) {
+      this.windowStore.RemoveDetail(m.ID);
     }
-    this.messages = this.messages.filter(m => !hideIds.has(m.ID));
+    this.messages = this.messages.filter(m => !hideIds.Has(m.ID));
     this.resetComponentState(this.ConversationId!);
     this.cdr.detectChanges();
+  }
+
+  /**
+   * The rows removed by "delete this and everything after": when thread replies are collapsed,
+   * the target, every main-flow row after it, and any thread replies whose root is among those rows.
+   * When the target is itself a thread reply, only the target and the replies under it.
+   */
+  private rowsToDeleteFrom(
+    sortedMessages: MJConversationDetailEntity[],
+    targetId: string,
+  ): MJConversationDetailEntity[] {
+    const targetIndex = sortedMessages.findIndex(m => UUIDsEqual(m.ID, targetId));
+    if (targetIndex === -1) {
+      return [];
+    }
+    if (!this.CollapseThreadReplies) {
+      return sortedMessages.slice(targetIndex);
+    }
+    const roots = GetThreadReplyRoots(sortedMessages);
+    if (roots.Has(targetId)) {
+      // Sorted by Sequence, so a reply always follows its parent: one pass collects the subtree.
+      const subtree = new UUIDSet([sortedMessages[targetIndex].ID]);
+      for (let i = targetIndex + 1; i < sortedMessages.length; i++) {
+        const parentId = sortedMessages[i].ParentID;
+        if (parentId && subtree.Has(parentId)) {
+          subtree.Add(sortedMessages[i].ID);
+        }
+      }
+      return sortedMessages.filter(m => subtree.Has(m.ID));
+    }
+    const removedRoots = new UUIDSet();
+    for (let i = targetIndex; i < sortedMessages.length; i++) {
+      const id = sortedMessages[i].ID;
+      if (!roots.Has(id) || i === targetIndex) {
+        removedRoots.Add(id);
+      }
+    }
+    return sortedMessages.filter(m => {
+      const rootId = roots.Get(m.ID);
+      return removedRoots.Has(m.ID) || (rootId !== undefined && removedRoots.Has(rootId));
+    });
   }
 
   /** @deprecated Use {@link OnDeleteMessage}. */
@@ -4915,16 +7844,35 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return this.OnDeleteMessage(message);
   }
 
+  /** @deprecated Use {@link OnRegenerateRequested}. */
   OnRetryMessage(message: MJConversationDetailEntity): void {
-    // TODO: Implement retry logic
-    // This should find the parent user message and re-trigger the agent invocation
-    LogStatusEx({message: 'Retry requested for message', verboseOnly: true, additionalArgs: [message.ID]});
-    // For now, just log it - full implementation would require refactoring agent invocation
+    void this.OnRegenerateRequested(message);
   }
 
-  /** @deprecated Use {@link OnRetryMessage}. */
+  /** @deprecated Use {@link OnRegenerateRequested}. */
   onRetryMessage(message: MJConversationDetailEntity): void {
     return this.OnRetryMessage(message);
+  }
+
+  /**
+   * Stop the agent run behind an in-progress AI reply. Uses the run already mapped to the
+   * reply when there is one; otherwise looks it up by the reply's detail id, since the run row
+   * appears a moment after the placeholder. The run's own completion event then flows through
+   * the normal path and the message leaves In-Progress on its own.
+   */
+  async OnStopMessage(message: MJConversationDetailEntity): Promise<void> {
+    const mappedRun = this.AgentRunsByDetailId.get(message.ID);
+    const stopped = mappedRun
+      ? await this.agentStateService.CancelAgent(mappedRun.ID)
+      : await this.agentStateService.CancelAgentForDetail(message.ID);
+    if (!stopped) {
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Could not stop the run. It may have already finished.',
+        'warning',
+        3000
+      );
+    }
+    this.AfterStopClicked.emit(new AfterStopClickedEventArgs(message.ID, mappedRun?.ID ?? null, stopped));
   }
 
   /**
@@ -5013,6 +7961,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.SelectedVersionNumber = undefined;
     }
 
+    this.SelectedTaskGraphPanel = null;
+    this.ShowRemoteBrowserPanel = false;
     this.ShowArtifactPanel = true;
 
     // Load permissions for the selected artifact
@@ -5030,6 +7980,157 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /** @deprecated Use {@link OnArtifactClicked}. */
   async onArtifactClicked(data: {artifactId: string; versionId?: string}): Promise<void> {
     return this.OnArtifactClicked(data);
+  }
+
+  public OnTaskGraphPanelRequested(data: { parentTaskId: string; workflowTitle?: string; workflowName?: string; isRunning?: boolean }): void {
+    if (!data?.parentTaskId) {
+      return;
+    }
+    if (this.SelectedTaskGraphPanel && UUIDsEqual(this.SelectedTaskGraphPanel.parentTaskId, data.parentTaskId)) {
+      this.OnCloseTaskGraphPanel();
+      return;
+    }
+    this.ShowArtifactPanel = false;
+    this.ShowRemoteBrowserPanel = false;
+    this.SelectedArtifactId = null;
+    this.SelectedTaskGraphPanel = {
+      parentTaskId: data.parentTaskId,
+      workflowTitle: data.workflowTitle || data.workflowName || 'Task Graph',
+    };
+    this.cdr.detectChanges();
+  }
+
+  public IsSavingTaskGraphWorkflow: boolean = false;
+
+  public OnCloseTaskGraphPanel(): void {
+    this.SelectedTaskGraphPanel = null;
+    this.resetArtifactPaneSizing();
+    this.cdr.detectChanges();
+  }
+
+  public ToggleRemoteBrowserPanel(): void {
+    if (this.ShowRemoteBrowserPanel) {
+      this.CloseRemoteBrowserPanel();
+    } else {
+      this.OpenRemoteBrowserPanel();
+    }
+  }
+
+  public OpenRemoteBrowserPanel(): void {
+    if (this.ShowRemoteBrowserPanel || !this.AllowRemoteBrowser || !this.ConversationId) {
+      return;
+    }
+    // Open before the drawer renders: binding its surface starts the screencast for this conversation.
+    this.ensureRemoteBrowser().Open(this.ConversationId);
+    this.ShowArtifactPanel = false;
+    this.SelectedTaskGraphPanel = null;
+    this.SelectedArtifactId = null;
+    this.ShowRemoteBrowserPanel = true;
+    this.cdr.detectChanges();
+  }
+
+  /** Closing the drawer ends the browser (hiding it behind an artifact does not). */
+  public CloseRemoteBrowserPanel(): void {
+    if (!this.ShowRemoteBrowserPanel) {
+      return;
+    }
+    this.ShowRemoteBrowserPanel = false;
+    this.resetArtifactPaneSizing();
+    void this.remoteBrowser?.Close();
+    this.cdr.detectChanges();
+  }
+
+  public async NavigateRemoteBrowserFromInput(): Promise<void> {
+    const rawUrl = this.RemoteBrowserUrlInput?.trim();
+    if (!rawUrl || this.IsRemoteBrowserNavigating) {
+      return;
+    }
+    this.IsRemoteBrowserNavigating = true;
+    this.cdr.detectChanges();
+    try {
+      const result = await this.remoteBrowser?.Navigate(rawUrl);
+      // A refused session already said why (OnSessionRefused) and closed the browser.
+      if (result && !result.Success && this.IsRemoteBrowserLive) {
+        MJNotificationService.Instance.CreateSimpleNotification(result.ErrorMessage ?? 'The page could not be opened.', 'error', 5000);
+      }
+    } finally {
+      this.IsRemoteBrowserNavigating = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * `AppContext` plus the conversation's open browser (its URL, and the `browser_*` tools while this
+   * chat area owns them). Cached: it is bound to an input, so a fresh object per check would re-fire it.
+   */
+  public get EffectiveAppContext(): Record<string, unknown> | null {
+    const controller = this.remoteBrowser;
+    if (!controller) {
+      return this.AppContext;
+    }
+    const owns = controller.ConversationId !== null && controller.OwnsTools;
+    let memo = this.effectiveAppContextMemo;
+    if (!memo || memo.Base !== this.AppContext || memo.Version !== controller.StateVersion || memo.Owns !== owns) {
+      memo = { Base: this.AppContext, Version: controller.StateVersion, Owns: owns, Value: controller.WithBrowserContext(this.AppContext) };
+      this.effectiveAppContextMemo = memo;
+    }
+    return memo.Value;
+  }
+  private effectiveAppContextMemo: { Base: Record<string, unknown> | null; Version: number; Owns: boolean; Value: Record<string, unknown> | null } | null = null;
+
+  /**
+   * Persists the currently displayed Task Graph in the chat side-panel as a reusable
+   * Draft Flow Agent workflow via {@link WorkflowSaveOperation} and opens the new
+   * `MJ: AI Agents` record.
+   */
+  public async OnSaveTaskGraphAsWorkflow(spec: TaskGraphSpec | null): Promise<void> {
+    if (!spec?.tasks?.length || this.IsSavingTaskGraphWorkflow) {
+      return;
+    }
+    this.IsSavingTaskGraphWorkflow = true;
+    this.cdr.detectChanges();
+    try {
+      const name =
+        spec.workflowName?.trim() ||
+        this.SelectedTaskGraphPanel?.workflowTitle?.trim() ||
+        'Saved Workflow';
+      const workflowSpec: WorkflowSpec = {
+        name,
+        description: `Saved from Conversation ${this.Conversation?.Name || this.ConversationId || ''}`.trim(),
+        status: 'Draft',
+        graph: { ...spec, workflowName: name },
+        triggers: [],
+      };
+      const op = new WorkflowSaveOperation();
+      const result = await op.Execute(
+        { spec: workflowSpec },
+        { provider: this.ProviderToUse, user: this.CurrentUser },
+      );
+      const output = result.Output;
+      if (!result.Success || !output?.success || !output.agentID) {
+        MJNotificationService.Instance.CreateSimpleNotification(
+          output?.errorMessage ?? result.ErrorMessage ?? 'Could not save workflow.',
+          'error',
+          5000,
+        );
+        return;
+      }
+      MJNotificationService.Instance.CreateSimpleNotification(
+        `Saved workflow "${name}". Opening Flow Agent record…`,
+        'success',
+        3500,
+      );
+      this.OpenEntityRecord.emit({
+        entityName: 'MJ: AI Agents',
+        compositeKey: CompositeKey.FromID(output.agentID),
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      MJNotificationService.Instance.CreateSimpleNotification(`Failed to save workflow: ${msg}`, 'error', 5000);
+    } finally {
+      this.IsSavingTaskGraphWorkflow = false;
+      this.cdr.detectChanges();
+    }
   }
 
   async OnArtifactCreated(data: {conversationId: string, conversationDetailId: string, artifactId: string; versionId: string; versionNumber: number; name: string}): Promise<void> {
@@ -5280,11 +8381,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
-   * LocalStorage persistence methods for artifact pane
+   * UserInfoEngine persistence methods for artifact pane width
    */
   private loadArtifactPaneWidth(): void {
     try {
-      const saved = localStorage.getItem(this.ARTIFACT_PANE_WIDTH_KEY);
+      const saved = UserInfoEngine.Instance?.GetSetting(this.ARTIFACT_PANE_WIDTH_KEY);
       if (saved) {
         const width = parseFloat(saved);
         if (!isNaN(width) && width >= 20 && width <= 70) {
@@ -5292,20 +8393,26 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         }
       }
     } catch (error) {
-      console.warn('Failed to load artifact pane width from localStorage:', error);
+      console.warn('Failed to load artifact pane width from UserInfoEngine:', error);
     }
   }
 
   private saveArtifactPaneWidth(): void {
     try {
-      localStorage.setItem(this.ARTIFACT_PANE_WIDTH_KEY, this.ArtifactPaneWidth.toString());
+      UserInfoEngine.Instance?.SetSettingDebounced(
+        this.ARTIFACT_PANE_WIDTH_KEY,
+        this.ArtifactPaneWidth.toString()
+      );
     } catch (error) {
-      console.warn('Failed to save artifact pane width to localStorage:', error);
+      console.warn('Failed to save artifact pane width to UserInfoEngine:', error);
     }
   }
 
   OnConversationRenamed(event: {conversationId: string; name: string; description: string}): void {
     LogStatusEx({message: '🎉 Conversation renamed', verboseOnly: true, additionalArgs: [event]});
+    if (event?.conversationId && event.name) {
+      this.syncCachedMessageInputName(event.conversationId, event.name);
+    }
     // Pass the event up to workspace component for animation
     this.ConversationRenamed.emit(event);
   }
@@ -5420,12 +8527,113 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return this.OnOpenEntityRecord(event);
   }
 
+  /**
+   * Returns true when an `open:resource` command refers to a conversation artifact or generated file
+   * (either explicitly via `resourceType: 'Artifact' | 'File'` or via `resourceType: 'Record'` with
+   * an artifact/file entity name).
+   */
+  private isConversationArtifactCommand(command: OpenResourceCommand): boolean {
+    const rt = (command.resourceType ?? '').trim().toLowerCase();
+    if (rt === 'artifact' || rt === 'file') {
+      return true;
+    }
+    if (rt === 'record' && command.entityName) {
+      const normalizedEntity = command.entityName.trim().toLowerCase();
+      return (
+        normalizedEntity === 'mj: artifacts' ||
+        normalizedEntity === 'artifacts' ||
+        normalizedEntity === 'mj: artifact versions' ||
+        normalizedEntity === 'artifact versions' ||
+        normalizedEntity === 'mj: files' ||
+        normalizedEntity === 'files'
+      );
+    }
+    return false;
+  }
+
+  /**
+   * Opens the matching (or most recent) artifact in the current conversation's artifact viewer panel.
+   * Returns true if a conversation artifact was found and opened.
+   */
+  public OpenConversationArtifactForCommand(command: OpenResourceCommand): boolean {
+    const rawTarget = String(command.resourceId ?? '').trim();
+    const labelTarget = String(command.label ?? '').trim().toLowerCase();
+    let latestArtifact: LazyArtifactInfo | null = null;
+    let matchedArtifact: LazyArtifactInfo | null = null;
+
+    for (const artifacts of this.ArtifactsByDetailId.values()) {
+      for (const item of artifacts) {
+        latestArtifact = item;
+        if (rawTarget && (UUIDsEqual(item.ArtifactId, rawTarget) || UUIDsEqual(item.ArtifactVersionId, rawTarget))) {
+          matchedArtifact = item;
+        } else if (rawTarget && (item.ArtifactName?.toLowerCase() === rawTarget.toLowerCase() || item.VersionName?.toLowerCase() === rawTarget.toLowerCase())) {
+          matchedArtifact = item;
+        } else if (!matchedArtifact && labelTarget && item.ArtifactName && labelTarget.includes(item.ArtifactName.toLowerCase())) {
+          matchedArtifact = item;
+        }
+      }
+    }
+
+    const chosen = matchedArtifact ?? latestArtifact;
+    if (!chosen) {
+      return false;
+    }
+    void this.OnArtifactClicked({
+      artifactId: chosen.ArtifactId,
+      versionId: chosen.ArtifactVersionId
+    });
+    return true;
+  }
+
+  /**
+   * Handles non-Record `open:resource` commands when rendered inside the floating chat overlay
+   * (`OverlayMode === true`), where `ChatConversationsResource` is not mounted.
+   */
+  private handleOverlayOpenResourceCommand(command: OpenResourceCommand): void {
+    const rt = (command.resourceType ?? '').trim().toLowerCase();
+    if (rt === 'report' || rt === 'dashboard') {
+      if (!this.OpenConversationArtifactForCommand(command)) {
+        MJNotificationService.Instance?.CreateSimpleNotification(
+          'No artifact found in this conversation to open.',
+          'info',
+          3500
+        );
+      }
+      return;
+    }
+    if (rt === 'app' || rt === 'navitem') {
+      const appName = rt === 'app' ? command.resourceId : command.entityName;
+      const navItemName = rt === 'navitem'
+        ? (command.resourceId || command.entityName || '')
+        : (command.entityName || command.resourceId || '');
+      let queryParams: Record<string, string> | undefined;
+      if (command.parameters && Object.keys(command.parameters).length > 0) {
+        queryParams = {};
+        for (const [k, v] of Object.entries(command.parameters)) {
+          if (v != null) {
+            queryParams[k] = String(v);
+          }
+        }
+      }
+      this.navigationRequest.emit({
+        navItemName,
+        appName,
+        queryParams
+      });
+    }
+  }
+
   /** Record `open:resource` buttons → same openEntityRecord chain as agent-run links. */
   private emitOpenResourceRecord(command: OpenResourceCommand): void {
     if (!command.entityName) return;
     const entity = this.ProviderToUse.EntityByName(command.entityName);
     if (!entity) {
       console.warn('open:resource: unknown entity', command.entityName);
+      MJNotificationService.Instance?.CreateSimpleNotification(
+        `Unable to open record: unknown entity "${command.entityName}".`,
+        'info',
+        4000
+      );
       return;
     }
     const compositeKey = ConversationUtility.CompositeKeyFromOpenResource(
@@ -5434,8 +8642,35 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     );
     if (!compositeKey) {
       console.warn('open:resource: incomplete primary key', command.entityName, command);
+      MJNotificationService.Instance?.CreateSimpleNotification(
+        `Unable to open ${command.entityName}: no record identifier was provided.`,
+        'info',
+        4000
+      );
       return;
     }
+
+    // Guard against LLM-emitted placeholder IDs (e.g., "<FileID from storage result>") or non-UUID strings
+    // on uniqueidentifier primary keys so we don't navigate to a broken form URL.
+    for (const kv of compositeKey.KeyValuePairs) {
+      const rawVal = String(kv.Value ?? '').trim();
+      const pkField = entity.PrimaryKeys.find(pk => pk.Name === kv.FieldName);
+      const isUuidPk = pkField?.Type?.toLowerCase() === 'uniqueidentifier';
+      const isPlaceholder = !rawVal || (rawVal.startsWith('<') && rawVal.endsWith('>'));
+      if (isPlaceholder || (isUuidPk && !IsValidUUID(rawVal))) {
+        if (this.OpenConversationArtifactForCommand(command)) {
+          return;
+        }
+        console.warn('open:resource: invalid or placeholder primary key value', command.entityName, kv);
+        MJNotificationService.Instance?.CreateSimpleNotification(
+          `Unable to open ${command.entityName}: invalid record ID "${rawVal}".`,
+          'info',
+          4000
+        );
+        return;
+      }
+    }
+
     this.OpenEntityRecord.emit({ entityName: command.entityName, compositeKey });
   }
 
@@ -5498,6 +8733,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
     void this.engine.EnsureConversationLoaded(created, this.CurrentUser);
     this.RealtimeConversationReady.emit({ conversationId: created, select: false });
+  }
+
+  /**
+   * Says why a call ended only when it ended over a failure. A `'deadline'` end (the runtime's time-limit auto-end) is
+   * a normal end: the call surface closes on its own and the visitor needs no error toast.
+   */
+  private notifyIfCallFailed(reason: SessionEndReason): void {
+    if (reason !== 'error') {
+      return;
+    }
+    const notice = DescribeCallFailureNotice(this.RealtimeSession.LastStartError, this.RealtimeSession.LastSessionError);
+    MJNotificationService.Instance.CreateSimpleNotification(notice, 'error', 6000);
   }
 
   /**
@@ -5615,13 +8862,26 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
+   * True when the session review may offer "Start live session": not while a draft fork is open,
+   * the same rule as the composer's voice control (a session started there would run on the
+   * draft's parent path).
+   */
+  public get CanStartVoiceFromReview(): boolean {
+    return this.OpenView.Kind !== 'DraftFork';
+  }
+
+  /**
    * Review mode's "Start live session": RESUMES the reviewed session as a new live call
    * through the SAME start path the composer's mic uses, chaining `lastSessionId` so the
    * server restores saved channel states (e.g. the whiteboard) via `PriorChannelStatesJson`.
    * The start flips `Active$` synchronously, so clearing the review immediately after
-   * never unhosts the overlay mid-transition.
+   * never unhosts the overlay mid-transition. Starts nothing, and keeps the review, while
+   * {@link CanStartVoiceFromReview} is false.
    */
   public async OnReviewStartLive(request: RealtimeStartLiveRequest): Promise<void> {
+    if (!this.CanStartVoiceFromReview) {
+      return;
+    }
     const agentName = this.RealtimeReview?.AgentName ?? null;
     try {
       const start = this.RealtimeSession.StartRealtimeSession(
@@ -5637,7 +8897,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         null, // mediaCollectionId
         // App awareness — see message-input.startVoiceSession for the rationale.
         this.ApplicationId,
-        this.AppContext as AppContextSnapshot | null
+        this.AppContext as AppContextSnapshot | null,
+        // The channels this UI brings to its calls (the camera and screen share), on the fork the view targets.
+        { ...ConversationCallStartOptions(), ConversationBranchID: this.TargetBranchIdFor(request.ConversationId ?? this.ConversationId) }
       );
       this.RealtimeReview = null;
       await start;
@@ -5660,6 +8922,19 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /** @deprecated Use {@link OnReviewClosed}. */
   public onReviewClosed(): void {
     return this.OnReviewClosed();
+  }
+
+  /**
+   * A message reports that its run has gone quiet (MJ #4222).
+   *
+   * The reconciliation triggers all fire on transport events — a socket retry, a tab regaining
+   * focus. This one fires on the symptom itself: a run that simply stopped reporting, with no event
+   * anywhere to notice it. Each pass covers every in-progress message, so the request goes through
+   * the runtime's coalescing trigger: quiet rows asking at about the same time share one pass.
+   */
+  OnLivenessCheckRequested(messageId: string): void {
+    LogStatusEx({ message: `🫀 Message ${messageId} reports no recent progress — reconciling`, verboseOnly: true });
+    ConversationsRuntime.Instance.Liveness.Trigger('message-liveness');
   }
 
   /**
@@ -6000,6 +9275,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     //   3. a generic re-prompt        — last resort if no user message found
     // OnAnalyzeArtifact prefilled messageText with 'Analyze "..." — '; we
     // overwrite that with the resolved followup before sending.
+    // Read-only (host flag or a View share) must not auto-send the follow-up.
+    if (this.EffectiveReadOnly) {
+      return;
+    }
     const messageInput = this.getActiveMessageInputComponent();
     if (messageInput) {
       let followup = command.followupMessage?.trim();
@@ -6120,11 +9399,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (!this.ConversationId || !this.CurrentUser) return null;
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      // Get all conversation detail IDs for this conversation, newest first.
+      // Get the conversation detail IDs on the open view's path, newest first.
       const detailsResult = await rv.RunView<MJConversationDetailEntity>(
         {
           EntityName: 'MJ: Conversation Details',
-          ExtraFilter: `ConversationID='${this.ConversationId}'`,
+          ExtraFilter: ConversationEngine.ScopeFilter(this.openViewScope(this.ConversationId)),
           Fields: ['ID'],
           OrderBy: '__mj_CreatedAt DESC',
           ResultType: 'simple',
@@ -6323,19 +9602,35 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * a conversation from the composer sends the first message while the initial load is still
    * in flight.
    */
-  private followTranscript(change: 'load' | 'new' | 'update', message?: MJConversationDetailEntity): void {
+  private followTranscript(change: 'load' | 'new' | 'update' | 'stream', message?: MJConversationDetailEntity): void {
+    if (message && this.collapsedThreadRootId(message) !== null) {
+      return;
+    }
     if (change === 'load') {
       this.scrollToBottom = true;
+      return;
+    }
+    if (change === 'stream') {
+      this.followStream();
       return;
     }
     if (this.ReadReplyFromTop) {
       if (message?.Role === 'User' && message.ID && message.ID !== this.currentTurnStartMessageId) {
         this.currentTurnStartMessageId = message.ID;
+        this.streamAnchor = null;
+        this.streamPin = null;
       } else if (this.currentTurnStartMessageId && message?.Role === 'AI' && this.isSettled(message)) {
+        if (this.streamAnchor !== null) {
+          // The stream either pinned the turn's top or the reader took the viewport for this turn by
+          // scrolling during it. Either way completion must not land it again; keep the post-landing
+          // hold a normal landing gets so a status row right behind cannot yank the reader either.
+          this.bottomFollowSuppressedUntil = Date.now() + POST_LANDING_FOLLOW_HOLD_MS;
+          return;
+        }
         if (this.readerAtBottom) {
           this.pendingTurnStartMessageId = this.currentTurnStartMessageId;
           this.scrollToBottom = false;
-          this.bottomFollowSuppressedUntil = Date.now() + 1500;
+          this.bottomFollowSuppressedUntil = Date.now() + POST_LANDING_FOLLOW_HOLD_MS;
         }
         return;
       }
@@ -6353,6 +9648,86 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   private isSettled(message: MJConversationDetailEntity): boolean {
     return message.Status === 'Complete' || message.Status === 'Error';
+  }
+
+  /**
+   * Drops every in-flight ID whose loaded row has settled. A settled reply is never in flight:
+   * the list drives the composer's Stop slot and its ticker, and every reconcile path scans the
+   * rows for `In-Progress`, so an ID left behind after its row settled would never be looked at
+   * again (the overlay's Stop button ticked for hours after Regenerate-as-fork this way). An ID
+   * with no loaded row is kept; the row may simply not be on screen yet.
+   */
+  private dropSettledFromInFlight(): void {
+    const ids = this.InProgressMessageIds;
+    if (ids.length === 0) {
+      return;
+    }
+    const byID = IndexByUUID(this.messages ?? []);
+    const stillInFlight = ids.filter((id) => {
+      const row = byID.Get(id);
+      return !row || !this.isSettled(row);
+    });
+    if (stillInFlight.length !== ids.length) {
+      this.InProgressMessageIds = stillInFlight;
+    }
+  }
+
+  /**
+   * Where the viewport goes on a streamed delta, in the same frame as the DOM change so growth and
+   * scroll paint together. Without ReadReplyFromTop, or for a turn this component never saw open
+   * (a reload mid-stream), a reader at the bottom is followed there. With it, the turn's top is
+   * pinned as high as the content allows on every frame: the question rises to the top as the
+   * reply grows beneath it, and once the reader scrolls away the pin is released for the turn.
+   */
+  private followStream(): void {
+    const turnId = this.ReadReplyFromTop ? this.currentTurnStartMessageId : null;
+    if (!turnId) {
+      if (this.readerAtBottom) {
+        this.ScrollToBottomNow();
+      }
+      return;
+    }
+    if (this.streamAnchor === 'declined') {
+      return;
+    }
+    const container = this.scrollContainer?.nativeElement as HTMLElement | undefined;
+    if (!container) {
+      return;
+    }
+    const pin = this.resolveStreamPin(turnId, container);
+    if (!pin) {
+      return;
+    }
+    if (this.streamAnchor === null) {
+      if (!this.readerAtBottom) {
+        this.streamAnchor = 'declined';
+        return;
+      }
+      this.cancelPendingLanding();
+    } else if (Math.abs(container.scrollTop - this.streamAnchor) > STREAM_ANCHOR_TOLERANCE_PX) {
+      this.streamAnchor = 'declined';
+      return;
+    }
+    const turnTop = this.offsetWithinScroller(pin.target, container) - pin.clearance;
+    container.scrollTop = Math.max(0, Math.min(turnTop, container.scrollHeight - container.clientHeight));
+    // Read the position back: the browser clamps and rounds, and the next frame compares against
+    // what it will actually read, not what was asked for.
+    this.streamAnchor = container.scrollTop;
+    this.scrollToBottom = false;
+    this.bottomFollowSuppressedUntil = Date.now() + POST_LANDING_FOLLOW_HOLD_MS;
+    // The pin moves the viewport without a scroll event once the turn's top is reached, so the
+    // at-bottom state and the jump-to-bottom affordance would otherwise go stale for the stream.
+    this.CheckScroll();
+  }
+
+  /** The stream pin's target and clearance for this turn, resolved once and kept while the node is in the DOM. */
+  private resolveStreamPin(turnId: string, container: HTMLElement): { target: HTMLElement; clearance: number } | null {
+    if (this.streamPin && this.streamPin.target.isConnected) {
+      return this.streamPin;
+    }
+    const target = this.messageListComponent?.FindTimelineElement(turnId) ?? null;
+    this.streamPin = target ? { target, clearance: this.turnTopClearance(container) } : null;
+    return this.streamPin;
   }
 
   /**
@@ -6378,7 +9753,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     this.turnStartRetryHandle = null;
-    const turnTop = this.offsetWithinScroller(target) - this.turnTopClearance(container);
+    const turnTop = this.offsetWithinScroller(target, container) - this.turnTopClearance(container);
     const turnHeight = container.scrollHeight - turnTop; // the turn is the newest content
     if (turnHeight > container.clientHeight) {
       container.scroll({ top: turnTop, behavior: 'smooth' });
@@ -6405,19 +9780,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /** An element's top edge in the scroller's content coordinates — what scrollTop counts in. */
-  private offsetWithinScroller(el: HTMLElement): number {
-    const container = this.scrollContainer.nativeElement as HTMLElement;
+  private offsetWithinScroller(el: HTMLElement, container: HTMLElement): number {
     return el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
   }
 
   private clearTurnTracking(): void {
     this.currentTurnStartMessageId = null;
-    this.pendingTurnStartMessageId = null;
+    this.streamAnchor = null;
+    this.streamPin = null;
     this.bottomFollowSuppressedUntil = 0;
-    if (this.turnStartRetryHandle) {
-      clearTimeout(this.turnStartRetryHandle);
-      this.turnStartRetryHandle = null;
-    }
+    this.cancelPendingLanding();
   }
 
   /**
@@ -6433,6 +9805,284 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    *    completed successfully, we detect the mismatch and correct it. This prevents
    *    the race condition where the client overwrites a server-completed record.
    */
+  /**
+   * Re-read the agent-run rows backing this conversation's in-progress messages, refreshing
+   * {@link AgentRunsByDetailId} in place.
+   *
+   * REQUIRED BEFORE ANY ON-DEMAND RECONCILE. {@link reconnectInProgressRuns} compares against
+   * the in-memory map and never reloads it; on the conversation-load path that is safe only
+   * because `loadPeripheralData` ran moments earlier off a fresh fetch. Invoked from a socket
+   * reconnect or a tab regaining focus there has been no such fetch, so the map still holds the
+   * stale `Running` status the outage froze it at — and the reconcile silently finds nothing to
+   * do, which is indistinguishable from working (MJ #4222).
+   *
+   * Deliberately narrow in rows: only the in-progress details, with `BypassCache` because the
+   * server wrote these rows through a different provider. Cheaper than
+   * `windowStore.RefreshLatest()`, and cheap enough to run on every trigger. Full entity rows are
+   * read, not a few fields: each row replaces the run object the message renders from and that the
+   * completion path reloads, so a partial row would blank the run's duration, tokens and cost.
+   */
+  private async refreshAgentRunsForInProgress(conversationId: string, loadToken: number): Promise<void> {
+    const inProgressIds = this.messages
+      .filter(m => m.Status === 'In-Progress' && m.Role === 'AI' && m.ID)
+      .map(m => m.ID);
+
+    if (inProgressIds.length === 0) {
+      return;
+    }
+
+    const quoted = inProgressIds.map(id => `'${id}'`).join(',');
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const result = await rv.RunView<MJAIAgentRunEntityExtended>({
+      EntityName: 'MJ: AI Agent Runs',
+      ExtraFilter: `ConversationDetailID IN (${quoted})`,
+      OrderBy: '__mj_CreatedAt DESC',
+      ResultType: 'entity_object',
+      BypassCache: true
+    }, this.currentUser);
+
+    if (!result.Success || !this.isActiveConversationLoad(conversationId, loadToken)) {
+      return;
+    }
+
+    // Select the preferred root primary orchestrating run per detail in THIS pass
+    // (prioritizing ParentRunID == null and ContinuationDepth == 0 over continuation
+    // synthesis runs, and newest __mj_CreatedAt among ties so retried messages use their latest run).
+    const chosenByDetailId = new Map<string, MJAIAgentRunEntityExtended>();
+    const refreshedRunIds: string[] = [];
+    for (const run of result.Results || []) {
+      const detailId = run.ConversationDetailID;
+      if (!detailId) {
+        continue;
+      }
+      const existing = chosenByDetailId.get(detailId);
+      if (ShouldReplaceDetailAgentRun(existing, run)) {
+        chosenByDetailId.set(detailId, run);
+      }
+    }
+    for (const [detailId, run] of chosenByDetailId.entries()) {
+      this.AgentRunsByDetailId.set(detailId, run);
+      if (run.ID) {
+        refreshedRunIds.push(run.ID);
+      }
+    }
+    // New map reference so OnPush children re-read it.
+    this.AgentRunsByDetailId = new Map(this.AgentRunsByDetailId);
+    await this.loadHandoffStepsForRunIds(refreshedRunIds, conversationId, loadToken);
+  }
+
+  /**
+   * Reconcile in-progress messages against durable server state, on demand.
+   *
+   * This is the recovery path for the case the five close-event-driven mechanisms all miss: a
+   * completion published while the client's transport was silently dead. Tier 0 makes the socket
+   * close; this is what recovers the event that was dropped while it was down.
+   *
+   * Only one pass runs at a time. A request that arrives during a pass shares it and schedules one
+   * follow-up pass, so every caller resolves after a pass that started after its request.
+   *
+   * @param reason What prompted it — carried only for logging.
+   */
+  public async ReconcileNow(reason: string): Promise<void> {
+    if (ConversationChatAreaComponent.TRANSPORT_RECONNECT_REASONS.includes(reason)) {
+      this.reconcileWindowRefreshPending = true;
+    }
+    if (this.reconcileInFlight) {
+      this.reconcileRerunReason = reason;
+      return this.reconcileInFlight;
+    }
+    this.reconcileInFlight = this.runReconcilePasses(reason);
+    return this.reconcileInFlight;
+  }
+
+  /** Runs passes until no caller has asked for another. Clears the in-flight marker on exit. */
+  private async runReconcilePasses(reason: string): Promise<void> {
+    try {
+      let next: string | null = reason;
+      while (next) {
+        this.reconcileRerunReason = null;
+        await this.reconcileOnce(next);
+        next = this.reconcileRerunReason;
+      }
+    } finally {
+      this.reconcileInFlight = null;
+    }
+  }
+
+  /**
+   * Supervisor reasons that mean the transport itself was down, so anything published meanwhile
+   * was dropped. Only these pay for {@link refreshNewestWindow}; the other triggers
+   * (tab-visible, browser-online, message-liveness, completion-for-unloaded-message) keep the
+   * narrow run-row refresh alone.
+   */
+  private static readonly TRANSPORT_RECONNECT_REASONS: readonly string[] = ['socket-reconnected', 'stream-reconnected'];
+
+  /**
+   * After a transport reconnect, re-read the newest window page before reconciling, when any AI
+   * message is still unsettled.
+   *
+   * Two things {@link refreshAgentRunsForInProgress} alone does not cover:
+   *
+   * - **Error-status messages.** {@link correctStaleErrorMessages} can repair a message the client
+   *   marked Error while the server went on to complete the run — but only against a fresh run
+   *   row, and the narrow refresh reads runs for In-Progress messages only. Rebuilding the
+   *   peripherals from the refreshed window gives it current runs for every message in view.
+   * - **Rows written while the socket was down.** Their events were dropped, so only a re-read
+   *   brings them into the window.
+   *
+   * Newest page only, the same choice the poll-completion path makes: a full-history refresh
+   * would replace the loaded window with every row. Only called when
+   * {@link hasUnsettledAgentReplies} is true, so a quiet conversation costs one array scan.
+   *
+   * @returns false when the conversation changed underneath, so the caller abandons the pass.
+   */
+  private async refreshNewestWindow(conversationId: string, loadToken: number): Promise<boolean> {
+    await this.windowStore.RefreshLatest(this.currentUser);
+    if (!this.isActiveConversationLoad(conversationId, loadToken)) {
+      return false;
+    }
+
+    const refreshed = this.windowStore.GetSnapshot();
+    this.messages = refreshed.Details;
+    // loadPeripheralData short-circuits when it has already run for this conversation; clearing
+    // the marker is what lets it rebuild the run map from the fresh window.
+    this.lastLoadedConversationId = null;
+    await this.loadPeripheralData(conversationId, refreshed, loadToken);
+    return this.isActiveConversationLoad(conversationId, loadToken);
+  }
+
+  /** Whether any agent reply is still In-Progress, or is Error and may have completed server-side. */
+  private hasUnsettledAgentReplies(): boolean {
+    return (this.messages ?? []).some(
+      m => m.Role === 'AI' && (m.Status === 'In-Progress' || m.Status === 'Error')
+    );
+  }
+
+  /** One reconcile pass over the in-progress messages of the active conversation. */
+  private async reconcileOnce(reason: string): Promise<void> {
+    const conversationId = this.conversationId;
+    if (!conversationId || !this.currentUser) {
+      return;
+    }
+
+    // READ the token, never `++` it. `conversationLoadToken` is a CANCELLATION token: every
+    // in-flight conversation load checks it and bails when it changes, so incrementing here
+    // would abort a load already running rather than merely tagging this work.
+    const loadToken = this.conversationLoadToken;
+
+    LogStatusEx({ message: `🔁 Reconciling in-progress runs (${reason})`, verboseOnly: true });
+    try {
+      if (this.reconcileWindowRefreshPending) {
+        this.reconcileWindowRefreshPending = false;
+        // Decided synchronously so a pass with nothing unsettled adds no await to next's path.
+        if (this.hasUnsettledAgentReplies()) {
+          const stillActive = await this.refreshNewestWindow(conversationId, loadToken);
+          if (!stillActive) {
+            return;
+          }
+        }
+      }
+      await this.refreshAgentRunsForInProgress(conversationId, loadToken);
+      if (!this.isActiveConversationLoad(conversationId, loadToken)) {
+        return;
+      }
+      await this.detectAndReconcileAgentRuns(conversationId, loadToken);
+    } catch (error) {
+      // Recovery is best-effort: a failed reconcile must never surface as a user-facing error,
+      // and the next trigger will try again.
+      console.error('[ConversationChatArea] Reconciliation failed:', error);
+    }
+  }
+
+  /**
+   * Ask the durable read model whether a message we still show as in-progress has in fact finished.
+   *
+   * The last gap in the recovery chain. Everything else here reads `MJ: AI Agent Runs` through the
+   * client's own provider; when that returns nothing the message simply waits. The tail query reads
+   * the same truth server-side from a cursor, reports the conversation detail's own status, and runs
+   * over HTTP — so it answers while the WebSocket is still down, which is the whole point.
+   *
+   * Completion is routed through the existing {@link handleMessageCompletion}, never written here:
+   * four writers already move a message out of In-Progress and a fifth would race them.
+   *
+   * @returns true when the message was completed from durable state.
+   */
+  private async tryRecoverFromTail(
+    message: MJConversationDetailEntity,
+    conversationId: string,
+    loadToken: number
+  ): Promise<boolean> {
+    const tail = ConversationsRuntime.Instance.Tail;
+    const result = await tail.Tail(message.ID);
+
+    if (!this.isActiveConversationLoad(conversationId, loadToken)) {
+      return false;
+    }
+    if (!result.Success) {
+      // An older server has no tail query, and a new client then gets a failure on every call.
+      // Decide from the run list instead, as the client did before the tail existed.
+      return this.recoverFromRunList(message, conversationId, loadToken);
+    }
+
+    // `IsInFlight` false means the server considers the run finished. A terminal `DetailStatus`
+    // with no run at all covers the case where the detail was completed by something other than an
+    // agent run. Either way the message must stop spinning.
+    const detailIsTerminal = result.DetailStatus === 'Complete' || result.DetailStatus === 'Error';
+    const runIsTerminal = result.RunID != null && !result.IsInFlight;
+
+    if (!runIsTerminal && !detailIsTerminal) {
+      return false;
+    }
+
+    // A terminal run beside a detail the server still reports as open is the orphan window, which
+    // the server-side reconciler closes after its grace period. `handleMessageCompletion` re-reads
+    // the detail rather than writing it, so completing here cannot settle the message; it would
+    // reload the whole conversation on every trigger and leave it spinning regardless. Keep the
+    // cursor and wait for the row to close.
+    if (!detailIsTerminal && result.DetailStatus === 'In-Progress') {
+      LogStatusEx({
+        message: `📼 Tail reports run ${result.RunID} finished but detail ${message.ID} is still open — leaving it to the reconciler`,
+        verboseOnly: true
+      });
+      return false;
+    }
+
+    LogStatusEx({
+      message: `📼 Tail reports message ${message.ID} finished (run ${result.RunID ?? 'none'}, status ${result.RunStatus ?? result.DetailStatus}) — completing`,
+      verboseOnly: true
+    });
+    await this.handleMessageCompletion(message, result.RunID ?? '', conversationId, loadToken);
+    // The message is terminal, so its cursor will never advance again.
+    tail.Forget(message.ID);
+    return true;
+  }
+
+  /**
+   * Complete a message from the run list alone. Used only when the tail call fails.
+   *
+   * Less precise than the tail: it cannot see the conversation detail's own status, so during the
+   * orphan window it reloads the message without settling it. That was the behavior before the
+   * tail existed, and it is better than leaving a finished message spinning.
+   *
+   * @returns true when the message was completed.
+   */
+  private async recoverFromRunList(
+    message: MJConversationDetailEntity,
+    conversationId: string,
+    loadToken: number
+  ): Promise<boolean> {
+    const run = this.AgentRunsByDetailId.get(message.ID);
+    if (!run || !RUN_LIST_TERMINAL_STATUSES.includes(run.Status)) {
+      return false;
+    }
+    LogStatusEx({
+      message: `📼 Tail unavailable; run ${run.ID} (${run.Status}) for message ${message.ID} is finished — completing from the run list`,
+      verboseOnly: true
+    });
+    await this.handleMessageCompletion(message, run.ID, conversationId, loadToken);
+    return true;
+  }
+
   private async detectAndReconcileAgentRuns(conversationId: string, loadToken: number): Promise<void> {
     if (!this.isActiveConversationLoad(conversationId, loadToken)) {
       return;
@@ -6448,6 +10098,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Reconnect to in-progress agent runs whose completion events were missed.
    */
   private async reconnectInProgressRuns(conversationId: string, loadToken: number): Promise<void> {
+    // An ID whose row settled while its completion was missed would never be found by the scan below.
+    this.dropSettledFromInFlight();
     const inProgressMessages = this.messages.filter(
       m => m.Status === 'In-Progress' && m.Role === 'AI'
     );
@@ -6458,24 +10110,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     LogStatusEx({message: `🔄 Found ${inProgressMessages.length} in-progress messages, checking status...`, verboseOnly: true});
 
-    const completedStatuses = ['Completed', 'Failed', 'Error', 'Cancelled'];
-
     for (const message of inProgressMessages) {
       const agentRun = this.AgentRunsByDetailId.get(message.ID);
 
-      if (!agentRun) {
-        // No agent run yet — fire-and-forget may not have created it.
-        // Polling will pick this up once the server creates the run.
-        LogStatusEx({message: `⏳ No agent run found for in-progress message ${message.ID}, waiting for server...`, verboseOnly: true});
-        continue;
-      }
-
-      if (completedStatuses.includes(agentRun.Status)) {
-        // Agent completed during the WebSocket reconnection gap — handle now
-        LogStatusEx({message: `🔄 Agent run ${agentRun.ID} already completed (${agentRun.Status}) for message ${message.ID}, handling catch-up...`, verboseOnly: true});
-        await this.handleMessageCompletion(message, agentRun.ID, conversationId, loadToken);
-      } else {
-        LogStatusEx({message: `🔌 Agent run ${agentRun.ID} still ${agentRun.Status} for message ${message.ID}, WebSocket will receive updates`, verboseOnly: true});
+      // Ask durable state for every in-progress message, whatever the run map says. The run is not
+      // the only thing that decides a message: the tail reports the conversation detail's own
+      // status, which the run map does not carry at all. A finished run beside a detail that is
+      // still open is the orphan window, and completing from the run alone would reload the whole
+      // conversation on every trigger while the message kept spinning. The tail leaves that case
+      // to the server-side reconciler, and completes a detail that was closed by anything.
+      const recovered = await this.tryRecoverFromTail(message, conversationId, loadToken);
+      if (!recovered) {
+        LogStatusEx({
+          message: agentRun
+            ? `🔌 Agent run ${agentRun.ID} (${agentRun.Status}) for message ${message.ID}; durable state does not show the message finished`
+            : `⏳ No agent run found for in-progress message ${message.ID}, waiting for server...`,
+          verboseOnly: true
+        });
       }
     }
   }
@@ -6574,6 +10225,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private scrollToMessage(messageId: string): void {
     // Wait for DOM to update, then scroll
     setTimeout(() => {
+      if (this.scrollToMessageOrThreadRoot(messageId)) {
+        return;
+      }
       const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
       if (messageElement) {
         messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -6600,11 +10254,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     tempMessage.Message = '🔍 Analyzing your request to determine the best agent...';
     tempMessage.Role = 'AI';
     tempMessage.Status = 'In-Progress';
-    // Set created date using LoadFromData to bypass read-only protection
+    // Set created date using LoadFromData to bypass read-only protection. The open view's branch
+    // makes a fork view draw the row as one of the fork's own rows.
     tempMessage.LoadFromData({
       Message: tempMessage.Message,
       Role: tempMessage.Role,
       Status: tempMessage.Status,
+      BranchID: this.OpenViewBranchId,
       __mj_CreatedAt: new Date()
     });
     // No ID means it's temporary (won't be saved)

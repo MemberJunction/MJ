@@ -14,6 +14,11 @@
   transition: width 0.2s ease-in-out;
   overflow: hidden;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.04);
+  /* Isolate the navigation panel stacking context so its internal .collapse-toggle
+     (z-index: 10) never leaks out above .content-body or full-screen dialogs. */
+  isolation: isolate;
+  position: relative;
+  z-index: 1;
 }
 .navigation-panel.collapsed {
   width: 48px;
@@ -96,7 +101,7 @@
   gap: 24px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   position: relative;
-  z-index: 2; /* Above sibling .content-body so header dropdowns render on top of grid/map content */
+  z-index: 2;
 }
 
 .header-left {
@@ -438,17 +443,47 @@
   display: flex;
   flex: 1 1 0%;
   overflow: hidden;
-  /* Contain the body's stacking context. The view components inside (grid
-  option menus, the map's Leaflet panes/toolbar, etc.) use z-index values up
-  to ~1000; .content-header sits at z-index 2 (kept below the shell header —
-  see #2701). Without this, those body z-indices leak into the shared context
-  and paint over the header's own dropdowns (view-selector, date-field).
-  `isolation: isolate` flattens all body z-indices into one context beneath
-  the header. Safe because modals + the detail panel render at the dashboard
-  root (outside .content-body), so they still overlay everything. */
-  isolation: isolate;
-  position: relative;   /* added */
-  z-index: 3;           /* added — higher than .content-header's z-index: 2 */
+  /* Intentionally no z-index or isolation here: .content-header sits at z-index: 2
+     above normal body content, .dynamic-view-host isolates plug-in renderers such as
+     Leaflet (whose internal controls reach z-index: 1000) at z-index: 1, and full-screen
+     modal overlays (--mj-z-modal) hosted inside mj-view-workspace or mj-entity-data-grid
+     can escape above .content-header without being trapped. */
+  position: relative;
+}
+
+/* ============================================
+   DASHBOARDS MOVED BANNER
+   ============================================ */
+
+/* Sits between .content-header and .content-body in the .content-area column. Side margins line up with the header text. */
+.dx-moved-banner {
+  display: flex;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin: 12px 24px;
+  border-radius: 10px;
+  background: var(--mj-status-info-bg);
+  color: var(--mj-status-info-text);
+  font-size: 13px;
+  transition: margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* The home header has no bottom border and ends with its own padding. */
+.content-header.home-header + .dx-moved-banner {
+  margin-top: 0;
+}
+
+/* The open Quick Access panel covers the right 320px, so the banner ends 24px before it. */
+.dx-moved-banner.panel-open {
+  margin-right: 344px;
+}
+
+/* The text fills the free space. When less than 200px is free, the buttons go to a second line. */
+.dx-moved-banner span {
+  flex: 1 1 200px;
 }
 
 .loading-container,
@@ -1079,6 +1114,11 @@
   .quick-access-panel {
     width: 100%;
   }
+
+  /* The Quick Access panel covers the full width here, so the banner keeps its normal margin. */
+  .dx-moved-banner.panel-open {
+    margin-right: 24px;
+  }
 }
 
 @media (max-width: 600px) {
@@ -1096,6 +1136,12 @@
 
   .content-body {
     padding: 12px 16px;
+  }
+
+  /* The entity header has 16px side padding here. The home header keeps 24px. */
+  .content-header:not(.home-header) + .dx-moved-banner {
+    margin-left: 16px;
+    margin-right: 16px;
   }
 
   .entity-item-grid {

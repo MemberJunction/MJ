@@ -11,8 +11,41 @@
 import { CompositeKey, IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
+import type { LaneKind } from './ScopeExplanation';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeEntityConstraint } from './search.types';
 import { EnvIntOverride } from './env-config';
+
+/**
+ * Why one entity's slice of a fan-out came back empty.
+ *
+ * `'timeout'` — the per-entity wait elapsed. The query is very likely STILL RUNNING in the
+ * database; we stopped waiting, we did not stop the work.
+ * `'error'`   — the RunView reported a failure, or threw.
+ */
+export type EntitySearchIncompleteReason = 'timeout' | 'error';
+
+/** One entity's outcome within a single {@link EntitySearchProvider.Search} fan-out. */
+export type EntitySearchOutcome = {
+    EntityName: string;
+    Items: SearchResultItem[];
+    /** `null` when the entity answered — an empty `Items` then genuinely means "no matches". */
+    Incomplete: EntitySearchIncompleteReason | null;
+};
+
+/**
+ * Summary of a fan-out that could not read everything it was asked to read — the payload of
+ * {@link EntitySearchProvider.OnIncompleteResults}.
+ */
+export type EntitySearchIncompleteReport = {
+    /** The query text actually issued (post query-transform). */
+    Query: string;
+    /** How many entities were in scope for this fan-out. */
+    EntitiesRequested: number;
+    /** Entity names whose per-entity wait elapsed. */
+    TimedOutEntities: string[];
+    /** Entity names whose query reported a failure or threw. */
+    FailedEntities: string[];
+};
 
 /**
  * Provides entity-level LIKE-based search using RunView + UserSearchString.
@@ -22,6 +55,15 @@ import { EnvIntOverride } from './env-config';
 @RegisterClass(BaseSearchProvider, 'EntitySearchProvider')
 export class EntitySearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'entity';
+
+    /** Reads the scope's entity lanes, each with its own ExtraFilter and UserSearchString (see `BaseSearchProvider.ConsumesLaneKinds`). */
+    public override readonly ConsumesLaneKinds: readonly LaneKind[] = ['Entity'];
+
+    /** Every hit is a row of the entity it names, read through `RunView` as the user (see the base class). */
+    public override readonly ResultsAreRowsOfLabelledEntity: boolean = true;
+
+    /** Each lane's rendered `ExtraFilter` is applied in the `RunView` that reads its entity (see the base class). */
+    public override readonly AppliesLaneExtraFilter: boolean = true;
 
     /**
      * Minimum trimmed term length we accept. A single-character substring against a
@@ -65,6 +107,52 @@ export class EntitySearchProvider extends BaseSearchProvider {
      * ```
      */
     public static PerEntityTimeoutMS = EnvIntOverride('MJ_SEARCH_PER_ENTITY_TIMEOUT_MS', 3000);
+
+    /**
+     * Maximum number of per-entity RunViews this provider will have IN FLIGHT at once.
+     *
+     * Previously the fan-out was a flat `Promise.all` over every scoped entity, and that is
+     * the innermost of THREE nested unbounded layers: `SearchEngine` fans out per resolved
+     * scope, then per provider within each scope, then this fans out per entity. With ~150
+     * entities carrying `AllowUserSearchAPI` and a couple of scopes, one keystroke in the
+     * omnibar could put several hundred `LIKE '%term%'` scans on the connection pool
+     * simultaneously.
+     *
+     * {@link PerEntityTimeoutMS} does NOT bound that: it bounds how long each query is
+     * *waited on*, not how many run. The abandoned query keeps executing in the database
+     * (mssql `Request`s are not cancelled here), so under overload the timeouts fire, every
+     * entity resolves to an empty list, and the user sees *silently missing results* while
+     * the server is still working through the pile.
+     *
+     * Public + static so a deployment can tune it at startup, or override the default at
+     * process start via `MJ_SEARCH_MAX_CONCURRENT_ENTITIES`. The default of 8 is deliberately
+     * conservative: the fused result set is capped at `topK` regardless, so a lower ceiling
+     * costs latency on pathological fan-outs and buys back the pool.
+     *
+     * ```ts
+     * import { EntitySearchProvider } from '@memberjunction/search-engine';
+     * EntitySearchProvider.MaxConcurrentEntitySearches = 16;
+     * ```
+     */
+    public static MaxConcurrentEntitySearches = EnvIntOverride('MJ_SEARCH_MAX_CONCURRENT_ENTITIES', 8);
+
+    /**
+     * Optional deployment hook, invoked once per {@link Search} call that could not read every
+     * entity it was asked to read.
+     *
+     * Exists because a per-entity timeout or query failure resolves to an EMPTY LIST, which is
+     * indistinguishable downstream from "this entity genuinely has no matches". Fusion then
+     * publishes a confident, complete-looking result set that is quietly missing whole
+     * entities. The provider cannot widen its own return type — `BaseSearchProvider.Search`
+     * fixes it at `SearchResultItem[]` — so the partial-ness is surfaced here instead, as a
+     * report the host can turn into a "showing partial results" signal.
+     *
+     * The report is a fresh object per call and is never retained, so installing this hook
+     * introduces no shared mutable state between concurrent searches.
+     *
+     * Not invoked when every entity answered.
+     */
+    public static OnIncompleteResults?: (report: EntitySearchIncompleteReport) => void;
 
     /**
      * Execute an entity search across all entities with AllowUserSearchAPI=true.
@@ -136,11 +224,21 @@ export class EntitySearchProvider extends BaseSearchProvider {
                 Math.max(EntitySearchProvider.PerEntityFetchDepth, Math.ceil(topK / Math.max(1, scoped.length)))
             );
 
-            // Search all entities in parallel, threading per-entity ExtraFilter + UserSearchString
-            // override; each call is gated by a hard PerEntityTimeoutMS timeout so a slow entity
-            // cannot hold up the whole fan-out — partial results from the other entities still land.
-            const searchPromises = scoped.map(item =>
-                this.searchOneEntity(
+            // Search the entities through a BOUNDED pool, threading per-entity ExtraFilter +
+            // UserSearchString override; each call is additionally gated by a hard
+            // PerEntityTimeoutMS timeout so a slow entity cannot hold up the whole fan-out —
+            // partial results from the other entities still land.
+            //
+            // The bound is the point: this fan-out is one of THREE nested unbounded layers
+            // (SearchEngine fans out per scope, then per provider, then this fans out per
+            // entity), so a `Promise.all` over every searchable entity multiplies out to
+            // hundreds of simultaneous LIKE scans from a single keystroke. The individual
+            // timeouts do not bound the load — they bound how long each query is WAITED on,
+            // while the query itself keeps running in the database (see searchOneEntity).
+            const outcomes = await EntitySearchProvider.mapWithConcurrency(
+                scoped,
+                EntitySearchProvider.MaxConcurrentEntitySearches,
+                item => this.searchOneEntity(
                     item.EntityName,
                     item.UserSearchString ?? effectiveQuery,
                     perEntityLimit,
@@ -149,10 +247,11 @@ export class EntitySearchProvider extends BaseSearchProvider {
                 )
             );
 
-            const results = await Promise.all(searchPromises);
+            this.reportIncompleteEntities(outcomes, effectiveQuery);
+
             // Re-score against the original query for field-match relevance (not the transform)
             // to keep snippets/field-match semantics consistent with what the user typed.
-            const allResults = results.flat();
+            const allResults = outcomes.flatMap(o => o.Items);
 
             // Sort by score descending and limit to topK
             allResults.sort((a, b) => b.Score - a.Score);
@@ -167,18 +266,19 @@ export class EntitySearchProvider extends BaseSearchProvider {
     /**
      * Resolve the entity list to actually search.
      *
-     * - If `scopeConstraints.Entities` is provided, use those directly (each carries its own
-     *   rendered ExtraFilter + UserSearchString) — this is the "scoped" path.
-     * - Otherwise fall back to the legacy unscoped path (`AllowUserSearchAPI=true` with
-     *   optional `filters.EntityNames` restriction) and wrap each in a trivial constraint.
+     * - If `scopeConstraints.Entities` is defined, use it verbatim (each entry carries its own
+     *   rendered ExtraFilter + UserSearchString) — this is the "scoped" path. An EMPTY list means
+     *   the scope gives this provider no entity, so nothing is searched — never every entity.
+     * - Only when it is `undefined` (an unscoped search) fall back to the legacy path
+     *   (`AllowUserSearchAPI=true` with optional `filters.EntityNames`), wrapping each in a trivial constraint.
      */
     private buildScopedEntityList(
         md: IMetadataProvider,
         scopeConstraints: ScopeConstraints | undefined,
         filters: SearchFilters | undefined
     ): ScopeEntityConstraint[] {
-        if (scopeConstraints?.Entities?.length) {
-            // Honor the scope's explicit entity list verbatim.
+        if (scopeConstraints?.Entities) {
+            // Honor the scope's explicit entity list verbatim — including an empty one.
             return scopeConstraints.Entities;
         }
 
@@ -236,10 +336,95 @@ export class EntitySearchProvider extends BaseSearchProvider {
     }
 
     /**
+     * Run `worker` over `items` with at most `limit` calls in flight, preserving input order
+     * in the returned array.
+     *
+     * Static and internal-by-convention (not re-exported from the package index) so it can be
+     * exercised directly by the tests that pin the ceiling. `next++` needs no lock: the
+     * increment is a single synchronous step and JavaScript gives us one of those at a time,
+     * so no two runners can claim the same index.
+     */
+    public static async mapWithConcurrency<TIn, TOut>(
+        items: readonly TIn[],
+        limit: number,
+        worker: (item: TIn, index: number) => Promise<TOut>
+    ): Promise<TOut[]> {
+        const out: TOut[] = new Array<TOut>(items.length);
+        if (items.length === 0) {
+            return out;
+        }
+        // A non-positive or absurd ceiling must not become "no concurrency" or "unbounded":
+        // clamp to [1, items.length].
+        const effective = Math.max(1, Math.min(Math.floor(limit) || 1, items.length));
+        let next = 0;
+        const runners: Promise<void>[] = [];
+        for (let r = 0; r < effective; r++) {
+            runners.push((async () => {
+                for (;;) {
+                    const index = next++;
+                    if (index >= items.length) {
+                        return;
+                    }
+                    out[index] = await worker(items[index], index);
+                }
+            })());
+        }
+        await Promise.all(runners);
+        return out;
+    }
+
+    /**
+     * Turn the per-entity outcomes into one report for {@link OnIncompleteResults}, plus a
+     * single rolled-up log line.
+     *
+     * Rolled up on purpose: the previous behaviour logged one line per timed-out entity from
+     * inside the race, so an overloaded fan-out produced N separate lines and no statement of
+     * the thing that actually matters — that THIS SEARCH's answer is incomplete.
+     */
+    private reportIncompleteEntities(outcomes: readonly EntitySearchOutcome[], query: string): void {
+        const timedOut = outcomes.filter(o => o.Incomplete === 'timeout').map(o => o.EntityName);
+        const failed = outcomes.filter(o => o.Incomplete === 'error').map(o => o.EntityName);
+        if (timedOut.length === 0 && failed.length === 0) {
+            return;
+        }
+
+        const report: EntitySearchIncompleteReport = {
+            Query: query,
+            EntitiesRequested: outcomes.length,
+            TimedOutEntities: timedOut,
+            FailedEntities: failed,
+        };
+
+        LogError(
+            `EntitySearchProvider: PARTIAL RESULTS for "${query}" — ` +
+            `${timedOut.length + failed.length} of ${outcomes.length} entities did not answer ` +
+            `(${timedOut.length} timed out after ${EntitySearchProvider.PerEntityTimeoutMS}ms` +
+            `${timedOut.length > 0 ? `: ${timedOut.join(', ')}` : ''}` +
+            `${failed.length > 0 ? `; ${failed.length} failed: ${failed.join(', ')}` : ''}).`
+        );
+
+        const hook = EntitySearchProvider.OnIncompleteResults;
+        if (hook) {
+            try {
+                hook(report);
+            } catch (err) {
+                // A host's reporting hook must never be able to fail the search it is
+                // reporting on.
+                LogError(`EntitySearchProvider: OnIncompleteResults hook threw — ${err instanceof Error ? err.message : String(err)}`);
+            }
+        }
+    }
+
+    /**
      * Search a single entity using RunView with UserSearchString. Wraps the
      * underlying RunView in a hard PerEntityTimeoutMS timeout so a slow
      * entity cannot hold up the whole fan-out — partial results from the
      * other entities still land.
+     *
+     * Returns an {@link EntitySearchOutcome} rather than a bare array so the caller can tell
+     * "this entity has no matches" from "we never heard back about this entity". Those were
+     * the same value — `[]` — and that is how an incomplete result set came to be presented
+     * as a complete one.
      *
      * Note: `contextUser` is passed to RunView so row-level security (RLS) is applied
      * automatically — this is the Entity provider's permission push-down per Section 3.6
@@ -251,13 +436,12 @@ export class EntitySearchProvider extends BaseSearchProvider {
         maxRows: number,
         contextUser: UserInfo,
         extraFilter?: string
-    ): Promise<SearchResultItem[]> {
+    ): Promise<EntitySearchOutcome> {
         const work = this.searchOneEntityRaw(entityName, userSearchString, maxRows, contextUser, extraFilter);
         let timer: ReturnType<typeof setTimeout> | undefined;
-        const timeout = new Promise<SearchResultItem[]>(resolve => {
+        const timeout = new Promise<EntitySearchOutcome>(resolve => {
             timer = setTimeout(() => {
-                LogError(`EntitySearchProvider: timeout (${EntitySearchProvider.PerEntityTimeoutMS}ms) searching "${entityName}"`);
-                resolve([]);
+                resolve({ EntityName: entityName, Items: [], Incomplete: 'timeout' });
             }, EntitySearchProvider.PerEntityTimeoutMS);
         });
         try {
@@ -273,7 +457,7 @@ export class EntitySearchProvider extends BaseSearchProvider {
         maxRows: number,
         contextUser: UserInfo,
         extraFilter?: string
-    ): Promise<SearchResultItem[]> {
+    ): Promise<EntitySearchOutcome> {
         try {
             const rv = new RunView();
             const result = await rv.RunView<Record<string, unknown>>({
@@ -286,14 +470,18 @@ export class EntitySearchProvider extends BaseSearchProvider {
 
             if (!result.Success) {
                 LogError(`EntitySearchProvider: Failed to search "${entityName}": ${result.ErrorMessage}`);
-                return [];
+                return { EntityName: entityName, Items: [], Incomplete: 'error' };
             }
 
-            return this.convertResults(result.Results, entityName, userSearchString);
+            return {
+                EntityName: entityName,
+                Items: this.convertResults(result.Results, entityName, userSearchString),
+                Incomplete: null,
+            };
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`EntitySearchProvider: Error searching "${entityName}": ${msg}`);
-            return [];
+            return { EntityName: entityName, Items: [], Incomplete: 'error' };
         }
     }
 
@@ -309,7 +497,8 @@ export class EntitySearchProvider extends BaseSearchProvider {
     ): SearchResultItem[] {
         const md = this.Provider;
         const entityInfo = md.EntityByName(entityName);
-        const queryLower = query.toLowerCase();
+        const queryLower = query.toLowerCase().trim();
+        const queryTokens = queryLower.split(/\s+/).filter(t => t.length >= 2);
 
         // Get searchable fields and classify them by importance
         const searchFields = entityInfo?.Fields.filter(f => f.IncludeInUserSearchAPI) ?? [];
@@ -329,15 +518,20 @@ export class EntitySearchProvider extends BaseSearchProvider {
             const title = this.extractTitle(record, entityInfo);
             const snippet = this.extractSnippet(record, entityInfo);
 
-            // Calculate relevance: check how many fields match the query
+            // Calculate relevance: check how many fields match the query (full phrase or multi-word tokens)
             let matchedFields = 0;
             let nameFieldMatch = false;
             for (const field of searchFields) {
                 const val = record[field.Name];
-                if (val != null && String(val).toLowerCase().includes(queryLower)) {
-                    matchedFields++;
-                    if (nameFields.some(nf => nf.Name === field.Name)) {
-                        nameFieldMatch = true;
+                if (val != null) {
+                    const strVal = String(val).toLowerCase();
+                    const fullMatch = queryLower.length > 0 && strVal.includes(queryLower);
+                    const tokenMatch = !fullMatch && queryTokens.length > 1 && queryTokens.some(tok => strVal.includes(tok));
+                    if (fullMatch || tokenMatch) {
+                        matchedFields++;
+                        if (nameFields.some(nf => nf.Name === field.Name)) {
+                            nameFieldMatch = true;
+                        }
                     }
                 }
             }

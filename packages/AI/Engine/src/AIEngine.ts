@@ -5,20 +5,22 @@ import { BaseLLM, BaseModel, BaseResult, ChatParams, ChatMessage, ChatMessageRol
          EmbedContentParams,
          EmbedContentResult,
          ChatMessageContent,
-         BaseEmbeddings} from "@memberjunction/ai";
+         BaseEmbeddings,
+         EmbeddingInputType,
+         ApplyEmbeddingInputPrefix} from "@memberjunction/ai";
 import { SummarizeResult } from "@memberjunction/ai";
 import { AIModelConfiguration } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
-import { BaseEntity, BaseEntityEvent, BaseEngineRegistry, LogError, Metadata, UserInfo, IMetadataProvider, IStartupSink, RegisterForStartup } from "@memberjunction/core";
+import { BaseEntity, BaseEntityEvent, BaseEngineRegistry, LogError, LogWarning, Metadata, UserInfo, IMetadataProvider, IStartupSink, RegisterForStartup, SharedLoad } from "@memberjunction/core";
 import { BaseSingleton, MJGlobal, MJEventType, MJLruCache, ToEpochMs, UUIDsEqual } from "@memberjunction/global";
 import { createHash } from "crypto";
 import { MJAIActionEntity, MJActionEntity,
          MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
          MJAIModelActionEntity, MJAIPromptModelEntity, MJAIPromptTypeEntity,
          MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJArtifactTypeEntity,
-         MJEntityAIActionEntity, MJVectorDatabaseEntity, MJAIAgentPromptEntity,
-         MJAIAgentTypeEntity, MJAIVendorEntity, MJAIModelVendorEntity, MJAIModelTypeEntity,
+         MJEntityAIActionEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJAIAgentPromptEntity,
+         MJAIAgentTypeEntity, MJAIAgentRequestTypeEntity, MJAIVendorEntity, MJAIModelVendorEntity, MJAIModelTypeEntity,
          MJAIModelCostEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity,
          MJAIConfigurationEntity, MJAIConfigurationParamEntity, MJAIAgentStepEntity,
          MJAIAgentStepPathEntity, MJAIAgentRelationshipEntity, MJAIAgentPermissionEntity,
@@ -28,8 +30,9 @@ import { MJAIActionEntity, MJActionEntity,
          MJAIAgentClientToolEntity, MJAIAgentCategoryEntity, IsInjectableNoteStatus,
          MJAISkillEntity, MJAISkillActionEntity, MJAISkillSubAgentEntity, MJAIAgentSkillEntity, MJAISkillPermissionEntity,
          MJAIPersonaEntity, MJAIPersonaVendorEntity, MJAIModelPersonaEntity, MJAIAgentPersonaEntity } from "@memberjunction/core-entities";
-import { AIEngineBase, ResolvedModelPersona, ResolvedAgentPersona, EffectiveAgentPersona, EffectiveAgentPermissions } from "@memberjunction/ai-engine-base";
-import { SimpleVectorService } from "@memberjunction/ai-vectors-memory";
+import { AIEngineBase, ResolvedModelPersona, ResolvedAgentPersona, EffectiveAgentPersona, EffectiveAgentPermissions, AgentStorageAccountResolution, AgentStorageAccountSource, UserRunnableAgentSummary } from "@memberjunction/ai-engine-base";
+export type { AgentStorageAccountResolution, AgentStorageAccountSource, UserRunnableAgentSummary } from "@memberjunction/ai-engine-base";
+import { ReadStoredVector, SimpleVectorService, VectorInputEntry } from "@memberjunction/ai-vectors-memory";
 import { NoteEmbeddingMetadata, NoteMatchResult } from "./types/NoteMatchResult";
 import { ExampleEmbeddingMetadata, ExampleMatchResult } from "./types/ExampleMatchResult";
 import { ActionEngineBase } from "@memberjunction/actions-base";
@@ -120,18 +123,20 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     }
 
     /**
-     * Builds a bounded, collision-resistant cache key for a (model, text) pair.
+     * Builds a bounded, collision-resistant cache key for one embedding request. `text` is the
+     * prepared (prefixed) text. The input type is part of the key because a hosted driver maps it
+     * natively (an omitted one can differ from `'document'`), and dimensions change the vector.
      * Hashing the text keeps Map memory bounded regardless of text size.
      */
-    private buildEmbeddingCacheKey(modelId: string, text: string): string {
+    private buildEmbeddingCacheKey(modelId: string, text: string, inputType?: EmbeddingInputType, dimensions?: number): string {
         const hash = createHash('sha256').update(text).digest('hex');
-        return `${modelId}|${hash}`;
+        return `${modelId}|${inputType ?? ''}|${dimensions ?? ''}|${hash}`;
     }
 
     // Loading state management
     private _loaded: boolean = false;
-    private _loading: boolean = false;
-    private _loadingPromise: Promise<void> | null = null;
+    /** Shares concurrent loads; a forced `Config(true)` always gets a load that starts after it. */
+    private readonly _load = new SharedLoad();
     private _contextUser: UserInfo | undefined;
 
     // ========================================================================
@@ -148,10 +153,12 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     private _agentCatalogListenerSetUp: boolean = false;
     /** Entities whose change must coarse-invalidate the agent base-catalog cache (lowercased). */
     private static readonly agentCatalogInvalidatingEntities: ReadonlySet<string> = new Set([
-        'ai agents',
+        'mj: ai agents',
         'mj: ai agent actions',
         'mj: ai agent relationships',
         'mj: ai agent types',
+        'mj: ai agent configurations',
+        'mj: ai agent permissions',
     ]);
 
     /**
@@ -169,9 +176,10 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
         this._agentBaseCatalogCache.set(agentID, catalog);
     }
 
-    /** Wipes the entire agent base-catalog cache. Called on relevant entity changes and on reload. */
+    /** Wipes the entire agent base-catalog cache and user runnable agent directory cache. Called on relevant entity changes and on reload. */
     public ClearAgentBaseCatalogCache(): void {
         this._agentBaseCatalogCache.clear();
+        this.Base.ClearUserRunnableAgentDirectoryCache();
     }
 
     /**
@@ -249,6 +257,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public get Agents(): MJAIAgentEntityExtended[] { return this.Base.Agents; }
     public get AgentRelationships(): MJAIAgentRelationshipEntity[] { return this.Base.AgentRelationships; }
     public get AgentTypes(): MJAIAgentTypeEntity[] { return this.Base.AgentTypes; }
+    public get AgentRequestTypes(): MJAIAgentRequestTypeEntity[] { return this.Base.AgentRequestTypes; }
     public get AgentCategories(): MJAIAgentCategoryEntity[] { return this.Base.AgentCategories; }
     public get AgentActions(): MJAIAgentActionEntity[] { return this.Base.AgentActions; }
     public get AgentPrompts(): MJAIAgentPromptEntity[] { return this.Base.AgentPrompts; }
@@ -286,6 +295,20 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public get ClientToolDefinitions(): MJAIClientToolDefinitionEntity[] { return this.Base.ClientToolDefinitions; }
     public get AgentClientTools(): MJAIAgentClientToolEntity[] { return this.Base.AgentClientTools; }
     public GetClientToolsForAgent(agentId: string): MJAIClientToolDefinitionEntity[] { return this.Base.GetClientToolsForAgent(agentId); }
+    /** Agent storage-account routing with source tier — see {@link AIEngineBase.ResolveAgentStorageAccount}. */
+    public ResolveAgentStorageAccount(
+        agent: Parameters<AIEngineBase['ResolveAgentStorageAccount']>[0],
+        overrideStorageAccountId?: string | null
+    ): AgentStorageAccountResolution {
+        return this.Base.ResolveAgentStorageAccount(agent, overrideStorageAccountId);
+    }
+    /** Agent storage-account routing — see {@link AIEngineBase.ResolveAgentStorageAccountID}. */
+    public ResolveAgentStorageAccountID(
+        agent: Parameters<AIEngineBase['ResolveAgentStorageAccountID']>[0],
+        overrideStorageAccountId?: string | null
+    ): string | null {
+        return this.Base.ResolveAgentStorageAccountID(agent, overrideStorageAccountId);
+    }
     public GetCredentialBindingsForTarget(
         bindingType: 'Vendor' | 'ModelVendor' | 'PromptModel',
         targetId: string
@@ -307,6 +330,9 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public get ArtifactTypes(): MJArtifactTypeEntity[] { return this.Base.ArtifactTypes; }
     public get LanguageModels(): MJAIModelEntityExtended[] { return this.Base.LanguageModels; }
     public get VectorDatabases(): MJVectorDatabaseEntity[] { return this.Base.VectorDatabases; }
+    public get VectorIndexes(): MJVectorIndexEntity[] { return this.Base.VectorIndexes; }
+    public GetVectorIndexByID(id: string): MJVectorIndexEntity | undefined { return this.Base.GetVectorIndexByID(id); }
+    public GetProviderIndexName(vectorIndex: MJVectorIndexEntity): string { return this.Base.GetProviderIndexName(vectorIndex); }
     public get ModelCosts(): MJAIModelCostEntity[] { return this.Base.ModelCosts; }
     public get ModelPriceTypes(): MJAIModelPriceTypeEntity[] { return this.Base.ModelPriceTypes; }
     public get ModelPriceUnitTypes(): MJAIModelPriceUnitTypeEntity[] { return this.Base.ModelPriceUnitTypes; }
@@ -404,6 +430,20 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public GetAgentByID(agentId: string): MJAIAgentEntityExtended {
         return this.Base.GetAgentByID(agentId);
     }
+    public GetAgentRequestTypeByName(name: string): MJAIAgentRequestTypeEntity | undefined {
+        return this.Base.GetAgentRequestTypeByName(name);
+    }
+    public async ResolveAgentRequestTypeID(typeName: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<string | null> {
+        return this.Base.ResolveAgentRequestTypeID(typeName, contextUser, provider);
+    }
+    /** Cached per-user directory of directly discoverable, active agents the user is permitted to run — see {@link AIEngineBase.GetUserRunnableAgentDirectory}. */
+    public GetUserRunnableAgentDirectory(user: UserInfo | undefined): UserRunnableAgentSummary[] {
+        return this.Base.GetUserRunnableAgentDirectory(user);
+    }
+    /** Clears the per-user runnable agent directory cache — see {@link AIEngineBase.ClearUserRunnableAgentDirectoryCache}. */
+    public ClearUserRunnableAgentDirectoryCache(userId?: string): void {
+        this.Base.ClearUserRunnableAgentDirectoryCache(userId);
+    }
     public GetAgentConfigurationPresets(agentId: string, activeOnly: boolean = true): MJAIAgentConfigurationEntity[] {
         return this.Base.GetAgentConfigurationPresets(agentId, activeOnly);
     }
@@ -412,6 +452,19 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     }
     public GetAgentConfigurationPresetByName(agentId: string, presetName: string): MJAIAgentConfigurationEntity | undefined {
         return this.Base.GetAgentConfigurationPresetByName(agentId, presetName);
+    }
+    /**
+     * Finds an active configuration preset for `agentId` matching `presetName` by `Name` first,
+     * then `DisplayName` (both trimmed and case-insensitive).
+     */
+    public FindActiveAgentConfigurationPreset(agentId: string, presetName: string): MJAIAgentConfigurationEntity | undefined {
+        const target = presetName.trim().toLowerCase();
+        if (!target) {
+            return undefined;
+        }
+        const presets = this.GetAgentConfigurationPresets(agentId, true);
+        return presets.find((p) => p.Name?.trim().toLowerCase() === target)
+            ?? presets.find((p) => p.DisplayName?.trim().toLowerCase() === target);
     }
     public AgenteNoteTypeIDByName(agentNoteTypeName: string): string {
         return this.Base.AgenteNoteTypeIDByName(agentNoteTypeName);
@@ -507,8 +560,8 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
      * Configures the AIEngine by first ensuring AIEngineBase is configured,
      * then loading server-specific capabilities (embeddings, actions, etc.).
      *
-     * This method is safe to call from multiple places concurrently - it will
-     * return the same promise to all callers during loading.
+     * This method is safe to call from multiple places concurrently: callers share the load that
+     * is running, except that a `forceRefresh` call gets one more load after it (see SharedLoad).
      *
      * @param forceRefresh - If true, forces a full reload even if already loaded
      * @param contextUser - User context for server-side operations (required)
@@ -519,22 +572,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
         if (this._loaded && !forceRefresh) {
             return;
         }
-
-        // If currently loading, return the existing promise so all callers wait together
-        if (this._loading && this._loadingPromise) {
-            return this._loadingPromise;
-        }
-
-        // Start loading
-        this._loading = true;
-        this._loadingPromise = this.innerLoad(forceRefresh, contextUser, provider);
-
-        try {
-            await this._loadingPromise;
-        } finally {
-            this._loading = false;
-            this._loadingPromise = null;
-        }
+        return this._load.Run(forceRefresh === true, () => this.innerLoad(forceRefresh, contextUser, provider));
     }
 
     /**
@@ -705,21 +743,19 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
 
     /**
      * Refresh the vector service with the latest persisted vectors that are stored in the Agent Notes
-     * table. This does **not** calculate embeddings, that is done by the AI Agent Note sub-class upon save 
-     * as needed. This method simply uses the stored vectors and parses them from their JSON serialized format into
-     * vectors that are used by the vector service.
+     * table. This does **not** calculate embeddings, that is done by the AI Agent Note sub-class upon save
+     * as needed. This method simply reads the stored vectors — the binary `EmbeddingVectorBinary` column when
+     * it holds a valid vector, else the JSON `EmbeddingVector` column (see `ReadStoredVector`) — and loads them
+     * into the vector service. Notes with neither are skipped.
      */
     public async RefreshNoteEmbeddings(contextUser?: UserInfo): Promise<void> {
         try {
-            const notes = this.AgentNotes.filter(n => IsInjectableNoteStatus(n.Status) && n.EmbeddingVector);
+            const notes = this.WithDefaultEmbeddingModel(this.AgentNotes.filter(n => IsInjectableNoteStatus(n.Status)), 'agent note(s)');
+            const entries = this.toVectorEntries(notes, note => note.EmbeddingVectorBinary, note => note.EmbeddingVector,
+                note => this.packageNoteMetadata(note));
 
-            const entries = notes.map(note => ({
-                key: note.ID,
-                vector: JSON.parse(note.EmbeddingVector!),
-                metadata: this.packageNoteMetadata(note)
-            }));
-
-            this._noteVectorService = new SimpleVectorService();
+            // float32: embeddings are float32 at the source, and it halves the pool's memory
+            this._noteVectorService = new SimpleVectorService({ Precision: 'float32' });
             this._noteVectorService.LoadVectors(entries);
         } catch (error) {
             LogError(`AIEngine: Failed to load note embeddings: ${error instanceof Error ? error.message : String(error)}`);
@@ -748,7 +784,12 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
      */
     public AddOrUpdateSingleNoteEmbedding(note: MJAIAgentNoteEntity) {
         if (this._noteVectorService) {
-            this._noteVectorService.AddOrUpdateVector(note.ID, JSON.parse(note.EmbeddingVector),  this.packageNoteMetadata(note));
+            // A vector from another model can't share this index (see WithDefaultEmbeddingModel)
+            const vector = this.IsDefaultLocalEmbeddingModel(note.EmbeddingModelID)
+                ? ReadStoredVector(note.EmbeddingVectorBinary, note.EmbeddingVector)
+                : null;
+            if (vector) this._noteVectorService.AddOrUpdateVector(note.ID, vector, this.packageNoteMetadata(note));
+            else this._noteVectorService.RemoveVector(note.ID); // no usable vector — never keep a stale one
         }
         else {
             throw new Error('note vector service not initialized, error state')
@@ -790,7 +831,12 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
      */
     public AddOrUpdateSingleExampleEmbedding(example: MJAIAgentExampleEntity) {
         if (this._exampleVectorService) {
-            this._exampleVectorService.AddOrUpdateVector(example.ID, JSON.parse(example.EmbeddingVector), this.packageExampleMetadata(example));
+            // A vector from another model can't share this index (see WithDefaultEmbeddingModel)
+            const vector = this.IsDefaultLocalEmbeddingModel(example.EmbeddingModelID)
+                ? ReadStoredVector(example.EmbeddingVectorBinary, example.EmbeddingVector)
+                : null;
+            if (vector) this._exampleVectorService.AddOrUpdateVector(example.ID, vector, this.packageExampleMetadata(example));
+            else this._exampleVectorService.RemoveVector(example.ID); // no usable vector — never keep a stale one
         }
         else {
             throw new Error('example vector service not initialized, error state')
@@ -810,27 +856,83 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
 
     /**
      * Refresh the vector service with the latest persisted vectors that are stored in the Agent Examples
-     * table. This does **not** calculate embeddings, that is done by the AI Agent Example sub-class upon save 
-     * as needed. This method simply uses the stored vectors and parses them from their JSON serialized format into
-     * vectors that are used by the vector service.
+     * table. This does **not** calculate embeddings, that is done by the AI Agent Example sub-class upon save
+     * as needed. This method simply reads the stored vectors — binary `EmbeddingVectorBinary` first, JSON
+     * `EmbeddingVector` as the fallback (see `ReadStoredVector`) — and loads them into the vector service.
      */
     public async RefreshExampleEmbeddings(contextUser?: UserInfo): Promise<void> {
         try {
-            const examples = this.AgentExamples.filter(e => e.Status === 'Active' && e.EmbeddingVector);
+            const examples = this.WithDefaultEmbeddingModel(this.AgentExamples.filter(e => e.Status === 'Active'), 'agent example(s)');
+            const entries = this.toVectorEntries(examples, example => example.EmbeddingVectorBinary, example => example.EmbeddingVector,
+                example => this.packageExampleMetadata(example));
 
-            const entries = examples.map(example => ({
-                key: example.ID,
-                vector: JSON.parse(example.EmbeddingVector!),
-                metadata: this.packageExampleMetadata(example)
-            }));
-
-            this._exampleVectorService = new SimpleVectorService();
+            this._exampleVectorService = new SimpleVectorService({ Precision: 'float32' });
             this._exampleVectorService.LoadVectors(entries);
         } catch (error) {
             LogError(`AIEngine: Failed to load example embeddings: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
  
+    /**
+     * Turns records that persist an embedding into vector-service entries, reading each record's vector with
+     * {@link ReadStoredVector} (binary column first, JSON column as the fallback). Records with no usable
+     * vector are skipped, so one corrupt or not-yet-embedded row never fails the whole load.
+     * @param records - The records to index
+     * @param binaryOf - Reads a record's binary (base64 float32) vector column
+     * @param jsonOf - Reads a record's JSON vector column
+     * @param metadataOf - Builds the metadata stored alongside the vector
+     */
+    protected toVectorEntries<TRecord extends { ID: string }, TMetadata>(
+        records: TRecord[],
+        binaryOf: (record: TRecord) => string | null,
+        jsonOf: (record: TRecord) => string | null,
+        metadataOf: (record: TRecord) => TMetadata,
+    ): Array<VectorInputEntry<TMetadata>> {
+        const entries: Array<VectorInputEntry<TMetadata>> = [];
+        for (const record of records) {
+            const vector = ReadStoredVector(binaryOf(record), jsonOf(record));
+            if (vector) entries.push({ key: record.ID, vector, metadata: metadataOf(record) });
+        }
+        return entries;
+    }
+
+    /**
+     * Whether a stored vector's `EmbeddingModelID` is the {@link DefaultLocalEmbeddingModel}, i.e.
+     * whether it can be compared with vectors the platform embeds now.
+     */
+    public IsDefaultLocalEmbeddingModel(embeddingModelID: string | null | undefined): boolean {
+        const model = this.DefaultLocalEmbeddingModel;
+        return model != null && UUIDsEqual(embeddingModelID, model.ID);
+    }
+
+    /** Stored-vector columns shared by agent notes and examples. */
+    private static hasStoredVector(record: { EmbeddingVector: string | null; EmbeddingVectorBinary: string | null }): boolean {
+        return record.EmbeddingVector != null || record.EmbeddingVectorBinary != null;
+    }
+
+    /**
+     * Keeps the records whose stored vector came from the default local embedding model, so one
+     * in-memory index never mixes models: mixed dimensions make the vector service throw, and
+     * same-size vectors from another model rank nonsense. Logs one warning with the number of
+     * records left out until they are re-embedded. Every index of locally embedded rows loads
+     * through this (agent notes and examples here, queries in `QueryEngineServer`).
+     * @param label what the records are, for the warning (e.g. `'agent note(s)'`)
+     */
+    public WithDefaultEmbeddingModel<TRecord extends { EmbeddingModelID: string | null; EmbeddingVector: string | null; EmbeddingVectorBinary: string | null }>(
+        records: TRecord[],
+        label: string
+    ): TRecord[] {
+        const model = this.DefaultLocalEmbeddingModel; // resolved once, not per row
+        const embedded = records.filter(r => AIEngine.hasStoredVector(r));
+        const matching = embedded.filter(r => model != null && UUIDsEqual(r.EmbeddingModelID, model.ID));
+        const stale = embedded.length - matching.length;
+        if (stale > 0) {
+            LogWarning(`AIEngine: left out ${stale} ${label} embedded with a model other than the default local embedding model ` +
+                `(${model?.Name ?? 'none'}), or with no recorded model; run the "Re-embed Local Vectors" action to include them.`);
+        }
+        return matching;
+    }
+
     // ========================================================================
     // LLM Utility Methods
     // ========================================================================
@@ -984,17 +1086,58 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     // ========================================================================
 
     /**
-     * Returns an array of the local embedding models, sorted with the highest power models first
+     * Returns the active local embedding models, sorted with the highest power models first
      */
     public get LocalEmbeddingModels(): MJAIModelEntityExtended[] {
         const embeddingModels = this.Models.filter(m => {
             // Guard against AIModelType being non-string (defensive coding for data issues)
             const modelType = typeof m.AIModelType === 'string' ? m.AIModelType.trim().toLowerCase() : '';
             const vendor = typeof m.Vendor === 'string' ? m.Vendor.trim().toLowerCase() : '';
-            return modelType === this.EmbeddingModelTypeName.toLowerCase() &&
+            return m.IsActive &&
+                   modelType === this.EmbeddingModelTypeName.toLowerCase() &&
                    vendor === this.LocalEmbeddingModelVendorName.toLowerCase();
         });
-        return embeddingModels.sort((a, b) => (b.PowerRank || 0) - (a.PowerRank || 0));
+        // Ties break by name, so every process picks the same default.
+        return embeddingModels.sort((a, b) => (b.PowerRank || 0) - (a.PowerRank || 0) || a.Name.localeCompare(b.Name));
+    }
+
+    /** The resolved default for this process: undefined until resolved, null when it can't be. */
+    private _defaultLocalEmbeddingModelID: string | null | undefined = undefined;
+
+    /**
+     * Environment variable naming the default local embedding model. It is read by every process
+     * that embeds (MJAPI, the `mj` CLI, MCP/A2A servers, workers), so they all embed with, and judge
+     * stored vectors against, the same model. Set it before start.
+     */
+    public static readonly DEFAULT_LOCAL_EMBEDDING_MODEL_ENV = 'MJ_DEFAULT_LOCAL_EMBEDDING_MODEL';
+
+    /**
+     * The local embedding model every platform path uses: entity save hooks, agent memory search,
+     * QueryGen, and the semantic entity search fallback. It is the active local embedding model named
+     * by the `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL` environment variable, or the highest-PowerRank active
+     * one when the variable is unset. A name that matches no active local model is an error: local
+     * embedding stays off until it is fixed, rather than processes silently disagreeing on the model.
+     *
+     * Resolved once per process, so a catalog edit can't switch the model under the in-memory indexes
+     * (notes, examples, tags, queries) built with it. Changing the model takes effect on restart.
+     *
+     * Call `Config()` first. Before the models load this returns null, the same as when no active
+     * local model exists, and resolves on a later call once they have loaded.
+     */
+    public get DefaultLocalEmbeddingModel(): MJAIModelEntityExtended | null {
+        if (this._defaultLocalEmbeddingModelID === undefined) {
+            const models = this.LocalEmbeddingModels;
+            if (models.length === 0) {
+                return null; // not loaded yet, or no local models
+            }
+            const name = process.env[AIEngine.DEFAULT_LOCAL_EMBEDDING_MODEL_ENV]?.trim().toLowerCase();
+            const model = name ? models.find(m => m.Name.trim().toLowerCase() === name) : models[0];
+            if (!model) {
+                LogError(`AIEngine: ${AIEngine.DEFAULT_LOCAL_EMBEDDING_MODEL_ENV} names "${name}", which is not an active local embedding model. Local embedding is off until it is fixed.`);
+            }
+            this._defaultLocalEmbeddingModelID = model?.ID ?? null;
+        }
+        return this.Models.find(m => UUIDsEqual(m.ID, this._defaultLocalEmbeddingModelID)) ?? null;
     }
 
     /**
@@ -1014,16 +1157,48 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     }
 
     /**
-     * Helper method that generates an embedding for the given text using the highest power local embedding model.
+     * Helper method that generates an embedding for the given text using the
+     * {@link DefaultLocalEmbeddingModel}.
+     *
+     * @param options.inputType `'query'` for a search query, `'document'` (the default) for text
+     *   that is stored and searched
      */
-    public async EmbedTextLocal(text: string): Promise<{result: EmbedTextResult, model: MJAIModelEntityExtended} | null> {
-        const model = this.HighestPowerLocalEmbeddingModel;
+    public async EmbedTextLocal(text: string, options?: { inputType?: EmbeddingInputType }): Promise<{result: EmbedTextResult, model: MJAIModelEntityExtended} | null> {
+        const model = this.DefaultLocalEmbeddingModel;
         if (!model) {
             LogError('AIEngine: No local embedding model found. Cannot generate embedding.');
             return null;
         }
-        const result = await this.EmbedText(model, text);
-        return { result, model };
+        const result = await this.EmbedText(model, text, undefined, { inputType: options?.inputType });
+        return result ? { result, model } : null;
+    }
+
+    /**
+     * Shapes texts for an embedding call to `model`: each text gets the catalog prefix for
+     * `inputType` (from the effective `ModelConfiguration.Embedding` section), and the model-vendor
+     * row's `MaxInputTokens` is returned as the input cap. Both `EmbedText` and `AIEmbeddingRunner`
+     * use it, so a model is embedded the same way on every path.
+     *
+     * @param vendorID the `MJ: AI Vendors` ID the call runs on; when omitted, the vendor row behind
+     *   the model's own `DriverClass` and `APIName` is used
+     */
+    public PrepareEmbeddingInput(
+        model: MJAIModelEntityExtended,
+        texts: string[],
+        inputType?: EmbeddingInputType,
+        vendorID?: string
+    ): { texts: string[]; maxInputTokens?: number } {
+        const rows = (model.ModelVendors ?? []).filter(mv => vendorID
+            ? UUIDsEqual(mv.VendorID, vendorID)
+            : mv.DriverClass === model.DriverClass && mv.APIName === model.APIName);
+        // A vendor can hold both a "Model Developer" and an "Inference Provider" row for one model;
+        // the call runs on the inference row, so its prefixes and token cap are the ones that apply.
+        const modelVendor = rows.find(mv => this.IsInferenceProvider(mv)) ?? rows[0];
+        const config = this.GetEffectiveModelConfiguration(model.ID, modelVendor?.ID);
+        return {
+            texts: texts.map(text => ApplyEmbeddingInputPrefix(text, inputType, config)),
+            maxInputTokens: modelVendor?.MaxInputTokens ?? model.InputTokenLimit ?? undefined,
+        };
     }
 
     /**
@@ -1038,13 +1213,18 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
      *                            promise dedup — a `noCache` caller always re-infers, even if
      *                            an equivalent inference is already in flight)
      *
-     * Empty/whitespace `text` short-circuits to `null` without invoking the embedding provider.
+     * Empty/whitespace `text` short-circuits to `null` without invoking the embedding provider. A
+     * failed embed (drivers return an empty vector) also returns `null`, so no caller stores or
+     * searches with an empty vector.
+     *
+     * @param apiKey optional API key override; when omitted, the key for `model.DriverClass` is
+     *               resolved with `GetAIAPIKey` (local drivers ignore it)
      */
     public async EmbedText(
         model: MJAIModelEntityExtended,
         text: string,
         apiKey?: string,
-        options?: { bypassCache?: boolean; noCache?: boolean }
+        options?: { bypassCache?: boolean; noCache?: boolean; inputType?: EmbeddingInputType; dimensions?: number }
     ): Promise<EmbedTextResult | null> {
         if (!text || text.trim().length === 0) {
             return null;
@@ -1052,12 +1232,17 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
 
         const bypassCache = options?.bypassCache ?? false;
         const noCache = options?.noCache ?? false;
-        const cacheKey = this.buildEmbeddingCacheKey(model.ID, text);
+        const inputType = options?.inputType;
+        const dimensions = options?.dimensions;
+        const prepared = this.PrepareEmbeddingInput(model, [text], inputType);
+        const cacheKey = this.buildEmbeddingCacheKey(model.ID, prepared.texts[0], inputType, dimensions);
 
         if (!bypassCache && !noCache) {
             const cached = this._embeddingCache.Get(cacheKey);
             if (cached) {
-                return cached;
+                // Possibly an inference still in flight that will come back empty
+                const result = await cached;
+                return result?.vector?.length ? result : null;
             }
         }
 
@@ -1065,14 +1250,18 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
         // callers can share it (avoids redundant CPU-bound ONNX inference under load).
         const inferencePromise = (async (): Promise<EmbedTextResult | null> => {
             const params: EmbedTextParams = {
-                text: text,
-                model: model.APIName
+                text: prepared.texts[0],
+                model: model.APIName,
+                inputType,
+                dimensions,
+                maxInputTokens: prepared.maxInputTokens,
             };
 
+            // BaseEmbeddings used directly: AIEngine sits below @memberjunction/ai-prompts in the dependency hierarchy.
             const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
                 BaseEmbeddings,
                 model.DriverClass,
-                apiKey
+                apiKey || GetAIAPIKey(model.DriverClass)
             );
 
             if (!embedding) {
@@ -1103,7 +1292,8 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
                 .catch(evictIfStillOurs);
         }
 
-        return await inferencePromise;
+        const result = await inferencePromise;
+        return result?.vector?.length ? result : null;
     }
 
     /**
@@ -1118,7 +1308,8 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
      *
      * @param model   the embedding model to use (provides DriverClass + APIName)
      * @param content text, or interleaved text+media blocks, to embed into one fused vector
-     * @param apiKey  optional API key override
+     * @param apiKey  optional API key override; when omitted, the key for `model.DriverClass` is
+     *                resolved with `GetAIAPIKey`
      * @returns the embedding result, or null if the provider instance couldn't be created
      */
     public async EmbedContent(
@@ -1131,10 +1322,11 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
             return this.EmbedText(model, content, apiKey);
         }
 
+        // BaseEmbeddings used directly: AIEngine sits below @memberjunction/ai-prompts in the dependency hierarchy.
         const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
             BaseEmbeddings,
             model.DriverClass,
-            apiKey
+            apiKey || GetAIAPIKey(model.DriverClass)
         );
 
         if (!embedding) {
@@ -1173,7 +1365,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
             throw new Error('queryText cannot be empty');
         }
 
-        const queryEmbedding = await this.EmbedTextLocal(queryText);
+        const queryEmbedding = await this.EmbedTextLocal(queryText, { inputType: 'query' });
         if (!queryEmbedding || !queryEmbedding.result || queryEmbedding.result.vector.length === 0) {
             LogError('FindSimilarAgentNotes: Failed to generate embedding for query text. Falling back to cached notes.');
             return this.fallbackGetNotesFromCache(agentId, userId, companyId, topK, additionalFilter);
@@ -1181,7 +1373,8 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
 
         const composedFilter = this.composeNoteFilters(agentId, userId, companyId, additionalFilter);
 
-        const results = this._noteVectorService.FindNearest(
+        // Async: on a server the scan runs off the event loop (worker pool / native backend)
+        const results = await this._noteVectorService.FindNearestAsync(
             queryEmbedding.result.vector,
             topK,
             minSimilarity,
@@ -1286,7 +1479,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
             throw new Error('queryText cannot be empty');
         }
 
-        const queryEmbedding = await this.EmbedTextLocal(queryText);
+        const queryEmbedding = await this.EmbedTextLocal(queryText, { inputType: 'query' });
         if (!queryEmbedding || !queryEmbedding.result || queryEmbedding.result.vector.length === 0) {
             LogError('FindSimilarAgentExamples: Failed to generate embedding for query text. Falling back to cached examples.');
             return this.fallbackGetExamplesFromCache(agentId, userId, companyId, topK, additionalFilter);
@@ -1294,7 +1487,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
 
         const composedFilter = this.composeExampleFilters(agentId, userId, companyId, additionalFilter);
 
-        const results = this._exampleVectorService.FindNearest(
+        const results = await this._exampleVectorService.FindNearestAsync(
             queryEmbedding.result.vector,
             topK,
             minSimilarity,

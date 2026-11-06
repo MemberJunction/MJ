@@ -345,7 +345,7 @@ Every generated entity class provides:
 | `Workspaces` | User's workspaces |
 | `UserApplications` | Installed applications (sorted by sequence) |
 | `UserFavorites` | Favorited records (newest first) |
-| `UserRecordLogs` | Recent record access history |
+| `LoadRecentRecordLogs(maxItems, contextUser?)` | Query the user's recently opened records (newest first); not cached |
 | `UserSettings` | User settings key-value pairs |
 | `GetSetting(key)` | Get a setting value by key |
 | `SetSetting(key, value)` | Create or update a setting |

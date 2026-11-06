@@ -6,13 +6,20 @@ import { CommunicationEngine } from '@memberjunction/communication-engine';
 import { Message } from '@memberjunction/communication-types';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { SendNotificationParams, NotificationResult, DeliveryChannels } from './types';
+import {
+  CreateScopedNotificationConfigResolver,
+  ResolveChannel,
+  type ScopedChannelDecisions,
+  type ScopedNotificationConfigRow,
+} from './scoped-notification-config-resolver';
 
 /*
  * Unified notification engine that handles in-app, email, and SMS delivery
- * based on notification types and user preferences.
+ * based on notification types, scoped configs and user preferences.
  *
- * This engine relies on UserInfoEngine for notification types and preferences.
- * UserInfoEngine loads and caches all notification metadata via BaseEngine.
+ * This engine relies on UserInfoEngine for notification types and preferences, and loads
+ * `MJ: Scoped Notification Configs` itself: the level between a type's defaults and a
+ * recipient's preference where an application, a role or a notice's origin can speak.
  */
 export class NotificationEngine extends BaseEngine<NotificationEngine> {
   /**
@@ -38,11 +45,42 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     contextUser?: UserInfo,
     provider?: IMetadataProvider
   ): Promise<void> {
-    // Ensure UserInfoEngine is configured (it loads notification types)
+    // Ensure UserInfoEngine is configured (it loads notification types and the recipient's preferences)
     await UserInfoEngine.Instance.Config(forceRefresh, contextUser, provider);
+    // This engine's own data: the scoped configs, a global reference table (no user filter)
+    await this.Load(
+      [
+        {
+          Type: 'entity',
+          EntityName: 'MJ: Scoped Notification Configs',
+          PropertyName: '_scopedConfigs',
+          CacheLocal: true,
+        },
+      ],
+      provider ?? Metadata.Provider,
+      forceRefresh,
+      contextUser,
+    );
+  }
 
-    // BaseEngine Load with empty configs - we don't load our own data
-    await this.Load([], provider ?? Metadata.Provider, forceRefresh, contextUser);
+  private _scopedConfigs: ScopedNotificationConfigRow[] = [];
+
+  /** Every `MJ: Scoped Notification Configs` row, any status; the resolver filters. */
+  public get ScopedNotificationConfigs(): ScopedNotificationConfigRow[] {
+    return this._scopedConfigs ?? [];
+  }
+
+  /**
+   * What the scoped configs say for this notice, for the recipient and the roles they hold. Public so a host can
+   * see the decision a notice got, and so tests can drive it without sending.
+   */
+  public ResolveScopedChannels(params: SendNotificationParams, typeId: string): ScopedChannelDecisions {
+    const recipient = UserCache.Instance.Users.find((u) => UUIDsEqual(u.ID, params.userId));
+    const roleIds = (recipient?.UserRoles ?? []).map((r) => r.RoleID).filter((id): id is string => !!id);
+    return CreateScopedNotificationConfigResolver().Resolve(this.ScopedNotificationConfigs, typeId, params.scope, {
+      userId: params.userId,
+      roleIds,
+    });
   }
 
   /**
@@ -184,25 +222,18 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     if (prefs && !prefs.Enabled) {
       return { inApp: false, email: false, sms: false };
     }
-
-    // Determine each channel: user pref (if allowed and set) > type default
+    // Each channel, most specific wins: the recipient's preference (if the type allows one and it is set), then the
+    // scoped configs (global, application, role, recipient; Deny beats Allow at equal specificity), then the type's
+    // default. A locked Deny at the scoped level caps the recipient's preference.
     const allowUserPref = type.AllowUserPreference !== false;
-
-    // Resolve InApp channel
-    const inApp = (allowUserPref && prefs?.InAppEnabled != null)
-      ? prefs.InAppEnabled
-      : (type.DefaultInApp ?? false);
-
-    // Resolve Email channel
-    const email = (allowUserPref && prefs?.EmailEnabled != null)
-      ? prefs.EmailEnabled
-      : (type.DefaultEmail ?? false);
-
-    // Resolve SMS channel
-    const sms = (allowUserPref && prefs?.SMSEnabled != null)
-      ? prefs.SMSEnabled
-      : (type.DefaultSMS ?? false);
-
+    const scoped = this.ResolveScopedChannels(params, type.ID);
+    const pref = (value: boolean | null | undefined) => (allowUserPref && value != null ? value : null);
+    const inApp = ResolveChannel({ typeDefault: type.DefaultInApp ?? false, scoped: scoped.inApp, userPreference: pref(prefs?.InAppEnabled) });
+    const email = ResolveChannel({ typeDefault: type.DefaultEmail ?? false, scoped: scoped.email, userPreference: pref(prefs?.EmailEnabled) });
+    const sms = ResolveChannel({ typeDefault: type.DefaultSMS ?? false, scoped: scoped.sms, userPreference: pref(prefs?.SMSEnabled) });
+    if (scoped.rows.length > 0) {
+      LogStatus(`Notification '${type.Name}' resolved through ${scoped.rows.length} scoped config(s): inApp=${inApp} email=${email} sms=${sms}`);
+    }
     return { inApp, email, sms };
   }
 

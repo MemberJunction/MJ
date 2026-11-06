@@ -156,6 +156,37 @@ describe('ConversationDetailWindowStore', () => {
         expect(load).toHaveBeenCalledTimes(1); // local path — no query
     });
 
+    it('keeps an unsaved local placeholder (Sequence 0) at the tail without corrupting OldestSequence or NewestSequence', async () => {
+        load.mockResolvedValueOnce(pageOf([20, 21, 22], true));
+        await store.LoadLatest('conv-a', contextUser);
+
+        const placeholder = detail(0, { ID: 'placeholder-1', Status: 'In-Progress' });
+        store.ApplyLocalDetail(placeholder);
+
+        let snapshot = store.GetSnapshot();
+        expect(snapshot.Details.map(d => d.ID)).toEqual(['d-20', 'd-21', 'd-22', 'placeholder-1']);
+        expect(snapshot.Cursor.OldestSequence).toBe(20);
+        expect(snapshot.Cursor.NewestSequence).toBe(22);
+
+        load.mockResolvedValueOnce(pageOf([18, 19], true));
+        await store.LoadOlder(contextUser);
+
+        snapshot = store.GetSnapshot();
+        expect(snapshot.Details.map(d => d.ID)).toEqual(['d-18', 'd-19', 'd-20', 'd-21', 'd-22', 'placeholder-1']);
+        expect(snapshot.Cursor.OldestSequence).toBe(18);
+        expect(snapshot.Cursor.NewestSequence).toBe(22);
+
+        // Refreshing the tail while paged up (applyRefreshedTail) must also compute NewestSequence
+        // from the newest assigned row, not the trailing unassigned placeholder (Sequence 0).
+        load.mockResolvedValueOnce(pageOf([21, 22, 23], true));
+        await store.RefreshLatest(contextUser);
+
+        snapshot = store.GetSnapshot();
+        expect(snapshot.Details.map(d => d.ID)).toEqual(['d-18', 'd-19', 'd-20', 'd-21', 'd-22', 'd-23', 'placeholder-1']);
+        expect(snapshot.Cursor.OldestSequence).toBe(18);
+        expect(snapshot.Cursor.NewestSequence).toBe(23);
+    });
+
     it('slices an over-read page down to one page of timeline items', async () => {
         // REGRESSION: the engine deliberately OVER-READS raw rows (RawOverread defaults to
         // 3x the page size) because a page of rows can collapse to a single session card.
@@ -296,6 +327,23 @@ describe('ConversationDetailWindowStore', () => {
             HasMoreAbove: false
         });
         expect(store.CanLoadOlder()).toBe(false);
+    });
+
+    describe('branch', () => {
+        it('passes the branch to every page load', async () => {
+            load.mockResolvedValue(pageOf([20, 21], true));
+            await store.LoadLatest('conv-a', contextUser, 'B');
+            await store.LoadOlder(contextUser);
+            await store.RefreshLatest(contextUser);
+            for (const call of load.mock.calls) {
+                expect(call[0].BranchID).toBe('B');
+            }
+        });
+        it('reads the trunk when no branch is given (control)', async () => {
+            load.mockResolvedValue(pageOf([20, 21], false));
+            await store.LoadLatest('conv-a', contextUser);
+            expect(load.mock.calls[0][0].BranchID).toBeNull();
+        });
     });
 });
 
@@ -631,6 +679,58 @@ describe('ConversationDetailWindowStore — refresh gap', () => {
 
         expect(store.HasMoreAbove).toBe(true);
         expect(store.GetSnapshot().Cursor.OldestSequence).toBe(17);
+    });
+});
+
+/** A draft fork's window ends at its anchor: every read keeps rows at or below `upToSequence`. */
+describe('ConversationDetailWindowStore — upper Sequence bound', () => {
+    const user = {} as UserInfo;
+
+    it('ends the first page at the bound, then pages older rows as usual', async () => {
+        const load: Mock = vi.fn();
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+        load.mockResolvedValueOnce(pageOf([18, 19, 20], true));
+
+        await store.LoadLatest('conv-a', user, 'branch-b', 20);
+
+        expect(load.mock.calls[0][0]).toMatchObject({ ConversationID: 'conv-a', BranchID: 'branch-b', BeforeSequence: 21 });
+        expect(store.HasMoreAbove).toBe(true);
+        expect(store.CanLoadOlder()).toBe(true);
+
+        load.mockResolvedValueOnce(pageOf([15, 16, 17], false));
+        await store.LoadOlder(user);
+
+        expect(load.mock.calls[1][0]).toMatchObject({ BranchID: 'branch-b', BeforeSequence: 18 });
+        expect(sequencesOf(store.GetSnapshot().Details)).toEqual([15, 16, 17, 18, 19, 20]);
+        expect(store.HasMoreAbove).toBe(false);
+    });
+
+    it('keeps the bound on a refresh', async () => {
+        const load: Mock = vi.fn();
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+        load.mockResolvedValueOnce(pageOf([18, 19, 20], true));
+        await store.LoadLatest('conv-a', user, null, 20);
+
+        load.mockResolvedValueOnce(pageOf([18, 19, 20], true));
+        await store.RefreshLatest(user);
+
+        expect(load.mock.calls[1][0]).toMatchObject({ BranchID: null, BeforeSequence: 21 });
+        expect(sequencesOf(store.GetSnapshot().Details)).toEqual([18, 19, 20]);
+    });
+
+    it('reads the newest rows with no bound when none is given, and a later load drops an earlier bound', async () => {
+        const load: Mock = vi.fn();
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+        load.mockResolvedValueOnce(pageOf([18, 19, 20], true));
+        await store.LoadLatest('conv-a', user, 'branch-b', 20);
+
+        load.mockResolvedValueOnce(pageOf([40, 41, 42], true));
+        await store.LoadLatest('conv-a', user);
+        expect(load.mock.calls[1][0]).not.toHaveProperty('BeforeSequence');
+
+        load.mockResolvedValueOnce(pageOf([40, 41, 42, 43], true));
+        await store.RefreshLatest(user);
+        expect(load.mock.calls[2][0].BeforeSequence).toBeUndefined();
     });
 });
 

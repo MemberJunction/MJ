@@ -10,12 +10,68 @@
  *   1. The TestingFramework variable resolver (schema-validated, CLI `--var` flags).
  *   2. Env vars prefixed `MJ_TEST_VAR_*` — ad-hoc fallback when no schema is declared.
  *
+ * A backslash escapes a placeholder: `\{{ name }}` is literal text, never a
+ * variable. Substitution leaves it alone and then removes the backslash, and the
+ * unresolved-placeholder finders skip it. That lets a goal describe mustache syntax
+ * (e.g. a template editor) without tripping the unresolved-variable guard.
+ *
  * Both helpers are pure functions for easy unit testing.
  */
 
 const ENV_PREFIX = 'MJ_TEST_VAR_';
 const WHOLE_STRING = /^\{\{\s*([a-zA-Z_][\w.-]*)\s*\}\}$/;
-const EMBEDDED = /\{\{\s*([a-zA-Z_][\w.-]*)\s*\}\}/g;
+/** A placeholder, with group 1 set when a backslash escapes it. */
+const EMBEDDED = /(\\)?\{\{\s*([a-zA-Z_][\w.-]*)\s*\}\}/g;
+/** The escape marker removed by {@link UnescapeLiteralBraces}. */
+const ESCAPED_OPEN = /\\\{\{/g;
+
+/** Options for {@link SubstituteVariables}. */
+export interface SubstituteVariablesOptions {
+    /**
+     * Keep `\{{…}}` escapes in the output instead of unescaping them to `{{…}}`.
+     * Set this when the result is checked with {@link FindUnresolvedPlaceholders}
+     * afterwards, then call {@link UnescapeLiteralBraces} once the check passes.
+     */
+    KeepEscapes?: boolean;
+}
+
+/**
+ * Apply `fn` to every string in a parsed JSON value. Returns the original node
+ * when nothing beneath it changed, so an untouched input keeps its identity.
+ */
+function mapStrings(node: unknown, fn: (s: string) => unknown): unknown {
+    if (typeof node === 'string') {
+        return fn(node);
+    }
+    if (Array.isArray(node)) {
+        const mapped = node.map(item => mapStrings(item, fn));
+        return mapped.some((item, i) => item !== node[i]) ? mapped : node;
+    }
+    if (node !== null && typeof node === 'object') {
+        const source = node as Record<string, unknown>;
+        const result: Record<string, unknown> = {};
+        let changed = false;
+        for (const [k, v] of Object.entries(source)) {
+            result[k] = mapStrings(v, fn);
+            changed = changed || result[k] !== v;
+        }
+        return changed ? result : node;
+    }
+    return node;
+}
+
+/** Turn every `\{{` in a string into `{{`. */
+function unescapeString(value: string): string {
+    return value.replace(ESCAPED_OPEN, '{{');
+}
+
+/**
+ * Replace every escaped `\{{` with a literal `{{` in the string values of a
+ * parsed JSON object. Returns the input itself when it holds no escapes.
+ */
+export function UnescapeLiteralBraces<T>(obj: T): T {
+    return mapStrings(obj, unescapeString) as T;
+}
 
 /**
  * Try to parse a string env-var value as JSON when it looks structured
@@ -125,6 +181,16 @@ export function findUnresolvedAuthPlaceholders(auth: unknown): string[] {
     return FindUnresolvedAuthPlaceholders(auth);
 }
 
+/** Options for {@link ComposeApplicationContext}. */
+export interface ComposeApplicationContextOptions {
+    /**
+     * The per-test layer was already substituted and unescaped (it came from a test
+     * input that went through {@link SubstituteVariables} and {@link UnescapeLiteralBraces}).
+     * It is used as-is, so a literal `{{…}}` it holds is not substituted a second time.
+     */
+    PerTestResolved?: boolean;
+}
+
 /**
  * Compose suite-level + per-test application-context layers into a single
  * markdown string for the controller prompt, applying `{{var}}` substitution
@@ -140,16 +206,18 @@ export function findUnresolvedAuthPlaceholders(auth: unknown): string[] {
 export function ComposeApplicationContext(
     suiteLevel: string | undefined,
     perTest: string | undefined,
-    values: Record<string, unknown>
+    values: Record<string, unknown>,
+    options: ComposeApplicationContextOptions = {}
 ): string | undefined {
     const layers: string[] = [];
-    const substitute = (s: string) => Object.keys(values).length === 0 ? s : SubstituteVariables(s, values);
+    const substitute = (s: string) => SubstituteVariables(s, values);
 
     if (typeof suiteLevel === 'string' && suiteLevel.trim()) {
         layers.push(substitute(suiteLevel));
     }
     if (typeof perTest === 'string' && perTest.trim()) {
-        layers.push(`## Test-specific Notes\n\n${substitute(perTest)}`);
+        const notes = options.PerTestResolved ? perTest : substitute(perTest);
+        layers.push(`## Test-specific Notes\n\n${notes}`);
     }
     return layers.length === 0 ? undefined : layers.join('\n\n');
 }
@@ -158,9 +226,10 @@ export function ComposeApplicationContext(
 export function composeApplicationContext(
     suiteLevel: string | undefined,
     perTest: string | undefined,
-    values: Record<string, unknown>
+    values: Record<string, unknown>,
+    options: ComposeApplicationContextOptions = {}
 ): string | undefined {
-    return ComposeApplicationContext(suiteLevel, perTest, values);
+    return ComposeApplicationContext(suiteLevel, perTest, values, options);
 }
 
 /**
@@ -173,43 +242,37 @@ export function composeApplicationContext(
  *   non-string values are coerced with `String()`.
  * - Unknown keys are left in place verbatim (no error) so authors can ship a
  *   partially-parameterized test without breaking it.
+ * - An escaped `\{{key}}` is never substituted; it becomes the literal `{{key}}`
+ *   (or stays escaped with `KeepEscapes`).
  *
- * Returns a NEW object — the input is not mutated.
+ * The input is not mutated. Parts with nothing to replace are returned as-is.
  */
-export function SubstituteVariables<T>(obj: T, values: Record<string, unknown>): T {
-    if (Object.keys(values).length === 0) {
-        return obj;
-    }
+export function SubstituteVariables<T>(
+    obj: T,
+    values: Record<string, unknown>,
+    options: SubstituteVariablesOptions = {}
+): T {
+    const has = (key: string) => Object.prototype.hasOwnProperty.call(values, key);
 
-    const walk = (node: unknown): unknown => {
-        if (typeof node === 'string') {
-            const whole = node.match(WHOLE_STRING);
-            if (whole && Object.prototype.hasOwnProperty.call(values, whole[1])) {
-                return values[whole[1]];
-            }
-            return node.replace(EMBEDDED, (match, key: string) =>
-                Object.prototype.hasOwnProperty.call(values, key) ? String(values[key]) : match
-            );
+    return mapStrings(obj, (node: string): unknown => {
+        const whole = node.match(WHOLE_STRING);
+        if (whole && has(whole[1])) {
+            return values[whole[1]];
         }
-        if (Array.isArray(node)) {
-            return node.map(walk);
-        }
-        if (node !== null && typeof node === 'object') {
-            const result: Record<string, unknown> = {};
-            for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
-                result[k] = walk(v);
-            }
-            return result;
-        }
-        return node;
-    };
-
-    return walk(obj) as T;
+        const replaced = node.replace(EMBEDDED, (match: string, escape: string | undefined, key: string) =>
+            !escape && has(key) ? String(values[key]) : match
+        );
+        return options.KeepEscapes ? replaced : unescapeString(replaced);
+    }) as T;
 }
 
 /** @deprecated Use {@link SubstituteVariables}. */
-export function substituteVariables<T>(obj: T, values: Record<string, unknown>): T {
-    return SubstituteVariables(obj, values);
+export function substituteVariables<T>(
+    obj: T,
+    values: Record<string, unknown>,
+    options: SubstituteVariablesOptions = {}
+): T {
+    return SubstituteVariables(obj, values, options);
 }
 
 /**
@@ -217,7 +280,8 @@ export function substituteVariables<T>(obj: T, values: Record<string, unknown>):
  * after substitution. A non-empty result means variables the string
  * referenced were never provided — the caller can fail fast with the missing
  * keys instead of letting the literal `{{key}}` flow into a URL/goal and
- * surface later as a mysterious navigation error.
+ * surface later as a mysterious navigation error. Escaped `\{{key}}` text is
+ * literal and never reported.
  */
 export function FindUnresolvedPlaceholders(value: string | undefined): string[] {
     if (!value) {
@@ -225,7 +289,9 @@ export function FindUnresolvedPlaceholders(value: string | undefined): string[] 
     }
     const keys = new Set<string>();
     for (const match of value.matchAll(EMBEDDED)) {
-        keys.add(match[1]);
+        if (!match[1]) {
+            keys.add(match[2]);
+        }
     }
     return [...keys];
 }

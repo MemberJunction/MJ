@@ -129,6 +129,23 @@ describe('AzureAISearchProvider', () => {
             expect(results[1].Score).toBeCloseTo(0.5);
         });
 
+        it('a scoped search with no AzureAISearch row queries nothing — never the default index', async () => {
+            mockFetch.mockResolvedValueOnce(probeResponse(200));
+            const p = new AzureAISearchProvider();
+            await p.Initialize(configByServiceName(), fakeUser);
+            await p.CheckAvailability(fakeUser);
+            mockFetch.mockClear();
+
+            const none = await p.Search('hello', 10, undefined, fakeUser, { ExternalIndexes: [] });
+            const otherType = await p.Search('hello', 10, undefined, fakeUser, {
+                ExternalIndexes: [{ IndexType: 'Vector', VectorIndexID: 'v-1' }],
+            });
+
+            expect(none).toEqual([]);
+            expect(otherType).toEqual([]);
+            expect(mockFetch).not.toHaveBeenCalled();
+        });
+
         it('uses scope ExternalIndexes when present and merges results across indexes', async () => {
             mockFetch
                 .mockResolvedValueOnce(probeResponse(200))

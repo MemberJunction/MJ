@@ -252,6 +252,11 @@ dropping a record into `.entity-documents.json` (+ a `.njk` template) and pushin
 `mj sync push` — the job picks it up on the next run. With no Active Search documents, the
 job is a clean no-op rather than an error.
 
+The daily job does **not** refresh `Record Duplicate` documents. To keep a duplicate-detection
+document's vectors current, schedule `Vectorize Entity` a second time with
+`EntityDocumentType="Record Duplicate"` (the action's default), or vectorize before a detection run —
+see the [Duplicate Management Guide](../../../../guides/DUPLICATE_MANAGEMENT_GUIDE.md#4-keeping-vectors-current).
+
 ## Configuration Types
 
 ### VectorizeEntityParams
@@ -268,6 +273,18 @@ type VectorizeEntityParams = {
     CurrentUser?: UserInfo;         // User context
 };
 ```
+
+### Record filter
+
+`Configuration.recordFilter.extraFilter` on an entity document is a RunView `ExtraFilter` predicate a record must satisfy to be vectorized. It is ANDed into the filter on every page sync reads, together with a list run's membership filter. Duplicate detection applies the same filter to the records it checks and the candidates it returns; read it with `GetEntityDocumentRecordFilter(entityDocument)`.
+
+```json
+{ "recordFilter": { "extraFilter": "Status = 'Active'" } }
+```
+
+Records the filter excludes keep any vectors already stored for them; sync does not remove those.
+
+Keep the filter to plain comparisons (`=`, `<>`, `IN`, `IS NULL`, `AND`/`OR`) so it runs on both SQL Server and PostgreSQL. The PostgreSQL provider rewrites identifiers, `[brackets]`, boolean `= 0`/`= 1` and the T-SQL date functions, but passes other T-SQL (`ISNULL`, `LEN`, `+` concatenation) through unchanged, where it fails.
 
 ### EntitySyncConfig
 

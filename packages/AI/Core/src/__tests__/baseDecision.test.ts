@@ -112,6 +112,31 @@ describe('BaseDecision', () => {
         fake = new FakeDecision();
     });
 
+    describe('aborted requests', () => {
+        const abortError = (): Error => Object.assign(new Error('This operation was aborted'), { name: 'AbortError' });
+
+        it('classifies an abort the caller caused as Cancelled: Fatal and never failed over', async () => {
+            const controller = new AbortController();
+            controller.abort('user stopped');
+            fake.decideHandler = async () => { throw abortError(); };
+
+            const result = await fake.Decide({ ...createValidParams(), CancellationToken: controller.signal });
+
+            expect(result.success).toBe(false);
+            expect(result.errorInfo).toMatchObject({ errorType: 'Cancelled', severity: 'Fatal', canFailover: false });
+        });
+
+        it("classifies an abort the runner's timeout caused as a retriable network error, so it fails over", async () => {
+            const controller = new AbortController();
+            controller.abort(Object.assign(new Error("AI prompt 'Default Decision' exceeded its configured TimeoutMS (50ms) — the model call was aborted (timeout)"), { IsTimeout: true }));
+            fake.decideHandler = async () => { throw abortError(); };
+
+            const result = await fake.Decide({ ...createValidParams(), CancellationToken: controller.signal });
+
+            expect(result.errorInfo).toMatchObject({ errorType: 'NetworkError', severity: 'Retriable', canFailover: true });
+        });
+    });
+
     describe('1. Happy path', () => {
         it('evaluates Likelihood, Choice, and Score in one call with success and timing set', async () => {
             fake.decideHandler = async () => createValidResult();

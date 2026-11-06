@@ -7,11 +7,15 @@ import { MJAIAgentCategoryEntity, UserInfoEngine } from '@memberjunction/core-en
 const SETTING_KEY = 'mj.form.aiAgentCategories.headerCollapsed';
 
 @RegisterClassEx(BaseFormPanel, {
-    key: 'form-panel:AI Agent Categories:header',
+    key: 'form-panel:MJ: AI Agent Categories:header',
     metadata: {
-        entity: 'AI Agent Categories',
-        slot: 'header',
-        sortKey: 10,
+        entity: 'MJ: AI Agent Categories',
+        // A hero is a bare strip in before-fields. Its sortKey is above the overview's
+        // (higher draws first), so it draws above the overview cards.
+        slot: 'before-fields',
+        presentation: 'bare',
+        contributionKey: 'ai-agent-categories:header',
+        sortKey: 20,
     },
 })
 @Component({
@@ -65,6 +69,12 @@ const SETTING_KEY = 'mj.form.aiAgentCategories.headerCollapsed';
         }
         .mj-hero-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
         .mj-hero-identity { display: flex; align-items: center; gap: 14px; }
+        /* Let the identity column shrink so a long title (an email, say) wraps instead of pushing
+           the toggle past the edge and making the panel column scroll sideways on a phone. */
+        .mj-hero-top, .mj-hero-identity, .mj-hero-identity > div { min-width: 0; }
+        .mj-hero-identity { flex: 1 1 auto; }
+        .mj-hero-title { overflow-wrap: anywhere; }
+        .mj-hero-subline, .mj-hero-metrics-row { flex-wrap: wrap; }
         .mj-hero-avatar {
             width: 44px; height: 44px; border-radius: 10px;
             display: flex; align-items: center; justify-content: center;

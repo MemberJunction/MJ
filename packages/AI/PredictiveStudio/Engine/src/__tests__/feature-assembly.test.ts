@@ -13,6 +13,10 @@ import {
   resolveAsOfDate,
   daysSinceLastActivityAsOf,
 } from '../feature-assembly';
+import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
+
+/** The read scope every assembly needs. Reads go through the injected `dataAccess`, so the provider is never called. */
+const testScope: Pick<FeatureAssemblyParams, 'contextUser' | 'provider'> = { contextUser: { ID: 'user-1' } as UserInfo, provider: {} as IMetadataProvider };
 
 /**
  * Unit tests for the FeatureAssembly executor + as-of / leakage primitives.
@@ -33,9 +37,9 @@ class InMemoryDataAccess implements IFeatureDataAccess {
   async fetchRows(params: FetchRowsParams): Promise<FetchRowsResult> {
     const rows = this.rowsByEntity[params.EntityName];
     if (!rows) {
-      return { Success: false, Rows: [], ErrorMessage: `No fixture for ${params.EntityName}` };
+      return { Success: false, Rows: [], TotalRowCount: 0, ErrorMessage: `No fixture for ${params.EntityName}` };
     }
-    return { Success: true, Rows: rows };
+    return { Success: true, Rows: rows, TotalRowCount: rows.length };
   }
 
   async fetchEmbedding(entity: string, recordId: string, _embeddingModelRef: string, _dims: number): Promise<number[] | null> {
@@ -70,6 +74,7 @@ describe('FeatureAssemblyExecutor — member retention assembly', () => {
     };
 
     const params: FeatureAssemblyParams = {
+      ...testScope,
       targetEntityName: 'Members',
       records: members,
       sources,
@@ -109,6 +114,7 @@ describe('FeatureAssemblyExecutor — member retention assembly', () => {
     const members: SourceRow[] = [{ ID: 'm1', score: 5, Renewed: 1 }];
     const dataAccess = new InMemoryDataAccess({ Members: members });
     const result = await new FeatureAssemblyExecutor().assemble({
+      ...testScope,
       targetEntityName: 'Members',
       records: members,
       sources,
@@ -134,6 +140,7 @@ describe('FeatureAssemblyExecutor — member retention assembly', () => {
       Steps: [{ Id: 'e', Kind: 'embedding', Entity: 'Members', EmbeddingModelRef: 'minilm', Dims: 3 }],
     };
     const result = await new FeatureAssemblyExecutor().assemble({
+      ...testScope,
       targetEntityName: 'Members',
       records: members,
       sources,
@@ -149,6 +156,7 @@ describe('FeatureAssemblyExecutor — member retention assembly', () => {
     const members: SourceRow[] = [{ ID: 'm1', tenure: 9 }];
     const dataAccess = new InMemoryDataAccess({ Members: members });
     const result = await new FeatureAssemblyExecutor().assemble({
+      ...testScope,
       targetEntityName: 'Members',
       recordSet: { EntityName: 'Members' },
       sources,
@@ -190,6 +198,7 @@ describe('FeatureAssemblyExecutor — golden as-of test (no future leakage)', ()
 
     const asOf: AsOfStrategy = { Mode: 'offset', OffsetDays: 30 };
     const result = await new FeatureAssemblyExecutor().assemble({
+      ...testScope,
       targetEntityName: 'Members',
       records: members,
       sources,
@@ -246,6 +255,7 @@ describe('LeakageGuard', () => {
       SingleFeatureDominanceThreshold: 0.6,
     };
     const result = await new FeatureAssemblyExecutor().assemble({
+      ...testScope,
       targetEntityName: 'Members',
       records: members,
       sources,
@@ -264,6 +274,7 @@ describe('LeakageGuard', () => {
     const dataAccess = new InMemoryDataAccess({ Members: members });
     const guard: LeakageGuard = { DenyFields: ['leaky'], SingleFeatureDominanceThreshold: 0.6 };
     const result = await new FeatureAssemblyExecutor().assemble({
+      ...testScope,
       targetEntityName: 'Members',
       records: members,
       sources,
@@ -312,6 +323,7 @@ describe('FeatureAssemblyExecutor — anti-skew: required-column hydration + har
     Steps: [{ Id: 's', Kind: 'select', Columns: ['AutoRenew', 'MembershipType'] }],
   };
   const base = {
+    ...testScope,
     targetEntityName: 'Members',
     sources,
     steps,
@@ -462,6 +474,7 @@ describe('FeatureAssemblyExecutor — llm-derived step planning', () => {
       ],
     };
     const result = await new FeatureAssemblyExecutor().assemble({
+      ...testScope,
       targetEntityName: 'Members',
       records: members,
       sources,
@@ -495,6 +508,7 @@ describe('FeatureAssemblyExecutor — llm-derived step planning', () => {
       ],
     };
     const result = await new FeatureAssemblyExecutor().assemble({
+      ...testScope,
       targetEntityName: 'Members',
       records: members,
       sources,
@@ -527,6 +541,7 @@ describe('FeatureAssemblyExecutor — llm-derived step planning', () => {
       ],
     };
     const result = await new FeatureAssemblyExecutor().assemble({
+      ...testScope,
       targetEntityName: 'Members',
       records: members,
       sources,

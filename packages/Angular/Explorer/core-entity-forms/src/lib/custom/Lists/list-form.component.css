@@ -44,7 +44,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: white;
+    color: var(--mj-brand-on-primary);
     font-size: 24px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
@@ -164,6 +164,11 @@
     letter-spacing: 0.5px;
 }
 
+/* Phone section picker: hidden until the 768px rule below swaps it in for the rail */
+.phone-section-picker {
+    display: none;
+}
+
 /* Navigation Rail */
 .nav-rail {
     grid-area: nav;
@@ -191,7 +196,7 @@
 
 .nav-item:hover:not(.disabled) {
     background: rgba(255, 255, 255, 0.1);
-    color: white;
+    color: var(--mj-text-inverse);
 }
 
 .nav-item.active {
@@ -237,7 +242,7 @@
     border-radius: 9px;
     font-size: 10px;
     font-weight: 600;
-    color: white;
+    color: var(--mj-brand-on-primary);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -374,7 +379,7 @@
 .btn-primary {
     padding: 8px 16px;
     background: var(--mj-brand-primary);
-    color: white;
+    color: var(--mj-brand-on-primary);
     border: none;
     border-radius: 6px;
     font-size: 14px;
@@ -419,7 +424,7 @@
 .btn-danger {
     padding: 8px 16px;
     background: var(--mj-status-error);
-    color: white;
+    color: var(--mj-text-inverse);
     border: none;
     border-radius: 6px;
     font-size: 14px;
@@ -1054,6 +1059,20 @@
 }
 
 @media (max-width: 768px) {
+    /* The rail becomes one section-picker button in the nav grid area (same pattern as the
+       standard record form). */
+    .nav-rail {
+        display: none;
+    }
+
+    .phone-section-picker {
+        grid-area: nav;
+        display: block;
+        padding: 4px 8px;
+        border-bottom: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+    }
+
     .list-header {
         flex-direction: column;
         align-items: flex-start;

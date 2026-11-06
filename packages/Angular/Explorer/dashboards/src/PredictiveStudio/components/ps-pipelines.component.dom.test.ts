@@ -1,5 +1,5 @@
 import '@angular/compiler';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { renderComponentFixture, query, queryAll, capture, fakeMetadataProvider } from '@memberjunction/ng-test-utils';
@@ -136,5 +136,27 @@ describe('PSPipelinesComponent (DOM)', () => {
     expect(stepCards[0].textContent).toContain('UnitPrice');
     expect(stepCards[0].textContent).toContain('LineTotalNet');
     expect(stepCards[0].textContent).toContain('MJ_BizApps_Orders: Event Order Lines');
+  });
+
+  it('shows a stored as-of cutoff (inspector) with a reset action, and no reset for mode none', () => {
+    const none = render([makePipeline()], 'dag');
+    expect(query(none, '[data-testid="ps-pipelines-asof-mode"]')?.textContent?.trim()).toBe('none');
+    expect(query(none, '[data-testid="ps-pipelines-asof-reset"]')).toBeNull();
+
+    const cutoff = render([makePipeline({ AsOfStrategy: JSON.stringify({ Mode: 'column', Column: 'DecisionDate' }) })], 'dag');
+    expect(query(cutoff, '[data-testid="ps-pipelines-asof-mode"]')?.textContent?.trim()).toBe('column');
+    expect(query(cutoff, '[data-testid="ps-pipelines-asof-reset"]')?.textContent).toContain('Reset to none');
+  });
+
+  it('Reset to none marks the pipeline dirty without saving', () => {
+    const fixture = render([makePipeline({ AsOfStrategy: JSON.stringify({ Mode: 'offset', OffsetDays: 30 }) })], 'dag');
+    const save = vi.spyOn(fixture.componentInstance, 'save');
+    (query(fixture, '[data-testid="ps-pipelines-asof-reset"]') as HTMLElement).click();
+    fixture.detectChanges();
+    expect(save).not.toHaveBeenCalled();
+    expect(query(fixture, '[data-testid="ps-pipelines-asof-mode"]')?.textContent?.trim()).toBe('none');
+    expect(query(fixture, '[data-testid="ps-pipelines-asof-reset"]')).toBeNull();
+    expect(query(fixture, '[data-testid="ps-pipelines-dirty"]')).not.toBeNull();
+    expect((query(fixture, '[data-testid="ps-pipelines-save"]') as HTMLButtonElement).disabled).toBe(false);
   });
 });

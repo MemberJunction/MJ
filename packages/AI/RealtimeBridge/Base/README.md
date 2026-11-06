@@ -9,13 +9,13 @@ This package holds everything a bridge needs that carries **no execution** — t
 channel cache, the abstract `BaseRealtimeBridge` driver contract, the media-track types, the
 platform-agnostic turn-taking policy, and the capability-error type. It is the base half of the
 `AIBridgeEngineBase` / `AIBridgeEngine` pair, exactly mirroring how
-[`@memberjunction/ai-engine-base`](../BaseAIEngine)'s `AIEngineBase` underpins
-[`@memberjunction/aiengine`](../Engine)'s `AIEngine`. The server tier that actually *runs* a bridged
+[`@memberjunction/ai-engine-base`](../../BaseAIEngine)'s `AIEngineBase` underpins
+[`@memberjunction/aiengine`](../../Engine)'s `AIEngine`. The server tier that actually *runs* a bridged
 session (the transport seam, bot lifecycle, janitor, the `LoopbackBridge`) lives in
-[`@memberjunction/ai-bridge-server`](../Bridge).
+[`@memberjunction/ai-bridge-server`](../Server).
 
 > See the architecture plan at `/plans/realtime/realtime-bridges-architecture.md` and the developer
-> guide [`/guides/REALTIME_BRIDGES_GUIDE.md`](../../../guides/REALTIME_BRIDGES_GUIDE.md) for the full
+> guide [`/guides/REALTIME_BRIDGES_GUIDE.md`](../../../../guides/REALTIME_BRIDGES_GUIDE.md) for the full
 > design (transport seam, capability gating, channel contribution, turn-taking, roadmap).
 
 ## What's in the box
@@ -26,7 +26,7 @@ session (the transport seam, bot lifecycle, janitor, the `LoopbackBridge`) lives
 | `AIBridgeEngineBase` | A `BaseEngine` singleton caching the bridge registry — providers + capability flags, agent identities, the provider→channel junction — with synchronous resolution helpers (`ProviderByName`, `ProviderByDriverClass`, `IdentityByValue`, `ChannelsForProvider`, …). No execution. |
 | `TurnTakingPolicy` + `RegexAddressedMatcher` | Pure, platform-agnostic turn-taking (`Passive` / `Active` / `Hybrid`) with injected matcher/scorer/clock — fully unit-testable, no I/O. |
 | `BridgeCapabilityNotSupportedError` | The defense-in-depth error thrown when a capability-gated method is called on a driver that doesn't support it (carries `FeatureName` + `ProviderName`). |
-| Media-track types | `BridgeMediaFrame`, `BridgeMediaTrackKind` (`audio-in` … `screen-out`), `BridgeParticipantInfo`, `BridgeParticipantRole` — the typed, directional, **media-agnostic** transport payloads. |
+| Media-track types | `BridgeMediaFrame`, `BridgeMediaTrackKind` (`audio-in` … `screen-out`), `BridgeParticipantInfo`, `BridgeParticipantRole` — the typed, directional, **media-agnostic** transport payloads. `BridgeVideoSourceEnd` and `BridgeAvatarFailure` are what a driver reports when a camera or screen stops or the agent's avatar can't be shown (see [Video on the bridge](#video-on-the-bridge)). |
 | Driver contract types | `RealtimeBridgeContext`, `BridgeConnectResult`, `BridgeDisconnectReason`, `IBridgeProviderFeatures` (typed alias of the generated `MJ: AI Bridge Providers.SupportedFeatures` shape). |
 
 ## Installation
@@ -40,9 +40,9 @@ npm install @memberjunction/ai-bridge-base
 `BaseRealtimeBridge` has two tiers of methods:
 
 - **Abstract — every bridge MUST implement:** `Connect(ctx)`, `Disconnect(reason)`,
-  `SendMedia(track, frame)` (outbound — fed from `IRealtimeSession.OnOutput`), and
-  `OnMedia(handler)` (inbound — routed to `IRealtimeSession.SendInput`). Audio is just one track;
-  video/screen ride the same two media methods.
+  `SendMedia(track, frame)` (outbound — the agent's voice from `IRealtimeSession.OnOutput`, its video from
+  `IRealtimeSession.OnVideoFrame`), and `OnMedia(handler)` (inbound — routed to `IRealtimeSession.SendInput` as a
+  frame tagged audio or video). Audio is just one track; video/screen ride the same two media methods.
 - **Virtual / capability-gated — override only what your platform supports:** `GetParticipants`,
   `OnParticipantChange` (gated by `SpeakerDiarization`), `SendDTMF` / `OnDTMF` (`DTMF`),
   `TransferCall` (`CallTransfer`), `StartRecording` (`Recording`). Each throws
@@ -53,6 +53,42 @@ npm install @memberjunction/ai-bridge-base
 Protected helpers for driver authors: `applyContext(ctx)` (capture features + provider name — call it
 first in `Connect`), `RequireFeature(flag)` (re-assert a flag at the top of an overriding method), and
 `notSupported(name)` (build the standard error).
+
+Outside the two tiers, a few hooks are no-ops by default and not capability-gated. The two for video,
+`OnVideoSourceEnded` and `OnAvatarUnavailable`, are described below.
+
+## Video on the bridge
+
+Cameras and shared screens come in on `video-in` and `screen-in`; the agent's own video goes out on `video-out`. The
+server engine sends a camera or screen frame to the model as video, and only to a session that takes video.
+
+A video frame carries more than an audio frame. Each of these `BridgeMediaFrame` fields is optional:
+
+- `MimeType` — the payload's format: `'image/jpeg'` for a camera frame, `'video/mp4'` for a piece of an avatar's
+  fragmented MP4. Audio frames may omit it. A video frame without one can't be sent to a model that needs an image type;
+  the realtime driver drops it.
+- `SourceID` — which camera or screen an inbound frame comes from, when the endpoint has several: an opaque key that
+  stays the same for one source, such as `'participant:ada:camera'`. The engine uses it to notice a new source.
+- `SourceLabel` — the source's name for the model ("Ada's camera").
+- `Width`, `Height` — the video's size in pixels, set together, where the producer knows it: an image's own size after
+  rotation and scaling, or for fragmented MP4 the size the init segment gives the video track (on the init segment and
+  on each fragment that carries video).
+- `KeyFrame` — whether a decoder can start at this frame. `true` for a still image, which decodes on its own; for encoded
+  video, whether the piece's first video frame is a key frame. Absent on a piece with no video frame (audio, an MP4 init
+  segment).
+
+A consumer reads an absent `Width`, `Height` or `KeyFrame` as unknown.
+
+Two hooks carry the driver's video events to the engine. A driver that has no video doesn't override them:
+
+- `OnVideoSourceEnded(handler)` — a camera or screen the driver was sending stopped, reported as a
+  `BridgeVideoSourceEnd` (`Track`, `SourceID`, `SourceLabel`, as its frames carried them): the person stopped letting
+  agents see them, left, stopped sharing or turned the camera off, or the driver moved the model's view to another
+  source. The engine tells the model it can no longer see that source.
+- `OnAvatarUnavailable(handler)` — the driver took the agent's avatar down and goes on audio only, with a
+  `BridgeAvatarFailure`: `'decoder-failed'` (its decoders kept failing) or `'publish-failed'` (the endpoint refused the
+  video track). The engine then replaces the model session with one that renders no avatar, when the host gave it a way
+  to (`RecoverRealtimeSessionWithoutAvatar` in [`@memberjunction/ai-bridge-server`](../Server)).
 
 ## Minimal usage — a tiny custom bridge
 
@@ -96,7 +132,7 @@ export class EchoBridge extends BaseRealtimeBridge {
 
 A bridge provider row whose `DriverClass = 'EchoBridge'` and whose `SupportedFeatures` enables
 `{ AudioIn, AudioOut }` resolves to this driver through the `ClassFactory`. (The shipped
-[`LoopbackBridge`](../Bridge) in the server package is a fuller worked example — it also overrides the
+[`LoopbackBridge`](../Server) in the server package is a fuller worked example — it also overrides the
 diarization-gated roster methods.)
 
 ## Turn-taking
@@ -137,8 +173,8 @@ the bridge contributes (planned Phase 2).*
 | Layer | Package | Role |
 |---|---|---|
 | **Metadata cache + abstract driver + turn policy** | **`@memberjunction/ai-bridge-base`** (this) | provider/identity/channel cache, `BaseRealtimeBridge`, `TurnTakingPolicy`, media-track + capability types |
-| Coordination + execution + transport seam | [`@memberjunction/ai-bridge-server`](../Bridge) | `AIBridgeEngine` (composes this base), the `bridge ↔ IRealtimeSession` seam, bot lifecycle, janitor, `LoopbackBridge` |
-| Realtime session contract | [`@memberjunction/ai`](../Core) | `IRealtimeSession` / `BaseRealtimeModel` — injected into the engine, never constructed by a bridge |
+| Coordination + execution + transport seam | [`@memberjunction/ai-bridge-server`](../Server) | `AIBridgeEngine` (composes this base), the `bridge ↔ IRealtimeSession` seam, bot lifecycle, janitor, `LoopbackBridge` |
+| Realtime session contract | [`@memberjunction/ai`](../../Core) | `IRealtimeSession` / `BaseRealtimeModel` — injected into the engine, never constructed by a bridge |
 
 The server `AIBridgeEngine` **composes** (does not extend) `AIBridgeEngineBase`, so the startup manager
 warms exactly one `BaseEngine` cache — the same composition-over-inheritance pattern `AIEngine` uses
@@ -146,11 +182,11 @@ over `AIEngineBase`.
 
 ## Further reading
 
-- **Guide:** [`/guides/REALTIME_BRIDGES_GUIDE.md`](../../../guides/REALTIME_BRIDGES_GUIDE.md) — the full
+- **Guide:** [`/guides/REALTIME_BRIDGES_GUIDE.md`](../../../../guides/REALTIME_BRIDGES_GUIDE.md) — the full
   developer guide (how to add a driver, the transport seam, turn-taking, entity invariants, roadmap).
 - **Architecture plan:** `/plans/realtime/realtime-bridges-architecture.md`.
-- **Server package:** [`@memberjunction/ai-bridge-server`](../Bridge/README.md).
-- **Companion:** [`/guides/REALTIME_CO_AGENTS_GUIDE.md`](../../../guides/REALTIME_CO_AGENTS_GUIDE.md) —
+- **Server package:** [`@memberjunction/ai-bridge-server`](../Server/README.md).
+- **Companion:** [`/guides/REALTIME_CO_AGENTS_GUIDE.md`](../../../../guides/REALTIME_CO_AGENTS_GUIDE.md) —
   the realtime engine the bridge plugs into.
 
 ## License

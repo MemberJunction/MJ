@@ -9,12 +9,14 @@ import {
   ChartData,
   ExecutionDetails
 } from '../services/ai-instrumentation.service';
+import { ComputeCoveragePercent, GetBucketSizeMs } from '../services/ai-usage-analytics.compute';
 import { DataPointClickEvent } from './charts/time-series-chart.component';
 import { KPICardData } from './widgets/kpi-card.component';
 import { HeatmapData } from './charts/performance-heatmap.component';
 import { RunView, CompositeKey } from '@memberjunction/core';
 import { ResourceData } from "@memberjunction/core-entities";
 import { MJAIPromptRunEntityExtended, MJAIAgentRunEntityExtended, MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 
 export interface DrillDownTab {
@@ -213,6 +215,7 @@ export interface ExecutionMonitoringState {
                           [data]="(trends$ | async) ?? []"
                           title="Execution Trends"
                           [config]="timeSeriesConfig"
+                          [BucketSizeMs]="TrendBucketMs"
                           (dataPointClick)="onDataPointClick($event)"
                           (timeRangeChange)="onChartTimeRangeChange($event)"
                         ></app-time-series-chart>
@@ -1791,24 +1794,24 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
   set performanceMatrix$(value: Observable<HeatmapData[]>) {
     this.PerformanceMatrix$ = value;
   }
-  CostData$: Observable<{ model: string; cost: number; tokens: number }[]>;
+  CostData$: Observable<{ model: string; cost: number | null; tokens: number }[]>;
 
   /** @deprecated Use {@link CostData$}. */
-  get costData$(): Observable<{ model: string; cost: number; tokens: number }[]> {
+  get costData$(): Observable<{ model: string; cost: number | null; tokens: number }[]> {
     return this.CostData$;
   }
   /** @deprecated Use {@link CostData$}. */
-  set costData$(value: Observable<{ model: string; cost: number; tokens: number }[]>) {
+  set costData$(value: Observable<{ model: string; cost: number | null; tokens: number }[]>) {
     this.CostData$ = value;
   }
-  TokenEfficiency$: Observable<{ inputTokens: number; outputTokens: number; cost: number; model: string }[]>;
+  TokenEfficiency$: Observable<{ inputTokens: number; outputTokens: number; cost: number | null; model: string }[]>;
 
   /** @deprecated Use {@link TokenEfficiency$}. */
-  get tokenEfficiency$(): Observable<{ inputTokens: number; outputTokens: number; cost: number; model: string }[]> {
+  get tokenEfficiency$(): Observable<{ inputTokens: number; outputTokens: number; cost: number | null; model: string }[]> {
     return this.TokenEfficiency$;
   }
   /** @deprecated Use {@link TokenEfficiency$}. */
-  set tokenEfficiency$(value: Observable<{ inputTokens: number; outputTokens: number; cost: number; model: string }[]>) {
+  set tokenEfficiency$(value: Observable<{ inputTokens: number; outputTokens: number; cost: number | null; model: string }[]>) {
     this.TokenEfficiency$ = value;
   }
 
@@ -2051,6 +2054,11 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
   }
 
   private createKPICards(kpis: DashboardKPIs): KPICardData[] {
+    const covPriced = kpis.Coverage?.PricedRuns ?? 0;
+    const covUnpriced = kpis.Coverage?.UnpricedRuns ?? 0;
+    const covTotal = covPriced + covUnpriced;
+    const coveragePct = Math.round(ComputeCoveragePercent(kpis.Coverage));
+
     return [
       {
         title: 'Total Executions',
@@ -2061,10 +2069,20 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
       },
       {
         title: 'Total Cost',
-        value: `$${kpis.totalCost.toFixed(4)}`,
+        value: kpis.totalCost !== null
+          ? `${kpis.costCurrency === 'USD' ? '$' : kpis.costCurrency + ' '}${kpis.totalCost.toFixed(4)}`
+          : '\u2014',
         icon: 'fa-dollar-sign',
         color: 'warning',
-        subtitle: `${kpis.costCurrency} • $${kpis.dailyCostBurn.toFixed(2)}/day`
+        // Mixed currencies: the total is in one of them; the others are left out rather than added at 1:1.
+        subtitle: `covers ${coveragePct}% of runs` + (kpis.IsMixedCurrency ? ` \u00b7 ${kpis.costCurrency} only` : '')
+      },
+      {
+        title: 'Coverage',
+        value: `${coveragePct}%`,
+        icon: 'fa-shield-halved',
+        color: coveragePct >= 90 ? 'success' : coveragePct >= 70 ? 'warning' : 'danger',
+        subtitle: `${covPriced} of ${covTotal} runs priced`
       },
       {
         title: 'Success Rate',
@@ -2085,7 +2103,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
         value: this.FormatTokens(kpis.totalTokens),
         icon: 'fa-coins',
         color: 'primary',
-        subtitle: `$${kpis.costPerToken.toFixed(6)}/token`
+        subtitle: kpis.costPerToken !== null ? `$${kpis.costPerToken.toFixed(6)}/token` : '\u2014'
       },
       {
         title: 'Top Model',
@@ -2108,8 +2126,12 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     return this.OnTimeRangeChange();
   }
 
+  /** Width of each trend bucket, the same rule the service buckets by. */
+  public TrendBucketMs: number | null = null;
+
   private setTimeRange(range: string): void {
     const { start, end } = this.getTimeRangeFromSelection(range);
+    this.TrendBucketMs = GetBucketSizeMs(start, end);
     this.instrumentationService.setDateRange(start, end);
   }
   
@@ -2207,25 +2229,28 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     return this.OnChartTimeRangeChange(range);
   }
 
-  private getMetricValue(data: TrendData, metric: string): number {
+  private getMetricValue(data: TrendData, metric: string): number | null {
     switch (metric) {
       case 'executions': return data.executions;
       case 'cost': return data.cost;
       case 'tokens': return data.tokens;
       case 'avgTime': return data.avgTime;
       case 'errors': return data.errors;
-      default: return 0;
+      default: return null;
     }
   }
 
-  private formatMetricValue(metric: string, value: number): string {
+  private formatMetricValue(metric: string, value: number | null): string {
+    if (value === null || value === undefined) {
+      return '\u2014';
+    }
     switch (metric) {
       case 'executions': return value.toLocaleString();
       case 'cost': return `$${value.toFixed(4)}`;
       case 'tokens': return value.toLocaleString();
       case 'avgTime': return `${(value / 1000).toFixed(1)}s`;
       case 'errors': return value.toString();
-      default: return value.toString();
+      default: return String(value);
     }
   }
 
@@ -2297,12 +2322,12 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     return this.TrackByCostModel(index, item);
   }
 
-  TrackByEfficiencyModel(index: number, item: { model: string; inputTokens: number; outputTokens: number; cost: number }): string {
+  TrackByEfficiencyModel(index: number, item: { model: string; inputTokens: number; outputTokens: number; cost: number | null }): string {
     return item.model;
   }
 
   /** @deprecated Use {@link TrackByEfficiencyModel}. */
-  trackByEfficiencyModel(index: number, item: { model: string; inputTokens: number; outputTokens: number; cost: number }): string {
+  trackByEfficiencyModel(index: number, item: { model: string; inputTokens: number; outputTokens: number; cost: number | null }): string {
     return this.TrackByEfficiencyModel(index, item);
   }
 
@@ -2320,35 +2345,45 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     return this.FormatTokens(tokens);
   }
 
-  formatCurrency(amount: number, decimals: number = 4): string {
+  formatCurrency(amount: number | null | undefined, decimals: number = 4): string {
+    if (amount === null || amount === undefined) {
+      return '\u2014';
+    }
     return `$${amount.toFixed(decimals)}`;
   }
 
-  FormatCostPerToken(cost: number, tokens: number): string {
-    const costPer1K = tokens > 0 ? (cost / tokens) * 1000 : 0;
+  FormatCostPerToken(cost: number | null | undefined, tokens: number): string {
+    if (cost === null || cost === undefined || tokens <= 0) {
+      return '\u2014';
+    }
+    const costPer1K = (cost / tokens) * 1000;
     return `$${costPer1K.toFixed(4)}/1K tokens`;
   }
 
   /** @deprecated Use {@link FormatCostPerToken}. */
-  formatCostPerToken(cost: number, tokens: number): string {
+  formatCostPerToken(cost: number | null | undefined, tokens: number): string {
     return this.FormatCostPerToken(cost, tokens);
   }
 
-  GetCostBarWidth(cost: number, maxCost: number): number {
-    return maxCost > 0 ? (cost / maxCost) * 100 : 0;
+  GetCostBarWidth(cost: number | null | undefined, maxCost: number): number {
+    if (cost === null || cost === undefined || maxCost <= 0) {
+      return 0;
+    }
+    return (cost / maxCost) * 100;
   }
 
   /** @deprecated Use {@link GetCostBarWidth}. */
-  getCostBarWidth(cost: number, maxCost: number): number {
+  getCostBarWidth(cost: number | null | undefined, maxCost: number): number {
     return this.GetCostBarWidth(cost, maxCost);
   }
 
-  GetMaxCost(costData: { cost: number }[]): number {
-    return Math.max(...costData.map(item => item.cost));
+  GetMaxCost(costData: { cost: number | null }[]): number {
+    const priced = costData.map(item => item.cost).filter((c): c is number => c !== null && c !== undefined);
+    return priced.length > 0 ? Math.max(...priced) : 0;
   }
 
   /** @deprecated Use {@link GetMaxCost}. */
-  getMaxCost(costData: { cost: number }[]): number {
+  getMaxCost(costData: { cost: number | null }[]): number {
     return this.GetMaxCost(costData);
   }
 
@@ -2522,25 +2557,32 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
         endTime.setHours(23, 59, 59, 999);
       }
       
-      // Load executions for this time period
-      const [promptResults, agentResults] = await Promise.all([
-        RunView.FromMetadataProvider(this.ProviderToUse).RunView<MJAIPromptRunEntityExtended>({
+      // Load executions for this time period in a single batched RunViews call with lightweight scalar projections
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const [promptResults, agentResults] = await rv.RunViews([
+        {
           EntityName: 'MJ: AI Prompt Runs',
           ExtraFilter: `RunAt >= '${startTime.toISOString()}' AND RunAt <= '${endTime.toISOString()}'`,
-          OrderBy: 'RunAt DESC' 
-        }),
-        RunView.FromMetadataProvider(this.ProviderToUse).RunView<MJAIAgentRunEntityExtended>({
+          OrderBy: 'RunAt DESC',
+          MaxRows: 500,
+          Fields: ['ID', 'Prompt', 'Model', 'Success', 'RunAt', 'CompletedAt', 'Cost', 'TokensUsed', 'ErrorMessage'],
+          ResultType: 'simple'
+        },
+        {
           EntityName: 'MJ: AI Agent Runs',
           ExtraFilter: `StartedAt >= '${startTime.toISOString()}' AND StartedAt <= '${endTime.toISOString()}'`,
-          OrderBy: 'StartedAt DESC' 
-        })
+          OrderBy: 'StartedAt DESC',
+          MaxRows: 500,
+          Fields: ['ID', 'Agent', 'Status', 'StartedAt', 'CompletedAt', 'TotalCost', 'TotalTokensUsed', 'ErrorMessage'],
+          ResultType: 'simple'
+        }
       ]);
       
       // Convert to ExecutionRecord format
       const executions: ExecutionRecord[] = [];
       
       // Add prompt executions
-      for (const run of promptResults.Results) {
+      for (const run of promptResults.Results as MJAIPromptRunEntityExtended[]) {
         const duration = run.CompletedAt ? 
           new Date(run.CompletedAt).getTime() - new Date(run.RunAt).getTime() : 
           Date.now() - new Date(run.RunAt).getTime();
@@ -2561,7 +2603,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
       }
       
       // Add agent executions
-      for (const run of agentResults.Results) {
+      for (const run of agentResults.Results as MJAIAgentRunEntityExtended[]) {
         const duration = run.CompletedAt ? 
           new Date(run.CompletedAt).getTime() - new Date(run.StartedAt).getTime() : 
           Date.now() - new Date(run.StartedAt).getTime();
@@ -2601,14 +2643,19 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     this.LoadingDrillDown = true;
     
     try {
-      // Find model by name
-      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const result = await rv.RunView<MJAIModelEntityExtended>({
-        EntityName: 'MJ: AI Models',
-        ExtraFilter: `Name = '${modelName.replace(/'/g, "''")}'` 
-      });
-      
-      const model = result.Results[0];
+      // Consult AIEngineBase in-memory cache first before issuing a network RunView
+      await AIEngineBase.Instance.Config(false);
+      let model: MJAIModelEntityExtended | undefined = AIEngineBase.Instance.Models.find(m => m.Name === modelName);
+      if (!model) {
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const result = await rv.RunView<MJAIModelEntityExtended>({
+          EntityName: 'MJ: AI Models',
+          ExtraFilter: `Name = '${modelName.replace(/'/g, "''")}'`,
+          Fields: ['ID', 'Name', 'Vendor', 'APIName', 'IsActive', 'Description'],
+          ResultType: 'simple'
+        });
+        model = result.Results[0];
+      }
       if (model) {
         tab.data = {
           name: model.Name,

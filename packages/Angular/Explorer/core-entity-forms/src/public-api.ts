@@ -26,6 +26,11 @@ export { MJTestRubricFormComponentExtended } from './lib/custom/Tests/test-rubri
 export { MJListFormComponentExtended } from './lib/custom/Lists/list-form.component';
 export { MJAIAgentSessionFormComponentExtended } from './lib/custom/AIAgentSessions/ai-agent-session-form.component';
 export { MJAIAgentChannelFormComponentExtended } from './lib/custom/AIAgentChannels/ai-agent-channel-form.component';
+export { MJRubricFormComponentExtended, RubricFormPolicy } from './lib/custom/Rubrics/rubric-form.component';
+export { RubricAuthorPanel, RubricDiffPanel, RubricPublishPanel, RubricVersionsPanel } from './lib/custom/Rubrics/rubric-form.panels';
+export { MJRubricEvaluationFormComponentExtended, RubricEvaluationComparePanel, RubricEvaluationFormPolicy, RubricEvaluationResultPanel } from './lib/custom/Rubrics/evaluation-form.component';
+export { MJRubricScaleFormComponentExtended, RubricScaleFormPolicy, RubricScaleLevelsPanel } from './lib/custom/Rubrics/scale-form.component';
+export { MJAIAgentRubricFormComponentExtended, MJRubricBandFormComponentExtended, MJRubricCategoryFormComponentExtended, MJRubricCriterionFormComponentExtended, MJRubricEvaluationScoreFormComponentExtended, MJRubricScaleLevelFormComponentExtended, MJRubricVersionFormComponentExtended, RubricVersionFormPolicy, RubricVersionSummaryPanel } from './lib/custom/Rubrics/record-forms.component';
 export { MLModelFormComponentExtended, LoadMLModelFormComponentExtended, MLModelFormPolicy } from './lib/custom/MLModels/ml-model-form.component';
 export { RecordProcessFormComponentExtended, LoadRecordProcessFormComponentExtended, RecordProcessFormPolicy } from './lib/custom/RecordProcesses/record-process-form.component';
 export { PSModelDetailComponent } from './lib/custom/MLModels/ps-model-detail.component';
@@ -34,6 +39,7 @@ export * from './lib/custom/MLModels/ml-model-view-models';
 // Custom form supporting components
 export { TemplateEditorComponent } from './lib/shared/components/template-editor.component';
 export { ChatMessageViewerComponent } from './lib/custom/AIPromptRuns/chat-message-viewer.component';
+export { PromptRunDataCaptureNoteComponent } from './lib/custom/AIPromptRuns/prompt-run-data-capture-note.component';
 export { AIAgentRunTimelineComponent } from './lib/custom/ai-agent-run/ai-agent-run-timeline.component';
 export { AIAgentRunStepNodeComponent } from './lib/custom/ai-agent-run/ai-agent-run-step-node.component';
 export { AIAgentRunAnalyticsComponent } from './lib/custom/ai-agent-run/ai-agent-run-analytics.component';
@@ -60,3 +66,7 @@ export { FlowAgentFormSectionComponent } from './lib/custom/AIAgents/FlowAgentTy
 
 // Visual Hierarchy & Taxonomy Form Panels
 export * from './lib/custom/HierarchyPanels/hierarchy-form-panels';
+
+// Brand Kit Form Panels
+export { BrandKitAssetsPanelComponent, LoadBrandKitAssetsPanelComponent } from './lib/panels/brand-kits/brand-kit-assets.panel';
+export { BrandKitGenerationPolicyPanelComponent, LoadBrandKitGenerationPolicyPanelComponent } from './lib/panels/brand-kits/brand-kit-generation-policy.panel';

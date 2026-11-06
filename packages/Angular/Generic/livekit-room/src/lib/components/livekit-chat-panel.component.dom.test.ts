@@ -41,6 +41,22 @@ describe('LiveKitChatPanelComponent (DOM)', () => {
     expect(text(remote, '.lk-chat__sender')).toContain('Alex');
   });
 
+  it('marks a message that did not go out "Not sent", with a Retry that hands that message back', () => {
+    const sent = msg({ IsLocal: true, Text: 'first' });
+    const failed = msg({ IsLocal: true, Text: 'second', NotSent: true });
+    const f = render({ Messages: [sent, failed] });
+    const [sentRow, failedRow] = queryAll(f, '.lk-chat__msg');
+    expect(sentRow.querySelector('.lk-chat__not-sent')).toBeNull();
+    expect(failedRow.querySelector('.lk-chat__not-sent-label')?.textContent?.trim()).toBe('Not sent');
+
+    const spy = vi.fn();
+    f.componentInstance.Retry.subscribe(spy);
+    const retry = failedRow.querySelector('.lk-chat__not-sent button') as HTMLButtonElement;
+    expect(retry.textContent?.trim()).toBe('Retry');
+    retry.click();
+    expect(spy).toHaveBeenCalledExactlyOnceWith(failed);
+  });
+
   it('disables the send button until the draft is non-empty', async () => {
     const f = render({ Messages: [] });
     expect((query(f, 'button[type="submit"]') as HTMLButtonElement).disabled).toBe(true);

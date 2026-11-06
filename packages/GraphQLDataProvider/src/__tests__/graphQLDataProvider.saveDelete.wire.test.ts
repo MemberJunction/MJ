@@ -14,7 +14,7 @@ vi.mock('graphql-request', async () => {
     return { gql: wire.FakeGql, GraphQLClient: wire.FakeGraphQLClient };
 });
 
-import { EntityDeleteOptions, EntitySaveOptions, TransactionItem, UserInfo } from '@memberjunction/core';
+import { EntityDeleteOptions, EntityInfo, EntitySaveOptions, TransactionItem, UserInfo } from '@memberjunction/core';
 import { ValidationErrorInfo } from '@memberjunction/global';
 import { GraphQLTransactionGroup } from '../graphQLTransactionGroup';
 import { FakeGraphQLResponseError, GraphQLWire } from './support/graphQLWire';
@@ -183,10 +183,123 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             // OriginalValues captured for every field by CodeName
             expect(entity.LatestResult.OriginalValues).toHaveLength(10);
         });
+
+        it('omits untouched Deprecated/Disabled fields on Create without calling entity.Get on them, while still sending explicitly dirtied Deprecated fields', async () => {
+            const entityId = 'A1B2C3D4-0000-4000-8000-000000000099';
+            const detailEntityInfo = new EntityInfo({
+                ID: entityId,
+                Name: 'ConversationDetails',
+                BaseTable: 'ConversationDetail',
+                BaseView: 'vwConversationDetails',
+                SchemaName: 'MJ',
+                Status: 'Active',
+                EntityFields: [
+                    {
+                        ID: `EF-${entityId}-1`,
+                        EntityID: entityId,
+                        Name: 'ID',
+                        Type: 'uniqueidentifier',
+                        IsPrimaryKey: true,
+                        AllowsNull: false,
+                        AllowUpdateAPI: false,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 1,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-2`,
+                        EntityID: entityId,
+                        Name: 'Message',
+                        Type: 'nvarchar',
+                        AllowsNull: false,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 2,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-3`,
+                        EntityID: entityId,
+                        Name: 'ArtifactID',
+                        Type: 'uniqueidentifier',
+                        AllowsNull: true,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 3,
+                        Status: 'Deprecated',
+                    },
+                    {
+                        ID: `EF-${entityId}-4`,
+                        EntityID: entityId,
+                        Name: 'SuggestedResponses',
+                        Type: 'nvarchar',
+                        AllowsNull: true,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 4,
+                        Status: 'Deprecated',
+                    },
+                ],
+            });
+            provider.RegisterTestEntity(detailEntityInfo);
+
+            // Case 1: Create without touching Deprecated fields
+            const detail1 = new TestCustomerEntity(detailEntityInfo, provider);
+            detail1.NewRecord();
+            detail1.Set('Message', 'Hello');
+            const accessedFields1: string[] = [];
+            const origGet1 = detail1.Get.bind(detail1);
+            detail1.Get = (fieldName: string) => {
+                accessedFields1.push(fieldName);
+                return origGet1(fieldName);
+            };
+
+            GraphQLWire.EnqueueResponse(
+                saveResponse('CreateMJConversationDetail', {
+                    ID: 'DET-1',
+                    Message: 'Hello',
+                    ArtifactID: null,
+                    SuggestedResponses: null,
+                })
+            );
+            await provider.Save(detail1, user, new EntitySaveOptions());
+
+            const input1 = lastInputRecord();
+            expect(input1).toHaveProperty('Message', 'Hello');
+            expect(input1).not.toHaveProperty('ArtifactID');
+            expect(input1).not.toHaveProperty('SuggestedResponses');
+            expect(accessedFields1).not.toContain('ArtifactID');
+            expect(accessedFields1).not.toContain('SuggestedResponses');
+
+            // Case 2: Create where caller explicitly dirties ArtifactID
+            const detail2 = new TestCustomerEntity(detailEntityInfo, provider);
+            detail2.NewRecord();
+            detail2.Set('Message', 'With legacy artifact');
+            detail2.Set('ArtifactID', 'ART-LEGACY-1');
+
+            GraphQLWire.EnqueueResponse(
+                saveResponse('CreateMJConversationDetail', {
+                    ID: 'DET-2',
+                    Message: 'With legacy artifact',
+                    ArtifactID: 'ART-LEGACY-1',
+                    SuggestedResponses: null,
+                })
+            );
+            await provider.Save(detail2, user, new EntitySaveOptions());
+
+            const input2 = lastInputRecord();
+            expect(input2).toHaveProperty('Message', 'With legacy artifact');
+            expect(input2).toHaveProperty('ArtifactID', 'ART-LEGACY-1');
+            expect(input2).not.toHaveProperty('SuggestedResponses');
+        });
     });
 
     describe('Save — update', () => {
-        it('builds an Update mutation and includes the primary key in the input', async () => {
+        it('builds an Update mutation with a delta input and a selection set of every loaded non-binary field', async () => {
             const entity = loadedCustomer();
             entity.Set('Name', 'New Name');
             GraphQLWire.EnqueueResponse(saveResponse('UpdateCRMCustomer', { ID: 'CUST-0001', Name: 'New Name' }));
@@ -196,18 +309,56 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             const doc = GraphQLWire.LastRequest.document;
             expect(doc).toContain('mutation UpdateCRMCustomer ($input: UpdateCRMCustomerInput!)');
             expect(doc).toContain('UpdateCRMCustomer(input: $input)');
+            // The selection set requests PK, datestamps, the dirty field and every other loaded
+            // non-binary field; only the binary Photo column stays out.
+            for (const expected of ['ID', 'Name', '_mj__CreatedAt', '_mj__UpdatedAt', 'First_Name', 'Tier', 'IsActive', 'Age', 'SignedUpAt']) {
+                expect(doc).toContain(expected);
+            }
+            expect(doc).not.toContain('Photo');
 
             const input = lastInputRecord();
             expect(input['ID']).toBe('CUST-0001');
             expect(input['Name']).toBe('New Name');
-            expect(input['Tier']).toBe('Gold');
-            expect(input['IsActive']).toBe(true);
-            expect(input['Age']).toBe(42);
-            expect(input['SignedUpAt']).toBe(SIGNED_UP_AT_MS);
+            // Clean fields are omitted from vars.input on delta update
+            expect(input).not.toHaveProperty('Tier');
+            expect(input).not.toHaveProperty('IsActive');
+            expect(input).not.toHaveProperty('Age');
+            expect(input).not.toHaveProperty('SignedUpAt');
+            expect(input).not.toHaveProperty('First_Name');
+            expect(Object.keys(input).sort()).toEqual(['ID', 'Name', 'OldValues___']);
             expect(entity.LatestResult.Type).toBe('update');
         });
 
-        it('sends OldValues___ for concurrency checking with per-type string encoding', async () => {
+        it('requests clean loaded writable fields in the Update selection set so a concurrent change to an untouched field reaches the entity', async () => {
+            // Session B changed Tier to 'Platinum' after this entity was loaded. The server preserves
+            // B's Tier on the non-overlapping save and returns the merged row; the client must ask
+            // for Tier back or it keeps showing the stale 'Gold'.
+            const entity = loadedCustomer();
+            entity.Set('Name', 'New Name');
+            GraphQLWire.EnqueueResponse(
+                saveResponse('UpdateCRMCustomer', {
+                    ID: 'CUST-0001',
+                    Name: 'New Name',
+                    Tier: 'Platinum',
+                    _mj__CreatedAt: CREATED_AT.toISOString(),
+                    _mj__UpdatedAt: new Date('2026-03-01T00:00:00Z').toISOString(),
+                })
+            );
+
+            const savedValues = (await provider.Save(entity, user, new EntitySaveOptions())) as Record<string, unknown>;
+
+            const doc = GraphQLWire.LastRequest.document;
+            for (const loadedField of ['First_Name', 'Tier', 'IsActive', 'Age', 'SignedUpAt']) {
+                expect(doc, `${loadedField} is loaded and readable, so the response must carry it`).toContain(loadedField);
+            }
+            // Binary columns stay out of the delta response: they are heavy and never merged concurrently.
+            expect(doc).not.toContain('Photo');
+            // The INPUT stays delta-only: only the primary key and the dirty field travel to the server.
+            expect(Object.keys(lastInputRecord()).sort()).toEqual(['ID', 'Name', 'OldValues___']);
+            expect(savedValues['Tier']).toBe('Platinum');
+        });
+
+        it('sends delta-only OldValues___ (PK + dirty writable fields) on a single-field update', async () => {
             const entity = loadedCustomer();
             entity.Set('Name', 'New Name');
             GraphQLWire.EnqueueResponse(saveResponse('UpdateCRMCustomer', { ID: 'CUST-0001', Name: 'New Name' }));
@@ -217,19 +368,696 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             const input = lastInputRecord();
             const oldValues = input['OldValues___'];
             expect(Array.isArray(oldValues)).toBe(true);
-            // one entry per field — the full pre-save record rides along
-            expect(oldValues).toHaveLength(10);
-            expect(oldValues).toEqual(
-                expect.arrayContaining([
-                    { Key: 'ID', Value: 'CUST-0001' },
-                    { Key: 'Name', Value: 'Old Name' },          // the OLD value, not the dirty one
-                    { Key: 'First_Name', Value: null },          // nulls stay null
-                    { Key: 'IsActive', Value: '1' },             // booleans → '1'/'0'
-                    { Key: 'Age', Value: '42' },                 // numbers → strings
-                    { Key: 'SignedUpAt', Value: SIGNED_UP_AT_MS.toString() },       // dates → epoch-ms strings
-                    { Key: '_mj__CreatedAt', Value: CREATED_AT.getTime().toString() }, // __mj_ keys mapped for transport
-                ])
+            expect(oldValues).toEqual([
+                { Key: 'ID', Value: 'CUST-0001' },
+                { Key: 'Name', Value: 'Old Name' },
+            ]);
+        });
+
+        it('encodes dirty fields of every type into OldValues___ strings (null, boolean, number, Date) and excludes read-only fields', async () => {
+            const entity = loadedCustomer();
+            entity.Set('Name', 'New Name');
+            entity.Set('First Name', 'Ada');
+            entity.Set('IsActive', false);
+            entity.Set('Age', 43);
+            entity.Set('SignedUpAt', new Date(SIGNED_UP_AT_MS + 60_000));
+            GraphQLWire.EnqueueResponse(saveResponse('UpdateCRMCustomer', { ID: 'CUST-0001', Name: 'New Name' }));
+
+            await provider.Save(entity, user, new EntitySaveOptions());
+
+            const input = lastInputRecord();
+            const oldValues = input['OldValues___'] as Array<{ Key: string; Value: string | null }>;
+            expect(oldValues).toEqual([
+                { Key: 'ID', Value: 'CUST-0001' },
+                { Key: 'Name', Value: 'Old Name' },                     // string old value
+                { Key: 'First_Name', Value: null },                     // null stays null
+                { Key: 'IsActive', Value: '1' },                        // boolean true → '1'
+                { Key: 'Age', Value: '42' },                            // number → string
+                { Key: 'SignedUpAt', Value: SIGNED_UP_AT_MS.toString() }, // Date → epoch-ms string
+            ]);
+            // Clean field (Tier) and read-only fields (Photo, _mj__CreatedAt, _mj__UpdatedAt) are NOT in OldValues___
+            const keys = oldValues.map((kv) => kv.Key);
+            expect(keys).not.toContain('Tier');
+            expect(keys).not.toContain('Photo');
+            expect(keys).not.toContain('_mj__CreatedAt');
+            expect(keys).not.toContain('_mj__UpdatedAt');
+        });
+
+        it('20-field entity update: modifying 1 field sends ONLY PK + that 1 field in vars.input and OldValues___, while the selection set still requests the loaded fields', async () => {
+            const entityId = 'A1B2C3D4-0000-4000-8000-000000000020';
+            const twentyFields = [
+                {
+                    ID: `EF-${entityId}-1`,
+                    EntityID: entityId,
+                    Name: 'ID',
+                    Type: 'uniqueidentifier',
+                    IsPrimaryKey: true,
+                    AllowsNull: false,
+                    AllowUpdateAPI: false,
+                    AutoIncrement: false,
+                    IsVirtual: false,
+                    Sequence: 1,
+                    Status: 'Active',
+                },
+                {
+                    ID: `EF-${entityId}-2`,
+                    EntityID: entityId,
+                    Name: 'Description',
+                    Type: 'nvarchar',
+                    AllowsNull: true,
+                    AllowUpdateAPI: true,
+                    AutoIncrement: false,
+                    IsVirtual: false,
+                    Sequence: 2,
+                    Status: 'Active',
+                },
+            ];
+            for (let i = 3; i <= 18; i++) {
+                twentyFields.push({
+                    ID: `EF-${entityId}-${i}`,
+                    EntityID: entityId,
+                    Name: `Field${i}`,
+                    Type: 'nvarchar',
+                    AllowsNull: true,
+                    AllowUpdateAPI: true,
+                    AutoIncrement: false,
+                    IsVirtual: false,
+                    Sequence: i,
+                    Status: 'Active',
+                });
+            }
+            // Add 1 virtual read-only field and 1 read-only timestamp field to bring total to 20
+            twentyFields.push(
+                {
+                    ID: `EF-${entityId}-19`,
+                    EntityID: entityId,
+                    Name: 'OwnerName',
+                    Type: 'nvarchar',
+                    AllowsNull: true,
+                    AllowUpdateAPI: false,
+                    AutoIncrement: false,
+                    IsVirtual: true,
+                    Sequence: 19,
+                    Status: 'Active',
+                },
+                {
+                    ID: `EF-${entityId}-20`,
+                    EntityID: entityId,
+                    Name: '__mj_UpdatedAt',
+                    Type: 'datetimeoffset',
+                    AllowsNull: false,
+                    AllowUpdateAPI: false,
+                    AutoIncrement: false,
+                    IsVirtual: false,
+                    Sequence: 20,
+                    Status: 'Active',
+                }
             );
+            const wideInfo = new EntityInfo({
+                ID: entityId,
+                Name: 'WideRecords',
+                BaseTable: 'WideRecord',
+                BaseView: 'vwWideRecords',
+                SchemaName: 'CRM',
+                Status: 'Active',
+                EntityFields: twentyFields,
+            });
+            provider.RegisterTestEntity(wideInfo);
+
+            const initialData: Record<string, unknown> = {
+                ID: 'WIDE-001',
+                Description: 'Initial description',
+                OwnerName: 'Alice',
+                __mj_UpdatedAt: UPDATED_AT,
+            };
+            for (let i = 3; i <= 18; i++) {
+                initialData[`Field${i}`] = `Value-${i}`;
+            }
+
+            const wideEntity = new TestCustomerEntity(wideInfo, provider);
+            wideEntity.LoadFromData(initialData);
+            expect(wideEntity.Fields).toHaveLength(20);
+
+            // Modify ONLY Description
+            wideEntity.Set('Description', 'Updated description');
+            const newUpdatedAt = new Date('2026-03-01T00:00:00Z');
+            GraphQLWire.EnqueueResponse(
+                saveResponse('UpdateCRMWideRecord', {
+                    ID: 'WIDE-001',
+                    Description: 'Updated description',
+                    _mj__UpdatedAt: newUpdatedAt.toISOString(),
+                })
+            );
+
+            const savedValues = (await provider.Save(wideEntity, user, new EntitySaveOptions())) as Record<string, unknown>;
+
+            const input = lastInputRecord();
+            expect(Object.keys(input).sort()).toEqual(['Description', 'ID', 'OldValues___']);
+            expect(input['ID']).toBe('WIDE-001');
+            expect(input['Description']).toBe('Updated description');
+            expect(input['OldValues___']).toEqual([
+                { Key: 'ID', Value: 'WIDE-001' },
+                { Key: 'Description', Value: 'Initial description' },
+            ]);
+
+            // Selection set requests PK (ID), dirty field (Description), virtual/read-only field (OwnerName),
+            // datestamp (_mj__UpdatedAt) and the 16 untouched loaded fields (Field3..Field18), so a
+            // concurrent change to any of them comes back with the saved row.
+            const doc = GraphQLWire.LastRequest.document;
+            expect(doc).toContain('ID');
+            expect(doc).toContain('Description');
+            expect(doc).toContain('OwnerName');
+            expect(doc).toContain('_mj__UpdatedAt');
+            for (let i = 3; i <= 18; i++) {
+                expect(doc).toContain(`Field${i}`);
+            }
+
+            // And Save() merges the delta response onto wideEntity.GetAll() so all 17 clean loaded fields remain present
+            expect(savedValues['ID']).toBe('WIDE-001');
+            expect(savedValues['Description']).toBe('Updated description');
+            expect(savedValues['OwnerName']).toBe('Alice');
+            for (let i = 3; i <= 18; i++) {
+                expect(savedValues[`Field${i}`]).toBe(`Value-${i}`);
+            }
+        });
+
+        it('includes computed/virtual/read-only fields (e.g., DisplayName) in Update selection set even when only a scalar field (FirstName) is dirty', async () => {
+            const entityId = 'A1B2C3D4-0000-4000-8000-000000000022';
+            const personEntityInfo = new EntityInfo({
+                ID: entityId,
+                Name: 'People',
+                BaseTable: 'Person',
+                BaseView: 'vwPeople',
+                SchemaName: 'CRM',
+                Status: 'Active',
+                EntityFields: [
+                    {
+                        ID: `EF-${entityId}-1`,
+                        EntityID: entityId,
+                        Name: 'ID',
+                        Type: 'uniqueidentifier',
+                        IsPrimaryKey: true,
+                        AllowsNull: false,
+                        AllowUpdateAPI: false,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 1,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-2`,
+                        EntityID: entityId,
+                        Name: 'FirstName',
+                        Type: 'nvarchar',
+                        AllowsNull: false,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 2,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-3`,
+                        EntityID: entityId,
+                        Name: 'LastName',
+                        Type: 'nvarchar',
+                        AllowsNull: false,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 3,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-4`,
+                        EntityID: entityId,
+                        Name: 'DisplayName',
+                        Type: 'nvarchar',
+                        AllowsNull: false,
+                        AllowUpdateAPI: false,
+                        AutoIncrement: false,
+                        IsVirtual: true,
+                        IsComputed: true,
+                        Sequence: 4,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-5`,
+                        EntityID: entityId,
+                        Name: 'Notes',
+                        Type: 'nvarchar',
+                        Length: -1,
+                        AllowsNull: true,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 5,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-6`,
+                        EntityID: entityId,
+                        Name: '__mj_UpdatedAt',
+                        Type: 'datetimeoffset',
+                        AllowsNull: false,
+                        AllowUpdateAPI: false,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 6,
+                        Status: 'Active',
+                    },
+                ],
+            });
+            provider.RegisterTestEntity(personEntityInfo);
+
+            const person = new TestCustomerEntity(personEntityInfo, provider);
+            person.LoadFromData({
+                ID: '4FF5A9B0-008A-57E4-9DF6-002290210A26',
+                FirstName: 'Quinny',
+                LastName: 'Broadcast',
+                DisplayName: 'Quinny Broadcast',
+                Notes: 'Large untouched notes payload',
+                __mj_UpdatedAt: UPDATED_AT,
+            });
+
+            // Change ONLY FirstName (a scalar field, not a foreign key)
+            person.Set('FirstName', 'Quinton');
+            GraphQLWire.EnqueueResponse(
+                saveResponse('UpdateCRMPerson', {
+                    ID: '4FF5A9B0-008A-57E4-9DF6-002290210A26',
+                    FirstName: 'Quinton',
+                    DisplayName: 'Quinton Broadcast',
+                    _mj__UpdatedAt: UPDATED_AT.toISOString(),
+                })
+            );
+
+            const savedValues = (await provider.Save(person, user, new EntitySaveOptions())) as Record<string, unknown>;
+
+            const doc = GraphQLWire.LastRequest.document;
+            // Selection set includes ID, dirty FirstName, computed/virtual DisplayName, and _mj__UpdatedAt
+            expect(doc).toContain('ID');
+            expect(doc).toContain('FirstName');
+            expect(doc).toContain('DisplayName');
+            expect(doc).toContain('_mj__UpdatedAt');
+            // Untouched writable fields LastName and Notes are requested back but never sent as input
+            expect(doc).toContain('LastName');
+            expect(doc).toContain('Notes');
+
+            const input = lastInputRecord();
+            expect(Object.keys(input).sort()).toEqual(['FirstName', 'ID', 'OldValues___']);
+            // Returned values have the updated DisplayName from the backend AND preserve untouched LastName/Notes
+            expect(savedValues['FirstName']).toBe('Quinton');
+            expect(savedValues['DisplayName']).toBe('Quinton Broadcast');
+            expect(savedValues['LastName']).toBe('Broadcast');
+            expect(savedValues['Notes']).toBe('Large untouched notes payload');
+        });
+
+        it('includes server-derived fields (WhereClause, SmartFilterWhereClause, SmartFilterExplanation) in UpdateMJUserView selection set when SmartFilterPrompt is modified', async () => {
+            const entityId = 'A1B2C3D4-0000-4000-8000-000000000099';
+            const userViewEntityInfo = new EntityInfo({
+                ID: entityId,
+                Name: 'MJ: User Views',
+                BaseTable: 'UserView',
+                BaseView: 'vwUserViews',
+                SchemaName: '__mj',
+                Status: 'Active',
+                EntityFields: [
+                    {
+                        ID: `EF-${entityId}-1`,
+                        EntityID: entityId,
+                        Name: 'ID',
+                        Type: 'uniqueidentifier',
+                        IsPrimaryKey: true,
+                        AllowsNull: false,
+                        AllowUpdateAPI: false,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 1,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-2`,
+                        EntityID: entityId,
+                        Name: 'Name',
+                        Type: 'nvarchar',
+                        AllowsNull: false,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 2,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-3`,
+                        EntityID: entityId,
+                        Name: 'SmartFilterEnabled',
+                        Type: 'bit',
+                        AllowsNull: false,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 3,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-4`,
+                        EntityID: entityId,
+                        Name: 'SmartFilterPrompt',
+                        Type: 'nvarchar',
+                        AllowsNull: true,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 4,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-5`,
+                        EntityID: entityId,
+                        Name: 'WhereClause',
+                        Type: 'nvarchar',
+                        AllowsNull: true,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 5,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-6`,
+                        EntityID: entityId,
+                        Name: 'SmartFilterWhereClause',
+                        Type: 'nvarchar',
+                        AllowsNull: true,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 6,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-7`,
+                        EntityID: entityId,
+                        Name: 'SmartFilterExplanation',
+                        Type: 'nvarchar',
+                        AllowsNull: true,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 7,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-8`,
+                        EntityID: entityId,
+                        Name: '__mj_UpdatedAt',
+                        Type: 'datetimeoffset',
+                        AllowsNull: false,
+                        AllowUpdateAPI: false,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 8,
+                        Status: 'Active',
+                    },
+                ],
+            });
+            provider.RegisterTestEntity(userViewEntityInfo);
+
+            const view = new TestCustomerEntity(userViewEntityInfo, provider);
+            view.LoadFromData({
+                ID: 'A014C770-33C8-42DC-9E6A-E420E4ABE067',
+                Name: 'AI Agents — Active Agents',
+                SmartFilterEnabled: true,
+                SmartFilterPrompt: '',
+                WhereClause: '',
+                SmartFilterWhereClause: null,
+                SmartFilterExplanation: null,
+                __mj_UpdatedAt: UPDATED_AT,
+            });
+
+            // User enters a Smart Filter prompt on the client; WhereClause is generated server-side during MJUserViewEntityServer.Save()
+            view.Set('SmartFilterPrompt', 'Starts with A, eh?');
+            GraphQLWire.EnqueueResponse(
+                saveResponse('UpdateMJUserView', {
+                    ID: 'A014C770-33C8-42DC-9E6A-E420E4ABE067',
+                    SmartFilterPrompt: 'Starts with A, eh?',
+                    WhereClause: "Name LIKE 'A%'",
+                    SmartFilterWhereClause: "Name LIKE 'A%'",
+                    SmartFilterExplanation: "Filtering for AI agents whose names begin with the letter 'A'.",
+                    _mj__UpdatedAt: UPDATED_AT.toISOString(),
+                })
+            );
+
+            const savedValues = (await provider.Save(view, user, new EntitySaveOptions())) as Record<string, unknown>;
+
+            const doc = GraphQLWire.LastRequest.document;
+            expect(doc).toContain('SmartFilterPrompt');
+            expect(doc).toContain('WhereClause');
+            expect(doc).toContain('SmartFilterWhereClause');
+            expect(doc).toContain('SmartFilterExplanation');
+            // The clean loaded Name is requested back too, but never sent as input.
+            expect(doc).toContain('\n                    Name\n');
+
+            const input = lastInputRecord();
+            expect(Object.keys(input).sort()).toEqual(['ID', 'OldValues___', 'SmartFilterPrompt']);
+            expect(savedValues['WhereClause']).toBe("Name LIKE 'A%'");
+            expect(savedValues['SmartFilterWhereClause']).toBe("Name LIKE 'A%'");
+            expect(savedValues['SmartFilterExplanation']).toBe("Filtering for AI agents whose names begin with the letter 'A'.");
+        });
+
+        it('includes virtual fields in the Update selection set when a foreign key field is dirty', async () => {
+            const entityId = 'A1B2C3D4-0000-4000-8000-000000000021';
+            const fkEntityInfo = new EntityInfo({
+                ID: entityId,
+                Name: 'Products',
+                BaseTable: 'Product',
+                BaseView: 'vwProducts',
+                SchemaName: 'CRM',
+                Status: 'Active',
+                EntityFields: [
+                    {
+                        ID: `EF-${entityId}-1`,
+                        EntityID: entityId,
+                        Name: 'ID',
+                        Type: 'uniqueidentifier',
+                        IsPrimaryKey: true,
+                        AllowsNull: false,
+                        AllowUpdateAPI: false,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 1,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-2`,
+                        EntityID: entityId,
+                        Name: 'Name',
+                        Type: 'nvarchar',
+                        AllowsNull: false,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 2,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-3`,
+                        EntityID: entityId,
+                        Name: 'CategoryID',
+                        Type: 'uniqueidentifier',
+                        AllowsNull: true,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        RelatedEntityID: 'CAT-ENTITY-ID',
+                        Sequence: 3,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-4`,
+                        EntityID: entityId,
+                        Name: 'Category',
+                        Type: 'nvarchar',
+                        AllowsNull: true,
+                        AllowUpdateAPI: false,
+                        AutoIncrement: false,
+                        IsVirtual: true,
+                        Sequence: 4,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-5`,
+                        EntityID: entityId,
+                        Name: '__mj_UpdatedAt',
+                        Type: 'datetimeoffset',
+                        AllowsNull: false,
+                        AllowUpdateAPI: false,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 5,
+                        Status: 'Active',
+                    },
+                ],
+            });
+            provider.RegisterTestEntity(fkEntityInfo);
+
+            const product = new TestCustomerEntity(fkEntityInfo, provider);
+            product.LoadFromData({
+                ID: 'PROD-1',
+                Name: 'Widget',
+                CategoryID: 'CAT-OLD',
+                Category: 'Hardware',
+                __mj_UpdatedAt: UPDATED_AT,
+            });
+
+            // Dirty the foreign key CategoryID
+            product.Set('CategoryID', 'CAT-NEW');
+            GraphQLWire.EnqueueResponse(
+                saveResponse('UpdateCRMProduct', {
+                    ID: 'PROD-1',
+                    CategoryID: 'CAT-NEW',
+                    Category: 'Electronics',
+                    _mj__UpdatedAt: UPDATED_AT.toISOString(),
+                })
+            );
+
+            const savedValues = (await provider.Save(product, user, new EntitySaveOptions())) as Record<string, unknown>;
+
+            const doc = GraphQLWire.LastRequest.document;
+            // Selection set includes PK, dirty FK (CategoryID), virtual joined display field (Category), and datestamp
+            expect(doc).toContain('ID');
+            expect(doc).toContain('CategoryID');
+            expect(doc).toContain('Category');
+            expect(doc).toContain('_mj__UpdatedAt');
+            // The clean scalar field Name is requested back so a concurrent change to it is not lost
+            expect(doc).toContain('\n                    Name\n');
+
+            // Merged return values have refreshed Category AND preserved clean Name
+            expect(savedValues['CategoryID']).toBe('CAT-NEW');
+            expect(savedValues['Category']).toBe('Electronics');
+            expect(savedValues['Name']).toBe('Widget');
+        });
+
+        it('preserves NotLoaded === true on unloaded fields while keeping clean loaded fields NotLoaded === false after delta Update', async () => {
+            class PermissiveCustomerEntity extends TestCustomerEntity {
+                public override CheckPermissions(): boolean {
+                    return true;
+                }
+            }
+            const entity = new PermissiveCustomerEntity(BuildCustomerEntityInfo(), provider);
+            entity.ContextCurrentUser = user;
+            // Partial load: Photo and Age are omitted from the source, so they start NotLoaded === true
+            entity.LoadFromData({
+                ID: 'CUST-0001',
+                Name: 'Old Name',
+                'First Name': 'Ada',
+                Tier: 'Gold',
+                IsActive: true,
+                SignedUpAt: new Date(SIGNED_UP_AT_MS),
+                __mj_CreatedAt: CREATED_AT,
+                __mj_UpdatedAt: UPDATED_AT,
+            });
+            expect(entity.GetFieldByName('Photo').NotLoaded).toBe(true);
+            expect(entity.GetFieldByName('Age').NotLoaded).toBe(true);
+            expect(entity.GetFieldByName('Tier').NotLoaded).toBe(false);
+
+            entity.Set('Name', 'Updated Name');
+            GraphQLWire.EnqueueResponse(
+                saveResponse('UpdateCRMCustomer', {
+                    ID: 'CUST-0001',
+                    Name: 'Updated Name',
+                    _mj__CreatedAt: CREATED_AT.toISOString(),
+                    _mj__UpdatedAt: new Date('2026-03-01T00:00:00Z').toISOString(),
+                })
+            );
+
+            const saved = await entity.Save();
+            expect(saved).toBe(true);
+            // NotLoaded fields are never requested back; loaded ones are.
+            const doc = GraphQLWire.LastRequest.document;
+            expect(doc).not.toContain('Photo');
+            expect(doc).not.toContain('Age');
+            expect(doc).toContain('Tier');
+            expect(entity.Get('Name')).toBe('Updated Name');
+            expect(entity.Get('Tier')).toBe('Gold');
+            expect(entity.Get('First Name')).toBe('Ada');
+            expect(entity.GetFieldByName('Tier').NotLoaded).toBe(false);
+            expect(entity.GetFieldByName('First Name').NotLoaded).toBe(false);
+            expect(entity.GetFieldByName('Photo').NotLoaded).toBe(true);
+            expect(entity.GetFieldByName('Age').NotLoaded).toBe(true);
+        });
+
+        it('requests ONLY PK and datestamps when SaveReturnMode is datestamps_only', async () => {
+            const entity = loadedCustomer();
+            entity.Set('Name', 'Datestamps Only Update');
+            const newUpdatedAt = new Date('2026-03-05T00:00:00Z');
+            GraphQLWire.EnqueueResponse(
+                saveResponse('UpdateCRMCustomer', {
+                    ID: 'CUST-0001',
+                    _mj__CreatedAt: CREATED_AT.toISOString(),
+                    _mj__UpdatedAt: newUpdatedAt.toISOString(),
+                })
+            );
+
+            const options = new EntitySaveOptions();
+            options.SaveReturnMode = 'datestamps_only';
+            const savedValues = (await provider.Save(entity, user, options)) as Record<string, unknown>;
+
+            const doc = GraphQLWire.LastRequest.document;
+            expect(doc).toContain('ID');
+            expect(doc).toContain('_mj__CreatedAt');
+            expect(doc).toContain('_mj__UpdatedAt');
+            // Even the dirty field Name is omitted from the selection set in datestamps_only mode
+            expect(doc).not.toContain('\n                    Name\n');
+            expect(doc).not.toContain('Tier');
+
+            // Merged return values retain caller-set Name and clean Tier alongside updated timestamps
+            expect(savedValues['Name']).toBe('Datestamps Only Update');
+            expect(savedValues['Tier']).toBe('Gold');
+        });
+
+        it('sends all loaded writable fields in input and OldValues___ and requests all readable fields when options.IgnoreDirtyState is true', async () => {
+            const entity = loadedCustomer();
+            entity.Set('Name', 'New Name');
+            GraphQLWire.EnqueueResponse(saveResponse('UpdateCRMCustomer', { ID: 'CUST-0001', Name: 'New Name' }));
+
+            const options = new EntitySaveOptions();
+            options.IgnoreDirtyState = true;
+            await provider.Save(entity, user, options);
+
+            const doc = GraphQLWire.LastRequest.document;
+            for (const expected of ['ID', 'Name', 'First_Name', 'Tier', 'IsActive', 'Age', 'SignedUpAt', 'Photo', '_mj__CreatedAt', '_mj__UpdatedAt']) {
+                expect(doc).toContain(expected);
+            }
+
+            const input = lastInputRecord();
+            expect(Object.keys(input).sort()).toEqual([
+                'Age',
+                'First_Name',
+                'ID',
+                'IsActive',
+                'Name',
+                'OldValues___',
+                'SignedUpAt',
+                'Tier',
+            ]);
+            expect(input['ID']).toBe('CUST-0001');
+            expect(input['Name']).toBe('New Name');
+            expect(input['Tier']).toBe('Gold');
+            expect(input['IsActive']).toBe(true);
+            expect(input['Age']).toBe(42);
+            expect(input['SignedUpAt']).toBe(SIGNED_UP_AT_MS);
+
+            const oldValues = input['OldValues___'] as Array<{ Key: string; Value: string | null }>;
+            expect(oldValues).toEqual([
+                { Key: 'ID', Value: 'CUST-0001' },
+                { Key: 'Name', Value: 'Old Name' },
+                { Key: 'First_Name', Value: null },
+                { Key: 'Tier', Value: 'Gold' },
+                { Key: 'IsActive', Value: '1' },
+                { Key: 'Age', Value: '42' },
+                { Key: 'SignedUpAt', Value: SIGNED_UP_AT_MS.toString() },
+            ]);
         });
 
         it('omits OldValues___ when SkipOldValuesCheck is true', async () => {
@@ -264,6 +1092,27 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             await provider.Save(plain, user, new EntitySaveOptions());
             expect(Object.prototype.hasOwnProperty.call(lastInputRecord(), 'RestoreContext___')).toBe(false);
         });
+
+        it('never sends a clone context: clones run on the server, and a client-supplied one would forge lineage', async () => {
+            const entity = loadedCustomer();
+            entity.Set('Name', 'Cloned Name');
+            entity.SetCloneContext({
+                CloneLogID: 'CLONE-LOG-001',
+                SourceEntityName: 'Customers',
+                SourceRecordID: 'CUST-ORIG',
+                RootEntityName: 'Customers',
+                RootSourceRecordID: 'CUST-ORIG',
+                RootTargetRecordID: 'CUST-0001',
+                Depth: 0,
+                Route: 'RootSave',
+                FieldChangeSummary: [],
+            });
+            GraphQLWire.EnqueueResponse(saveResponse('UpdateCRMCustomer', { ID: 'CUST-0001' }));
+
+            await provider.Save(entity, user, new EntitySaveOptions());
+
+            expect(Object.prototype.hasOwnProperty.call(lastInputRecord(), 'CloneContext___')).toBe(false);
+        });
     });
 
     describe('Save — short circuits and errors', () => {
@@ -277,6 +1126,19 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             expect(GraphQLWire.Requests).toHaveLength(0);
             expect(result).toEqual(entity.GetAll());
             expect(entity.LatestResult.Success).toBe(true);
+        });
+
+        it('IsParentEntityDelete returns true without any wire call (MJ#4864)', async () => {
+            const entity = loadedCustomer();
+            const options = new EntityDeleteOptions();
+            options.IsParentEntityDelete = true;
+
+            const result = await provider.Delete(entity, options, user);
+
+            expect(GraphQLWire.Requests).toHaveLength(0);
+            expect(result).toBe(true);
+            expect(entity.LatestResult?.Success).toBe(true);
+            expect(entity.LatestResult?.Type).toBe('delete');
         });
 
         it('surfaces the first GraphQL error message into LatestResult and returns null', async () => {

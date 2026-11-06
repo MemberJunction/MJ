@@ -27,3 +27,5 @@ export * from './lib/components/create-agent-slidein.component';
 // Invocations — the inverse index: everywhere an agent is invoked without a person
 export * from './lib/components/agent-invocations.model';
 export * from './lib/components/agent-invocations.component';
+export * from './lib/components/agent-rubrics.model';
+export * from './lib/components/agent-rubrics.component';

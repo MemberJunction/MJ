@@ -87,7 +87,7 @@ export class MJRemoteOperationEntityServer extends MJRemoteOperationEntity {
         return (
             this.GenerationType === 'AI' &&
             !this.CodeLocked &&
-            (this.GetFieldByName('Description').Dirty || !this.IsSaved || this.ForceCodeGeneration)
+            (this.GetFieldByName('Description').Dirty || (!this.IsSaved && !this.Code) || this.ForceCodeGeneration)
         );
     }
 

@@ -1,0 +1,50 @@
+<mj-page-layout>
+  <mj-page-header Title="Work Queue" Icon="fa-solid fa-layer-group" Subtitle="Topics, subscriptions and the deliveries moving through them">
+    <div meta>
+      @if (StatsLoaded) {
+        <mj-stat-badge Icon="fa-solid fa-hourglass-half" [Count]="TotalPending" Label="pending" />
+        <mj-stat-badge Icon="fa-solid fa-bolt" [Count]="TotalInFlight" Label="in flight" [Variant]="TotalInFlight > 0 ? 'running' : 'default'" />
+        <mj-stat-badge Icon="fa-solid fa-envelope-open-text" [Count]="TotalDeadLettered" Label="dead-lettered" [Variant]="TotalDeadLettered > 0 ? 'error' : 'default'" />
+        @if (TotalBlockedKeys > 0) {
+          <mj-stat-badge Icon="fa-solid fa-lock" [Count]="TotalBlockedKeys" Label="blocked keys" Variant="warning" />
+        }
+      }
+    </div>
+
+    <div actions>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="Refresh()"></mj-refresh-button>
+    </div>
+
+    <div toolbar>
+      <mj-tab-nav [Tabs]="Tabs" [ActiveKey]="ActiveTab" (TabChange)="OnTabChange($any($event))"></mj-tab-nav>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body>
+    <div class="work-queue-body">
+      @if (LoadError) {
+        <mj-alert Variant="error" Title="Work queue data could not be loaded" [Message]="LoadError"></mj-alert>
+      }
+      @if (!CanOperate && ActiveTab !== 'overview' && ActiveTab !== 'bindings') {
+        <mj-alert Variant="info" Size="sm" Message="Replay and discard are disabled: your roles do not grant Update on MJ: Work Queue Subscriptions."></mj-alert>
+      }
+      @switch (ActiveTab) {
+        @case ('overview') {
+          <mj-work-queue-overview [Rows]="Rows" [IsLoading]="IsLoading" [LastRefreshedAt]="LastRefreshedAt"
+            (SubscriptionSelected)="OnOverviewSubscriptionSelected($event)" (OpenRecord)="OnOpenRecord($event)"></mj-work-queue-overview>
+        }
+        @case ('dead-letters') {
+          <mj-work-queue-dead-letters [Provider]="ProviderToUse" [Subscriptions]="SubscriptionOptions" [SelectedSubscription]="SelectedSubscription" [CanOperate]="CanOperate"
+            (SelectedSubscriptionChange)="OnSubscriptionChange($event)" (Changed)="OnQueueChanged()" (Loaded)="OnDeadLettersLoaded($event)"></mj-work-queue-dead-letters>
+        }
+        @case ('partitions') {
+          <mj-work-queue-partitions [Provider]="ProviderToUse" [Subscriptions]="SubscriptionOptions" [SelectedSubscription]="SelectedSubscription" [Condition]="PartitionCondition" [CanOperate]="CanOperate"
+            (SelectedSubscriptionChange)="OnSubscriptionChange($event)" (ConditionChange)="OnConditionChange($event)" (Changed)="OnQueueChanged()" (Loaded)="OnPartitionsLoaded($event)"></mj-work-queue-partitions>
+        }
+        @case ('bindings') {
+          <mj-work-queue-bindings [Provider]="ProviderToUse" [Transports]="TransportOptions" (Loaded)="OnBindingsLoaded($event)"></mj-work-queue-bindings>
+        }
+      }
+    </div>
+  </mj-page-body>
+</mj-page-layout>

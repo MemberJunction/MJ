@@ -1,0 +1,19 @@
+{
+  "fields": {
+    "Name": "Rubric Architect",
+    "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+    "TemplateText": "@file:templates/rubrics/rubric-architect.md",
+    "ResponseFormat": "JSON",
+    "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+    "Status": "Active",
+    "Description": "System prompt for the Rubric Architect. It drafts, imports, critiques, and improves a rubric. It does not publish.",
+    "EffortLevel": 1
+  },
+  "primaryKey": {
+    "ID": "A04F025E-E797-4CA2-8EB3-8C0D4983C274"
+  },
+  "sync": {
+    "lastModified": "2026-10-02T21:42:20.492Z",
+    "checksum": "70927d40b8c0681c2ee07bb04748f85b0268f04dff0d99cec0e176b591cc3c50"
+  }
+}

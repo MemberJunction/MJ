@@ -19,6 +19,7 @@ import {
 type ArchiveStatus = MJArchiveConfigurationEntityType['Status'];
 type ArchiveMode = MJArchiveConfigurationEntityType['DefaultMode'];
 type EntityMode = MJArchiveConfigurationEntityEntityType['Mode'];
+type StorageMode = MJArchiveConfigurationEntityType['StorageMode'];
 
 /** Represents an archive configuration record */
 export interface ArchiveConfig {
@@ -32,6 +33,7 @@ export interface ArchiveConfig {
   DefaultRetentionDays: number;
   DefaultBatchSize: number;
   DefaultMode: ArchiveMode;
+  StorageMode: StorageMode;
   ArchiveRelatedRecordChanges: boolean;
   IsDirty: boolean;
 }
@@ -80,6 +82,9 @@ export class ArchiveConfigAdminComponent extends BaseAngularComponent implements
 
   /** Available archive modes */
   ArchiveModes: string[] = ['StripFields', 'SoftDelete', 'HardDelete', 'ArchiveOnly'];
+
+  /** Available storage modes */
+  StorageModes: StorageMode[] = ['Store', 'Purge'];
 
   /** Whether the list is loading */
   IsLoading = true;
@@ -207,6 +212,7 @@ export class ArchiveConfigAdminComponent extends BaseAngularComponent implements
       DefaultRetentionDays: 365,
       DefaultBatchSize: 100,
       DefaultMode: 'StripFields',
+      StorageMode: 'Store',
       ArchiveRelatedRecordChanges: false,
       IsDirty: true,
     };
@@ -275,6 +281,7 @@ export class ArchiveConfigAdminComponent extends BaseAngularComponent implements
       DefaultRetentionDays: Number(r['DefaultRetentionDays'] ?? 365),
       DefaultBatchSize: Number(r['DefaultBatchSize'] ?? 100),
       DefaultMode: (r['DefaultMode'] as ArchiveMode) ?? 'StripFields',
+      StorageMode: (r['StorageMode'] as StorageMode) ?? 'Store',
       ArchiveRelatedRecordChanges: Boolean(r['ArchiveRelatedRecordChanges']),
       IsDirty: false,
     }));
@@ -353,6 +360,7 @@ export class ArchiveConfigAdminComponent extends BaseAngularComponent implements
     entity.DefaultRetentionDays = this.SelectedConfig.DefaultRetentionDays;
     entity.DefaultBatchSize = this.SelectedConfig.DefaultBatchSize;
     entity.DefaultMode = this.SelectedConfig.DefaultMode ?? 'StripFields';
+    entity.StorageMode = this.SelectedConfig.StorageMode ?? 'Store';
     entity.ArchiveRelatedRecordChanges = this.SelectedConfig.ArchiveRelatedRecordChanges;
 
     const saved = await entity.Save();

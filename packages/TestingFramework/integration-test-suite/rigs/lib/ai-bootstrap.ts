@@ -15,6 +15,7 @@
  */
 import sql from 'mssql';
 import { LoadEnv, LoadDbConfig, Assert } from './harness';
+import type { DbConfig } from './harness';
 import { RunView, UserInfo } from '@memberjunction/core';
 import { setupSQLServerClient, SQLServerProviderConfigData, SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import { UserCache } from '@memberjunction/generic-database-provider';
@@ -31,10 +32,14 @@ export interface AICtx {
     provider: SQLServerDataProvider;  // case-violation-ok-legacy-back-compat: the file is outside the package compiled program, so no type-checked rename is possible
 }
 
-/** Bootstraps the live provider stack + AIEngine. Reuses the DB resolution the cache suites use. */
-export async function BootstrapAI(): Promise<AICtx> {
+/**
+ * Bootstraps the live provider stack + AIEngine. Reuses the DB resolution the cache suites use, unless
+ * `dbConfig` is given: a caller that has already resolved (and checked) the settings passes them, so it
+ * connects to exactly the database it checked.
+ */
+export async function BootstrapAI(dbConfig?: DbConfig): Promise<AICtx> {
     LoadEnv();
-    const db = await LoadDbConfig();
+    const db = dbConfig ?? await LoadDbConfig();
     const pool = await new sql.ConnectionPool({
         server: db.Host,
         port: db.Port,

@@ -19,7 +19,13 @@
  * });
  * ```
  */
-export { RedisLocalStorageProvider, RedisProviderConfig } from './RedisLocalStorageProvider.js';
+export { RedisLocalStorageProvider, RedisProviderConfig, CachePublishMode, ChannelMessageHandler, KeyLockTimeoutError, KeyLockLostError } from './RedisLocalStorageProvider.js';
+export {
+    ClearSharedCacheCategories,
+    SHARED_CACHE_WRITE_CATEGORIES,
+    SharedCacheCategoryClear,
+    SharedCacheClearOptions,
+} from './SharedCacheClear.js';
 
 // Re-export CacheChangedEvent from core for convenience
 // (consumers can also import directly from @memberjunction/core)

@@ -87,9 +87,15 @@ export interface MapViewConfig {
   `,
   styles: [
     `
-      :host {
+      /* Isolate Leaflet's internal z-index: 400..1000 panes inside the map renderer
+         so they stay below Data Explorer's .content-header (z-index: 2) and dropdown menus (#2701)
+         without trapping fixed-position overlays in sibling view renderers like Grid. */
+      mj-map-view-renderer {
         display: block;
         height: 100%;
+        isolation: isolate;
+        position: relative;
+        z-index: 1;
       }
       /* Fill the map area (the host centers its content but does not grow). */
       .map-view-renderer-empty-fill {

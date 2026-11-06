@@ -1,4 +1,5 @@
 import { RealtimeAudioActivity } from '@memberjunction/ai-realtime-client';
+import { GateAudioLevel, REALTIME_AUDIO_BIN_COUNT, SmoothAudioBars, SmoothAudioLevel } from '@memberjunction/ai-realtime-client/media';
 
 /**
  * @fileoverview AUDIO-REACTIVE VISUAL SMOOTHING for the call overlay — the framework-free
@@ -6,8 +7,9 @@ import { RealtimeAudioActivity } from '@memberjunction/ai-realtime-client';
  * that make the hero orb vibrate like a speaker cone and the EQ render a true spectrum.
  *
  * Raw analyser levels are jittery; rendering them directly strobes. This module applies:
- *  - **Attack/decay envelope smoothing** ({@link SmoothLevel}) — fast attack so speech
- *    onset feels instant, slow decay so the cone "rings down" instead of snapping shut.
+ *  - **Attack/decay envelope smoothing** (`SmoothAudioLevel` from
+ *    `@memberjunction/ai-realtime-client/media`, the smoothing every meter display shares) — fast
+ *    attack so speech onset feels instant, slow decay so the cone "rings down" instead of snapping shut.
  *  - **Direction resolution with hysteresis** — who is audibly speaking (`agent` / `user` /
  *    `none`) with a presence floor and a hold window, so the direction color never
  *    flickers across syllable gaps.
@@ -32,7 +34,7 @@ export interface RealtimeAudioVisualFrame {
 }
 
 /** Number of EQ bars the hero renders (matches the meter's bin count). */
-export const AUDIO_VISUAL_BIN_COUNT = 9;
+export const AUDIO_VISUAL_BIN_COUNT = REALTIME_AUDIO_BIN_COUNT;
 
 /** Levels below this are treated as silence for direction purposes. */
 export const AUDIO_PRESENCE_FLOOR = 0.045;
@@ -58,22 +60,21 @@ export const AUDIO_INPUT_NOISE_GATE = 0.045;
 /**
  * Soft-knee noise gate: at/below `gate` → 0; above it the remaining range rescales to
  * 0..1 (so the gate never visibly "clips" the bottom off real speech). Pure.
+ *
+ * @deprecated Use `GateAudioLevel` from `@memberjunction/ai-realtime-client/media`.
  */
 export function GateLevel(level: number, gate: number): number {
-  if (!Number.isFinite(level) || level <= gate) {
-    return 0;
-  }
-  return Math.min(1, (level - gate) / (1 - gate));
+  return GateAudioLevel(level, gate);
 }
 
 /**
  * One smoothing step: fast attack (speech onset reads instantly), slow decay (the level
  * rings down like a speaker cone instead of snapping). Pure.
+ *
+ * @deprecated Use `SmoothAudioLevel` from `@memberjunction/ai-realtime-client/media`.
  */
 export function SmoothLevel(previous: number, next: number, attack: number = 0.5, decay: number = 0.12): number {
-  const factor = next > previous ? attack : decay;
-  const value = previous + (next - previous) * factor;
-  return Math.min(1, Math.max(0, value));
+  return SmoothAudioLevel(previous, next, attack, decay);
 }
 
 /**
@@ -109,10 +110,10 @@ export class RealtimeAudioVisualSmoother {
       return null;
     }
     // Gate BEFORE smoothing: silence is true zero, the decay still rings down smoothly.
-    const gatedOut = GateLevel(raw.OutputLevel ?? 0, AUDIO_OUTPUT_NOISE_GATE);
-    const gatedIn = GateLevel(raw.InputLevel ?? 0, AUDIO_INPUT_NOISE_GATE);
-    this.outputLevel = SmoothLevel(this.outputLevel, gatedOut);
-    this.inputLevel = SmoothLevel(this.inputLevel, gatedIn);
+    const gatedOut = GateAudioLevel(raw.OutputLevel ?? 0, AUDIO_OUTPUT_NOISE_GATE);
+    const gatedIn = GateAudioLevel(raw.InputLevel ?? 0, AUDIO_INPUT_NOISE_GATE);
+    this.outputLevel = SmoothAudioLevel(this.outputLevel, gatedOut);
+    this.inputLevel = SmoothAudioLevel(this.inputLevel, gatedIn);
     this.smoothBins(this.pickRawBins(raw, gatedOut, gatedIn));
     this.resolveDirection(nowMs);
     return {
@@ -137,13 +138,9 @@ export class RealtimeAudioVisualSmoother {
     return outBins ?? inBins;
   }
 
+  /** Moves the bars toward the spectrum, or toward silence when there is none. */
   private smoothBins(rawBins: number[] | null): void {
-    if (!rawBins) {
-      // No spectrum available — decay the bars toward silence.
-      this.bins = this.bins.map(b => SmoothLevel(b, 0));
-      return;
-    }
-    this.bins = this.bins.map((prev, i) => SmoothLevel(prev, rawBins[i] ?? 0));
+    this.bins = SmoothAudioBars(this.bins, rawBins);
   }
 
   /**

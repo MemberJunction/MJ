@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, OnInit, OnDestroy, AfterViewInit, inject, ViewChild } from '@angular/core';
+import { ChangeDetectorRef, Component, ElementRef, OnInit, OnDestroy, AfterViewInit, inject, ViewChild } from '@angular/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
@@ -229,6 +229,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
 
   private dataService = inject(IntegrationDataService);
   private cdr = inject(ChangeDetectorRef);
+  private elementRef = inject<ElementRef<HTMLElement>>(ElementRef);
   private documentClickHandler: ((e: Event) => void) | null = null;
 
   async ngOnInit(): Promise<void> {
@@ -966,14 +967,26 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   // Entity map editor (field mapping detail)
   // ---------------------------------------------------------------------------
 
+  /** Opens the field-mapping editor and moves focus to its back button. */
   OnEntityMapClick(em: EntityMapRow): void {
     this.EditorEntityMap = em;
     this.cdr.detectChanges();
+    this.focusInHost('app-visual-field-editor .ve-back-btn');
   }
 
+  /** Closes the editor and returns focus to the open button of the map that was open. */
   CloseEntityMapEditor(): void {
+    const closedMapId = this.EditorEntityMap?.ID;
     this.EditorEntityMap = null;
     this.cdr.detectChanges();
+    if (closedMapId) {
+      this.focusInHost(`[data-entity-map-id="${closedMapId}"]`);
+    }
+  }
+
+  /** Focuses the first element in this component that matches the selector, if there is one. */
+  private focusInHost(selector: string): void {
+    this.elementRef.nativeElement.querySelector<HTMLElement>(selector)?.focus();
   }
 
   // ---------------------------------------------------------------------------

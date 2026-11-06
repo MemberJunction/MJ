@@ -3,6 +3,16 @@
 Fast, copy-paste verification for everything in this program. Ordered by **what you can test
 right now with the keys already in `.env`** first, then vendor-credential-gated, then entitlement-gated.
 
+> **Status (2026-10-03):** the Twilio inbound/outbound proof below was recorded in **June 2026 against the old
+> MJServer-hosted ingress**. The ingress moved to `@memberjunction/telephony-adapters` on 2026-09-12 and was then
+> hardened (run-as user, per-call media tokens, outbound gate, status callbacks, call cap). **No live call has
+> been recorded on current code** — re-run it with [`LIVE-CALL-CHECKLIST.md`](./LIVE-CALL-CHECKLIST.md) and record
+> the call SIDs there. Vonage and RingCentral have **never** been run live.
+
+> **Prerequisite for inbound (all carriers):** set `telephony.inboundRunAsUserEmail`
+> (`TELEPHONY_INBOUND_RUN_AS_USER_EMAIL`) to a dedicated least-privilege user — see DEPLOYMENT.md §4. Without it,
+> every inbound call is rejected by design.
+
 > **Servers you run yourself** (this runbook never starts them): MJAPI on **:4008**, and `ngrok`
 > for the Twilio webhook/media (public URL cycles — re-point `TWILIO_STREAM_PUBLIC_URL` +
 > `MJAPI_PUBLIC_URL` + the Twilio number's webhook when it changes).
@@ -22,11 +32,11 @@ right now with the keys already in `.env`** first, then vendor-credential-gated,
 
 ## Tier 1 — testable now (Twilio + OpenAIRealtime keys + live DB)
 
-### 1. Twilio inbound — ✅ proven
+### 1. Twilio inbound — proven June 2026 (pre-move ingress); re-verify
 Call the Sage number. Webhook → signature verify → agent resolve → realtime model → WS media → audio. Done.
 
-### 2. Twilio outbound — ✅ proven
-From MJExplorer's GraphQL playground (must be authenticated — outbound reads the current user):
+### 2. Twilio outbound — proven June 2026 (pre-move ingress); re-verify
+From MJExplorer's GraphQL playground (must be authenticated — outbound reads the current user; the caller must also be allowed to run the agent, and the destination must pass `telephony.outbound`):
 ```graphql
 mutation {
   PlaceTwilioCall(
@@ -82,16 +92,19 @@ the session escalates to a resolved account while preserving the in-progress con
 
 ## Tier 2 — needs one vendor account each (near-repeats of Twilio)
 
-Vonage and RingCentral are code-complete + unit-tested; mutations `PlaceVonageCall` / `PlaceRingCentralCall`
-exist. To test live:
-1. Add the vendor's block to `mj.config.cjs` (mirror the Twilio block; `enabled` gated on its account SID/key).
-2. Point a vendor number's webhook at your ngrok URL: `/telephony/vonage/...` or `/telephony/ringcentral/webhook`;
-   media WSS at `/telephony/vonage/media` or `/telephony/ringcentral/media`.
+Vonage and RingCentral are code-complete + unit-tested but **have never been run live**; mutations
+`PlaceVonageCall` / `PlaceRingCentralCall` exist. To test live:
+1. Add the vendor's block to `mj.config.cjs` (see DEPLOYMENT.md §4; `enabled` gated on its account id/creds).
+2. **Vonage:** point the Voice app's Answer URL at `https://<public-host>/telephony/vonage/answer` and Event URL at
+   `…/telephony/vonage/event` (both POST); the media WSS is `…/telephony/vonage/media`.
+   **RingCentral:** no public URL at all — it is a SIP softphone registration (DEPLOYMENT.md §6b).
 3. Repeat Tier-1 steps 1–2 with the vendor mutation.
 
-Deltas from Twilio (documented in `spikes/T2-T3-vonage-ringcentral-notes.md`):
-- **Vonage:** NCCO + WebSocket-media instead of TwiML; signs the connection.
-- **RingCentral:** `Validation-Token` registration handshake + `verification-token` per delivery instead of HMAC signature.
+Deltas from Twilio (the route list in `spikes/T2-T3-vonage-ringcentral-notes.md` for RingCentral predates the move to
+the SIP softphone transport — there is no `/telephony/ringcentral/*` route):
+- **Vonage:** NCCO + WebSocket-media instead of TwiML; signed webhooks (JWT or `sig`). Outbound audio was broken
+  before PR 1 (the media URI carried no call identity); expect to confirm it first.
+- **RingCentral:** SIP INVITE/RTP over an outbound registration instead of a webhook + media socket.
 
 ---
 
@@ -110,6 +123,7 @@ Deltas from Twilio (documented in `spikes/T2-T3-vonage-ringcentral-notes.md`):
 |---|---|
 | Widget mount fails, CORS error in console | host page not on a whitelisted origin → serve on **:8080** (or add your origin to the instance's `AllowedOrigins`) |
 | Widget mount fails, 4xx from `/widget/session` | MJAPI not on :4008, or `widget.enabled` not set, or wrong `pk_` key |
+| Inbound call says "unable to take your call right now" | `telephony.inboundRunAsUserEmail` is unset/invalid (inbound is refused by design) — check the MJAPI log for the reason |
 | Inbound call says "no agent available" | realtime key missing under `AI_VENDOR_API_KEY__OpenAIRealtime` (driverClass-specific) |
 | Inbound call: "No 'From' number specified" | `Direction` not in bridge Configuration — fixed in `buildSessionConfiguration`; rebuild MJServer |
 | Twilio 31920 / WS upgrade 400 | media WSS path not routed — the single upgrade dispatcher must own the `upgrade` event |

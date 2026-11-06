@@ -16,7 +16,6 @@ export class MJAIAgentNoteTypeFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'identifier', sectionName: 'Identifier', isExpanded: true },
             { sectionKey: 'noteTypeDefinition', sectionName: 'Note Type Definition', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIAgentNotes', sectionName: 'AIAgent Notes', isExpanded: false }

@@ -178,7 +178,9 @@
       ],
       "MJ: AI Agent Relationships": [
         {
-          "_comment": "ActionSmith is a top-level agent (ExposeAsAction=true, ParentID NULL). Referenced here so Agent Manager can delegate capability-gap scenarios: 'User wants a new reusable action / composition' routes to ActionSmith, which in turn delegates JS generation to Codesmith.",
+          "_comments": [
+            "ActionSmith is a top-level agent (ExposeAsAction=true, ParentID NULL). Referenced here so Agent Manager can delegate capability-gap scenarios: 'User wants a new reusable action / composition' routes to ActionSmith, which in turn delegates JS generation to Codesmith."
+          ],
           "fields": {
             "AgentID": "@parent:ID",
             "SubAgentID": "@lookup:MJ: AI Agents.Name=ActionSmith",
@@ -196,7 +198,9 @@
           }
         },
         {
-          "_comment": "Database Designer is called by Agent Manager AFTER the user approves the design plan, when Planning Designer has written pendingSchemaChanges to the payload. Agent Manager passes pendingSchemaChanges as callerContext.tableSpecs with subagentConfirmedByParent: true so DB Designer skips its own approval gate.",
+          "_comments": [
+            "Database Designer is called by Agent Manager AFTER the user approves the design plan, when Planning Designer has written pendingSchemaChanges to the payload. Agent Manager passes pendingSchemaChanges as callerContext.tableSpecs with subagentConfirmedByParent: true so DB Designer skips its own approval gate."
+          ],
           "fields": {
             "AgentID": "@parent:ID",
             "SubAgentID": "@lookup:MJ: AI Agents.Name=Database Designer",
@@ -626,7 +630,9 @@
           }
         },
         {
-          "_comment": "DEPRECATED & DISABLED. A Flow agent cannot run as a sub-agent — the runtime refuses it (FlowAgentType.DetermineInitialStep rejects params.parentRun). Superseded by the 'Load Agent Spec' action, which Agent Manager now calls directly. Kept as a Disabled record (the runtime's Status==='Active' sub-agent filter excludes it) because MetadataSync is update-only and will not delete an omitted record.",
+          "_comments": [
+            "DEPRECATED & DISABLED. A Flow agent cannot run as a sub-agent — the runtime refuses it (FlowAgentType.DetermineInitialStep rejects params.parentRun). Superseded by the 'Load Agent Spec' action, which Agent Manager now calls directly. Kept as a Disabled record (the runtime's Status==='Active' sub-agent filter excludes it) because MetadataSync is update-only and will not delete an omitted record."
+          ],
           "fields": {
             "ParentID": "@parent:ID",
             "Name": "Agent Spec Loader",
@@ -648,7 +654,9 @@
           "relatedEntities": {
             "MJ: AI Agent Actions": [
               {
-                "_comment": "Tombstone: this action binding belonged to the Flow-based Agent Spec Loader, now superseded by Agent Manager calling the Load Agent Spec action directly. Deleted via deleteRecord (not just omitted) so MetadataSync removes it from existing DBs and the deletion reaches the consolidated release migration.",
+                "_comments": [
+                  "Tombstone: this action binding belonged to the Flow-based Agent Spec Loader, now superseded by Agent Manager calling the Load Agent Spec action directly. Deleted via deleteRecord (not just omitted) so MetadataSync removes it from existing DBs and the deletion reaches the consolidated release migration."
+                ],
                 "primaryKey": {
                   "ID": "90BB672E-1837-4CF3-8C75-6F1A454C6D3A"
                 },
@@ -660,7 +668,9 @@
             ],
             "MJ: AI Agent Steps": [
               {
-                "_comment": "Tombstone: the loader's single Action step, removed for the same reason as the action binding above.",
+                "_comments": [
+                  "Tombstone: the loader's single Action step, removed for the same reason as the action binding above."
+                ],
                 "primaryKey": {
                   "ID": "33533220-480D-4693-BAC0-980E98077CC7"
                 },

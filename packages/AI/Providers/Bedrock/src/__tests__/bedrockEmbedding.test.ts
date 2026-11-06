@@ -50,4 +50,62 @@ describe('BedrockEmbedding.EmbedTexts (Bedrock keeps its own EmbedTexts — unmo
         expect(r.vectors).toEqual([[1, 0], [0, 1]]);
         expect(mockSend).toHaveBeenCalledTimes(1); // Cohere-on-Bedrock embeds the array in one call
     });
+
+    it('Cohere path sends input_type search_query for a query and search_document otherwise', async () => {
+        mockSend.mockResolvedValue({ body: encode({ embeddings: [[1, 0]], tokens: 1 }) });
+        const e = new BedrockEmbedding('id:secret');
+        await e.EmbedTexts({ texts: ['a'], model: 'cohere.embed-english-v3', inputType: 'query' });
+        await e.EmbedTexts({ texts: ['a'], model: 'cohere.embed-english-v3' });
+        const bodies = mockSend.mock.calls.map((c) => JSON.parse(c[0].input.body));
+        expect(bodies.map((b) => b.input_type)).toEqual(['search_query', 'search_document']);
+    });
+});
+
+/** Builds the error `fetch` and the SDKs reject an aborted request with. */
+function abortError(): Error {
+    const error = new Error('This operation was aborted');
+    error.name = 'AbortError';
+    return error;
+}
+
+/** The classification a cancellation error carries, read from the error a call rejected with. */
+async function rejectionTypeOf(operation: Promise<unknown>): Promise<string | undefined> {
+    try {
+        await operation;
+    } catch (error) {
+        const info: { errorType?: string } | undefined = (error as { errorInfo?: { errorType?: string } }).errorInfo;
+        return info?.errorType;
+    }
+    throw new Error('expected the call to reject');
+}
+
+describe('BedrockEmbedding cancellation', () => {
+    beforeEach(() => {
+        mockSend.mockReset(); // braces: a function returned from beforeEach would run as its teardown
+    });
+
+    it('forwards the CancellationToken to send() as its abortSignal, on both paths', async () => {
+        mockSend.mockResolvedValueOnce({ body: encode({ embeddings: [[1, 0]], tokens: 1 }) });
+        mockSend.mockResolvedValueOnce({ body: encode({ embedding: [1, 1], inputTextTokenCount: 1 }) });
+        const controller = new AbortController();
+        const e = new BedrockEmbedding('id:secret');
+        await e.EmbedTexts({ texts: ['a'], model: 'cohere.embed-english-v3', CancellationToken: controller.signal });
+        await e.EmbedTexts({ texts: ['a'], model: 'amazon.titan-embed-text-v1', CancellationToken: controller.signal });
+        expect(mockSend.mock.calls[0][1]).toEqual({ abortSignal: controller.signal });
+        expect(mockSend.mock.calls[1][1]).toEqual({ abortSignal: controller.signal });
+    });
+
+    it('stops the per-text loop once aborted and reports the call as cancelled', async () => {
+        const controller = new AbortController();
+        mockSend.mockImplementation(async () => {
+            controller.abort('stop');
+            throw abortError();
+        });
+        const e = new BedrockEmbedding('id:secret');
+        const type = await rejectionTypeOf(
+            e.EmbedTexts({ texts: ['a', 'b', 'c'], model: 'amazon.titan-embed-text-v1', CancellationToken: controller.signal }),
+        );
+        expect(type).toBe('Cancelled');
+        expect(mockSend).toHaveBeenCalledTimes(1); // texts b and c never sent
+    });
 });

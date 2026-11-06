@@ -1,0 +1,281 @@
+[
+  {
+    "_comments": [
+      "PEOPLE DATA LABS - ENRICH PEOPLE. A thin action for agents and workflows over PDLPersonClient.BulkEnrich in",
+      "@memberjunction/actions-peopledatalabs: resolves a key (CompanyID credential, else PDL_API_KEY), sends up to",
+      "100 people, returns the normalized matches (education, employment, LinkedIn URL, PDL id, likelihood) and writes",
+      "nothing. Emails, phones and addresses PDL returns are never mapped. Code-to-code callers use the client, not this",
+      "action. DriverClass is the @RegisterClass(BaseAction, 'PDLEnrichPeopleAction') key.",
+      "No sync block: the release push writes that back. primaryKey from uuidgen."
+    ],
+    "fields": {
+      "Name": "People Data Labs - Enrich People",
+      "Description": "Looks up to 100 people up in People Data Labs and returns their education and employment history, LinkedIn URL, PDL id and match likelihood. Billed one PDL credit per matched person; misses are free. Writes nothing.",
+      "DriverClass": "PDLEnrichPeopleAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-id-card",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "People",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "IsRequired": true,
+            "Description": "JSON array of up to 100 people: { Email, LinkedInURL, FirstName, LastName, Company, PDLID, Key }. Any one of Email, LinkedInURL, PDLID, or first name + last name + company identifies a person. Key is echoed back on the match (defaults to the position)."
+          },
+          "primaryKey": {
+            "ID": "F21D062A-3B51-44DA-A223-DABE2479DFCA"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:03.980Z",
+            "checksum": "e1094cbdd374a81734ff8130c9e1e5e0de158320159b17c72bb4d7595583755f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MinLikelihood",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Minimum match likelihood 1 to 10. PDL recommends 6; lower values return guesses, higher values fewer but surer matches.",
+            "DefaultValue": "6"
+          },
+          "primaryKey": {
+            "ID": "543699BB-A241-419A-9983-CF728D64364B"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:04.003Z",
+            "checksum": "5fc86c8abacd14f61cc8dd55b187d2b6277bfcd8f470673ad55676c81d726ade"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Resolve the PDL key from this company's People Data Labs credential instead of the environment. Optional; falls back to the PDL_API_KEY environment variable."
+          },
+          "primaryKey": {
+            "ID": "048FC58B-ED37-4BF9-8DB3-329BE348599C"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:04.027Z",
+            "checksum": "c23d3389634d6b0eba6951b5ccc2169b1fa72059e48de69884bf36fa09b41a53"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Matches",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "One PDLPersonMatch per input, in input order: Key, Matched, PDLID, Likelihood, LinkedInURL, Education[], Experience[], ErrorMessage."
+          },
+          "primaryKey": {
+            "ID": "738E81C9-A9FC-4366-855C-C43CE59D8317"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:04.051Z",
+            "checksum": "7a70380639a5690f92b03b839db1642af118f4e8a8836b145cc140c83ce1fcf9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MatchedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "How many of the inputs matched."
+          },
+          "primaryKey": {
+            "ID": "A37973FD-620C-4F71-9A2A-6B1456B57790"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:04.075Z",
+            "checksum": "21f4ddd1dc93ba663750a8155213ff6f759dd926fdf9d6c28f43bd8e0788e7f1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CreditsConsumed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Credits PDL reported for the call (x-call-credits-spent), else the number of matches."
+          },
+          "primaryKey": {
+            "ID": "CE1404BD-6B28-436E-BD2B-3A9CC9CC63CB"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:04.098Z",
+            "checksum": "aab280ae0854f35f06250ef4c0bdbf7d9b91c554e1da4563933621b80f8283e9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "KeySource",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Which path supplied the API key: 'credential' or 'environment'."
+          },
+          "primaryKey": {
+            "ID": "7B9FCD48-0B49-4414-BE8F-C301082F6D2A"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:04.126Z",
+            "checksum": "2f3f13fad1bc8c7a358f39f675158613e4aea95afb178d7d15be23e89cbf1fd7"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "At least one person matched."
+          },
+          "primaryKey": {
+            "ID": "BA886CF6-4D7C-481B-B051-F0576E9130C6"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:04.147Z",
+            "checksum": "c6b5d21edd9db02754cf347522489893b75e5181ba2cb91f974180202c721b66"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_MATCHES",
+            "IsSuccess": true,
+            "Description": "The call succeeded and nobody matched; nothing was billed."
+          },
+          "primaryKey": {
+            "ID": "7B114212-7186-4D28-BC8C-513883D387EF"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:04.164Z",
+            "checksum": "cebc6f3e073caf4cd204f258cf7d46cbb3eea4b09d05d084b6adf3d880b98ca5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "RATE_LIMITED",
+            "IsSuccess": false,
+            "Description": "PDL rate-limited the call (429). Retry after the window the message names."
+          },
+          "primaryKey": {
+            "ID": "8BDD7F49-C543-4520-A0C1-6D0DBD98CEA7"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:04.181Z",
+            "checksum": "9718a63e3e8780e70c398ce7970504899d651856df94d8e11ea5bbc630490b4a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CREDITS_EXHAUSTED",
+            "IsSuccess": false,
+            "Description": "The PDL account is out of credits (402)."
+          },
+          "primaryKey": {
+            "ID": "A9953368-CF37-4BD3-824D-C24D85233A3E"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:04.198Z",
+            "checksum": "c8bfde4e3e7a19d1b12b72f740a68cfaf2667de2a4c01703b8b4095917e76342"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CREDENTIALS_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "No PDL API key could be resolved for the supplied CompanyID or the environment, or PDL rejected the key."
+          },
+          "primaryKey": {
+            "ID": "64EBDBE5-D5EB-4FBE-B8A2-91C7E0D351DA"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:04.215Z",
+            "checksum": "6eff02629e778d6fa7f48790c334c30131b0810ba9c8bf3d499b85ccfc8dd4a9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CONFIGURATION_ERROR",
+            "IsSuccess": false,
+            "Description": "The company's credential exists but its Values are malformed."
+          },
+          "primaryKey": {
+            "ID": "ECD1BF43-3C97-4D26-B7A5-9F84DDF08F68"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:04.235Z",
+            "checksum": "c16c89dd9ce5b5fcca87380654b8cbfa2ed9a16ac71282a4db64addbd8536758"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "A bad parameter: People missing, over 100 entries, an entry nothing identifies, or MinLikelihood out of range."
+          },
+          "primaryKey": {
+            "ID": "9B64C1F6-4C54-480A-B2E3-5FACEB491516"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:04.255Z",
+            "checksum": "7e0c563168a3e45e6a5b9761e54b5e293e7605986b087772bae9cdc2f2264412"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Anything unexpected, with the message."
+          },
+          "primaryKey": {
+            "ID": "4A8F8995-8B08-47F6-98D1-0A3491AAA0D7"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:04.274Z",
+            "checksum": "f44498ff458e957523209bfd6f3df49bea7b7283ffa048d250e2705987883a13"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "9FF0D231-3B6C-4B13-AC55-FF6F530ADF92"
+    },
+    "sync": {
+      "lastModified": "2026-10-13T19:00:03.957Z",
+      "checksum": "2669801017276dc7c9220e2ecc19b8bb128878c4c9d959507c73162e96676e1f"
+    }
+  }
+]

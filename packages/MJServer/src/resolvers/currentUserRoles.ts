@@ -1,10 +1,41 @@
-import { LogError } from '@memberjunction/core';
+import { LogError, UserInfo } from '@memberjunction/core';
 
 /**
  * Guards and filter builders for CurrentUser role loading.
  * Kept out of UserResolver so the login-adjacent failure modes are unit-testable
  * without importing generated GraphQL types or the Apollo config bootstrap.
  */
+
+/**
+ * The session user's own fields, as CurrentUser returns them. The client asks for every field of
+ * `UserInfo` (GraphQLDataProvider builds its query from it), so each one belongs here; anything
+ * left out reaches the client as null (as IsTemplate once did, hiding the template-user banner).
+ */
+export function SessionUserFields(userRecord: UserInfo) {
+  return {
+    ID: userRecord.ID,
+    Name: userRecord.Name,
+    FirstName: userRecord.FirstName,
+    LastName: userRecord.LastName,
+    Title: userRecord.Title,
+    Email: userRecord.Email,
+    Type: userRecord.Type,
+    IsActive: userRecord.IsActive,
+    IsTemplate: userRecord.IsTemplate,
+    LinkedRecordType: userRecord.LinkedRecordType,
+    EmployeeID: userRecord.EmployeeID,
+    LinkedEntityID: userRecord.LinkedEntityID,
+    LinkedEntityRecordID: userRecord.LinkedEntityRecordID,
+    __mj_CreatedAt: userRecord.__mj_CreatedAt,
+    __mj_UpdatedAt: userRecord.__mj_UpdatedAt,
+    FirstLast: userRecord.FirstLast,
+    EmployeeFirstLast: userRecord.EmployeeFirstLast,
+    EmployeeEmail: userRecord.EmployeeEmail,
+    EmployeeTitle: userRecord.EmployeeTitle,
+    EmployeeSupervisor: userRecord.EmployeeSupervisor,
+    EmployeeSupervisorEmail: userRecord.EmployeeSupervisorEmail,
+  };
+}
 
 export function RequireLoadedUser<T extends { ID?: string }>(
   user: T | null | undefined,

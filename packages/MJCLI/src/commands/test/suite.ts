@@ -47,6 +47,9 @@ export default class TestSuite extends Command {
       description: 'Maximum number of parallel workers (default 4)',
       default: 4,
     }),
+    rubric: Flags.string({
+      description: 'Rubric override for every test: name or id, optionally @version',
+    }),
     'flaky-check': Flags.integer({
       description: 'Run each test N times to detect flakiness (variance > 0.3 or mixed pass/fail = flaky). Recommended: 3 or 5',
     }),
@@ -61,6 +64,15 @@ export default class TestSuite extends Command {
         'Path to a JS/TS module that exports custom IOracle classes or instances. ' +
         'Each export is registered on the engine before the suite runs — used by non-MJ ' +
         'adopters to plug app-specific oracle types without modifying TestingFramework.',
+    }),
+    shard: Flags.string({
+      description:
+        'Deterministic shard specification (<index>/<total>, 1-based, e.g. --shard=1/3) for ' +
+        'partitioning suite execution across isolated parallel worker processes using duration-aware LPT balancing.',
+    }),
+    transport: Flags.string({
+      description: 'Filter suite tests by transport layer (server, client, or all).',
+      options: ['server', 'client', 'all'],
     }),
   };
 
@@ -87,8 +99,11 @@ export default class TestSuite extends Command {
         parallel: flags.parallel,
         maxParallel: flags['max-parallel'],
         flakyCheck: flags['flaky-check'],
+        rubric: flags.rubric,
         oraclesModule: flags['oracles-module'],
         checksModule: flags['checks-module'],
+        shard: flags.shard,
+        transport: flags.transport as 'server' | 'client' | 'all' | undefined,
       });
 
     } catch (error) {

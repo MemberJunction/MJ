@@ -2,7 +2,8 @@
 type ActionableCommand =
     | OpenResourceCommand
     | OpenURLCommand
-    | CaptureDataSnapshotCommand;
+    | CaptureDataSnapshotCommand
+    | ComposeEmailCommand;
 
 interface OpenResourceCommand {
     type: 'open:resource';  // Command type identifier
@@ -21,7 +22,13 @@ type ResourceType =
     | 'Dashboard'  // Dashboard view
     | 'Report'  // Report view
     | 'Form'  // Form view
-    | 'View';  // Saved view
+    | 'View'  // Saved or dynamic view
+    | 'App'  // Application (e.g., "data-explorer", "Data Explorer")
+    | 'NavItem'  // Application navigation item (e.g., "Queries", "Conversations")
+    | 'Artifact'  // Conversation or standalone artifact
+    | 'File'  // File or document artifact
+    | 'Query'  // Saved query
+    | 'Search';  // Universal search
 
 interface OpenURLCommand {
     type: 'open:url';  // Command type identifier
@@ -58,5 +65,22 @@ interface ShowNotificationCommand {
     message: string;  // Message text to display.
     severity?: 'success' | 'info' | 'warning' | 'error';  // Severity level affecting icon and color:
     duration?: number;  // Duration in milliseconds before auto-dismissing.
+}
+
+interface ComposeEmailCommand {
+    type: 'compose:email';  // Command type identifier
+    label: string;  // Button label shown to the user.
+    icon?: string;  // Optional Font Awesome icon class to display on the button.
+    to?: string[];  // Recipient addresses.
+    cc?: string[];  // Carbon-copy addresses. Same rule as {@link to}: omit rather than guess.
+    bcc?: string[];  // Blind-carbon-copy addresses. Same rule as {@link to}: omit rather than guess.
+    subject?: string;  // Subject line.
+    body?: string;  // Body text. PLAIN TEXT only — see the note on this interface.
+    artifactId?: string;  // Optional artifact holding the full draft.
+}
+
+interface MailtoURLResult {
+    url: string;  // The built `mailto:` URL.
+    withinLimit: boolean;  // Whether {@link url} is short enough for a mail client to open without truncating the body.
 }
 ```

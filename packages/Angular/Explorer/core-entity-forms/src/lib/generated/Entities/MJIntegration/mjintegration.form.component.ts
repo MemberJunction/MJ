@@ -23,7 +23,8 @@ export class MJIntegrationFormComponent extends BaseFormComponent {
             { sectionKey: 'mJCompanyIntegrations', sectionName: 'Company Integrations', isExpanded: false },
             { sectionKey: 'mJIntegrationURLFormats', sectionName: 'URL Formats', isExpanded: false },
             { sectionKey: 'mJRecordChanges', sectionName: 'Record Changes', isExpanded: false },
-            { sectionKey: 'mJIntegrationObjects', sectionName: 'Integration Objects', isExpanded: false }
+            { sectionKey: 'mJIntegrationObjects', sectionName: 'Integration Objects', isExpanded: false },
+            { sectionKey: 'mJCompanyIntegrationObjects', sectionName: 'Company Integration Objects', isExpanded: false }
         ]);
     }
 }

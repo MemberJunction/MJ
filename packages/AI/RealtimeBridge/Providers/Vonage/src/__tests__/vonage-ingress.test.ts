@@ -5,6 +5,8 @@ import {
     ComputeVonageSignature,
     VerifyVonageJwt,
     BuildInboundAnswerNcco,
+    IsTerminalVonageCallStatus,
+    IsVonageMachineStatus,
     ResolveInboundCall,
 } from '../vonage-ingress';
 
@@ -144,5 +146,24 @@ describe('resolveInboundCall', () => {
     it('throws when a required param is missing', () => {
         expect(() => ResolveInboundCall({ from: '+1', to: '+2' })).toThrow(/missing a required param/);
         expect(() => ResolveInboundCall({ uuid: 'X', to: '+2' })).toThrow(/from/);
+    });
+});
+
+describe('IsTerminalVonageCallStatus', () => {
+    it.each(['completed', 'busy', 'failed', 'rejected', 'timeout', 'cancelled', 'canceled', 'unanswered', ' Completed '])('treats %s as terminal', (s) => {
+        expect(IsTerminalVonageCallStatus(s)).toBe(true);
+    });
+
+    it.each(['started', 'ringing', 'answered', 'machine', 'human', 'brand-new-status', '', undefined])('does not treat %j as terminal', (s) => {
+        expect(IsTerminalVonageCallStatus(s)).toBe(false);
+    });
+});
+
+describe('IsVonageMachineStatus', () => {
+    it('recognises the machine verdict only', () => {
+        expect(IsVonageMachineStatus('machine')).toBe(true);
+        expect(IsVonageMachineStatus(' Machine ')).toBe(true);
+        expect(IsVonageMachineStatus('human')).toBe(false);
+        expect(IsVonageMachineStatus(undefined)).toBe(false);
     });
 });

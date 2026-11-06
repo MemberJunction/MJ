@@ -104,6 +104,10 @@ componentProps = {
 | `ComponentError` | `EventEmitter<Error>` | Errors during rendering or transpilation |
 | `ComponentReady` | `EventEmitter<void>` | React component has mounted |
 
+### MJReactComponent Methods
+
+Hosts that drive a component from outside (an agent operating it through a realtime channel, a toolbar) call the standard component methods on the `MJReactComponent` instance: `InvokeMethod(name, ...args)`, `HasMethod(name)`, `GetCurrentDataState()`, `Refresh()` (the component's own `refresh()` when it registered one, otherwise a re-render), `Print()`, `validate()`, `IsDirty()`, `Reset()`, `ScrollTo(target)` and `Focus(target?)`. Each is a no-op (or `undefined`/`false`) until the component has initialized (`Initialized` fires). A new `Component` input is a new version: the component reinitializes in place and `Initialized` fires again.
+
 ## Services
 
 | Service | Purpose |

@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect, beforeEach } from 'vitest';
 import type {
     MJAIBridgeProviderEntity_IBridgeProviderFeatures,
@@ -5,10 +8,11 @@ import type {
 import {
     RealtimeBridgeContext,
     BridgeMediaFrame,
+    BridgeMediaTrackKind,
     BridgeCapabilityNotSupportedError,
     BridgeMeetingParticipant,
 } from '@memberjunction/ai-bridge-base';
-import { DiscordBridge } from '../discord-bridge';
+import { DISCORD_BRIDGE_DRIVER_CLASS, DiscordBridge } from '../discord-bridge';
 import {
     IDiscordVoiceSdk,
     DiscordMember,
@@ -102,22 +106,22 @@ class FakeDiscordVoiceSdk implements IDiscordVoiceSdk {
 // Helpers.
 // ──────────────────────────────────────────────────────────────────────────────
 
-// The Discord §8 seed row: on-demand + inbound routing, A/V/screen in+out, diarization.
-// Notably NO ScheduledJoin, NO InviteJoin, NO NativeInvite (Discord is voice-channel based).
-const FULL_FEATURES: MJAIBridgeProviderEntity_IBridgeProviderFeatures = {
+/**
+ * The Discord row's `SupportedFeatures` as `metadata/` ships it, and the default for these tests: on-demand + inbound
+ * routing, audio in+out, diarization. Notably NO ScheduledJoin, NO InviteJoin, NO NativeInvite (Discord is voice-channel
+ * based), and no video or screen ("Go Live") flags: the SDK seam carries audio only. "The provider row metadata ships"
+ * below checks this against the seed file.
+ */
+const DISCORD_ROW_FEATURES: MJAIBridgeProviderEntity_IBridgeProviderFeatures = {
     OnDemandJoin: true,
     InboundRouting: true,
     AudioIn: true,
     AudioOut: true,
-    VideoIn: true,
-    VideoOut: true,
-    ScreenIn: true,
-    ScreenOut: true,
     SpeakerDiarization: true,
 };
 
 function ctx(
-    features: MJAIBridgeProviderEntity_IBridgeProviderFeatures = FULL_FEATURES,
+    features: MJAIBridgeProviderEntity_IBridgeProviderFeatures = DISCORD_ROW_FEATURES,
     overrides: Partial<RealtimeBridgeContext> = {},
 ): RealtimeBridgeContext {
     return {
@@ -138,6 +142,55 @@ function makeBridge(sdk: FakeDiscordVoiceSdk): DiscordBridge {
 
 function bytes(...vals: number[]): ArrayBuffer {
     return new Uint8Array(vals).buffer;
+}
+
+/** Each media track and the `SupportedFeatures` flag that claims it. */
+const MEDIA_TRACK_FLAGS = [
+    ['audio-in', 'AudioIn'],
+    ['audio-out', 'AudioOut'],
+    ['video-in', 'VideoIn'],
+    ['video-out', 'VideoOut'],
+    ['screen-in', 'ScreenIn'],
+    ['screen-out', 'ScreenOut'],
+] as const satisfies ReadonlyArray<readonly [BridgeMediaTrackKind, keyof MJAIBridgeProviderEntity_IBridgeProviderFeatures]>;
+
+/** The repository's `metadata/` folder, from this file's folder (`packages/AI/RealtimeBridge/Providers/Discord/src/__tests__`). */
+const METADATA_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../../../../metadata');
+
+/** The part of a `metadata/ai-bridge-providers` record these tests read. */
+interface BridgeProviderSeedRecord {
+    fields?: {
+        DriverClass?: string;
+        /** A native JSON object in the seed file; an escaped JSON string is also valid metadata. */
+        SupportedFeatures?: string | MJAIBridgeProviderEntity_IBridgeProviderFeatures | null;
+    };
+}
+
+/**
+ * The `SupportedFeatures` of the `MJ: AI Bridge Providers` row that `metadata/` ships for this driver, found by its
+ * `DriverClass` (the key the engine resolves the driver by). Read from the seed file, since it is the source of the row.
+ */
+function seededDiscordRowFeatures(): MJAIBridgeProviderEntity_IBridgeProviderFeatures {
+    const records = JSON.parse(
+        readFileSync(resolve(METADATA_DIR, 'ai-bridge-providers/.ai-bridge-providers.json'), 'utf8'),
+    ) as BridgeProviderSeedRecord[];
+    const rows = records.filter((record) => record.fields?.DriverClass === DISCORD_BRIDGE_DRIVER_CLASS);
+    if (rows.length !== 1) {
+        throw new Error(`metadata/ai-bridge-providers ships ${rows.length} rows with DriverClass ${DISCORD_BRIDGE_DRIVER_CLASS}, not 1`);
+    }
+    const raw = rows[0].fields?.SupportedFeatures;
+    if (raw == null) {
+        return {};
+    }
+    return typeof raw === 'string' ? (JSON.parse(raw) as MJAIBridgeProviderEntity_IBridgeProviderFeatures) : raw;
+}
+
+/** The flags a features object turns on, sorted. An omitted flag and `false` both mean the feature is off. */
+function enabledFlags(features: MJAIBridgeProviderEntity_IBridgeProviderFeatures): string[] {
+    return Object.entries(features)
+        .filter(([, on]) => on === true)
+        .map(([flag]) => flag)
+        .sort();
 }
 
 let sdk: FakeDiscordVoiceSdk;
@@ -163,7 +216,7 @@ describe('DiscordBridge — Connect / Disconnect', () => {
 
     it('parses a bare guild/channel pair address', async () => {
         const bridge = makeBridge(sdk);
-        const result = await bridge.Connect(ctx(FULL_FEATURES, { Address: '777/888' }));
+        const result = await bridge.Connect(ctx(DISCORD_ROW_FEATURES, { Address: '777/888' }));
         expect(result.ExternalConnectionId).toBe('888');
         expect(sdk.LastJoinArgs?.GuildId).toBe('777');
     });
@@ -171,7 +224,7 @@ describe('DiscordBridge — Connect / Disconnect', () => {
     it('parses a bare channel id with the guild sourced from config', async () => {
         const bridge = makeBridge(sdk);
         const result = await bridge.Connect(
-            ctx(FULL_FEATURES, { Address: '999', Configuration: { BotDisplayName: 'Sage', GuildId: 'guild-x' } }),
+            ctx(DISCORD_ROW_FEATURES, { Address: '999', Configuration: { BotDisplayName: 'Sage', GuildId: 'guild-x' } }),
         );
         expect(result.ExternalConnectionId).toBe('999');
         expect(sdk.LastJoinArgs?.GuildId).toBe('guild-x');
@@ -436,5 +489,47 @@ describe('DiscordBridge — capability gating', () => {
         await expect(bridge.Connect(ctx({ OnDemandJoin: true, AudioIn: true }))).rejects.toBeInstanceOf(
             BridgeCapabilityNotSupportedError,
         );
+    });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// The provider row metadata ships. The engine, the provider form and the realtime dashboard read its flags, so they must
+// say what the driver does (#5447).
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('DiscordBridge — the provider row metadata ships', () => {
+    it('claims exactly the flags these tests connect with: on-demand join, inbound routing, audio in and out, and diarization', () => {
+        expect(enabledFlags(seededDiscordRowFeatures())).toEqual(enabledFlags(DISCORD_ROW_FEATURES));
+    });
+
+    it("with the row's flags, the bot carries exactly the media tracks the row claims: audio in and out, no video or screen", async () => {
+        const features = seededDiscordRowFeatures();
+        const bridge = makeBridge(sdk);
+        const heard: BridgeMediaFrame[] = [];
+        bridge.OnMedia((f) => heard.push(f));
+        await bridge.Connect(ctx(features));
+
+        // What the SDK seam can bring in (it has no video or screen callback), and a frame on every outbound track (the
+        // engine forwards whatever video a session emits on video-out).
+        sdk.DriveInboundAudio({ Pcm: bytes(1), UserId: 'u-alice', DisplayName: 'Alice' });
+        bridge.SendMedia('audio-out', { Track: 'audio-out', Bytes: bytes(2) });
+        bridge.SendMedia('video-out', { Track: 'video-out', Bytes: bytes(3), MimeType: 'video/mp4' });
+        bridge.SendMedia('screen-out', { Track: 'screen-out', Bytes: bytes(4) });
+
+        // The tracks the bot carried: what reached the agent, and what reached the voice channel (the seam's only send is
+        // audio, so anything it sent was audio-out).
+        const carried = new Set<BridgeMediaTrackKind>(heard.map((f) => f.Track));
+        if (sdk.SentAudio.length > 0) {
+            carried.add('audio-out');
+        }
+        const claimed = MEDIA_TRACK_FLAGS.filter(([, flag]) => features[flag] === true).map(([track]) => track);
+        expect(claimed, 'the row must claim the media tracks the bot carries, and only those').toEqual(
+            MEDIA_TRACK_FLAGS.map(([track]) => track).filter((track) => carried.has(track)),
+        );
+        // Only the audio frame reached the voice channel; the video and screen frames went nowhere.
+        expect(sdk.SentAudio.map((pcm) => [...new Uint8Array(pcm)])).toEqual([[2]]);
+        // The row's SpeakerDiarization: inbound audio carries the speaker, and the roster is readable.
+        expect(heard.map((f) => f.SpeakerLabel)).toEqual(['u-alice']);
+        expect((await bridge.GetParticipants()).map((p) => p.ExternalId)).toContain('u-alice');
     });
 });

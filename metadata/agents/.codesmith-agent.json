@@ -12,7 +12,7 @@
       "ExposeAsAction": true,
       "InvocationMode": "Any",
       "IconClass": "fa-solid fa-hammer",
-      "PayloadSelfWritePaths": "[\"task\", \"inputData\", \"requirements\", \"iterations\", \"code\", \"results\", \"errors\", \"logs\"]",
+      "PayloadSelfWritePaths": null,
       "FinalPayloadValidation": "{\"code\": \"string:!empty\", \"results\": \"any\", \"iterations\": \"number:[1+]\"}",
       "FinalPayloadValidationMode": "Warn",
       "MaxIterationsPerRun": 10
@@ -50,14 +50,36 @@
             "checksum": "728665075513a2b2b42c677ccfc9512cd6af3dd5a4b4818ef19b620a19bdd98f"
           }
         }
+      ],
+      "MJ: AI Agent Rubrics": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RubricID": "@lookup:MJ: Rubrics.Name=Generated code",
+            "Purpose": "Evaluation",
+            "IsDefault": true,
+            "Status": "Active",
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Codesmith Agent"
+            }
+          },
+          "primaryKey": {
+            "ID": "14F1D3E2-D06B-4726-86E2-3B732B50D623"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:55.259Z",
+            "checksum": "13f093632684fc8a86700e6755b210571aea3dafdf9979c09b7a4a5f39b6a406"
+          }
+        }
       ]
     },
     "primaryKey": {
       "ID": "03E3675E-E8C7-41B3-92C6-99520FF35FAB"
     },
     "sync": {
-      "lastModified": "2026-07-07T15:18:38.815Z",
-      "checksum": "67ad798867ea9b2efde1ad772351d9e34f46814ca6a11763d0698d6b625bdaec"
+      "lastModified": "2026-10-19T17:22:05.942Z",
+      "checksum": "c0e08e4eeaee80151d99944e442cf87079fa9fc704f9ac8949f9e038c77c0b13"
     }
   }
 ]

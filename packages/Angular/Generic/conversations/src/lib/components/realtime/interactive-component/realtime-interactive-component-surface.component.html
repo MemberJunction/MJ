@@ -1,0 +1,61 @@
+<div class="ic-surface">
+  @if (Instances.length === 0) {
+    <div class="ic-empty">
+      <i class="fa-solid fa-cubes ic-empty__icon" aria-hidden="true"></i>
+      <p class="ic-empty__title">No component open</p>
+      <p class="ic-empty__hint">{{ AgentName }} can open an interactive component here during the conversation.</p>
+    </div>
+  } @else {
+    <div class="ic-tabbar">
+      <div class="ic-tabs" role="tablist" aria-label="Open components">
+        @for (record of Instances; track TrackByInstance($index, record); let i = $index) {
+          <button
+            type="button"
+            class="ic-tab"
+            role="tab"
+            [class.ic-tab--active]="record.InstanceID === ActiveID"
+            [attr.aria-selected]="record.InstanceID === ActiveID"
+            [attr.tabindex]="record.InstanceID === ActiveID ? 0 : -1"
+            [title]="record.Artifact.Name"
+            (click)="SelectTab(record.InstanceID)"
+            (keydown)="OnTabKeydown($event, i)"
+          >
+            <i class="fa-solid fa-cube ic-tab__icon" aria-hidden="true"></i>
+            <span class="ic-tab__name">{{ record.Artifact.Name }}</span>
+            <span class="ic-tab__version">v{{ record.Artifact.VersionNumber }}</span>
+          </button>
+        }
+      </div>
+      @if (ActiveRecord; as active) {
+        <button
+          type="button"
+          class="ic-close"
+          [attr.aria-label]="'Close ' + active.Artifact.Name"
+          [title]="'Close ' + active.Artifact.Name"
+          (click)="CloseTab($event, active.InstanceID)"
+        >
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      }
+    </div>
+    <div class="ic-panes">
+      @for (record of Instances; track TrackByInstance($index, record)) {
+        <div
+          class="ic-pane"
+          role="tabpanel"
+          [hidden]="record.InstanceID !== ActiveID"
+          [attr.data-instance]="record.InstanceID"
+          [attr.aria-label]="record.Artifact.Name"
+        >
+          <mj-interactive-component-host
+            [Spec]="record.Artifact.Spec"
+            [Inputs]="record.Inputs"
+            [Provider]="Provider"
+            (Activity)="OnActivity(record.InstanceID, $event)"
+            (HandleChange)="OnHandleChange(record.InstanceID, $event)"
+          ></mj-interactive-component-host>
+        </div>
+      }
+    </div>
+  }
+</div>

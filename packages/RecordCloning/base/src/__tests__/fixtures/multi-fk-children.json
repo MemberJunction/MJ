@@ -1,0 +1,432 @@
+{
+  "_generated": "Child entities with more than one one-to-many relationship from the same parent, from vwEntityRelationships on MJ core. Regenerate when core adds such a pair.",
+  "Children": {
+    "MJ: AI Agent Co Agents": [
+      {
+        "Parent": "MJ: AI Agents",
+        "JoinFields": [
+          "CoAgentID",
+          "TargetAgentID"
+        ]
+      }
+    ],
+    "MJ: AI Agent Relationships": [
+      {
+        "Parent": "MJ: AI Agents",
+        "JoinFields": [
+          "AgentID",
+          "SubAgentID"
+        ]
+      }
+    ],
+    "MJ: AI Agent Requests": [
+      {
+        "Parent": "MJ: AI Agent Runs",
+        "JoinFields": [
+          "OriginatingAgentRunID",
+          "ResumingAgentRunID"
+        ]
+      },
+      {
+        "Parent": "MJ: Users",
+        "JoinFields": [
+          "RequestForUserID",
+          "ResponseByUserID"
+        ]
+      }
+    ],
+    "MJ: AI Agent Runs": [
+      {
+        "Parent": "MJ: AI Agent Runs",
+        "JoinFields": [
+          "LastRunID",
+          "ParentRunID"
+        ]
+      }
+    ],
+    "MJ: AI Agent Step Paths": [
+      {
+        "Parent": "MJ: AI Agent Steps",
+        "JoinFields": [
+          "DestinationStepID",
+          "OriginStepID"
+        ]
+      }
+    ],
+    "MJ: AI Agent Steps": [
+      {
+        "Parent": "MJ: AI Agents",
+        "JoinFields": [
+          "AgentID",
+          "SubAgentID"
+        ]
+      }
+    ],
+    "MJ: AI Agent Types": [
+      {
+        "Parent": "MJ: AI Prompts",
+        "JoinFields": [
+          "ContextCompressionPromptID",
+          "ConversationSummaryPromptID",
+          "SystemPromptID"
+        ]
+      }
+    ],
+    "MJ: AI Agents": [
+      {
+        "Parent": "MJ: AI Agents",
+        "JoinFields": [
+          "DefaultCoAgentID",
+          "ParentID"
+        ]
+      },
+      {
+        "Parent": "MJ: AI Prompts",
+        "JoinFields": [
+          "ContextCompressionPromptID",
+          "ConversationSummaryPromptID"
+        ]
+      },
+      {
+        "Parent": "MJ: File Storage Providers",
+        "JoinFields": [
+          "AttachmentStorageProviderID",
+          "RecordingStorageProviderID"
+        ]
+      }
+    ],
+    "MJ: AI Configurations": [
+      {
+        "Parent": "MJ: AI Prompts",
+        "JoinFields": [
+          "DefaultPromptForContextCompressionID",
+          "DefaultPromptForContextSummarizationID"
+        ]
+      }
+    ],
+    "MJ: AI Model Types": [
+      {
+        "Parent": "MJ: AI Modalities",
+        "JoinFields": [
+          "DefaultInputModalityID",
+          "DefaultOutputModalityID"
+        ]
+      }
+    ],
+    "MJ: AI Prompt Runs": [
+      {
+        "Parent": "MJ: AI Models",
+        "JoinFields": [
+          "ModelID",
+          "OriginalModelID"
+        ]
+      },
+      {
+        "Parent": "MJ: AI Prompt Runs",
+        "JoinFields": [
+          "ParentID",
+          "RerunFromPromptRunID"
+        ]
+      },
+      {
+        "Parent": "MJ: AI Prompts",
+        "JoinFields": [
+          "ChildPromptID",
+          "JudgeID",
+          "PromptID"
+        ]
+      }
+    ],
+    "MJ: API Keys": [
+      {
+        "Parent": "MJ: Users",
+        "JoinFields": [
+          "CreatedByUserID",
+          "UserID"
+        ]
+      }
+    ],
+    "MJ: Artifact Permissions": [
+      {
+        "Parent": "MJ: Users",
+        "JoinFields": [
+          "SharedByUserID",
+          "UserID"
+        ]
+      }
+    ],
+    "MJ: Collection Permissions": [
+      {
+        "Parent": "MJ: Users",
+        "JoinFields": [
+          "SharedByUserID",
+          "UserID"
+        ]
+      }
+    ],
+    "MJ: Component Dependencies": [
+      {
+        "Parent": "MJ: Components",
+        "JoinFields": [
+          "ComponentID",
+          "DependencyComponentID"
+        ]
+      }
+    ],
+    "MJ: Content Item Duplicates": [
+      {
+        "Parent": "MJ: Content Items",
+        "JoinFields": [
+          "ContentItemAID",
+          "ContentItemBID"
+        ]
+      }
+    ],
+    "MJ: Content Types": [
+      {
+        "Parent": "MJ: AI Models",
+        "JoinFields": [
+          "AIModelID",
+          "EmbeddingModelID"
+        ]
+      }
+    ],
+    "MJ: Dashboard Category Permissions": [
+      {
+        "Parent": "MJ: Users",
+        "JoinFields": [
+          "SharedByUserID",
+          "UserID"
+        ]
+      }
+    ],
+    "MJ: Dashboard Permissions": [
+      {
+        "Parent": "MJ: Users",
+        "JoinFields": [
+          "SharedByUserID",
+          "UserID"
+        ]
+      }
+    ],
+    "MJ: Duplicate Runs": [
+      {
+        "Parent": "MJ: Users",
+        "JoinFields": [
+          "ApprovedByUserID",
+          "StartedByUserID"
+        ]
+      }
+    ],
+    "MJ: Entity AI Actions": [
+      {
+        "Parent": "MJ: Entities",
+        "JoinFields": [
+          "EntityID",
+          "OutputEntityID"
+        ]
+      }
+    ],
+    "MJ: Entity Actions": [
+      {
+        "Parent": "MJ: Entities",
+        "JoinFields": [
+          "EntityID",
+          "ScopeEntityID"
+        ]
+      }
+    ],
+    "MJ: Entity Fields": [
+      {
+        "Parent": "MJ: Entities",
+        "JoinFields": [
+          "EntityID",
+          "RelatedEntityID"
+        ]
+      }
+    ],
+    "MJ: Entity Permissions": [
+      {
+        "Parent": "MJ: Row Level Security Filters",
+        "JoinFields": [
+          "CreateRLSFilterID",
+          "DeleteRLSFilterID",
+          "ReadRLSFilterID",
+          "UpdateRLSFilterID"
+        ]
+      }
+    ],
+    "MJ: Entity Relationships": [
+      {
+        "Parent": "MJ: Entities",
+        "JoinFields": [
+          "EntityID",
+          "RelatedEntityID"
+        ]
+      }
+    ],
+    "MJ: Form Chrome Rules": [
+      {
+        "Parent": "MJ: Entities",
+        "JoinFields": [
+          "EntityID",
+          "RelatedEntityID"
+        ]
+      }
+    ],
+    "MJ: Integration Object Fields": [
+      {
+        "Parent": "MJ: Integration Objects",
+        "JoinFields": [
+          "IntegrationObjectID",
+          "RelatedIntegrationObjectID"
+        ]
+      }
+    ],
+    "MJ: Lists": [
+      {
+        "Parent": "MJ: Users",
+        "JoinFields": [
+          "LastRefreshedByUserID",
+          "UserID"
+        ]
+      }
+    ],
+    "MJ: Materialized Results": [
+      {
+        "Parent": "MJ: Entities",
+        "JoinFields": [
+          "GeneratedEntityID",
+          "SourceEntityID"
+        ]
+      }
+    ],
+    "MJ: Open App Dependencies": [
+      {
+        "Parent": "MJ: Open Apps",
+        "JoinFields": [
+          "DependsOnAppID",
+          "OpenAppID"
+        ]
+      }
+    ],
+    "MJ: Query Dependencies": [
+      {
+        "Parent": "MJ: Queries",
+        "JoinFields": [
+          "DependsOnQueryID",
+          "QueryID"
+        ]
+      }
+    ],
+    "MJ: Record Links": [
+      {
+        "Parent": "MJ: Entities",
+        "JoinFields": [
+          "SourceEntityID",
+          "TargetEntityID"
+        ]
+      }
+    ],
+    "MJ: Record Merge Logs": [
+      {
+        "Parent": "MJ: Users",
+        "JoinFields": [
+          "ApprovedByUserID",
+          "InitiatedByUserID"
+        ]
+      }
+    ],
+    "MJ: Resource Permissions": [
+      {
+        "Parent": "MJ: Users",
+        "JoinFields": [
+          "SharedByUserID",
+          "UserID"
+        ]
+      }
+    ],
+    "MJ: Resource Types": [
+      {
+        "Parent": "MJ: Entities",
+        "JoinFields": [
+          "CategoryEntityID",
+          "EntityID"
+        ]
+      }
+    ],
+    "MJ: Scheduled Jobs": [
+      {
+        "Parent": "MJ: Users",
+        "JoinFields": [
+          "NotifyUserID",
+          "OwnerUserID"
+        ]
+      }
+    ],
+    "MJ: Tag Audit Logs": [
+      {
+        "Parent": "MJ: Tags",
+        "JoinFields": [
+          "RelatedTagID",
+          "TagID"
+        ]
+      }
+    ],
+    "MJ: Tag Co Occurrences": [
+      {
+        "Parent": "MJ: Tags",
+        "JoinFields": [
+          "TagAID",
+          "TagBID"
+        ]
+      }
+    ],
+    "MJ: Tag Suggestions": [
+      {
+        "Parent": "MJ: Tags",
+        "JoinFields": [
+          "BestMatchTagID",
+          "ProposedParentID",
+          "ResolvedTagID"
+        ]
+      }
+    ],
+    "MJ: Tags": [
+      {
+        "Parent": "MJ: Tags",
+        "JoinFields": [
+          "MergedIntoTagID",
+          "ParentID"
+        ]
+      }
+    ],
+    "MJ: Task Dependencies": [
+      {
+        "Parent": "MJ: Tasks",
+        "JoinFields": [
+          "DependsOnTaskID",
+          "TaskID"
+        ]
+      }
+    ],
+    "MJ: User Notification Types": [
+      {
+        "Parent": "MJ: Templates",
+        "JoinFields": [
+          "EmailTemplateID",
+          "SMSTemplateID"
+        ]
+      }
+    ],
+    "MJ: Version Label Restores": [
+      {
+        "Parent": "MJ: Version Labels",
+        "JoinFields": [
+          "PreRestoreLabelID",
+          "VersionLabelID"
+        ]
+      }
+    ]
+  }
+}

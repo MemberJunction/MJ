@@ -6,17 +6,19 @@
 **************************************************************************************************************/
 
 import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IRunViewProvider, ProviderConfigDataBase, RunViewResult,
-         EntityInfo, EntityFieldInfo, EntityFieldTSType, TenantContext,
+         EntityInfo, type EntityField, EntityFieldInfo, EntityFieldTSType, TenantContext,
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange,
-         ILocalStorageProvider, EntitySaveOptions, EntityMergeOptions, LogError, LogStatus,
-         TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput,
-         EntityRecordNameResult, RecordDependency, RecordMergeRequest, RecordMergeResult,
+         ILocalStorageProvider, EntitySaveOptions, EntityMergeOptions, LogError, LogStatus, LogStatusEx,
+         TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameCache,
+         EntityRecordNameResult, RecordDependency, GetRecordDependenciesOptions, RecordMergeRequest, RecordMergeResult,
          RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, EntityDeleteOptions,
          RunQueryParams, RunQueryEnrichment, BaseEntityResult, QueryExecutionSpec,
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
          KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider, ReadableFieldsTransportKey,
-         SearchEntityParams, EntitySearchResult, ScoredCandidate, RemoteOpInvokeOptions, RemoteOpResult, RemoteOpProgress } from "@memberjunction/core";
+         SearchEntityParams, EntitySearchResult, ScoredCandidate, RemoteOpInvokeOptions, RemoteOpResult, RemoteOpProgress,
+         GetLocalTimeZone, TIME_ZONE_HEADER, ViewPropertyValues, ResolveMJAPIURL,
+         GetEffectiveAlternateBaseViewName, TelemetryManager, GetDiagnosticContext, IsDiagnosticCaptureSuppressed } from "@memberjunction/core";
 import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore, DeserializeValidationErrors } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
@@ -29,9 +31,126 @@ import { GraphQLTransactionGroup } from "./graphQLTransactionGroup";
 import { GraphQLAIClient } from "./graphQLAIClient";
 import { BrowserIndexedDBStorageProvider } from "./storage-providers";
 import { SanitizeGraphQLError, ToSafeGraphQLError } from "./sanitizeGraphQLError";
+import { IsGraphQLMutation, FirstGraphQLOperationKind, ExtractGraphQLOperationName } from "./graphQLOperationKind";
+
+/**
+ * Structured network operation observation emitted by {@link GraphQLDataProvider}
+ * for flight recorders and diagnostic bundles. Never includes raw variable values.
+ */
+export interface NetworkDiagnosticObservation {
+    operationName: string;
+    operationKind: 'query' | 'mutation' | 'subscription';
+    traceId: string;
+    spanId: string;
+    traceparent: string;
+    durationMs: number;
+    /** Approximate size: query text plus the JSON text of the variables. */
+    requestBytes: number;
+    /** Approximate size: the JSON text of the response data, or of the error response. */
+    responseBytes: number;
+    succeeded: boolean;
+    errorCode?: string;
+    errorMessage?: string;
+    retryCount: number;
+    variableKeys: string[];
+    timestamp: number;
+}
+
+export type NetworkDiagnosticObserver = (observation: NetworkDiagnosticObservation) => void;
+
+const _networkDiagnosticObservers = new Set<NetworkDiagnosticObserver>();
+
+/**
+ * Registers a callback notified after every GraphQL network operation (`ExecuteGQL` and
+ * `ExecuteGQLWithProgress`). Returns an unsubscribe function.
+ */
+export function RegisterNetworkDiagnosticObserver(observer: NetworkDiagnosticObserver): () => void {
+    _networkDiagnosticObservers.add(observer);
+    return () => {
+        _networkDiagnosticObservers.delete(observer);
+    };
+}
+
+/** The headers of a GraphQL HTTP response. */
+export interface GraphQLResponseHeaders {
+    get(name: string): string | null;
+}
+
+export type ResponseHeaderObserver = (headers: GraphQLResponseHeaders) => void;
+
+const _responseHeaderObservers = new Set<ResponseHeaderObserver>();
+
+/**
+ * Registers a callback called with the headers of each GraphQL HTTP response. Returns an
+ * unsubscribe function. An observer that throws does not affect the request or other observers.
+ */
+export function RegisterResponseHeaderObserver(observer: ResponseHeaderObserver): () => void {
+    _responseHeaderObservers.add(observer);
+    return () => {
+        _responseHeaderObservers.delete(observer);
+    };
+}
+
+type MaybeHeaders = { get?: (name: string) => string | null };
+
+/**
+ * Returns the response's headers when it has a `headers.get` function. A failed request
+ * (graphql-request `ClientError`) carries its response on `error.response`.
+ */
+function responseHeadersOf(response: unknown): GraphQLResponseHeaders | null {
+    if (!response || typeof response !== 'object') {
+        return null;
+    }
+    const source = response instanceof Error ? (response as { response?: { headers?: MaybeHeaders } }).response : response;
+    const headers = (source as { headers?: MaybeHeaders } | undefined)?.headers;
+    return headers && typeof headers.get === 'function' ? (headers as GraphQLResponseHeaders) : null;
+}
+
+function notifyResponseHeaderObservers(response: unknown): void {
+    const headers = _responseHeaderObservers.size > 0 ? responseHeadersOf(response) : null;
+    if (!headers) {
+        return;
+    }
+    for (const observer of _responseHeaderObservers) {
+        try {
+            observer(headers);
+        } catch {
+            // an observer failure never breaks the request
+        }
+    }
+}
+
+function generateHexId(byteCount: number): string {
+    const g = globalThis as { crypto?: { getRandomValues?: (arr: Uint8Array) => Uint8Array } };
+    if (g.crypto && typeof g.crypto.getRandomValues === 'function') {
+        const bytes = new Uint8Array(byteCount);
+        g.crypto.getRandomValues(bytes);
+        let hex = '';
+        for (let i = 0; i < bytes.length; i++) {
+            hex += bytes[i].toString(16).padStart(2, '0');
+        }
+        return hex;
+    }
+    let fallback = '';
+    for (let i = 0; i < byteCount; i++) {
+        fallback += Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
+    }
+    return fallback;
+}
 
 // define the shape for a RefreshToken function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
 export type RefreshTokenFunction = () => Promise<string>;
+
+/**
+ * The URL and credentials each GraphQL client was built with (recorded by CreateNewGraphQLClient).
+ * A client's headers are fixed at construction, so a connect bringing different credentials must
+ * build a new client rather than reuse one that would keep sending the old identity (#4887).
+ */
+const clientCredentials = new WeakMap<GraphQLClient, string>();
+
+function credentialsKey(url: string, token: string, mjAPIKey: string, userAPIKey?: string): string {
+    return JSON.stringify([url, token ?? null, mjAPIKey ?? null, userAPIKey ?? null]);
+}
 
 /**
  * State of the provider's graphql-ws WebSocket connection.
@@ -47,6 +166,41 @@ export type SocketConnectionState = 'connected' | 'disconnected' | 'unknown';
  * The client application should use this to notify the user and force re-authentication.
  */
 export type AuthenticationErrorCallback = (error: Error) => void;
+
+/** The RunQueriesWithCacheCheck response as it arrives over GraphQL. */
+interface RunQueriesCacheCheckGQLResponse {
+    success: boolean;
+    errorMessage?: string;
+    results: Array<{
+        queryIndex: number;
+        queryId: string;
+        status: string;
+        Results?: string;
+        maxUpdatedAt?: string;
+        rowCount?: number;
+        errorMessage?: string;
+        definitionHash?: string | null;
+    }>;
+}
+
+/**
+ * Options for {@link GraphQLDataProvider.ExecuteGQL}.
+ */
+export interface ExecuteGQLOptions {
+    /**
+     * The entities a mutation is known to write. After a mutation the provider drops its RunView
+     * dedup-linger entries; with this set, only the entries touching these entities are dropped
+     * instead of every entry. The entity `Save()`/`Delete()` paths pass their own entity — the same
+     * scope the local BaseEntity save/delete event already invalidates. Leave it unset for any
+     * mutation whose writes are not known up front (Remote Operations, Actions, agent runs): those
+     * drop everything, because a stale replay is worse than a re-query. Ignored for queries.
+     *
+     * Rows a server-side save hook writes to OTHER entities are outside the scope, exactly as they
+     * were before mutations invalidated at all; code that reads such rows right after the save can
+     * call `InvalidateRunViewDedupCache()` itself.
+     */
+    AffectedEntityNames?: readonly string[];
+}
 
 /**
  * One dispatcher lifecycle frame for a durable workflow run (task graph), as delivered by the
@@ -147,6 +301,14 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
     get WSURL(): string { return this.Data.WSURL }
 
     /**
+     * URL of the MJAPI server for routes other than GraphQL, such as `/oauth/*` and `/media/*` (MJ #5674),
+     * set from the host's `MJAPI_URI`. `undefined` when the host has not configured one; callers then keep
+     * their pre-#5674 behaviour.
+     */
+    get MJAPIURL(): string | undefined { return ResolveMJAPIURL(this.Data.MJAPIURL) }
+    set MJAPIURL(url: string) { this.Data.MJAPIURL = url }
+
+    /**
      * Opt in to logging the *values* of GraphQL variables when a request fails.
      *
      * Defaults to `false`, in which case a failed request logs the operation's
@@ -222,6 +384,37 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
 
 
 
+/**
+ * How often the client sends a keepalive ping, in ms.
+ *
+ * Matched to MJAPI's own cadence: graphql-ws's `useServer(options, ws, keepAlive)` defaults its
+ * third positional argument to 12s, so the server already pings and terminates on an unanswered
+ * pong. Pinging at a comparable rate makes the two ends detect a dead link at roughly the same
+ * time instead of leaving the client blind for half a minute after the server has given up.
+ */
+export const WS_KEEPALIVE_MS = 10_000;
+
+/**
+ * How long to wait for a pong before declaring the socket dead, in ms.
+ *
+ * REQUIRED, not optional. graphql-ws re-arms its keepalive ping ONLY on pong receipt, so a
+ * half-open socket receives exactly one ping and then goes silent forever — its own JSDoc says
+ * "NOTHING will happen automatically with the client if the server never responds to a
+ * PingMessage with a PongMessage." Without this watchdog the socket never closes, `retryAttempts`
+ * never engages (it fires only on abnormal CLOSURE), and every recovery path that keys off
+ * `on('closed')` stays asleep indefinitely. See MJ #4222.
+ */
+export const WS_PONG_TIMEOUT_MS = 10_000;
+
+/**
+ * How long to wait for `ConnectionAck` after opening the socket, in ms.
+ *
+ * graphql-ws defaults this to 0, i.e. disabled — a reconnect that completes the TCP handshake but
+ * never acks would hang forever, which is the same blindness as an unanswered pong, just on the
+ * reconnect path. On expiry graphql-ws closes with `4418`, which is retriable.
+ */
+export const WS_CONNECTION_ACK_TIMEOUT_MS = 10_000;
+
 // The GraphQLDataProvider implements both the IEntityDataProvider and IMetadataProvider interfaces.
 /**
  * The GraphQLDataProvider class is a data provider for MemberJunction that implements the IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunQueryProvider interfaces and connects to the
@@ -245,6 +438,39 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * use GetGlobalObjectStore() directly with the same key format.
      */
     private static readonly _globalStoreKey = '___SINGLETON__GraphQLDataProvider';
+
+    /**
+     * Writable fields on specific entities that are computed or mutated server-side inside
+     * `BaseEntity.Save()` subclasses (e.g. `MJUserViewEntityServer` generating `WhereClause`,
+     * `SmartFilterWhereClause`, and `SmartFilterExplanation` via AI or stamping approval fields).
+     * Even when clean on the client, these fields must be requested in the GraphQL `Update`
+     * selection set so the client entity and local engine caches receive the server-derived values.
+     */
+    private static readonly _serverDerivedUpdateFieldsByEntity: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+        [
+            'MJ: User Views',
+            new Set([
+                'WhereClause',
+                'SmartFilterWhereClause',
+                'SmartFilterExplanation',
+                'ApprovedByUserID',
+                'ApprovedAt',
+                'ApprovedFingerprint',
+            ]),
+        ],
+        [
+            'MJ: Queries',
+            new Set([
+                'ApprovedByUserID',
+                'ApprovedAt',
+                'ApprovedFingerprint',
+                'UsesTemplate',
+                'TechnicalDescription',
+                'EmbeddingVector',
+                'EmbeddingModelID',
+            ]),
+        ],
+    ]);
 
     /**
      * Returns the singleton instance of GraphQLDataProvider.
@@ -376,11 +602,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
-    public async GetPreferredUUID(forceRefreshSessionId?: boolean): Promise<string> {
-        // Try to get the stored session ID
-        const oldUUID = await this.GetStoredSessionID();
-        const UUID = forceRefreshSessionId || !oldUUID ? this.GenerateUUID() : oldUUID;
-        return UUID;
+    public async GetPreferredUUID(_forceRefreshSessionId?: boolean): Promise<string> {
+        // Always generate a fresh per-tab/runtime UUID rather than reusing a shared
+        // localStorage sessionId across browser tabs. Sharing a single sessionId in
+        // localStorage caused other tabs in the same browser to treat remote
+        // CacheInvalidation events as self-originated (OriginSessionID === this.sessionId)
+        // and silently drop cross-tab updates.
+        return this.GenerateUUID();
     }
 
 
@@ -396,53 +624,105 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      */
     public async Config(configData: GraphQLProviderConfigData, providerToUse?: IMetadataProvider, separateConnection?: boolean, forceRefreshSessionId?: boolean): Promise<boolean> {
         try {
-            // Enhanced logging to diagnose token issues
-            // const tokenPreview = configData.Token ? `${configData.Token.substring(0, 20)}...${configData.Token.substring(configData.Token.length - 10)}` : 'NO TOKEN';
-            // console.log('[GraphQL] Config called with token:', {
-            //     tokenPreview,
-            //     tokenLength: configData.Token?.length,
-            //     separateConnection,
-            //     hasRefreshFunction: !!configData.Data?.RefreshTokenFunction
-            // });
-
-            // CRITICAL: Always set this instance's _configData first
-            // This ensures BuildDatasetFilterFromConfig() can access ConfigData.IncludeSchemas
-            this._configData = configData;
-
-            if (separateConnection) {
-                // Get UUID after setting the configData, so that it can be used to get any stored session ID
-                this._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
-
-                this._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, this._sessionId, configData.MJAPIKey, configData.UserAPIKey);
-                // Store the session ID for this connection
-                await this.saveStoredSessionID(this._sessionId);
-            }
-            else {
-                // Update the singleton instance
-                GraphQLDataProvider.Instance._configData = configData;
-
-                if (GraphQLDataProvider.Instance._sessionId === undefined) {
-                    GraphQLDataProvider.Instance._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
-                }
-
-                // now create the new client, if it isn't already created
-                if (!GraphQLDataProvider.Instance._client)
-                    GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId, configData.MJAPIKey, configData.UserAPIKey);
-
-                // Store the session ID for the global instance
-                await GraphQLDataProvider.Instance.saveStoredSessionID(GraphQLDataProvider.Instance._sessionId);
-
-                // CRITICAL: Sync this instance with the singleton
-                // This ensures ExecuteGQL() can use this._client.request()
-                this._sessionId = GraphQLDataProvider.Instance._sessionId;
-                this._client = GraphQLDataProvider.Instance._client;
-            }
+            await this.connectClient(configData, separateConnection, forceRefreshSessionId);
             return super.Config(configData); // now parent class can do it's config
         }
         catch (e) {
             LogError(e);
             throw (e)
         }
+    }
+
+    /**
+     * The authenticate-only half of {@link Config}, for embedded/anonymous surfaces that only make
+     * their own GraphQL calls. After it resolves, {@link ExecuteGQL} works. No metadata is fetched,
+     * so entity metadata (`Entities`, `EntityByName`, `RunView`, `GetEntityObject`) is NOT available
+     * until the full boot runs (`SetupGraphQLClient`, or {@link Config}) on this same instance.
+     * Uses the shared singleton connection (a secondary instance keeps its own). A later Connect/Config with a different URL,
+     * token or API key rebuilds that connection's client (keeping the session id).
+     */
+    public async Connect(configData: GraphQLProviderConfigData): Promise<void> {
+        await this.connectClient(configData, false, false);
+    }
+
+    /**
+     * The connection half of {@link Config}: stores the config, resolves the session id and creates the
+     * GraphQL client (this instance's own client when separateConnection is true or this is not the
+     * global singleton, otherwise the shared singleton client, which is reused unless the credentials
+     * changed). Loads no metadata.
+     */
+    private async connectClient(configData: GraphQLProviderConfigData, separateConnection?: boolean, forceRefreshSessionId?: boolean): Promise<void> {
+        // Enhanced logging to diagnose token issues
+        // const tokenPreview = configData.Token ? `${configData.Token.substring(0, 20)}...${configData.Token.substring(configData.Token.length - 10)}` : 'NO TOKEN';
+        // console.log('[GraphQL] Config called with token:', {
+        //     tokenPreview,
+        //     tokenLength: configData.Token?.length,
+        //     separateConnection,
+        //     hasRefreshFunction: !!configData.Data?.RefreshTokenFunction
+        // });
+
+        // CRITICAL: Always set this instance's _configData first
+        // This ensures BuildDatasetFilterFromConfig() can access ConfigData.IncludeSchemas
+        this._configData = configData;
+        this.setTimeZoneHeader();
+
+        // An instance that is not the global singleton (built while the global-store slot was
+        // parked) owns its own connection, even when a re-entry path omits the flag:
+        // ProviderBase.Refresh() re-runs Config(this._ConfigData) without separateConnection.
+        // Taking the shared branch from such an instance would hand the global provider this
+        // instance's credentials, and every global call would then run as its user (#4887).
+        if (separateConnection || GraphQLDataProvider.Instance !== this) {
+            // Get UUID after setting the configData, so that it can be used to get any stored session ID
+            this._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
+
+            this._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, this._sessionId, configData.MJAPIKey, configData.UserAPIKey);
+            // Store the session ID for this connection
+            await this.saveStoredSessionID(this._sessionId);
+        }
+        else {
+            // Update the singleton instance
+            GraphQLDataProvider.Instance._configData = configData;
+
+            if (GraphQLDataProvider.Instance._sessionId === undefined || forceRefreshSessionId) {
+                GraphQLDataProvider.Instance._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);
+            }
+
+            // Create the client if there is none, or rebuild it (same session id) when this config
+            // brings different credentials — e.g. an anonymous connect upgraded to a login.
+            const existing = GraphQLDataProvider.Instance._client;
+            if (!existing || this.isBuiltWithOtherCredentials(existing, configData))
+                GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId, configData.MJAPIKey, configData.UserAPIKey);
+
+            // Store the session ID for the global instance
+            await GraphQLDataProvider.Instance.saveStoredSessionID(GraphQLDataProvider.Instance._sessionId);
+
+            // CRITICAL: Sync this instance with the singleton
+            // This ensures ExecuteGQL() can use this._client.request()
+            this._sessionId = GraphQLDataProvider.Instance._sessionId;
+            this._client = GraphQLDataProvider.Instance._client;
+        }
+    }
+
+    /**
+     * Sends this runtime's IANA time zone on every request (`x-mj-timezone`), so the server works
+     * date tokens out in the caller's zone. A value the host set first is kept; where `Intl` gives
+     * no zone, nothing is sent and the server uses UTC.
+     */
+    private setTimeZoneHeader(): void {
+        const timeZone = GetLocalTimeZone();
+        if (timeZone && !this._dynamicHeaders.has(TIME_ZONE_HEADER)) {
+            this.SetDynamicHeader(TIME_ZONE_HEADER, timeZone);
+        }
+    }
+
+    /**
+     * True when `client` was built with a URL or credentials other than `configData`'s. A client this
+     * class did not record (a subclass's own CreateNewGraphQLClient, a test harness) is kept as-is.
+     */
+    private isBuiltWithOtherCredentials(client: GraphQLClient, configData: GraphQLProviderConfigData): boolean {
+        const builtWith = clientCredentials.get(client);
+        return builtWith !== undefined &&
+            builtWith !== credentialsKey(configData.URL, configData.Token, configData.MJAPIKey, configData.UserAPIKey);
     }
 
     public get sessionId(): string {
@@ -538,8 +818,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     /**************************************************************************/
     protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQuery()
+        this.refuseServerOnlyQueryParams(params);
         if (params.SQL) {
-            return this.RunAdhocQuery(params.SQL, params.MaxRows, undefined, params.StartRow);
+            return this.RunAdhocQuery(params.SQL, params.MaxRows, params.TimeoutSeconds, params.StartRow);
         }
         else if (params.QueryID) {
             return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow, params.Enrichment, params.DataSource);
@@ -549,6 +830,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         else {
             throw new Error("No SQL, QueryID, or QueryName provided to RunQuery");
+        }
+    }
+
+    /**
+     * `RequireApproved` and `ServerParameters` are honoured only by server code, and no GraphQL run
+     * input carries them, so a browser run that sets either throws rather than running without it.
+     */
+    private refuseServerOnlyQueryParams(params: RunQueryParams): void {
+        if (params.RequireApproved || params.ServerParameters !== undefined) {
+            throw new Error('RequireApproved and ServerParameters are set only by server code; a run sent from the browser cannot carry them.');
         }
     }
 
@@ -595,6 +886,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     protected async InternalRunQueries(params: RunQueryParams[], contextUser?: UserInfo): Promise<RunQueryResult[]> {
         // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQueries()
         // Make a single batch GraphQL call for efficiency (single network roundtrip)
+        params.forEach(p => this.refuseServerOnlyQueryParams(p));
         const query = gql`
             query RunQueriesBatch($input: [RunQueryInput!]!) {
                 RunQueries(input: $input) {
@@ -742,6 +1034,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * using the Query's CacheValidationSQL. If current, returns status='current' with no data.
      * If stale, returns status='stale' with fresh data.
      *
+     * A server older than the query-definition check rejects the `definitionHash` field. The call
+     * is then retried once without it (the server falls back to data-only validation), and the field
+     * is left out of later calls for {@link DEFINITION_HASH_RETRY_MS} before it is tried again, so a
+     * client that outlives a rolling deploy picks the check up once the servers are upgraded.
+     *
      * @param params - Array of RunQuery requests with optional cache status
      * @param contextUser - Optional user context
      * @returns Response containing results for each query in the batch
@@ -751,100 +1048,18 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         contextUser?: UserInfo
     ): Promise<RunQueriesWithCacheCheckResponse<T>> {
         try {
-            // Build the GraphQL input
-            const input = params.map(item => ({
-                params: {
-                    QueryID: item.params.QueryID || null,
-                    QueryName: item.params.QueryName || null,
-                    CategoryID: item.params.CategoryID || null,
-                    CategoryPath: item.params.CategoryPath || null,
-                    Parameters: item.params.Parameters || null,
-                    MaxRows: item.params.MaxRows ?? null,
-                    StartRow: item.params.StartRow ?? null,
-                    ForceAuditLog: item.params.ForceAuditLog || false,
-                    AuditLogDescription: item.params.AuditLogDescription || null,
-                    Enrichment: item.params.Enrichment || null,
-                    DataSource: item.params.DataSource || null,
-                },
-                cacheStatus: item.cacheStatus ? {
-                    maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
-                    rowCount: item.cacheStatus.rowCount,
-                } : null,
-            }));
-
-            const query = gql`
-                query RunQueriesWithCacheCheckQuery($input: [RunQueryWithCacheCheckInput!]!) {
-                    RunQueriesWithCacheCheck(input: $input) {
-                        success
-                        errorMessage
-                        results {
-                            queryIndex
-                            queryId
-                            status
-                            Results
-                            maxUpdatedAt
-                            rowCount
-                            errorMessage
-                        }
-                    }
+            params.forEach(item => this.refuseServerOnlyQueryParams(item.params));
+            const sendDefinition = this._definitionHashUnsupportedUntil == null || Date.now() >= this._definitionHashUnsupportedUntil;
+            try {
+                return await this.executeRunQueriesWithCacheCheck<T>(params, sendDefinition);
+            } catch (e) {
+                if (!sendDefinition || !GraphQLDataProvider.isUnsupportedDefinitionHashError(e)) {
+                    throw e;
                 }
-            `;
-
-            const responseData = await this.ExecuteGQL(query, { input });
-            const response = responseData?.['RunQueriesWithCacheCheck'] as {
-                success: boolean;
-                errorMessage?: string;
-                results: Array<{
-                    queryIndex: number;
-                    queryId: string;
-                    status: string;
-                    Results?: string;
-                    maxUpdatedAt?: string;
-                    rowCount?: number;
-                    errorMessage?: string;
-                }>;
-            };
-
-            if (!response) {
-                return {
-                    success: false,
-                    results: [],
-                    errorMessage: 'No response from server',
-                };
+                this._definitionHashUnsupportedUntil = Date.now() + GraphQLDataProvider.DEFINITION_HASH_RETRY_MS;
+                LogStatusEx({ message: 'RunQueriesWithCacheCheck: the server does not support query definition hashes — validating cached query results by data only', verboseOnly: true });
+                return await this.executeRunQueriesWithCacheCheck<T>(params, false);
             }
-
-            // Transform results - deserialize Results for stale/no_validation results
-            const transformedResults: RunQueryWithCacheCheckResult<T>[] = response.results.map(result => {
-                if ((result.status === 'stale' || result.status === 'no_validation') && result.Results) {
-                    // Deserialize the Results JSON string
-                    const deserializedResults: T[] = JSON.parse(result.Results);
-
-                    return {
-                        queryIndex: result.queryIndex,
-                        queryId: result.queryId,
-                        status: result.status as 'current' | 'stale' | 'no_validation' | 'error',
-                        results: deserializedResults,
-                        maxUpdatedAt: result.maxUpdatedAt,
-                        rowCount: result.rowCount,
-                        errorMessage: result.errorMessage,
-                    };
-                }
-
-                return {
-                    queryIndex: result.queryIndex,
-                    queryId: result.queryId,
-                    status: result.status as 'current' | 'stale' | 'no_validation' | 'error',
-                    maxUpdatedAt: result.maxUpdatedAt,
-                    rowCount: result.rowCount,
-                    errorMessage: result.errorMessage,
-                };
-            });
-
-            return {
-                success: response.success,
-                results: transformedResults,
-                errorMessage: response.errorMessage,
-            };
         } catch (e) {
             LogError(`Error in RunQueriesWithCacheCheck: ${e}`);
             return {
@@ -854,6 +1069,161 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             };
         }
     }
+
+    /** How long, in milliseconds, to leave `definitionHash` out after a server rejected it. */
+    private static readonly DEFINITION_HASH_RETRY_MS = 5 * 60_000;
+
+    /**
+     * When a server last rejected `definitionHash`, the time (ms) until which it is left out of
+     * RunQueriesWithCacheCheck calls. Null while the server is assumed to support it.
+     */
+    private _definitionHashUnsupportedUntil: number | null = null;
+
+    /**
+     * The errors a server whose schema predates `definitionHash` returns for this request, with the
+     * code Apollo gives each: the selected output field fails query validation, and the input field
+     * fails variable coercion. Only these mean "older server"; any other error that happens to name
+     * the field is an ordinary failure, and must not relax the check to data-only validation.
+     */
+    private static readonly UNSUPPORTED_DEFINITION_HASH_ERRORS: ReadonlyArray<{ Code: string; Message: string }> = [
+        { Code: 'GRAPHQL_VALIDATION_FAILED', Message: 'Cannot query field "definitionHash" on type "RunQueryWithCacheCheckResultOutput"' },
+        { Code: 'BAD_USER_INPUT', Message: 'Field "definitionHash" is not defined by type "RunQueryCacheStatusInput"' },
+    ];
+
+    /**
+     * True when the server's schema rejected the `definitionHash` field (a server that predates it):
+     * one of the GraphQL errors is one of {@link UNSUPPORTED_DEFINITION_HASH_ERRORS}, with that
+     * error's code when the server sends one. Reads the structured GraphQL errors when the thrown
+     * error carries them, and its message otherwise.
+     */
+    private static isUnsupportedDefinitionHashError(e: unknown): boolean {
+        return GraphQLDataProvider.isSchemaRejection(e, GraphQLDataProvider.UNSUPPORTED_DEFINITION_HASH_ERRORS);
+    }
+
+    /**
+     * True when one of the GraphQL errors `e` carries is one of `rejections`, with that rejection's
+     * code when the server sends one. Reads the structured GraphQL errors when the thrown error
+     * carries them, and its message otherwise.
+     */
+    private static isSchemaRejection(e: unknown, rejections: ReadonlyArray<{ Code: string; Message: string }>): boolean {
+        const errors = (e as { response?: { errors?: Array<{ message?: string; extensions?: { code?: string } }> } } | null)?.response?.errors;
+        if (errors && errors.length > 0) {
+            return errors.some(error => GraphQLDataProvider.matchesSchemaRejection(rejections, error.message, error.extensions?.code));
+        }
+        return e instanceof Error && GraphQLDataProvider.matchesSchemaRejection(rejections, e.message, undefined);
+    }
+
+    /** True when `message` is one of `rejections` and `code`, if given, is its code. */
+    private static matchesSchemaRejection(rejections: ReadonlyArray<{ Code: string; Message: string }>, message: string | undefined, code: string | undefined): boolean {
+        return rejections.some(rejection =>
+            !!message && message.includes(rejection.Message) && (code === undefined || code === rejection.Code));
+    }
+
+    /** One RunQueriesWithCacheCheck round trip; throws on a transport or GraphQL error. */
+    private async executeRunQueriesWithCacheCheck<T>(
+        params: RunQueryWithCacheCheckParams[],
+        includeDefinition: boolean
+    ): Promise<RunQueriesWithCacheCheckResponse<T>> {
+        const input = GraphQLDataProvider.buildRunQueriesCacheCheckInput(params, includeDefinition);
+        const query = includeDefinition
+            ? GraphQLDataProvider.RUN_QUERIES_CACHE_CHECK_GQL
+            : GraphQLDataProvider.RUN_QUERIES_CACHE_CHECK_GQL_WITHOUT_DEFINITION;
+        const responseData = await this.ExecuteGQL(query, { input });
+        const response = responseData?.['RunQueriesWithCacheCheck'] as RunQueriesCacheCheckGQLResponse | undefined;
+        if (!response) {
+            return {
+                success: false,
+                results: [],
+                errorMessage: 'No response from server',
+            };
+        }
+        return {
+            success: response.success,
+            results: response.results.map(result => GraphQLDataProvider.toRunQueryCacheCheckResult<T>(result)),
+            errorMessage: response.errorMessage,
+        };
+    }
+
+    /** The GraphQL input for a RunQueriesWithCacheCheck call. */
+    private static buildRunQueriesCacheCheckInput(params: RunQueryWithCacheCheckParams[], includeDefinition: boolean) {
+        return params.map(item => ({
+            params: {
+                QueryID: item.params.QueryID || null,
+                QueryName: item.params.QueryName || null,
+                CategoryID: item.params.CategoryID || null,
+                CategoryPath: item.params.CategoryPath || null,
+                Parameters: item.params.Parameters || null,
+                MaxRows: item.params.MaxRows ?? null,
+                StartRow: item.params.StartRow ?? null,
+                ForceAuditLog: item.params.ForceAuditLog || false,
+                AuditLogDescription: item.params.AuditLogDescription || null,
+                Enrichment: item.params.Enrichment || null,
+                DataSource: item.params.DataSource || null,
+            },
+            cacheStatus: item.cacheStatus ? {
+                maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
+                rowCount: item.cacheStatus.rowCount,
+                // Only sent when the slot has one (or '' for a slot without): the server skips
+                // the definition check when the field is absent.
+                ...(includeDefinition && item.cacheStatus.definitionHash != null ? { definitionHash: item.cacheStatus.definitionHash } : {}),
+            } : null,
+        }));
+    }
+
+    /** Converts one result row, deserializing the rows of a stale or no_validation result. */
+    private static toRunQueryCacheCheckResult<T>(result: RunQueriesCacheCheckGQLResponse['results'][number]): RunQueryWithCacheCheckResult<T> {
+        const converted: RunQueryWithCacheCheckResult<T> = {
+            queryIndex: result.queryIndex,
+            queryId: result.queryId,
+            status: result.status as 'current' | 'stale' | 'no_validation' | 'error',
+            maxUpdatedAt: result.maxUpdatedAt,
+            rowCount: result.rowCount,
+            errorMessage: result.errorMessage,
+            definitionHash: result.definitionHash ?? undefined,
+        };
+        if ((result.status === 'stale' || result.status === 'no_validation') && result.Results) {
+            converted.results = JSON.parse(result.Results) as T[];
+        }
+        return converted;
+    }
+
+    private static readonly RUN_QUERIES_CACHE_CHECK_GQL = gql`
+        query RunQueriesWithCacheCheckQuery($input: [RunQueryWithCacheCheckInput!]!) {
+            RunQueriesWithCacheCheck(input: $input) {
+                success
+                errorMessage
+                results {
+                    queryIndex
+                    queryId
+                    status
+                    Results
+                    maxUpdatedAt
+                    rowCount
+                    errorMessage
+                    definitionHash
+                }
+            }
+        }
+    `;
+
+    /** The same request for a server that predates query definition hashes. */
+    private static readonly RUN_QUERIES_CACHE_CHECK_GQL_WITHOUT_DEFINITION = gql`
+        query RunQueriesWithCacheCheckQuery($input: [RunQueryWithCacheCheckInput!]!) {
+            RunQueriesWithCacheCheck(input: $input) {
+                success
+                errorMessage
+                results {
+                    queryIndex
+                    queryId
+                    status
+                    Results
+                    maxUpdatedAt
+                    rowCount
+                    errorMessage
+                }
+            }
+        }
+    `;
 
     /**************************************************************************/
     // END ---- IRunQueryProvider
@@ -931,6 +1301,19 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // vs its live base view ('Live', default). Only forward when set so default is unchanged.
                 if (params.DataSource !== undefined)
                     innerParams.DataSource = params.DataSource;
+                // Binary fields (base64 strings) are left out unless requested. Only forward when set
+                // so the default request is unchanged.
+                if (params.IncludeBinaryFields !== undefined)
+                    innerParams.IncludeBinaryFields = params.IncludeBinaryFields;
+                // Only forward when set so the default request is unchanged.
+                if (params.SkipTotalRowCount !== undefined)
+                    innerParams.SkipTotalRowCount = params.SkipTotalRowCount;
+                // AlternateBaseView selects a registered EntityAlternateBaseView by Name, or "" to
+                // force the entity's default BaseView over a saved UserView pin. Also forwards a
+                // ViewEntity pin when ViewEntity itself is not serialized over the wire.
+                const singleEffectiveAbv = GetEffectiveAlternateBaseViewName(params) ?? params.AlternateBaseView;
+                if (singleEffectiveAbv !== undefined)
+                    innerParams.AlternateBaseView = singleEffectiveAbv;
 
                 if (!dynamicView) {
                     innerParams.ExcludeUserViewRunID = params.ExcludeUserViewRunID ? params.ExcludeUserViewRunID : "";
@@ -938,6 +1321,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     innerParams.OverrideExcludeFilter = params.OverrideExcludeFilter ? params.OverrideExcludeFilter : '';
                     innerParams.SaveViewResults = params.SaveViewResults ? params.SaveViewResults : false;
                 }
+                this.applyViewPropertiesToInput(params, innerParams, dynamicView);
 
                 // Include Aggregates if provided
                 if (params.Aggregates && params.Aggregates.length > 0) {
@@ -978,11 +1362,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
                 // Log aggregate request for debugging
                 if (innerParams.Aggregates?.length > 0) {
-                    console.log('[GraphQLDataProvider] Sending RunView with aggregates:', {
-                        entityName: entity,
-                        queryName: qName,
-                        aggregateCount: innerParams.Aggregates.length,
-                        aggregates: innerParams.Aggregates
+                    LogStatusEx({
+                        message: '[GraphQLDataProvider] Sending RunView with aggregates:',
+                        verboseOnly: true,
+                        additionalArgs: [{
+                            entityName: entity,
+                            queryName: qName,
+                            aggregateCount: innerParams.Aggregates.length,
+                            aggregates: innerParams.Aggregates
+                        }]
                     });
                 }
 
@@ -991,11 +1379,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     // Log aggregate response for debugging
                     const responseAggregates = viewData[qName].AggregateResults;
                     if (innerParams.Aggregates?.length > 0) {
-                        console.log('[GraphQLDataProvider] Received aggregate results:', {
-                            entityName: entity,
-                            aggregateResultCount: responseAggregates?.length || 0,
-                            aggregateResults: responseAggregates,
-                            aggregateExecutionTime: viewData[qName].AggregateExecutionTime
+                        LogStatusEx({
+                            message: '[GraphQLDataProvider] Received aggregate results:',
+                            verboseOnly: true,
+                            additionalArgs: [{
+                                entityName: entity,
+                                aggregateResultCount: responseAggregates?.length || 0,
+                                aggregateResults: responseAggregates,
+                                aggregateExecutionTime: viewData[qName].AggregateExecutionTime
+                            }]
                         });
                     }
 
@@ -1027,6 +1419,23 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             LogError(e);
             throw (e)
         }
+    }
+
+    /**
+     * Puts a run's view-property values on its GraphQL input. Only a stored-view run takes them,
+     * and `ServerProperties` never leave the server, so either mistake throws rather than being dropped.
+     */
+    private applyViewPropertiesToInput(params: RunViewParams, input: { Properties?: ViewPropertyValues }, dynamicView: boolean): void {
+        if (params.ServerProperties !== undefined) {
+            throw new Error('ServerProperties are set only by server code; send client values in Properties.');
+        }
+        if (params.Properties === undefined) {
+            return;
+        }
+        if (dynamicView) {
+            throw new Error('Properties apply only to a stored view: run it by ViewID or ViewName.');
+        }
+        input.Properties = params.Properties;
     }
 
     protected async InternalRunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
@@ -1106,6 +1515,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     if (param.DataSource !== undefined) {
                         innerParam.DataSource = param.DataSource;
                     }
+                    if (param.IncludeBinaryFields !== undefined) {
+                        innerParam.IncludeBinaryFields = param.IncludeBinaryFields;
+                    }
+                    if (param.SkipTotalRowCount !== undefined) {
+                        innerParam.SkipTotalRowCount = param.SkipTotalRowCount;
+                    }
+                    const batchEffectiveAbv = GetEffectiveAlternateBaseViewName(param) ?? param.AlternateBaseView;
+                    if (batchEffectiveAbv !== undefined) {
+                        innerParam.AlternateBaseView = batchEffectiveAbv;
+                    }
 
                     if (!dynamicView) {
                         innerParam.ExcludeUserViewRunID = param.ExcludeUserViewRunID || "";
@@ -1113,6 +1532,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         innerParam.OverrideExcludeFilter = param.OverrideExcludeFilter || '';
                         innerParam.SaveViewResults = param.SaveViewResults || false;
                     }
+                    this.applyViewPropertiesToInput(param, innerParam, dynamicView);
 
                     // Include Aggregates if provided
                     if (param.Aggregates && param.Aggregates.length > 0) {
@@ -1207,7 +1627,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     ): Promise<RunViewsWithCacheCheckResponse<T>> {
         try {
             // Build the GraphQL input
-            const input = params.map(item => ({
+            const buildInput = (includeFieldSecurityKey: boolean) => params.map(item => ({
                 params: {
                     EntityName: item.params.EntityName || '',
                     // ExtraFilter/OrderBy are resolved to strings by ProviderBase
@@ -1231,10 +1651,30 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     // a CacheLocal batch routes through this smart-cache-check path, so omitting it silently
                     // downgrades a DataSource:'Materialized' request to a live read.
                     DataSource: item.params.DataSource,
+                    // AlternateBaseView must be forwarded on the smart-cache-check batch transport too
+                    // (including a ViewEntity pin when ViewEntity itself is not serialized over the wire):
+                    // otherwise a CacheLocal batch requesting an alternate base view silently reads BaseView.
+                    AlternateBaseView: GetEffectiveAlternateBaseViewName(item.params) ?? item.params.AlternateBaseView,
+                    // Forwarded on this transport too, so a CacheLocal batch that asked for binary
+                    // fields gets them (the slot fingerprint already distinguishes the two widths).
+                    IncludeBinaryFields: item.params.IncludeBinaryFields,
+                    SkipTotalRowCount: item.params.SkipTotalRowCount,
+                    // BypassCache needs the same forwarding as the fields above, and omitting it INVERTED
+                    // the caller's intent rather than merely losing it. A param that bypasses the cache is
+                    // ineligible for a cache status, so none is attached below —
+                    // and the server reads a missing cacheStatus as "the client has nothing cached", which
+                    // is its cue to answer from the SERVER cache without touching the database. So the
+                    // strongest available "read true database state" arrived as its opposite, and
+                    // BaseEngine.Config(true) in a browser could not escape a stale server slot.
+                    BypassCache: item.params.BypassCache,
                 },
                 cacheStatus: item.cacheStatus ? {
                     maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
                     rowCount: item.cacheStatus.rowCount,
+                    // Lets the server answer "stale" when this user's columns changed but no row did.
+                    // Left out for a server that predates it (see executeRunViewsCacheCheckGQL).
+                    ...(includeFieldSecurityKey && item.cacheStatus.fieldSecurityKey != null
+                        ? { fieldSecurityKey: item.cacheStatus.fieldSecurityKey } : {}),
                 } : null,
             }));
 
@@ -1279,7 +1719,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 }
             `;
 
-            const responseData = await this.ExecuteGQL(query, { input });
+            const responseData = await this.executeRunViewsCacheCheckGQL(query, buildInput);
             const response = responseData?.['RunViewsWithCacheCheck'] as {
                 success: boolean;
                 errorMessage?: string;
@@ -1386,6 +1826,42 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
+    /**
+     * Runs the RunViewsWithCacheCheck query, sending each cache status's `fieldSecurityKey`.
+     *
+     * A server older than the field-security key rejects the field. The call is then retried once
+     * without it (the server falls back to row-only validation), and the field is left out of later
+     * calls for {@link DEFINITION_HASH_RETRY_MS} before it is tried again, the same pattern as the
+     * query definition hash.
+     *
+     * @param query - The RunViewsWithCacheCheck document
+     * @param buildInput - Builds the `input` variable, with or without the key
+     */
+    private async executeRunViewsCacheCheckGQL<TInput>(query: string, buildInput: (includeFieldSecurityKey: boolean) => TInput): Promise<Record<string, unknown> | null | undefined> {
+        const sendKey = this._fieldSecurityKeyUnsupportedUntil == null || Date.now() >= this._fieldSecurityKeyUnsupportedUntil;
+        try {
+            return await this.ExecuteGQL(query, { input: buildInput(sendKey) });
+        } catch (e) {
+            if (!sendKey || !GraphQLDataProvider.isSchemaRejection(e, GraphQLDataProvider.UNSUPPORTED_FIELD_SECURITY_KEY_ERRORS)) {
+                throw e;
+            }
+            this._fieldSecurityKeyUnsupportedUntil = Date.now() + GraphQLDataProvider.DEFINITION_HASH_RETRY_MS;
+            LogStatusEx({ message: 'RunViewsWithCacheCheck: the server does not support field-security cache keys — validating cached views by rows only', verboseOnly: true });
+            return await this.ExecuteGQL(query, { input: buildInput(false) });
+        }
+    }
+
+    /**
+     * When a server last rejected `fieldSecurityKey`, the time (ms) until which it is left out of
+     * RunViewsWithCacheCheck calls. Null while the server is assumed to support it.
+     */
+    private _fieldSecurityKeyUnsupportedUntil: number | null = null;
+
+    /** The error a server whose schema predates `fieldSecurityKey` returns: the input field fails variable coercion. */
+    private static readonly UNSUPPORTED_FIELD_SECURITY_KEY_ERRORS: ReadonlyArray<{ Code: string; Message: string }> = [
+        { Code: 'BAD_USER_INPUT', Message: 'Field "fieldSecurityKey" is not defined by type "RunViewCacheStatusInput"' },
+    ];
+
     protected async getEntityNameAndUserView(params: RunViewParams, contextUser?: UserInfo): Promise<{entityName: string, v: MJUserViewEntityExtended}> {
         let entityName: string;
         let v: MJUserViewEntityExtended;
@@ -1426,9 +1902,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // If so, we need to include all fields since the caller didn't specify the fields they want
             // otherwise, we include the fields that are part of the view definition.
             if (dynamicView) {
-                // include all fields since no fields were passed in
+                // include all fields since no fields were passed in — except binary fields
+                // (large base64 values), which are fetched only when IncludeBinaryFields is set
                 e.Fields.forEach(f => {
-                    if (!f.IsBinaryFieldType) {
+                    if (!f.IsBinaryFieldType || params.IncludeBinaryFields === true) {
                       fieldList.push(SharedFieldMapper.MapFieldName(f.CodeName));
                     }
                 });
@@ -1450,6 +1927,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         if (!c.EntityField) {
                             // this can happen if a field was previously included in a view, but is no longer part of the entity
                             // simply don't include it in the field list
+                        }
+                        else if (c.EntityField.IsBinaryFieldType && params.IncludeBinaryFields !== true) {
+                            // binary columns are fetched only on request — the server leaves them
+                            // out of a saved view's column list too, so selecting one here would
+                            // hydrate a null instead of a not-loaded field
                         }
                         else
                             fieldList.push(SharedFieldMapper.MapFieldName(c.EntityField.CodeName));
@@ -1503,31 +1985,94 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @param entityName the name of the entity to check
      * @param KeyValuePairs the KeyValuePairs of the record to check
      */
-    public async GetRecordDependencies(entityName: string, primaryKey: CompositeKey): Promise<RecordDependency[]> {
+    public async GetRecordDependencies(
+        entityName: string,
+        primaryKey: CompositeKey,
+        _contextUser?: UserInfo | GetRecordDependenciesOptions,
+        options?: GetRecordDependenciesOptions
+    ): Promise<RecordDependency[]> {
         try {
+            const resolvedOptions =
+                options !== undefined
+                    ? options
+                    : _contextUser && !(_contextUser instanceof UserInfo) && !('UserRoles' in _contextUser) && !('Email' in _contextUser)
+                      ? (_contextUser as GetRecordDependenciesOptions)
+                      : undefined;
+
             // execute the gql query to get the dependencies
-            const query = gql`query GetRecordDependenciesQuery ($entityName: String!, $CompositeKey: CompositeKeyInputType!) {
-                GetRecordDependencies(entityName: $entityName, CompositeKey: $CompositeKey) {
+            const query = resolvedOptions
+                ? gql`query GetRecordDependenciesQuery ($entityName: String!, $CompositeKey: CompositeKeyInputType!, $options: RecordDependencyOptionsInput) {
+                GetRecordDependencies(entityName: $entityName, CompositeKey: $CompositeKey, options: $options) {
                     EntityName
                     RelatedEntityName
                     FieldName
-                    CompositeKey {
+                    FieldDisplayName
+                    PrimaryKey {
                         KeyValuePairs {
                             FieldName
                             Value
                         }
                     }
+                    IsSoftLink
+                    EntityIDFieldName
                 }
             }`
+                : gql`query GetRecordDependenciesQuery ($entityName: String!, $CompositeKey: CompositeKeyInputType!) {
+                GetRecordDependencies(entityName: $entityName, CompositeKey: $CompositeKey) {
+                    EntityName
+                    RelatedEntityName
+                    FieldName
+                    FieldDisplayName
+                    PrimaryKey {
+                        KeyValuePairs {
+                            FieldName
+                            Value
+                        }
+                    }
+                    IsSoftLink
+                    EntityIDFieldName
+                }
+            }`;
 
             // now we have our query built, execute it
-            const vars = {
+            const vars: {
+                entityName: string;
+                CompositeKey: { KeyValuePairs: KeyValuePair[] };
+                options?: GetRecordDependenciesOptions;
+            } = {
                 entityName: entityName,
-                CompositeKey: {KeyValuePairs: this.ensureKeyValuePairValueIsString(primaryKey.KeyValuePairs)}
+                CompositeKey: { KeyValuePairs: this.ensureKeyValuePairValueIsString(primaryKey.KeyValuePairs) },
+                ...(resolvedOptions ? { options: resolvedOptions } : {}),
             };
             const data = await this.ExecuteGQL(query, vars);
 
-            return data?.GetRecordDependencies; // shape of the result should exactly match the RecordDependency type
+            if (data?.GetRecordDependencies && Array.isArray(data.GetRecordDependencies)) {
+                return data.GetRecordDependencies.map((raw: {
+                    EntityName: string;
+                    RelatedEntityName: string;
+                    FieldName: string;
+                    FieldDisplayName?: string | null;
+                    PrimaryKey?: { KeyValuePairs?: KeyValuePair[] };
+                    IsSoftLink?: boolean | null;
+                    EntityIDFieldName?: string | null;
+                }): RecordDependency => {
+                    const dep = new RecordDependency();
+                    dep.EntityName = raw.EntityName;
+                    dep.RelatedEntityName = raw.RelatedEntityName;
+                    dep.FieldName = raw.FieldName;
+                    dep.FieldDisplayName = raw.FieldDisplayName ?? undefined;
+                    const kvps = (raw.PrimaryKey?.KeyValuePairs ?? []).map(kv => new KeyValuePair(kv.FieldName, kv.Value));
+                    const pk = new CompositeKey(kvps);
+                    if (pk.KeyValuePairs.length === 0 && kvps.length > 0) {
+                        pk.KeyValuePairs = kvps;
+                    }
+                    dep.PrimaryKey = pk;
+                    dep.IsSoftLink = raw.IsSoftLink ?? undefined;
+                    dep.EntityIDFieldName = raw.EntityIDFieldName ?? undefined;
+                    return dep;
+                });
+            }
+            return [];
         }
         catch (e) {
             LogError(e);
@@ -1701,8 +2246,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * key validation still runs in `ProviderBase.RouteOperation` before this is called.
      */
     protected override async InternalRouteOperation<TInput = unknown, TOutput = unknown>(operationKey: string, input: TInput, options: RemoteOpInvokeOptions): Promise<RemoteOpResult<TOutput>> {
-        const mutation = gql`mutation ExecuteRemoteOperation($operationKey: String!, $inputJSON: String!, $invokeMode: String!, $progressChannelId: String) {
-            ExecuteRemoteOperation(input: { operationKey: $operationKey, inputJSON: $inputJSON, invokeMode: $invokeMode, progressChannelId: $progressChannelId }) {
+        const mutation = gql`mutation ExecuteRemoteOperation($operationKey: String!, $inputJSON: String!, $invokeMode: String!, $progressChannelId: String, $contractFingerprint: String) {
+            ExecuteRemoteOperation(input: { operationKey: $operationKey, inputJSON: $inputJSON, invokeMode: $invokeMode, progressChannelId: $progressChannelId, contractFingerprint: $contractFingerprint }) {
                 success
                 resultCode
                 outputJSON
@@ -1744,6 +2289,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 inputJSON: JSON.stringify(input ?? null),
                 invokeMode: options.mode ?? 'attached',
                 progressChannelId: progressChannelId ?? null,
+                contractFingerprint: options.contractFingerprint ?? null,
             });
             const r = data?.ExecuteRemoteOperation;
             if (!r) {
@@ -1836,7 +2382,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * server's own `ReadableFields___`; see {@link ApplyServerFieldAccess}.
      */
     private getDeniedReadFieldNamesForCurrentUser(entityInfo: EntityInfo): Set<string> {
-        if (!entityInfo?.EnableFieldLevelSecurity || !this.CurrentUser) {
+        if (!entityInfo?.FieldLevelSecurityApplies || !this.CurrentUser) {
             return new Set<string>();
         }
         return entityInfo.GetDeniedReadFields(this.CurrentUser);
@@ -1858,7 +2404,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * non-nullable column is broken on such a server regardless.
      */
     private fieldSecurityTransportSelection(entityInfo: EntityInfo): string {
-        return entityInfo?.EnableFieldLevelSecurity ? ReadableFieldsTransportKey : '';
+        return entityInfo?.FieldLevelSecurityApplies ? ReadableFieldsTransportKey : '';
     }
 
     /**
@@ -1911,11 +2457,156 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return row;
     }
 
+    private _isaParentPreSaveSnapshot = new WeakMap<
+        BaseEntity,
+        Map<string, { dirty: boolean; value: unknown; oldValue: unknown }>
+    >();
+
+    private getParentPreSaveFieldSnapshot(
+        entity: BaseEntity,
+        field: EntityField
+    ): { dirty: boolean; value: unknown; oldValue: unknown } | undefined {
+        const snapshot = this._isaParentPreSaveSnapshot.get(entity);
+        if (!snapshot) {
+            return undefined;
+        }
+        const fSnap = snapshot.get(field.Name);
+        if (!fSnap) {
+            return undefined;
+        }
+        // If a prior chain save aborted after IsParentEntitySave (before provider.Save(leaf) ran)
+        // and the caller subsequently reverted or reloaded this field on the parent, the field's
+        // current value no longer matches the value captured when IsParentEntitySave finalized it.
+        // Evict only the mismatched field entry so other dirty fields on the same parent remain intact.
+        if (field.Value !== fSnap.value) {
+            snapshot.delete(field.Name);
+            if (snapshot.size === 0) {
+                this._isaParentPreSaveSnapshot.delete(entity);
+            }
+            return undefined;
+        }
+        return fSnap;
+    }
+
+    /**
+     * Clears any pre-save dirty/OldValue snapshots recorded for `entity`'s `ISAParent` chain.
+     */
+    public ClearISAParentPreSaveSnapshots(entity: BaseEntity): void {
+        let p = entity.ISAParent;
+        while (p) {
+            this._isaParentPreSaveSnapshot.delete(p);
+            p = p.ISAParent;
+        }
+    }
+
+    /**
+     * Checks whether `field` is dirty on `entity` or, for IS-A child entities where parent
+     * fields are mirrored as virtual fields, on any ancestor in the `ISAParent` chain.
+     */
+    public IsFieldDirtyOnChain(entity: BaseEntity, field: EntityField): boolean {
+        return this.isFieldDirtyOnChain(entity, field);
+    }
+
+    private isFieldDirtyOnChain(entity: BaseEntity, field: EntityField): boolean {
+        const snap = this.getParentPreSaveFieldSnapshot(entity, field);
+        if (snap?.dirty) {
+            return true;
+        }
+        if (entity.ISAParent && entity.EntityInfo?.ParentEntityFieldNames?.has(field.Name)) {
+            const parentField = entity.ISAParent.Fields.find(pf => pf.Name === field.Name);
+            if (parentField) {
+                return this.isFieldDirtyOnChain(entity.ISAParent, parentField) || field.Dirty;
+            }
+        }
+        return field.Dirty;
+    }
+
+    /**
+     * Retrieves the pre-mutation `OldValue` for `field` on `entity`, consulting the `ISAParent`
+     * chain for the authoritative `OldValue` of parent-owned fields.
+     */
+    private getFieldOldValueOnChain(entity: BaseEntity, field: EntityField): unknown {
+        const snap = this.getParentPreSaveFieldSnapshot(entity, field);
+        if (snap !== undefined) {
+            return snap.oldValue;
+        }
+        if (entity.ISAParent && entity.EntityInfo?.ParentEntityFieldNames?.has(field.Name)) {
+            const parentField = entity.ISAParent.Fields.find(pf => pf.Name === field.Name);
+            if (parentField) {
+                return this.getFieldOldValueOnChain(entity.ISAParent, parentField);
+            }
+        }
+        return field.OldValue;
+    }
+
+    /**
+     * Merges a delta GraphQL mutation response (`converted`) onto the entity's currently loaded
+     * in-memory field map (`entity.GetAll()`) so `BaseEntity.finalizeSave()` retains clean loaded
+     * fields without marking them `NotLoaded`, while keeping previously `NotLoaded` fields absent.
+     *
+     * Fields that are denied read access for the current user are stripped from the base map, and
+     * for any field where `Name !== CodeName` (e.g. `'First Name'` vs `'First_Name'`) whose
+     * `CodeName` arrived in `converted`, the pre-save `Name` key is removed so the server's
+     * returned value is authoritative without duplicate keys.
+     */
+    private mergeDeltaResponseWithEntity(
+        entity: BaseEntity,
+        converted: Record<string, unknown>,
+        isDeniedRead: (fieldName: string) => boolean
+    ): Record<string, unknown> {
+        if (!converted || typeof converted !== 'object' || typeof entity.GetAll !== 'function') {
+            return converted;
+        }
+        const base: Record<string, unknown> = { ...(entity.GetAll() as Record<string, unknown>) };
+        for (const field of entity.Fields) {
+            if (isDeniedRead(field.Name)) {
+                delete base[field.Name];
+                delete base[field.CodeName];
+                continue;
+            }
+            if (field.Name !== field.CodeName && Object.prototype.hasOwnProperty.call(converted, field.CodeName)) {
+                delete base[field.Name];
+            }
+        }
+        return { ...base, ...converted };
+    }
+
+    /**
+     * Persists a `BaseEntity` over GraphQL via the generated `Create<Type>` or `Update<Type>` mutation.
+     *
+     * ### Delta-Only Update Wire Protocol
+     * - **Create (`!entity.IsSaved` or IS-A promotion create)**: Sends all loaded, writable,
+     *   non-denied-read fields in `vars.input` (plus the shared primary key on an IS-A promotion create),
+     *   ensuring client-initialized `NewRecord()` defaults and required `Create*Input` fields are transmitted,
+     *   and requests all readable fields in the mutation selection set.
+     * - **Update (`entity.IsSaved && !isaPromotionCreate`)**: Sends **only** primary keys and dirty
+     *   writable fields (`f.IsPrimaryKey || (!f.ReadOnly && !f.NotLoaded && f.Dirty)`) in both
+     *   `vars.input` and `vars.input.OldValues___`. Clean fields, read-only fields (`__mj_CreatedAt`,
+     *   `__mj_UpdatedAt`), virtual fields, and `NotLoaded` fields are omitted from the mutation input.
+     * - **Response selection on Update**: Requests primary keys, `__mj_CreatedAt` / `__mj_UpdatedAt`,
+     *   dirty fields, server-derived fields, and every other loaded non-binary field, so a concurrent
+     *   change the server preserved on an untouched column reaches the entity. `NotLoaded` and binary
+     *   fields are not requested. The response is merged onto `entity.GetAll()` before
+     *   `ApplyServerFieldAccess` so `BaseEntity.finalizeSave()` preserves `NotLoaded` on unloaded fields.
+     * - **`datestamps_only` return mode**: Requests only primary keys and `__mj_CreatedAt` /
+     *   `__mj_UpdatedAt` and merges the response onto `entity.GetAll()`.
+     * - **Forced full save (`options?.IgnoreDirtyState === true`)**: Bypasses the dirty-only filter on
+     *   `Update`, sending all loaded writable fields and requesting all readable fields.
+     */
     public async Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}> {
         // IS-A parent entity save: the full ORM pipeline (permissions, validation, events)
         // already ran in BaseEntity._InnerSave(). Skip the network call — the leaf entity's
         // mutation will include all chain fields. Return current entity state.
         if (options?.IsParentEntitySave) {
+            const snapshot = new Map<string, { dirty: boolean; value: unknown; oldValue: unknown }>();
+            for (const f of entity.Fields) {
+                snapshot.set(f.Name, {
+                    dirty: this.isFieldDirtyOnChain(entity, f),
+                    value: f.Value,
+                    oldValue: this.getFieldOldValueOnChain(entity, f),
+                });
+            }
+            this._isaParentPreSaveSnapshot.set(entity, snapshot);
             const result = new BaseEntityResult();
             result.StartedAt = new Date();
             result.EndedAt = new Date();
@@ -1927,6 +2618,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
 
         const result = new BaseEntityResult();
+        let deferParentSnapshotCleanup = false;
         try {
             entity.RegisterTransactionPreprocessing(); // as of the time of writing, this isn't technically needed because we are not doing any async preprocessing, but it is good to have it here for future use in case something is added with async between here and the TransactionItem being added.
 
@@ -1958,6 +2650,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // parent is saved: a whole-chain create (new parent + new child) keeps sending no key,
             // so the server still mints the root identity and pays no parent lookup on that path.
             //
+            // On an Update (when options.IgnoreDirtyState is not set), only primary keys and dirty
+            // writable fields are included in vars.input (generated Update*Input types mark all
+            // non-PK fields optional).
+            //
             // NotLoaded fields are OMITTED from the mutation input entirely (legal — the
             // generated Update input types mark every non-PK field optional): their value is
             // a construction artifact the user was never shown, and the NOT-NULL fabrication
@@ -1969,20 +2665,72 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // NotLoaded on the refresh, and a denied NOT-NULL column no longer breaks response
             // serialization.
             //
-            // Only the READ verb is filtered here. A readable-but-update-denied field must
-            // still be SENT, or the server cannot reject an attempt to change it — its check
-            // is dirty-only (BaseEntity.CheckFieldLevelUpdatePermissions), so an unchanged
-            // value round-trips safely and a changed one is refused. Create-denied values are
+            // Only the READ verb is filtered here. A readable-but-update-denied field that was
+            // dirtied is still SENT so the server can reject the attempt to change it — its check
+            // is dirty-only (BaseEntity.CheckFieldLevelUpdatePermissions). Create-denied values are
             // dropped server-side (ApplyFieldLevelCreateSuppression). Filtering either verb
             // here would replace a visible refusal with a silent success.
             const isaPromotionCreate = !entity.IsSaved && entity.EntityInfo.IsChildType && entity.ISAParent?.IsSaved === true;
+            const isUpdate = entity.IsSaved && !isaPromotionCreate;
+            const filterToDirtyOnly = isUpdate && !options?.IgnoreDirtyState;
+            const effectiveReturnMode = options?.SaveReturnMode ?? entity.EntityInfo.SaveReturnMode;
+            const shouldMergeDeltaResponse = filterToDirtyOnly || effectiveReturnMode === 'datestamps_only';
             const deniedReadFields = this.getDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
             const isDeniedRead = (fieldName: string) => deniedReadFields.has(fieldName.trim().toLowerCase());
+            // Exclude non-Active (Deprecated / Disabled) fields from Save() unless the caller
+            // explicitly modified them, avoiding false-positive BaseEntity.Get / BaseEntity.SetMany
+            // deprecation warnings on Create or forced full saves.
+            const isNonActiveField = (f: EntityField) =>
+                Boolean(f.EntityFieldInfo.Status && f.EntityFieldInfo.Status !== 'Active');
+            const isFieldWrittenForSave = (f: EntityField): boolean => {
+                if (this.isFieldDirtyOnChain(entity, f)) {
+                    return true;
+                }
+                if (!isUpdate) {
+                    if (!f.NeverSet) {
+                        return true;
+                    }
+                    if (entity.ISAParent && entity.EntityInfo.ParentEntityFieldNames?.has(f.Name)) {
+                        const parentField = entity.ISAParent.Fields.find(pf => pf.Name === f.Name);
+                        if (parentField && !parentField.NeverSet) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            };
             const filteredFields = entity.Fields.filter(f =>
                 (!f.ReadOnly || (f.IsPrimaryKey && (entity.IsSaved || isaPromotionCreate))) &&
-                (f.IsPrimaryKey || (!f.NotLoaded && !isDeniedRead(f.Name))));
+                (f.IsPrimaryKey || (
+                    !f.NotLoaded &&
+                    !isDeniedRead(f.Name) &&
+                    (!isNonActiveField(f) || isFieldWrittenForSave(f)) &&
+                    (!filterToDirtyOnly || this.isFieldDirtyOnChain(entity, f))
+                )));
+            const serverDerivedFields = GraphQLDataProvider._serverDerivedUpdateFieldsByEntity.get(entity.EntityInfo.Name);
+            const returnFields = entity.Fields.filter(f => {
+                if (isDeniedRead(f.Name)) {
+                    return false;
+                }
+                if (effectiveReturnMode === 'datestamps_only') {
+                    return f.IsPrimaryKey || f.EntityFieldInfo.IsSpecialDateField;
+                }
+                if (filterToDirtyOnly) {
+                    // Every loaded non-binary field comes back, not only the dirty ones: the server
+                    // merges a concurrent change to an untouched column into the saved row, and the
+                    // entity can only reflect that change if the response carries the column.
+                    return (
+                        f.IsPrimaryKey ||
+                        f.EntityFieldInfo.IsSpecialDateField ||
+                        this.isFieldDirtyOnChain(entity, f) ||
+                        Boolean(serverDerivedFields?.has(f.Name)) ||
+                        (!f.NotLoaded && !f.EntityFieldInfo.IsBinaryFieldType)
+                    );
+                }
+                return true;
+            });
                 const inner = `                ${mutationName}(input: $input) {
-                ${entity.Fields.filter(f => !isDeniedRead(f.Name))
+                ${returnFields
                     .map(f => SharedFieldMapper.MapFieldName(f.CodeName)).join("\n                    ")}
                     ${this.fieldSecurityTransportSelection(entity.EntityInfo)}
             }`
@@ -2051,26 +2799,31 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 };
             }
 
-            // now add an OldValues prop to the vars IF the type === 'update' and the options.SkipOldValuesCheck === false
-            if (type.trim().toLowerCase() === 'update' &&
-                options.SkipOldValuesCheck === false) {
-                const ov = [];
-                entity.Fields.forEach(f => {
-                    // A NotLoaded field has no real old value — sending a fabricated null
-                    // would feed the server's conflict detection fiction. Omit it entirely.
-                    if (f.NotLoaded && !f.IsPrimaryKey) return;
-                    let val = null;
-                    if (f.OldValue !== null && f.OldValue !== undefined) {
-                        if (f.EntityFieldInfo.TSType === EntityFieldTSType.Date) 
-                            val = f.OldValue.getTime().toString();
+            // On Update (when SkipOldValuesCheck === false), attach OldValues___ for server-side
+            // optimistic concurrency checking.
+            // Delta-only OldValues___: on normal updates (!options?.IgnoreDirtyState), include ONLY
+            // primary keys and dirty writable fields (matching the delta sent in vars.input),
+            // omitting clean fields, read-only fields, virtual fields, and NotLoaded fields.
+            // When options?.IgnoreDirtyState is true, include all loaded writable fields alongside
+            // primary keys.
+            if (isUpdate && options?.SkipOldValuesCheck === false) {
+                const oldValueFields = options?.IgnoreDirtyState
+                    ? entity.Fields.filter(f => f.IsPrimaryKey || (!f.NotLoaded && !f.ReadOnly && !isDeniedRead(f.Name)))
+                    : entity.Fields.filter(f => f.IsPrimaryKey || (!f.NotLoaded && !f.ReadOnly && !isDeniedRead(f.Name) && this.isFieldDirtyOnChain(entity, f)));
+                const ov = oldValueFields.map(f => {
+                    const rawOldVal = this.getFieldOldValueOnChain(entity, f);
+                    let val: string | null = null;
+                    if (rawOldVal !== null && rawOldVal !== undefined) {
+                        if (f.EntityFieldInfo.TSType === EntityFieldTSType.Date)
+                            val = (rawOldVal instanceof Date ? rawOldVal.getTime() : new Date(String(rawOldVal)).getTime()).toString();
                         else if (f.EntityFieldInfo.TSType === EntityFieldTSType.Boolean)
-                            val = f.OldValue === true ? "1" : "0";
-                        else if (typeof f.OldValue !== "string")
-                            val = f.OldValue.toString();
+                            val = rawOldVal === true ? "1" : "0";
+                        else if (typeof rawOldVal !== "string")
+                            val = String(rawOldVal);
                         else
-                            val = f.OldValue;
+                            val = rawOldVal;
                     }
-                    ov.push({Key: SharedFieldMapper.MapFieldName(f.CodeName), Value: val }); // pass ALL old values to server, slightly inefficient but we want full record
+                    return { Key: SharedFieldMapper.MapFieldName(f.CodeName), Value: val };
                 });
                 vars.input['OldValues___'] = ov; // add the OldValues prop to the input property that is part of the vars already
             }
@@ -2082,6 +2835,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         inputType: mutationName + 'Input!'
                     }
                 ];
+                const extraData: {
+                    mutationName: string;
+                    mutationInputTypes: { varName: string; inputType: string }[];
+                    ignoreDirtyState?: boolean;
+                } = {
+                    mutationName,
+                    mutationInputTypes: mutationInputTypes
+                };
+                if (options?.IgnoreDirtyState) {
+                    extraData.ignoreDirtyState = true;
+                }
 
                 entity.RaiseReadyForTransaction(); // let the entity know we're ready to be part of the transaction
 
@@ -2090,10 +2854,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 entity.TransactionGroup.AddTransaction(new TransactionItem(        entity, 
                                                                                    result.Type === 'create' ? 'Create' : 'Update', 
                                                                                    inner, vars, 
-                                                                                   {
-                                                                                      mutationName,
-                                                                                      mutationInputTypes: mutationInputTypes
-                                                                                   },
+                                                                                   extraData,
                                                                                    (results: any, success: boolean) => {
                     // we get here whenever the transaction group does gets around to committing
                     // our query. We need to update our entity with the values that were returned
@@ -2103,9 +2864,20 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         // got our data, send it back to the caller, which is the entity object
                         // and that object needs to update itself from this data.
                         result.Success = true;
+                        const converted = this.ConvertBackToMJFields(results);
+                        const merged = shouldMergeDeltaResponse
+                            ? this.mergeDeltaResponseWithEntity(entity, converted, isDeniedRead)
+                            : converted;
                         // Prune stale-metadata nulls so the entity's post-save refresh
                         // (finalizeSave) sees key-omission and marks NotLoaded correctly.
-                        result.NewValues = this.ApplyServerFieldAccess(entity.EntityInfo, this.ConvertBackToMJFields(results));
+                        const hydrated = this.ApplyServerFieldAccess(entity.EntityInfo, merged);
+                        if (shouldMergeDeltaResponse && results && typeof results === 'object') {
+                            for (const key of Object.keys(results)) {
+                                delete results[key];
+                            }
+                            Object.assign(results, hydrated);
+                        }
+                        result.NewValues = hydrated;
                     }
                     else {
                         // the transaction failed, nothing to update, but we need to call Reject so the
@@ -2115,17 +2887,23 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     }
                 }));
 
+                deferParentSnapshotCleanup = true;
                 return true; // part of a TG always return true after we setup the transaction group item above
             }
             else {
-                // not part of a transaction group, so just go for it and send across our GQL
-                const d = await this.ExecuteGQL(outer, vars)
+                // not part of a transaction group, so just go for it and send across our GQL. The
+                // mutation writes this entity, so only its dedup-linger entries are dropped.
+                const d = await this.ExecuteGQL(outer, vars, true, { AffectedEntityNames: [entity.EntityInfo.Name] })
                 if (d && d[mutationName]) {
                     result.Success = true;
                     result.EndedAt = new Date();
+                    const converted = this.ConvertBackToMJFields(d[mutationName]);
+                    const merged = shouldMergeDeltaResponse
+                        ? this.mergeDeltaResponseWithEntity(entity, converted, isDeniedRead)
+                        : converted;
                     // Prune stale-metadata nulls so finalizeSave's re-hydration sees
                     // key-omission and marks NotLoaded correctly on the refresh.
-                    result.NewValues = this.ApplyServerFieldAccess(entity.EntityInfo, this.ConvertBackToMJFields(d[mutationName]));
+                    result.NewValues = this.ApplyServerFieldAccess(entity.EntityInfo, merged);
                     return result.NewValues;
                 }
                 else
@@ -2151,7 +2929,53 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             LogError(e);
             return null;
         }
+        finally {
+            if (!deferParentSnapshotCleanup) {
+                this.ClearISAParentPreSaveSnapshots(entity);
+            }
+        }
     }
+
+    /**
+     * Resolves the `EntityField` on `entity` that one of a CompositeKey's `FieldName`s refers to.
+     *
+     * The direct, case- and whitespace-insensitive name match is the normal path. It misses when
+     * the caller built the key from a HARDCODED column name — `CompositeKey.FromID(id)` invents
+     * `'ID'` — while the entity's real primary key is called something else (`cst_key`,
+     * `individual_id`). Every MJ core entity happens to be `ID`-keyed, so that mismatch is
+     * invisible across the whole core product and appears only on entities mapped from an
+     * external schema.
+     *
+     * When the key names exactly ONE column and the entity has exactly ONE primary key, the
+     * caller's intent is unambiguous — the single name it supplied can only mean "the primary
+     * key" — so the entity's primary key is used regardless of what the name was. Anything else
+     * (a composite key, or a name that is genuinely not a primary-key column) is a real defect
+     * and is now reported as one, naming the entity and the key it was handed. Previously both
+     * cases dereferenced `undefined` and surfaced as the bare TypeError
+     * `Cannot read properties of undefined (reading 'EntityFieldInfo')`, which says nothing
+     * about which entity or which key name was wrong.
+     */
+    protected ResolvePrimaryKeyField(entity: BaseEntity, keyFieldName: string, keyColumnCount: number): EntityField {
+        // next's indexed, case- and whitespace-insensitive lookup
+        const direct: EntityField | null = entity.GetFieldByName(keyFieldName);
+        if (direct) {
+            return direct;
+        }
+        if (keyColumnCount === 1 && entity.PrimaryKeys.length === 1) {
+            const single: EntityField | undefined = entity.FirstPrimaryKey; // first-pk-ok: guarded on BOTH lengths being 1 — a one-column key against a one-column PK, so the caller's single name can only mean this field
+            // A primary key declared in metadata but absent from the field collection would make
+            // this undefined; fall through to the named error rather than hand back nothing.
+            if (single) {
+                return single;
+            }
+        }
+        const declared: string = entity.EntityInfo.PrimaryKeys.map(pk => pk.Name).join(', ') || '(none)';
+        throw new Error(
+            `Primary key field '${keyFieldName}' does not exist on entity '${entity.EntityInfo.Name}' ` +
+            `(its primary key is: ${declared}). The record key was built with a field name this entity does not have.`
+        );
+    }
+
     public async Load(entity: BaseEntity, primaryKey: CompositeKey, EntityRelationshipsToLoad: string[] = null, user: UserInfo) : Promise<{}> {
         try {
             const vars = {};
@@ -2159,7 +2983,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             let pkeyOuterParamString: string = '';
 
             for (let i = 0; i < primaryKey.KeyValuePairs.length; i++) {
-                const field: EntityFieldInfo = entity.Fields.find(f => f.Name.trim().toLowerCase() === primaryKey.KeyValuePairs[i].FieldName.trim().toLowerCase()).EntityFieldInfo;
+                const field: EntityFieldInfo = this.ResolvePrimaryKeyField(entity, primaryKey.KeyValuePairs[i].FieldName, primaryKey.KeyValuePairs.length).EntityFieldInfo;
                 const val = primaryKey.GetValueByIndex(i);
                 const pkeyGraphQLType: string = field.GraphQLType;
 
@@ -2200,9 +3024,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const deniedReadFields = this.getDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
                 const query = gql`query Single${graphQLTypeName}${rel.length > 0 ? 'Full' : ''} (${pkeyOuterParamString}) {
                 ${graphQLTypeName}(${pkeyInnerParamString}) {
-                                    ${entity.Fields.filter((f) => !f.EntityFieldInfo.IsBinaryFieldType && !deniedReadFields.has(f.Name.trim().toLowerCase()))
+                                    ${entity.EntityInfo.Fields.filter((f) => !deniedReadFields.has(f.Name.trim().toLowerCase())) /* binary fields included: a single-record Load hydrates every readable field, binary values arriving as base64 */
                                       .map((f) => {
-                                        if (f.EntityFieldInfo.Name.trim().toLowerCase().startsWith('__mj_')) {
+                                        if (f.Name.trim().toLowerCase().startsWith('__mj_')) {
                                           // fields that start with __mj_ need to be converted to _mj__ for the GraphQL query
                                           return f.CodeName.replace('__mj_', '_mj__');
                                         } else {
@@ -2265,6 +3089,19 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public async Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo) : Promise<boolean> {
+        // IS-A parent delete: the leaf's delete mutation already deleted the whole chain on the
+        // server, so the parent has nothing left to send. Record the success and return, as
+        // Save() does for IsParentEntitySave (MJ#4864).
+        if (options?.IsParentEntityDelete) {
+            const parentResult = new BaseEntityResult();
+            parentResult.StartedAt = new Date();
+            parentResult.EndedAt = new Date();
+            parentResult.Type = 'delete';
+            parentResult.Success = true;
+            entity.RegisterResultHistoryEntry(parentResult);
+            return true;
+        }
+
         const result = new BaseEntityResult();
         try {
             entity.RegisterTransactionPreprocessing();
@@ -2280,7 +3117,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             let pkeyOuterParamString: string = '';
             let returnValues: string = '';
             for (let kv of entity.PrimaryKey.KeyValuePairs) {
-                const pk = entity.Fields.find(f => f.Name.trim().toLowerCase() === kv.FieldName.trim().toLowerCase()); // get the field for the primary key field
+                // Same resolution as the single-record Load above — one helper so the two cannot drift.
+                const pk: EntityField = this.ResolvePrimaryKeyField(entity, kv.FieldName, entity.PrimaryKey.KeyValuePairs.length);
                 vars[pk.CodeName] = pk.Value;
                 mutationInputTypes.push({varName: pk.CodeName, inputType: pk.EntityFieldInfo.GraphQLType + '!'}); // only used when doing a transaction group, but it is easier to do in this main loop
                 // GraphQL forbids '__'-prefixed arg/field names; sanitize a '__mj_'-prefixed PK to '_mj__' to match
@@ -2364,8 +3202,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 return true;
             }
             else {
-                // no transaction just go for it
-                const d = await this.ExecuteGQL(query, vars)
+                // no transaction just go for it (scoped like Save: the delete writes this entity)
+                const d = await this.ExecuteGQL(query, vars, true, { AffectedEntityNames: [entity.EntityInfo.Name] })
                 if (d && d[queryName]) {
                     const data = d[queryName];
                     for (let key of entity.PrimaryKey.KeyValuePairs) {
@@ -2441,10 +3279,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         else {
             return {
-                DatasetID: "",
+                DatasetID: data?.GetDatasetByName?.DatasetID ?? "",
                 DatasetName: datasetName,
                 Success: false,
-                Status: 'Unknown',
+                Status: data?.GetDatasetByName?.Status || 'Unknown',
                 LatestUpdateDate: null,
                 Results: null
             };
@@ -2465,8 +3303,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
     public async GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetStatusResultType> {
         // If coalescing is enabled and there are no item filters (simple case),
-        // enqueue for batching
-        if (GraphQLDataProvider._datasetStatusCoalesceMs > 0 && !itemFilters) {
+        // enqueue for batching — except for MJ_Metadata when the queue is empty,
+        // because preValidateAndRefresh() checks MJ_Metadata alone before any
+        // engines start, so waiting 10ms in a timer only adds startup latency.
+        if (
+            GraphQLDataProvider._datasetStatusCoalesceMs > 0 &&
+            !itemFilters &&
+            !(datasetName === ProviderBase._mjMetadataDatasetName && GraphQLDataProvider._datasetStatusQueue.length === 0)
+        ) {
             return this.enqueueDatasetStatusCheck(datasetName);
         }
         return this.executeDatasetStatusByName(datasetName, itemFilters);
@@ -2502,7 +3346,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
         // Batch: use GetMultipleDatasetStatusByName
         const names = queue.map(q => q.datasetName);
-        LogStatus(`⚡ [Coalesce] Batching ${names.length} dataset status checks into 1 request: [${names.join(', ')}]`);
+        LogStatusEx({
+            message: `⚡ [Coalesce] Batching ${names.length} dataset status checks into 1 request: [${names.join(', ')}]`,
+            verboseOnly: true
+        });
 
         try {
             const batchQuery = gql`query GetMultipleDatasetStatusByName($DatasetNames: [String!]!) {
@@ -2580,10 +3427,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         else {
             return {
-                DatasetID: "",
+                DatasetID: data?.GetDatasetStatusByName?.DatasetID ?? "",
                 DatasetName: datasetName,
                 Success: false,
-                Status: 'Unknown',
+                Status: data?.GetDatasetStatusByName?.Status || 'Unknown',
                 LatestUpdateDate: null,
                 EntityUpdateDates: null
             };
@@ -2642,6 +3489,41 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                                                          );
         if (data && data.SetRecordFavoriteStatus !== null)
             return data.SetRecordFavoriteStatus.Success;
+    }
+
+    /**
+     * Record names this connection has seen, for synchronous display code. Safe to keep here
+     * because every request on a connection is answered as the same user.
+     */
+    private readonly _recordNames = new EntityRecordNameCache();
+
+    public override async GetCachedRecordName(entityName: string, compositeKey: CompositeKey, loadIfNeeded?: boolean): Promise<string | undefined> {
+        const cached = this._recordNames.Get(entityName, compositeKey);
+        if (!cached && loadIfNeeded) {
+            return this.GetEntityRecordName(entityName, compositeKey);
+        }
+        return cached;
+    }
+
+    public override HasCachedRecordName(entityName: string, compositeKey: CompositeKey): boolean {
+        return this._recordNames.Has(entityName, compositeKey);
+    }
+
+    public override GetCachedRecordNameOnlyIfCached(entityName: string, compositeKey: CompositeKey): string | undefined {
+        return this._recordNames.Get(entityName, compositeKey);
+    }
+
+    public override SetCachedRecordName(entityName: string, compositeKey: CompositeKey, recordName: string): void {
+        this._recordNames.Set(entityName, compositeKey, recordName);
+    }
+
+    public override async GetEntityRecordName(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo, forceRefresh: boolean = false): Promise<string> {
+        return this._recordNames.GetOrFetch(entityName, compositeKey, forceRefresh,
+            () => this.InternalGetEntityRecordName(entityName, compositeKey));
+    }
+
+    public override async GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo, forceRefresh: boolean = false): Promise<EntityRecordNameResult[]> {
+        return this._recordNames.GetOrFetchMany(info, forceRefresh, (uncached) => this.InternalGetEntityRecordNames(uncached));
     }
 
     protected async InternalGetEntityRecordName(entityName: string, primaryKey: CompositeKey): Promise<string> {
@@ -2777,8 +3659,83 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @param refreshTokenIfNeeded 
      * @returns 
      */
-    public static async ExecuteGQL(query: string, variables: any, refreshTokenIfNeeded: boolean = true): Promise<any> {
-        return GraphQLDataProvider.Instance.ExecuteGQL(query, variables, refreshTokenIfNeeded);
+    public static async ExecuteGQL(query: string, variables: any, refreshTokenIfNeeded: boolean = true, options?: ExecuteGQLOptions): Promise<any> {
+        return GraphQLDataProvider.Instance.ExecuteGQL(query, variables, refreshTokenIfNeeded, options);
+    }
+
+    /**
+     * Mints a W3C Trace Context `traceparent` header (`00-<32-hex-traceId>-<16-hex-spanId>-01`).
+     * Reuses `existingTraceId` when provided (e.g. across a `JWT_EXPIRED` retry).
+     */
+    public static MintTraceparent(existingTraceId?: string): { traceparent: string; traceId: string; spanId: string } {
+        const traceId = existingTraceId && /^[0-9a-f]{32}$/i.test(existingTraceId)
+            ? existingTraceId.toLowerCase()
+            : generateHexId(16);
+        const spanId = generateHexId(8);
+        return {
+            traceparent: `00-${traceId}-${spanId}-01`,
+            traceId,
+            spanId,
+        };
+    }
+
+    /**
+     * True when a network diagnostic observer is registered or telemetry is on. Payload sizes are
+     * only measured then, so the JSON serialization never costs anything on an idle client.
+     */
+    private shouldMeasurePayloadSizes(): boolean {
+        if (_networkDiagnosticObservers.size > 0) {
+            return true;
+        }
+        const tm = typeof TelemetryManager !== 'undefined' ? TelemetryManager?.Instance : undefined;
+        return Boolean(tm?.IsEnabled);
+    }
+
+    /** Length of the JSON text of `value`; 0 when it is missing or cannot be serialized. */
+    private static approximateJsonSize(value: unknown): number {
+        if (value == null) {
+            return 0;
+        }
+        try {
+            return JSON.stringify(value)?.length ?? 0;
+        } catch {
+            return 0;
+        }
+    }
+
+    private emitNetworkTelemetry(obs: NetworkDiagnosticObservation): void {
+        try {
+            const suppressed = typeof IsDiagnosticCaptureSuppressed === 'function' && IsDiagnosticCaptureSuppressed();
+            if (!suppressed) {
+                for (const listener of _networkDiagnosticObservers) {
+                    try {
+                        listener(obs);
+                    } catch {
+                        // Never allow diagnostic observers to disrupt network execution
+                    }
+                }
+            }
+            const tm = typeof TelemetryManager !== 'undefined' ? TelemetryManager?.Instance : undefined;
+            if (tm && typeof tm.RecordEvent === 'function' && tm.IsEnabled) {
+                tm.RecordEvent(
+                    'Network',
+                    `GraphQL.${obs.operationKind}.${obs.operationName}`,
+                    {
+                        operationType: obs.operationKind,
+                        operationName: obs.operationName,
+                        traceId: obs.traceId,
+                        retryCount: obs.retryCount,
+                        requestSize: obs.requestBytes,
+                        responseSize: obs.responseBytes,
+                        statusCode: obs.succeeded ? 200 : 500,
+                        status: obs.succeeded ? 200 : 500,
+                    },
+                    obs.durationMs,
+                );
+            }
+        } catch {
+            // Never allow telemetry errors to propagate out of GraphQL transport
+        }
     }
 
     /**
@@ -2801,7 +3758,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         query: string,
         variables: Record<string, unknown>,
         onProgress?: (event: { loaded: number; total: number; percent: number }) => void,
-        refreshTokenIfNeeded: boolean = true
+        refreshTokenIfNeeded: boolean = true,
+        existingTraceId?: string,
+        retryCount: number = 0
     ): Promise<T> {
         if (!this._configData?.URL) {
             throw new Error('GraphQLDataProvider is not configured with a URL.');
@@ -2809,11 +3768,29 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
         const url = this._configData.URL;
         const payload = JSON.stringify({ query, variables });
+        const isMutation = IsGraphQLMutation(query);
+        const operationKind = FirstGraphQLOperationKind(query) ?? 'query';
+        const operationName = ExtractGraphQLOperationName(query);
+        const { traceparent, traceId, spanId } = GraphQLDataProvider.MintTraceparent(existingTraceId);
+        const diagCtx = typeof GetDiagnosticContext === 'function' ? GetDiagnosticContext() : undefined;
+        const startTime = performance.now();
+        const variableKeys = variables && typeof variables === 'object' ? Object.keys(variables) : [];
+
+        const settle = () => {
+            // see ExecuteGQL — a mutation can write server-side without a local BaseEntity event
+            if (isMutation) {
+                this.InvalidateRunViewDedupCache();
+            }
+        };
 
         return new Promise<T>((resolve, reject) => {
             const xhr = new XMLHttpRequest();
             xhr.open('POST', url);
             xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.setRequestHeader('traceparent', traceparent);
+            if (diagCtx?.sessionId) {
+                xhr.setRequestHeader('x-mj-diagnostic-session', diagCtx.sessionId);
+            }
 
             if (this._sessionId) {
                 xhr.setRequestHeader('x-session-id', this._sessionId);
@@ -2841,6 +3818,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
 
             xhr.onload = async () => {
+                const durationMs = performance.now() - startTime;
+                const responseBytes = xhr.responseText ? xhr.responseText.length : 0;
                 if (xhr.status >= 200 && xhr.status < 300) {
                     try {
                         const json = JSON.parse(xhr.responseText) as { data?: T; errors?: Array<{ message?: string; extensions?: { code?: string } }> };
@@ -2849,26 +3828,90 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             const code = error?.extensions?.code?.toUpperCase()?.trim();
                             if (code === 'JWT_EXPIRED' && refreshTokenIfNeeded) {
                                 await this.RefreshToken();
-                                resolve(await this.ExecuteGQLWithProgress<T>(query, variables, onProgress, false));
+                                resolve(await this.ExecuteGQLWithProgress<T>(query, variables, onProgress, false, traceId, retryCount + 1));
                                 return;
                             }
+                            this.emitNetworkTelemetry({
+                                operationName,
+                                operationKind,
+                                traceId,
+                                spanId,
+                                traceparent,
+                                durationMs,
+                                requestBytes: payload.length,
+                                responseBytes,
+                                succeeded: false,
+                                errorCode: code,
+                                errorMessage: error.message || 'GraphQL Error',
+                                retryCount,
+                                variableKeys,
+                                timestamp: Date.now(),
+                            });
                             reject(new Error(error.message || 'GraphQL Error'));
                         } else {
+                            this.emitNetworkTelemetry({
+                                operationName,
+                                operationKind,
+                                traceId,
+                                spanId,
+                                traceparent,
+                                durationMs,
+                                requestBytes: payload.length,
+                                responseBytes,
+                                succeeded: true,
+                                retryCount,
+                                variableKeys,
+                                timestamp: Date.now(),
+                            });
                             resolve(json.data as T);
                         }
                     } catch (err) {
                         reject(err);
                     }
                 } else {
+                    this.emitNetworkTelemetry({
+                        operationName,
+                        operationKind,
+                        traceId,
+                        spanId,
+                        traceparent,
+                        durationMs,
+                        requestBytes: payload.length,
+                        responseBytes,
+                        succeeded: false,
+                        errorCode: `HTTP_${xhr.status}`,
+                        errorMessage: `HTTP error ${xhr.status}: ${xhr.statusText}`,
+                        retryCount,
+                        variableKeys,
+                        timestamp: Date.now(),
+                    });
                     reject(new Error(`HTTP error ${xhr.status}: ${xhr.statusText}`));
                 }
             };
 
-            xhr.onerror = () => reject(new Error('Network error during request'));
+            xhr.onerror = () => {
+                this.emitNetworkTelemetry({
+                    operationName,
+                    operationKind,
+                    traceId,
+                    spanId,
+                    traceparent,
+                    durationMs: performance.now() - startTime,
+                    requestBytes: payload.length,
+                    responseBytes: 0,
+                    succeeded: false,
+                    errorCode: 'NETWORK_ERROR',
+                    errorMessage: 'Network error during request',
+                    retryCount,
+                    variableKeys,
+                    timestamp: Date.now(),
+                });
+                reject(new Error('Network error during request'));
+            };
             xhr.onabort = () => reject(new Error('Request aborted'));
 
             xhr.send(payload);
-        });
+        }).finally(settle);
     }
 
     /**
@@ -2876,14 +3919,57 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @param query 
      * @param variables 
      * @param refreshTokenIfNeeded 
+     * @param options - see {@link ExecuteGQLOptions}
      * @returns 
      */
-    public async ExecuteGQL(query: string, variables: any, refreshTokenIfNeeded: boolean = true): Promise<any> {
+    public async ExecuteGQL(query: string, variables: any, refreshTokenIfNeeded: boolean = true, options?: ExecuteGQLOptions): Promise<any> {
+        return this.executeGQLInternal(query, variables, refreshTokenIfNeeded, options, undefined, 0);
+    }
+
+    private async executeGQLInternal(
+        query: string,
+        variables: any,
+        refreshTokenIfNeeded: boolean,
+        options: ExecuteGQLOptions | undefined,
+        existingTraceId: string | undefined,
+        retryCount: number
+    ): Promise<any> {
+        const isMutation = IsGraphQLMutation(query);
+        const operationKind = FirstGraphQLOperationKind(query) ?? 'query';
+        const operationName = ExtractGraphQLOperationName(query);
+        const { traceparent, traceId, spanId } = GraphQLDataProvider.MintTraceparent(existingTraceId);
+        const diagCtx = typeof GetDiagnosticContext === 'function' ? GetDiagnosticContext() : undefined;
+        const requestHeaders: Record<string, string> = {
+            traceparent,
+            ...(diagCtx?.sessionId ? { 'x-mj-diagnostic-session': diagCtx.sessionId } : {}),
+        };
+        const startTime = performance.now();
+        const variableKeys = variables && typeof variables === 'object' ? Object.keys(variables as Record<string, unknown>) : [];
+        const measureSizes = this.shouldMeasurePayloadSizes();
+        const approxReqBytes = (typeof query === 'string' ? query.length : 0)
+            + (measureSizes ? GraphQLDataProvider.approximateJsonSize(variables) : 0);
+
         try {
-            const data = await this._client.request(query, variables);
+            const data = await this._client.request(query, variables, requestHeaders);
+            const durationMs = performance.now() - startTime;
+            this.emitNetworkTelemetry({
+                operationName,
+                operationKind,
+                traceId,
+                spanId,
+                traceparent,
+                durationMs,
+                requestBytes: approxReqBytes,
+                responseBytes: measureSizes ? GraphQLDataProvider.approximateJsonSize(data) : 0,
+                succeeded: true,
+                retryCount,
+                variableKeys,
+                timestamp: Date.now(),
+            });
             return data;
         }
         catch (e) {
+            const durationMs = performance.now() - startTime;
             // Enhanced error logging to diagnose 500 errors.
             //
             // SECURITY: the error thrown by the underlying graphql-request client
@@ -2918,24 +4004,83 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 const code = error?.extensions?.code?.toUpperCase().trim()
                 if (code === 'JWT_EXPIRED') {
                     if (refreshTokenIfNeeded) {
-                        // token expired, so we need to refresh it and try again
+                        // token expired, so we need to refresh it and try again, preserving traceId
                         await this.RefreshToken();
-                        return await this.ExecuteGQL(query, variables, false/*don't attempt to refresh again*/);
+                        return await this.executeGQLInternal(query, variables, false/*don't attempt to refresh again*/, options, traceId, retryCount + 1);
                     }
                     else {
                         // token expired but the caller doesn't want a refresh, so just return the error
+                        this.emitNetworkTelemetry({
+                            operationName,
+                            operationKind,
+                            traceId,
+                            spanId,
+                            traceparent,
+                            durationMs,
+                            requestBytes: approxReqBytes,
+                            responseBytes: measureSizes ? GraphQLDataProvider.approximateJsonSize(e.response) : 0,
+                            succeeded: false,
+                            errorCode: code,
+                            errorMessage: safeToThrow.message,
+                            retryCount,
+                            variableKeys,
+                            timestamp: Date.now(),
+                        });
                         LogError(`JWT_EXPIRED and refreshTokenIfNeeded is false`);
                         throw safeToThrow;
                     }
                 }
-                else
+                else {
+                    this.emitNetworkTelemetry({
+                        operationName,
+                        operationKind,
+                        traceId,
+                        spanId,
+                        traceparent,
+                        durationMs,
+                        requestBytes: approxReqBytes,
+                        responseBytes: measureSizes ? GraphQLDataProvider.approximateJsonSize(e.response) : 0,
+                        succeeded: false,
+                        errorCode: code,
+                        errorMessage: safeToThrow.message,
+                        retryCount,
+                        variableKeys,
+                        timestamp: Date.now(),
+                    });
                     throw safeToThrow;
+                }
             }
             else {
+                this.emitNetworkTelemetry({
+                    operationName,
+                    operationKind,
+                    traceId,
+                    spanId,
+                    traceparent,
+                    durationMs,
+                    requestBytes: approxReqBytes,
+                    responseBytes: measureSizes ? GraphQLDataProvider.approximateJsonSize(e?.response) : 0,
+                    succeeded: false,
+                    errorCode: safeToThrow.Code,
+                    errorMessage: safeToThrow.message,
+                    retryCount,
+                    variableKeys,
+                    timestamp: Date.now(),
+                });
                 // LogError() stringifies its argument (String(message) internally), which
                 // for the raw error class yields the full serialised request.
                 LogError(JSON.stringify(safeError));
                 throw safeToThrow; // force the caller to handle the error
+            }
+        }
+        finally {
+            // A mutation can write server-side (Remote Operations, Actions, agent runs, server-side
+            // save hooks) without a BaseEntity event ever reaching this process, so drop the RunView
+            // dedup-linger entries — otherwise an identical RunView in the next DedupLingerMs replays
+            // pre-mutation rows. Runs on failure too: a failed mutation may have written part-way.
+            // A caller that knows exactly what it wrote (entity Save/Delete) scopes the drop.
+            if (isMutation) {
+                this.InvalidateRunViewDedupCache(options?.AffectedEntityNames);
             }
         }
     }
@@ -2956,7 +4101,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
 
         // Start a new refresh
-        console.log('[GraphQL] Starting token refresh...');
+        LogStatusEx({ message: '[GraphQL] Starting token refresh...', verboseOnly: true });
         this._refreshPromise = this.performTokenRefresh();
 
         // Also store on singleton if in singleton mode
@@ -2966,7 +4111,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
         try {
             await this._refreshPromise;
-            console.log('[GraphQL] Token refresh completed successfully');
+            LogStatusEx({ message: '[GraphQL] Token refresh completed successfully', verboseOnly: true });
         } finally {
             // Clear the promise when done
             this._refreshPromise = null;
@@ -3046,6 +4191,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      *
      * Specifically clears:
      * - The `MJ_Metadata` IndexedDB database (entity definitions, RunView/RunQuery/Dataset caches)
+     * - The `MJ_Diagnostics` IndexedDB database, if it exists
      * - All localStorage keys except those in `preservedKeys`
      *
      * @param preservedKeys localStorage keys to keep across logout (e.g. theme preference).
@@ -3062,9 +4208,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         keysToRemove.forEach(key => localStorage.removeItem(key));
 
-        // Delete the MJ IndexedDB metadata cache
-        await new Promise<void>((resolve) => {
-            const req = indexedDB.deleteDatabase('MJ_Metadata');
+        // Delete the `MJ_Metadata` and `MJ_Diagnostics` IndexedDB databases
+        await Promise.all(['MJ_Metadata', 'MJ_Diagnostics'].map((name) => GraphQLDataProvider.deleteIndexedDb(name)));
+    }
+
+    /** Deletes one IndexedDB database; resolves when the deletion ends, fails or is blocked. */
+    private static deleteIndexedDb(name: string): Promise<void> {
+        return new Promise<void>((resolve) => {
+            const req = indexedDB.deleteDatabase(name);
             req.onsuccess = () => resolve();
             req.onerror = () => resolve();
             req.onblocked = () => resolve();
@@ -3099,7 +4250,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             headers['x-api-key'] = userAPIKey;
 
         const client = new GraphQLClient(url, {
-            headers
+            headers,
+            responseMiddleware: (response) => {
+                this.inspectResponseCacheHeaders(response);
+                notifyResponseHeaderObservers(response);
+            },
         });
 
         // Re-apply any dynamic headers so they survive client re-creation (e.g., token refresh)
@@ -3107,6 +4262,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             client.setHeader(key, value);
         }
 
+        clientCredentials.set(client, credentialsKey(url, token, mjAPIKey, userAPIKey));
         return client;
     }
 
@@ -3173,7 +4329,19 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     private _wsClient: Client = null;
     private _wsClientCreatedAt: number = null;
     private _socketStateSubject = new BehaviorSubject<SocketConnectionState>('unknown');
+    private _socketReconnectedSubject = new Subject<void>();
     private _isDisposingSocketIntentionally = false;
+    /** Disarms the current client's pong watchdog. Each client owns its own timer. */
+    private _disarmPongWatchdog: (() => void) | null = null;
+
+    /**
+     * Fires each time the socket comes back up after having dropped — never on the first
+     * connect. Subscribers should treat it as "you may have missed events while you were
+     * away; re-read authoritative state", because the push topic has no replay buffer.
+     */
+    public get SocketReconnected$(): Observable<void> {
+        return this._socketReconnectedSubject.asObservable();
+    }
 
     /**
      * Observable of the WebSocket (graphql-ws) connection state. Used by
@@ -3189,6 +4357,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      */
     public get SocketConnectionState(): SocketConnectionState {
         return this._socketStateSubject.value;
+    }
+
+    /**
+     * How many WebSocket subscriptions are currently open. Zero means nothing is waiting on
+     * push frames, so a socket that is down is delivering nothing and costing nothing.
+     */
+    public get ActiveSubscriptionCount(): number {
+        return this._activeSubscriptionCount;
     }
 
     /**
@@ -3235,7 +4411,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         // Create new client if needed
         if (!this._wsClient) {
             this._isDisposingSocketIntentionally = false;
-            this._wsClient = createClient({
+            // Bind handlers to this LOCAL client, not to `this._wsClient`. A pong watchdog armed
+            // on one socket must never be able to terminate a *replacement* socket created while
+            // that timer was still pending.
+            const client = createClient({
                 url: this.ConfigData.WSURL,
                 // Function form: re-evaluated on every connection attempt (including
                 // retries after 4403 "Token expired"). This lets the client pick up a
@@ -3247,17 +4426,79 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     ...(this.ConfigData.MJAPIKey ? { 'x-mj-api-key': this.ConfigData.MJAPIKey } : {}),
                     ...(this.ConfigData.UserAPIKey ? { 'x-mj-user-api-key': this.ConfigData.UserAPIKey } : {}),
                 }),
-                keepAlive: 30000, // Send keepalive ping every 30 seconds
+                keepAlive: WS_KEEPALIVE_MS,
+                connectionAckWaitTimeout: WS_CONNECTION_ACK_TIMEOUT_MS,
                 retryAttempts: 3,
                 shouldRetry: () => true,
             });
+            this._wsClient = client;
             this._wsClientCreatedAt = now;
 
-            // Emit connectivity events — consumed by ServerConnectivityService
-            this._wsClient.on('connected', () => {
-                this._socketStateSubject.next('connected');
+            // The pong timer belongs to this client alone, so a late event from a replaced client
+            // can never disarm the watchdog of the client that took its place.
+            let pongTimeout: ReturnType<typeof setTimeout> | null = null;
+            const disarmPongWatchdog = (): void => {
+                if (pongTimeout !== null) {
+                    clearTimeout(pongTimeout);
+                    pongTimeout = null;
+                }
+            };
+            this._disarmPongWatchdog = disarmPongWatchdog;
+
+            // ── Pong watchdog (MJ #4222) ──
+            // graphql-ws sends the keepalive ping but deliberately does nothing when no pong
+            // comes back, and re-arms the ping ONLY on pong receipt. So on a half-open socket
+            // the library emits exactly one 'ping' and then falls permanently silent: no close,
+            // no error, no retry. This watchdog is what converts that silence into a real close
+            // event, which is the single signal the retry logic, `_socketStateSubject`,
+            // ServerConnectivityService, ConversationStreaming and FireAndForgetHelper all wait on.
+            client.on('ping', (received: boolean) => {
+                // `received === true` is a server-initiated ping, which graphql-ws answers on our
+                // behalf — it tells us nothing about whether OUR traffic is getting through. Only
+                // a ping we sent starts the countdown.
+                if (received) {
+                    return;
+                }
+                disarmPongWatchdog();
+                pongTimeout = setTimeout(() => {
+                    pongTimeout = null;
+                    try {
+                        // Issues a synthetic `4499 Terminated` close. graphql-ws treats terminate
+                        // as non-fatal, so `retryAttempts`/`shouldRetry` reconnect as normal.
+                        client.terminate();
+                    } catch {
+                        // Socket already gone — the close we wanted has effectively happened.
+                    }
+                }, WS_PONG_TIMEOUT_MS);
             });
-            this._wsClient.on('closed', (event: unknown) => {
+            client.on('pong', (received: boolean) => {
+                // The link is proven alive in both directions; stand the watchdog down.
+                if (received) {
+                    disarmPongWatchdog();
+                }
+            });
+
+            // Emit connectivity events — consumed by ServerConnectivityService
+            client.on('connected', (_socket: unknown, _payload: unknown, wasRetry: boolean) => {
+                this._socketStateSubject.next('connected');
+                if (wasRetry) {
+                    // A RECONNECT, not a first connect. This is the only trustworthy reconnect
+                    // signal available: graphql-ws re-establishes subscriptions transparently, so
+                    // the RxJS stream may never error or complete, and `_socketStateSubject` can
+                    // re-emit 'connected' without an intervening 'disconnected' when the close was
+                    // suppressed. Anything published while the socket was down was dropped with no
+                    // replay, so a listener must reconcile against durable state (MJ #4222).
+                    this._socketReconnectedSubject.next();
+                }
+            });
+            client.on('closed', (event: unknown) => {
+                // Whatever closed the socket, no pong can arrive on it now. Disarm first so a
+                // pending watchdog cannot fire against an already-dead client.
+                disarmPongWatchdog();
+                // A replaced client's late close says nothing about the socket in use now.
+                if (this._wsClient !== client) {
+                    return;
+                }
                 // Ignore closes we initiated via disposeWSClient() — those already
                 // emit 'unknown' themselves. Only treat unexpected closes (retries
                 // exhausted) as 'disconnected'.
@@ -3295,6 +4536,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     private disposeWSClient(): void {
         if (this._wsClient) {
             this._isDisposingSocketIntentionally = true;
+            // Disarm before disposing: a deliberate teardown must not leave a watchdog running
+            // against a client that is going away.
+            this._disarmPongWatchdog?.();
+            this._disarmPongWatchdog = null;
             try {
                 this._wsClient.dispose();
             } catch (e) {
@@ -3366,10 +4611,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     timeSinceEmission >= this.SUBSCRIPTION_IDLE_TIMEOUT_MS;
 
                 if (shouldCleanup) {
-                    console.log(`[GraphQLDataProvider] Marking session ${sessionId} for cleanup: ` +
-                        `activeSubscribers=${value.activeSubscribers}, ` +
-                        `timeSinceRequested=${Math.round(timeSinceRequested/1000)}s, ` +
-                        `timeSinceEmission=${Math.round(timeSinceEmission/1000)}s`);
+                    LogStatusEx({
+                        message: `[GraphQLDataProvider] Marking session ${sessionId} for cleanup: ` +
+                            `activeSubscribers=${value.activeSubscribers}, ` +
+                            `timeSinceRequested=${Math.round(timeSinceRequested/1000)}s, ` +
+                            `timeSinceEmission=${Math.round(timeSinceEmission/1000)}s`,
+                        verboseOnly: true
+                    });
                     toRemove.push(sessionId);
                 }
             });
@@ -3382,7 +4630,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         entry.subject.complete(); // Completes for ALL subscribers
                         entry.subscription.unsubscribe(); // Closes WebSocket subscription
                         this._pushStatusSubjects.delete(sessionId);
-                        console.log(`[GraphQLDataProvider] Cleaned up stale subscription for session: ${sessionId}`);
+                        LogStatusEx({ message: `[GraphQLDataProvider] Cleaned up stale subscription for session: ${sessionId}`, verboseOnly: true });
                     } catch (e) {
                         console.error(`[GraphQLDataProvider] Error cleaning up subscription for ${sessionId}:`, e);
                     }
@@ -3390,14 +4638,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             });
 
             if (toRemove.length > 0) {
-                console.log(`[GraphQLDataProvider] Cleaned up ${toRemove.length} stale subscription(s)`);
+                LogStatusEx({ message: `[GraphQLDataProvider] Cleaned up ${toRemove.length} stale subscription(s)`, verboseOnly: true });
             }
 
             // If no subscriptions remain and client is old, dispose of it
             if (this._pushStatusSubjects.size === 0 && this._wsClient && this._wsClientCreatedAt) {
                 const clientAge = now - this._wsClientCreatedAt;
                 if (clientAge > this.WS_CLIENT_MAX_AGE_MS) {
-                    console.log('[GraphQLDataProvider] Disposing of idle WebSocket client');
+                    LogStatusEx({ message: '[GraphQLDataProvider] Disposing of idle WebSocket client', verboseOnly: true });
                     this.disposeWSClient();
                 }
             }
@@ -3416,9 +4664,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return new Observable((observer) => {
             const client = this.getOrCreateWSClient();
             this._activeSubscriptionCount++;
+            const { traceparent } = GraphQLDataProvider.MintTraceparent();
+            const diagCtx = typeof GetDiagnosticContext === 'function' ? GetDiagnosticContext() : undefined;
+            const extensions: Record<string, unknown> = {
+                traceparent,
+                ...(diagCtx?.sessionId ? { diagnosticSessionId: diagCtx.sessionId } : {}),
+            };
 
             const unsubscribe = client.subscribe(
-                { query: subscription, variables },
+                { query: subscription, variables, extensions },
                 {
                     next: (data) => {
                         observer.next(data.data);
@@ -3432,7 +4686,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             errorObj?.message?.includes('JWT_EXPIRED');
 
                         if (isTokenExpired) {
-                            console.log('[GraphQLDataProvider] WebSocket JWT token expired, refreshing and reconnecting...');
+                            LogStatusEx({ message: '[GraphQLDataProvider] WebSocket JWT token expired, refreshing and reconnecting...', verboseOnly: true });
                             try {
                                 // Refresh the token
                                 await this.RefreshToken();
@@ -3539,7 +4793,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                                 errorObj?.message?.includes('JWT_EXPIRED');
 
                             if (isTokenExpired) {
-                                console.log('[GraphQLDataProvider] PushStatusUpdates JWT token expired, refreshing and reconnecting...');
+                                LogStatusEx({ message: '[GraphQLDataProvider] PushStatusUpdates JWT token expired, refreshing and reconnecting...', verboseOnly: true });
                                 try {
                                     // Refresh the token
                                     await this.RefreshToken();
@@ -3773,16 +5027,219 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      **************************************************************************/
 
     private _cacheInvalidationSubscription: Subscription | null = null;
+    private _lastCacheInvalidationSequence = 0;
+    private _lastCacheServerProcessId: string | null = null;
+    private _catchUpInFlight: Promise<boolean> | null = null;
 
     /**
-     * Subscribes to server-side cache invalidation events and raises MJGlobal
-     * BaseEntityEvent with type='remote-invalidate' for each notification.
-     * This enables BaseEngine instances to automatically re-fetch stale data
-     * when another server modifies entities.
-     *
-     * Call this after the provider is configured and WebSocket URL is available.
-     * Safe to call multiple times — subsequent calls are no-ops if already subscribed.
+     * Latest monotonic cache invalidation sequence number observed from the server.
      */
+    public get LastCacheInvalidationSequence(): number {
+        return this._lastCacheInvalidationSequence;
+    }
+
+    /**
+     * Server process ID (`X-MJ-Server-ID`) associated with {@link LastCacheInvalidationSequence}.
+     */
+    public get LastCacheServerProcessId(): string | null {
+        return this._lastCacheServerProcessId;
+    }
+
+    /**
+     * Inspects `X-MJ-Cache-Seq` and `X-MJ-Server-ID` HTTP response headers returned by MJServer.
+     */
+    private inspectResponseCacheHeaders(response: unknown): void {
+        if (!response || typeof response !== 'object' || response instanceof Error) {
+            return;
+        }
+        const headers = (response as { headers?: { get?: (name: string) => string | null } }).headers;
+        if (!headers || typeof headers.get !== 'function') {
+            return;
+        }
+        const seqHeader = headers.get('x-mj-cache-seq');
+        const serverIdHeader = headers.get('x-mj-server-id');
+        if (seqHeader !== null && seqHeader !== undefined) {
+            const parsedSeq = parseInt(seqHeader, 10);
+            if (!Number.isNaN(parsedSeq) && parsedSeq >= 0) {
+                this.ProcessServerCacheSequenceHeader(parsedSeq, serverIdHeader);
+            }
+        }
+    }
+
+    /**
+     * Resets the client-side cache invalidation sequence watermarks and server process ID.
+     * Useful when reconnecting to a new server endpoint or resetting state in tests.
+     */
+    public ResetCacheSequenceState(): void {
+        this._lastCacheInvalidationSequence = 0;
+        this._lastCacheServerProcessId = null;
+        this._catchUpInFlight = null;
+    }
+
+    /**
+     * Processes a server cache invalidation sequence number and server process ID observed
+     * from an `X-MJ-Cache-Seq` / `X-MJ-Server-ID` HTTP header. When a sequence gap is detected
+     * on the same server process, triggers {@link CatchUpCacheInvalidations} in the background.
+     */
+    public ProcessServerCacheSequenceHeader(
+        serverSequence: number,
+        serverProcessId?: string | null
+    ): void {
+        if (serverProcessId && this._lastCacheServerProcessId && this._lastCacheServerProcessId !== serverProcessId) {
+            // Server process changed (restart or different replica): adopt the new baseline
+            this._lastCacheServerProcessId = serverProcessId;
+            this._lastCacheInvalidationSequence = serverSequence;
+            return;
+        }
+        if (serverProcessId && !this._lastCacheServerProcessId) {
+            this._lastCacheServerProcessId = serverProcessId;
+        }
+        if (this._lastCacheInvalidationSequence === 0) {
+            this._lastCacheInvalidationSequence = serverSequence;
+            return;
+        }
+        if (serverSequence > this._lastCacheInvalidationSequence) {
+            void this.CatchUpCacheInvalidations(this._lastCacheInvalidationSequence);
+        }
+    }
+
+    /**
+     * Queries `GetCacheInvalidationsSince` on the server to replay any cache invalidation events
+     * missed between `sinceSequence` and the server's current sequence number.
+     *
+     * @returns `true` if the delta was replayed cleanly, or `false` if the server indicated
+     *          `RequiresFullRefresh = true` (e.g., sequence fell off the ring buffer).
+     */
+    public async CatchUpCacheInvalidations(sinceSequence?: number): Promise<boolean> {
+        if (this._catchUpInFlight) {
+            return this._catchUpInFlight;
+        }
+        const targetSince = sinceSequence ?? this._lastCacheInvalidationSequence;
+        const promise = this.performCacheInvalidationCatchUp(targetSince);
+        this._catchUpInFlight = promise;
+        try {
+            return await promise;
+        } finally {
+            this._catchUpInFlight = null;
+        }
+    }
+
+    private async performCacheInvalidationCatchUp(sinceSequence: number): Promise<boolean> {
+        if (!this._client) {
+            return false;
+        }
+        const query = gql`
+            query GetCacheInvalidationsSince($sinceSequence: Int!) {
+                GetCacheInvalidationsSince(sinceSequence: $sinceSequence) {
+                    RequiresFullRefresh
+                    CurrentSequence
+                    ServerProcessID
+                    Events {
+                        EntityName
+                        PrimaryKeyValues
+                        Action
+                        SourceServerID
+                        Timestamp
+                        OriginSessionID
+                        RecordData
+                        Sequence
+                    }
+                }
+            }
+        `;
+        try {
+            const response = await this._client.request<{
+                GetCacheInvalidationsSince?: {
+                    RequiresFullRefresh: boolean;
+                    CurrentSequence: number;
+                    ServerProcessID: string;
+                    Events: Array<{
+                        EntityName: string;
+                        PrimaryKeyValues: string | null;
+                        Action: string;
+                        SourceServerID: string;
+                        Timestamp: string;
+                        OriginSessionID?: string;
+                        RecordData?: string;
+                        Sequence?: number;
+                    }>;
+                };
+            }>(query, { sinceSequence });
+            const catchUp = response?.GetCacheInvalidationsSince;
+            if (!catchUp) {
+                return false;
+            }
+            this._lastCacheServerProcessId = catchUp.ServerProcessID;
+            if (catchUp.CurrentSequence > this._lastCacheInvalidationSequence) {
+                this._lastCacheInvalidationSequence = catchUp.CurrentSequence;
+            }
+            if (catchUp.RequiresFullRefresh) {
+                return false;
+            }
+            for (const event of catchUp.Events) {
+                this.dispatchCacheInvalidationEvent(event);
+            }
+            return true;
+        } catch (err) {
+            if (GraphQLDataProvider.VerboseCacheInvalidationLogging) {
+                console.warn('[GraphQLDataProvider] CatchUpCacheInvalidations failed:', err);
+            }
+            return false;
+        }
+    }
+
+    private dispatchCacheInvalidationEvent(event: {
+        EntityName: string;
+        PrimaryKeyValues: string | null;
+        Action: string;
+        SourceServerID: string;
+        Timestamp: string;
+        OriginSessionID?: string;
+        RecordData?: string;
+        Sequence?: number;
+    }): void {
+        if (typeof event.Sequence === 'number' && event.Sequence > this._lastCacheInvalidationSequence) {
+            this._lastCacheInvalidationSequence = event.Sequence;
+        }
+
+        // Skip events that originated from this browser session — we already
+        // handled the cache update locally via the BaseEntity.Save()/Delete() event.
+        if (event.OriginSessionID && event.OriginSessionID === this.sessionId) {
+            if (GraphQLDataProvider.VerboseCacheInvalidationLogging) {
+                console.debug(`[GraphQLDataProvider] Skipping self-originated cache invalidation for "${event.EntityName}" (action: ${event.Action})`);
+            }
+            return;
+        }
+
+        if (GraphQLDataProvider.VerboseCacheInvalidationLogging) {
+            console.debug(`[GraphQLDataProvider] Cache invalidation received: ${event.Action} for "${event.EntityName}" from server ${event.SourceServerID?.substring(0, 8) || 'unknown'}`);
+        }
+
+        // Raise a MJGlobal event so BaseEngine instances can react
+        const baseEntityEvent: BaseEntityEvent = {
+            type: 'remote-invalidate',
+            entityName: event.EntityName,
+            baseEntity: null,
+            // Attach the publishing provider so multi-provider client setups can resolve
+            // entity metadata against the correct server (instead of the global default).
+            provider: this,
+            payload: {
+                primaryKeyValues: event.PrimaryKeyValues,
+                action: event.Action,
+                sourceServerId: event.SourceServerID,
+                timestamp: event.Timestamp,
+                recordData: event.RecordData,
+            },
+        };
+
+        MJGlobal.Instance.RaiseEvent({
+            event: MJEventType.ComponentEvent,
+            eventCode: BaseEntity.BaseEventCode,
+            args: baseEntityEvent,
+            component: this,
+        });
+    }
+
     /**
      * Subscribe to client tool requests for a specific agent session.
      * The returned Observable emits ClientToolRequestNotification objects
@@ -3826,57 +5283,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 Timestamp
                 OriginSessionID
                 RecordData
+                Sequence
             }
         }`;
 
         const observable = this.Subscribe(CACHE_INVALIDATION_SUB);
 
         this._cacheInvalidationSubscription = observable.subscribe({
-            next: (data: Record<string, { EntityName: string; PrimaryKeyValues: string | null; Action: string; SourceServerID: string; Timestamp: string; OriginSessionID?: string; RecordData?: string }>) => {
+            next: (data: Record<string, { EntityName: string; PrimaryKeyValues: string | null; Action: string; SourceServerID: string; Timestamp: string; OriginSessionID?: string; RecordData?: string; Sequence?: number }>) => {
                 const event = data?.cacheInvalidation;
                 if (!event) return;
-
-                // Skip events that originated from this browser session — we already
-                // handled the cache update locally via the BaseEntity.Save()/Delete() event.
-                if (event.OriginSessionID && event.OriginSessionID === this.sessionId) {
-                    if (GraphQLDataProvider.VerboseCacheInvalidationLogging) {
-                        console.debug(`[GraphQLDataProvider] Skipping self-originated cache invalidation for "${event.EntityName}" (action: ${event.Action})`);
-                    }
-                    return;
-                }
-
-                if (GraphQLDataProvider.VerboseCacheInvalidationLogging) {
-                    console.debug(`[GraphQLDataProvider] Cache invalidation received: ${event.Action} for "${event.EntityName}" from server ${event.SourceServerID?.substring(0, 8) || 'unknown'}`);
-                }
-
-                // Raise a MJGlobal event so BaseEngine instances can react
-                const baseEntityEvent: BaseEntityEvent = {
-                    type: 'remote-invalidate',
-                    entityName: event.EntityName,
-                    baseEntity: null,
-                    // Attach the publishing provider so multi-provider client setups can resolve
-                    // entity metadata against the correct server (instead of the global default).
-                    provider: this,
-                    payload: {
-                        primaryKeyValues: event.PrimaryKeyValues,
-                        action: event.Action,
-                        sourceServerId: event.SourceServerID,
-                        timestamp: event.Timestamp,
-                        recordData: event.RecordData,
-                    },
-                };
-
-                // The event drives BaseEngine caches directly, AND — because this provider
-                // registers the entities its metadata is built from (the MJ_Metadata dataset's
-                // items) with ProviderBase's static event fan-out — it also schedules a debounced
-                // metadata staleness check when the written entity is one of them. See
-                // ProviderBase.handleMetadataMemberEntityEvent; no entity names are listed here.
-                MJGlobal.Instance.RaiseEvent({
-                    event: MJEventType.ComponentEvent,
-                    eventCode: BaseEntity.BaseEventCode,
-                    args: baseEntityEvent,
-                    component: this,
-                });
+                this.dispatchCacheInvalidationEvent(event);
             },
             error: (error: unknown) => {
                 console.error('[GraphQLDataProvider] Cache invalidation subscription error:', error);
@@ -3884,7 +5301,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 this._cacheInvalidationSubscription = null;
             },
             complete: () => {
-                console.log('[GraphQLDataProvider] Cache invalidation subscription completed, will re-establish on next WebSocket creation');
+                LogStatusEx({ message: '[GraphQLDataProvider] Cache invalidation subscription completed, will re-establish on next WebSocket creation', verboseOnly: true });
                 this._cacheInvalidationSubscription = null;
             },
         });

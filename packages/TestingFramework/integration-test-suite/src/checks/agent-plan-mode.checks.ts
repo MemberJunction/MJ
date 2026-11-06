@@ -37,7 +37,9 @@ import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext, AgentPlanModeFixture } from '@memberjunction/testing-integration';
 
 const SETTLE_MS = Number(process.env.AGENT_SETTLE_MS ?? 4000);
-const RESUME_POLL_ATTEMPTS = Number(process.env.AGENT_RESUME_POLL ?? 30);
+// ResumingAgentRunID is linked only after the resumed run completes (MJAIAgentRequestEntityServer.resumeAgent),
+// so the poll window must cover a whole live run — 35s has been observed on a loaded box.
+const RESUME_POLL_ATTEMPTS = Number(process.env.AGENT_RESUME_POLL ?? 90);
 
 /** A phase-P (model-compliance) failure — retryable per §3.3, distinct from a framework-correctness failure. */
 class ModelNonCompliance extends Error {}

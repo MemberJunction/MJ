@@ -1,0 +1,28 @@
+@if (Message) {
+    <div class="data-capture-note">
+        <mj-alert class="data-capture-message" Variant="info" [Message]="Message" />
+        @if (Rows.length > 0) {
+            <table class="data-shape-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Input</th>
+                        <th scope="col">Key</th>
+                        <th scope="col" class="size-cell">Size</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (row of Rows; track row.Input + '.' + row.Key) {
+                        <tr>
+                            <td class="name-cell">{{ row.Input }}</td>
+                            <td class="name-cell">{{ row.Key }}</td>
+                            <td class="size-cell">{{ row.Size }}</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        @for (notice of ElidedNotices; track notice) {
+            <p class="data-shape-elided">{{ notice }}</p>
+        }
+    </div>
+}

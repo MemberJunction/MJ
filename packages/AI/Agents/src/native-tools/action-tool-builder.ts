@@ -6,6 +6,7 @@
 import type { ChatTool } from '@memberjunction/ai';
 import type { MJActionParamEntity } from '@memberjunction/core-entities';
 import type { MJActionEntityExtended } from '@memberjunction/actions-base';
+import { CoerceValueToSchema, type ParamValueSchema, ResolveParamElementSchema } from './action-param-schema';
 
 /** One Action, and the provider-legal tool name it was declared under. */
 export interface ActionToolBinding {
@@ -16,6 +17,8 @@ export interface ActionToolBinding {
     /** The Action the framework dispatches when that name comes back. */
     action: MJActionEntityExtended;
     tool: ChatTool;
+    /** The Action's params the tool was built from — what {@link CoerceActionArguments} reads back. */
+    params: readonly MJActionParamEntity[];
 }
 
 /**
@@ -80,28 +83,31 @@ export function sanitizeToolName(actionName: string): string {
 }
 
 /**
- * Maps one param's `ValueType` onto a JSON Schema fragment (§8.2 table).
+ * Coerces a call's arguments toward each param's declared schema, before the Action runs.
  *
- * `ActionParam.ValueType` distinguishes only five coarse kinds, so this mapping is lossy by
- * construction and the prose `Description` carries the real type — exactly as the rendered action
- * catalog does today. Two choices here were settled by measurement rather than by reasoning
- * Measured:
+ * Models sometimes send an object as a JSON string, a number as `"10"` or a boolean as `"true"`.
+ * Each declared param is coerced against the same schema its tool declaration used — the stored
+ * `ValueSchema` or the `ValueType` mapping, array-wrapped for `IsArray` — so a param declared as a
+ * string (an `Other` param, which may legitimately hold JSON-looking text) is never decoded.
  *
- * - **`Scalar` emits a union type.** It appears to violate the cross-provider common subset —
- *   OpenAPI 3.0, which Gemini's classic function declarations follow, has no union `type` — but it
- *   measured clean on every provider tested, so the plan's literal mapping stands.
- * - **Everything else emits `string`, not `object`.** §8.2 originally specified `object` for the
- *   opaque kinds, reasoning it was "exact parity with the prose catalog". It is not:
- *   `Run Ad-hoc Query.Query` is `ValueType: 'Other'` but holds SQL text, and typing it as an
- *   object made models emit `Query: {}` on 40% of calls — well-formed, dispatchable and useless,
- *   which no well-formedness check catches. Switching to `string` took usable arguments from
- *   60% to 100% on the same prompts. The structural type beats the prose description whenever the
- *   two disagree, so it must not disagree.
+ * @param params The Action's params, as the tool was built from them
+ * @param args The call's arguments, as the provider returned them
+ * @returns A new argument object; `args` is not mutated
  */
-function schemaForValueType(valueType: MJActionParamEntity['ValueType']): Record<string, unknown> {
-    return valueType === 'Scalar'
-        ? { type: ['string', 'number', 'boolean'] }
-        : { type: 'string' };
+export function CoerceActionArguments(
+    params: readonly MJActionParamEntity[],
+    args: Record<string, unknown> | undefined
+): Record<string, unknown> {
+    const coerced: Record<string, unknown> = { ...(args ?? {}) };
+    for (const param of params) {
+        if (!(param.Name in coerced)) {
+            continue;
+        }
+        const element = ResolveParamElementSchema(param);
+        const schema: ParamValueSchema = param.IsArray ? { type: 'array', items: element } : element;
+        coerced[param.Name] = CoerceValueToSchema(coerced[param.Name], schema);
+    }
+    return coerced;
 }
 
 /**
@@ -110,10 +116,11 @@ function schemaForValueType(valueType: MJActionParamEntity['ValueType']): Record
  * Dropping `DefaultValue` would make the tool strictly less informative than the prose catalog it
  * replaces, which is the one thing this mapping must never be.
  */
-function describeParam(param: MJActionParamEntity): string {
+function describeParam(param: MJActionParamEntity, schemaDescription?: string): string {
     const parts: string[] = [];
-    if (param.Description) {
-        parts.push(param.Description.trim());
+    const description = schemaDescription ?? param.Description;
+    if (description) {
+        parts.push(description.trim());
     }
     if (param.DefaultValue) {
         parts.push(`Default: ${param.DefaultValue}.`);
@@ -185,7 +192,9 @@ function composeDescription(
  */
 function describeTool(action: MJActionEntityExtended, params: readonly MJActionParamEntity[]): string {
     const outputs = params.filter((p) => p.Type === 'Output' || p.Type === 'Both');
-    // Harness stand-ins may build an Action literal without the related-record collection.
+    // Harness stand-ins may build an Action literal without the related-record collection. The collection
+    // itself is declared `OrderBy: 'ResultCode ASC'`, and the prose catalog lists the codes in that same
+    // order, so they are left as they come: the two descriptions have to agree.
     const codes = action.ResultCodes?.Items ?? [];
 
     for (const detail of DESCRIPTION_DETAIL_LEVELS) {
@@ -198,24 +207,39 @@ function describeTool(action: MJActionEntityExtended, params: readonly MJActionP
 }
 
 /**
+ * The property schema one param is declared with.
+ *
+ * The element schema is the param's stored `ValueSchema` when it has one, else the `ValueType`
+ * mapping. `IsArray` wraps it rather than replacing it (§8.2), and the element keeps its own
+ * description inside `items`. On a non-array param a description in the stored schema takes the
+ * place of the param's `Description`, since the schema author wrote it for this declaration.
+ */
+function declareParam(param: MJActionParamEntity): ParamValueSchema {
+    const element = ResolveParamElementSchema(param);
+    const schema: ParamValueSchema = param.IsArray ? { type: 'array', items: element } : element;
+    const description = describeParam(param, param.IsArray ? undefined : element.description);
+    return description ? { ...schema, description } : schema;
+}
+
+/**
  * Builds the `ChatTool` declaration for one Action.
  *
  * Only `Input` and `Both` params are declared: an `Output` param is something the Action returns,
  * and declaring it would invite the model to supply it.
  */
 export function BuildToolFromAction(action: MJActionEntityExtended, params: readonly MJActionParamEntity[]): ChatTool {
-    const properties: Record<string, unknown> = {};
+    const properties: Record<string, ParamValueSchema> = {};
     const required: string[] = [];
 
-    for (const param of params) {
-        if (param.Type !== 'Input' && param.Type !== 'Both') {
-            continue;
-        }
-        const element = schemaForValueType(param.ValueType);
-        // IsArray wraps the element schema rather than replacing it (§8.2).
-        const schema = param.IsArray ? { type: 'array', items: element } : element;
-        const description = describeParam(param);
-        properties[param.Name] = description ? { ...schema, description } : schema;
+    // Declared in ordinal name order, so the schema is byte-identical wherever it is built. The `Params`
+    // collection already loads `OrderBy: 'Name ASC'`, but that is the database's collation order, which
+    // differs between servers; a tool declaration that differs only in property order still misses the
+    // provider's prompt cache.
+    const declared = params
+        .filter((param) => param.Type === 'Input' || param.Type === 'Both')
+        .sort((a, b) => CompareToolNames(a.Name, b.Name));
+    for (const param of declared) {
+        properties[param.Name] = declareParam(param);
         if (param.IsRequired) {
             required.push(param.Name);
         }
@@ -255,7 +279,8 @@ export function BuildActionToolSet(
     const tools: ChatTool[] = [];
 
     for (const action of actions) {
-        const tool = BuildToolFromAction(action, paramsByActionId.get(action.ID) ?? []);
+        const params = paramsByActionId.get(action.ID) ?? [];
+        const tool = BuildToolFromAction(action, params);
         const existing = byToolName.get(tool.name);
         if (existing) {
             throw new Error(
@@ -266,11 +291,22 @@ export function BuildActionToolSet(
         if (tool.name.length === 0) {
             throw new Error(`Action '${action.Name}' sanitizes to an empty tool name — it must contain at least one alphanumeric character.`);
         }
-        byToolName.set(tool.name, { kind: 'action', toolName: tool.name, action, tool });
+        byToolName.set(tool.name, { kind: 'action', toolName: tool.name, action, tool, params });
         tools.push(tool);
     }
+    // Same reason as the parameter order inside each tool: the actions arrive in load order.
+    tools.sort((a, b) => CompareToolNames(a.name, b.name));
 
     return { tools, byToolName };
+}
+
+/**
+ * Ordinal comparison for the names that decide tool-declaration order. Deliberately not `localeCompare`:
+ * the order has to be the same in every process, whatever its locale, or the declarations differ between
+ * servers for the same agent.
+ */
+export function CompareToolNames(a: string, b: string): number {
+    return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /** @deprecated Use {@link BuildActionToolSet}. */

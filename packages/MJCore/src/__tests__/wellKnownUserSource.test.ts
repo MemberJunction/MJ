@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MJGlobal, RegisterClassEx } from '@memberjunction/global';
+import { GetGlobalObjectStore, MJGlobal, RegisterClassEx } from '@memberjunction/global';
 import { WellKnownUserSource } from '../generic/wellKnownUserSource';
 import { IMetadataProvider } from '../generic/interfaces';
 import { UserInfo } from '../generic/securityInfo';
@@ -78,6 +78,24 @@ describe('WellKnownUserSource', () => {
         expect(names).toContain('HigherPriorityWellKnownUserSource');
     });
 
+    it('caches Instance in the GlobalObjectStore and clears it via ResetInstance', () => {
+        WellKnownUserSource.ResetInstance();
+        const globalStore = GetGlobalObjectStore();
+        expect(globalStore?.['___SINGLETON__WellKnownUserSource']).toBeUndefined();
+
+        const first = WellKnownUserSource.Instance;
+        expect(first).toBeInstanceOf(HigherPriorityWellKnownUserSource);
+        expect(globalStore?.['___SINGLETON__WellKnownUserSource']).toBe(first);
+        expect(WellKnownUserSource.Instance).toBe(first);
+
+        WellKnownUserSource.ResetInstance();
+        expect(globalStore?.['___SINGLETON__WellKnownUserSource']).toBeUndefined();
+
+        const second = WellKnownUserSource.Instance;
+        expect(second).toBeInstanceOf(HigherPriorityWellKnownUserSource);
+        expect(second).not.toBe(first);
+    });
+
     /**
      * `IsSystemUser` is the synchronous companion used by `BaseEngine` identity resolution.
      * Field-level security deliberately does NOT call it — see
@@ -95,3 +113,4 @@ describe('WellKnownUserSource', () => {
         });
     });
 });
+

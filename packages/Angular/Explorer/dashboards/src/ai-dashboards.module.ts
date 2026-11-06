@@ -12,7 +12,9 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
 import { SharedDashboardWidgetsModule } from './shared/shared-dashboard-widgets.module';
 import { SharedPipesModule } from './shared/shared-pipes.module';
 import { SearchModule } from '@memberjunction/ng-search';
-import { MJButtonDirective, MJComboboxComponent, MJDropdownComponent, MJSwitchComponent, MJPageHeaderComponent, MJPageLayoutComponent, MJPageBodyComponent, MJPageHeaderInteriorComponent, MJPageBodyInteriorComponent, MJFilterPopoverComponent, MJPageSearchComponent, MJFilterPanelComponent, MJFilterFieldComponent, MJFilterChipComponent, MJTabNavComponent, MJViewToggleComponent, MJStatBadgeComponent, MJRefreshButtonComponent, MJLeftNavComponent, MJLeftNavContentComponent, MJDialogComponent, MJDialogActionsComponent, MJEmptyStateComponent, MJAlertComponent, MJAccordionModule, MjSlidePanelComponent } from '@memberjunction/ng-ui-components';
+import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
+import { MJButtonDirective, MJClickableDirective, MJComboboxComponent, MJDropdownComponent, MJSwitchComponent, MJPageHeaderComponent, MJPageLayoutComponent, MJPageBodyComponent, MJPageHeaderInteriorComponent, MJPageBodyInteriorComponent, MJFilterPopoverComponent, MJPageSearchComponent, MJFilterPanelComponent, MJFilterFieldComponent, MJFilterChipComponent, MJTabNavComponent, MJViewToggleComponent, MJStatBadgeComponent, MJRefreshButtonComponent, MJLeftNavComponent, MJLeftNavContentComponent, MJDialogComponent, MJDialogActionsComponent, MJEmptyStateComponent, MJAlertComponent, MJAccordionModule, MjSlidePanelComponent } from '@memberjunction/ng-ui-components';
+import { ConversationsModule } from '@memberjunction/ng-conversations';
 
 // AI Components
 import { ModelManagementComponent } from './AI/components/models/model-management.component';
@@ -48,6 +50,7 @@ import { ClassifySeedTaxonomyComponent } from './AI/components/autotagging/compo
 import { ClassifySetupWizardComponent } from './AI/components/autotagging/dialogs/classify-setup-wizard.component';
 import { TagsResourceComponent, LoadTagsResource } from './AI/components/tags/tags-resource.component';
 import { DuplicateDetectionResourceComponent } from './AI/components/duplicates/duplicate-detection-resource.component';
+import { CompareValueComponent } from './AI/components/duplicates/compare-value.component';
 import { VectorManagementResourceComponent } from './AI/components/vectors/vector-management-resource.component';
 import { AIInstrumentationService } from './AI/services/ai-instrumentation.service';
 import { AIAnalyticsResourceComponent, LoadAIAnalyticsResource } from './AI/components/analytics/ai-analytics-resource.component';
@@ -59,6 +62,7 @@ import { AnalyticsModelPerformanceComponent, LoadAnalyticsModelPerformance } fro
 import { AnalyticsCostBudgetComponent, LoadAnalyticsCostBudget } from './AI/components/analytics/cost-budget/cost-budget.component';
 import { AnalyticsErrorAnalysisComponent, LoadAnalyticsErrorAnalysis } from './AI/components/analytics/error-analysis/error-analysis.component';
 import { AnalyticsUsagePatternsComponent, LoadAnalyticsUsagePatterns } from './AI/components/analytics/usage-patterns/usage-patterns.component';
+import { UsageExplorerComponent, LoadUsageExplorer } from './AI/components/analytics/usage-explorer/usage-explorer.component';
 import { AnalyticsRealtimeOverviewComponent, LoadAnalyticsRealtimeOverview } from './AI/components/analytics/realtime/realtime-overview.component';
 import { AnalyticsRealtimeSessionsComponent, LoadAnalyticsRealtimeSessions } from './AI/components/analytics/realtime/realtime-sessions.component';
 import { RealtimeManagementComponent, LoadRealtimeManagement } from './AI/components/analytics/realtime/realtime-management.component';
@@ -66,6 +70,9 @@ import { AnalyticsRealtimeTranscriptsComponent, LoadAnalyticsRealtimeTranscripts
 
 // AI Overview Hub
 import { AIOverviewHubComponent, LoadAIOverviewHub } from './AI/components/overview/ai-overview-hub.component';
+import { ChiefOfStaffOverviewComponent, LoadChiefOfStaffOverview } from './ChiefOfStaff/chief-of-staff-overview.component';
+import { ChiefOfStaffApprovalsComponent, LoadChiefOfStaffApprovals } from './ChiefOfStaff/chief-of-staff-approvals.component';
+import { ChiefOfStaffGovernanceComponent, LoadChiefOfStaffGovernance } from './ChiefOfStaff/chief-of-staff-governance.component';
 
 // Knowledge Hub components
 import {
@@ -82,6 +89,10 @@ import {
   LoadVisualizeResource
 } from './KnowledgeHub/components/visualize/visualize-resource.component';
 import { TagCloudComponent } from './KnowledgeHub/components/visualize/tag-cloud/tag-cloud.component';
+import {
+  SemanticGraphExplorerComponent,
+  LoadSemanticGraphExplorerComponent
+} from './KnowledgeHub/components/visualize/semantic-graph/semantic-graph-explorer.component';
 import { RecordDrilldownComponent } from './KnowledgeHub/components/visualize/record-drilldown/record-drilldown.component';
 import {
   SchedulingResourceComponent,
@@ -99,6 +110,7 @@ import { ClusteringModule } from '@memberjunction/ng-clustering';
 import { SchedulingModule } from '@memberjunction/ng-scheduling';
 import { RecordProcessEditorComponent } from '@memberjunction/ng-record-process-studio';
 import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
+import { GraphViewComponent } from '@memberjunction/ng-graph-view';
 
 /**
  * AIDashboardsModule — AI feature area: models, prompts, agents,
@@ -144,6 +156,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     ClusterVisualizationResourceComponent,
     VisualizeResourceComponent,
     TagCloudComponent,
+    SemanticGraphExplorerComponent,
     RecordDrilldownComponent,
     SchedulingResourceComponent,
     AnalyticsResourceComponent,
@@ -157,13 +170,19 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     AnalyticsCostBudgetComponent,
     AnalyticsErrorAnalysisComponent,
     AnalyticsUsagePatternsComponent,
+    UsageExplorerComponent,
     AnalyticsRealtimeOverviewComponent,
     AnalyticsRealtimeSessionsComponent,
     RealtimeManagementComponent,
     AnalyticsRealtimeTranscriptsComponent,
-    AIOverviewHubComponent
+    AIOverviewHubComponent,
+    ChiefOfStaffOverviewComponent,
+    ChiefOfStaffApprovalsComponent,
+    ChiefOfStaffGovernanceComponent
   ],
   imports: [
+    ConversationsModule,
+    CompareValueComponent,
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
@@ -178,7 +197,9 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     SharedDashboardWidgetsModule,
     SharedPipesModule,
     SearchModule,
+    QueryViewerModule,
     MJButtonDirective,
+    MJClickableDirective,
     MJComboboxComponent,
     MJDropdownComponent,
     MJSwitchComponent,
@@ -207,6 +228,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     ClusteringModule,
     SchedulingModule,
     MJWordCloudComponent,
+    GraphViewComponent,
     RecordProcessEditorComponent
   ],
   providers: [
@@ -229,6 +251,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     SearchResultDetailComponent,
     ClusterVisualizationResourceComponent,
     VisualizeResourceComponent,
+    SemanticGraphExplorerComponent,
     SchedulingResourceComponent,
     AnalyticsResourceComponent,
     FeaturePipelinesResourceComponent,
@@ -241,11 +264,15 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     AnalyticsCostBudgetComponent,
     AnalyticsErrorAnalysisComponent,
     AnalyticsUsagePatternsComponent,
+    UsageExplorerComponent,
     AnalyticsRealtimeOverviewComponent,
     AnalyticsRealtimeSessionsComponent,
     RealtimeManagementComponent,
     AnalyticsRealtimeTranscriptsComponent,
     AIOverviewHubComponent,
+    ChiefOfStaffOverviewComponent,
+    ChiefOfStaffApprovalsComponent,
+    ChiefOfStaffGovernanceComponent,
     SharedDashboardWidgetsModule
   ]
 })
@@ -255,6 +282,7 @@ export class AIDashboardsModule {
         LoadTagsResource();
         LoadClusterVisualizationResource();
         LoadVisualizeResource();
+        LoadSemanticGraphExplorerComponent();
         LoadSchedulingResource();
         LoadAnalyticsResource();
         LoadFeaturePipelinesResource();
@@ -266,10 +294,14 @@ export class AIDashboardsModule {
         LoadAnalyticsCostBudget();
         LoadAnalyticsErrorAnalysis();
         LoadAnalyticsUsagePatterns();
+        LoadUsageExplorer();
         LoadAnalyticsRealtimeOverview();
         LoadAnalyticsRealtimeSessions();
         LoadRealtimeManagement();
         LoadAnalyticsRealtimeTranscripts();
         LoadAIOverviewHub();
+        LoadChiefOfStaffOverview();
+        LoadChiefOfStaffApprovals();
+        LoadChiefOfStaffGovernance();
     }
 }

@@ -1,25 +1,30 @@
 import { Component, ComponentRef, Input, OnDestroy, OnInit, Type, ViewContainerRef, inject } from '@angular/core';
+import type { MediaPlacement } from '@memberjunction/ai-realtime-client/media';
 import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 
 /**
- * Generic pane host for an interactive channel's surface inside the overlay's tabbed
- * surface panel. Given the per-session channel {@link Plugin}, it:
+ * Generic host for an interactive channel's surface on the call overlay's stage. Given the per-session channel
+ * {@link Plugin}, it:
  *
  *  1. dynamically creates the plugin's surface component
  *     ({@link BaseRealtimeChannelClient.GetSurfaceComponent}) into its own view container;
  *  2. immediately hands the created instance to
  *     {@link BaseRealtimeChannelClient.BindSurface} — synchronously, BEFORE the surface's
  *     first change detection, so inputs the plugin sets are visible in its `ngOnInit`;
- *  3. notifies {@link BaseRealtimeChannelClient.UnbindSurface} when the pane is destroyed
- *     (panel collapsed / overlay torn down), flipping the plugin back into its
- *     no-surface tool-execution mode.
+ *  3. tells the plugin whether the surface is on screen
+ *     ({@link BaseRealtimeChannelClient.OnSurfaceVisibilityChange}) and where it is placed
+ *     ({@link BaseRealtimeChannelClient.OnSurfacePlacementChange}) right after binding and whenever
+ *     {@link Visible} or {@link Placement} changes;
+ *  4. notifies {@link BaseRealtimeChannelClient.UnbindSurface} when the pane is destroyed
+ *     (the channel left the session / the overlay was torn down) or handed another plugin,
+ *     flipping the plugin back into its no-surface tool-execution mode.
  *
  * This is how channel surfaces render with ZERO channel-specific wiring in the overlay:
  * the host never knows the surface component's type or API — the plugin wires its own
  * inputs/outputs in `BindSurface`.
  *
  * The created component is inserted as a SIBLING of this host element (standard
- * `ViewContainerRef` semantics), so it participates directly in the pane's flex layout;
+ * `ViewContainerRef` semantics), so it participates directly in its container's layout;
  * the host element itself renders nothing (`display: none`).
  */
 @Component({
@@ -29,16 +34,77 @@ import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
   styles: [':host { display: none; }']
 })
 export class RealtimeChannelPaneComponent implements OnInit, OnDestroy {
-  /** The per-session channel plugin whose surface this pane hosts. */
-  @Input({ required: true }) Plugin!: BaseRealtimeChannelClient;
-
   private viewContainer = inject(ViewContainerRef);
   private surfaceRef: ComponentRef<object> | null = null;
+  private plugin!: BaseRealtimeChannelClient;
+  private initialized = false;
+  private visible = true;
+  private placement: MediaPlacement = 'tab';
+
+  /**
+   * The per-session channel plugin whose surface this pane hosts. Handing the pane another plugin (the same channel
+   * in a new session) releases the old plugin's surface and creates the new one's.
+   */
+  @Input({ required: true })
+  set Plugin(value: BaseRealtimeChannelClient) {
+    if (value === this.plugin) {
+      return;
+    }
+    if (this.initialized) {
+      this.releaseSurface();
+    }
+    this.plugin = value;
+    if (this.initialized) {
+      this.createSurface();
+    }
+  }
+  get Plugin(): BaseRealtimeChannelClient {
+    return this.plugin;
+  }
+
+  /** Whether the surface is on screen. The plugin hears of every change while its surface is bound. */
+  @Input()
+  set Visible(value: boolean) {
+    if (value === this.visible) {
+      return;
+    }
+    this.visible = value;
+    if (this.surfaceRef) {
+      this.plugin.OnSurfaceVisibilityChange(value);
+    }
+  }
+  get Visible(): boolean {
+    return this.visible;
+  }
+
+  /** Where the surface is placed. The plugin hears of every move while its surface is bound. */
+  @Input()
+  set Placement(value: MediaPlacement) {
+    if (value === this.placement) {
+      return;
+    }
+    this.placement = value;
+    if (this.surfaceRef) {
+      this.plugin.OnSurfacePlacementChange(value);
+    }
+  }
+  get Placement(): MediaPlacement {
+    return this.placement;
+  }
 
   ngOnInit(): void {
+    this.initialized = true;
+    this.createSurface();
+  }
+
+  ngOnDestroy(): void {
+    this.releaseSurface();
+  }
+
+  private createSurface(): void {
     // Server-only channels have no surface (GetSurfaceComponent === null). The overlay should not
     // register a pane for them, but guard here too so a stray registration never crashes the panel.
-    const surface = this.Plugin.GetSurfaceComponent();
+    const surface = this.plugin.GetSurfaceComponent();
     if (!surface) {
       return;
     }
@@ -48,12 +114,14 @@ export class RealtimeChannelPaneComponent implements OnInit, OnDestroy {
     this.surfaceRef = this.viewContainer.createComponent(surface as Type<object>);
     // Bind BEFORE the created component's first change detection — inputs the plugin sets
     // here are in place when the surface's ngOnInit runs.
-    this.Plugin.BindSurface(this.surfaceRef.instance);
+    this.plugin.BindSurface(this.surfaceRef.instance);
+    this.plugin.OnSurfaceVisibilityChange(this.visible);
+    this.plugin.OnSurfacePlacementChange(this.placement);
     this.surfaceRef.changeDetectorRef.markForCheck();
   }
 
-  ngOnDestroy(): void {
-    this.Plugin.UnbindSurface();
+  private releaseSurface(): void {
+    this.plugin.UnbindSurface();
     this.surfaceRef?.destroy();
     this.surfaceRef = null;
   }

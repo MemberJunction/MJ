@@ -4,11 +4,12 @@
  * against an injectable {@link IZoomMeetingSdk} seam so it builds + unit-tests with NO network and NO
  * real Zoom SDK (the Gemini `connectLiveSession` testability pattern).
  *
- * Zoom capability coverage (per the §8 seed row): on-demand + scheduled join, audio in/out, diarized
- * roster (`SpeakerDiarization`), participant mute + in-meeting chat (via the Meeting Controls channel),
- * and the directional video/screen flags (transport carries them; the realtime models light audio
- * first). Telephony features (DTMF / transfer / recording) are NOT Zoom-meeting features, so those
- * virtual base methods keep throwing `BridgeCapabilityNotSupportedError`.
+ * Zoom capability coverage (per the seed row): on-demand + scheduled join, audio in/out, diarized
+ * roster (`SpeakerDiarization`), participant mute + in-meeting chat (via the Meeting Controls channel).
+ * No video or screen in either direction: the {@link IZoomMeetingSdk} seam carries audio only, so the
+ * seed row claims none of the video and screen flags. Telephony features (DTMF / transfer / recording)
+ * are NOT Zoom-meeting features, so those virtual base methods keep throwing
+ * `BridgeCapabilityNotSupportedError`.
  *
  * @module @memberjunction/ai-bridge-zoom
  * @author MemberJunction.com
@@ -180,8 +181,8 @@ export class ZoomBridge extends BaseRealtimeBridge {
 
     /**
      * Sends an outbound media frame into the meeting. Audio is fed to the SDK's virtual-mic path;
-     * video/screen frames are gated by the directional capability flags (the transport carries them,
-     * and the SDK send is a deployment-time binding TODO — today the models emit audio).
+     * `video-out` and `screen-out` frames are dropped: the SDK seam has no video or screen send, so the
+     * provider row claims neither `VideoOut` nor `ScreenOut`.
      *
      * @param track The outbound track the frame targets.
      * @param frame The media frame to send.
@@ -200,8 +201,8 @@ export class ZoomBridge extends BaseRealtimeBridge {
             }
             case 'video-out':
             case 'screen-out':
-                // Directional video/screen capability is declared; the SDK send binding lands with the
-                // first realtime model that emits these tracks (TODO at deployment). No-op for now.
+                // Dropped: the SDK seam has no video or screen send yet, and the provider row claims neither flag.
+                // Carrying one takes a seam method, its real binding, and the flag on the provider row.
                 break;
             default:
                 // An inbound track was passed to SendMedia — ignore (defensive).

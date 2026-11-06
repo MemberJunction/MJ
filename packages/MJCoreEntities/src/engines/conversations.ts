@@ -1,9 +1,10 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, EntityEventRowIsFree, IMetadataProvider, ResolveEntityEventKey, ResolveEntityEventRow, RunQuery, RunView, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, EntityEventRowIsFree, EntityInfo, IMetadataProvider, ResolveEntityEventKey, ResolveEntityEventRow, RunQuery, RunView, type RunViewParams, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
 import { ChatMessage } from "@memberjunction/ai";
-import { EscapeSQLString, NormalizeUUID, ToEpochMs, UUIDsEqual } from "@memberjunction/global";
+import { EscapeSQLString, IndexByUUID, NormalizeUUID, ToEpochMs, UUIDMap, UUIDSet, UUIDsEqual } from "@memberjunction/global";
 import { BehaviorSubject, Observable } from "rxjs";
 import {
     MJConversationEntity,
+    MJConversationBranchEntity,
     MJConversationDetailEntity,
     MJConversationDetailEntityType,
     MJAIAgentRunEntity,
@@ -18,6 +19,13 @@ import {
 import type { MJResourcePermissionEntity } from "../generated/entity_subclasses";
 import { ArtifactMetadataEngine } from "./artifacts";
 import { ResourcePermissionEngine } from "../custom/ResourcePermissions/ResourcePermissionEngine";
+import {
+    ConversationAnchorMetadata,
+    ConversationAnchorType,
+    FilterAnchoredConversationsForUser,
+    IsConversationHiddenByFieldSecurity,
+    ParseConversationAnchorMetadata
+} from "../custom/AnchoredConversationSecurity";
 
 /**
  * `MJ: Resource Types.ID` for Conversations. Conversations that the current
@@ -25,6 +33,146 @@ import { ResourcePermissionEngine } from "../custom/ResourcePermissions/Resource
  * are folded into the list by `LoadConversations` using this ID.
  */
 const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
+
+/**
+ * `MJ: Resource Types.ID` for Projects (Conversation Folders). Used for Google Drive-style
+ * folder ACL sharing (`MJ: Resource Permissions`) where users/roles granted access to a
+ * folder inherit access to conversations inside it.
+ */
+export const PROJECTS_RESOURCE_TYPE_ID = '88D0DF27-AF8F-43AC-9EC4-2AC314F49355';
+
+/**
+ * Three-tier folder visibility model:
+ * - `'Private'`: Owned by a user (`OwnerUserID != null`) with no active folder shares.
+ * - `'Shared'`: Owned by a user (`OwnerUserID != null`) and shared with specific Users/Roles via `MJ: Resource Permissions`.
+ * - `'Public'`: Environment-wide folder (`OwnerUserID == null`) visible to everyone in the environment.
+ */
+export type ProjectVisibilityTier = 'Private' | 'Shared' | 'Public';
+
+/**
+ * The spellings of `"inheritFolderAccess": true` the SQL filter recognises: the compact one every MJ writer
+ * produces (`JSON.stringify` and the server's save, which rewrites `AdditionalData` compactly) and the
+ * one-space one. {@link INHERIT_FOLDER_ACCESS_SQL_CLAUSE} and {@link IsInheritingFolderAccessInSQL} are both
+ * built from this list, so they cannot drift apart.
+ */
+export const INHERIT_FOLDER_ACCESS_TRUE_SPELLINGS: readonly string[] = ['"inheritFolderAccess":true', '"inheritFolderAccess": true'];
+
+/**
+ * SQL predicate matching conversations that inherit access from their folder. Inheritance is opt-in: turning
+ * it on writes `"inheritFolderAccess":true` into `Conversation.AdditionalData`.
+ *
+ * `LIKE`, not `JSON_VALUE`: this filter runs on PostgreSQL too, which translates no SQL Server JSON
+ * functions in a runtime filter. A `LIKE` also matches the key nested inside another object, which the parser
+ * does not count; `MJConversationEntityServer` refuses to save a value the two read differently, so they agree on
+ * every row the entity layer writes.
+ */
+export const INHERIT_FOLDER_ACCESS_SQL_CLAUSE =
+    `(${INHERIT_FOLDER_ACCESS_TRUE_SPELLINGS.map((s) => `AdditionalData LIKE '%${s}%'`).join(' OR ')})`;
+
+/**
+ * What {@link INHERIT_FOLDER_ACCESS_SQL_CLAUSE} decides for this `AdditionalData`: true when the SQL filter
+ * treats the conversation as inheriting its folder's access. Case-insensitive, like SQL Server's default
+ * collation. The server compares this as well as {@link IsInheritingFolderAccess}, so a rewrite that one of
+ * them reads differently is caught.
+ */
+export function IsInheritingFolderAccessInSQL(additionalData: string | null | undefined): boolean {
+    if (!additionalData) {
+        return false;
+    }
+    const lower = additionalData.toLowerCase();
+    return INHERIT_FOLDER_ACCESS_TRUE_SPELLINGS.some((s) => lower.includes(s.toLowerCase()));
+}
+
+/**
+ * `AdditionalData` rewritten as compact JSON when it holds a JSON object, so the stored text always uses the
+ * spelling {@link INHERIT_FOLDER_ACCESS_SQL_CLAUSE} matches. Anything else (null, an array, text that is not
+ * JSON) comes back unchanged. The round trip through `JSON.parse` rounds an integer beyond 2^53, so such a
+ * number in the object is stored rounded.
+ */
+export function CanonicalizeConversationAdditionalData(additionalData: string | null | undefined): string | null | undefined {
+    if (!additionalData) {
+        return additionalData;
+    }
+    try {
+        const parsed: unknown = JSON.parse(additionalData);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            return JSON.stringify(parsed);
+        }
+    } catch {
+        // Not JSON: leave it as written.
+    }
+    return additionalData;
+}
+
+/** Spots `"inheritFolderAccess": true` in AdditionalData that is not valid JSON. */
+const INHERIT_TRUE_PATTERN = /"inheritFolderAccess"\s*:\s*true/;
+
+/**
+ * Returns true when `conversation` inherits permissions from its parent folder (`ProjectID`).
+ * Inheritance is opt-in: it is on only when `conversation.AdditionalData` stores
+ * `"inheritFolderAccess": true`.
+ */
+export function IsInheritingFolderAccess(
+    conversation: { AdditionalData?: string | null } | null | undefined
+): boolean {
+    const raw = conversation?.AdditionalData;
+    if (!raw || raw.trim().length === 0) {
+        return false;
+    }
+    try {
+        const parsed = JSON.parse(raw) as Record<string, unknown> | null;
+        return !!parsed && typeof parsed === 'object' && parsed['inheritFolderAccess'] === true;
+    } catch {
+        return INHERIT_TRUE_PATTERN.test(raw);
+    }
+}
+
+/**
+ * Returns the updated `AdditionalData` JSON string after setting or clearing `inheritFolderAccess`.
+ * Preserves any other keys already present in `existingAdditionalData`. When `inheritFolderAccess`
+ * is `false` (the default) and no other keys exist, returns `null`.
+ */
+export function BuildUpdatedAdditionalDataForFolderInheritance(
+    existingAdditionalData: string | null | undefined,
+    inheritFolderAccess: boolean
+): string | null {
+    let dataObj: Record<string, unknown> = {};
+    if (existingAdditionalData && existingAdditionalData.trim().length > 0) {
+        try {
+            const parsed = JSON.parse(existingAdditionalData);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                dataObj = { ...(parsed as Record<string, unknown>) };
+            }
+        } catch {
+            // If existing AdditionalData is non-JSON, replace with clean object
+        }
+    }
+    if (inheritFolderAccess) {
+        dataObj['inheritFolderAccess'] = true;
+    } else {
+        delete dataObj['inheritFolderAccess'];
+    }
+    return Object.keys(dataObj).length === 0 ? null : JSON.stringify(dataObj);
+}
+
+/**
+ * Returns the higher of two `MJ: Resource Permissions` levels (`'Owner' > 'Edit' > 'View' > null`).
+ */
+export function ComparePermissionLevels(
+    a: 'View' | 'Edit' | 'Owner' | null | undefined,
+    b: 'View' | 'Edit' | 'Owner' | null | undefined
+): 'View' | 'Edit' | 'Owner' | null {
+    const rank = (lvl: 'View' | 'Edit' | 'Owner' | null | undefined): number => {
+        if (lvl === 'Owner') return 3;
+        if (lvl === 'Edit') return 2;
+        if (lvl === 'View') return 1;
+        return 0;
+    };
+    const rA = rank(a);
+    const rB = rank(b);
+    if (rA === 0 && rB === 0) return null;
+    return rA >= rB ? (a ?? null) : (b ?? null);
+}
 
 /**
  * Display info about the user who shared a conversation with the current user,
@@ -70,6 +218,183 @@ export interface CreateConversationOptions {
      * (UUID, int, composite).
      */
     linkedRecordId?: string | null;
+    /**
+     * Structural anchor category when this conversation represents an anchored
+     * comment thread on a record or sub-target (`Record`, `Field`, `Section`,
+     * `Group`, `Contribution`, `DocBlock`, `SlideRegion`, `SheetRange`).
+     */
+    anchorType?: ConversationAnchorType;
+    /**
+     * Sub-target key within the linked record (field name, section key, group key, etc.).
+     */
+    anchorKey?: string | null;
+    /**
+     * Structured anchor metadata snapshot (`IConversationAnchorMetadata`).
+     */
+    anchorMetadata?: ConversationAnchorMetadata | null;
+}
+
+/**
+ * Filter options for {@link ConversationEngine.LoadAnchoredConversations}.
+ */
+export interface LoadAnchoredConversationsOptions {
+    /** Whether to include resolved threads (`IsResolved = 1`). Defaults to `true`. */
+    includeResolved?: boolean;
+    /** Optional filter by a specific `AnchorType`. */
+    anchorType?: ConversationAnchorType;
+    /** Optional filter by a specific `AnchorKey`. */
+    anchorKey?: string;
+    /** Optional explicit metadata provider (falls back to `ConversationEngine.ProviderToUse`). */
+    provider?: IMetadataProvider;
+    /** Force bypassing RunView cache. */
+    bypassCache?: boolean;
+}
+
+/**
+ * Parameters for creating a new anchored comment thread on a record or sub-target
+ * via {@link ConversationEngine.CreateAnchoredConversation}.
+ */
+export interface CreateAnchoredConversationParams {
+    /** Display name for the thread (defaults to anchor display label or record comment title). */
+    name?: string;
+    /** Optional environment ID. */
+    environmentId?: string;
+    /** Target entity ID (`MJ: Entities.ID`). */
+    linkedEntityId: string;
+    /** Target record serialized primary key. */
+    linkedRecordId: string;
+    /** Structural anchor category (`Record`, `Field`, `Section`, `Group`, `Contribution`, etc.). */
+    anchorType: NonNullable<ConversationAnchorType>;
+    /** Target key within the record (`FieldName`, `SectionKey`, `GroupKey`, etc.). Null for `Record`. */
+    anchorKey?: string | null;
+    /** Anchor snapshot metadata (`quotedValue`, `fieldName`, `sectionKey`, `groupKey`, etc.). */
+    anchorMetadata?: ConversationAnchorMetadata | null;
+    /** Optional first message to post immediately in the newly created thread. */
+    initialMessage?: string;
+    /** Optional AI agent to associate with the conversation (`DefaultAgentID`). */
+    defaultAgentId?: string | null;
+    /** Optional explicit metadata provider. */
+    provider?: IMetadataProvider;
+}
+
+/**
+ * Aggregated open and resolved comment counts across a record's fields, sections,
+ * left-nav rail groups, and contributions.
+ */
+export interface AnchoredCommentRollup {
+    /** Total unresolved anchored threads visible to the user on this record. */
+    TotalOpenCount: number;
+    /** Total resolved anchored threads visible to the user on this record. */
+    TotalResolvedCount: number;
+    /** Open threads anchored directly at the whole-record level (`AnchorType === 'Record'`). */
+    RecordLevelOpenCount: number;
+    /** Open thread counts keyed by normalized (lowercase) field name (`AnchorType === 'Field'`). */
+    ByField: ReadonlyMap<string, number>;
+    /**
+     * Open thread counts keyed by section key (`AnchorType === 'Section'` PLUS any open
+     * field threads whose `AnchorMetadataObject.sectionKey` belongs to that section).
+     */
+    BySection: ReadonlyMap<string, number>;
+    /**
+     * Open thread counts keyed by left-nav rail group key (`AnchorType === 'Group'` PLUS
+     * any open section/field threads whose `AnchorMetadataObject.groupKey` belongs to that group).
+     */
+    ByGroup: ReadonlyMap<string, number>;
+    /** Open thread counts keyed by contribution key (`AnchorType === 'Contribution'`). */
+    ByContribution: ReadonlyMap<string, number>;
+}
+
+/**
+ * Pure rollup helper that computes open and resolved anchored comment counts across
+ * fields, sections, groups, and contributions, while enforcing FLS visibility when
+ * `entityInfo` and `currentUser` are provided.
+ */
+export function ComputeAnchoredCommentCounts(
+    conversations: ReadonlyArray<Pick<MJConversationEntity, 'AnchorType' | 'AnchorKey' | 'AnchorMetadata' | 'AnchorMetadataObject' | 'IsResolved'>>,
+    currentUser?: UserInfo | null,
+    entityInfo?: EntityInfo | null
+): AnchoredCommentRollup {
+    let totalOpenCount = 0;
+    let totalResolvedCount = 0;
+    let recordLevelOpenCount = 0;
+    const byField = new Map<string, number>();
+    const bySection = new Map<string, number>();
+    const byGroup = new Map<string, number>();
+    const byContribution = new Map<string, number>();
+
+    for (const conv of conversations) {
+        if (!conv.AnchorType) {
+            continue;
+        }
+        if (
+            currentUser &&
+            entityInfo &&
+            IsConversationHiddenByFieldSecurity(
+                entityInfo,
+                currentUser,
+                conv.AnchorType,
+                conv.AnchorKey,
+                conv.AnchorMetadataObject ?? conv.AnchorMetadata
+            )
+        ) {
+            continue;
+        }
+        if (conv.IsResolved) {
+            totalResolvedCount++;
+            continue;
+        }
+
+        totalOpenCount++;
+        const meta = ParseConversationAnchorMetadata(conv.AnchorMetadataObject ?? conv.AnchorMetadata);
+        const rawKey = conv.AnchorKey?.trim() ?? '';
+
+        if (conv.AnchorType === 'Record') {
+            recordLevelOpenCount++;
+        } else if (conv.AnchorType === 'Field') {
+            const fieldKey = (rawKey || meta?.fieldName?.trim() || '').toLowerCase();
+            if (fieldKey) {
+                byField.set(fieldKey, (byField.get(fieldKey) ?? 0) + 1);
+            }
+        } else if (conv.AnchorType === 'Section') {
+            const sectionKey = rawKey || meta?.sectionKey?.trim() || '';
+            if (sectionKey) {
+                bySection.set(sectionKey, (bySection.get(sectionKey) ?? 0) + 1);
+            }
+        } else if (conv.AnchorType === 'Group') {
+            const groupKey = rawKey || meta?.groupKey?.trim() || '';
+            if (groupKey) {
+                byGroup.set(groupKey, (byGroup.get(groupKey) ?? 0) + 1);
+            }
+        } else if (conv.AnchorType === 'Contribution') {
+            if (rawKey) {
+                byContribution.set(rawKey, (byContribution.get(rawKey) ?? 0) + 1);
+            }
+        }
+
+        // Roll up Field threads into their parent Section and Group when metadata provides them
+        if (conv.AnchorType !== 'Section' && meta?.sectionKey) {
+            const secKey = meta.sectionKey.trim();
+            if (secKey) {
+                bySection.set(secKey, (bySection.get(secKey) ?? 0) + 1);
+            }
+        }
+        if (conv.AnchorType !== 'Group' && meta?.groupKey) {
+            const grpKey = meta.groupKey.trim();
+            if (grpKey) {
+                byGroup.set(grpKey, (byGroup.get(grpKey) ?? 0) + 1);
+            }
+        }
+    }
+
+    return {
+        TotalOpenCount: totalOpenCount,
+        TotalResolvedCount: totalResolvedCount,
+        RecordLevelOpenCount: recordLevelOpenCount,
+        ByField: byField,
+        BySection: bySection,
+        ByGroup: byGroup,
+        ByContribution: byContribution
+    };
 }
 
 /**
@@ -95,6 +420,25 @@ export type ConversationContextMetadata = {
      * included raw in the window.
      */
     summaryBoundarySequence?: number;
+    /** ID of the user who wrote this message, when populated on `ConversationDetail` */
+    userId?: string | null;
+    /** Display name of the user who wrote this message, when available */
+    userName?: string | null;
+    /** ID of the AI agent that wrote this message, when populated on `ConversationDetail` */
+    agentId?: string | null;
+    /** Display name of the AI agent that wrote this message, when available */
+    agentName?: string | null;
+    /** Parent `ConversationDetail.ID` when this message replies to an earlier row */
+    parentId?: string | null;
+    /** Un-prefixed `ConversationDetail.Message` text when speaker attribution formatted `content` */
+    rawContent?: string;
+};
+
+type SpeakerAttributionState = {
+    attributeUsers: boolean;
+    attributeAgents: boolean;
+    labelsById: UUIDMap<string>;
+    rowsById: UUIDMap<ConversationWindowSourceRow>;
 };
 
 /**
@@ -123,6 +467,21 @@ export interface ConversationWindowSourceRow {
      * rows by hand for an unfloored assembly need not supply it.
      */
     __mj_CreatedAt?: Date | string | null;
+    /**
+     * Set when a rerun of the row's turn replaced it (in-place Regenerate or Save and resend). Such a
+     * row is kept for audit but left out of every window; optional so hand-built rows may omit it.
+     */
+    ReplacedAt?: Date | string | null;
+    /** Authoring user ID on multi-user conversations; optional for hand-built rows. */
+    UserID?: string | null;
+    /** Authoring user display name from `vwConversationDetails`; optional for hand-built rows. */
+    User?: string | null;
+    /** Answering agent ID on AI rows; optional for hand-built rows. */
+    AgentID?: string | null;
+    /** Answering agent display name from `vwConversationDetails`; optional for hand-built rows. */
+    Agent?: string | null;
+    /** Parent detail ID when this row replies to an earlier message; optional for hand-built rows. */
+    ParentID?: string | null;
 }
 
 /**
@@ -131,7 +490,160 @@ export interface ConversationWindowSourceRow {
  * from the assembler's requirements.
  */
 export const ConversationWindowFields: readonly (keyof ConversationWindowSourceRow)[] =
-    ['ID', 'Sequence', 'Role', 'Message', 'SummaryOfEarlierConversation', '__mj_CreatedAt'];
+    ['ID', 'Sequence', 'Role', 'Message', 'SummaryOfEarlierConversation', '__mj_CreatedAt', 'ReplacedAt', 'UserID', 'User', 'AgentID', 'Agent', 'ParentID'];
+
+/** How a fork started. The values come from the CHECK constraint on ConversationBranch.Kind. */
+export type ForkKind = MJConversationBranchEntity['Kind'];
+
+/** The fork kinds, keyed by {@link ForkKind} so a value CodeGen adds to the union fails to compile until it is listed. */
+const FORK_KIND_KEYS: Readonly<Record<ForkKind, true>> = { Fork: true, Edit: true, Regenerate: true };
+
+/** True when `value` is a key of {@link FORK_KIND_KEYS}. */
+function isForkKind(value: string): value is ForkKind {
+    return Object.prototype.hasOwnProperty.call(FORK_KIND_KEYS, value);
+}
+
+/** Every fork kind. */
+export const FORK_KINDS: readonly ForkKind[] = Object.keys(FORK_KIND_KEYS).filter(isForkKind);
+
+/** One `MJ: Conversation Branches` row (a fork), as the path helpers and the fork summaries need it. */
+export interface ConversationBranchRow {
+    ID: string;
+    ConversationID: string;
+    /** Fork this one started from; null means it started from Main. */
+    ParentBranchID: string | null;
+    /** Sequence of the last message shared with the parent path; null means none are shared. */
+    ForkFromSequence: number | null;
+    Name?: string | null;
+    /** How the fork started; a row without it counts as 'Fork'. */
+    Kind?: ForkKind;
+    /** The edited message (Edit) or the replaced answer (Regenerate); null otherwise. */
+    SourceDetailID?: string | null;
+    /** The person who started the fork. */
+    UserID?: string;
+    /** The name of that person (the view's virtual field). */
+    User?: string | null;
+    __mj_CreatedAt?: Date | string;
+}
+
+/** Longest branch chain the path predicate will build. */
+export const MAX_BRANCH_DEPTH = 32;
+
+/** The Fields a fresh load of fork rows selects. */
+export const ConversationBranchFields: readonly (keyof ConversationBranchRow)[] =
+    ['ID', 'ConversationID', 'ParentBranchID', 'ForkFromSequence', 'Name', 'Kind', 'SourceDetailID', 'UserID', 'User', '__mj_CreatedAt'];
+
+/**
+ * What {@link ConversationEngine.CreateFork} needs. A null ForkFromSequence starts before the first message.
+ * ParentBranchID must be the branch that owns the row at ForkFromSequence (null for a Main row); the
+ * fork-point helpers ({@link ConversationEngine.ForkPointFrom} and the others) produce that.
+ */
+export interface CreateForkInput {
+    ConversationID: string;
+    Kind: ForkKind;
+    ParentBranchID: string | null;
+    ForkFromSequence: number | null;
+    SourceDetailID?: string | null;
+    Name?: string | null;
+}
+
+/** Where a new fork starts: the parent path (null is Main) and the Sequence of the last shared message. */
+export interface ForkPoint {
+    readonly ParentBranchID: string | null;
+    readonly ForkFromSequence: number | null;
+}
+
+/** A person or an agent who wrote in a fork. */
+export interface ForkParticipant {
+    readonly Kind: 'User' | 'Agent';
+    readonly ID: string;
+    readonly Name: string | null;
+}
+
+/** A detail row as the fork summaries read it: a fork's own row, or an anchor row. */
+export interface ForkSummaryRow {
+    ID: MJConversationDetailEntity['ID'];
+    BranchID: MJConversationDetailEntity['BranchID'];
+    Sequence: MJConversationDetailEntity['Sequence'];
+    Role: MJConversationDetailEntity['Role'] | null;
+    Message: MJConversationDetailEntity['Message'] | null;
+    UserID: MJConversationDetailEntity['UserID'];
+    AgentID: MJConversationDetailEntity['AgentID'];
+    User?: MJConversationDetailEntity['User'];
+    Agent?: MJConversationDetailEntity['Agent'];
+    HiddenToUser?: MJConversationDetailEntity['HiddenToUser'] | null;
+    /** A Date on an entity, an ISO string on a 'simple' RunView row. */
+    __mj_CreatedAt: MJConversationDetailEntity['__mj_CreatedAt'] | string;
+}
+
+/** The Fields the fork-summary reads select. */
+export const ForkSummaryRowFields: readonly (keyof ForkSummaryRow)[] =
+    ['ID', 'BranchID', 'Sequence', 'Role', 'Message', 'UserID', 'AgentID', 'User', 'Agent', 'HiddenToUser', '__mj_CreatedAt'];
+
+/** Most participants a fork summary lists. */
+export const MAX_FORK_PARTICIPANTS = 3;
+
+/** Where a message is: its branch (null is Main) and its Sequence. */
+export interface ForkMessagePosition {
+    readonly BranchID: string | null;
+    readonly Sequence: number;
+}
+
+/** What the UI shows for one fork: its chip, its header and its row in the forks list. */
+export interface ForkSummary {
+    readonly Branch: ConversationBranchRow;
+    readonly Kind: ForkKind;
+    readonly DisplayName: string;
+    /** The fork's own visible rows. */
+    readonly MessageCount: number;
+    /** Distinct agents and people of the own rows, in order of first appearance, at most {@link MAX_FORK_PARTICIPANTS}. */
+    readonly Participants: ReadonlyArray<ForkParticipant>;
+    /** Every person who wrote an own User row. */
+    readonly AuthorUserIDs: ReadonlyArray<string>;
+    /** The newest own row's time, else the fork's creation time. */
+    readonly LastActivityAt: Date;
+    readonly LastMessagePreview: string | null;
+    readonly LastMessageAuthorName: string | null;
+    /** The message the chip shows under: SourceDetailID, else the anchor. */
+    readonly PlacementDetailID: string | null;
+    /** The branch and Sequence of the placement message; null when its row is not read. */
+    readonly PlacementPosition?: ForkMessagePosition | null;
+    /**
+     * The row the fork inherits up to: the parent fork's own row (a Main row when ParentBranchID
+     * is null) with Sequence = ForkFromSequence. Null when there is no such row.
+     */
+    readonly AnchorDetailID: string | null;
+    readonly AnchorAuthorName: string | null;
+    readonly AnchorAt: Date | null;
+    /**
+     * The author of the fork's source message (SourceDetailID: the replaced, edited or regenerated
+     * message): the agent of an agent row, else the person. Null with no source or when its row is not read.
+     */
+    readonly SourceAuthorName?: string | null;
+    readonly StartedByUserID: string | null;
+    readonly StartedByName: string | null;
+    readonly ParentBranchID: string | null;
+}
+
+const FORK_NAME_MAX_WORDS = 6;
+const FORK_NAME_MAX_CHARS = 40;
+const FORK_PREVIEW_MAX_CHARS = 120;
+
+/** The rows one reader may see: a conversation plus the branch whose path is active. */
+export interface ConversationScope {
+    readonly ConversationID: string;
+    /** null = trunk */
+    readonly BranchID: string | null;
+    /** The conversation's branch rows, loaded once. Empty on the trunk. */
+    readonly Branches: ReadonlyArray<ConversationBranchRow>;
+}
+
+function sameId(a: string | null | undefined, b: string | null | undefined): boolean {
+    if (a == null || b == null) {
+        return a == null && b == null;
+    }
+    return NormalizeUUID(a) === NormalizeUUID(b);
+}
 
 export interface SharedByInfo {
     /** Grantor user ID. Null when the share predates the `SharedByUserID` column. */
@@ -214,14 +726,20 @@ export interface ConversationDetailParsed extends MJConversationDetailEntityType
 export function ParseConversationDetailComplete(
     queryResult: ConversationDetailComplete
 ): ConversationDetailParsed {
+    const rawArtifacts = queryResult.ArtifactsJSON
+        ? JSON.parse(queryResult.ArtifactsJSON) as ArtifactJSON[]
+        : [];
+    const artifacts = rawArtifacts.slice().sort((a, b) => {
+        const aTime = ToEpochMs(a.VersionCreatedAt) ?? ToEpochMs(a.__mj_CreatedAt) ?? 0;
+        const bTime = ToEpochMs(b.VersionCreatedAt) ?? ToEpochMs(b.__mj_CreatedAt) ?? 0;
+        return aTime - bTime;
+    });
     return {
         ...queryResult,
         agentRuns: queryResult.AgentRunsJSON
             ? JSON.parse(queryResult.AgentRunsJSON) as AgentRunJSON[]
             : [],
-        artifacts: queryResult.ArtifactsJSON
-            ? JSON.parse(queryResult.ArtifactsJSON) as ArtifactJSON[]
-            : [],
+        artifacts,
         ratings: queryResult.RatingsJSON
             ? JSON.parse(queryResult.RatingsJSON) as RatingJSON[]
             : []
@@ -305,6 +823,8 @@ export interface LoadDetailWindowParams {
     PageSize?: number;
     /** Raw rows to pull per attempt. Default `PageSize * 3`. */
     RawOverread?: number;
+    /** The branch whose path to page; null or omitted is the trunk. */
+    BranchID?: string | null;
 }
 
 /**
@@ -394,12 +914,77 @@ function idInFilter(ids: string[]): string {
     return `ID IN (${quoteIdList(ids)})`;
 }
 
-/** Keys agent runs by the detail they belong to. */
+interface DetailAgentRunCandidate {
+    ID?: string | null;
+    ParentRunID?: string | null;
+    ContinuationDepth?: number | null;
+    StartedAt?: Date | string | null;
+    __mj_CreatedAt?: Date | string | null;
+}
+
+/**
+ * Priority tier for choosing which `AIAgentRun` represents a `ConversationDetail` in the UI
+ * (gear icon -> "View Agent Run", token/cost stats, duration):
+ * - Tier 0: Root primary orchestrating run (`ParentRunID == null` and `ContinuationDepth == 0`)
+ * - Tier 1: Root post-workflow continuation synthesis run (`ParentRunID == null` and `ContinuationDepth > 0`)
+ * - Tier 2: Child / sub-agent run (`ParentRunID != null`)
+ */
+function agentRunPriorityTier(run: DetailAgentRunCandidate): number {
+    if (run.ParentRunID) {
+        return 2;
+    }
+    return (run.ContinuationDepth ?? 0) > 0 ? 1 : 0;
+}
+
+/**
+ * Returns true when `candidate` should replace `existing` as the representative agent run
+ * for a single `ConversationDetailID`. Lower tier wins (primary root run beats continuation
+ * synthesis run, which beats child sub-agent run); within the same tier, a strictly newer run
+ * wins (so user retries of a message replace the earlier run while DESC-ordered queries keep
+ * the first row when timestamps are tied or omitted in test fixtures).
+ */
+export function ShouldReplaceDetailAgentRun(
+    existing: DetailAgentRunCandidate | undefined,
+    candidate: DetailAgentRunCandidate
+): boolean {
+    if (!existing) {
+        return true;
+    }
+    if (existing.ID && candidate.ID && UUIDsEqual(existing.ID, candidate.ID)) {
+        return true;
+    }
+    const existingTier = agentRunPriorityTier(existing);
+    const candidateTier = agentRunPriorityTier(candidate);
+    if (candidateTier !== existingTier) {
+        return candidateTier < existingTier;
+    }
+    const existingTime = ToEpochMs(existing.__mj_CreatedAt ?? existing.StartedAt) ?? 0;
+    const candidateTime = ToEpochMs(candidate.__mj_CreatedAt ?? candidate.StartedAt) ?? 0;
+    if (candidateTime !== existingTime) {
+        return candidateTime > existingTime;
+    }
+    return false;
+}
+
+function selectPreferredDetailAgentRun(runs: AgentRunJSON[]): AgentRunJSON | undefined {
+    let best: AgentRunJSON | undefined;
+    for (const run of runs) {
+        if (ShouldReplaceDetailAgentRun(best, run)) {
+            best = run;
+        }
+    }
+    return best;
+}
+
+/** Keys agent runs by the detail they belong to, preferring the primary root orchestrating run. */
 function groupAgentRunsByDetailId(runs: MJAIAgentRunEntity[]): Map<string, MJAIAgentRunEntity> {
     const byDetailId = new Map<string, MJAIAgentRunEntity>();
     for (const run of runs) {
         if (run.ConversationDetailID) {
-            byDetailId.set(run.ConversationDetailID, run);
+            const existing = byDetailId.get(run.ConversationDetailID);
+            if (ShouldReplaceDetailAgentRun(existing, run)) {
+                byDetailId.set(run.ConversationDetailID, run);
+            }
         }
     }
     return byDetailId;
@@ -508,10 +1093,23 @@ function mergeArtifactJSON(
  * without an identity there is nobody to be the owner of, and widening on absent input
  * is how a personal folder reaches a stranger's list.
  */
-export function BuildProjectVisibilityFilter(userId: string | null | undefined): string {
+export function BuildProjectVisibilityFilter(
+    userId: string | null | undefined,
+    sharedProjectIds: string[] = []
+): string {
     const id = String(userId ?? '').trim();
-    return id.length > 0
-        ? `(OwnerUserID IS NULL OR OwnerUserID='${EscapeSQLString(id)}')`
+    const cleanedSharedIds = sharedProjectIds
+        .map((pid) => String(pid ?? '').trim())
+        .filter((pid) => pid.length > 0);
+    const sharedClause =
+        cleanedSharedIds.length > 0
+            ? ` OR ID IN (${cleanedSharedIds.map((pid) => `'${EscapeSQLString(pid)}'`).join(',')})`
+            : '';
+    if (id.length > 0) {
+        return `(OwnerUserID IS NULL OR OwnerUserID='${EscapeSQLString(id)}'${sharedClause})`;
+    }
+    return cleanedSharedIds.length > 0
+        ? `(OwnerUserID IS NULL${sharedClause})`
         : `OwnerUserID IS NULL`;
 }
 
@@ -633,6 +1231,12 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     /** Track the environment ID used for the last load */
     private _lastEnvironmentId: string | null = null;
 
+    /** Track the user ID used for the last conversations load */
+    private _lastConversationsUserId: string | null = null;
+
+    /** Conversation IDs shared with the current user via explicit MJ: Resource Permissions grants */
+    private _explicitSharedConversationIds = new Set<string>();
+
     /** Track the environment ID used for the last projects (folders) load */
     private _lastProjectsEnvironmentId: string | null = null;
     /**
@@ -643,6 +1247,12 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * from cache and never issue a read of their own.
      */
     private _lastProjectsUserId: string | null = null;
+
+    /**
+     * The user the last folder or conversation load ran for. Kept whole, not just the ID, so event handlers can
+     * match that user's Role grants as well as their User grants (see {@link getUserSharedProjectPermissions}).
+     */
+    private _lastViewer: UserInfo | null = null;
 
     /**
      * Monotonic ticket for conversation loads, to keep the newest ANSWER rather than the
@@ -660,7 +1270,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * For conversations the current user *received* via sharing, this map goes
      * from `conversationId` to the grantor's display info. Populated by
      * {@link LoadConversations} using the `SharedByUserID` column on the
-     * `MJ: Resource Permissions` row. Used by the chat UI to render
+     * `MJ: Resource Permissions` row or the conversation owner for conversations
+     * inside a shared folder. Used by the chat UI to render
      * "Shared by {email}" next to the title and a share icon in the sidebar.
      */
     private _sharedByByConversationId = new Map<string, SharedByInfo>();
@@ -687,8 +1298,17 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
-     * True when the user may change the conversation's folder and pin: they own
-     * it, or hold an Edit or Owner grant on it. A View grant is read-only.
+     * True when the user may move the conversation to another folder or change whether it inherits its
+     * folder's access: only its owner. Both decide who else sees it, so an Edit or Owner grant is not
+     * enough. Mirrors the server's rule in `MJConversationEntityServer`.
+     */
+    public CanMoveConversation(conversation: MJConversationEntity, userId: string): boolean {
+        return !!conversation.UserID && UUIDsEqual(conversation.UserID, userId);
+    }
+
+    /**
+     * True when the user may pin the conversation: they own it, or hold an Edit or Owner grant on it.
+     * A View grant is read-only. Moving it is owner-only: see {@link CanMoveConversation}.
      */
     public CanEditConversation(conversation: MJConversationEntity, userId: string): boolean {
         if (conversation.UserID && UUIDsEqual(conversation.UserID, userId)) {
@@ -747,7 +1367,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         environmentId: string,
         contextUser: UserInfo,
         forceRefresh: boolean = false,
-        options?: { includeApplicationScoped?: boolean }
+        options?: { includeApplicationScoped?: boolean; includeAnchored?: boolean; includeRecordLinked?: boolean }
     ): Promise<void> {
         // Skip if already loaded for this environment (unless forcing)
         if (!forceRefresh && this._lastEnvironmentId === environmentId && this._conversations$.value.length > 0) {
@@ -755,21 +1375,25 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         }
 
         this._lastEnvironmentId = environmentId;
+        this._lastConversationsUserId = contextUser?.ID ?? null;
+        this._lastViewer = contextUser ?? null;
 
         // Claim a ticket for this load. Anything published below is gated on still holding
         // the newest one — see _conversationsLoadGeneration.
         const generation = ++this._conversationsLoadGeneration;
 
         const sharedPermissions = await this.getSharedConversationPermissions(contextUser);
+        const initialSharedProjectIds = this.getSharedProjectIds(environmentId);
         const filter = this.buildVisibleConversationsFilter(
             environmentId,
             contextUser.ID,
             sharedPermissions.map((p) => p.ResourceRecordID),
-            options
+            options,
+            initialSharedProjectIds
         );
 
         const rv = new RunView();
-        const result = await rv.RunView<MJConversationEntity>(
+        let result = await rv.RunView<MJConversationEntity>(
             {
                 EntityName: 'MJ: Conversations',
                 ExtraFilter: filter,
@@ -801,34 +1425,178 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             this._conversations$.next([]);
         }
 
-        // Build the "shared by" map AFTER fetching conversations so we can
-        // exclude permissions on conversations the user owns. A role-inherited
-        // grant on the user's own conversation (e.g. they're in a role that
-        // got View access via a feedback workflow) must NOT appear as
-        // "shared with me at View level" — otherwise the chat UI would treat
-        // their own conversation as read-only. See isReadOnlyView in
-        // conversation-chat-area.component.
-        const ownedConversationIds = new Set(
-            (result.Results ?? [])
-                .filter((c) => c.UserID && UUIDsEqual(c.UserID, contextUser.ID))
-                .map((c) => NormalizeUUID(c.ID))
+        await this.applyConversationSharingMetadata(
+            rv,
+            result.Results ?? [],
+            sharedPermissions,
+            initialSharedProjectIds,
+            contextUser
         );
-        const trulySharedPermissions = sharedPermissions.filter(
-            (p) => !ownedConversationIds.has(NormalizeUUID(p.ResourceRecordID))
-        );
-        await this.rebuildSharedByMap(rv, trulySharedPermissions, contextUser);
 
         // Load the folder (project) list so the sidebar can group conversations
         // under their folder. Done after the conversation query (so it isn't
         // delayed) and after the early-return guard above; LoadProjects has its
         // own per-environment guard to avoid redundant reloads.
         await this.LoadProjects(environmentId, contextUser, forceRefresh);
+
+        if (generation !== this._conversationsLoadGeneration) {
+            return;
+        }
+
+        // If LoadProjects discovered shared folders that were not yet in _projects$ when
+        // the initial conversation query ran, re-query MJ: Conversations so conversations
+        // inside those shared folders are automatically included and marked View-only.
+        const currentSharedProjectIds = this.getSharedProjectIds(environmentId);
+        if (!this.sameIdSet(initialSharedProjectIds, currentSharedProjectIds)) {
+            const updatedFilter = this.buildVisibleConversationsFilter(
+                environmentId,
+                contextUser.ID,
+                sharedPermissions.map((p) => p.ResourceRecordID),
+                options,
+                currentSharedProjectIds
+            );
+            result = await rv.RunView<MJConversationEntity>(
+                {
+                    EntityName: 'MJ: Conversations',
+                    ExtraFilter: updatedFilter,
+                    OrderBy: 'IsPinned DESC, __mj_UpdatedAt DESC',
+                    MaxRows: 1000,
+                    ResultType: 'entity_object',
+                    BypassCache: forceRefresh
+                },
+                contextUser
+            );
+
+            if (generation !== this._conversationsLoadGeneration) {
+                return;
+            }
+
+            if (result.Success) {
+                this._conversations$.next(result.Results || []);
+            } else {
+                console.error('[ConversationEngine] Failed to load conversations:', result.ErrorMessage);
+                this._conversations$.next([]);
+            }
+
+            await this.applyConversationSharingMetadata(
+                rv,
+                result.Results ?? [],
+                sharedPermissions,
+                currentSharedProjectIds,
+                contextUser
+            );
+        }
+    }
+
+    /**
+     * Populates {@link _explicitSharedConversationIds} and {@link _sharedByByConversationId}
+     * from both explicit `MJ: Resource Permissions` grants and folder-inherited permissions
+     * on conversations inside Shared or Public folders (when {@link IsInheritingFolderAccess}
+     * is true).
+     *
+     * Explicit grants and folder-inherited grants combine via {@link ComparePermissionLevels}
+     * (`Owner > Edit > View`), while conversations whose owner has not turned on `inheritFolderAccess`
+     * do not inherit folder access and are only visible to their owner or explicit conversation grantees.
+     *
+     * Side effect: when any loaded conversation turns out not to be visible to the user, it is
+     * dropped and the remaining list is re-emitted on {@link _conversations$}.
+     */
+    private async applyConversationSharingMetadata(
+        rv: RunView,
+        conversations: MJConversationEntity[],
+        sharedPermissions: MJResourcePermissionEntity[],
+        sharedProjectIds: string[],
+        contextUser: UserInfo
+    ): Promise<void> {
+        // Exclude permissions on conversations the user owns. A role-inherited
+        // grant on the user's own conversation (e.g. they're in a role that
+        // got View access via a feedback workflow) must NOT appear as
+        // "shared with me at View level" — otherwise the chat UI would treat
+        // their own conversation as read-only. See isReadOnlyView in
+        // conversation-chat-area.component.
+        const ownedConversationIds = new Set(
+            conversations
+                .filter((c) => c.UserID && UUIDsEqual(c.UserID, contextUser.ID))
+                .map((c) => NormalizeUUID(c.ID))
+        );
+        const trulySharedPermissions = sharedPermissions.filter(
+            (p) => !ownedConversationIds.has(NormalizeUUID(p.ResourceRecordID))
+        );
+        this._explicitSharedConversationIds = new Set(
+            trulySharedPermissions.map((p) => NormalizeUUID(p.ResourceRecordID))
+        );
+
+        const sharedProjectIdSet = new Set(sharedProjectIds.map((id) => NormalizeUUID(id)));
+        const convById = new Map<string, MJConversationEntity>(
+            conversations.map((c) => [NormalizeUUID(c.ID), c])
+        );
+
+        const effectiveExplicitPermissions = trulySharedPermissions.map((p) => {
+            const conv = convById.get(NormalizeUUID(p.ResourceRecordID));
+            const inherited =
+                conv && conv.ProjectID && IsInheritingFolderAccess(conv) && sharedProjectIdSet.has(NormalizeUUID(conv.ProjectID))
+                    ? this.GetEffectiveProjectPermission(conv.ProjectID, contextUser)
+                    : null;
+            return {
+                ResourceRecordID: p.ResourceRecordID,
+                SharedByUserID: p.SharedByUserID ?? null,
+                SharedByUser: p.SharedByUser ?? null,
+                PermissionLevel: ComparePermissionLevels(p.PermissionLevel ?? 'View', inherited?.Level) ?? 'View'
+            };
+        });
+
+        const folderSharedPermissions: Array<{
+            ResourceRecordID: string;
+            SharedByUserID: string | null;
+            SharedByUser: string | null;
+            PermissionLevel: 'View' | 'Edit' | 'Owner' | null;
+        }> = [];
+
+        const visibleConversations: MJConversationEntity[] = [];
+        let filteredAny = false;
+
+        for (const conv of conversations) {
+            const normId = NormalizeUUID(conv.ID);
+            const isOwned = !conv.UserID || ownedConversationIds.has(normId);
+            if (isOwned || this._explicitSharedConversationIds.has(normId)) {
+                visibleConversations.push(conv);
+                continue;
+            }
+            if (
+                conv.ProjectID &&
+                IsInheritingFolderAccess(conv) &&
+                sharedProjectIdSet.has(NormalizeUUID(conv.ProjectID))
+            ) {
+                visibleConversations.push(conv);
+                const inherited = this.GetEffectiveProjectPermission(conv.ProjectID, contextUser);
+                const convWithUser = conv as MJConversationEntity & { User?: string | null };
+                folderSharedPermissions.push({
+                    ResourceRecordID: conv.ID,
+                    SharedByUserID: conv.UserID ?? inherited?.SharedByUserID ?? null,
+                    SharedByUser: convWithUser.User ?? inherited?.SharedByUser ?? null,
+                    PermissionLevel: inherited?.Level ?? 'View'
+                });
+            } else {
+                filteredAny = true;
+            }
+        }
+
+        if (filteredAny) {
+            this._conversations$.next(visibleConversations);
+        }
+
+        await this.rebuildSharedByMap(
+            rv,
+            [...effectiveExplicitPermissions, ...folderSharedPermissions],
+            contextUser
+        );
     }
 
     /**
      * Returns an `ExtraFilter` for `MJ: Conversations` that matches exactly the conversations
-     * {@link LoadConversations} shows the user: owned by the user or shared with them, not
-     * archived, and (unless `includeApplicationScoped`) Global or Both scope.
+     * {@link LoadConversations} shows the user: owned by the user, explicitly shared with them,
+     * or inside a visible Shared/Public folder (with folder inheritance enabled), not archived,
+     * and (unless `includeApplicationScoped`) Global or Both scope.
      *
      * Use it anywhere that reads conversations for display (search, pickers) so those reads
      * cannot show more than the conversation list does. It is not capped, unlike the list load.
@@ -840,15 +1608,188 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     public async GetVisibleConversationsFilter(
         environmentId: string,
         contextUser: UserInfo,
-        options?: { includeApplicationScoped?: boolean }
+        options?: { includeApplicationScoped?: boolean; includeAnchored?: boolean; includeRecordLinked?: boolean }
     ): Promise<string> {
         const sharedPermissions = await this.getSharedConversationPermissions(contextUser);
+        const sharedProjectIds = this.getSharedProjectIds(environmentId);
         return this.buildVisibleConversationsFilter(
             environmentId,
             contextUser.ID,
             sharedPermissions.map((p) => p.ResourceRecordID),
-            options
+            options,
+            sharedProjectIds
         );
+    }
+
+    /**
+     * Approved `MJ: Resource Permissions` rows targeting `MJ: Projects` (`PROJECTS_RESOURCE_TYPE_ID`).
+     */
+    private getApprovedProjectPermissions(): MJResourcePermissionEntity[] {
+        const allPerms = ResourcePermissionEngine.Instance.Permissions ?? [];
+        return allPerms.filter(
+            (p) =>
+                p.Status === 'Approved' &&
+                UUIDsEqual(p.ResourceTypeID, PROJECTS_RESOURCE_TYPE_ID)
+        );
+    }
+
+    /**
+     * Approved `MJ: Projects` permission grants that apply to `user` (direct User grant or Role grant),
+     * reduced to the highest `PermissionLevel` per project ID.
+     */
+    private getUserSharedProjectPermissions(user: UserInfo | null | undefined): MJResourcePermissionEntity[] {
+        if (!user?.ID) return [];
+        const approved = this.getApprovedProjectPermissions();
+        const roleIdSet = new Set(
+            (user.UserRoles ?? [])
+                .map((ur) => ur.RoleID)
+                .filter((id): id is string => !!id)
+                .map((id) => NormalizeUUID(id))
+        );
+        const matching = approved.filter(
+            (p) =>
+                (p.Type === 'User' && !!p.UserID && UUIDsEqual(p.UserID, user.ID)) ||
+                (p.Type === 'Role' && !!p.RoleID && roleIdSet.has(NormalizeUUID(p.RoleID)))
+        );
+
+        const byProjectId = new Map<string, MJResourcePermissionEntity>();
+        for (const perm of matching) {
+            const key = NormalizeUUID(perm.ResourceRecordID);
+            const existing = byProjectId.get(key);
+            if (!existing) {
+                byProjectId.set(key, perm);
+            } else {
+                const winner = ComparePermissionLevels(existing.PermissionLevel ?? 'View', perm.PermissionLevel ?? 'View');
+                if (winner !== (existing.PermissionLevel ?? 'View')) {
+                    byProjectId.set(key, perm);
+                }
+            }
+        }
+        return [...byProjectId.values()];
+    }
+
+    /**
+     * Returns the three-tier visibility mode (`'Private' | 'Shared' | 'Public'`) for a folder:
+     * - `'Public'`: `OwnerUserID == null` (environment-wide)
+     * - `'Shared'`: `OwnerUserID != null` and the folder itself has approved `MJ: Resource Permissions` grants
+     * - `'Private'`: `OwnerUserID != null` with no active folder shares
+     *
+     * A subfolder is shared on its own: the server's read filter and write check look at a folder's own
+     * grants only, so this does too, and the tier shown is the access the server enforces.
+     */
+    public GetProjectVisibilityTier(projectOrId: MJProjectEntity | string | null | undefined): ProjectVisibilityTier {
+        const project =
+            typeof projectOrId === 'string'
+                ? this._projects$.value.find((p) => !!p.ID && UUIDsEqual(p.ID, projectOrId))
+                : projectOrId;
+        if (!project) {
+            return 'Private';
+        }
+        if (!project.OwnerUserID) {
+            return 'Public';
+        }
+        const shared = !!project.ID && this.getApprovedProjectPermissions().some((p) => UUIDsEqual(p.ResourceRecordID, project.ID));
+        return shared ? 'Shared' : 'Private';
+    }
+
+    /**
+     * Resolves the effective permission level (`'View' | 'Edit' | 'Owner'`) a user inherits from a folder.
+     * The folder's own grants only, not its ancestors', matching the server (see {@link GetProjectVisibilityTier}):
+     * - Public folders (`OwnerUserID == null`) grant at least `'View'` to everyone in the environment.
+     * - Shared folders grant the user's highest direct/role `MJ: Resource Permissions` level (`View`/`Edit`/`Owner`).
+     * - Folder owners also receive at least `'View'` on other users' inherited conversations placed in their Shared folder.
+     *
+     * Without a `contextUser`, it answers for the user the last folder or conversation load ran for, Role grants included.
+     */
+    public GetEffectiveProjectPermission(
+        projectId: string | null | undefined,
+        contextUser?: UserInfo | null
+    ): { Level: 'View' | 'Edit' | 'Owner'; SharedByUserID: string | null; SharedByUser: string | null } | null {
+        if (!projectId) return null;
+        const viewer = contextUser ?? this._lastViewer;
+        const userId = viewer?.ID ?? this._lastConversationsUserId ?? this._lastProjectsUserId;
+        const normUserId = userId ? NormalizeUUID(userId) : null;
+        const userProjectPerms = this.getUserSharedProjectPermissions(viewer);
+        const userPermByProjectId = new Map<string, MJResourcePermissionEntity>(
+            userProjectPerms.map((p) => [NormalizeUUID(p.ResourceRecordID), p])
+        );
+        if (normUserId) {
+            for (const p of this.getApprovedProjectPermissions()) {
+                if (p.Type === 'User' && p.UserID && NormalizeUUID(p.UserID) === normUserId) {
+                    const key = NormalizeUUID(p.ResourceRecordID);
+                    const existing = userPermByProjectId.get(key);
+                    if (
+                        !existing ||
+                        ComparePermissionLevels(existing.PermissionLevel ?? 'View', p.PermissionLevel ?? 'View') !==
+                            (existing.PermissionLevel ?? 'View')
+                    ) {
+                        userPermByProjectId.set(key, p);
+                    }
+                }
+            }
+        }
+        const normProjectId = NormalizeUUID(projectId);
+        const proj = this._projects$.value.find((p) => !!p.ID && NormalizeUUID(p.ID) === normProjectId);
+        const directGrant = userPermByProjectId.get(normProjectId);
+
+        let bestLevel: 'View' | 'Edit' | 'Owner' | null = null;
+        let sharedByUserId: string | null = null;
+        let sharedByUser: string | null = null;
+
+        if (directGrant) {
+            bestLevel = directGrant.PermissionLevel ?? 'View';
+            sharedByUserId = directGrant.SharedByUserID ?? proj?.OwnerUserID ?? null;
+            sharedByUser = directGrant.SharedByUser ?? proj?.OwnerUser ?? null;
+        }
+
+        if (proj) {
+            if (!proj.OwnerUserID) {
+                bestLevel = ComparePermissionLevels(bestLevel, 'View');
+            } else if (userId && !UUIDsEqual(proj.OwnerUserID, userId)) {
+                // Folder owned by another user that is in our visible project list (shared with us)
+                bestLevel = ComparePermissionLevels(bestLevel, 'View');
+                sharedByUserId = sharedByUserId ?? proj.OwnerUserID;
+                sharedByUser = sharedByUser ?? proj.OwnerUser ?? null;
+            } else if (userId && this.GetProjectVisibilityTier(proj) !== 'Private') {
+                // Folder owner viewing collaborators' conversations inside their Shared folder
+                bestLevel = ComparePermissionLevels(bestLevel, 'View');
+            }
+        }
+
+        if (!bestLevel) {
+            return null;
+        }
+        return {
+            Level: bestLevel,
+            SharedByUserID: sharedByUserId,
+            SharedByUser: sharedByUser
+        };
+    }
+
+    /**
+     * IDs of loaded folders in `environmentId` that share their conversations with participants:
+     * - `'Public'` folders (`OwnerUserID IS NULL`)
+     * - `'Shared'` folders (have approved `MJ: Resource Permissions` grants on the folder itself,
+     *   or are owned by another user and visible to the current viewer).
+     */
+    private getSharedProjectIds(environmentId: string): string[] {
+        const viewerId = this._lastConversationsUserId ?? this._lastProjectsUserId;
+        return this._projects$.value
+            .filter((p) => {
+                if (p.IsArchived) return false;
+                if (p.EnvironmentID && !UUIDsEqual(p.EnvironmentID, environmentId)) return false;
+                if (!p.OwnerUserID) return true; // Public tier
+                if (viewerId && !UUIDsEqual(p.OwnerUserID, viewerId)) return true; // Shared with viewer by another owner
+                return this.GetProjectVisibilityTier(p) !== 'Private';
+            })
+            .map((p) => p.ID)
+            .filter((id): id is string => !!id);
+    }
+
+    private sameIdSet(a: string[], b: string[]): boolean {
+        if (a.length !== b.length) return false;
+        const setA = new Set(a.map((id) => NormalizeUUID(id)));
+        return b.every((id) => setA.has(NormalizeUUID(id)));
     }
 
     /**
@@ -864,19 +1805,34 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         environmentId: string,
         userId: string,
         sharedConversationIds: string[],
-        options?: { includeApplicationScoped?: boolean }
+        options?: { includeApplicationScoped?: boolean; includeAnchored?: boolean; includeRecordLinked?: boolean },
+        sharedProjectIds: string[] = []
     ): string {
         const ownershipClause = `UserID='${userId}'`;
         const sharedClause =
             sharedConversationIds.length > 0
-                ? ` OR ID IN (${sharedConversationIds.map((id) => `'${id}'`).join(',')})`
+                ? ` OR ID IN (${sharedConversationIds.map((id) => `'${EscapeSQLString(id)}'`).join(',')})`
+                : '';
+        const sharedFolderClause =
+            sharedProjectIds.length > 0
+                ? ` OR (ProjectID IN (${sharedProjectIds.map((id) => `'${EscapeSQLString(id)}'`).join(',')}) AND ${INHERIT_FOLDER_ACCESS_SQL_CLAUSE})`
                 : '';
         // The main chat view shows Global and Both. App-scoped conversations live inside
         // their owning Application's embedded surface.
         const scopeClause = options?.includeApplicationScoped
             ? ''
             : ` AND ApplicationScope IN ('Global', 'Both')`;
-        return `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}`;
+        // Anchored record/document comment threads live inside the target record's
+        // comment drawer/popover and should not clutter the main Chat sidebar list.
+        const anchorClause = options?.includeAnchored
+            ? ''
+            : ` AND AnchorType IS NULL`;
+        // Record-bound AI conversations (e.g. "Ask AI" on an entity record form) stay
+        // attached to their owning record and do not pollute the general-purpose Chat sidebar.
+        const recordLinkedClause = options?.includeRecordLinked
+            ? ''
+            : ` AND LinkedEntityID IS NULL`;
+        return `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}${sharedFolderClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}${anchorClause}${recordLinkedClause}`;
     }
 
     /**
@@ -941,14 +1897,13 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * Loads the projects (conversation folders) visible to a user in an environment and
      * emits via Projects$.
      *
-     * Visible means SHARED (OwnerUserID IS NULL — every folder that existed before
-     * ownership was expressible) plus the user's OWN personal folders. A personal folder
-     * never reaches anyone else's sidebar. The set is small, so it is cached whole;
-     * reloading is skipped only when both the environment AND the user match, because the
-     * read now depends on both.
+     * Visible means:
+     * - PUBLIC (`OwnerUserID IS NULL`),
+     * - SHARED with the user or their roles via `MJ: Resource Permissions` (`PROJECTS_RESOURCE_TYPE_ID`), or
+     * - PRIVATE/OWNED by the user (`OwnerUserID = contextUser.ID`).
      *
      * @param environmentId - The environment to filter projects by
-     * @param contextUser - The current user context; also decides which personal folders load
+     * @param contextUser - The current user context; also decides which personal/shared folders load
      * @param forceRefresh - If true, reloads even if already cached for this environment/user
      */
     public async LoadProjects(
@@ -963,9 +1918,13 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             return;
         }
 
-        // Shared folders, plus this user's own. One definition, shared with every other
-        // list read of this entity — see BuildProjectVisibilityFilter.
-        const ownership = BuildProjectVisibilityFilter(userId);
+        await ResourcePermissionEngine.Instance.Config(false, contextUser);
+        const sharedProjectIds = this.getUserSharedProjectPermissions(contextUser).map(
+            (p) => p.ResourceRecordID
+        );
+
+        // Public folders, folders shared with this user/role, plus this user's own.
+        const ownership = BuildProjectVisibilityFilter(userId, sharedProjectIds);
 
         const rv = new RunView();
         const result = await rv.RunView<MJProjectEntity>(
@@ -989,6 +1948,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         if (result.Success) {
             this._lastProjectsEnvironmentId = environmentId;
             this._lastProjectsUserId = userId;
+            this._lastViewer = contextUser ?? null;
             this._projects$.next(result.Results || []);
         } else {
             console.error('[ConversationEngine] Failed to load projects:', result.ErrorMessage);
@@ -1012,6 +1972,57 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         contextUser: UserInfo
     ): Promise<boolean> {
         return this.SaveConversation(conversationId, { ProjectID: projectId }, contextUser);
+    }
+
+    /**
+     * Enables or disables folder permission inheritance for a conversation (`inheritFolderAccess`
+     * in `Conversation.AdditionalData`). It is off by default; while off, the conversation is restricted
+     * to its owner and explicit conversation-level `MJ: Resource Permissions` grantees even when
+     * placed inside a Shared or Public folder.
+     */
+    public async SetConversationFolderInheritance(
+        conversationId: string,
+        inheritFolderAccess: boolean,
+        contextUser?: UserInfo
+    ): Promise<boolean> {
+        const existing = this.GetConversation(conversationId);
+        const updatedAdditionalData = BuildUpdatedAdditionalDataForFolderInheritance(
+            existing?.AdditionalData,
+            inheritFolderAccess
+        );
+        const saved = await this.SaveConversation(
+            conversationId,
+            { AdditionalData: updatedAdditionalData },
+            contextUser
+        );
+        if (saved) {
+            this.reconcileFolderSharedConversations();
+        }
+        return saved;
+    }
+
+    /**
+     * Creates a fork (an `MJ: Conversation Branches` row) started by `contextUser`. A fork before the
+     * first message shares nothing, so its parent is always Main. Never reads or writes the
+     * conversation row. Write access is the branch entity's rule (owner, or an Edit/Owner share).
+     * The server refuses it unless the person holds the `Conversations: Fork` authorization.
+     * @throws when the fork cannot be saved; the message carries the save result
+     */
+    public async CreateFork(input: CreateForkInput, contextUser: UserInfo): Promise<MJConversationBranchEntity> {
+        const branch = await this.ProviderToUse.GetEntityObject<MJConversationBranchEntity>('MJ: Conversation Branches', contextUser);
+        branch.NewRecord();
+        branch.ConversationID = input.ConversationID;
+        branch.Kind = input.Kind;
+        branch.ForkFromSequence = input.ForkFromSequence;
+        branch.ParentBranchID = input.ForkFromSequence == null ? null : input.ParentBranchID;
+        branch.SourceDetailID = input.SourceDetailID ?? null;
+        branch.UserID = contextUser.ID;
+        const name = input.Name?.trim();
+        branch.Name = name ? name : null;
+        if (!(await branch.Save())) {
+            throw new Error(`Failed to create the fork: ${branch.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+        return branch;
     }
 
     /**
@@ -1088,12 +2099,17 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         }
         const newParentId = project.ParentID ?? null;
 
-        // 1. Unassign conversations directly in this folder
+        // 1. Unassign conversations directly in this folder that the caller can edit.
+        // View-only conversations owned by other users in a shared folder cannot be edited
+        // by this caller; if any still exist in the DB, the delete below will surface
+        // FK_Conversation_Project via ExplainProjectDeleteFailure.
         const directConversations = this._conversations$.value.filter(
             c => c.ProjectID && UUIDsEqual(c.ProjectID, id)
         );
         for (const conv of directConversations) {
-            await this.SaveConversation(conv.ID, { ProjectID: null }, contextUser);
+            if (!contextUser?.ID || !conv.UserID || this.CanEditConversation(conv, contextUser.ID)) {
+                await this.SaveConversation(conv.ID, { ProjectID: null }, contextUser);
+            }
         }
 
         // 2. Reparent direct child folders one level up.
@@ -1157,6 +2173,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             throw new Error(ExplainProjectDeleteFailure(project.LatestResult?.CompleteMessage));
         }
 
+        this.reconcileFolderSharedConversations();
         return true;
     }
 
@@ -1255,6 +2272,15 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         if (options?.linkedRecordId !== undefined) {
             conversation.LinkedRecordID = options.linkedRecordId;
         }
+        if (options?.anchorType !== undefined) {
+            conversation.AnchorType = options.anchorType;
+        }
+        if (options?.anchorKey !== undefined) {
+            conversation.AnchorKey = options.anchorKey;
+        }
+        if (options?.anchorMetadata !== undefined) {
+            conversation.AnchorMetadataObject = options.anchorMetadata;
+        }
 
         // Guard our own save event: the engine's BaseEntity event handler
         // (handleConversationEntityEvent) ALSO prepends a conversation it doesn't yet
@@ -1283,11 +2309,267 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // out on next refresh.
         // The GetConversation() check is belt-and-suspenders against a save event that
         // slips past _selfMutating (e.g. async dispatch) — never add the same ID twice.
-        if (conversation.ApplicationScope !== 'Application' && !this.GetConversation(conversation.ID)) {
+        if (
+            conversation.ApplicationScope !== 'Application' &&
+            conversation.AnchorType == null &&
+            conversation.LinkedEntityID == null &&
+            !this.GetConversation(conversation.ID)
+        ) {
             const updated = [conversation, ...this._conversations$.value];
             this._conversations$.next(updated);
         }
         return conversation;
+    }
+
+    /**
+     * Loads non-anchored AI conversations (`AnchorType IS NULL`) bound to a specific
+     * `(linkedEntityId, linkedRecordId)` for `contextUser`, ordered by most-recently updated.
+     * Used by `<mj-chat-agents-overlay>` ("Ask AI") when a user opens an entity record form.
+     */
+    public async LoadRecordConversations(
+        linkedEntityId: string,
+        linkedRecordId: string,
+        contextUser: UserInfo,
+        environmentId?: string,
+        provider?: IMetadataProvider
+    ): Promise<MJConversationEntity[]> {
+        const cleanEntityId = linkedEntityId?.trim();
+        const cleanRecordId = linkedRecordId?.trim();
+        if (!cleanEntityId || !cleanRecordId || !contextUser?.ID) {
+            return [];
+        }
+
+        const md = provider ?? this.ProviderToUse;
+        const rv = RunView.FromMetadataProvider(md);
+        const safeEntityId = EscapeSQLString(cleanEntityId);
+        const safeRecordId = EscapeSQLString(cleanRecordId);
+        const safeUserId = EscapeSQLString(contextUser.ID);
+        const envClause = environmentId?.trim()
+            ? ` AND EnvironmentID='${EscapeSQLString(environmentId.trim())}'`
+            : '';
+
+        const result = await rv.RunView<MJConversationEntity>(
+            {
+                EntityName: 'MJ: Conversations',
+                ExtraFilter:
+                    `LinkedEntityID='${safeEntityId}'` +
+                    ` AND (LinkedRecordID='${safeRecordId}' OR LinkedRecordID='ID|${safeRecordId}')` +
+                    ` AND AnchorType IS NULL` +
+                    ` AND UserID='${safeUserId}'` +
+                    ` AND (IsArchived IS NULL OR IsArchived=0)` +
+                    envClause,
+                OrderBy: '__mj_UpdatedAt DESC',
+                MaxRows: 50,
+                ResultType: 'entity_object'
+            },
+            contextUser
+        );
+
+        return result.Success && result.Results ? result.Results : [];
+    }
+
+    // ========================================================================
+    // ANCHORED RECORD CONVERSATIONS & COMMENT THREADS
+    // ========================================================================
+
+    /**
+     * Loads all anchored conversations (`AnchorType IS NOT NULL`) attached to a specific
+     * `(linkedEntityId, linkedRecordId)` that `contextUser` is authorized to see under both
+     * row-level security (RLS on the linked record) and field-level security (FLS on the
+     * anchored field or any `restrictedFields` stamped in `AnchorMetadataObject`).
+     */
+    public async LoadAnchoredConversations(
+        linkedEntityId: string,
+        linkedRecordId: string,
+        contextUser: UserInfo,
+        options?: LoadAnchoredConversationsOptions
+    ): Promise<MJConversationEntity[]> {
+        const provider = options?.provider ?? this.ProviderToUse;
+        const clauses: string[] = [
+            `LinkedEntityID='${EscapeSQLString(linkedEntityId)}'`,
+            `LinkedRecordID='${EscapeSQLString(linkedRecordId)}'`,
+            `AnchorType IS NOT NULL`,
+            `(IsArchived IS NULL OR IsArchived=0)`
+        ];
+        if (options?.includeResolved === false) {
+            clauses.push(`IsResolved=0`);
+        }
+        if (options?.anchorType) {
+            clauses.push(`AnchorType='${EscapeSQLString(options.anchorType)}'`);
+        }
+        if (options?.anchorKey !== undefined) {
+            clauses.push(`AnchorKey='${EscapeSQLString(options.anchorKey)}'`);
+        }
+
+        const rv = RunView.FromMetadataProvider(provider);
+        const result = await rv.RunView<MJConversationEntity>(
+            {
+                EntityName: 'MJ: Conversations',
+                ExtraFilter: clauses.join(' AND '),
+                OrderBy: 'IsResolved ASC, __mj_UpdatedAt DESC',
+                ResultType: 'entity_object',
+                BypassCache: options?.bypassCache ?? false
+            },
+            contextUser
+        );
+        if (!result.Success || !result.Results) {
+            return [];
+        }
+
+        return FilterAnchoredConversationsForUser(provider, contextUser, result.Results);
+    }
+
+    /**
+     * Loads all `MJ: Conversation Details` rows for the given anchored conversation IDs,
+     * grouped by normalized `ConversationID` in chronological `Sequence ASC, __mj_CreatedAt ASC` order.
+     */
+    public async LoadAnchoredConversationDetails(
+        conversationIds: ReadonlyArray<string>,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider,
+        bypassCache: boolean = false
+    ): Promise<Map<string, MJConversationDetailEntity[]>> {
+        const byConversationId = new Map<string, MJConversationDetailEntity[]>();
+        const cleanIds = conversationIds.map(id => id?.trim()).filter((id): id is string => !!id);
+        if (cleanIds.length === 0) {
+            return byConversationId;
+        }
+        for (const id of cleanIds) {
+            byConversationId.set(NormalizeUUID(id), []);
+        }
+
+        const md = provider ?? this.ProviderToUse;
+        const rv = RunView.FromMetadataProvider(md);
+        const inList = cleanIds.map(id => `'${EscapeSQLString(id)}'`).join(',');
+        const result = await rv.RunView<MJConversationDetailEntity>(
+            {
+                EntityName: 'MJ: Conversation Details',
+                ExtraFilter: `ConversationID IN (${inList}) AND (HiddenToUser IS NULL OR HiddenToUser=0) AND ReplacedAt IS NULL`,
+                OrderBy: 'Sequence ASC, __mj_CreatedAt ASC',
+                ResultType: 'entity_object',
+                BypassCache: bypassCache
+            },
+            contextUser
+        );
+
+        if (result.Success && result.Results) {
+            for (const detail of result.Results) {
+                const key = NormalizeUUID(detail.ConversationID);
+                const list = byConversationId.get(key) ?? [];
+                list.push(detail);
+                byConversationId.set(key, list);
+            }
+        }
+        return byConversationId;
+    }
+
+    /**
+     * Creates a new anchored comment thread (`MJ: Conversations` with `AnchorType`, `AnchorKey`,
+     * and `AnchorMetadataObject`) bound to `(linkedEntityId, linkedRecordId)`, and optionally
+     * posts the opening `MJ: Conversation Details` message.
+     */
+    public async CreateAnchoredConversation(
+        params: CreateAnchoredConversationParams,
+        contextUser: UserInfo
+    ): Promise<{ Conversation: MJConversationEntity; InitialDetail: MJConversationDetailEntity | null }> {
+        const md = params.provider ?? this.ProviderToUse;
+        const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
+        conversation.NewRecord();
+
+        const fallbackName = params.anchorMetadata?.anchorDisplayName
+            || params.anchorMetadata?.sectionDisplayName
+            || params.anchorMetadata?.groupDisplayName
+            || params.anchorKey
+            || `${params.anchorType} Comment`;
+        conversation.Name = (params.name?.trim() || fallbackName).slice(0, 255);
+        if (params.environmentId) {
+            conversation.EnvironmentID = params.environmentId;
+        } else if (this._lastEnvironmentId) {
+            conversation.EnvironmentID = this._lastEnvironmentId;
+        }
+        conversation.UserID = contextUser.ID;
+        conversation.ApplicationScope = 'Global';
+        conversation.LinkedEntityID = params.linkedEntityId;
+        conversation.LinkedRecordID = params.linkedRecordId;
+        conversation.AnchorType = params.anchorType;
+        conversation.AnchorKey = params.anchorKey ?? null;
+        conversation.AnchorMetadataObject = params.anchorMetadata ?? null;
+        if (params.defaultAgentId !== undefined) {
+            conversation.DefaultAgentID = params.defaultAgentId;
+        }
+
+        this._selfMutating = true;
+        try {
+            const saved = await conversation.Save();
+            if (!saved) {
+                throw new Error(conversation.LatestResult?.CompleteMessage || conversation.LatestResult?.Message || 'Failed to create anchored conversation');
+            }
+        } finally {
+            this._selfMutating = false;
+        }
+
+        let initialDetail: MJConversationDetailEntity | null = null;
+        const messageText = params.initialMessage?.trim();
+        if (messageText) {
+            initialDetail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', contextUser);
+            initialDetail.NewRecord();
+            initialDetail.ConversationID = conversation.ID;
+            initialDetail.UserID = contextUser.ID;
+            initialDetail.Role = 'User';
+            initialDetail.Message = messageText;
+            const detailSaved = await initialDetail.Save();
+            if (!detailSaved) {
+                throw new Error(initialDetail.LatestResult?.CompleteMessage || initialDetail.LatestResult?.Message || 'Failed to save initial comment message');
+            }
+        }
+
+        return { Conversation: conversation, InitialDetail: initialDetail };
+    }
+
+    /**
+     * Marks an anchored conversation thread as resolved or re-opened (`IsResolved`,
+     * `ResolvedByUserID`, `ResolvedAt`).
+     */
+    public async SetConversationResolved(
+        conversationId: string,
+        isResolved: boolean,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<MJConversationEntity> {
+        const md = provider ?? this.ProviderToUse;
+        const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
+        const loaded = await conversation.Load(conversationId);
+        if (!loaded) {
+            throw new Error(`Conversation ${conversationId} not found`);
+        }
+
+        conversation.IsResolved = isResolved;
+        conversation.ResolvedByUserID = isResolved ? contextUser.ID : null;
+        conversation.ResolvedAt = isResolved ? new Date() : null;
+
+        this._selfMutating = true;
+        try {
+            const saved = await conversation.Save();
+            if (!saved) {
+                throw new Error(conversation.LatestResult?.CompleteMessage || conversation.LatestResult?.Message || 'Failed to update conversation resolution status');
+            }
+        } finally {
+            this._selfMutating = false;
+        }
+
+        return conversation;
+    }
+
+    /**
+     * Computes open and resolved anchored comment counts across fields, sections, groups,
+     * and contributions for a record, respecting FLS for `currentUser`.
+     */
+    public ComputeAnchoredCommentCounts(
+        conversations: ReadonlyArray<Pick<MJConversationEntity, 'AnchorType' | 'AnchorKey' | 'AnchorMetadata' | 'AnchorMetadataObject' | 'IsResolved'>>,
+        currentUser?: UserInfo | null,
+        entityInfo?: EntityInfo | null
+    ): AnchoredCommentRollup {
+        return ComputeAnchoredCommentCounts(conversations, currentUser, entityInfo);
     }
 
     /**
@@ -1324,9 +2606,13 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             return null;
         }
 
-        // App-scoped conversations live inside their owning Application's embedded surface,
-        // not the main-chat list this engine caches — mirror CreateConversation and skip them.
-        if (conversation.ApplicationScope === 'Application') {
+        // App-scoped, anchored, and record-bound conversations live inside their owning
+        // surface, not the main-chat list this engine caches — mirror CreateConversation and skip them.
+        if (
+            conversation.ApplicationScope === 'Application' ||
+            conversation.AnchorType != null ||
+            conversation.LinkedEntityID != null
+        ) {
             return conversation;
         }
 
@@ -1460,14 +2746,29 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             }
         }
 
+        const previousValues: Record<string, unknown> = {};
+        for (const key of Object.keys(updates)) {
+            previousValues[key] = (conversation as unknown as Record<string, unknown>)[key];
+        }
+
         this.mergeDataOntoRecord(conversation, updates);
+        // Emit immediately after mutating the shared cached entity so Angular subscribers
+        // (e.g. ConversationListComponent) run change detection synchronously rather than
+        // seeing an uncommitted mutation during the async Save() round-trip (NG0100).
+        this._conversations$.next([...this._conversations$.value]);
 
         this._selfMutating = true;
         try {
             const saved = await conversation.Save();
             if (!saved) {
+                this.mergeDataOntoRecord(conversation, previousValues as Partial<MJConversationEntity>);
+                this._conversations$.next([...this._conversations$.value]);
                 throw new Error(conversation.LatestResult?.Message || 'Failed to update conversation');
             }
+        } catch (err) {
+            this.mergeDataOntoRecord(conversation, previousValues as Partial<MJConversationEntity>);
+            this._conversations$.next([...this._conversations$.value]);
+            throw err;
         } finally {
             this._selfMutating = false;
         }
@@ -1680,41 +2981,39 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     // ========================================================================
 
     /**
-     * Loads conversation details (messages) for a specific conversation.
-     * Results are cached for instant retrieval on subsequent calls.
-     *
-     * @param conversationId - The conversation to load details for
-     * @param contextUser - The current user context
-     * @param forceRefresh - If true, reloads even if cached
-     * @returns Array of conversation detail entities
-     */
-    /**
      * Loads conversation details using the efficient GetConversationComplete query
      * which returns messages, agent runs, artifacts, ratings, and user avatars in one round-trip.
-     * Results are cached for instant retrieval on subsequent calls.
+     * The cache holds every row of the conversation, on every branch path; a scope limits
+     * only what this call returns.
      *
      * @param conversationId - The conversation to load details for
      * @param contextUser - The current user context
      * @param forceRefresh - If true, reloads even if cached
-     * @returns The full cache entry with all peripheral data
+     * @param scope - When given, the returned entry holds only the rows in this scope
+     *   (see {@link scopedEntry}); when omitted, every row of the conversation
+     * @returns The cache entry with all peripheral data, limited to the scope when one is given
+     * @throws when the scope belongs to another conversation
      */
     public async LoadConversationDetails(
         conversationId: string,
         contextUser: UserInfo,
-        forceRefresh: boolean = false
+        forceRefresh: boolean = false,
+        scope?: ConversationScope
     ): Promise<ConversationDetailCache> {
+        ConversationEngine.assertScopeOf(conversationId, scope);
         const key = NormalizeUUID(conversationId);
 
         // Return cached if available and not forcing
         if (!forceRefresh) {
             const cached = this._detailCache.get(key);
             if (cached) {
-                return cached;
+                return ConversationEngine.scopedEntry(cached, scope);
             }
         }
 
         // Use GetConversationComplete for one-round-trip loading of all data
         const rq = new RunQuery();
+        // conversation-scope: whole-conversation cache; every consumer filters to its scope
         const result = await rq.RunQuery({
             QueryName: 'GetConversationComplete',
             CategoryPath: 'MJ/Conversations',
@@ -1734,7 +3033,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 LoadedAt: new Date(),
                 PeripheralDataStale: false
             };
-            return empty;
+            return ConversationEngine.scopedEntry(empty, scope);
         }
 
         const rawData = result.Results as ConversationDetailComplete[];
@@ -1743,7 +3042,40 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         const cacheEntry = await this.buildDetailCacheFromRawData(rawData, contextUser);
         this._detailCache.set(key, cacheEntry);
 
-        return cacheEntry;
+        return ConversationEngine.scopedEntry(cacheEntry, scope);
+    }
+
+    /**
+     * Throws when a scope is given and belongs to another conversation.
+     * @throws when the scope belongs to another conversation
+     */
+    private static assertScopeOf(conversationId: string, scope: ConversationScope | undefined): void {
+        if (scope && !sameId(scope.ConversationID, conversationId)) {
+            throw new Error(`Conversation ${conversationId} is not the scope's conversation ${scope.ConversationID}`);
+        }
+    }
+
+    /**
+     * A cache entry limited to a scope: a copy whose `Details` hold only the rows in the scope,
+     * and whose `RawData` holds the raw rows of those details, both in their cached order. The
+     * peripheral maps are the cached ones, shared. The entry itself when no scope is given. The
+     * cached entry is never changed. Callers check the scope's conversation first
+     * ({@link assertScopeOf}).
+     */
+    private static scopedEntry(
+        entry: ConversationDetailCache,
+        scope: ConversationScope | undefined
+    ): ConversationDetailCache {
+        if (!scope) {
+            return entry;
+        }
+        const details = ConversationEngine.FilterToScope(scope, entry.Details);
+        const detailIds = new Set(details.map(d => NormalizeUUID(d.ID)));
+        return {
+            ...entry,
+            Details: details,
+            RawData: entry.RawData.filter(r => !!r.ID && detailIds.has(NormalizeUUID(r.ID))),
+        };
     }
 
 
@@ -1762,19 +3094,25 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * a partial entry there would silently starve the agent of everything before the summary
      * boundary, with no error. Use a separate partial cache if incremental caching is needed.
      *
-     * Does not throw for a read that FAILS — a failed load returns an empty window flagged
-     * {@link DetailWindowLoadResult.Failed} so the caller can leave its paging state intact
-     * rather than mistaking the failure for the start of the conversation.
+     * Every detail read is limited to the path of `BranchID` (the trunk when omitted).
+     * Replaced rows (`ReplacedAt` set) are never read.
      *
-     * It is not, however, exception-proof: there is no `try/catch` here, so a provider that
-     * REJECTS rather than returning `Success: false` propagates out to the caller. That path
-     * is left deliberately — it degrades better than the handled one, because an exception
-     * skips the cursor write entirely and the caller's paging state survives untouched.
+     * Does not throw for a read that FAILS — a failed branch-path read, like a failed page
+     * read, returns an empty window flagged {@link DetailWindowLoadResult.Failed} so the
+     * caller can leave its paging state intact rather than mistaking the failure for the
+     * start of the conversation. A failed branch-path read never falls back to the trunk.
+     *
+     * It is not, however, exception-proof: the detail reads have no `try/catch`, so a
+     * provider that REJECTS rather than returning `Success: false` propagates out to the
+     * caller. That path is left deliberately — it degrades better than the handled one,
+     * because an exception skips the cursor write entirely and the caller's paging state
+     * survives untouched.
      *
      * ### Round-trip profile — the counterweight to the payload win
      *
      * This trades ONE fat query for several thin ones. Per page:
      *
+     *   0. {@link BranchPathFilterFresh} — one branch read, only when `BranchID` is set
      *   1. {@link fetchDetailRowsBySequence} — always
      *   2. {@link expandOldestSession} — only when the oldest row is session-stamped
      *   3. {@link hasOlderDetails} — always, in parallel with (4)
@@ -1796,7 +3134,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * over more content — and unlike first paint, a reader who has scrolled up has already
      * committed to reading back. If paging up ever feels slow, that is the number to raise.
      *
-     * @param params - Conversation, optional `Sequence` bound, and page sizing
+     * @param params - Conversation, optional branch, optional `Sequence` bound, and page sizing
      * @param contextUser - The requesting user (entity RLS applies)
      */
     public async LoadDetailWindow(
@@ -1806,9 +3144,13 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         const pageSize = params.PageSize ?? DEFAULT_WINDOW_PAGE_SIZE;
         const overread = params.RawOverread ?? pageSize * DETAIL_WINDOW_OVERREAD_FACTOR;
 
-        const page = await this.fetchDetailRowsBySequence(
-            params.ConversationID, params.BeforeSequence, overread, contextUser
-        );
+        const pathFilter = await this.resolveWindowPathFilter(params, contextUser);
+        if (pathFilter === null) {
+            return emptyDetailWindowResult(true);
+        }
+        const liveFilter = ConversationEngine.LiveRowsFilter(pathFilter);
+
+        const page = await this.fetchDetailRowsBySequence(liveFilter, params.BeforeSequence, overread, contextUser);
         // Deliberately two branches, not one. `null` is a FAILED read; an empty array is a
         // range that genuinely holds no rows. Collapsing them is what lets a transport blip
         // read downstream as "you have reached the start of the conversation".
@@ -1819,7 +3161,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             return emptyDetailWindowResult(false);
         }
 
-        const details = await this.expandOldestSession(params.ConversationID, page, contextUser);
+        const details = await this.expandOldestSession(liveFilter, page, contextUser);
         const oldestSequence = details[0].Sequence;
         const newestSequence = details[details.length - 1].Sequence;
 
@@ -1828,7 +3170,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // to an empty/false result on a failed read — so `Promise.all` cannot introduce a
         // rejection path this method did not already have.
         const [olderProbe, peripherals] = await Promise.all([
-            this.hasOlderDetails(params.ConversationID, oldestSequence, contextUser),
+            this.hasOlderDetails(liveFilter, oldestSequence, contextUser),
             this.buildWindowPeripherals(details, contextUser)
         ]);
 
@@ -1846,24 +3188,49 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
+     * The `ExtraFilter` predicate for the window's branch path.
+     *
+     * @returns The predicate, or null when the branch rows could not be read or the branch
+     *   path could not be built.
+     */
+    private async resolveWindowPathFilter(
+        params: LoadDetailWindowParams,
+        contextUser: UserInfo
+    ): Promise<string | null> {
+        try {
+            return await ConversationEngine.BranchPathFilterFresh(
+                params.ConversationID, params.BranchID, contextUser, this.ProviderToUse
+            );
+        } catch (error) {
+            console.error(
+                `[ConversationEngine] Failed to build the branch path for conversation ${params.ConversationID}, `
+                    + `branch ${params.BranchID}:`,
+                error
+            );
+            return null;
+        }
+    }
+
+    /**
      * Reads the newest `maxRows` detail rows below an optional `Sequence` bound and returns
      * them in CHRONOLOGICAL order.
      *
      * The query is `Sequence DESC` because the interesting end of a transcript is the tail;
      * the reversal happens here so every caller downstream sees oldest-to-newest.
      *
+     * @param pathFilter - The branch path predicate from {@link BuildBranchPathFilter}
      * @returns The page in ascending `Sequence` order, or null when the read failed.
      */
     private async fetchDetailRowsBySequence(
-        conversationId: string,
+        pathFilter: string,
         beforeSequence: number | undefined,
         maxRows: number,
         contextUser: UserInfo
     ): Promise<MJConversationDetailEntity[] | null> {
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const filter = beforeSequence == null
-            ? `ConversationID='${conversationId}'`
-            : `ConversationID='${conversationId}' AND Sequence < ${beforeSequence}`;
+            ? pathFilter
+            : `${pathFilter} AND Sequence < ${beforeSequence}`;
 
         const result = await rv.RunView<MJConversationDetailEntity>({
             EntityName: 'MJ: Conversation Details',
@@ -1888,10 +3255,11 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * boundary — without this read the card renders from a partial row set AND the same
      * session reappears on the next older page.
      *
+     * @param pathFilter - The branch path predicate from {@link BuildBranchPathFilter}
      * @returns The page with any missing session rows prepended, still chronological.
      */
     private async expandOldestSession(
-        conversationId: string,
+        pathFilter: string,
         details: MJConversationDetailEntity[],
         contextUser: UserInfo
     ): Promise<MJConversationDetailEntity[]> {
@@ -1903,7 +3271,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<MJConversationDetailEntity>({
             EntityName: 'MJ: Conversation Details',
-            ExtraFilter: `ConversationID='${conversationId}' AND AgentSessionID='${sessionId}' `
+            ExtraFilter: `${pathFilter} AND AgentSessionID='${sessionId}' `
                 + `AND Sequence < ${details[0].Sequence}`,
             OrderBy: 'Sequence DESC',
             MaxRows: MAX_SESSION_EXPANSION_ROWS,
@@ -1925,18 +3293,21 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      *
      * Returns a TRI-STATE rather than a boolean. "No older rows" and "could not find out"
      * are both `HasOlder: false`, and only the second must leave the caller's cursor alone.
+     *
+     * @param pathFilter - The branch path predicate from {@link BuildBranchPathFilter}
      */
     private async hasOlderDetails(
-        conversationId: string,
+        pathFilter: string,
         oldestSequence: number,
         contextUser: UserInfo
     ): Promise<{ HasOlder: boolean; Failed: boolean }> {
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const probe = await rv.RunView<Pick<MJConversationDetailEntityType, 'ID'>>({
             EntityName: 'MJ: Conversation Details',
-            ExtraFilter: `ConversationID='${conversationId}' AND Sequence < ${oldestSequence}`,
+            ExtraFilter: `${pathFilter} AND Sequence < ${oldestSequence}`,
             OrderBy: 'Sequence DESC',
             MaxRows: 1,
+            SkipTotalRowCount: true,
             Fields: ['ID'],
             ResultType: 'simple'
         }, contextUser);
@@ -1976,14 +3347,16 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
             const parsed = ParseConversationDetailComplete(row);
 
-            // Agent runs
-            if (parsed.agentRuns.length > 0) {
-                const agentRunData = parsed.agentRuns[0];
+            // Agent runs (prefer primary root orchestrating run over continuation synthesis or child runs)
+            const agentRunData = selectPreferredDetailAgentRun(parsed.agentRuns);
+            if (agentRunData) {
                 const agentRun = await md.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', contextUser);
                 agentRun.LoadFromData({
                     ID: agentRunData.ID,
                     AgentID: agentRunData.AgentID,
                     Agent: agentRunData.Agent,
+                    ParentRunID: agentRunData.ParentRunID ?? null,
+                    ContinuationDepth: agentRunData.ContinuationDepth ?? 0,
                     Status: agentRunData.Status,
                     __mj_CreatedAt: agentRunData.__mj_CreatedAt,
                     __mj_UpdatedAt: agentRunData.__mj_UpdatedAt,
@@ -2058,6 +3431,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             {
                 EntityName: 'MJ: Conversation Detail Artifacts',
                 ExtraFilter: `${byDetail} AND Direction='Output'`,
+                OrderBy: '__mj_CreatedAt ASC',
                 ResultType: 'simple'
             }
         ], contextUser);
@@ -2144,6 +3518,14 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             list.push(mergeArtifactJSON(junction, version, artifact));
             byDetailId.set(junction.ConversationDetailID, list);
         }
+        for (const [detailId, list] of byDetailId) {
+            list.sort((a, b) => {
+                const aTime = ToEpochMs(a.VersionCreatedAt) ?? ToEpochMs(a.__mj_CreatedAt) ?? 0;
+                const bTime = ToEpochMs(b.VersionCreatedAt) ?? ToEpochMs(b.__mj_CreatedAt) ?? 0;
+                return aTime - bTime;
+            });
+            byDetailId.set(detailId, list);
+        }
         return byDetailId;
     }
 
@@ -2172,26 +3554,33 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * - Artifacts/ratings: replaced per-detail (cheap — plain data, not entity objects)
      * - User avatars: merged (new users added)
      *
-     * If no cache exists yet, falls back to a full load.
+     * If no cache exists yet, falls back to a full load. The cache holds every row of the
+     * conversation; a scope limits only what this call returns.
      *
      * @param conversationId - The conversation to refresh
      * @param contextUser - The current user context
-     * @returns The updated cache entry
+     * @param scope - When given, the returned entry holds only the rows in this scope
+     *   (see {@link scopedEntry}); when omitted, every row of the conversation
+     * @returns The updated cache entry, limited to the scope when one is given
+     * @throws when the scope belongs to another conversation
      */
     public async RefreshConversationDetails(
         conversationId: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        scope?: ConversationScope
     ): Promise<ConversationDetailCache> {
+        ConversationEngine.assertScopeOf(conversationId, scope);
         const key = NormalizeUUID(conversationId);
         const existing = this._detailCache.get(key);
 
         // No cache yet — do a full load
         if (!existing) {
-            return this.LoadConversationDetails(conversationId, contextUser);
+            return this.LoadConversationDetails(conversationId, contextUser, false, scope);
         }
 
         // Run the query
         const rq = new RunQuery();
+        // conversation-scope: whole-conversation cache; every consumer filters to its scope
         const result = await rq.RunQuery({
             QueryName: 'GetConversationComplete',
             CategoryPath: 'MJ/Conversations',
@@ -2200,7 +3589,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
         if (!result.Success || !result.Results) {
             console.error('[ConversationEngine] Failed to refresh conversation details:', result.ErrorMessage);
-            return existing;
+            return ConversationEngine.scopedEntry(existing, scope);
         }
 
         const freshRows = result.Results as ConversationDetailComplete[];
@@ -2239,12 +3628,14 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             // check for `LoadFromData` before calling it, and hydrate a real entity when
             // we only have plain data. Mirrors the pattern in
             // `conversation-chat-area.component.ts#onMessageComplete` (line ~909).
-            if (parsed.agentRuns.length > 0) {
-                const agentRunData = parsed.agentRuns[0];
+            const agentRunData = selectPreferredDetailAgentRun(parsed.agentRuns);
+            if (agentRunData) {
                 const mergeFields = {
                     ID: agentRunData.ID,
                     AgentID: agentRunData.AgentID,
                     Agent: agentRunData.Agent,
+                    ParentRunID: agentRunData.ParentRunID ?? null,
+                    ContinuationDepth: agentRunData.ContinuationDepth ?? 0,
                     Status: agentRunData.Status,
                     __mj_CreatedAt: agentRunData.__mj_CreatedAt,
                     __mj_UpdatedAt: agentRunData.__mj_UpdatedAt,
@@ -2255,15 +3646,17 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 };
 
                 const existingRun = existing.AgentRunsByDetailId.get(row.ID);
-                const existingRunIsEntity = !!existingRun && typeof (existingRun as { LoadFromData?: unknown }).LoadFromData === 'function';
+                if (ShouldReplaceDetailAgentRun(existingRun, agentRunData)) {
+                    const existingRunIsEntity = !!existingRun && typeof (existingRun as { LoadFromData?: unknown }).LoadFromData === 'function';
 
-                if (existingRunIsEntity) {
-                    existingRun!.LoadFromData(mergeFields);
-                } else {
-                    // Either no existing run, or existing value is plain JSON — hydrate fresh.
-                    const newRun = await md.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', contextUser);
-                    newRun.LoadFromData(existingRun ? { ...existingRun, ...mergeFields } : agentRunData);
-                    existing.AgentRunsByDetailId.set(row.ID!, newRun);
+                    if (existingRunIsEntity) {
+                        existingRun!.LoadFromData(mergeFields);
+                    } else {
+                        // Either no existing run, or existing value is plain JSON — hydrate fresh.
+                        const newRun = await md.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', contextUser);
+                        newRun.LoadFromData(existingRun ? { ...existingRun, ...mergeFields } : agentRunData);
+                        existing.AgentRunsByDetailId.set(row.ID!, newRun);
+                    }
                 }
             }
 
@@ -2291,7 +3684,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         existing.LoadedAt = new Date();
         existing.PeripheralDataStale = false;
 
-        return existing;
+        return ConversationEngine.scopedEntry(existing, scope);
     }
 
     /**
@@ -2356,8 +3749,11 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      *   covers everything before it, and cutting into the post-boundary tail would create
      *   a coverage gap.
      * @param options.historyFrom - A history floor: see {@link AssembleContextWindow}.
+     * @param scope - When given, the window is built from the rows in this scope only; when
+     *   omitted, from every cached row of the conversation
      * @returns Messages in chronological order, each stamped with
      *   {@link ConversationContextMetadata}
+     * @throws when the scope belongs to another conversation
      */
     public async GetAgentContextWindow(
         conversationId: string,
@@ -2366,21 +3762,65 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             excludeDetailIds?: string[];
             maxTailMessages?: number;
             historyFrom?: Date | null;
-        }
+            speakerAttribution?: 'off' | 'auto' | 'always';
+            speakerLabels?: ReadonlyMap<string, string>;
+        },
+        scope?: ConversationScope
     ): Promise<ConversationContextMessage[]> {
         await this.Config(false, contextUser);
-        const cache = await this.LoadConversationDetails(conversationId, contextUser);
+        const cache = await this.LoadConversationDetails(conversationId, contextUser, false, scope);
         return ConversationEngine.AssembleContextWindow(cache.Details, options);
     }
 
     /**
-     * Loads a conversation's window source rows FRESH — one RunView through the given
+     * Loads a conversation's branch rows FRESH through the given provider (entity RLS applies).
+     * Ordered by creation so alternatives at a fork point list in the order they were made.
+     * @throws when the RunView reports failure
+     */
+    public static async LoadBranchesFresh(
+        conversationId: string,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<ConversationBranchRow[]> {
+        const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+        const rows = await rv.RunView<ConversationBranchRow>({
+            EntityName: 'MJ: Conversation Branches',
+            ExtraFilter: `ConversationID='${EscapeSQLString(conversationId)}'`,
+            OrderBy: '__mj_CreatedAt ASC',
+            Fields: [...ConversationBranchFields],
+            ResultType: 'simple',
+        }, contextUser);
+        if (!rows.Success) {
+            throw new Error(`Failed to load branches for conversation ${conversationId}: ${rows.ErrorMessage}`);
+        }
+        return rows.Results || [];
+    }
+
+    /**
+     * {@link ScopeFilter} of the scope from {@link LoadScope}. The trunk (an empty, whitespace-only
+     * or missing branch id) needs no load and costs no query.
+     * @throws When the branch read fails ({@link LoadBranchesFresh}), when `branchId` is not
+     *   among the conversation's branches, or when its chain is longer than {@link MAX_BRANCH_DEPTH}
+     */
+    public static async BranchPathFilterFresh(
+        conversationId: string,
+        branchId: string | null | undefined,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<string> {
+        const scope = await ConversationEngine.LoadScope(conversationId, branchId, contextUser, provider);
+        return ConversationEngine.ScopeFilter(scope);
+    }
+
+    /**
+     * Loads the window source rows on a conversation's branch path FRESH — through the given
      * provider with the contextUser (entity RLS applies), never touching this engine's
-     * process-global detail cache. The single source of the fresh-load query shape
-     * (entity name, filter, order, fields) for every server-side caller: the agent
-     * resolver's history loader and the cross-turn compaction pass both consume this,
+     * process-global detail cache. The trunk costs one RunView; a branch costs two (its branch
+     * rows via {@link BranchPathFilterFresh}, then the path's rows). The single source of the
+     * fresh-load query shape (entity name, filter, order, fields) for every server-side
+     * caller: the agent resolver's history loader and the cross-turn compaction pass both consume this,
      * so the two can never drift apart. THROWS on load failure — servers must fail
-     * loudly rather than proceed against an empty history.
+     * loudly rather than proceed against an empty history. Replaced rows never leave the database.
      *
      * @param conversationId - The conversation whose detail rows to load
      * @param contextUser - The requesting user (entity RLS is applied under this user)
@@ -2388,23 +3828,27 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * @param historyFrom - Optional history floor: only rows written at or after it are loaded,
      *   so nothing before it leaves the database. Pair it with the same `historyFrom` on
      *   {@link AssembleContextWindow}, which also drops the summary of earlier messages.
-     * @returns The conversation's rows in Sequence order, shaped for {@link AssembleContextWindow}
-     * @throws When the underlying RunView reports failure (never returns a silent empty set),
-     *   or when `historyFrom` is an invalid date
+     * @param branchId - The branch whose path to load; null or omitted reads the trunk.
+     * @returns The rows on the branch's path (the trunk when no branch) in Sequence order,
+     *   shaped for {@link AssembleContextWindow}
+     * @throws When a RunView reports failure (never returns a silent empty set), when
+     *   `historyFrom` is an invalid date, when `branchId` is not among the conversation's
+     *   branches, or when its chain is longer than {@link MAX_BRANCH_DEPTH}
      */
     public static async LoadWindowRowsFresh(
         conversationId: string,
         contextUser: UserInfo,
         provider?: IMetadataProvider,
-        historyFrom?: Date | null
+        historyFrom?: Date | null,
+        branchId?: string | null
     ): Promise<ConversationWindowSourceRow[]> {
         const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
-        const conversationFilter = `ConversationID='${conversationId}'`;
+        const pathFilter = await ConversationEngine.BranchPathFilterFresh(conversationId, branchId, contextUser, provider);
         const rows = await rv.RunView<ConversationWindowSourceRow>({
             EntityName: 'MJ: Conversation Details',
-            ExtraFilter: historyFrom
-                ? `${conversationFilter} AND ${ConversationEngine.HistoryFromFilter(historyFrom)}`
-                : conversationFilter,
+            ExtraFilter: ConversationEngine.LiveRowsFilter(historyFrom
+                ? `${pathFilter} AND ${ConversationEngine.HistoryFromFilter(historyFrom)}`
+                : pathFilter),
             OrderBy: 'Sequence ASC',
             Fields: [...ConversationWindowFields],
             ResultType: 'simple',
@@ -2433,6 +3877,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * floor none is used, and the window is the most recent `maxTailMessages` rows at or
      * after the floor. A row whose `__mj_CreatedAt` is missing or unreadable can't be shown
      * to be after the floor, so it is dropped too.
+     *
+     * Replaced rows (`ReplacedAt` set) are always left out.
      */
     public static AssembleContextWindow(
         details: ReadonlyArray<ConversationWindowSourceRow>,
@@ -2440,22 +3886,25 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             excludeDetailIds?: string[];
             maxTailMessages?: number;
             historyFrom?: Date | null;
+            speakerAttribution?: 'off' | 'auto' | 'always';
+            speakerLabels?: ReadonlyMap<string, string>;
         }
     ): ConversationContextMessage[] {
         const excluded = new Set((options?.excludeDetailIds || []).map(id => NormalizeUUID(id)));
         const floor = options?.historyFrom ?? null;
         const ordered = details
-            .filter(d => !excluded.has(NormalizeUUID(d.ID)))
+            .filter(d => !excluded.has(NormalizeUUID(d.ID)) && !ConversationEngine.IsReplacedRow(d))
             .filter(d => !floor || ConversationEngine.isAtOrAfter(d.__mj_CreatedAt, floor))
             .sort((a, b) => a.Sequence - b.Sequence);
+        const attribution = ConversationEngine.buildSpeakerAttribution(ordered, options);
 
         const boundary = floor ? undefined : ConversationEngine.findSummaryBoundary(ordered);
         if (boundary) {
             const tail = ordered.filter(d => d.Sequence >= boundary.Sequence);
-            return [ConversationEngine.buildSummaryMessage(boundary), ...tail.map(d => ConversationEngine.detailToContextMessage(d))];
+            return [ConversationEngine.buildSummaryMessage(boundary), ...tail.map(d => ConversationEngine.detailToContextMessage(d, attribution))];
         }
 
-        const all = ordered.map(d => ConversationEngine.detailToContextMessage(d));
+        const all = ordered.map(d => ConversationEngine.detailToContextMessage(d, attribution));
         const cap = options?.maxTailMessages;
         return cap && all.length > cap ? all.slice(-cap) : all;
     }
@@ -2472,6 +3921,474 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      */
     public static HistoryFromFilter(historyFrom: Date, column: string = '__mj_CreatedAt'): string {
         return `${column} >= '${historyFrom.toISOString()}'`;
+    }
+
+    /**
+     * `filter` limited to rows no rerun replaced (`ReplacedAt` is NULL). A replaced row is an answer a
+     * rerun of its turn superseded: it is kept, but never shown and never sent to an agent. Every reader
+     * of conversation rows for display or for agent context applies this.
+     */
+    public static LiveRowsFilter(filter: string): string {
+        return `${filter} AND [ReplacedAt] IS NULL`;
+    }
+
+    /** True when a rerun of its turn replaced the row (`ReplacedAt` is set). */
+    public static IsReplacedRow(row: { ReplacedAt?: Date | string | null }): boolean {
+        return row.ReplacedAt != null;
+    }
+
+    /**
+     * The branch and its ancestors, current branch first. Empty for the trunk.
+     * @throws when the branch is not in `branches`, or the chain is longer than
+     *   {@link MAX_BRANCH_DEPTH} (which also catches a cycle).
+     */
+    public static BuildBranchChain(
+        branches: ReadonlyArray<ConversationBranchRow>,
+        branchId: string | null | undefined
+    ): ConversationBranchRow[] {
+        const chain: ConversationBranchRow[] = [];
+        let current: string | null = branchId ?? null;
+        while (current != null) {
+            if (chain.length >= MAX_BRANCH_DEPTH) {
+                throw new Error(`Branch chain for ${branchId} exceeds ${MAX_BRANCH_DEPTH} levels`);
+            }
+            const id = current;
+            const branch = branches.find(b => sameId(b.ID, id));
+            if (!branch) {
+                throw new Error(`Branch ${id} not found`);
+            }
+            chain.push(branch);
+            current = branch.ParentBranchID ?? null;
+        }
+        return chain;
+    }
+
+    /**
+     * The `ExtraFilter` predicate for a branch path: the branch's own rows, plus each
+     * ancestor's rows up to that ancestor's fork sequence, plus the trunk up to the last
+     * fork sequence. A null branch is the trunk alone.
+     *
+     * Column names are bracketed, so the predicate also works inside a subquery on
+     * `vwConversationDetails` from another entity's filter: the PostgreSQL provider converts
+     * bracketed names itself but quotes bare names only when they are fields of the outer entity.
+     */
+    public static BuildBranchPathFilter(
+        conversationId: string,
+        branchId: string | null | undefined,
+        branches: ReadonlyArray<ConversationBranchRow>
+    ): string {
+        const conversationFilter = `[ConversationID]='${EscapeSQLString(conversationId)}'`;
+        const chain = ConversationEngine.BuildBranchChain(branches, branchId);
+        if (chain.length === 0) {
+            return `${conversationFilter} AND [BranchID] IS NULL`;
+        }
+        const clauses: string[] = [];
+        let cap: number | null = null;
+        for (const branch of chain) {
+            const id = EscapeSQLString(branch.ID);
+            clauses.push(cap == null ? `[BranchID]='${id}'` : `([BranchID]='${id}' AND [Sequence] <= ${cap})`);
+            cap = branch.ForkFromSequence;
+            if (cap == null) {
+                return `${conversationFilter} AND (${clauses.join(' OR ')})`;
+            }
+        }
+        clauses.push(`([BranchID] IS NULL AND [Sequence] <= ${cap})`);
+        return `${conversationFilter} AND (${clauses.join(' OR ')})`;
+    }
+
+    /** True when a row is on the path described by a chain from {@link BuildBranchChain}. */
+    public static IsRowOnBranchPath(
+        row: { BranchID?: string | null; Sequence: number },
+        chain: ReadonlyArray<ConversationBranchRow>
+    ): boolean {
+        let cap: number | null = null;
+        for (const branch of chain) {
+            if (sameId(row.BranchID, branch.ID)) {
+                return cap == null || row.Sequence <= cap;
+            }
+            cap = branch.ForkFromSequence;
+            if (cap == null) {
+                return false;
+            }
+        }
+        return row.BranchID == null && (cap == null || row.Sequence <= cap);
+    }
+
+    /** In-memory counterpart of {@link BuildBranchPathFilter} for rows already loaded. */
+    public static FilterRowsToBranchPath<T extends { BranchID?: string | null; Sequence: number }>(
+        rows: ReadonlyArray<T>,
+        branchId: string | null | undefined,
+        branches: ReadonlyArray<ConversationBranchRow>
+    ): T[] {
+        const chain = ConversationEngine.BuildBranchChain(branches, branchId);
+        return rows.filter(r => ConversationEngine.IsRowOnBranchPath(r, chain));
+    }
+
+    /** A scope for the trunk: no branch rows are needed. */
+    public static TrunkScope(conversationId: string): ConversationScope {
+        return { ConversationID: conversationId, BranchID: null, Branches: [] };
+    }
+
+    /**
+     * Builds a scope for an explicit branch. An empty, whitespace-only or missing branch id is the
+     * trunk. A branch id loads the conversation's branch rows once and must name one of them
+     * (compared without regard to case); the scope's `BranchID` is that row's `ID`.
+     * @throws when the branch rows cannot be read or the branch is not one of them.
+     */
+    public static async LoadScope(
+        conversationId: string,
+        branchId: string | null | undefined,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<ConversationScope> {
+        const normalized = branchId && branchId.trim().length > 0 ? branchId : null;
+        if (normalized === null) {
+            return ConversationEngine.TrunkScope(conversationId);
+        }
+        const branches = await ConversationEngine.LoadBranchesFresh(conversationId, contextUser, provider);
+        const branch = branches.find(b => sameId(b.ID, normalized));
+        if (!branch) {
+            throw new Error(`Branch ${normalized} is not a branch of conversation ${conversationId}`);
+        }
+        return { ConversationID: conversationId, BranchID: branch.ID, Branches: branches };
+    }
+
+    /**
+     * Predicate over MJ: Conversation Details for the rows in scope. Same text as
+     * {@link BuildBranchPathFilter}.
+     * @throws when the scope's `BranchID`, or the parent of a branch on its chain, is not in the
+     *   scope's `Branches`, or when the chain is longer than {@link MAX_BRANCH_DEPTH}.
+     */
+    public static ScopeFilter(scope: ConversationScope): string {
+        return ConversationEngine.BuildBranchPathFilter(scope.ConversationID, scope.BranchID, scope.Branches);
+    }
+
+    /**
+     * `[column] IN (SELECT ID FROM [__mj].[vwConversationDetails] WHERE <ScopeFilter>)` for entities
+     * anchored by a conversation detail id column.
+     */
+    public static ScopeSubquery(scope: ConversationScope, column: string = 'ConversationDetailID'): string {
+        return `[${column}] IN (SELECT ID FROM [__mj].[vwConversationDetails] WHERE ${ConversationEngine.ScopeFilter(scope)})`;
+    }
+
+    /** In-memory form of {@link ScopeFilter} for one row already loaded. */
+    public static IsInScope(scope: ConversationScope, row: { BranchID?: string | null; Sequence: number }): boolean {
+        const chain = ConversationEngine.BuildBranchChain(scope.Branches, scope.BranchID);
+        return ConversationEngine.IsRowOnBranchPath(row, chain);
+    }
+
+    /** In-memory form of {@link ScopeFilter} for rows already loaded. Keeps their order. */
+    public static FilterToScope<T extends { BranchID?: string | null; Sequence: number }>(
+        scope: ConversationScope,
+        rows: readonly T[]
+    ): T[] {
+        return ConversationEngine.FilterRowsToBranchPath(rows, scope.BranchID, scope.Branches);
+    }
+
+    /**
+     * Filter over MJ: Artifact Versions for the versions of one artifact visible in scope: versions
+     * linked (in any direction) from a message on the path, and versions with no conversation link
+     * at all.
+     */
+    public static ArtifactVersionScopeFilter(scope: ConversationScope, artifactId: string): string {
+        const path = ConversationEngine.ScopeFilter(scope);
+        const id = EscapeSQLString(artifactId);
+        return `[ArtifactID]='${id}' AND (` +
+            `[ID] IN (SELECT ArtifactVersionID FROM [__mj].[vwConversationDetailArtifacts] WHERE ConversationDetailID IN (SELECT ID FROM [__mj].[vwConversationDetails] WHERE ${path}))` +
+            ` OR [ID] NOT IN (SELECT ArtifactVersionID FROM [__mj].[vwConversationDetailArtifacts] WHERE ArtifactVersionID IS NOT NULL)` +
+            `)`;
+    }
+
+    /** The kind of a fork row; a missing or unknown value is 'Fork'. */
+    public static NormalizeForkKind(kind: string | null | undefined): ForkKind {
+        return FORK_KINDS.find(k => k === kind) ?? 'Fork';
+    }
+
+    /**
+     * Plain text of a stored message: each `@{...}` mention becomes `@<name>`, or is dropped when it
+     * has no name, and runs of whitespace become one space. Null when nothing is left.
+     */
+    public static ForkPlainText(message: string | null | undefined): string | null {
+        if (!message) {
+            return null;
+        }
+        const plain = message
+            .replace(/@\{[^{}]*\}/g, token => {
+                try {
+                    const parsed = JSON.parse(token.slice(1)) as { name?: string | number | boolean | null };
+                    return typeof parsed.name === 'string' && parsed.name.trim().length > 0 ? `@${parsed.name.trim()}` : ' ';
+                } catch {
+                    return ' ';
+                }
+            })
+            .replace(/\s+/g, ' ')
+            .trim();
+        return plain.length > 0 ? plain : null;
+    }
+
+    /** The first words of a message, for a fork with no name: at most 6 words and 40 characters, '…' when cut. */
+    public static ForkFirstWords(message: string | null | undefined): string | null {
+        const plain = ConversationEngine.ForkPlainText(message);
+        if (!plain) {
+            return null;
+        }
+        const words = plain.split(' ');
+        let text = words.slice(0, FORK_NAME_MAX_WORDS).join(' ');
+        let cut = words.length > FORK_NAME_MAX_WORDS;
+        if (text.length > FORK_NAME_MAX_CHARS) {
+            text = text.slice(0, FORK_NAME_MAX_CHARS).trimEnd();
+            cut = true;
+        }
+        return cut ? `${text}…` : text;
+    }
+
+    /** A one-line preview of a message: at most 120 characters, '…' when cut. */
+    public static ForkPreviewText(message: string | null | undefined): string | null {
+        const plain = ConversationEngine.ForkPlainText(message);
+        if (!plain) {
+            return null;
+        }
+        return plain.length > FORK_PREVIEW_MAX_CHARS ? `${plain.slice(0, FORK_PREVIEW_MAX_CHARS).trimEnd()}…` : plain;
+    }
+
+    /**
+     * The label of a fork: its name, else a default from its kind — Fork: the first words of its first
+     * message, else "Fork"; Edit: "Edited version"; Regenerate: "Other answer".
+     */
+    public static ForkDisplayName(branch: Pick<ConversationBranchRow, 'Name' | 'Kind'>, firstOwnMessage: string | null): string {
+        const name = branch.Name?.trim();
+        if (name) {
+            return name;
+        }
+        switch (ConversationEngine.NormalizeForkKind(branch.Kind)) {
+            case 'Edit':
+                return 'Edited version';
+            case 'Regenerate':
+                return 'Other answer';
+            default:
+                return ConversationEngine.ForkFirstWords(firstOwnMessage) ?? 'Fork';
+        }
+    }
+
+    /** The fork point at a message: the new fork starts after the message itself, on its branch. */
+    public static ForkPointFrom(message: { BranchID?: string | null; Sequence: number }): ForkPoint {
+        return { ParentBranchID: message.BranchID ?? null, ForkFromSequence: message.Sequence };
+    }
+
+    /**
+     * Edit of a message, or Fork from here on it (the fork replaces it): the new fork starts at the row
+     * before it on its path (both null when it is the first message). Undefined when that row is not
+     * known: the message is not in `pathRows`, or it is the first loaded row while older rows exist
+     * (`hasMoreAbove`).
+     */
+    public static EditForkPoint(
+        message: { ID: string; Sequence: number },
+        pathRows: ReadonlyArray<{ ID: string; Sequence: number; BranchID?: string | null }>,
+        hasMoreAbove: boolean = false
+    ): ForkPoint | undefined {
+        const sorted = [...pathRows].sort((a, b) => a.Sequence - b.Sequence);
+        const index = sorted.findIndex(r => sameId(r.ID, message.ID));
+        if (index < 0) {
+            return undefined;
+        }
+        if (index === 0) {
+            return hasMoreAbove ? undefined : { ParentBranchID: null, ForkFromSequence: null };
+        }
+        return ConversationEngine.ForkPointFrom(sorted[index - 1]);
+    }
+
+    /** Regenerate of an answer: the new fork starts at the user message the answer replied to. */
+    public static RegenerateForkPoint(userMessage: { BranchID?: string | null; Sequence: number }): ForkPoint {
+        return ConversationEngine.ForkPointFrom(userMessage);
+    }
+
+    /**
+     * Predicate over MJ: Conversation Details for the anchor rows of the given forks (one clause per
+     * distinct fork point); null when no fork has a fork point.
+     */
+    public static AnchorRowsFilter(conversationId: string, branches: ReadonlyArray<ConversationBranchRow>): string | null {
+        const clauses: string[] = [];
+        for (const branch of branches) {
+            if (branch.ForkFromSequence == null) {
+                continue;
+            }
+            const onParent = branch.ParentBranchID == null
+                ? '[BranchID] IS NULL'
+                : `[BranchID]='${EscapeSQLString(branch.ParentBranchID)}'`;
+            const clause = `(${onParent} AND [Sequence]=${Math.trunc(branch.ForkFromSequence)})`;
+            if (!clauses.includes(clause)) {
+                clauses.push(clause);
+            }
+        }
+        if (clauses.length === 0) {
+            return null;
+        }
+        return `[ConversationID]='${EscapeSQLString(conversationId)}' AND (${clauses.join(' OR ')})`;
+    }
+
+    /**
+     * Predicate over MJ: Conversation Details for the source rows of the given forks (each distinct
+     * SourceDetailID once); null when no fork has a source.
+     */
+    public static SourceRowsFilter(conversationId: string, branches: ReadonlyArray<ConversationBranchRow>): string | null {
+        const ids: string[] = [];
+        for (const branch of branches) {
+            const id = branch.SourceDetailID;
+            if (id && !ids.some(known => sameId(known, id))) {
+                ids.push(id);
+            }
+        }
+        if (ids.length === 0) {
+            return null;
+        }
+        const list = ids.map(id => `'${EscapeSQLString(id)}'`).join(', ');
+        return `[ConversationID]='${EscapeSQLString(conversationId)}' AND [ID] IN (${list})`;
+    }
+
+    /**
+     * One summary per fork, in the order of `branches`. Pure: `ownRows` are the conversation's rows
+     * with a BranchID, `anchorRows` the rows {@link AnchorRowsFilter} selects, `sourceRows` the rows
+     * {@link SourceRowsFilter} selects.
+     */
+    public static BuildForkSummaries(
+        branches: ReadonlyArray<ConversationBranchRow>,
+        ownRows: ReadonlyArray<ForkSummaryRow>,
+        anchorRows: ReadonlyArray<ForkSummaryRow>,
+        sourceRows: ReadonlyArray<ForkSummaryRow> = []
+    ): ForkSummary[] {
+        const ownByFork = new Map<string, ForkSummaryRow[]>();
+        for (const row of ownRows) {
+            if (row.BranchID == null || row.HiddenToUser === true) {
+                continue;
+            }
+            const key = NormalizeUUID(row.BranchID);
+            const list = ownByFork.get(key);
+            if (list) {
+                list.push(row);
+            } else {
+                ownByFork.set(key, [row]);
+            }
+        }
+        return branches.map(branch => {
+            const own = [...(ownByFork.get(NormalizeUUID(branch.ID)) ?? [])].sort((a, b) => a.Sequence - b.Sequence);
+            const anchor = branch.ForkFromSequence == null
+                ? undefined
+                : anchorRows.find(r => r.Sequence === branch.ForkFromSequence && sameId(r.BranchID, branch.ParentBranchID ?? null));
+            const sourceId = branch.SourceDetailID;
+            const source = sourceId ? sourceRows.find(r => sameId(r.ID, sourceId)) : undefined;
+            const placement = sourceId ? source : anchor;
+            const first = own.find(r => ConversationEngine.ForkPlainText(r.Message) != null);
+            const last = own.length > 0 ? own[own.length - 1] : undefined;
+            const authors: string[] = [];
+            for (const r of own) {
+                if (r.Role === 'User' && r.UserID && !authors.some(a => sameId(a, r.UserID))) {
+                    authors.push(r.UserID);
+                }
+            }
+            return {
+                Branch: branch,
+                Kind: ConversationEngine.NormalizeForkKind(branch.Kind),
+                DisplayName: ConversationEngine.ForkDisplayName(branch, first?.Message ?? null),
+                MessageCount: own.length,
+                Participants: ConversationEngine.forkParticipants(own),
+                AuthorUserIDs: authors,
+                LastActivityAt: (last ? ConversationEngine.toForkDate(last.__mj_CreatedAt) : null)
+                    ?? ConversationEngine.toForkDate(branch.__mj_CreatedAt)
+                    ?? new Date(0),
+                LastMessagePreview: last ? ConversationEngine.ForkPreviewText(last.Message) : null,
+                LastMessageAuthorName: last ? ConversationEngine.rowAuthorName(last) : null,
+                PlacementDetailID: branch.SourceDetailID ?? anchor?.ID ?? null,
+                PlacementPosition: placement ? { BranchID: placement.BranchID ?? null, Sequence: placement.Sequence } : null,
+                AnchorDetailID: anchor?.ID ?? null,
+                AnchorAuthorName: anchor ? ConversationEngine.rowAuthorName(anchor) : null,
+                AnchorAt: anchor ? ConversationEngine.toForkDate(anchor.__mj_CreatedAt) : null,
+                SourceAuthorName: source ? ConversationEngine.rowAuthorName(source) : null,
+                StartedByUserID: branch.UserID ?? null,
+                StartedByName: branch.User ?? null,
+                ParentBranchID: branch.ParentBranchID ?? null,
+            };
+        });
+    }
+
+    /**
+     * Loads the fork summaries of a conversation FRESH (entity RLS applies): the fork rows (unless
+     * given), then the forks' own rows, their anchor rows and their source rows in one RunViews batch.
+     * @throws when a read fails
+     */
+    public static async LoadForkSummaries(
+        conversationId: string,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider,
+        branches?: ReadonlyArray<ConversationBranchRow>
+    ): Promise<ForkSummary[]> {
+        const forks = branches ?? await ConversationEngine.LoadBranchesFresh(conversationId, contextUser, provider);
+        if (forks.length === 0) {
+            return [];
+        }
+        const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+        const params: RunViewParams[] = [{
+            EntityName: 'MJ: Conversation Details',
+            ExtraFilter: `[ConversationID]='${EscapeSQLString(conversationId)}' AND [BranchID] IS NOT NULL`,
+            OrderBy: 'Sequence ASC',
+            Fields: [...ForkSummaryRowFields],
+            ResultType: 'simple',
+        }];
+        const rowsParams = (filter: string): RunViewParams => ({
+            EntityName: 'MJ: Conversation Details',
+            ExtraFilter: filter,
+            Fields: [...ForkSummaryRowFields],
+            ResultType: 'simple',
+        });
+        const anchorFilter = ConversationEngine.AnchorRowsFilter(conversationId, forks);
+        const anchorIndex = anchorFilter ? params.push(rowsParams(anchorFilter)) - 1 : -1;
+        const sourceFilter = ConversationEngine.SourceRowsFilter(conversationId, forks);
+        const sourceIndex = sourceFilter ? params.push(rowsParams(sourceFilter)) - 1 : -1;
+        const results = await rv.RunViews<ForkSummaryRow>(params, contextUser);
+        const own = results[0];
+        const anchors = anchorIndex >= 0 ? results[anchorIndex] : undefined;
+        const sources = sourceIndex >= 0 ? results[sourceIndex] : undefined;
+        if (!own?.Success) {
+            throw new Error(`Failed to load the forks of conversation ${conversationId}: ${own?.ErrorMessage}`);
+        }
+        if (anchors && !anchors.Success) {
+            throw new Error(`Failed to load the fork anchors of conversation ${conversationId}: ${anchors.ErrorMessage}`);
+        }
+        if (sources && !sources.Success) {
+            throw new Error(`Failed to load the fork source messages of conversation ${conversationId}: ${sources.ErrorMessage}`);
+        }
+        return ConversationEngine.BuildForkSummaries(forks, own.Results ?? [], anchors?.Results ?? [], sources?.Results ?? []);
+    }
+
+    /** Distinct agents and people of rows in order, at most {@link MAX_FORK_PARTICIPANTS}. */
+    private static forkParticipants(rows: ReadonlyArray<ForkSummaryRow>): ForkParticipant[] {
+        const out: ForkParticipant[] = [];
+        for (const r of rows) {
+            const participant: ForkParticipant | null = r.AgentID
+                ? { Kind: 'Agent', ID: r.AgentID, Name: r.Agent ?? null }
+                : r.UserID ? { Kind: 'User', ID: r.UserID, Name: r.User ?? null } : null;
+            if (!participant || out.some(p => p.Kind === participant.Kind && sameId(p.ID, participant.ID))) {
+                continue;
+            }
+            out.push(participant);
+            if (out.length === MAX_FORK_PARTICIPANTS) {
+                break;
+            }
+        }
+        return out;
+    }
+
+    /** The agent's name for an agent row, else the person's name; null when the row names neither. */
+    private static rowAuthorName(row: ForkSummaryRow): string | null {
+        return row.AgentID ? (row.Agent ?? null) : (row.User ?? null);
+    }
+
+    /** A Date from a stored timestamp; null when missing or unreadable. */
+    private static toForkDate(value: Date | string | null | undefined): Date | null {
+        if (value == null) {
+            return null;
+        }
+        const date = value instanceof Date ? value : new Date(value);
+        return Number.isNaN(date.getTime()) ? null : date;
     }
 
     /** True when a row's timestamp is at or after the floor; false when it is missing or unreadable. */
@@ -2511,16 +4428,101 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         };
     }
 
-    /** Converts a raw ConversationDetail row into a context message with sequence metadata. */
-    private static detailToContextMessage(detail: ConversationWindowSourceRow): ConversationContextMessage {
-        return {
-            role: ConversationEngine.mapDetailRoleToChatRole(detail.Role),
-            content: detail.Message || '',
-            metadata: {
-                sequence: detail.Sequence,
-                conversationDetailId: detail.ID
-            }
+    /** Converts a raw ConversationDetail row into a context message with sequence and speaker metadata. */
+    private static detailToContextMessage(
+        detail: ConversationWindowSourceRow,
+        attribution?: SpeakerAttributionState
+    ): ConversationContextMessage {
+        const role = ConversationEngine.mapDetailRoleToChatRole(detail.Role);
+        const raw = detail.Message || '';
+        const content = ConversationEngine.formatAttributedMessageContent(detail, role, attribution);
+        const metadata: ConversationContextMetadata = {
+            sequence: detail.Sequence,
+            conversationDetailId: detail.ID,
+            ...(content !== raw ? { rawContent: raw } : {}),
+            ...(detail.UserID !== undefined ? { userId: detail.UserID } : {}),
+            ...(detail.User !== undefined ? { userName: detail.User } : {}),
+            ...(detail.AgentID !== undefined ? { agentId: detail.AgentID } : {}),
+            ...(detail.Agent !== undefined ? { agentName: detail.Agent } : {}),
+            ...(detail.ParentID !== undefined ? { parentId: detail.ParentID } : {}),
         };
+        return { role, content, metadata };
+    }
+
+    /** Builds speaker attribution state for a context window assembly pass. */
+    private static buildSpeakerAttribution(
+        ordered: ReadonlyArray<ConversationWindowSourceRow>,
+        options?: {
+            speakerAttribution?: 'off' | 'auto' | 'always';
+            speakerLabels?: ReadonlyMap<string, string>;
+        }
+    ): SpeakerAttributionState {
+        const mode = options?.speakerAttribution ?? 'auto';
+        const labelsById = new UUIDMap<string>();
+        for (const [key, value] of options?.speakerLabels ?? []) {
+            if (key && value?.trim()) {
+                labelsById.Set(key, value.trim());
+            }
+        }
+        const distinctUsers = new UUIDSet();
+        const distinctAgents = new UUIDSet();
+        for (const d of ordered) {
+            const role = ConversationEngine.mapDetailRoleToChatRole(d.Role);
+            if (role === 'user' && d.UserID) {
+                distinctUsers.Add(d.UserID);
+            } else if (role === 'assistant' && d.AgentID) {
+                distinctAgents.Add(d.AgentID);
+            }
+        }
+        const rowsById = IndexByUUID(ordered);
+        const hasMultipleHumans = distinctUsers.Size > 1 || labelsById.Size > 0;
+        return {
+            attributeUsers: mode === 'always' || (mode === 'auto' && hasMultipleHumans),
+            attributeAgents: mode === 'always' || (mode === 'auto' && hasMultipleHumans && distinctAgents.Size > 1),
+            labelsById,
+            rowsById,
+        };
+    }
+
+    /** Formats message content with `[Speaker]: ` or `[Speaker -> replying to Target]: ` when speaker attribution applies. */
+    private static formatAttributedMessageContent(
+        detail: ConversationWindowSourceRow,
+        role: 'user' | 'assistant' | 'system',
+        attribution?: SpeakerAttributionState
+    ): string {
+        const raw = detail.Message || '';
+        if (!attribution) {
+            return raw;
+        }
+        const speaker = role === 'user' && attribution.attributeUsers
+            ? ConversationEngine.speakerLabelForRow(detail, attribution.labelsById)
+            : role === 'assistant' && attribution.attributeAgents
+                ? ConversationEngine.speakerLabelForRow(detail, attribution.labelsById)
+                : null;
+        if (!speaker) {
+            return raw;
+        }
+        const parentRow = detail.ParentID ? attribution.rowsById.Get(detail.ParentID) : undefined;
+        const parentSpeaker = parentRow ? ConversationEngine.speakerLabelForRow(parentRow, attribution.labelsById) : null;
+        const header = parentSpeaker ? `[${speaker} -> replying to ${parentSpeaker}]` : `[${speaker}]`;
+        return `${header}: ${raw}`;
+    }
+
+    /** Resolves a display name for a row's author (human or agent). */
+    private static speakerLabelForRow(
+        row: ConversationWindowSourceRow,
+        labelsById: UUIDMap<string>
+    ): string | null {
+        const role = ConversationEngine.mapDetailRoleToChatRole(row.Role);
+        if (role === 'assistant') {
+            const custom = row.AgentID ? labelsById.Get(row.AgentID) : undefined;
+            return custom || row.Agent?.trim() || null;
+        }
+        if (role === 'user') {
+            const custom = row.UserID ? labelsById.Get(row.UserID) : undefined;
+            return custom || row.User?.trim() || null;
+        }
+        return null;
     }
 
     /**
@@ -2609,7 +4611,9 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
-     * Adds or updates an agent run in the cache for a specific detail.
+     * Adds or updates an agent run in the cache for a specific detail, honoring
+     * {@link ShouldReplaceDetailAgentRun} so a continuation/sub-agent run never overwrites
+     * the primary root orchestrating run for that detail.
      *
      * @param conversationId - The conversation ID
      * @param detailId - The detail ID the agent run is associated with
@@ -2618,8 +4622,22 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     public SetAgentRunForDetail(conversationId: string, detailId: string, agentRun: MJAIAgentRunEntity): void {
         const key = NormalizeUUID(conversationId);
         const cached = this._detailCache.get(key);
-        if (cached) {
-            cached.AgentRunsByDetailId.set(detailId, agentRun);
+        if (!cached) {
+            return;
+        }
+        let targetDetailKey = detailId;
+        let existing = cached.AgentRunsByDetailId.get(detailId);
+        if (!existing) {
+            for (const [cachedDetailId, cachedRun] of cached.AgentRunsByDetailId) {
+                if (UUIDsEqual(cachedDetailId, detailId)) {
+                    targetDetailKey = cachedDetailId;
+                    existing = cachedRun;
+                    break;
+                }
+            }
+        }
+        if (ShouldReplaceDetailAgentRun(existing, agentRun)) {
+            cached.AgentRunsByDetailId.set(targetDetailKey, agentRun);
         }
     }
 
@@ -2645,9 +4663,13 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         this._conversations$.next([]);
         this._projects$.next([]);
         this._detailCache.clear();
+        this._sharedByByConversationId.clear();
+        this._explicitSharedConversationIds.clear();
         this._lastEnvironmentId = null;
+        this._lastConversationsUserId = null;
         this._lastProjectsEnvironmentId = null;
         this._lastProjectsUserId = null;
+        this._lastViewer = null;
     }
 
     // ========================================================================
@@ -2967,6 +4989,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             if (existing) {
                 this.mergeDataOntoRecord(existing, data);
                 this._conversations$.next([...this._conversations$.value]);
+                this.reconcileFolderSharedConversations();
             } else if (event.baseEntity) {
                 // A conversation created OUTSIDE this engine (local save event) that we don't
                 // yet hold — append it so the list updates reactively. Only fold in the
@@ -2974,18 +4997,28 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 // app-scoped rows live in their owning surface (see CreateConversation), and
                 // archived rows don't belong in the active list.
                 const scope = data['ApplicationScope'] as string | undefined;
+                const anchorType = data['AnchorType'] as string | null | undefined;
+                const linkedEntityId = data['LinkedEntityID'] as string | null | undefined;
                 const environmentId = data['EnvironmentID'] as string | undefined;
                 const isArchived = data['IsArchived'] === true;
                 const inLoadedEnvironment =
                     !this._lastEnvironmentId ||
                     (environmentId != null && UUIDsEqual(environmentId, this._lastEnvironmentId));
-                if (scope !== 'Application' && !isArchived && inLoadedEnvironment) {
+                if (
+                    scope !== 'Application' &&
+                    anchorType == null &&
+                    linkedEntityId == null &&
+                    !isArchived &&
+                    inLoadedEnvironment
+                ) {
                     this._conversations$.next([event.baseEntity as MJConversationEntity, ...this._conversations$.value]);
+                    this.reconcileFolderSharedConversations();
                 }
             }
         } else if (action === 'delete') {
             const existing = this.GetConversation(id);
             if (existing) {
+                this._sharedByByConversationId.delete(NormalizeUUID(id));
                 this.removeFromList(id);
                 this.removeDetailCache(id);
             }
@@ -3051,6 +5084,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         if (action === 'delete') {
             if (existingIdx >= 0) {
                 this._projects$.next(current.filter(p => !UUIDsEqual(p.ID, id)));
+                this.reconcileFolderSharedConversations();
             }
             return true;
         }
@@ -3097,10 +5131,14 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // folder in the environment — widening on absent input is the failure mode worth
         // avoiding, and it is the same rule the read path applies.
         const ownerUserId = data['OwnerUserID'] as string | null | undefined;
+        const viewerId = this._lastProjectsUserId ?? this._lastConversationsUserId;
+        const hasProjectGrant = this.getUserSharedProjectPermissions(this._lastViewer).some((p) =>
+            UUIDsEqual(p.ResourceRecordID, id)
+        );
         const isVisibleToViewer =
             ownerUserId == null || ownerUserId === ''
                 ? true
-                : !!this._lastProjectsUserId && UUIDsEqual(ownerUserId, this._lastProjectsUserId);
+                : (!!viewerId && UUIDsEqual(ownerUserId, viewerId)) || hasProjectGrant;
 
         const belongsInList = !isArchived && inLoadedEnvironment && isVisibleToViewer;
 
@@ -3111,12 +5149,81 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 this.mergeDataOntoRecord(current[existingIdx], data);
                 this._projects$.next([...current]);
             }
+            this.reconcileFolderSharedConversations();
         } else if (event.baseEntity && belongsInList) {
             // New folder from a local event — append the entity object
             this._projects$.next([...current, event.baseEntity as MJProjectEntity]);
+            this.reconcileFolderSharedConversations();
         }
 
         return true;
+    }
+
+    /**
+     * Keeps folder-shared conversations in `_conversations$` and `_sharedByByConversationId`
+     * aligned with the currently loaded Shared/Public folders and each conversation's
+     * {@link IsInheritingFolderAccess} setting:
+     * - Non-owned conversations without an explicit `MJ: Resource Permissions` grant that sit
+     *   inside a visible Shared/Public folder (and have folder inheritance enabled) get a
+     *   `SharedByInfo` entry with the viewer's inherited folder permission level.
+     * - Non-owned conversations without an explicit grant whose folder is no longer a visible
+     *   Shared/Public folder or whose `inheritFolderAccess` was turned off are dropped from
+     *   `_conversations$` and `_sharedByByConversationId`.
+     */
+    private reconcileFolderSharedConversations(): void {
+        const viewerUserId = this._lastConversationsUserId ?? this._lastProjectsUserId;
+        if (!viewerUserId) {
+            return;
+        }
+
+        const envId = this._lastEnvironmentId ?? this._lastProjectsEnvironmentId ?? '';
+        const sharedProjectIdSet = new Set(
+            this.getSharedProjectIds(envId).map((id) => NormalizeUUID(id))
+        );
+
+        const currentConversations = this._conversations$.value;
+        const keptConversations: MJConversationEntity[] = [];
+        let listChanged = false;
+
+        for (const conv of currentConversations) {
+            const normId = NormalizeUUID(conv.ID);
+            const isOwned = !conv.UserID || UUIDsEqual(conv.UserID, viewerUserId);
+            const isExplicitlyShared = this._explicitSharedConversationIds.has(normId);
+
+            if (isOwned || isExplicitlyShared) {
+                keptConversations.push(conv);
+                continue;
+            }
+
+            const inSharedFolder =
+                !!conv.ProjectID &&
+                IsInheritingFolderAccess(conv) &&
+                sharedProjectIdSet.has(NormalizeUUID(conv.ProjectID));
+            if (inSharedFolder) {
+                keptConversations.push(conv);
+                const inherited = this.GetEffectiveProjectPermission(conv.ProjectID, this._lastViewer);
+                const existingShare = this._sharedByByConversationId.get(normId);
+                if (!existingShare) {
+                    const convWithUser = conv as MJConversationEntity & { User?: string | null };
+                    this._sharedByByConversationId.set(normId, {
+                        UserID: conv.UserID ?? inherited?.SharedByUserID ?? null,
+                        Name: convWithUser.User ?? inherited?.SharedByUser ?? null,
+                        Email: null,
+                        Level: inherited?.Level ?? 'View'
+                    });
+                } else if (inherited?.Level) {
+                    existingShare.Level = ComparePermissionLevels(existingShare.Level, inherited.Level) ?? 'View';
+                }
+            } else {
+                listChanged = true;
+                this._sharedByByConversationId.delete(normId);
+                this.removeDetailCache(conv.ID);
+            }
+        }
+
+        if (listChanged) {
+            this._conversations$.next(keptConversations);
+        }
     }
 
     /**

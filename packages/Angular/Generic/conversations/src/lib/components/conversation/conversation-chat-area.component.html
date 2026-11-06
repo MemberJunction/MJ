@@ -47,7 +47,7 @@
          like the Form Builder cockpit show the mode picker above the
          empty-state on a fresh chat instead of waiting for the first
          message to round-trip. -->
-    <div class="chat-header">
+    <div class="chat-header" (keydown.escape)="OnViewEscape($event)">
       <div class="chat-info" [class.with-sidebar-toggle]="showSidebarToggle">
         @if (showSidebarToggle) {
           <button class="sidebar-toggle-btn"
@@ -57,7 +57,13 @@
           </button>
         }
         @if (conversation) {
-          <div class="chat-title">{{ conversation.Name || '' }}</div>
+          <ng-container *ngTemplateOutlet="titleBar"></ng-container>
+          @if (CurrentOwnerAgent) {
+            <span class="with-chip" [style.--agent-accent]="CurrentOwnerAccentVar">
+              <span class="dot" aria-hidden="true"></span>
+              <span>with <b>{{ CurrentOwnerAgentName }}</b></span>
+            </span>
+          }
         }
         @if (sharedByBadge) {
           <span class="shared-by-badge" [title]="sharedByBadge.fullTooltip">
@@ -66,7 +72,7 @@
           </span>
         }
         @if (conversation?.ProjectID) {
-          <button class="project-tag" (click)="openProjectSelector()" title="Assign to project">
+          <button class="project-tag" (click)="openProjectSelector()" [attr.title]="EffectiveReadOnly ? 'Project' : 'Assign to project'">
             <i class="fas fa-folder"></i>
             <span>{{ conversation!.Project || 'Project' }}</span>
           </button>
@@ -79,6 +85,15 @@
         }
       </div>
       <div class="chat-actions chat-actions-buttons">
+        @if (ForkSummaries.length > 0) {
+          <button mjButton #forksButton Variant="flat" Size="sm" class="forks-button" [class.active]="ShowForksPopover"
+            aria-haspopup="dialog" [attr.aria-expanded]="ShowForksPopover" [attr.aria-controls]="ShowForksPopover ? ForksPopoverID : null"
+            (click)="ToggleForksPopover()" title="Forks in this conversation">
+            <i class="fa-solid fa-code-branch"></i>
+            <span class="btn-label">Forks</span>
+            <span class="forks-count">{{ ForkSummaries.length }}</span>
+          </button>
+        }
         @if (allowPinning && pinnedMessageCount > 0) {
           <button class="pin-chip" [class.active]="showPinsPanel" (click)="TogglePinsPanel()" title="View pinned messages">
             <i class="fas fa-thumbtack"></i>
@@ -91,13 +106,23 @@
             <span class="artifact-badge">{{ artifactCountDisplay }}</span>
           </button>
         }
+        @if (AllowRemoteBrowser && conversation) {
+          <button mjButton variant="flat" size="sm"
+            class="remote-browser-toggle-btn"
+            [class.active]="ShowRemoteBrowserPanel || IsRemoteBrowserLive"
+            (click)="ToggleRemoteBrowserPanel()"
+            [title]="ShowRemoteBrowserPanel ? 'Hide Browser' : IsRemoteBrowserLive ? 'Show Browser (running)' : 'Open Browser'">
+            <i class="fa-solid fa-globe"></i>
+            <span class="btn-label">Browser</span>
+          </button>
+        }
         @if (memberCount > 1) {
           <button class="chat-members" (click)="toggleMembersModal()" title="View members">
             <i class="fas fa-users"></i>
             <span class="members-badge">{{ memberCount }}</span>
           </button>
         }
-        @if (!overlayMode && showAgentModePicker && ModePickerTargetAgentId) {
+        @if (!overlayMode && showAgentModePicker && ModePickerTargetAgentId && !EffectiveReadOnly) {
           <!-- Per-agent mode/quality picker (Draft / Standard / High).
                Targets the agent the next non-mention message will route
                to. Auto-hides when that agent has fewer than 2 configured
@@ -121,7 +146,7 @@
             [Conversation]="conversation"
             [CurrentUser]="currentUser"
             [AllowedAgentIDs]="AllowedAgentIDs"
-            [Disabled]="isReadOnlyView">
+            [Disabled]="EffectiveReadOnly">
           </mj-conversation-agent-picker>
         }
         @if (showExportButton) {
@@ -154,6 +179,64 @@
     </div>
   }
 
+  <!-- Header title. Main: the conversation name. A fork: the path, the conversation and each parent fork
+       (each opens its view; the parent is the way back), then the open fork with its kind icon. Past three
+       entries, and on narrow screens, the middle crumbs collapse into an ellipsis that opens the forks list.
+       The current name can be renamed in place. -->
+  <ng-template #titleBar>
+    <div class="chat-title-bar">
+      @if (OpenView.Kind === 'Main') {
+        <ng-container *ngTemplateOutlet="titleName"></ng-container>
+      } @else {
+        <nav class="chat-title-path" aria-label="Breadcrumb">
+          <ol class="chat-title-crumbs">
+            @for (parent of HeaderPath.Parents; track $index) {
+              @if ($index === 1) {
+                <li class="chat-title-crumb chat-title-ellipsis" [class.collapses-wide]="HeaderPath.CollapsesWide">
+                  <button mjButton Variant="flat" Size="sm" type="button" (click)="ShowWholePath()" aria-label="Show the whole path" title="Show the whole path">…</button>
+                  <i class="fa-solid fa-chevron-right chat-title-sep" aria-hidden="true"></i>
+                </li>
+              }
+              <li class="chat-title-crumb" [class.path-middle]="parent.IsMiddle" [class.collapsed-wide]="parent.CollapsedWide">
+                <button mjButton Variant="flat" Size="sm" type="button" (click)="OpenCrumb(parent.Crumb)" [title]="'Back to ' + parent.Crumb.Label">
+                  <span class="chat-title-crumb-label">{{ parent.Crumb.Label }}</span>
+                </button>
+                <i class="fa-solid fa-chevron-right chat-title-sep" aria-hidden="true"></i>
+              </li>
+            }
+            <li class="chat-title-current" aria-current="page">
+              <i [class]="'chat-title-kind ' + OpenViewIcon" [attr.data-kind]="OpenViewKind" aria-hidden="true"></i>
+              <ng-container *ngTemplateOutlet="titleName"></ng-container>
+            </li>
+          </ol>
+        </nav>
+      }
+    </div>
+  </ng-template>
+
+  <!-- The current name and its rename button; the inline field while renaming -->
+  <ng-template #titleName>
+    @if (IsRenamingTitle) {
+      <input
+        #titleNameInput
+        type="text"
+        class="chat-title-input"
+        maxlength="255"
+        [attr.aria-label]="TitleRenameLabel"
+        [(ngModel)]="TitleRenameText"
+        (keydown.enter)="$event.preventDefault(); SaveTitleRename(true)"
+        (keydown.escape)="$event.preventDefault(); $event.stopPropagation(); CancelTitleRename()"
+        (blur)="SaveTitleRename()" />
+    } @else {
+      <h2 class="chat-title" [title]="HeaderTitle">{{ HeaderTitle }}</h2>
+      @if (CanRenameTitle) {
+        <button mjButton #titleRenameButton Variant="icon" Size="sm" type="button" class="chat-title-rename" (click)="StartTitleRename()" [attr.aria-label]="TitleRenameLabel" [title]="TitleRenameLabel">
+          <i class="fa-solid fa-pen" aria-hidden="true"></i>
+        </button>
+      }
+    }
+  </ng-template>
+
   <!-- Messages and Artifact Split Layout — restructures into [stage | rail]
        when isDemonstrationActive (per Matt's 06-10 design). The .demonstration-mode
        class drives the CSS Grid switch; the stage container renders only when the
@@ -174,7 +257,7 @@
 
     <!-- Messages Pane -->
     <div class="chat-messages-pane"
-      [class.full-width]="!showArtifactPanel"
+      [class.full-width]="!showArtifactPanel && !SelectedTaskGraphPanel && !ShowRemoteBrowserPanel"
       [class.hidden]="isArtifactPaneMaximized">
       @if (isLoadingConversation) {
         <!-- Loading State - checked FIRST to prevent empty state flash. The branch
@@ -195,7 +278,12 @@
              renders with its own greeting, prompt chips, and message input.
              emptyStateConfig (when supplied) takes precedence over the legacy
              [emptyStateGreeting] string for backwards compatibility. -->
-        @if (slotTemplate('emptyState'); as t) {
+        @if (ReadOnly) {
+          <div class="read-only-banner" role="status">
+            <i class="fas fa-eye"></i>
+            <span>{{ ReadOnlyMessage || 'You have view-only access to this conversation.' }}</span>
+          </div>
+        } @else if (slotTemplate('emptyState'); as t) {
           <ng-container *ngTemplateOutlet="t; context: {
             $implicit: emptyStateConfig,
             greeting: emptyStateConfig?.greeting ?? emptyStateGreeting,
@@ -237,66 +325,87 @@
         <div class="chat-messages-wrapper">
           <div class="chat-messages-container"></div>
           <div class="chat-input-container">
-            <!-- composerExtra slot — host UI directly above the composer (IMJChatComposerExtraContext). -->
-            @if (slotTemplate('composerExtra'); as t) {
-              <div class="chat-composer-extra">
-                <ng-container *ngTemplateOutlet="t; context: {
-                  $implicit: conversation,
-                  ConversationId: conversationId,
-                  IsProcessing: isProcessing
-                }"></ng-container>
+            @if (ReadOnly) {
+              <div class="read-only-banner" role="status">
+                <i class="fas fa-eye"></i>
+                <span>{{ ReadOnlyMessage || 'You have view-only access to this conversation.' }}</span>
+              </div>
+            } @else {
+              <!-- composerExtra slot — host UI directly above the composer (IMJChatComposerExtraContext). -->
+              @if (slotTemplate('composerExtra'); as t) {
+                <div class="chat-composer-extra">
+                  <ng-container *ngTemplateOutlet="t; context: {
+                    $implicit: conversation,
+                    ConversationId: conversationId,
+                    IsProcessing: isProcessing
+                  }"></ng-container>
+                </div>
+              }
+              <div class="message-input-container-wrapper">
+                <mj-message-input
+                  #emptyStateInput
+                  [emptyStateMode]="true"
+                  [initialDraft]="GetInitialDraftFor(null)"
+                  (initialDraftApplied)="OnComposerDraftApplied()"
+                  (DraftStateChanged)="OnDraftStateChanged(null, $event)"
+                  (ComposerBlurred)="OnComposerBlurred()"
+                  [currentUser]="currentUser"
+                  [disabled]="isProcessing"
+                  [ReadOnly]="EffectiveReadOnly"
+                  [appContext]="appContext"
+                  [applicationId]="applicationId"
+                  [defaultAgentId]="defaultAgentId"
+                  [enableAttachments]="enableAttachments && allowAttachments"
+                  [enableMentions]="allowMentions"
+                  [enableAgentMentions]="allowAgentMentions"
+                  [enableEntityMentions]="allowEntityMentions"
+                  [enableSkillCommands]="allowSkillCommands"
+                  [enablePlanMode]="allowPlanMode"
+                  [enableRealtime]="allowRealtime"
+                  [AllowedAgentIDs]="AllowedAgentIDs"
+                  [MentionPeople]="MentionPeople"
+                  [maxAttachments]="maxAttachments"
+                  [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
+                  [acceptedFileTypes]="acceptedFileTypes"
+                  (emptyStateSubmit)="onEmptyStateMessageSent($event)">
+                </mj-message-input>
               </div>
             }
-            <div class="message-input-container-wrapper">
-              <mj-message-input
-                #emptyStateInput
-                [emptyStateMode]="true"
-                [initialDraft]="GetInitialDraftFor(null)"
-                (initialDraftApplied)="OnComposerDraftApplied()"
-            (DraftStateChanged)="OnDraftStateChanged(null, $event)"
-            (ComposerBlurred)="OnComposerBlurred()"
-                [currentUser]="currentUser"
-                [disabled]="isProcessing"
-                [enableAttachments]="enableAttachments && allowAttachments"
-                [enableMentions]="allowMentions"
-                [enableAgentMentions]="allowAgentMentions"
-                [enableEntityMentions]="allowEntityMentions"
-                [enableSkillCommands]="allowSkillCommands"
-                [enablePlanMode]="allowPlanMode"
-                [enableRealtime]="allowRealtime"
-                [AllowedAgentIDs]="AllowedAgentIDs"
-                [MentionPeople]="MentionPeople"
-                [maxAttachments]="maxAttachments"
-                [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
-                [acceptedFileTypes]="acceptedFileTypes"
-                (emptyStateSubmit)="onEmptyStateMessageSent($event)">
-              </mj-message-input>
-            </div>
           </div>
         </div>
       } @else {
         <!-- Normal Message View -->
         <div class="chat-messages-wrapper">
+          @if (OpenView.Kind !== 'Main' && slotTemplate('header')) {
+            <!-- A host header replaces the default one, so the fork title shows above the transcript. -->
+            <div class="fork-view-bar" role="region" aria-label="Fork" (keydown.escape)="OnViewEscape($event)">
+              <ng-container *ngTemplateOutlet="titleBar"></ng-container>
+            </div>
+          }
           <!-- Upload Indicator Overlay (centered in conversation area) -->
           @if (isUploadingAttachments) {
             <div class="upload-indicator-overlay">
               <mj-loading [text]="uploadingMessage" size="medium"></mj-loading>
             </div>
           }
-          <div class="chat-messages-container" #scrollContainer (scroll)="checkScroll()">
+          <div class="chat-messages-container" #scrollContainer (scroll)="checkScroll()" (keydown.escape)="OnViewEscape($event)">
             <mj-conversation-message-list
               [showEmptyFill]="showEmptyFill"
               [showDateNavigation]="showDateNavigation"
               [showAgentRunDetails]="showAgentRunDetails"
               [showReactions]="showReactions"
               [showMessageRating]="showMessageRating"
-              [allowPinning]="allowPinning"
-              [allowMessageEdit]="allowMessageEdit"
-              [allowMessageDelete]="allowMessageDelete"
+              [allowPinning]="allowPinning && !EffectiveReadOnly"
+              [allowMessageEdit]="allowMessageEdit && !EffectiveReadOnly"
+              [allowMessageDelete]="allowMessageDelete && !EffectiveReadOnly"
+              [ReadOnly]="EffectiveReadOnly"
+              [AllowStopRun]="AllowStopRun"
+              [InFlightCount]="InFlightCount"
+              [OpenLinksInNewTab]="OpenLinksInNewTab"
               [assistantDisplayName]="assistantDisplayName"
               [assistantAvatarUrl]="assistantAvatarUrl"
-              [messages]="messages"
-              [HasMoreAbove]="hasMoreMessagesAbove"
+              [messages]="DisplayMessages"
+              [HasMoreAbove]="ListHasMoreAbove"
               [IsLoadingOlder]="isLoadingOlderMessages"
               [ScrollRoot]="messageScrollRoot"
               (OlderRequested)="onOlderMessagesRequested()"
@@ -306,17 +415,26 @@
               [isProcessing]="isProcessing"
               [artifactMap]="effectiveArtifactsMap"
               [agentRunMap]="agentRunsByDetailId"
+              [HandoffMap]="HandoffsByDetailId"
               [ratingsMap]="ratingsByDetailId"
               [userAvatarMap]="userAvatarMap"
               [attachmentsMap]="attachmentsByDetailId"
               [messageRendererTemplate]="slotTemplate('messageRenderer')"
               [messageExtraTemplate]="slotTemplate('messageExtra')"
               [sessionMetaMap]="realtimeSessionMetaMap"
+              [ForkChipMap]="ForkChipMap"
+              [ForkLayout]="ForkLayout"
+              [CanFork]="CanFork"
+              [InPlaceTurn]="InPlaceTurn"
+              (ForkOpenRequested)="OnForkOpenRequested($event)"
+              (EditResendRequested)="OnEditResendRequested($event)"
+              (RegenerateRequested)="OnRegenerateRequested($event)"
+              (ResendInPlaceRequested)="OnResendInPlaceRequested($event)"
+              (ForkRequested)="OnForkRequested($event)"
               (realtimeSessionOpenRequested)="OpenRealtimeSessionReview($event)"
-              (replyInThread)="onReplyInThread($event)"
-              (viewThread)="onViewThread($event)"
               (deleteMessage)="onDeleteMessage($event)"
-              (retryMessage)="onRetryMessage($event)"
+              (BeforeStopClicked)="BeforeStopClicked.emit($event)"
+              (StopMessage)="OnStopMessage($event)"
               (testFeedbackMessage)="onTestFeedbackMessage($event)"
               (artifactClicked)="onArtifactClicked($event)"
               (messageEdited)="onMessageEdited($event)"
@@ -324,13 +442,16 @@
               (suggestedResponseSelected)="onSuggestedResponseSelected($event)"
               (attachmentClicked)="onAttachmentClicked($event)"
               (diagnosticRequested)="onDiagnosticRequested($event)"
+              (LivenessCheckRequested)="OnLivenessCheckRequested($event)"
               (messagePinToggled)="onMessagePinToggled($event)"
               (beforeResponseFormSubmitted)="beforeResponseFormSubmitted.emit($event)"
-              (afterResponseFormSubmitted)="afterResponseFormSubmitted.emit($event)">
+              (afterResponseFormSubmitted)="afterResponseFormSubmitted.emit($event)"
+              (TaskGraphPanelRequested)="OnTaskGraphPanelRequested($event)"
+              (ScrollToMessageRequested)="OnJumpToMessage($event)">
             </mj-conversation-message-list>
 
             <!-- Scroll to Bottom Icon (positioned within scroll container for proper centering) -->
-            @if (showScrollToBottomIcon && messages && messages.length > 0) {
+            @if (showScrollToBottomIcon && DisplayMessages.length > 0) {
               <span class="scroll-to-bottom-icon" style="left: 50%;"
                 (click)="scrollToBottomAnimate()">
                 <i class="fas fa-arrow-down"></i>
@@ -344,6 +465,11 @@
               <!-- Loading State -->
               <div class="loading-peripheral-placeholder">
                 <mj-loading text="Loading conversation data..." size="medium"></mj-loading>
+              </div>
+            } @else if (ReadOnly) {
+              <div class="read-only-banner" role="status">
+                <i class="fas fa-eye"></i>
+                <span>{{ ReadOnlyMessage || 'You have view-only access to this conversation.' }}</span>
               </div>
             } @else {
               @if (isReadOnlyView) {
@@ -364,7 +490,7 @@
               }
               <!-- Input Component - Multiple instances cached, only one visible -->
               <div class="message-input-container-wrapper">
-                @for (inputRef of getCachedInputs(); track inputRef.conversationId) {
+                @for (inputRef of getCachedInputs(); track NormalizeCachedInputId(inputRef.conversationId)) {
                   <mj-message-input
                     #messageInput
                     [hidden]="inputRef.conversationId !== conversationId"
@@ -378,7 +504,7 @@
                     [artifactsByDetailId]="inputRef.conversationId === conversationId ? artifactsByDetailId : emptyArtifactsMap"
                     [systemArtifactsByDetailId]="inputRef.conversationId === conversationId ? systemArtifactsByDetailId : emptyArtifactsMap"
                     [agentRunsByDetailId]="inputRef.conversationId === conversationId ? agentRunsByDetailId : emptyAgentRunsMap"
-                    [appContext]="appContext"
+                    [appContext]="EffectiveAppContext"
                     [applicationId]="applicationId"
                     [defaultAgentId]="defaultAgentId"
                     [conversationDefaultAgentId]="inputRef.conversationId === conversationId ? (conversation?.DefaultAgentID ?? null) : null"
@@ -387,17 +513,28 @@
                     [AllowedAgentIDs]="AllowedAgentIDs"
                     [MentionPeople]="MentionPeople"
                     [AgentHistoryFrom]="AgentHistoryFrom"
+                    [TargetBranchID]="TargetBranchIdFor(inputRef.conversationId)"
+                    [ResolveTargetBranch]="inputRef.conversationId === conversationId ? ResolveComposerBranch : null"
                     [AgentTurnHandler]="AgentTurnHandler"
                     [AutoNameConversation]="AutoNameConversation"
+                    [EnableDecisionRouting]="EnableDecisionRouting"
                     [inProgressMessageIds]="inputRef.conversationId === conversationId ? inProgressMessageIds : emptyInProgressIds"
                     [disabled]="isProcessing || isReadOnlyView"
+                    [ReadOnly]="EffectiveReadOnly"
                     [enableAttachments]="enableAttachments && allowAttachments"
                     [enableMentions]="allowMentions"
                     [enableAgentMentions]="allowAgentMentions"
                     [enableEntityMentions]="allowEntityMentions"
                     [enableSkillCommands]="allowSkillCommands"
                     [enablePlanMode]="allowPlanMode"
-                    [enableRealtime]="allowRealtime"
+                    [enableRealtime]="allowRealtime && OpenView.Kind !== 'DraftFork'"
+                    [Placeholder]="ComposerPlaceholderFor(inputRef.conversationId)"
+                    [SendSlotMode]="inputRef.conversationId === conversationId ? SendSlotMode : 'send'"
+                    [StopCount]="inputRef.conversationId === conversationId ? StopCount : 0"
+                    [StopLabel]="StopLabel"
+                    [StatusText]="inputRef.conversationId === conversationId ? StatusText : null"
+                    [StatusElapsed]="inputRef.conversationId === conversationId ? StatusElapsed : null"
+                    (StopClicked)="OnComposerStopClicked()"
                     [maxAttachments]="maxAttachments"
                     [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
                     [acceptedFileTypes]="acceptedFileTypes"
@@ -406,6 +543,7 @@
                     (initialMessageAutoSendStarted)="onInitialMessageAutoSendStarted($event)"
                     (initialMessageAutoSendFailed)="onInitialMessageAutoSendFailed($event)"
                     (messageSent)="onMessageSent($event)"
+                    (MessageStreamed)="OnMessageStreamed($event)"
                     (agentResponse)="onAgentResponse($event)"
                     (agentRunDetected)="onAgentRunDetected($event)"
                     (agentRunUpdate)="onAgentRunUpdate($event)"
@@ -420,6 +558,9 @@
                   </mj-message-input>
                 }
               </div>
+              @if (ComposerHint) {
+                <div class="fork-composer-hint">{{ ComposerHint }}</div>
+              }
             }
           </div>
         </div>
@@ -440,6 +581,7 @@
           [environmentId]="environmentId"
           [versionNumber]="selectedVersionNumber"
           [viewContext]="'conversation'"
+          [Scope]="ArtifactViewerScope"
           [canShare]="canShareSelectedArtifact"
           [canEdit]="canEditSelectedArtifact"
           [isMaximized]="isArtifactPaneMaximized"
@@ -457,6 +599,121 @@
       </div>
     }
 
+    <!-- Task Graph Run Viewer Pane -->
+    @if (SelectedTaskGraphPanel) {
+      @if (!isArtifactPaneMaximized) {
+        <div class="resize-handle" (mousedown)="onResizeStart($event)" (touchstart)="onResizeTouchStart($event)"></div>
+      }
+      <div class="chat-artifact-pane chat-task-graph-pane"
+        [style.width.%]="artifactPaneWidth"
+        [class.maximized]="isArtifactPaneMaximized">
+        <div class="task-graph-pane-header">
+          <div class="task-graph-pane-title-group">
+            <span class="task-graph-pane-icon">
+              <i class="fa-solid fa-diagram-project"></i>
+            </span>
+            <div class="task-graph-pane-titles">
+              <span class="task-graph-pane-title">{{ SelectedTaskGraphPanel.workflowTitle }}</span>
+              <span class="task-graph-pane-subtitle">Interactive Task Graph &amp; Step Inspector</span>
+            </div>
+          </div>
+          <div class="task-graph-pane-actions">
+            <button
+              type="button"
+              class="task-graph-pane-save-btn"
+              [disabled]="IsSavingTaskGraphWorkflow || !taskGraphRunView.Spec?.tasks?.length"
+              (click)="OnSaveTaskGraphAsWorkflow(taskGraphRunView.Spec)"
+              title="Save this task graph as a reusable Draft Flow Agent workflow">
+              <i class="fa-solid" [class.fa-spinner]="IsSavingTaskGraphWorkflow" [class.fa-spin]="IsSavingTaskGraphWorkflow" [class.fa-floppy-disk]="!IsSavingTaskGraphWorkflow"></i>
+              <span>{{ IsSavingTaskGraphWorkflow ? 'Saving…' : 'Save as Workflow' }}</span>
+            </button>
+            <button
+              type="button"
+              class="task-graph-pane-btn"
+              (click)="toggleMaximizeArtifactPane()"
+              [title]="isArtifactPaneMaximized ? 'Restore panel size' : 'Maximize panel'">
+              <i class="fa-solid" [class.fa-compress]="isArtifactPaneMaximized" [class.fa-expand]="!isArtifactPaneMaximized"></i>
+            </button>
+            <button
+              type="button"
+              class="task-graph-pane-btn"
+              (click)="OnCloseTaskGraphPanel()"
+              title="Close Task Graph panel">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+        </div>
+        <div class="task-graph-pane-body">
+          <mj-task-graph-run-view
+            #taskGraphRunView
+            [ParentTaskID]="SelectedTaskGraphPanel.parentTaskId"
+            [WorkflowName]="SelectedTaskGraphPanel.workflowTitle"
+            [LiveUpdates]="true"
+            [ShowVariables]="true"
+            [Height]="'100%'">
+          </mj-task-graph-run-view>
+        </div>
+      </div>
+    }
+
+    <!-- Remote Browser Side Pane -->
+    @if (ShowRemoteBrowserPanel) {
+      @if (!isArtifactPaneMaximized) {
+        <div class="resize-handle" (mousedown)="onResizeStart($event)" (touchstart)="onResizeTouchStart($event)"></div>
+      }
+      <div class="chat-artifact-pane chat-task-graph-pane chat-remote-browser-pane"
+        [style.width.%]="artifactPaneWidth"
+        [class.maximized]="isArtifactPaneMaximized">
+        <div class="task-graph-pane-header">
+          <div class="task-graph-pane-title-group">
+            <span class="task-graph-pane-icon">
+              <i class="fa-solid fa-globe"></i>
+            </span>
+            <div class="task-graph-pane-titles">
+              <span class="task-graph-pane-title">Remote Browser</span>
+              <span class="task-graph-pane-subtitle">Shared live browser workspace</span>
+            </div>
+          </div>
+          <div class="task-graph-pane-actions">
+            <input
+              type="text"
+              class="remote-browser-url-input"
+              placeholder="Enter URL or domain…"
+              [(ngModel)]="RemoteBrowserUrlInput"
+              (keydown.enter)="$event.preventDefault(); NavigateRemoteBrowserFromInput()" />
+            <button
+              type="button"
+              class="task-graph-pane-save-btn"
+              [disabled]="IsRemoteBrowserNavigating || !RemoteBrowserUrlInput.trim()"
+              (click)="NavigateRemoteBrowserFromInput()"
+              title="Navigate to URL">
+              <i class="fa-solid" [class.fa-spinner]="IsRemoteBrowserNavigating" [class.fa-spin]="IsRemoteBrowserNavigating" [class.fa-arrow-right]="!IsRemoteBrowserNavigating"></i>
+              <span>Go</span>
+            </button>
+            <button
+              type="button"
+              class="task-graph-pane-btn"
+              (click)="toggleMaximizeArtifactPane()"
+              [title]="isArtifactPaneMaximized ? 'Restore panel size' : 'Maximize panel'">
+              <i class="fa-solid" [class.fa-compress]="isArtifactPaneMaximized" [class.fa-expand]="!isArtifactPaneMaximized"></i>
+            </button>
+            <button
+              type="button"
+              class="task-graph-pane-btn"
+              (click)="CloseRemoteBrowserPanel()"
+              title="Close Browser panel">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+        </div>
+        <div class="task-graph-pane-body">
+          <mj-realtime-remote-browser-surface
+            #conversationRemoteBrowserSurface>
+          </mj-realtime-remote-browser-surface>
+        </div>
+      </div>
+    }
+
     <!-- Artifact Share Modal -->
     <mj-artifact-share-modal
       [isOpen]="isArtifactShareModalOpen"
@@ -471,10 +728,21 @@
       <mj-pinned-messages-panel
         [pinnedMessages]="pinnedMessages"
         [isLoading]="isLoadingPins"
+        [AllowUnpin]="!EffectiveReadOnly"
         (closed)="showPinsPanel = false"
         (jumpRequested)="onJumpToMessage($event)"
         (unpinRequested)="onUnpinFromPanel($event)">
       </mj-pinned-messages-panel>
+    }
+
+    @if (ShowForksPopover) {
+      <mj-conversation-forks-popover
+        [PanelID]="ForksPopoverID"
+        [Summaries]="ForkSummaries"
+        [CurrentUserID]="CurrentUser.ID"
+        (ForkSelected)="OnForkSelectedFromList($event)"
+        (Closed)="CloseForksPopover()">
+      </mj-conversation-forks-popover>
     }
   </div>
 
@@ -493,10 +761,12 @@
       [CurrentUser]="currentUser"
       [EnvironmentID]="environmentId"
       [ReviewData]="RealtimeReview"
+      [AllowStartLive]="CanStartVoiceFromReview"
       [Chrome]="overlayMode ? 'orb' : 'auto'"
       [Compact]="overlayMode"
       [ShowDevLinks]="!overlayMode"
       [ShowDensityPicker]="!overlayMode"
+      [OpenLinksInNewTab]="OpenLinksInNewTab"
       (NavigateRequest)="onRealtimeNavigateRequest($event)"
       (StartLiveRequested)="onReviewStartLive($event)"
       (ReviewClosed)="onReviewClosed()">
@@ -515,17 +785,6 @@
   }
 </div>
 
-<!-- Thread Panel -->
-@if (threadId) {
-  <mj-thread-panel
-    [parentMessageId]="threadId"
-    [conversationId]="conversationId || ''"
-    [currentUser]="currentUser"
-    (closed)="onLocalThreadClosed()"
-    (replyAdded)="onThreadReplyAdded($event)">
-  </mj-thread-panel>
-}
-
 <!-- Export Modal -->
 <!-- [branding] is bound BEFORE [isVisible] deliberately: Angular sets inputs in
      template order within a change-detection pass, and the modal's isVisible setter
@@ -534,6 +793,7 @@
   [branding]="exportBranding"
   [isVisible]="showExportModal"
   [conversation]="conversation || undefined"
+  [Scope]="ExportScope"
   [currentUser]="currentUser"
   (cancelled)="onExportModalCancelled()"
   (exported)="onExportModalComplete()">

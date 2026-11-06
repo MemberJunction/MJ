@@ -1,7 +1,7 @@
 import { Component, AfterViewInit, ViewContainerRef, OnDestroy, ChangeDetectionStrategy, inject } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent, CUSTOM_LAYOUT_TOOLBAR_CONFIG } from '@memberjunction/ng-base-forms';
-import { MJAIPromptRunEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIPromptRunEntityExtended, MJAIPromptEntityExtended, type TemplateDataCaptureMode, type TemplateDataShape } from '@memberjunction/ai-core-plus';
 import { MJAIModelEntity } from "@memberjunction/core-entities";
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { MJAIPromptRunFormComponent } from '../../generated/Entities/MJAIPromptRun/mjaipromptrun.form.component';
@@ -9,16 +9,40 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { ChatMessage } from '@memberjunction/ai';
 import { TestHarnessWindowManagerService } from '@memberjunction/ng-ai-test-harness';
 import { ParseJSONOptions, ParseJSONRecursive } from '@memberjunction/global';
+import { JoinHeroSummary, RunStatusKind, type RunStatusKindValue } from '../../shared/phone-hero';
+import { PhoneSectionsState } from '../../shared/phone-sections-state';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Prompt Runs')
 @Component({
   standalone: false,
     selector: 'mj-ai-prompt-run-form',
     templateUrl: './ai-prompt-run-form.component.html',
-    styleUrls: ['./ai-prompt-run-form.component.css'],
+    styleUrls: ['./ai-prompt-run-form.component.css', '../../shared/phone-hero.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormComponent implements AfterViewInit, OnDestroy {
+
+    /** Phone width shows the stacked accordions as sections behind one picker (design call 7A). */
+    public Phone = new PhoneSectionsState(() => this.cdr.markForCheck());
+
+    /** Phone hero (6A): whether the summary line is expanded to show the rest of the hero. */
+    public HeroDetailsOpen = false;
+
+    /** Toggles the phone hero between its compact identity row and the full hero. */
+    public ToggleHeroDetails(): void {
+        this.HeroDetailsOpen = !this.HeroDetailsOpen;
+        this.cdr.markForCheck();
+    }
+
+    /** The phone hero's one-line summary of what the compact hero leaves out. */
+    public get HeroSummary(): string {
+        return JoinHeroSummary([
+            this.record.RunType,
+            this.record.ChildPrompt || this.Prompt?.Name,
+            this.model?.Name,
+            this.formatDuration(this.record.ExecutionTimeMS),
+        ]);
+    }
     public record!: MJAIPromptRunEntityExtended;
     public readonly ToolbarConfig = CUSTOM_LAYOUT_TOOLBAR_CONFIG;
 
@@ -29,6 +53,9 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
 
     /** Custom-layout AI Prompt Run form looks best full-width on first open. */
     public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
+
+    /** Custom-layout form owns its entire body; suppress auto-filled relationship sections. */
+    public override get OwnsEntireFormBody(): boolean { return true; }
 
     // Related entities
     public Prompt: MJAIPromptEntityExtended | null = null;
@@ -285,7 +312,14 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
     public set inputData(value: any) {
       this.InputData = value;
     }
-    
+
+    /** Template-data capture mode stored with this run; null for runs saved before capture modes existed. */
+    public DataCapture: TemplateDataCaptureMode | null = null;
+    /** Key sizes of the template inputs, stored in `None` mode. */
+    public DataShape: TemplateDataShape | null = null;
+    /** Why a `Referenced` run stored `Full`. */
+    public DataCaptureNote: string | null = null;
+
     // Validation data
     public ValidationAttempts: any[] = [];
 
@@ -353,6 +387,8 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
     }
     
     ngOnDestroy() {
+        super.ngOnDestroy();
+        this.Phone.Stop();
         // Clean up any resources
         // Currently no subscriptions or timers to clean up
         // This is here for future use and to complete the lifecycle
@@ -490,6 +526,9 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
         this.InputData = messageData.inputData;
         this.FormattedMessages = messageData.formattedMessages;
         this.FormattedData = messageData.formattedData;
+        this.DataCapture = messageData.dataCapture;
+        this.DataShape = messageData.dataShape;
+        this.DataCaptureNote = messageData.dataCaptureNote;
         console.log('📄 Input data formatted. Chat messages:', this.ChatMessages.length, 'Input data exists:', !!this.InputData);
         
         console.log('📊 Formatting result data...');
@@ -606,6 +645,11 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
         } else {
             return '#17a2b8'; // Blue (completed but no success flag)
         }
+    }
+
+    /** The phone status chip's kind, which picks its `--mj-status-*` tokens. */
+    get StatusKind(): RunStatusKindValue {
+        return RunStatusKind(!!this.record?.CompletedAt, this.record?.Success);
     }
 
     /** @deprecated Use {@link GetStatusColor}. */

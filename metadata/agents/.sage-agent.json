@@ -25,17 +25,22 @@
         "includeVariableRefsDocs": false,
         "includeScratchpadDocs": true,
         "includeMessageExpansionDocs": false,
-        "enableTaskGraphs": true
+        "enableTaskGraphs": true,
+        "enableHandoff": true
       },
       "RerankerConfiguration": {
         "enabled": true,
-        "rerankerModelId": "@lookup:MJ: AI Models.Name=rerank-v3.5",
+        "rerankerModelId": "@lookup:MJ: AI Models.Name=rerank-v5.0-fast",
         "retrievalMultiplier": 3,
-        "minRelevanceThreshold": 0.5,
+        "minRelevanceThreshold": 0.02,
         "fallbackOnError": true
       },
       "TypeConfiguration": {
         "realtime": {
+          "video": {
+            "enabled": true,
+            "avatarId": "Ben"
+          },
           "directActions": {
             "enabled": true,
             "timeoutMs": 8000,
@@ -499,6 +504,34 @@
             "delete": true,
             "deletedAt": "2026-09-22T18:53:11.631Z"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Render Architecture Diagram",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E924A91D-4C8B-4E15-9A3E-71D82C9B4011"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:46:20.759Z",
+            "checksum": "7b4f27bb809afa8549520d0548bc15ea3e3093e002de368ca7bd8d9b53940d7e"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Architecture Diagram Reference",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B418C72E-5D9A-4F26-8B4F-82E93DAC5122"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:46:20.773Z",
+            "checksum": "74ab806d6f221bda9360443ca3a310f4fd2c30ebcfe84a8f9f5b86967b98f0d4"
+          }
         }
       ],
       "MJ: AI Agent Configurations": [
@@ -616,6 +649,8 @@
             "ModelSelectionMode": "Agent",
             "ArtifactCreationMode": "Never",
             "ExposeAsAction": false,
+            "MessageMode": "Latest",
+            "MaxMessages": 10,
             "AgentTypePromptParams": {
               "includeForEachDocs": false,
               "includeWhileDocs": false,
@@ -695,8 +730,8 @@
             "ID": "D0F2CF26-32F1-4AE2-B1F8-B27747C962BE"
           },
           "sync": {
-            "lastModified": "2026-08-07T23:58:28.553Z",
-            "checksum": "9487052fab9f761d457388813c990a7e9947a8323e339e369f98ecce12fff07d"
+            "lastModified": "2026-10-20T23:19:38.646Z",
+            "checksum": "c061c00fb0220ef974d368db110156280bb396417cd719a95fe676849ee47103"
           }
         },
         {
@@ -713,6 +748,8 @@
             "ExposeAsAction": false,
             "DriverClass": "FormBuilderAgent",
             "IconClass": "fa-solid fa-pen-ruler",
+            "MessageMode": "Latest",
+            "MaxMessages": 10,
             "AgentTypePromptParams": {
               "includeForEachDocs": false,
               "includeWhileDocs": false,
@@ -736,6 +773,8 @@
                   "ExposeAsAction": false,
                   "DriverClass": "FormBuilderDesignerAgent",
                   "IconClass": "fa-solid fa-drafting-compass",
+                  "MessageMode": "Latest",
+                  "MaxMessages": 10,
                   "PayloadDownstreamPaths": [
                     "*"
                   ],
@@ -819,8 +858,8 @@
                   "ID": "E2C44DC4-5DEA-471E-9B03-490FF11B7DB9"
                 },
                 "sync": {
-                  "lastModified": "2026-05-29T19:49:21.580Z",
-                  "checksum": "cd14011e3255ec008f46618f13aa9cf49b4ac8da03d5957c79f941d33668b386"
+                  "lastModified": "2026-10-20T23:19:38.679Z",
+                  "checksum": "1b419a013b2ccfdf6e57a3caaa999623dbb7eb834d7932f9870aa6b35f0d200a"
                 }
               },
               {
@@ -947,8 +986,30 @@
             "ID": "7270273A-5FFE-4C85-811C-C9189E2B134F"
           },
           "sync": {
-            "lastModified": "2026-05-29T19:49:21.518Z",
-            "checksum": "167c748e117490d99585d05fea6b73b34d3281c1543e03d8e78ef01c37246ef6"
+            "lastModified": "2026-10-20T23:19:38.665Z",
+            "checksum": "fd67f5631d83e99823296f68fabede4dcba06371ab2b23e23a7326c152ddc8ed"
+          }
+        }
+      ],
+      "MJ: AI Agent Rubrics": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RubricID": "@lookup:MJ: Rubrics.Name=Assistant reply",
+            "Purpose": "Evaluation",
+            "IsDefault": true,
+            "Status": "Active",
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Sage"
+            }
+          },
+          "primaryKey": {
+            "ID": "40A4B461-4123-4B7E-8209-99AA50D9F29A"
+          },
+          "sync": {
+            "lastModified": "2026-10-06T20:21:55.598Z",
+            "checksum": "da9b39d28e84d56d51a18c8e0400e5949f71ddb98d302ee95323f672984ba5bd"
           }
         }
       ]
@@ -957,8 +1018,8 @@
       "ID": "3AB78346-897F-4238-AA6A-F10A131CC691"
     },
     "sync": {
-      "lastModified": "2026-09-21T02:45:37.105Z",
-      "checksum": "4fe54fe156517a51154e5277e2ccf1eec0b5a875bca4d52d7b6d66bb0d3a9b00"
+      "lastModified": "2026-11-01T22:54:14.920Z",
+      "checksum": "7b03f2740a8fca65353f02488a5059f6b07661b9e17214646671d85bdeef6384"
     }
   }
 ]

@@ -197,12 +197,15 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     return this.OnEntityOpened(entity);
   }
 
+  /**
+   * Opens a record the ERD asked for (the details panel's Open button sends the entity's own
+   * `MJ: Entities` record). Navigates directly rather than emitting `OpenEntityRecord`: not every
+   * Explorer host subscribes to that output, and where none does the button silently did nothing.
+   */
   public OnOpenRecord(event: {EntityName: string, RecordID: string}): void {
-    this.OpenEntityRecord.emit({
-      EntityName: event.EntityName,
-      // The ERD emits records of arbitrary entities — resolve the key against the entity's metadata
-      RecordPKey: CompositeKey.FromURLSegment(this.metadata.EntityByName(event.EntityName), event.RecordID)
-    });
+    // The ERD emits records of arbitrary entities — resolve the key against the entity's metadata
+    const recordKey = CompositeKey.FromURLSegment(this.metadata.EntityByName(event.EntityName), event.RecordID);
+    this.navigationService.OpenEntityRecord(event.EntityName, recordKey);
   }
 
   /** @deprecated Use {@link OnOpenRecord}. */

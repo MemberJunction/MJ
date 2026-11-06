@@ -4,6 +4,8 @@ import {
     VerifyTwilioSignature,
     ComputeTwilioSignature,
     BuildInboundVoiceTwiML,
+    IsMachineAnsweredBy,
+    IsTerminalTwilioCallStatus,
     ResolveInboundCall,
 } from '../twilio-ingress';
 
@@ -84,6 +86,33 @@ describe('buildInboundVoiceTwiML', () => {
         const twiml = BuildInboundVoiceTwiML('wss://api.example/telephony/twilio/media');
         expect(twiml).toContain('<Connect>');
         expect(twiml).toContain('<Stream url="wss://api.example/telephony/twilio/media" />');
+    });
+});
+
+describe('BuildInboundVoiceTwiML with parameters', () => {
+    it('carries the per-call token as a <Parameter> inside <Stream>', () => {
+        const twiml = BuildInboundVoiceTwiML('wss://api.example/telephony/twilio/media', { mjToken: 'tok123' });
+        expect(twiml).toContain('<Stream url="wss://api.example/telephony/twilio/media"><Parameter name="mjToken" value="tok123"/></Stream>');
+    });
+});
+
+describe('IsTerminalTwilioCallStatus', () => {
+    it.each(['completed', 'busy', 'failed', 'no-answer', 'canceled', ' Completed '])('treats %s as terminal', (s) => {
+        expect(IsTerminalTwilioCallStatus(s)).toBe(true);
+    });
+
+    it.each(['queued', 'initiated', 'ringing', 'in-progress', 'brand-new-status', '', undefined])('does not treat %j as terminal', (s) => {
+        expect(IsTerminalTwilioCallStatus(s)).toBe(false);
+    });
+});
+
+describe('IsMachineAnsweredBy', () => {
+    it.each(['machine_start', 'machine_end_beep', 'machine_end_silence', 'machine_end_other', 'fax', ' Machine_Start '])('treats %s as a machine', (v) => {
+        expect(IsMachineAnsweredBy(v)).toBe(true);
+    });
+
+    it.each(['human', 'unknown', '', undefined])('does not treat %j as a machine (never hang up on a possible human)', (v) => {
+        expect(IsMachineAnsweredBy(v)).toBe(false);
     });
 });
 

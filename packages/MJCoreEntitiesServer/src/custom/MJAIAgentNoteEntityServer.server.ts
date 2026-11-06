@@ -1,7 +1,7 @@
 import { RegisterClass } from "@memberjunction/global";
 import { BaseEntity, EntityDeleteOptions, EntitySaveOptions, LogError, SimpleEmbeddingResult } from "@memberjunction/core";
 import { MJAIAgentNoteEntity, IsInjectableNoteStatus } from "@memberjunction/core-entities";
-import { EmbedTextLocalHelper } from "./util";
+import { EmbedTextLocalHelper, IsLocalEmbeddingStaleHelper } from "./util";
 import { AIEngine } from "@memberjunction/aiengine";
 
 /**
@@ -25,16 +25,20 @@ export class MJAIAgentNoteEntityServer extends MJAIAgentNoteEntity {
         return EmbedTextLocalHelper(this, textToEmbed);
     }
 
+    /** A stored vector from a model other than the default local one is re-embedded on save. */
+    protected override async IsEmbeddingStale(embeddingModelID: string | null): Promise<boolean> {
+        return IsLocalEmbeddingStaleHelper(this, embeddingModelID);
+    }
+
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         try {
-            // 1. Generate/refresh the embedding if the Note text is new or dirty.
-            const noteField = this.GetFieldByName('Note');
-            const shouldGenerateEmbedding = !this.IsSaved || noteField.Dirty;
-
-            if (shouldGenerateEmbedding && this.Note && this.Note.trim().length > 0) {
-                await this.GenerateEmbeddingByFieldName("Note", "EmbeddingVector", "EmbeddingModelID");
+            // 1. Generate/refresh the embedding. GenerateEmbedding skips it unless the Note is new or
+            //    dirty, or its stored vector is from another model (IsEmbeddingStale).
+            if (this.Note && this.Note.trim().length > 0) {
+                await this.GenerateEmbeddingByFieldName("Note", "EmbeddingVector", "EmbeddingModelID", "EmbeddingVectorBinary");
             } else if (!this.Note || this.Note.trim().length === 0) {
                 this.EmbeddingVector = null;
+                this.EmbeddingVectorBinary = null;
                 this.EmbeddingModelID = null;
             }
 
@@ -53,7 +57,7 @@ export class MJAIAgentNoteEntityServer extends MJAIAgentNoteEntity {
             //    background load completes, the underlying vector service is null and the
             //    update would silently no-op. EnsureLoaded blocks until the engine is ready.
             await AIEngine.Instance.EnsureLoaded();
-            if (IsInjectableNoteStatus(this.Status) && this.EmbeddingVector) {
+            if (IsInjectableNoteStatus(this.Status) && (this.EmbeddingVectorBinary || this.EmbeddingVector)) {
                 AIEngine.Instance.AddOrUpdateSingleNoteEmbedding(this);
             } else {
                 AIEngine.Instance.RemoveSingleNoteEmbedding(this.ID);

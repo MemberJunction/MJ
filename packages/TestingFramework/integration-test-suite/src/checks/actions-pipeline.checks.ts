@@ -42,6 +42,7 @@ import { MJActionExecutionLogEntity, MJActionFilterEntity } from '@memberjunctio
 import { ActionEngineServer } from '@memberjunction/actions';
 import { RunActionParams, MJActionEntityExtended } from '@memberjunction/actions-base';
 import type { ActionParam, ActionResult } from '@memberjunction/actions-base';
+import { BaseAgent } from '@memberjunction/ai-agents';
 import { Assert, AssertEqual, settle, verifyActionLog } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
@@ -302,6 +303,29 @@ export const ActionsPipelineChecks: NamedCheck[] = [
             Assert(result.Result == null, 'no result-code entity should resolve for an engine-level failure');
 
             console.log(`      → ClassFactory miss contained as a structured failure: "${(result.Message ?? '').slice(0, 80)}…"`);
+        }
+    },
+    {
+        Id: 'actions-pipeline.AP6',
+        Name: 'AP6: the failure contract the agent circuit breaker consumes — engine failures return Success=false + Message (never throw), and ordinary input failures never classify as fatal',
+        Fn: async (ctx): Promise<void> => {
+            // BaseAgent.ExecuteSingleAction reads ActionResult.Success / Message to drive its
+            // run-scoped breaker (see agent-loop-standin ALS7–ALS11). Two properties of the engine
+            // must hold for that to be safe: a failing action comes back STRUCTURED, and the
+            // messages an action emits for bad INPUT must not look like a credential failure, or
+            // one bad argument would lock the tool out for the whole run.
+            const missing = await runCalc(ctx, []);
+            AssertEqual(missing.Success, false, 'a missing required parameter is a structured failure');
+            Assert((missing.Message ?? '').length > 0, 'the structured failure carries a message');
+            const invalid = await runCalc(ctx, [{ Name: 'Expression', Value: 'process.exit(0)', Type: 'Input' }]);
+            AssertEqual(invalid.Success, false, 'a rejected expression is a structured failure');
+
+            const classify = (m: string | null | undefined): boolean =>
+                (new BaseAgent() as unknown as { isFatalActionError(m: string | null | undefined): boolean }).isFatalActionError(m);
+            AssertEqual(classify(missing.Message), false, `the missing-parameter message must not be fatal: "${missing.Message}"`);
+            AssertEqual(classify(invalid.Message), false, `the invalid-expression message must not be fatal: "${invalid.Message}"`);
+            AssertEqual(classify('API key not found for provider'), true, 'a genuine credential message still classifies as fatal (the classifier is not simply off)');
+            console.log(`      → structured failures: "${missing.Message}" / "${invalid.Message}" — both non-fatal to the breaker`);
         }
     }
 ];

@@ -42,8 +42,8 @@ class TestableRunner extends ProductionScoreRecordSetRunner {
 
 function contextFor(entity: EntityInfo, target: KeyCapturingEntity): RecordProcessorContext {
   return {
-    contextUser: { ID: 'u1' },
-    provider: {
+    ContextUser: { ID: 'u1' },
+    Provider: {
       EntityByID: (id: string) => (id === entity.ID ? entity : undefined),
       GetEntityObject: async () => target,
     },

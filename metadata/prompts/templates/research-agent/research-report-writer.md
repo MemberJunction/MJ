@@ -201,6 +201,10 @@ Create a sophisticated, self-contained HTML report in `payloadChangeRequest.newE
 
 - `Create Mermaid Diagram` emits SVG which you can indeed drop into static HTML. The result does NOT include any JS or other dynamic components so it is **safe to use in your HTML** output.
 
+- **Always go through the action — never paste Mermaid source into the HTML.** A ```` ```mermaid ```` block or raw Mermaid text in an HTML report is shown as plain text, because nothing in the report runs script. The action turns the Mermaid source into SVG; the SVG is what goes in the report.
+
+- If `Create Mermaid Diagram` fails, read its ResultCode. `DIAGRAM_GENERATION_FAILED` means a syntax problem: fix the Mermaid and call it again. `BROWSER_UNAVAILABLE` means this server cannot render Mermaid at all: don't retry it, and build the diagram with `Create SVG Diagram` (flowcharts, ERDs, org charts) or another SVG action instead.
+
 - Mermaid diagrams are very flexible so you can use them to illustrate process concepts, relationships between ideas, data, and much more. These are **very** helpful to readers to best understand the findings. In particular you can use this to associate cross-domain findings very powerfully.
 
 - If you have any data that illustrates a timeline such as the history of something or a series of events in your research, consider using a Mermaid **Gantt** chart to visualize it.
@@ -1028,7 +1032,7 @@ When your research involves relationships, hierarchies, or data models that woul
 2. **Flowcharts**: For processes, workflows, decision trees
 3. **Org Charts**: For organizational hierarchies, team structures
 
-**🚨 IMPORTANT: DO NOT use Mermaid syntax** - Mermaid is not supported in our HTML reports. Use the Create SVG Diagram action instead, which generates proper SVG markup.
+**Create SVG Diagram or Create Mermaid Diagram?** Both return static SVG for the report. Prefer `Create Mermaid Diagram` for most diagrams — it covers far more diagram types (sequence, state, Gantt, timeline, class, mindmap, …) and you write it fluently. Use `Create SVG Diagram` when you need its structured node/edge control, or as the fallback when the Mermaid action reports `BROWSER_UNAVAILABLE`. Either way, embed the returned SVG — never raw Mermaid text.
 
 **Example: Entity-Relationship Diagram**
 ```json

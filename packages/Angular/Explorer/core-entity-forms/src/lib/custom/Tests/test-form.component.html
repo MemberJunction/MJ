@@ -96,6 +96,11 @@
 
   <!-- Tabs -->
   <div class="tabs-container">
+    <!-- Phone: the strip becomes one button that opens the Sections sheet -->
+    <mj-section-picker class="phone-section-picker"
+                       [Items]="SectionPickerItems"
+                       [ActiveKey]="ActiveTab"
+                       (ActiveKeyChange)="OnSectionPicked($event)"></mj-section-picker>
     <div class="tabs" role="tablist">
       <button class="tab"
         [class.active]="activeTab === 'overview'"
@@ -287,6 +292,21 @@
                   }
                 </select>
               </div>
+            </div>
+
+            <div class="edit-field">
+              <label for="test-rubric">Rubric</label>
+              <select
+                id="test-rubric"
+                class="config-input"
+                [ngModel]="record.RubricID"
+                (ngModelChange)="record.RubricID = $event || null"
+              >
+                <option [ngValue]="null">— None —</option>
+                @for (rubric of RubricOptions; track rubric.id) {
+                  <option [ngValue]="rubric.id">{{ rubric.name }}</option>
+                }
+              </select>
             </div>
 
             <div class="edit-field">

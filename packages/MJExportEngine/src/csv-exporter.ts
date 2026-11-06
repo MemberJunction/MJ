@@ -1,5 +1,5 @@
 import { BaseExporter } from './base-exporter';
-import { ExportOptions, ExportResult, ExportData } from './types';
+import { ExportOptions, ExportResult, ExportData, ExportColumn } from './types';
 
 /**
  * CSV exporter - lightweight, no external dependencies
@@ -52,7 +52,7 @@ export class CSVExporter extends BaseExporter {
       for (const row of sampledData) {
         const values = this.extractRowValues(row, columns);
         const line = values
-          .map(value => this.escapeCSVValue(this.formatCSVValue(value)))
+          .map((value, index) => this.escapeCSVValue(this.formatCSVValue(value, columns[index])))
           .join(this.delimiter);
         lines.push(line);
       }
@@ -104,9 +104,14 @@ export class CSVExporter extends BaseExporter {
   /**
    * Format a value for CSV output
    */
-  private formatCSVValue(value: unknown): string {
+  private formatCSVValue(value: unknown, column?: ExportColumn): string {
     if (value === null || value === undefined) {
       return '';
+    }
+
+    // A calendar day is written as ISO 8601 `YYYY-MM-DD`: no time to invent, and no zone to shift it.
+    if (column?.dataType === 'dateonly') {
+      return this.calendarDay(value) ?? String(value);
     }
 
     if (value instanceof Date) {

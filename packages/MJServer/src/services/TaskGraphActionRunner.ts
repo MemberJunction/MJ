@@ -11,6 +11,7 @@
  */
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionParam } from '@memberjunction/actions-base';
+import { BuildActionOutputObject } from '@memberjunction/ai-core-plus';
 import { LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { TaskActionRunner, TaskActionRunParams, TaskActionRunResult } from '@memberjunction/task-graph';
@@ -35,9 +36,19 @@ export class TaskGraphActionRunner implements TaskActionRunner {
                 Filters: [],
             });
 
+            const output = this.buildOutput(result.Params, result.Message);
+            const unstorable = this.findUnstorableOutput(output);
+            if (unstorable) {
+                const message =
+                    `Action "${action.Name}" returned output param "${unstorable.Name}", which cannot be stored ` +
+                    `as the step's result: ${unstorable.Reason}. Output params of a durable step must be plain data.`;
+                LogError(`[TaskGraphActionRunner] Task ${params.TaskID}: ${message}`);
+                return { Success: false, ErrorMessage: message, ActionLogID: result.LogEntry?.ID };
+            }
+
             return {
                 Success: result.Success,
-                Output: this.buildOutput(result.Params),
+                Output: output,
                 ErrorMessage: result.Success ? undefined : result.Message,
                 // The engine already wrote the log; this is the only place its id is in hand. Without
                 // carrying it out, a workflow's action step has no path back to its own execution
@@ -52,6 +63,24 @@ export class TaskGraphActionRunner implements TaskActionRunner {
     }
 
     /**
+     * The first output param that cannot be written to the Task row as JSON, or null.
+     *
+     * Checked here because this is the last place that knows the action's and the param's NAMES: the
+     * dispatcher serializes the whole Output later and, for a live object (an entity, an observable),
+     * fails with a bare "Converting circular structure to JSON" that names neither.
+     */
+    private findUnstorableOutput(output: Record<string, unknown>): { Name: string; Reason: string } | null {
+        for (const [Name, value] of Object.entries(output)) {
+            try {
+                JSON.stringify(value);
+            } catch (e) {
+                return { Name, Reason: e instanceof Error ? e.message.split('\n')[0] : String(e) };
+            }
+        }
+        return null;
+    }
+
+    /**
      * Projects the action's parameters onto the flat result a workflow step is expected to produce.
      *
      * **Why not return `result.Params` as-is.** That is an `ActionParam[]`, and every consumer of a
@@ -62,16 +91,14 @@ export class TaskGraphActionRunner implements TaskActionRunner {
      * is exactly what the Demo workflow did: step 1 completed with an output payload of `{}` and
      * every downstream branch was skipped, with nothing anywhere reporting a problem.
      *
-     * Only `Output` and `Both` params are included. Echoing the inputs back would let a step's own
-     * parameters masquerade as its results, so an output mapping could "succeed" by reading the
-     * value the step was given rather than the one it produced.
+     * Only `Output` and `Both` params are included (plus any structured JSON object returned in
+     * `resultMessage`, such as `Create Document`'s `{ handle, documentType, fileName }`). Echoing
+     * `Input`-only params back would let a step's own parameters masquerade as its results, so an
+     * output mapping could "succeed" by reading the value the step was given rather than the one it
+     * produced.
      */
-    private buildOutput(actionParams: ActionParam[]): Record<string, unknown> {
-        const output: Record<string, unknown> = {};
-        for (const p of actionParams ?? []) {
-            if (p.Type === 'Output' || p.Type === 'Both') output[p.Name] = p.Value;
-        }
-        return output;
+    private buildOutput(actionParams: ActionParam[], resultMessage?: string | null): Record<string, unknown> {
+        return BuildActionOutputObject(actionParams, resultMessage);
     }
 
     /**

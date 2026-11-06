@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, inject } from '@angular/core';
 import { Subject, debounceTime, takeUntil } from 'rxjs';
-import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { IndexByUUID, RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { MJListFormComponent } from '../../generated/Entities/MJList/mjlist.form.component';
@@ -8,6 +8,7 @@ import { MJListEntity, MJListDetailEntity, MJListDetailEntityExtended, MJListCat
 import { CompositeKey, Metadata, RunView, RunViewResult, EntityInfo, LogError, LogStatus } from '@memberjunction/core';
 import { ListShareDialogConfig, ListShareDialogResult, GetRecordDisplayField, IsTextSearchableField, FormatRecordDisplayValue } from '@memberjunction/ng-list-management';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
+import { SectionPickerItem } from '@memberjunction/ng-ui-components';
 
 export type ListSection = 'overview' | 'items' | 'sharing' | 'activity' | 'settings';
 
@@ -475,6 +476,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
     }
@@ -682,9 +684,9 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             ]);
 
             this.Stats = {
-                itemCount: itemsResult.Success ? itemsResult.TotalRowCount : 0,
-                shareCount: sharesResult.Success ? sharesResult.TotalRowCount : 0,
-                invitationCount: invitationsResult.Success ? invitationsResult.TotalRowCount : 0,
+                itemCount: itemsResult.Success ? itemsResult.TotalRowCount ?? 0 : 0,
+                shareCount: sharesResult.Success ? sharesResult.TotalRowCount ?? 0 : 0,
+                invitationCount: invitationsResult.Success ? invitationsResult.TotalRowCount ?? 0 : 0,
                 lastUpdated: this.record.__mj_UpdatedAt
             };
         } catch (error) {
@@ -709,6 +711,19 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     }
 
     // === Navigation ===
+
+    /** The enabled rail items as `mj-section-picker` items: same order, the badge as the count. */
+    public get SectionPickerItems(): SectionPickerItem[] {
+        return this.NavItems
+            .filter((item) => !item.disabled)
+            .map((item) => ({ Key: item.id, Title: item.label, Icon: item.icon, Count: item.badge ?? null }));
+    }
+
+    /** A pick from the phone section sheet; a key that names no rail item is ignored. */
+    public OnSectionPicked(key: string): void {
+        const item = this.NavItems.find((i) => i.id === key);
+        if (item) this.SetActiveSection(item.id);
+    }
 
     public SetActiveSection(section: ListSection): void {
         const navItem = this.NavItems.find(n => n.id === section);
@@ -795,8 +810,9 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             const tg = await this.metadata.CreateTransactionGroup();
             let queued = 0;
             let failedToQueue = 0;
+            const itemsByID = IndexByUUID(this.ListItems, i => i.detail.ID);
             for (const id of this.SelectedItems) {
-                const item = this.ListItems.find(i => UUIDsEqual(i.detail.ID, id));
+                const item = itemsByID.Get(id);
                 if (item) {
                     item.detail.TransactionGroup = tg;
                     // With a TransactionGroup set, Delete() returns true once

@@ -1,10 +1,11 @@
-import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunction/actions-base";
+import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
+import { SafeMathEvaluator } from "../utilities/safe-math-evaluator";
 
 /**
- * Action that evaluates mathematical expressions safely using JavaScript's built-in math functions.
- * Supports basic arithmetic operations, parentheses, and common math functions.
+ * Action that evaluates mathematical expressions: arithmetic, parentheses, and common math functions
+ * and constants. The expression is parsed as math, never run as JavaScript — see {@link SafeMathEvaluator}.
  * 
  * @example
  * ```typescript
@@ -53,80 +54,8 @@ export class CalculateExpressionAction extends BaseAction {
                 };
             }
 
-            const expression = expressionParam.Value.trim();
-
-            // Validate the expression doesn't contain dangerous code
-            if (this.containsDangerousCode(expression)) {
-                return {
-                    Success: false,
-                    Message: "Expression contains invalid or potentially dangerous code",
-                    ResultCode: "INVALID_EXPRESSION"
-                };
-            }
-
-            // Create a safe evaluation context with math functions
-            const mathContext = {
-                // Basic math functions
-                abs: Math.abs,
-                acos: Math.acos,
-                asin: Math.asin,
-                atan: Math.atan,
-                atan2: Math.atan2,
-                ceil: Math.ceil,
-                cos: Math.cos,
-                exp: Math.exp,
-                floor: Math.floor,
-                log: Math.log,
-                log10: Math.log10,
-                max: Math.max,
-                min: Math.min,
-                pow: Math.pow,
-                random: Math.random,
-                round: Math.round,
-                sin: Math.sin,
-                sqrt: Math.sqrt,
-                tan: Math.tan,
-                // Constants
-                E: Math.E,
-                PI: Math.PI,
-                // Additional useful functions
-                sign: Math.sign,
-                trunc: Math.trunc,
-                cbrt: Math.cbrt,
-                log2: Math.log2,
-                // Hyperbolic functions
-                sinh: Math.sinh,
-                cosh: Math.cosh,
-                tanh: Math.tanh
-            };
-
-            // Prepare the expression by replacing math function names
-            let safeExpression = expression;
-            
-            // Replace common math notations
-            safeExpression = safeExpression.replace(/\^/g, '**'); // Replace ^ with ** for exponentiation
-            
-            // Create the evaluation function
-            const evalFunction = new Function(...Object.keys(mathContext), `
-                "use strict";
-                try {
-                    return (${safeExpression});
-                } catch (e) {
-                    throw new Error('Invalid expression: ' + e.message);
-                }
-            `);
-
-            // Evaluate the expression
-            const result = evalFunction(...Object.values(mathContext));
-
-            // Check if result is a valid number
-            if (typeof result !== 'number' || isNaN(result)) {
-                return {
-                    Success: false,
-                    Message: "Expression did not evaluate to a valid number",
-                    ResultCode: "INVALID_EXPRESSION"
-                };
-            }
+            const expression = String(expressionParam.Value).trim();
+            const result = new SafeMathEvaluator().Evaluate(expression);
 
             const resultData = {
                 expression: expression,
@@ -156,52 +85,6 @@ export class CalculateExpressionAction extends BaseAction {
                 ResultCode: "INVALID_EXPRESSION"
             };
         }
-    }
-
-    /**
-     * Checks if the expression contains potentially dangerous code patterns
-     */
-    private containsDangerousCode(expression: string): boolean {
-        // List of dangerous patterns to block
-        const dangerousPatterns = [
-            /import\s/i,
-            /require\s*\(/i,
-            /eval\s*\(/i,
-            /function\s*\(/i,
-            /=>/,
-            /new\s+/i,
-            /\.\s*constructor/i,
-            /\[["'`].*["'`]\]/,  // Array access with strings
-            /process\./i,
-            /global\./i,
-            /window\./i,
-            /document\./i,
-            /console\./i,
-            /alert\s*\(/i,
-            /prompt\s*\(/i,
-            /confirm\s*\(/i,
-            /while\s*\(/i,
-            /for\s*\(/i,
-            /do\s*{/i,
-            /if\s*\(/i,
-            /else/i,
-            /return/i,
-            /throw/i,
-            /try/i,
-            /catch/i,
-            /finally/i,
-            /await/i,
-            /async/i,
-            /class\s/i,
-            /extends/i,
-            /\${/,  // Template literals
-            /`/,    // Backticks
-            /;/,    // Semicolons (prevent multiple statements)
-            /{/,    // Curly braces (prevent code blocks)
-            /}/,
-        ];
-
-        return dangerousPatterns.some(pattern => pattern.test(expression));
     }
 
     /**

@@ -36,15 +36,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Optional. Specific SearchScope ID to use. When omitted, the calling agent's default scope (IsDefault=1) is used, falling back to Global when SearchScopeAccess='All'.",
+            "Description": "Optional. Specific SearchScope ID to use. When the run's host assigned search scopes, only those can be searched: omit this to use the host's first scope, and any other scope is refused. Otherwise, when omitted, the calling agent's default scope (IsDefault=1) is used, falling back to Global when SearchScopeAccess='All'.",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "D7EA4FC4-DFF6-4AD9-9584-4DB13AAA1AA8"
           },
           "sync": {
-            "lastModified": "2026-05-14T02:08:24.334Z",
-            "checksum": "d2b4f9dae3dc5670214207edd68a944653d233a9bfe948b9f59cc4267fce6ff6"
+            "lastModified": "2026-11-01T22:53:27.294Z",
+            "checksum": "3e6a8d377a17bdde04c84a275bf6c7493cea6a66b0d97d60ec5b01aae48339fa"
           }
         },
         {
@@ -74,15 +74,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Minimum relevance score threshold (0-1). Results below this score are excluded after RRF fusion. Overridden by AIAgentSearchScope.MinScore if set and greater.",
+            "Description": "Minimum semantic similarity (0-1), applied to the semantic (vector) lane before RRF fusion: semantic-only matches below it are dropped. Keyword, full-text, tag and storage matches are never filtered by it. Similarity scales differ by embedding model, so choose the value for the model in use. Overridden by AIAgentSearchScope.MinScore if set and greater.",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "7D890D74-EEDD-4F27-BD2C-953FB9D9CEC6"
           },
           "sync": {
-            "lastModified": "2026-05-14T02:08:24.399Z",
-            "checksum": "0c18481d2bdabcb6b4b261add73654f4e396ad44f6d99947586ef9075fa52350"
+            "lastModified": "2026-10-13T19:00:04.322Z",
+            "checksum": "35ef6ffd501ba97d9073faedd59ca9f8d778123c08826655628b1847ee799ac8"
           }
         },
         {

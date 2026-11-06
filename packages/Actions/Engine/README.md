@@ -68,6 +68,7 @@ flowchart TD
 - **Transition Filters** — Filters see the values on *both* sides of a save, so a gate can express "when Status *becomes* Approved" rather than only "when Status *is* Approved"
 - **Durable Dispatch** — An `After*` binding can opt into surviving a process restart (`EntityAction.RunMode = 'Durable'`)
 - **Execution-Log Retention** — Each log row is stamped with the retention its action declared, and a scheduled purge enforces it
+- **Zero-Overhead Disabled Logging & Single-Instance Dispatch** — When an action disables execution logging (`LogActionExecution === false` or `ExecutionLogRetentionDays === 0` without `Verbose`), `SnapshotInputParams` short-circuits in $O(1)$ without cloning or serializing parameters, and `GetOrCreateActionInstance` reuses a single `ClassFactory` action instance across `ValidateInputs` and `InternalRunAction` within the same run.
 
 ## Usage
 
@@ -326,6 +327,12 @@ report a working filter as a failure to gate.
 > action anyway, so filters recorded preventing things they did not prevent. They now genuinely
 > prevent. If you have `ActionFilter` rows configured, actions that were firing despite them will
 > stop — which is what the rows always asked for.
+
+**Two authoring surfaces write these rows for you.** A workflow's `EntityEvent` trigger
+(`WorkflowSpec.triggers[].filter`) and a Record Process's `OnChangeFilter` both compile to an
+`ActionFilter` bound through `EntityActionFilter`, in this same language. See "Triggers: when a
+workflow runs" in the [Workflows and Task Graphs Guide](../../../guides/WORKFLOW_AND_TASK_GRAPH_GUIDE.md)
+and §7 of the [Record Set Processing Guide](../../../guides/RECORD_SET_PROCESSING_GUIDE.md).
 
 ### Durable dispatch — `After*` work that survives a restart
 

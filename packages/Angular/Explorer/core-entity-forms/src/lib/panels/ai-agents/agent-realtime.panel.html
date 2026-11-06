@@ -1,5 +1,6 @@
 <mj-collapsible-panel
     SectionKey="agentRealtime"
+    [Order]="DisplayOrder"
     SectionName="Realtime"
     Icon="fa fa-tower-broadcast"
     [Form]="FormComponent"
@@ -20,9 +21,13 @@
             <div class="rt-section-header">
                 <i class="fa-solid fa-people-arrows"></i>
                 <span>Co-agent pairings</span>
-                <span class="rt-count">{{ Pairings.length }}</span>
+                @if (!PairingsError) {
+                    <span class="rt-count">{{ Pairings.length }}</span>
+                }
             </div>
-            @if (Pairings.length === 0) {
+            @if (PairingsError) {
+                <mj-alert Variant="error" Size="sm">{{ PairingsError }}</mj-alert>
+            } @else if (Pairings.length === 0) {
                 <div class="rt-empty">No co-agent pairings reference this agent.</div>
             } @else {
                 <div class="rt-list">
@@ -55,9 +60,13 @@
             <div class="rt-section-header">
                 <i class="fa-solid fa-id-card"></i>
                 <span>Bridge identities</span>
-                <span class="rt-count">{{ Identities.length }}</span>
+                @if (!IdentitiesError) {
+                    <span class="rt-count">{{ Identities.length }}</span>
+                }
             </div>
-            @if (Identities.length === 0) {
+            @if (IdentitiesError) {
+                <mj-alert Variant="error" Size="sm">{{ IdentitiesError }}</mj-alert>
+            } @else if (Identities.length === 0) {
                 <div class="rt-empty">No bridge identities provisioned for this agent.</div>
             } @else {
                 <div class="rt-list">

@@ -1,0 +1,120 @@
+@if (View; as view) {
+  <section class="idv" [attr.data-status]="view.Status" aria-labelledby="idv-title">
+    <h3 id="idv-title" class="idv__title">Verify your identity</h3>
+
+    @if (view.Status === 'verified') {
+      <div class="idv__done" role="status">
+        <i class="fa-solid fa-circle-check idv__done-icon" aria-hidden="true"></i>
+        <div>
+          <p class="idv__done-heading">You're verified</p>
+          <p class="idv__done-detail">{{ view.Name.Value }} &middot; {{ view.Email.Value }}</p>
+        </div>
+      </div>
+    } @else {
+      <p class="idv__lead" id="idv-lead">
+        Check your details, then we'll email you a code and a link. Either one confirms it's you.
+      </p>
+
+      <div class="idv__field">
+        <label class="idv__label" for="idv-name">Your name</label>
+        <input
+          id="idv-name"
+          class="mj-input idv__input"
+          type="text"
+          autocomplete="name"
+          autocapitalize="words"
+          maxlength="200"
+          [value]="ValueFor('name')"
+          [disabled]="Locked || CodeStage"
+          [attr.aria-describedby]="IsSuggested('name') ? 'idv-name-hint' : null"
+          (input)="OnDraft('name', $event)"
+          (blur)="CommitField('name')"
+          (keydown.enter)="CommitField('name')" />
+        @if (IsSuggested('name')) {
+          <p class="idv__suggested" id="idv-name-hint">
+            <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+            Suggested by {{ SuggestedBy('name') }} &mdash; check it's right.
+            <button mjButton variant="outline" size="sm" type="button" class="idv__confirm" [disabled]="Busy" (click)="ConfirmField('name')">Confirm</button>
+          </p>
+        }
+      </div>
+
+      <div class="idv__field">
+        <label class="idv__label" for="idv-email">Your email</label>
+        <input
+          id="idv-email"
+          class="mj-input idv__input"
+          type="email"
+          inputmode="email"
+          autocomplete="email"
+          autocapitalize="none"
+          spellcheck="false"
+          maxlength="200"
+          [value]="ValueFor('email')"
+          [disabled]="Locked || CodeStage"
+          [attr.aria-describedby]="IsSuggested('email') ? 'idv-email-hint' : null"
+          [attr.aria-invalid]="view.ProblemCode === 'invalid_email' ? 'true' : null"
+          (input)="OnDraft('email', $event)"
+          (blur)="CommitField('email')"
+          (keydown.enter)="CommitField('email')" />
+        @if (IsSuggested('email')) {
+          <p class="idv__suggested" id="idv-email-hint">
+            <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+            Suggested by {{ SuggestedBy('email') }} &mdash; check it's right.
+            <button mjButton variant="outline" size="sm" type="button" class="idv__confirm" [disabled]="Busy" (click)="ConfirmField('email')">Confirm</button>
+          </p>
+        }
+      </div>
+
+      @if (!CodeStage) {
+        <div class="idv__actions">
+          @if (HasUnconfirmed) {
+            <button mjButton variant="outline" type="button" [disabled]="Busy || Locked" (click)="ConfirmAll()">Confirm details</button>
+          }
+          <button mjButton variant="primary" type="button" class="idv__send" [disabled]="Busy || Locked || (!view.CanSubmit && Drafts.name === '' && Drafts.email === '')" (click)="SendCode()">
+            @if (view.Status === 'sending') { Sending… } @else { Send code }
+          </button>
+        </div>
+      } @else {
+        <div class="idv__code" aria-live="polite">
+          <p class="idv__sent">
+            <i class="fa-solid fa-envelope-circle-check" aria-hidden="true"></i>
+            We emailed a code to <strong>{{ view.Destination }}</strong>. Type it below, or open the link in the email.
+          </p>
+          <label class="idv__label" for="idv-code">Code</label>
+          <input
+            #codeInput
+            id="idv-code"
+            class="mj-input idv__input idv__code-input"
+            type="text"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            maxlength="16"
+            [value]="CodeDraft"
+            [disabled]="view.Status === 'verifying'"
+            [attr.aria-invalid]="view.ProblemCode === 'invalid_code' ? 'true' : null"
+            (input)="OnCodeInput($event)"
+            (keydown.enter)="SubmitCode()" />
+          <div class="idv__actions">
+            <button mjButton variant="primary" type="button" [disabled]="Busy || view.Status === 'verifying' || CodeDraft.trim() === ''" (click)="SubmitCode()">
+              @if (view.Status === 'verifying') { Checking… } @else { Verify }
+            </button>
+            <button mjButton variant="outline" type="button" [disabled]="Busy || view.Status === 'verifying' || ResendWaitSeconds > 0" (click)="Resend()">
+              @if (ResendWaitSeconds > 0) { Resend in {{ ResendWaitSeconds }}s } @else { Resend code }
+            </button>
+          </div>
+          @if (view.AttemptsRemaining !== null) {
+            <p class="idv__hint">{{ view.AttemptsRemaining }} {{ view.AttemptsRemaining === 1 ? 'try' : 'tries' }} left.</p>
+          }
+        </div>
+      }
+
+      @if (view.Problem || ActionProblem) {
+        <p class="idv__problem" role="alert">
+          <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+          {{ view.Problem || ActionProblem }}
+        </p>
+      }
+    }
+  </section>
+}

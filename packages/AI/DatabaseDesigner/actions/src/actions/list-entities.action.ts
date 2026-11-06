@@ -6,7 +6,7 @@
  * then joins with Entities metadata to build a human-readable summary.
  */
 
-import { RegisterClass, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
+import { RegisterClass, EscapeSQLString } from '@memberjunction/global';
 import { BaseAction } from '@memberjunction/actions';
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RunView, Metadata, UserInfo } from '@memberjunction/core';
@@ -38,6 +38,9 @@ interface EntitySummary {
  */
 @RegisterClass(BaseAction, 'List My Entities')
 export class ListMyEntitiesAction extends BaseDatabaseDesignerAction {
+    /** Reads only the caller's own entities, with the caller's permissions. */
+    public static readonly AuthorizesCaller = true;
+
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             const userID = params.ContextUser?.ID;
@@ -94,7 +97,7 @@ export class ListMyEntitiesAction extends BaseDatabaseDesignerAction {
     ): EntitySummary[] {
         const md = new Metadata(); // global-provider-ok: MJAPI server-side, single-provider deployment
         return entityIDs.reduce<EntitySummary[]>((acc, id) => {
-            const info = md.Entities.find(e => UUIDsEqual(e.ID, id));
+            const info = md.EntityByID(id);
             if (info) {
                 acc.push({
                     EntityID: info.ID,

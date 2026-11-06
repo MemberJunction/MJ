@@ -198,6 +198,7 @@ function buildDeps(overrides: Partial<MaintenanceDeps> = {}): {
     trainingEngine: trainingEngine as unknown as TrainingEngine,
     trainingDeps: {} as TrainingDeps,
     clock: FixedClock,
+    provider: {} as unknown as IMetadataProvider, // test double: the fakes above never read the provider
     ...overrides,
   };
   return { deps, loader, rowCounter, rescoreRunner, trainingEngine };

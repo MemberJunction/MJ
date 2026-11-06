@@ -1104,11 +1104,13 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
         version.UserID = this.metadata.CurrentUser.ID;
 
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        // conversation-scope: artifact-wide read, no conversation path applies
         const versionsResult = await rv.RunView<MJArtifactVersionEntity>({
           EntityName: 'MJ: Artifact Versions',
           ExtraFilter: `ArtifactID = '${artifact.ID}'`,
           OrderBy: 'VersionNumber DESC',
           MaxRows: 1,
+          SkipTotalRowCount: true,
           ResultType: 'entity_object'
         });
 

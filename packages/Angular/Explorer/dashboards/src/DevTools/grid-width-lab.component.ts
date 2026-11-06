@@ -54,7 +54,8 @@ export class GridWidthLabComponent extends BaseResourceComponent implements OnIn
     public override async GetResourceDisplayName(): Promise<string> { return 'Grid Width Lab'; }
     public override async GetResourceIconClass(): Promise<string> { return 'fa-solid fa-arrows-left-right-to-line'; }
 
-    public ngOnInit(): void {
+    public override ngOnInit(): void {
+        super.ngOnInit();
         this.rebuild();
         this.NotifyLoadComplete();
     }

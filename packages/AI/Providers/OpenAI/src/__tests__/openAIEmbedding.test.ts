@@ -47,3 +47,47 @@ describe('OpenAIEmbedding.EmbedTexts (real BaseEmbeddings dispatch → embedBatc
     });
     // (graceful empty-on-error is unchanged provider behavior and is covered by the base embedPerText tests.)
 });
+
+/** Builds the error `fetch` and the SDKs reject an aborted request with. */
+function abortError(): Error {
+    const error = new Error('This operation was aborted');
+    error.name = 'AbortError';
+    return error;
+}
+
+/** The classification a cancellation error carries, read from the error a call rejected with. */
+async function rejectionTypeOf(operation: Promise<unknown>): Promise<string | undefined> {
+    try {
+        await operation;
+    } catch (error) {
+        const info: { errorType?: string } | undefined = (error as { errorInfo?: { errorType?: string } }).errorInfo;
+        return info?.errorType;
+    }
+    throw new Error('expected the call to reject');
+}
+
+describe('OpenAIEmbedding cancellation', () => {
+    beforeEach(() => {
+        mockCreate.mockReset(); // braces: a function returned from beforeEach would run as its teardown
+    });
+
+    it('forwards the CancellationToken to embeddings.create as its request signal', async () => {
+        mockCreate.mockResolvedValue(embedResponse([[1, 0]]));
+        const controller = new AbortController();
+        await new OpenAIEmbedding('k').EmbedTexts({ texts: ['a'], model: 'm', CancellationToken: controller.signal });
+        await new OpenAIEmbedding('k').EmbedText({ text: 'a', model: 'm', CancellationToken: controller.signal });
+        expect(mockCreate.mock.calls[0][1]).toEqual({ signal: controller.signal });
+        expect(mockCreate.mock.calls[1][1]).toEqual({ signal: controller.signal });
+    });
+
+    it('reports an aborted request as cancelled rather than as an empty result', async () => {
+        const controller = new AbortController();
+        mockCreate.mockImplementation(async () => {
+            controller.abort('stop');
+            throw abortError();
+        });
+        const e = new OpenAIEmbedding('k');
+        expect(await rejectionTypeOf(e.EmbedTexts({ texts: ['a', 'b'], model: 'm', CancellationToken: controller.signal }))).toBe('Cancelled');
+        expect(await rejectionTypeOf(e.EmbedText({ text: 'a', model: 'm', CancellationToken: controller.signal }))).toBe('Cancelled');
+    });
+});

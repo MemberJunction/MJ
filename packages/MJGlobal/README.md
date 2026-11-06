@@ -363,7 +363,9 @@ if (result.success) {
 }
 ```
 
-Supports comparisons (`==`, `!=`, `<`, `>`, `<=`, `>=`), logical operators (`&&`, `||`, `!`), `typeof`, dot-notation property access including optional chaining (`payload?.customer?.tier`), bracket-notation access with a **literal** index/key, safe string/array methods (`.includes()`, `.startsWith()`, `.some()`, `.every()`, etc.), and the safe globals exported as `SAFE_EXPRESSION_GLOBALS` — `Math`, `Number`, `String`, `Boolean`, `Array`, `Object`, `JSON`, `Date`, `parseInt`, `parseFloat`, `isNaN`, `isFinite` — callable as namespace methods (`Math.abs(x)`, `Object.keys(x)`) or bare functions (`Number(x)`). Regex literals, `in`/`instanceof`, and methods outside the safe list are not supported.
+Supports comparisons (`==`, `!=`, `<`, `>`, `<=`, `>=`), logical operators (`&&`, `||`, `!`), `typeof`, dot-notation property access including optional chaining (`payload?.customer?.tier`), bracket-notation access with a **literal** index/key, safe string/array methods (`.includes()`, `.startsWith()`, `.split()`, `.some()`, `.every()`, etc.), and the approved globals in `APPROVED_EXPRESSION_GLOBALS` — `Math`, `Number`, `String`, `Boolean`, `Array`, `Object`, `JSON`, `Date`, `parseInt`, `parseFloat`, `isNaN`, `isFinite` — callable as namespace methods (`Math.abs(x)`, `Object.keys(x)`) or bare functions (`Number(x)`). Regex literals, `in`/`instanceof`, and methods outside the safe list are not supported.
+
+Identifiers are allowlisted too. A free name must be a key of the evaluation context, a parameter of an enclosing arrow function, `undefined`/`NaN`/`Infinity`, or an approved global **in call position** — `Math.PI`, `items.map(Number)` and `fetch` are refused. The callback of `.some()`/`.every()`/`.find()`/`.filter()`/`.map()`/`.reduce()` must be an inline arrow function. Context keys must be plain identifiers. `SafeExpressionEvaluator.ScreenExpression(expression, allowedIdentifiers)` runs the same screen without compiling; `FieldTransformEngine` uses it for field-rule and integration formulas, with `value` and `fields` as the allowed names.
 
 ### SQLExpressionValidator
 
@@ -513,6 +515,32 @@ IsValueEncrypted('$ENC$keyId$AES-256-GCM$iv$ciphertext$authTag'); // true
 IsValueEncrypted('[!ENCRYPTED$]');                                 // true (sentinel)
 IsValueEncrypted('plain text');                                    // false
 IsEncryptedSentinel('[!ENCRYPTED$]');                              // true
+```
+
+### Binary Encoding
+
+Above the database, MemberJunction represents a binary column (`varbinary` / `binary` / `image`, PostgreSQL `bytea`) as a **base64 string** — in `BaseEntity` fields, caches, `RunView` rows and GraphQL alike. These helpers convert and validate it. The codec is picked once per process from the fastest the host offers (native `Uint8Array.fromBase64`/`toBase64`, Node `Buffer`, then `atob`/`btoa`); every codec accepts and produces the same strings. See the [Binary Fields Guide](../../guides/BINARY_FIELDS_GUIDE.md).
+
+| Function | Description |
+|---|---|
+| `BytesToBase64(bytes)` | Bytes to standard, padded base64 |
+| `Base64ToBytes(b64)` | Base64 to bytes; throws on invalid input |
+| `TryBase64ToBytes(b64)` | Same, but returns `null` for null/undefined or invalid input |
+| `IsValidBase64(value)` | Canonical base64 only: standard alphabet, optional padding, no whitespace, data-URI prefix or URL-safe alphabet |
+| `HasValidBase64Shape(value)` | Length/padding shape check only |
+| `Base64DecodedByteLength(b64)` | Decoded byte count without decoding (for size checks) |
+| `IsByteArray(value)` | True for a `Uint8Array` (including a Node `Buffer`) |
+| `ReplaceByteArraysWithBase64(row)` | Replaces top-level byte arrays in a row with base64; copy-on-write, never mutates the input |
+| `Float32VectorToBytes(values)` / `BytesToFloat32Vector(bytes)` | A vector as little-endian float32 bytes (4 per value, no header); decode returns `null` for empty or misaligned input |
+| `Float32VectorToBase64(values)` / `Base64ToFloat32Vector(b64)` | The same, as the base64 value stored in a binary vector field such as `VectorBinary` |
+| `GetBase64Codec()` / `Base64Codecs` | The codec in use / every available codec (diagnostics and tests) |
+
+```typescript
+import { Float32VectorToBase64, Base64ToFloat32Vector, TryBase64ToBytes } from '@memberjunction/global';
+
+doc.VectorBinary = Float32VectorToBase64(embedding);        // write
+const vector = Base64ToFloat32Vector(doc.VectorBinary);     // Float32Array | null
+const bytes = TryBase64ToBytes(file.Content);               // Uint8Array | null
 ```
 
 ### String and JSON Utilities
@@ -754,9 +782,11 @@ const changes = await new FieldRulesEvaluator().ComputeChanges(
 
 ### Safety
 
-- `Condition` expressions use the **safe** evaluator (blocklisted patterns, no statements).
-- `formula` / `custom` value expressions compile with `new Function` (the same model as the established
-  integration `custom` transform) — author them from privileged users/agents, not untrusted input.
+- `Condition` expressions use the **safe** evaluator (allowlisted constructs and identifiers, no statements).
+- `formula` / `custom` value expressions pass the same allowlist screen
+  (`SafeExpressionEvaluator.ScreenExpression`, with `value` and `fields` as the only free names) before
+  they compile with `new Function`. A rejected expression fails like a compile error, through the step's
+  `OnError` policy.
 - The engine performs **no I/O**; `lookup` reaches a database only through the resolver you inject.
 
 ### See also

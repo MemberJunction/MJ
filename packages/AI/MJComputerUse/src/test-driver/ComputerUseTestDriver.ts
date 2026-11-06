@@ -56,6 +56,8 @@ import {
     ValidationWarning,
     TestRunOutputItem,
     ReplayTelemetry,
+    InlineOracleFromVerdicts,
+    OraclesWithNamedRubric,
 } from '@memberjunction/testing-engine';
 
 import {
@@ -89,7 +91,7 @@ import { BaseBrowserAdapter } from '@memberjunction/computer-use';
 import { MJComputerUseEngine } from '../engine/MJComputerUseEngine.js';
 import { MJRunComputerUseParams, PromptEntityRef, ActionRef } from '../types/mj-params.js';
 import { parseJudgeFrequency } from '../utils/judge-frequency-parser.js';
-import { BuildVariableValuesFromContext, SubstituteVariables, ComposeApplicationContext, FindUnresolvedPlaceholders, FindUnresolvedAuthPlaceholders } from '../utils/variable-substitution.js';
+import { BuildVariableValuesFromContext, SubstituteVariables, ComposeApplicationContext, FindUnresolvedPlaceholders, FindUnresolvedAuthPlaceholders, UnescapeLiteralBraces } from '../utils/variable-substitution.js';
 
 import type {
     ComputerUseTestConfig,
@@ -104,6 +106,7 @@ import {
     FormatConsoleLine,
     ReadSuiteComputerUseConfig,
     MergeComputerUseConfig,
+    InlineVerdictIsAdvisory,
     IsOracleAdvisory,
     PartitionGatingOracles,
     ClassifyFailure,
@@ -260,11 +263,13 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             //  "http://byo-app:3000" for a remote-target profile pointing at the BYO app).
             // Values come from the variable resolver (schema-validated) PLUS env vars
             // prefixed with MJ_TEST_VAR_ as an ad-hoc fallback when no schema is defined.
+            // Escaped `\{{…}}` stays escaped until the guard below has run, so it is
+            // never mistaken for a missing variable.
             const variableValues = BuildVariableValuesFromContext(context);
             if (Object.keys(variableValues).length > 0) {
-                config = SubstituteVariables(config, variableValues);
-                input = SubstituteVariables(input, variableValues);
-                expected = SubstituteVariables(expected, variableValues);
+                config = SubstituteVariables(config, variableValues, { KeepEscapes: true });
+                input = SubstituteVariables(input, variableValues, { KeepEscapes: true });
+                expected = SubstituteVariables(expected, variableValues, { KeepEscapes: true });
             }
 
             // fail fast on unresolved {{vars}} in the fields that would
@@ -283,6 +288,10 @@ export class ComputerUseTestDriver extends BaseTestDriver {
                     `Define them in the suite/test variables (or MJ_TEST_VAR_* env) before running.`
                 );
             }
+            // The guard passed: escaped `\{{…}}` is literal text from here on.
+            config = UnescapeLiteralBraces(config);
+            input = UnescapeLiteralBraces(input);
+            expected = UnescapeLiteralBraces(expected);
 
             // 1c. Resolve application context (suite-level + per-test). Suite context
             // comes from TestSuite.Configuration.applicationContext; the test can
@@ -559,7 +568,8 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         const suiteLevel = typeof context.suiteContext?.applicationContext === 'string'
             ? context.suiteContext.applicationContext
             : undefined;
-        return ComposeApplicationContext(suiteLevel, input.applicationContext, variableValues);
+        // The per-test notes came in with `input`, which is already substituted and unescaped.
+        return ComposeApplicationContext(suiteLevel, input.applicationContext, variableValues, { PerTestResolved: true });
     }
 
     /** Map a test's JSON checkpoint (lowercase) to an engine {@link RunCheckpoint}. */
@@ -1201,6 +1211,10 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             output.interactiveElements = lastElements.map(e => ({ role: e.Role, name: e.Name, selector: e.Selector }));
         }
 
+        if (result.FinalJudgeVerdict?.CriteriaVerdicts?.length) {
+            output.criteriaVerdicts = result.FinalJudgeVerdict.CriteriaVerdicts;
+        }
+
         // Include judge verdict if available
         if (result.FinalJudgeVerdict) {
             output.finalJudgeVerdict = {
@@ -1594,8 +1608,13 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         actualOutput: Record<string, unknown>,
         context: DriverExecutionContext
     ): Promise<OracleResult[]> {
-        const oracleConfigs = config.oracles ?? [];
-        if (oracleConfigs.length === 0) {
+        const oracleConfigs = OraclesWithNamedRubric(config.oracles, {
+            runRubricId: context.options.rubricId,
+            runVersionId: context.options.rubricVersionId,
+            testRubricId: context.test.RubricID,
+        });
+        const verdicts = actualOutput.criteriaVerdicts as { criterion: string; met: boolean; evidence?: string }[] | undefined;
+        if (oracleConfigs.length === 0 && !(verdicts && verdicts.length > 0)) {
             this.logToTestRun(context, 'info', 'No oracles configured — skipping evaluation');
             return [];
         }
@@ -1605,6 +1624,17 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         for (const oracleConfig of oracleConfigs) {
             const result = await this.runSingleOracle(oracleConfig, expected, actualOutput, context);
             results.push(result);
+        }
+
+        if (verdicts && verdicts.length > 0) {
+            const inline = InlineOracleFromVerdicts(verdicts);
+            inline.advisory = InlineVerdictIsAdvisory(config);
+            results.push(inline);
+            this.logToTestRun(
+                context,
+                inline.passed ? 'info' : 'warn',
+                `Oracle llm-judge (inline)${inline.advisory ? ' (advisory)' : ''}: ${inline.passed ? 'PASSED' : 'FAILED'} (Score: ${inline.score.toFixed(2)})`,
+            );
         }
 
         return results;
@@ -1639,6 +1669,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         try {
             const oracleInput: OracleInput = {
                 test: context.test,
+                testRunId: context.testRun.ID,
                 expectedOutput: expected,
                 actualOutput,
                 contextUser: context.contextUser

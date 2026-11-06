@@ -69,6 +69,10 @@ export type RealtimeChromeMode = 'orb' | 'console' | 'auto';
  */
 export type RealtimeControlId =
   | 'mute'
+  | 'camera'
+  | 'share'
+  /** A microphone or camera picked in the composer's device menu. */
+  | 'devices'
   | 'captions'
   | 'type'
   | 'end'
@@ -129,8 +133,7 @@ export interface RealtimeUiInputs {
    */
   compact?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
-   * Fade non-essential controls when the session is idle (orb chrome only), for
-   * a cinematic feel. Default `true`.
+   * @deprecated No-op since 6.2: the idle fade was never implemented. Kept so existing `UiConfig` bags compile.
    */
   autoHideControls?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
@@ -139,6 +142,12 @@ export interface RealtimeUiInputs {
    * console in `'auto'` mode). Default `true`.
    */
   allowTextReveal?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /**
+   * May the participant type into the live session? `false` removes every road to the typed composer — the strip and
+   * lean-sheet Type buttons, the type-to-compose hotkey and programmatic open — and nothing else: transcript, captions,
+   * surface panel and channel strip are untouched. `allowTextReveal=false` implies `false`. Default `true`.
+   */
+  allowTyping?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /** Show the captions toggle. Default `true`. */
   showCaptionsControl?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
@@ -179,6 +188,7 @@ export const DEFAULT_REALTIME_UI_INPUTS: Required<RealtimeUiInputs> = {
   compact: false,
   autoHideControls: true,
   allowTextReveal: true,
+  allowTyping: true,
   showCaptionsControl: true,
   showDensityPicker: true,
   showMinimize: true,
@@ -201,13 +211,13 @@ export interface RealtimeUiSignals {
   /**
    * Has the user revealed text this session? (i.e. tapped "show the
    * conversation" / engaged the composer — disclosure level ≥ 1.) This is the
-   * intent half of the auto orb↔console rule.
+   * intent half of the auto orb↔console rule. While the agent's video presents
+   * in the hero, captions alone run over the video, so the overlay reports this
+   * only once the user asks for the conversation.
    */
   TextRevealed: boolean;
   /** Disclosure model says a transcript may be shown. */
   DisclosureShowThread: boolean;
-  /** Disclosure model says the composer/text dock may be shown. */
-  DisclosureShowComposer: boolean;
   /** Disclosure model says a surface panel may be shown. */
   DisclosureShowPanel: boolean;
   /** Disclosure model says the gear/settings menu may be shown. */
@@ -238,17 +248,19 @@ export interface ResolvedRealtimeUi {
   chrome: 'orb' | 'console';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Whether compact spacing/typography applies. */
   compact: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
-  /** True while connecting — hosts can show a single, size-independent loader. */
-  connecting: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /** The big ambient hero orb is the primary surface. */
   showHero: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The transcript/thread is visible. */
   showThread: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
-  /** The text composer dock is visible. */
-  showComposer: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The right-hand surface panel is visible. */
   showSurfacePanel: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /**
+   * The surface panel is hidden only because the call has no room for it: the host allows it, it is earned and no
+   * channel holds the stage, but the call is narrower than the console breakpoint outside console chrome. It shows again
+   * once the call is wide enough. The overlay keeps the user's collapse of the panel through this, and only this.
+   */
+  SurfacePanelWaitsForRoom: boolean;
   /** The Activity tab/rail is available. */
   showActivityTab: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The channel strip is visible. */
@@ -267,12 +279,10 @@ export interface ResolvedRealtimeUi {
   /** The end-call control is available. */
   showEnd: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
-  /** The surface panel may be drag-resized. */
-  allowResize: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The user has a path to reveal text. */
   allowTextReveal: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
-  /** Non-essential controls should auto-fade when idle. */
-  autoHideControls: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** Typing into the session is allowed (see RealtimeUiInputs.allowTyping). */
+  allowTyping: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -287,7 +297,6 @@ export const DEFAULT_REALTIME_UI_SIGNALS: RealtimeUiSignals = {
   ContainerWidthPx: 0,
   TextRevealed: false,
   DisclosureShowThread: false,
-  DisclosureShowComposer: false,
   DisclosureShowPanel: false,
   DisclosureShowGear: false,
   SurfacePanelEarned: false,
@@ -298,6 +307,32 @@ export const DEFAULT_REALTIME_UI_SIGNALS: RealtimeUiSignals = {
   channelFocus: false,
   ConnectionState: 'connecting',
 };
+
+/**
+ * The host's inputs laid over {@link DEFAULT_REALTIME_UI_INPUTS}. An explicit `undefined` ("not set") falls back to
+ * the default, which a plain spread would overwrite with `undefined`.
+ */
+function withDefaults(inputs: RealtimeUiInputs | null | undefined): Required<RealtimeUiInputs> {
+  const cfg: Required<RealtimeUiInputs> = { ...DEFAULT_REALTIME_UI_INPUTS };
+  if (inputs) {
+    for (const key of Object.keys(inputs) as Array<keyof RealtimeUiInputs>) {
+      assignDefined(cfg, inputs, key);
+    }
+  }
+  return cfg;
+}
+
+/**
+ * Copies one input onto the resolved config when the host set it. The target is typed as the optional shape
+ * because TypeScript cannot write a generic key into a `Required<>`; only a defined value is ever written, so
+ * the config stays complete.
+ */
+function assignDefined<K extends keyof RealtimeUiInputs>(target: RealtimeUiInputs, inputs: RealtimeUiInputs, key: K): void {
+  const value = inputs[key];
+  if (value !== undefined) {
+    target[key] = value;
+  }
+}
 
 /**
  * Resolve the consumer config + live signals into a render-ready view-model.
@@ -331,25 +366,23 @@ export function ResolveRealtimeUi(
   inputs: RealtimeUiInputs | null | undefined,
   signals: RealtimeUiSignals,
 ): ResolvedRealtimeUi {
-  const cfg: Required<RealtimeUiInputs> = { ...DEFAULT_REALTIME_UI_INPUTS, ...(inputs ?? {}) };
+  const cfg = withDefaults(inputs);
 
-  const connecting = signals.ConnectionState === 'connecting';
   const allowTextReveal = cfg.allowTextReveal;
   const chrome = resolveChrome(cfg, signals, allowTextReveal);
   const isConsole = chrome === 'console';
   const compact = cfg.compact || signals.ContainerWidthPx < cfg.consoleBreakpointPx;
 
-  // The transcript shows when the user has EXPLICITLY revealed text this session
-  // (`textRevealed`), OR we're in a console (consoles always carry the thread), OR we're
-  // reviewing a recording. We deliberately do NOT consult the disclosure ratchet here: a
-  // power user with a high base level still opens to the calm orb, exactly like the historical
-  // `ShowHero = !ShowCaptions` behaviour — "keep the orb until the user asks for text".
-  const showThread = allowTextReveal && (signals.TextRevealed || isConsole || signals.IsReviewing);
+  // Review always carries the thread. Live, the thread shows when the user has EXPLICITLY revealed text this session
+  // (`TextRevealed`) or we're in a console (consoles carry the thread) — both only if text is allowed at all. We
+  // deliberately do NOT consult the disclosure ratchet: a power user with a high base level still opens to the calm
+  // orb ("keep the orb until the user asks for text").
+  const showThread = signals.IsReviewing || (allowTextReveal && (signals.TextRevealed || isConsole));
 
-  // The hero orb owns the surface in orb chrome (and there's nothing else to show).
-  const showHero = chrome === 'orb' && !showThread;
+  // The hero is the surface whenever there is no thread (a forced console with text disallowed included).
+  const showHero = !showThread;
 
-  const showComposer = isConsole && allowTextReveal && signals.DisclosureShowComposer && !signals.IsReviewing;
+  const allowTyping = cfg.allowTyping && allowTextReveal;
 
   // The surface/Details panel opens ON DEMAND when earned (the Details peek, the agent's
   // OpenSurfacePanel, content auto-reveal — all set surfacePanelEarned). It is an INDEPENDENT
@@ -367,34 +400,35 @@ export function ResolveRealtimeUi(
   // is already a console (incl. review / forced-console at any width) OR the container is at least as
   // wide as the console breakpoint — never in a cramped narrow overlay, and never dependent on text.
   const roomForSurfacePanel = isConsole || signals.ContainerWidthPx >= cfg.consoleBreakpointPx;
-  const showSurfacePanel =
-    cfg.showSurfacePanel && signals.SurfacePanelEarned && !signals.channelFocus && roomForSurfacePanel;
+  // Everything the panel needs but room. Kept apart so the overlay can tell a panel that waits for room from one that
+  // was hidden on purpose (SurfacePanelWaitsForRoom).
+  const surfacePanelWanted = cfg.showSurfacePanel && signals.SurfacePanelEarned && !signals.channelFocus;
+  const showSurfacePanel = surfacePanelWanted && roomForSurfacePanel;
 
   const showActivityTab = cfg.showActivityRail && (signals.HasActivity || signals.IsReviewing) && isConsole;
 
   const showChannelStrip = cfg.showChannels && signals.hasChannels && isConsole && !signals.channelFocus;
 
-  const showGear = signals.DisclosureShowGear || isConsole;
+  // An empty gear menu is not worth an affordance: it needs at least one entry (density picker or dev links).
+  const showGear = (signals.DisclosureShowGear || isConsole) && (cfg.showDensityPicker || cfg.showDevLinks);
 
   return {
     chrome,
     compact,
-    connecting,
     showHero,
     showThread,
-    showComposer,
     showSurfacePanel,
+    SurfacePanelWaitsForRoom: surfacePanelWanted && !roomForSurfacePanel,
     showActivityTab,
     showChannelStrip,
-    showCaptionsControl: cfg.showCaptionsControl,
+    showCaptionsControl: cfg.showCaptionsControl && allowTextReveal,
     showDensityPicker: cfg.showDensityPicker && showGear,
     showGear,
     showDevLinks: cfg.showDevLinks && signals.DevMode,
     showMinimize: cfg.showMinimize && !signals.IsReviewing,
     showEnd: cfg.showEnd,
-    allowResize: cfg.allowResize && showSurfacePanel,
     allowTextReveal,
-    autoHideControls: cfg.autoHideControls && chrome === 'orb',
+    allowTyping,
   };
 }
 

@@ -7,7 +7,8 @@ import {
     ImageVariationParams,
     ImageModelInfo,
     GeneratedImage,
-    ErrorAnalyzer
+    ErrorAnalyzer,
+    IsRequestAborted
 } from "@memberjunction/ai";
 import OpenAI from "openai";
 import { type Uploadable } from "openai";
@@ -57,6 +58,9 @@ interface GptImageVariationParams {
  *
  * This replaces the older DALL-E models with OpenAI's GPT-4o native image generation
  * capabilities, which produce higher quality results through the ChatGPT API.
+ *
+ * A request's `CancellationToken` is handed to the SDK as its `signal`, so cancelling it tears the
+ * HTTP request down; the call then resolves as cancelled, never as a failure to fail over.
  */
 @RegisterClass(BaseImageGenerator, 'OpenAIImageGenerator')
 export class OpenAIImageGenerator extends BaseImageGenerator {
@@ -84,6 +88,9 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
      */
     public async GenerateImage(params: ImageGenerationParams): Promise<ImageGenerationResult> {
         const startTime = new Date();
+        if (params.CancellationToken?.aborted) {
+            return this.CancelledResult(params.CancellationToken);
+        }
 
         try {
             const openAIParams = this.buildGenerationParams(params);
@@ -92,7 +99,8 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
             // but the API accepts them. We cast here at the API boundary since we've validated
             // our params match the actual API spec. SDK v6.x includes proper GPT Image types.
             const response = await this._openAI.images.generate(
-                openAIParams as OpenAI.Images.ImageGenerateParams
+                openAIParams as OpenAI.Images.ImageGenerateParams,
+                { signal: params.CancellationToken }
             );
 
             // Handle the response - ensure it's not a stream
@@ -102,7 +110,7 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
                 return this.createErrorResult(startTime, 'Unexpected streaming response from OpenAI');
             }
         } catch (error) {
-            return this.handleError(error, startTime);
+            return this.handleError(error, startTime, params.CancellationToken);
         }
     }
 
@@ -113,6 +121,9 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
      */
     public async EditImage(params: ImageEditParams): Promise<ImageGenerationResult> {
         const startTime = new Date();
+        if (params.CancellationToken?.aborted) {
+            return this.CancelledResult(params.CancellationToken);
+        }
 
         try {
             const imageInput = await this.normalizeImageInput(params.image);
@@ -128,7 +139,8 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
 
             // Cast at API boundary - see comment in GenerateImage for rationale
             const response = await this._openAI.images.edit(
-                openAIParams as OpenAI.Images.ImageEditParams
+                openAIParams as OpenAI.Images.ImageEditParams,
+                { signal: params.CancellationToken }
             );
 
             // Handle the response - ensure it's not a stream
@@ -138,7 +150,7 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
                 return this.createErrorResult(startTime, 'Unexpected streaming response from OpenAI');
             }
         } catch (error) {
-            return this.handleError(error, startTime);
+            return this.handleError(error, startTime, params.CancellationToken);
         }
     }
 
@@ -187,6 +199,9 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
      */
     public async CreateVariation(params: ImageVariationParams): Promise<ImageGenerationResult> {
         const startTime = new Date();
+        if (params.CancellationToken?.aborted) {
+            return this.CancelledResult(params.CancellationToken);
+        }
 
         try {
             const imageInput = await this.normalizeImageInput(params.image);
@@ -198,12 +213,13 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
 
             // Cast at API boundary - see comment in GenerateImage for rationale
             const response = await this._openAI.images.createVariation(
-                openAIParams as OpenAI.Images.ImageCreateVariationParams
+                openAIParams as OpenAI.Images.ImageCreateVariationParams,
+                { signal: params.CancellationToken }
             );
 
             return this.processVariationResponse(response, startTime, params);
         } catch (error) {
-            return this.handleError(error, startTime);
+            return this.handleError(error, startTime, params.CancellationToken);
         }
     }
 
@@ -506,9 +522,14 @@ export class OpenAIImageGenerator extends BaseImageGenerator {
     }
 
     /**
-     * Handle errors and create error result
+     * Handle errors and create error result. A request its signal aborted is classified by why it was
+     * aborted, not as a provider error: a caller cancellation is reported as cancelled (never failed
+     * over), and an abort caused by a timeout as a retriable network error.
      */
-    private handleError(error: unknown, startTime: Date): ImageGenerationResult {
+    private handleError(error: unknown, startTime: Date, signal?: AbortSignal): ImageGenerationResult {
+        if (IsRequestAborted(error, signal)) {
+            return this.CancelledResult(signal, error);
+        }
         const errorInfo = ErrorAnalyzer.analyzeError(error, 'OpenAI');
         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
 

@@ -17,13 +17,14 @@
 }
 
 /* ── Header ───────────────────────────────────────────── */
+/* Text on the header's surface uses the text tokens; inverse text is for colored backgrounds. */
 .lk-room__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 10px 16px;
   background: var(--mj-bg-surface, #111a2b);
-  color: var(--mj-text-inverse, #fff);
+  color: var(--mj-text-primary, #fff);
   border-bottom: 1px solid var(--mj-border-subtle, rgba(255, 255, 255, 0.08));
 }
 .lk-room__title {
@@ -57,7 +58,7 @@
   align-items: center;
   gap: 6px;
   font-size: 0.82rem;
-  color: var(--mj-text-inverse, #fff);
+  color: var(--mj-text-secondary, #fff);
   opacity: 0.85;
 }
 .lk-room__e2ee {
@@ -220,7 +221,7 @@
   border-radius: 10px;
   background: var(--mj-bg-surface-elevated, #fff);
   border: 1px solid var(--mj-border-default, #e2e8f0);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  box-shadow: var(--mj-shadow-lg);
   min-width: 180px;
 }
 .lk-room__layout-option {
@@ -241,4 +242,40 @@
 .lk-room__layout-option--active {
   color: var(--mj-text-inverse, #fff);
   background: var(--mj-brand-primary, #0076b6);
+}
+
+/* Where a hidden self-view comes back from: the top-left corner, where the user's own tile was (first in the grid). */
+/* Picture-in-picture boxes float over the stage, under its chip and overlays. */
+.lk-room__pips {
+  z-index: 1;
+}
+/* A box can be smaller than a tile's usual minimum, so the tile in it shrinks to fit. */
+.lk-room__pip-tile {
+  --mj-media-tile-min-height: 0;
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.lk-room__self-hidden {
+  position: absolute;
+  left: 24px;
+  top: 24px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 12px;
+  font-size: 0.8rem;
+  color: var(--mj-text-secondary);
+  background: var(--mj-bg-surface-elevated);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-full);
+  box-shadow: var(--mj-shadow-md);
+}
+
+/* The lobby before joining: the camera check fills the room. */
+.lk-room__lobby {
+  height: 100%;
+  background: var(--mj-bg-page);
 }

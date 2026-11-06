@@ -143,10 +143,17 @@ export class SyncStateManager {
     return this.SetFileChecksum(relativePath, checksum);
   }
 
-  /** Remove checksums for files that no longer exist on disk. */
-  async PruneStaleChecksums(baseDir: string): Promise<number> {
+  /**
+   * Remove checksums for files that no longer exist on disk.
+   * @param baseDir - The folder the checksum keys are relative to
+   * @param withinDirs - When given, only keys under these folders (relative to `baseDir`) are checked
+   */
+  async PruneStaleChecksums(baseDir: string, withinDirs?: string[]): Promise<number> {
     let pruned = 0;
     for (const relativePath of Object.keys(this.state.fileChecksums)) {
+      if (withinDirs && !withinDirs.some((dir) => isUnderDir(relativePath, dir))) {
+        continue;
+      }
       const fullPath = path.join(baseDir, relativePath);
       if (!(await fs.pathExists(fullPath))) {
         delete this.state.fileChecksums[relativePath];
@@ -157,7 +164,16 @@ export class SyncStateManager {
   }
 
   /** @deprecated Use {@link PruneStaleChecksums}. */
-  async pruneStaleChecksums(baseDir: string): Promise<number> {
-    return this.PruneStaleChecksums(baseDir);
+  async pruneStaleChecksums(baseDir: string, withinDirs?: string[]): Promise<number> {
+    return this.PruneStaleChecksums(baseDir, withinDirs);
   }
+}
+
+/** Whether a relative path is inside a relative folder. An empty folder is the base folder. */
+function isUnderDir(relativePath: string, dir: string): boolean {
+  if (dir === '') {
+    return true;
+  }
+  const relative = path.relative(dir, relativePath);
+  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
 }

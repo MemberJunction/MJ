@@ -127,6 +127,54 @@
             "lastModified": "2026-08-08T01:12:47.922Z",
             "checksum": "001712c53d60e5d95840a44b8bc879f8cc31a78259f2d0e3a0f772f96f497ae1"
           }
+        },
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "IT: Payload Empty-Grant Child",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
+            "Description": "Scripted sub-agent identical to IT: Payload Child (same prompt: one analysis.result write, one secret.leak write) but seeded with PayloadUpstreamPaths=[], so PG4 can prove an empty grant merges nothing without overriding a shared agent at run time. PayloadDownstreamPaths=[\"customer.*\"] (mj-integration-test — safe to delete)",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExposeAsAction": false,
+            "ModelSelectionMode": "Agent",
+            "ArtifactCreationMode": "Never",
+            "IconClass": "fa-solid fa-vial",
+            "InjectNotes": false,
+            "InjectExamples": false,
+            "MaxIterationsPerRun": 3,
+            "ExecutionOrder": 2,
+            "PayloadDownstreamPaths": [
+              "customer.*"
+            ],
+            "PayloadUpstreamPaths": []
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:MJ: AI Prompts.Name=IT: Payload Child - System Prompt",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "DB21BA9F-49E3-435C-A8FC-FBA4BB121960"
+                },
+                "sync": {
+                  "lastModified": "2026-10-03T06:55:22.751Z",
+                  "checksum": "e4ef3951a0bd30c7f50fe46a2d47e029c9d92ded0e5ee3cda06fd85de1f8e5ee"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "45683FE9-B004-4091-934F-6BD8214287E6"
+          },
+          "sync": {
+            "lastModified": "2026-10-03T06:55:22.717Z",
+            "checksum": "8792bf4e56018136f27daf10ddf9b129a0b030694c21d1d6c107d4896b1043aa"
+          }
         }
       ]
     },

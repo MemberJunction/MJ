@@ -15,6 +15,7 @@ import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJAIPromptEntityExtended } from './MJAIPromptEntityExtended';
 import { MJAIModelEntityExtended } from './MJAIModelEntityExtended';
 import { AIModelRunParams, type AIModelRunResult } from './model-run.types';
+import type { TemplateDataCaptureMode } from './prompt-run-messages.types';
 
 /**
  * Modality types for multi-modal outputs
@@ -258,6 +259,13 @@ export class AIModelSelectionInfo {
     model: MJAIModelEntityExtended;
     /** The vendor entity, if a specific vendor was considered */
     vendor?: MJAIVendorEntity;
+    /**
+     * The provider implementation this combination would run through (e.g. `OpenRouterLLM`).
+     * Optional because it is telemetry, not identity — a long candidate list is often a single
+     * driver class repeated, which is the difference between "the chain is misconfigured" and
+     * "one provider has no key".
+     */
+    driverClass?: string;
     /** Priority of this model/vendor combination */
     priority: number;
     /** Whether this model/vendor had an available API key */
@@ -272,6 +280,8 @@ export class AIModelSelectionInfo {
     model: MJAIModelEntityExtended;
     /** The vendor entity, if a specific vendor was considered */
     vendor?: MJAIVendorEntity;
+    /** See {@link ModelsConsidered}. */
+    driverClass?: string;
     /** Priority of this model/vendor combination */
     priority: number;
     /** Whether this model/vendor had an available API key */
@@ -287,6 +297,8 @@ export class AIModelSelectionInfo {
     model: MJAIModelEntityExtended;
     /** The vendor entity, if a specific vendor was considered */
     vendor?: MJAIVendorEntity;
+    /** See {@link ModelsConsidered}. */
+    driverClass?: string;
     /** Priority of this model/vendor combination */
     priority: number;
     /** Whether this model/vendor had an available API key */
@@ -382,6 +394,13 @@ export class AIPromptParams extends AIModelRunParams {
   templateData?: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   /**
+   * Which template inputs (`data`, `templateData`) this run stores in `AIPromptRun.Messages`.
+   * Overrides the `TemplateDataCapture` of the run's prompts (child prompts, then the main prompt)
+   * and the server default (`aiPromptRuns.templateDataCapture` in mj.config.cjs, otherwise `'None'`).
+   */
+  TemplateDataCapture?: TemplateDataCaptureMode;
+
+  /**
    * Optional conversation messages for multi-turn conversations
    * When provided, these messages will be combined with the rendered template
    * for direct conversation-style prompting
@@ -395,6 +414,29 @@ export class AIPromptParams extends AIModelRunParams {
    * 'none' - Don't add rendered template to conversation
    */
   templateMessageRole?: TemplateMessageRole;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+  /**
+   * Child prompt templates already rendered by the caller, so `AIPromptRunner.ExecutePrompt` embeds
+   * them instead of rendering `childPrompts` a second time.
+   *
+   * - **Key**: the parent template's placeholder name — the `parentPlaceholder` of the matching
+   *   `ChildPromptParam` in `childPrompts`, e.g. `'agentSpecificPrompt'`.
+   * - **Value**: that child prompt's fully rendered text, exactly as `RenderChildPromptTemplates`
+   *   returns it in `renderedTemplates`.
+   *
+   * Set by the loop agent when it relocates a volatile specialization into the trailing runtime-state
+   * message: it must render the child once to build that message, and this hands the same text to the
+   * parent render. Absent (the normal case), the runner renders `childPrompts` itself.
+   */
+  PreRenderedChildTemplates?: Record<string, string>;
+
+  /**
+   * The system-prompt-and-tools fingerprint of the previous request in this conversation, from
+   * `GetSentPrefixFingerprint`. Set by a caller that replays reasoning to a provider which binds it
+   * to an unchanged prefix. When this request's system prompt or tools differ, the runner sends
+   * it without any replayed reasoning, which that provider would otherwise reject.
+   */
+  ReplayedReasoningPrefix?: string;
 
   /**
    * Optional callback for receiving execution progress updates
@@ -463,11 +505,28 @@ export class AIPromptParams extends AIModelRunParams {
   parentPromptRunId?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   /**
+   * Optional run type override for prompt execution tracking (e.g., 'ResultSelector', 'ParallelChild', 'Single').
+   */
+  RunType?: 'ParallelChild' | 'ParallelParent' | 'ResultSelector' | 'Single';
+
+  /**
+   * Optional execution order within a parallel execution group or sequence.
+   */
+  ExecutionOrder?: number;
+
+  /**
    * Additional model-specific parameters that will be passed through to the underlying model.
    * For chat/LLM models, this can include parameters like temperature, topP, topK, etc.
    * The AIPromptRunner will pass these through when building model-specific parameters.
    */
   additionalParameters?: Record<string, any>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+  /**
+   * When false, the prompt's template renders without HTML escaping: its output is plain text for a model, not HTML.
+   * Unset keeps the template engine's default (escaped), as every caller got before this member existed. Feature
+   * Pipeline drivers set it to false.
+   */
+  templateAutoescape?: boolean;  // case-violation-ok-legacy-back-compat: new member of shipped camelCase AIPromptParams keeps its casing
 
   /**
    * Optional prompt to use for model selection instead of the main prompt.
@@ -747,6 +806,12 @@ export class AIPromptParams extends AIModelRunParams {
   agentId?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   /**
+   * Attribution only; never used for behaviour. The user on whose behalf this prompt
+   * was executed (`AIPromptRun.UserID`). If omitted, falls back to contextUser?.ID.
+   */
+  UserID?: string;
+
+  /**
    * Optional file artifacts that may be attached as native content blocks
    * when the resolved LLM driver supports the file's MIME type natively.
    *
@@ -758,9 +823,62 @@ export class AIPromptParams extends AIModelRunParams {
   nativeFileInputs?: NativeFileInput[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
+/**
+ * The {@link AIPromptParams} fields that decide who a prompt runs as and which credentials it may
+ * spend: the user, the metadata provider, the AI configuration, the runtime keys, the per-request
+ * credential and the credential scope.
+ *
+ * A prompt the runner starts on a caller's behalf — AI JSON repair, the parallel result selector —
+ * must run under the caller's scope. Each one copying these fields by hand is how JSON repair came to
+ * forward `contextUser` and drop the rest, so it ran on the platform's keys inside a customer's run.
+ * Copy them with {@link PickPromptExecutionScope} instead.
+ */
+export type AIPromptExecutionScope = Pick<
+  AIPromptParams,
+  'contextUser' | 'provider' | 'configurationId' | 'apiKeys' | 'credentialId' | 'CredentialScope'
+>;
 
+/**
+ * Copies the {@link AIPromptExecutionScope} of one prompt's params, for a prompt started on its
+ * behalf. Spread it first and set the new prompt's own fields after it.
+ *
+ * Every field of the scope is listed: `satisfies` makes a field added to the type a compile error
+ * here until it is copied, so a new scope field reaches every internal prompt at once.
+ */
+export function PickPromptExecutionScope(params: AIPromptExecutionScope): AIPromptExecutionScope {
+  return {
+    contextUser: params.contextUser,
+    provider: params.provider,
+    configurationId: params.configurationId,
+    apiKeys: params.apiKeys,
+    credentialId: params.credentialId,
+    CredentialScope: params.CredentialScope,
+  } satisfies Record<keyof AIPromptExecutionScope, AIPromptExecutionScope[keyof AIPromptExecutionScope]>;
+}
 
+/**
+ * Inputs for resolving which user an `AIPromptRun` is attributed to.
+ *
+ * Only the USER is attributed on the prompt run. Which agent run a prompt run belongs to is owned by
+ * the agent layer — `AIAgentRunStep.TargetLogID` — and resolved at query time (see `vwAIUsageFacts`),
+ * so the prompt-execution layer carries no reference up into the agent layer.
+ */
+export interface ResolvePromptRunUserIDInput {
+  /** Explicit user override, if provided. */
+  UserID?: string | null;
+  /** The enclosing agent run, when there is one; its `UserID` is the next fallback. */
+  AgentRun?: { UserID?: string | null } | null;
+  /** The context user the operation runs as; the last fallback. */
+  ContextUser?: { ID?: string | null } | null;
+}
 
+/**
+ * Resolves `AIPromptRun.UserID`: explicit `UserID` > `AgentRun.UserID` > `ContextUser.ID` > null.
+ * An empty string counts as absent at every level.
+ */
+export function ResolvePromptRunUserID(input?: ResolvePromptRunUserIDInput | null): string | null {
+  return input?.UserID || input?.AgentRun?.UserID || input?.ContextUser?.ID || null;
+}
 
 /**
  * Callback function type for execution progress updates

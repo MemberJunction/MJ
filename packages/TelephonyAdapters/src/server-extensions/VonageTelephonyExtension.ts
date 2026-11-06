@@ -8,7 +8,6 @@ import { LogStatus } from '@memberjunction/core';
 import cors from 'cors';
 import {
     BaseServerExtension,
-    ServerExtensionConfig,
     ServerExtensionPhase,
     ServerExtensionInitContext,
     ExtensionInitResult,
@@ -21,6 +20,9 @@ import {
     VONAGE_MEDIA_WSS_PATH,
     SetVonageTelephonyService,
     VonageTelephonyService,
+    BuildCallbackUrl,
+    ReadSharedTelephonySettings,
+    ResolveOnMachine,
 } from '../telephony/index.js';
 
 @RegisterClass(BaseServerExtension, 'VonageTelephonyExtension')
@@ -33,10 +35,8 @@ export class VonageTelephonyExtension extends BaseServerExtension {
     private config: VonageTelephonyConfig | null = null;
 
     public async Initialize(
-        contextOrApp: ServerExtensionInitContext,
-        _config?: ServerExtensionConfig
+        context: ServerExtensionInitContext
     ): Promise<ExtensionInitResult> {
-        const context = contextOrApp;
         const rawSettings = context.config.Settings as unknown as Partial<VonageTelephonyConfig>;
 
         if (!rawSettings?.mediaPublicUrl) {
@@ -47,6 +47,9 @@ export class VonageTelephonyExtension extends BaseServerExtension {
             };
         }
 
+        const rootPath = context.config.RootPath || VONAGE_TELEPHONY_MOUNT_PATH;
+        const publicUrl = context.publicUrl || 'http://localhost:4000';
+
         const config: VonageTelephonyConfig = {
             applicationId: rawSettings.applicationId,
             privateKey: rawSettings.privateKey,
@@ -54,12 +57,12 @@ export class VonageTelephonyExtension extends BaseServerExtension {
             apiSecret: rawSettings.apiSecret,
             mediaPublicUrl: rawSettings.mediaPublicUrl,
             signatureSecret: rawSettings.signatureSecret,
-            eventUrl: rawSettings.eventUrl,
+            // Outbound calls report lifecycle events back to the route this extension mounts; an explicit setting wins.
+            eventUrl: rawSettings.eventUrl ?? BuildCallbackUrl(publicUrl, rootPath, '/event'),
+            onMachine: ResolveOnMachine(rawSettings.onMachine),
+            ...ReadSharedTelephonySettings(rawSettings),
         };
         this.config = config;
-
-        const rootPath = context.config.RootPath || VONAGE_TELEPHONY_MOUNT_PATH;
-        const publicUrl = context.publicUrl || 'http://localhost:4000';
 
         const handler = createVonageTelephonyHandler(publicUrl, config);
         this.service = handler.service;
@@ -91,6 +94,7 @@ export class VonageTelephonyExtension extends BaseServerExtension {
     }
 
     public async Shutdown(): Promise<void> {
+        this.service?.Dispose();
         SetVonageTelephonyService(undefined);
         this.service = null;
     }

@@ -10,7 +10,7 @@ graph TD
         A[TestEngineBase] --> B[Test Types Cache]
         A --> C[Tests Cache]
         A --> D[Test Suites Cache]
-        A --> E[Test Rubrics Cache]
+        A --> E["Test Rubrics Cache (deprecated)"]
         A --> F[Suite Tests Cache]
         G[Types Module] --> H[TestRunOptions]
         G --> I[SuiteRunOptions]
@@ -23,7 +23,7 @@ graph TD
         M["MJ: Test Types"]
         N["MJ: Tests"]
         O["MJ: Test Suites"]
-        P["MJ: Test Rubrics"]
+        P["MJ: Test Rubrics (deprecated, not read at execution)"]
         Q["MJ: Test Suite Tests"]
     end
 

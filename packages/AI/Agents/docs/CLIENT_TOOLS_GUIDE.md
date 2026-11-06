@@ -16,10 +16,11 @@ Client tools let agents invoke browser-side operations — navigating to records
 8. [Loop Agent Type Integration](#loop-agent-type-integration)
 9. [terminateAfterExecution (One-and-Done)](#terminateafterexecution-one-and-done)
 10. [Prompt Design](#prompt-design)
-11. [Message Types and Compaction](#message-types-and-compaction)
-12. [Security Considerations](#security-considerations)
-13. [Registering Tool Handlers (MJExplorer)](#registering-tool-handlers-mjexplorer)
-14. [Troubleshooting](#troubleshooting)
+11. [Results](#results)
+12. [Message Types and Compaction](#message-types-and-compaction)
+13. [Security Considerations](#security-considerations)
+14. [Registering Tool Handlers (MJExplorer)](#registering-tool-handlers-mjexplorer)
+15. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -78,15 +79,16 @@ Client tools are NOT for user confirmation or form input (that is Chat's job). C
 
 ## Tool Definition Sources
 
-The LLM sees tools from three sources, merged in `buildClientToolPromptSection()`:
+The LLM sees tools from four tiers. `buildClientToolPromptSection()` collects them, and `ResolveClientTools()` (`@memberjunction/ai-core-plus`) merges them:
 
-| Source | Priority | Origin |
-|--------|----------|--------|
-| **Metadata tools** | 1 (highest) | `MJ: AI Agent Client Tools` junction table → `AIEngineBase.GetClientToolsForAgent()` |
-| **Session tools** | 2 | `ClientToolRequestManager.GetSessionTools()` (pushed by client SDK decoration) |
-| **Request tools** | 3 | `ExecuteAgentParams.data.clientTools` (sent with each agent request) |
+| Tier | Precedence | Origin |
+|------|------------|--------|
+| **Override** | 1 (highest) | `ExecuteAgentParams.data.clientTools` (sent with one agent request) |
+| **Session** | 2 | `ClientToolRequestManager.GetSessionTools(data.sessionID)` (pushed by client SDK decoration) |
+| **App** | 3 | `ExecuteAgentParams.data.appContext.Capabilities.Tools` (the app context snapshot; see [How They Reach the LLM](#how-they-reach-the-llm)) |
+| **Static** | 4 (lowest) | `MJ: AI Agent Client Tools` junction table → `AIEngineBase.GetClientToolsForAgent()` |
 
-First registration wins — metadata tools take priority over session/request tools with the same name.
+**Name collisions:** the first tier that has the name wins, in this order: override `data.clientTools` > session tools > app `Capabilities.Tools` > static metadata. So a runtime tool replaces a metadata tool with the same name.
 
 ---
 
@@ -138,7 +140,7 @@ Metadata files: `metadata/client-tool-definitions/` and `metadata/agents/.sage-a
 
 ## Ephemeral Tools (Code-Registered)
 
-Ephemeral tools are registered in client code via `AgentClientService.RegisterTool()` and sent with each agent request in `Data.clientTools`. They don't exist in the database.
+Ephemeral tools are registered in client code via `AgentClientService.RegisterTool()`. They don't exist in the database. The handler stays in the browser; the agent request carries only the tool's name, description and input schema.
 
 ### Current Ephemeral Tools (MJExplorer)
 
@@ -150,24 +152,29 @@ Ephemeral tools are registered in client code via `AgentClientService.RegisterTo
 
 ### How They Reach the LLM
 
-The `conversation-agent.service.ts` gathers all registered tools from `AgentClientService.GetRegisteredTools()` and includes them in the agent execution request:
+In MJ Explorer, the tools reach the prompt through `Data.appContext.Capabilities.Tools`. The Explorer shell (`MJExplorerAppComponent`) builds that list from two parts:
+
+- its global tools (`registerClientTools()`: `NavigateToApp`, `CopyToClipboard`, `ShowNotification`, `SetTheme` and the others)
+- the tools that the active surface registers with `NavigationService.SetAgentClientTools`
+
+The chat sends the snapshot as `Data.appContext` with each agent request. `conversation-agent.service.ts` sends no `clientTools`.
 
 ```typescript
 Data: {
-    clientTools: this.agentClientService.GetRegisteredTools().map(t => ({
-        Name: t.Name,
-        Description: t.Description,
-        InputSchema: t.ParameterSchema
-    })),
-    appContext: { ... }
+    appContext: {
+        App: { ... },
+        Capabilities: {
+            Tools: [{ Name: 'AddPanel', Description: '...', InputSchema: { ... } }]
+        }
+    }
 }
 ```
 
-`buildClientToolPromptSection()` reads `extraData.clientTools` (source #3) and merges with metadata tools.
+`buildClientToolPromptSection()` reads `Capabilities.Tools` as the app tier. A caller can also send `Data.clientTools`, the override tier: `ConversationAgentRunner` in `@memberjunction/conversations-runtime` sends its session's registered tools there.
 
 ### Agent Control: `AllowEphemeralClientTools`
 
-The `AI Agents` entity has an `AllowEphemeralClientTools` bit field (default `true`). When `false`, the agent ignores ephemeral tools from the request — only metadata-linked tools are available.
+The `MJ: AI Agents` entity has an `AllowEphemeralClientTools` bit field (default `true`). The field exists, but no code reads it today. An agent gets the tools of every tier, whatever the value of the field.
 
 ---
 
@@ -183,6 +190,8 @@ interface AppContextSnapshot {
     ActiveNavItem: { Name: string; Description?: string; ResourceType?: string };
     OtherNavItems: Array<{ Name: string; Description?: string }>;
     User: { Name: string; Roles: string[] };
+    Capabilities?: { Tools?: ClientToolMetadata[] };   // the app tier of client tools
+    // Other optional fields: see packages/AI/CorePlus/src/app-context.ts
 }
 ```
 
@@ -276,6 +285,20 @@ The template conditionally includes `'ClientTools'` in the `nextStep.type` union
 
 ---
 
+## Results
+
+The results of one `ClientTools` step go into the conversation as one `user` message with `messageType: 'client-tool-result'` (`BuildClientToolResultMessage` in `packages/AI/Agents/src/client-tool-results.ts`).
+
+- **Text.** Each successful result is included in full. A failed result shows its error message. The Loop prompt param `clientToolResultMaxChars` (default -1) caps each result. A longer result is cut and gets a visible `[truncated N of M chars]` note. A value of -1 or 0 keeps the whole result.
+- **Expiration.** The message expires after 3 turns (Remove).
+- **Images.** A handler can return images with its result: `Media: [{ MimeType, Base64, Width?, Height? }]`. The allowed types are jpeg, png and webp. A result can have at most 4 items, and each item at most 2,000,000 bytes after decoding. The server checks the media with `ParseClientToolMedia` (`@memberjunction/ai-core-plus`) in `RespondToClientToolRequest`. When the check fails, the result becomes a failed result that gives the reason.
+- **How the model gets images.** The images of successful results go into the message as `image_url` blocks, ahead of the text. Each block has the tool name as its `fileName`. A message with images expires after 2 turns (Remove). The step's output keeps only metadata for each image (MIME type, bytes, width, height), not the base64.
+- **Models without image support.** `stripUnsupportedMediaBlocks` in `AIPromptRunner` replaces each image block with a text note. The note tells the model that it cannot see the image.
+- **Token counts and compaction.** The token estimate counts each image block as 1,600 tokens. Compaction replaces an image block with the text `[image omitted]`.
+- **Voice.** Realtime tool results are strings. The Explorer shell removes `Media` from the surface tool results that it gives to the realtime `ContextTool` proxy (`WithoutMedia`). A voice session gets images only as video frames, through `SendVideoFrame`.
+
+---
+
 ## Message Types and Compaction
 
 Client tool results are stored in conversation messages with `messageType: 'client-tool-result'`, distinct from `'action-result'`. This allows:
@@ -288,8 +311,8 @@ Client tool results are stored in conversation messages with `messageType: 'clie
 
 ## Security Considerations
 
-- **Metadata tools** are governed by the `AI Agent Client Tools` junction — agents can only use tools they're linked to
-- **Ephemeral tools** are governed by `AllowEphemeralClientTools` flag per agent
+- **Metadata tools** are governed by the `AI Agent Client Tools` junction — the static tier gives an agent only the metadata tools linked to it. Tools from the other tiers need no link.
+- **Ephemeral tools** have no per-agent control today: `AllowEphemeralClientTools` exists on the entity but is not enforced
 - **Timeout protection** prevents hanging if the browser is unresponsive
 - **Input validation**: Handlers should validate params before executing
 - **Session isolation**: PubSub requests are filtered by sessionID
@@ -354,7 +377,7 @@ if (provider.sessionId) {
 ### LLM never chooses client tools
 
 - **Tools not in prompt**: Check that `clientToolDetails` is populated in template data.
-- **No tools linked**: Verify the agent has `AI Agent Client Tools` junction records.
+- **No tools in any tier**: For metadata tools, verify the agent has `AI Agent Client Tools` junction records. For surface tools, verify that the surface called `NavigationService.SetAgentClientTools` and that the request's `Data.appContext.Capabilities.Tools` lists them.
 - **Vague descriptions**: Tool descriptions should clearly explain when to use them.
 
 ### Agent hangs after tools with taskComplete=true

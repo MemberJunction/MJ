@@ -146,6 +146,7 @@ flowchart LR
 | `telemetryManager.ts` | `TelemetryManager` for operation tracking and pattern detection |
 | `queryCache.ts` / `QueryCacheConfig.ts` | LRU query result cache with TTL support |
 | `databaseProviderBase.ts` | `DatabaseProviderBase` for server-side SQL execution and transactions |
+| `BaseEntitySaveQueue.ts` | `BaseEntitySaveQueue` for per-record serialized fire-and-forget execution log saves with optional `saveReturnMode` |
 | `util.ts` | Utility functions: `TypeScriptTypeFromSQLType`, `FormatValue`, `CodeNameFromString` |
 | `runView.ts` | `RunView` class and `RunViewParams` for executing stored and dynamic views |
 | `viewInfo.ts` | View metadata classes: `ViewInfo`, `ViewColumnInfo`, `ViewFilterInfo` |
@@ -329,24 +330,48 @@ It is **not** enforced on the low-level `EntityField.Value` accessor. Framework-
 
 > Note: `EntityField.ActiveStatusAssertions` is retained as a **deprecated no-op** for backward compatibility. There is nothing to toggle at the field level anymore, since `EntityField.Value` no longer asserts.
 
+#### Lazy `EntityField` Hydration (`_raw` Fast Path)
+
+When records are loaded via `LoadFromData()` (for example, inside `RunView` with `ResultType: 'entity_object'`), `BaseEntity` stores the database row directly in an internal `_raw` reference without eagerly populating every `EntityField` value via `SetMany()`:
+
+- **Zero-allocation read path**: `Get()`, `GetAll()`, `Dirty`, and `FieldIsDirty()` read directly from `_raw` (with `EntityFieldInfo.DefaultValue` fallback and `NotLoaded` column awareness for partial `Fields` projections), avoiding $N \times F$ `EntityField` setter invocations across large result sets.
+- **Lazy hydration on mutation or `Fields` inspection**: The first call to `Set()`, `SetMany()`, `Revert()`, `Validate()`, `Save()`, or `entity.Fields` transparently hydrates `EntityField` instances from `_raw` and clears `_raw`, preserving full dirty tracking and `OldValue` history.
+
 #### Save and Delete
 
 ```typescript
-import { EntitySaveOptions } from '@memberjunction/core';
+import { EntitySaveOptions, BaseEntitySaveQueue } from '@memberjunction/core';
 
 // Simple save
 const success = await entity.Save();
 
 // Save with options
 const options = new EntitySaveOptions();
-options.IgnoreDirtyState = true;     // Force save even if no changes detected
-options.SkipEntityAIActions = true;  // Skip AI-related actions
-options.SkipEntityActions = true;    // Skip entity actions
+options.IgnoreDirtyState = true;        // Force save even if no changes detected
+options.SkipEntityAIActions = true;     // Skip AI-related actions
+options.SkipEntityActions = true;       // Skip entity actions
+options.SaveReturnMode = 'datestamps_only'; // Return only PK + __mj_CreatedAt/__mj_UpdatedAt
 await entity.Save(options);
+
+// Fire-and-forget per-entity save queue (e.g., high-write execution logs)
+const logQueue = new BaseEntitySaveQueue({ saveReturnMode: 'datestamps_only' });
+logQueue.Insert(stepEntity);
+logQueue.Update(stepEntity, (s) => { s.Status = 'Complete'; });
+await logQueue.Flush();
 
 // Delete
 await entity.Delete();
 ```
+
+##### `SaveReturnMode: 'full' | 'datestamps_only'`
+
+By default (`SaveReturnMode: 'full'`), `spCreate*` and `spUpdate*` re-select the full row (`SELECT * FROM [schema].[BaseView] WHERE [PK] = @ID`) after every `INSERT` or `UPDATE` so joined virtual columns, SQL-computed columns, and trigger mutations are immediately reflected in memory.
+
+For high-write tables whose primary keys are pre-populated UUIDs (`NewRecord()`) and whose `BaseView` performs expensive joins or carries large `NVARCHAR(MAX)` columns (such as `AIPromptRun`, `AIAgentRun`, `AIAgentRunStep`, `ConversationDetail`, or `AuditLog`), you can configure **`SaveReturnMode: 'datestamps_only'`**:
+
+- **Entity-level (`Entity.Configuration`)**: Set `{"SaveReturnMode": "datestamps_only"}` in `Entity.Configuration`. CodeGen emits `spCreate*` and `spUpdate*` routines that query only the primary key(s) and `[__mj_CreatedAt]` / `[__mj_UpdatedAt]` directly from `BaseTable`, completely skipping `BaseView` and its joins.
+- **Per-save override (`EntitySaveOptions.SaveReturnMode`)**: Pass `{ SaveReturnMode: 'datestamps_only' }` to `entity.Save(options)` on any entity. Even if the entity's stored procedure returns the full view row, the data provider projects only the primary key(s) and timestamp columns over the wire and merges them onto the in-memory `BaseEntity` fields without clobbering existing in-memory values.
+- **Why DB timestamps are always returned**: `DatabaseProviderBase.Save()` performs optimistic concurrency checking (`checkRecordSavingInconsistency`) by comparing the entity's in-memory `__mj_UpdatedAt` against the database row before every update. Returning `[__mj_CreatedAt]` and `[__mj_UpdatedAt]` from `BaseTable` (which is a single clustered PK index seek on the row already in the buffer pool) keeps concurrency checking 100% accurate on subsequent saves while avoiding `BaseView` join evaluation and large-column network transfer.
 
 #### GetAll() for Spread Operator
 
@@ -469,6 +494,8 @@ if (!result.Success) {
 }
 ```
 
+A binary field (`varbinary` / `binary` / `image`, PostgreSQL `bytea`) holds a base64 string; `Validate()` rejects a value that is not canonical base64, and one whose decoded length exceeds a fixed-length column. See the [Binary Fields Guide](../../guides/BINARY_FIELDS_GUIDE.md).
+
 #### IS-A (Table-Per-Type) entities
 
 An entity may inherit from another — `Webinar` IS-A `Meeting` IS-A `Product` — with one primary key
@@ -491,6 +518,25 @@ rejected, which fails the whole save.
 
 See [docs/isa-relationships.md](docs/isa-relationships.md) for the full model — discovery, disjoint
 vs overlapping subtypes, delete orchestration, and CodeGen integration.
+
+### JSONType Fields: Live Typed Objects (`JSONFieldBinding`)
+
+A field with `EntityField.JSONType` gets a generated typed `<Field>Object` accessor that delegates to
+two protected `BaseEntity` helpers, `GetJSONFieldObject<T>(field)` / `SetJSONFieldObject<T>(field, value)`,
+backed by `JSONFieldBinding` (`src/generic/jsonFieldBinding.ts`). The accessor is a **live view** of the
+raw text: an in-place edit at any depth (`rec.ConfigObject.Items.push(x)`, `rec.ConfigObject.A.B = 1`,
+`delete rec.ConfigObject.K`) updates the raw field through `Set()`, so the record is dirty and `Save()`
+persists it. Only plain objects and arrays are wrapped, a write that changes nothing does not dirty the
+record, and when the raw text is replaced by another route (`Load`, `LoadFromData`, `Set`, `Revert`,
+`NewRecord`) the next read re-parses and earlier references are detached (writes through them throw).
+`FlushJSONFieldObjects()` runs before `Validate()` and at the start of `Save()` so edits made through the
+caller's own un-proxied reference after assignment are still captured.
+
+`structuredClone`, `postMessage` and IndexedDB reject a live value; use the typed
+`ToPlainJSON<T>(value)` export to obtain a plain deep copy. Generated `Validate()` overrides for opted-in
+types call the protected `ValidateJSONField(field, schema, rules, severity, result)`, which runs only when the
+field is dirty or the record is new and reports errors with path sources such as `Config.Items[2].EndHour`.
+See the [JSONType Guide](../../guides/JSONTYPE_GUIDE.md).
 
 ### CompositeKey
 
@@ -747,6 +793,8 @@ const countResult = await rv.RunView({
 });
 ```
 
+**Binary fields are omitted by default.** A `RunView` without `Fields` leaves out `varbinary` / `bytea` columns (the key is absent from the row). Pass `IncludeBinaryFields: true`, or name a binary field in `Fields`, to get them as base64 strings. `entity.Load()` always includes them, and saving a record loaded without them is safe — an unloaded field is never written. See the [Binary Fields Guide](../../guides/BINARY_FIELDS_GUIDE.md).
+
 #### RunViewParams Reference
 
 | Parameter | Type | Description |
@@ -757,7 +805,8 @@ const countResult = await rv.RunView({
 | `EntityName` | `string` | Entity name for dynamic views |
 | `ExtraFilter` | `string` | Additional SQL WHERE clause |
 | `OrderBy` | `string` | SQL ORDER BY clause |
-| `Fields` | `string[]` | Field names to return (simple mode only) |
+| `Fields` | `string[]` | Field names to return (simple mode only). Naming a binary field sets `IncludeBinaryFields`. |
+| `IncludeBinaryFields` | `boolean` | Return binary (`varbinary` / `bytea`) fields as base64 strings; omitted by default. Part of the cache fingerprint. |
 | `UserSearchString` | `string` | User search term |
 | `MaxRows` | `number` | Maximum rows to return |
 | `StartRow` | `number` | Row offset (OFFSET-based pagination). Use for UI grids. For deep iteration over large tables, prefer `AfterKey`. |
@@ -1096,6 +1145,7 @@ Key features:
 - Automatic refresh when entities are saved or deleted (debounced)
 - Local caching support via `CacheLocal` and `CacheLocalTTL` options
 - Supports both entity and dataset loading
+- `IncludeBinaryFields: true | 'DatabaseProviderOnly'` on a config loads binary fields (the second form only in server processes, where e.g. persisted embedding columns are needed)
 
 #### Permission-Constrained Loading
 
@@ -1534,7 +1584,8 @@ export class MyEntityServer extends MyEntity {
             {
                 fieldName: 'Description',
                 vectorFieldName: 'DescriptionVector',
-                modelFieldName: 'DescriptionVectorModelID'
+                modelFieldName: 'DescriptionVectorModelID',
+                binaryVectorFieldName: 'DescriptionVectorBinary'   // optional
             }
         ]);
         return await super.Save();
@@ -1551,6 +1602,7 @@ Features:
 - **Dirty Detection** -- Only generates embeddings when source text changes
 - **Null Handling** -- Clears vector fields when source text is empty
 - **Parallel Processing** -- Multiple embeddings generated concurrently
+- **Binary Companion** -- The optional `binaryVectorFieldName` (`binaryVectorField` on `GenerateEmbedding`/`GenerateEmbeddings`) stores the same vector as base64 float32 bytes alongside the JSON field, set and cleared together. Readers decode it with `ReadStoredVector` from `@memberjunction/ai-vectors-memory`; see the [Binary Fields Guide](../../guides/BINARY_FIELDS_GUIDE.md)
 
 ---
 

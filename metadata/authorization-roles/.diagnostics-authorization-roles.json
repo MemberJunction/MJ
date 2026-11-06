@@ -1,0 +1,44 @@
+[
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Diagnostics: Run Sessions",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-203000000001"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:04.373Z",
+      "checksum": "b42a09c25db01d2bf072d4a80d9aa169a4ba311db913ba98505144f57879c3dd"
+    }
+  },
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Diagnostics: Send Externally",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-203000000002"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:04.391Z",
+      "checksum": "63e559c3e6262458af3bfcc9a9ac810665a1e8fc3f62215277cda6b93cb671ac"
+    }
+  },
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Diagnostics: Manage Intake",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "B0749BFE-6E8A-4040-8015-01FA1507E066"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:04.409Z",
+      "checksum": "6ebd29ac6649822b880e4499d07675c51fa8b31ec157e08f865049568f4bfdba"
+    }
+  }
+]

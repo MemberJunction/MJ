@@ -9,27 +9,58 @@
 #
 # This answers one question, in seconds, under a name that says what is wrong.
 #
-# WHAT IT CANNOT DO: make anyone stop. `next-protect` requires exactly ONE status check
-# ('Check migrations'), so this — like every other check in the repo — is advisory. #4604 was
-# merged with five checks already red. Adding this context to the ruleset's
-# required_status_checks is what would actually prevent recurrence; that is a governance change,
-# deliberately not made here.
+# Intended to be a required check in next-protect, which is why there is no `paths:` filter on the
+# trigger: a workflow skipped by a paths filter never reports its checks, so every PR that left
+# package.json alone would wait forever. The `changes` job applies the same filter instead; a job skipped by its `if`
+# reports as passing.
 name: Lockfile Guard
 
 on:
   pull_request:
-    paths:
-      - '**/package.json'
-      - 'pnpm-lock.yaml'
-      - '.github/workflows/lockfile-guard.yml'
+
+# Least-privilege token: nothing in this workflow writes to the repository.
+permissions:
+  contents: read
 
 concurrency:
   group: lockfile-guard-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect lockfile-relevant changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      relevant: ${{ steps.filter.outputs.relevant }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+      - name: Check changed paths
+        id: filter
+        env:
+          PR_BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch --no-tags origin "$PR_BASE_REF"
+          CHANGED="$(git diff --name-only "origin/$PR_BASE_REF...HEAD")"
+          # The old paths filter (**/package.json, pnpm-lock.yaml, this workflow), plus patches/ and
+          # pnpm-workspace.yaml: editing a patchedDependencies patch without the lockfile fails
+          # frozen-lockfile installs (ERR_PNPM_LOCKFILE_CONFIG_MISMATCH).
+          if echo "$CHANGED" | grep -qE '(^|/)package\.json$|^pnpm-lock\.yaml$|^pnpm-workspace\.yaml$|^patches/|^\.github/workflows/lockfile-guard\.yml$'; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+          fi
+
   lockfile-matches-manifests:
     name: Lockfile matches package.json
+    needs: changes
+    # Fail closed: a skipped required check counts as passing, so if change detection itself
+    # failed, run the real check rather than skip it.
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.relevant == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -58,5 +89,5 @@ jobs:
           echo "─── what pnpm reported ───"
           # The 'Failure reason' block names the offending manifest and the exact specifiers, which
           # is the whole diagnosis; surfacing it here saves opening the log.
-          sed -n '/ERR_PNPM_OUTDATED_LOCKFILE/,/^$/p;/Failure reason/,/^$/p' /tmp/pnpm.log || cat /tmp/pnpm.log
+          grep -qE 'ERR_PNPM_|Failure reason' /tmp/pnpm.log && sed -n '/ERR_PNPM_/,/^$/p;/Failure reason/,/^$/p' /tmp/pnpm.log || cat /tmp/pnpm.log
           exit 1
