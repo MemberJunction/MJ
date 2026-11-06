@@ -22,6 +22,7 @@ import { AiSkillsChecks } from '../checks/ai-skills.checks';
 import { ApiKeysChecks } from '../checks/api-keys.checks';
 import { DiagnosticsChecks } from '../checks/diagnostics.checks';
 import { PredictiveStudioChecks } from '../checks/predictive-studio.checks';
+import { PredictiveShadowDriftChecks } from '../checks/predictive-shadow-drift.checks';
 import { RemoteOpWireProgressChecks } from '../checks/remote-op-wire-progress.checks';
 import { PromptRunnerChecks } from '../checks/prompt-runner.checks';
 import { AiVendorEffortChecks } from '../checks/ai-vendor-effort.checks';
@@ -180,6 +181,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['api-keys', ApiKeysChecks, 3],
         ['diagnostics', DiagnosticsChecks, 4], // DIAG1-DIAG4 session capture, bundle assembly, encrypted intake (IT163)
         ['predictive-studio', PredictiveStudioChecks, 5],
+        ['predictive-shadow-drift', PredictiveShadowDriftChecks, 2], // PSD1-PSD2 shadow scoring Role=Challenger isolation and PredictiveStudioEvaluateDriftAction over MJ: Feature Values (IT164)
         ['remote-op-wire-progress', RemoteOpWireProgressChecks, 1],
         ['prompt-runner', PromptRunnerChecks, 1],
         ['ai-vendor-effort', AiVendorEffortChecks, 2],
@@ -425,6 +427,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'performance-benchmark': 14,
         'permission-engine': 15,
         'perplexity-decider': 5,
+        'predictive-shadow-drift': 2,
         'predictive-studio': 5,
         'prompt-eval-harness': 7,
         'prompt-runner': 1,
@@ -531,7 +534,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(181);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(182);
     });
 });
 

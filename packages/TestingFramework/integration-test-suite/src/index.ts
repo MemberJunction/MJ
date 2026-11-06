@@ -28,6 +28,7 @@ export * from './checks/metadata-consistency.checks';
 export * from './checks/open-app-teardown.checks';
 export * from './checks/permission-engine.checks';
 export * from './checks/predictive-studio.checks';
+export * from './checks/predictive-shadow-drift.checks';
 export * from './checks/prompt-eval-harness.checks';
 export * from './checks/agent-decisions-switch.checks';
 export * from './checks/agent-prompt-cancellation.checks';

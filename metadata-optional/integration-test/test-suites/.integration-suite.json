@@ -1939,6 +1939,17 @@
           "primaryKey": {
             "ID": "2B6D709B-FD12-41C3-BDB2-3737A9E16195"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT164 - Predictive Shadow Scoring and Drift",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C94F1A82-7E3B-4D6A-82C1-5B9E0F3A4D2E"
+          }
         }
       ]
     },
