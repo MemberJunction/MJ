@@ -26,4 +26,38 @@ describe('template', () => {
     it('leaves non-template strings untouched', () => {
         expect(ResolveParams({ x: 'plain' }, scope).x).toBe('plain');
     });
+
+    describe('placeholder scanning', () => {
+        it.each([
+            ['  {{ row.Balance }}  ', 50],
+            ['{{row.Balance}}', 50],
+            ['{{\trow.Meta\n}}', { k: 'v' }],
+        ])('treats %j as one whole placeholder', (template, expected) => {
+            expect(ResolveParams({ x: template }, scope).x).toEqual(expected);
+        });
+
+        it.each([
+            ['{{row.Email}} and {{row.Balance}}', 'a@b.com and 50'],
+            ['{{ row.Email }}{{row.Balance}}', 'a@b.com50'],
+            ['no close {{row.Email', 'no close {{row.Email'],
+            ['single } brace {{row.Email} then {{row.Balance}}', 'single } brace {{row.Email} then 50'],
+            ['empty {{}} stays', 'empty {{}} stays'],
+            ['x {{row.Balance}}}', 'x 50}'],
+        ])('interpolates %j', (template, expected) => {
+            expect(ResolveParams({ x: template }, scope).x).toBe(expected);
+        });
+
+        it('reports an all-whitespace placeholder as an invalid path', () => {
+            expect(() => ResolveParams({ x: 'a {{   }} b' }, scope)).toThrow(/Invalid template path/);
+        });
+
+        it('reads 100k characters of whitespace inside unclosed braces in linear time', () => {
+            const ws = '\t'.repeat(100_000);
+            const started = Date.now();
+            expect(ResolveParams({ x: '{{{{' + ws }, scope).x).toBe('{{{{' + ws);
+            expect(ResolveParams({ x: '{{{{|' + ws + '}' }, scope).x).toBe('{{{{|' + ws + '}');
+            expect(ResolveParams({ x: '{{'.repeat(50_000) }, scope).x).toBe('{{'.repeat(50_000));
+            expect(Date.now() - started).toBeLessThan(2500);
+        });
+    });
 });

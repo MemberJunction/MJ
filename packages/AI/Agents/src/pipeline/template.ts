@@ -15,8 +15,58 @@ import { ValueToText } from './coerce';
 /** Binding scope: `$` = current upstream value; other keys = map/let bindings. */
 export type TemplateScope = Record<string, PipeValue>;
 
-const WHOLE = /^\s*\{\{\s*([^}]+?)\s*\}\}\s*$/;
-const EMBEDDED = /\{\{\s*([^}]+?)\s*\}\}/g;
+/**
+ * The path written inside one `{{ … }}` span, given the text between the braces (never empty, never
+ * containing `}`). Matches what the old `\{\{\s*([^}]+?)\s*\}\}` capture held: the text trimmed, or
+ * its last character when it is all whitespace.
+ */
+function placeholderPath(inner: string): string {
+    const trimmed = inner.trim();
+    return trimmed.length > 0 ? trimmed : inner.slice(-1);
+}
+
+/**
+ * The path of a param that is exactly one `{{ path }}` (surrounding whitespace allowed), or null.
+ * Index checks rather than a regex, so a long run of whitespace or braces costs linear time
+ * (CodeQL js/polynomial-redos).
+ */
+function wholePlaceholderPath(s: string): string | null {
+    const t = s.trim();
+    if (t.length < 5 || !t.startsWith('{{') || !t.endsWith('}}')) {
+        return null;
+    }
+    const inner = t.slice(2, -2);
+    return inner.includes('}') ? null : placeholderPath(inner);
+}
+
+/**
+ * Replace every embedded `{{ path }}` span, left to right. A span opens at `{{` and closes at the
+ * first `}` after it, which must be the first of `}}`; the text between is at least one character.
+ * The position of the next `}` is remembered across candidate openings, so text full of `{{` with
+ * no closing brace is scanned once (CodeQL js/polynomial-redos).
+ */
+function replaceEmbeddedPlaceholders(s: string, replace: (path: string) => string): string {
+    let out = '';
+    let copied = 0;
+    let nextClose = -1;
+    let open = s.indexOf('{{');
+    while (open !== -1) {
+        if (nextClose < open + 2) {
+            nextClose = s.indexOf('}', open + 2);
+            if (nextClose === -1) {
+                break;
+            }
+        }
+        if (nextClose > open + 2 && s[nextClose + 1] === '}') {
+            out += s.slice(copied, open) + replace(placeholderPath(s.slice(open + 2, nextClose)));
+            copied = nextClose + 2;
+            open = s.indexOf('{{', copied);
+        } else {
+            open = s.indexOf('{{', open + 1);
+        }
+    }
+    return out + s.slice(copied);
+}
 
 /** Recursively resolve templates in a tool's `with` params object. */
 export function ResolveParams(params: Record<string, unknown>, scope: TemplateScope): Record<string, unknown> {
@@ -42,11 +92,11 @@ function resolveValue(value: unknown, scope: TemplateScope): unknown {
 }
 
 function resolveString(s: string, scope: TemplateScope): unknown {
-    const whole = WHOLE.exec(s);
-    if (whole) {
-        return ResolvePath(whole[1], scope); // raw value
+    const whole = wholePlaceholderPath(s);
+    if (whole !== null) {
+        return ResolvePath(whole, scope); // raw value
     }
-    return s.replace(EMBEDDED, (_m, path) => ValueToText(ResolvePath(path, scope) ?? null));
+    return replaceEmbeddedPlaceholders(s, (path) => ValueToText(ResolvePath(path, scope) ?? null));
 }
 
 /** Resolve a scoped path like `row.Email` or `$.Results[0].Name`. Throws on an unknown binding. */

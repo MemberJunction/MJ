@@ -6,6 +6,39 @@ import { RefuseWorkflowInAgentRun } from "./workflow-run-scope";
 import { JSONParamHelper } from "../utilities/json-param-helper";
 
 /**
+ * Replace each `{{path}}` in `template` with `resolve(path)`, left to right, leaving a placeholder
+ * as written when `resolve` returns undefined. A placeholder is `{{`, one or more characters other
+ * than `}`, then `}}` — the old `/\{\{([^}]+)\}\}/g`. Scanned by index, remembering the next `}`
+ * across candidate openings, because that regex rescans to the end of the text from every `{{`
+ * when no `}` follows (CodeQL js/polynomial-redos).
+ */
+export function ReplaceTemplatePlaceholders(template: string, resolve: (path: string) => string | undefined): string {
+    let out = '';
+    let copied = 0;
+    let nextClose = -1;
+    let open = template.indexOf('{{');
+    while (open !== -1) {
+        if (nextClose < open + 2) {
+            nextClose = template.indexOf('}', open + 2);
+            if (nextClose === -1) {
+                break;
+            }
+        }
+        if (nextClose > open + 2 && template[nextClose + 1] === '}') {
+            const value = resolve(template.slice(open + 2, nextClose));
+            if (value !== undefined) {
+                out += template.slice(copied, open) + value;
+                copied = nextClose + 2;
+            }
+            open = template.indexOf('{{', nextClose + 2);
+        } else {
+            open = template.indexOf('{{', open + 1);
+        }
+    }
+    return out + template.slice(copied);
+}
+
+/**
  * Action that iterates over collections executing actions for each item
  * 
  * @example
@@ -345,10 +378,9 @@ export class LoopAction extends BaseAction {
      */
     private replaceTemplateString(template: string, context: any): string {
         // Simple template replacement for {{variable}} and {{object.property}}
-        return template.replace(/\{\{([^}]+)\}\}/g, (match, path) => {
-            const trimmedPath = path.trim();
-            const value = this.getValueByPath(context, trimmedPath);
-            return value !== undefined ? String(value) : match;
+        return ReplaceTemplatePlaceholders(template, (path) => {
+            const value = this.getValueByPath(context, path.trim());
+            return value !== undefined ? String(value) : undefined;
         });
     }
 

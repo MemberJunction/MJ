@@ -217,6 +217,7 @@ import {
     SuggestionUseCaseForDocumentType,
     TemplateFieldCapRefusal,
     TemplateFieldNames,
+    SelectedTemplateFieldPaths,
 } from '../AI/components/vectors/vector-document-rules';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { VectorManagementResourceComponent } from '../AI/components/vectors/vector-management-resource.component';
@@ -848,5 +849,29 @@ describe('SuggestedMatchThresholds', () => {
     it('refuses missing values', () => {
         expect(SuggestedMatchThresholds(undefined, 0.9)).toBeNull();
         expect(SuggestedMatchThresholds(0.7, null)).toBeNull();
+    });
+});
+
+describe('SelectedTemplateFieldPaths', () => {
+    it.each([
+        ['{{ Name }} and {{Email}}', ['Name', 'Email']],
+        ['{{Organization.Name}} {{ Organization.Name }}', ['Organization.Name']],
+        ['{{\tA.B.C\n}}', ['A.B.C']],
+        ['{{ Name | upper }}', []],
+        ['{{ Name', []],
+        ['{{A.}} {{.A}} {{A..B}}', []],
+        ['{{{Name}}', ['Name']],
+        ['{{ Na-me }}', []],
+        [null, []],
+        ['', []],
+    ])('reads %j', (template, expected) => {
+        expect(SelectedTemplateFieldPaths(template)).toEqual(expected);
+    });
+
+    it('reads 100k characters of whitespace inside unclosed braces in linear time', () => {
+        const started = Date.now();
+        expect(SelectedTemplateFieldPaths('{{ a' + '\t'.repeat(100_000))).toEqual([]);
+        expect(SelectedTemplateFieldPaths('{{\t'.repeat(50_000))).toEqual([]);
+        expect(Date.now() - started).toBeLessThan(2500);
     });
 });

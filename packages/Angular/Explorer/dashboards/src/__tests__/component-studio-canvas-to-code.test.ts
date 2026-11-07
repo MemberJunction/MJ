@@ -142,3 +142,25 @@ describe('parseCanvasFromCode (round-trip)', () => {
         expect(result.HasUnknownConstructs).toBe(true);
     });
 });
+
+describe('parseCanvasFromCode heading scan', () => {
+    const fieldRef = 'value("Name")';
+
+    it.each([
+        [`<h2>Form</h2><h3>Main</h3>${fieldRef}`, 'Form', ['Main']],
+        [`<h2 className="t">Form</h2><h3 style={s}>One</h3>${fieldRef}<h3>Two</h3>value("Count")`, 'Form', ['One', 'Two']],
+        [`<h2>{title}</h2><h3>A <b>bold</b></h3>${fieldRef}`, undefined, ['Details']],
+        [`<h3>Main</h3>${fieldRef}<h3>Empty</h3>`, undefined, ['Main']],
+    ])('reads the title and sections of %j', (code, title, sections) => {
+        const canvas = ParseCanvasFromCode(code, schema()).Canvas;
+        expect(canvas?.title).toBe(title);
+        expect(canvas?.sections.map(s => s.title)).toEqual(sections);
+    });
+
+    it('reads 100k characters of unclosed h2 and h3 openings in linear time', () => {
+        const started = Date.now();
+        expect(ParseCanvasFromCode('<h3'.repeat(50_000) + fieldRef, schema()).Canvas?.sections.map(s => s.title)).toEqual(['Details']);
+        expect(ParseCanvasFromCode(fieldRef + '<h2'.repeat(50_000), schema()).Canvas?.title).toBeUndefined();
+        expect(Date.now() - started).toBeLessThan(2500);
+    });
+});
