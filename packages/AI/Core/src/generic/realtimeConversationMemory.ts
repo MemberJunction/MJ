@@ -117,9 +117,9 @@ export function RenderRealtimeMemorySeed(seed: RealtimeMemorySeed): ReadonlyArra
         const role = entry.Kind === 'assistant' || entry.Kind === 'toolCall' ? 'model' : 'user';
         const last = turns[turns.length - 1];
         if (last.Role === role) {
-            last.Texts.push(entryText(entry));
+            last.Texts.push(RenderRealtimeMemoryEntry(entry));
         } else {
-            turns.push({ Role: role, Texts: [entryText(entry)] });
+            turns.push({ Role: role, Texts: [RenderRealtimeMemoryEntry(entry)] });
         }
     }
     return turns;
@@ -133,7 +133,8 @@ function resumePreamble(dropped: number): string {
     );
 }
 
-function entryText(entry: RealtimeMemoryEntry): string {
+/** One entry as the text a seed carries. A tool exchange reads as bracketed text, not a function-call part. */
+export function RenderRealtimeMemoryEntry(entry: RealtimeMemoryEntry): string {
     switch (entry.Kind) {
         case 'toolCall':
             return `[called ${entry.Name} ${entry.ArgumentsJson}]`;

@@ -732,6 +732,119 @@ describe('GeminiRealtimeClient session resumption', () => {
             expect(thinking.Connections[1].Session.ClientContents.filter((content) => content.turnComplete === true)).toEqual([]);
         });
 
+        describe('a tool result that crosses a reseed', () => {
+            it('goes out as realtime text, with no tool response and no commit, and a later seed has the pair once, in order', async () => {
+                client.EmitOn(0, HEARD('where is my order'));
+                client.EmitOn(0, TOOL_CALL('c1'));
+                client.CloseOn(0, 1011);
+                await vi.advanceTimersByTimeAsync(0);
+                client.SendToolResult('c1', '{"ok":true}');
+
+                const session = client.Connections[1].Session;
+                expect(session.ToolResponses).toEqual([]);
+                expect(session.RealtimeInputs).toEqual([{ text: '[lookup_order returned {"ok":true}]' }]);
+                expect(session.ClientContents.filter((content) => content.turnComplete === true)).toEqual([]);
+                expect(session.ClientContents).toHaveLength(1); // the seed alone
+                expect(emitted.states.at(-1)).toBe('speaking');
+                expect(client.IsBusy).toBe(true);
+                expect(client.IsTurnOpen).toBe(true);
+
+                client.EmitOn(1, SAID('It shipped.'));
+                client.EmitOn(1, TURN_COMPLETE);
+                expect(client.IsBusy).toBe(false);
+                expect(client.IsTurnOpen).toBe(false);
+
+                client.CloseOn(1, 1011);
+                await vi.advanceTimersByTimeAsync(0);
+                expect(seedOn(2)).toEqual([
+                    `user:${PREAMBLE}|where is my order`,
+                    'model:[called lookup_order {}]',
+                    'user:[lookup_order returned {"ok":true}]',
+                    'model:It shipped.',
+                ]);
+            });
+
+            it('a call issued after the resume still gets a tool response', async () => {
+                client.EmitOn(0, HEARD('hi'));
+                client.CloseOn(0, 1011);
+                await vi.advanceTimersByTimeAsync(0);
+                client.EmitOn(1, TOOL_CALL('c2'));
+                client.SendToolResult('c2', '{"ok":true}');
+
+                const session = client.Connections[1].Session;
+                expect(session.ToolResponses).toHaveLength(1);
+                expect(session.RealtimeInputs).toEqual([]);
+            });
+
+            it('a result queued during the move goes out as text too, after the seed', async () => {
+                client.EmitOn(0, TOOL_CALL('c1'));
+                client.AutoConfirmSetup = false;
+                client.CloseOn(0, 1011);
+                await vi.advanceTimersByTimeAsync(0);
+                client.SendToolResult('c1', '{"ok":true}');
+                client.ConfirmSetupOn(1);
+                await vi.advanceTimersByTimeAsync(0);
+
+                const session = client.Connections[1].Session;
+                expect(session.Calls).toEqual(['clientContent', 'realtimeInput']);
+                expect(session.ToolResponses).toEqual([]);
+                expect(session.RealtimeInputs).toEqual([{ text: '[lookup_order returned {"ok":true}]' }]);
+            });
+
+            it('a call that crosses two reseeds still goes out as text', async () => {
+                client.EmitOn(0, TOOL_CALL('c1'));
+                client.CloseOn(0, 1011);
+                await vi.advanceTimersByTimeAsync(0);
+                client.CloseOn(1, 1011);
+                await vi.advanceTimersByTimeAsync(0);
+                client.SendToolResult('c1', '{"ok":true}');
+
+                expect(client.Connections[2].Session.ToolResponses).toEqual([]);
+                expect(client.Connections[2].Session.RealtimeInputs).toEqual([{ text: '[lookup_order returned {"ok":true}]' }]);
+            });
+
+            it('strips the scheduling hint from the text', async () => {
+                client.EmitOn(0, TOOL_CALL('c1'));
+                client.CloseOn(0, 1011);
+                await vi.advanceTimersByTimeAsync(0);
+                client.SendToolResult('c1', '{"status":"shipped","__mj_scheduling":"WHEN_IDLE"}');
+                expect(client.Connections[1].Session.RealtimeInputs).toEqual([{ text: '[lookup_order returned {"status":"shipped"}]' }]);
+            });
+
+            it('on a non-blocking model it waits for the turn in flight, as any text does', async () => {
+                const other = await connectAnother({ supportsBlocking: false });
+                other.EmitOn(0, TOOL_CALL('c1'));
+                other.CloseOn(0, 1011);
+                await vi.advanceTimersByTimeAsync(0);
+                other.EmitOn(1, SAID('Still with you.'));
+                other.SendToolResult('c1', '{"ok":true}');
+                expect(other.Connections[1].Session.RealtimeInputs).toEqual([]);
+
+                other.EmitOn(1, TURN_COMPLETE);
+                expect(other.Connections[1].Session.ToolResponses).toEqual([]);
+                expect(other.Connections[1].Session.RealtimeInputs).toEqual([{ text: '[lookup_order returned {"ok":true}]' }]);
+            });
+        });
+
+        it('a failed seed leaves no open turn behind: a later tool result sends no commit', async () => {
+            client.EmitOn(0, HEARD('hi'));
+            client.SendContextNote('a note'); // leaves the client turn open on the old connection
+            client.AutoConfirmSetup = false;
+            client.CloseOn(0, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+            const session = client.Connections[1].Session;
+            session.ThrowOnClientContent = new Error('socket not open');
+            client.ConfirmSetupOn(1);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(emitted.errors.map((e) => e.Code)).toEqual(['resume-seed-failed']);
+
+            session.ThrowOnClientContent = null;
+            client.EmitOn(1, TOOL_CALL('c2'));
+            client.SendToolResult('c2', '{"ok":true}');
+            expect(session.ToolResponses).toHaveLength(1);
+            expect(session.ClientContents).toEqual([]);
+        });
+
         it('Disconnect clears the notebook', async () => {
             client.EmitOn(0, HEARD('hi'));
             client.EmitOn(0, SAID('Question 1'));

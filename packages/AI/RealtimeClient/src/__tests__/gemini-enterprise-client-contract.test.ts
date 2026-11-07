@@ -571,6 +571,21 @@ describe('GeminiEnterpriseRealtimeClient through the relay (web SDK, fake WebSoc
             expect(errors).toEqual([]);
         });
 
+        it('a tool result that crosses a resume still goes out as a tool response', async () => {
+            const { Client, Socket: first } = await connectWithHandle();
+            let toolCalls = 0;
+            Client.OnToolCall(() => toolCalls++);
+            first.Receive({ toolCall: { functionCalls: [{ id: 'c1', name: 'lookup_order', args: {} }] } });
+            await vi.waitFor(() => expect(toolCalls).toBe(1));
+            first.onclose?.(new CloseEvent('close', { code: 1006, reason: 'relay went away', wasClean: false }));
+
+            const second = await nextSocket(2);
+            await openAndConfirm(second);
+            await vi.waitFor(() => expect(first.Closed).toBe(true));
+            Client.SendToolResult('c1', '{"ok":true}');
+            expect(second.Frames.map((frame) => Object.keys(frame)[0])).toEqual(['setup', 'toolResponse']);
+        });
+
         it("keeps the transcript's order: a tool call does not finalize the user's words early", async () => {
             const { Client, Socket, Transcripts } = await connectWithHandle();
             let toolCalls = 0;
