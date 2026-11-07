@@ -8,6 +8,7 @@
     "tests",
     "test-suites",
     "roles",
+    "row-level-security-filters",
     "entity-permissions",
     "users",
     "ai-prompt-categories",
