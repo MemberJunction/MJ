@@ -87,9 +87,11 @@ describe('VitestCatchTarget.Prepare', () => {
   function prepWorld(hostRunner: (f: string, a: string[], cwd: string) => Promise<string>) {
     const { target, calls } = fakeTarget(() => ({ Stdout: '', ExitCode: 0 }));
     const work = mkdtempSync(join(tmpdir(), 'jit-prep-'));
+    const shown: string[][] = [];
     (target as never as { o: object }).o = { ...(target as never as { o: object }).o, WorkRoot: work, StoreDir: join(work, 'store'), HostRunner: hostRunner,
-      Repo: { AddWorktree: async () => { mkdirSync(join(work, 'head', 'patches'), { recursive: true }); writeFileSync(join(work, 'head', 'pnpm-lock.yaml'), LOCK); writeFileSync(join(work, 'head', '.pnpmfile.cjs'), 'bad'); writeFileSync(join(work, 'head', 'patches', 'type-graphql@2.0.0-beta.3.patch'), 'diff'); }, RemoveWorktree: async () => {} } } as never;
-    return { target, calls, work };
+      Repo: { AddWorktree: async () => { mkdirSync(join(work, 'head', 'patches'), { recursive: true }); writeFileSync(join(work, 'head', 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n# WORKTREE COPY\n'); writeFileSync(join(work, 'head', '.pnpmfile.cjs'), 'bad'); writeFileSync(join(work, 'head', 'patches', 'type-graphql@2.0.0-beta.3.patch'), 'diff'); },
+        Show: async (sha: string, path: string) => { shown.push([sha, path]); return LOCK; }, RemoveWorktree: async () => {} } } as never;
+    return { target, calls, work, shown };
   }
   it('runs pnpm on the host only as `fetch`, in a folder holding just a lockfile copy without patch information, then installs offline in the sandbox with the worktree and the run store mounted rw', async () => {
     const host: { File: string; Args: string[]; Cwd: string; Files: string[]; Lock: string }[] = [];
@@ -103,6 +105,13 @@ describe('VitestCatchTarget.Prepare', () => {
     expect(host[0].Lock).not.toContain('patchedDependencies'); expect(host[0].Lock).not.toContain('patch_hash'); expect(host[0].Lock).toContain('version: 2.0.0-beta.3(graphql@16.12.0)');
     const install = calls[0]; expect(install.Command.join(' ')).toContain('pnpm install --offline --frozen-lockfile --ignore-scripts');
     expect(install.Mounts.find((m) => m.Container === '/work')?.Mode).toBe('rw'); expect(install.Mounts.find((m) => m.Container === '/pnpm-store')).toEqual({ Host: join(work, 'store'), Container: '/pnpm-store', Mode: 'rw' });
+  });
+  it('reads the lockfile from git (the blob), never from the worktree, where it could be a symlink', async () => {
+    const locks: string[] = [];
+    const { target, shown } = prepWorld(async (_f, a, cwd) => { if (a[0] === 'fetch') locks.push(readFileSync(join(cwd, 'pnpm-lock.yaml'), 'utf8')); return a[0] === '--version' ? '10.33.0' : ''; });
+    await target.Prepare({ Kind: 'Head', SHA: 'h' });
+    expect(shown).toEqual([['h', 'pnpm-lock.yaml']]);
+    expect(locks[0]).not.toContain('WORKTREE COPY'); expect(locks[0]).toContain('version: 2.0.0-beta.3(graphql@16.12.0)');
   });
   it('turns a failed host fetch into an InfrastructureError and never starts the sandbox', async () => {
     const { target, calls } = prepWorld(async (_f, a) => { if (a[0] === '--version') return '10.33.0'; throw new Error('ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED'); });

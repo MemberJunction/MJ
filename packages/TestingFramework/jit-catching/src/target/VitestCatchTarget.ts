@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { closeSync, constants, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync, writeSync, type Stats } from 'node:fs';
+import { closeSync, constants, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, realpathSync, rmSync, writeFileSync, writeSync, type Stats } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join, sep } from 'node:path';
 import { promisify } from 'node:util';
@@ -56,7 +56,7 @@ export class VitestCatchTarget extends BaseCatchTarget {
         const dir = join(this.o.WorkRoot, revision.Kind.toLowerCase());
         if (existsSync(dir)) await this.o.Repo.RemoveWorktree(dir).catch(() => rmSync(dir, { recursive: true, force: true }));
         await this.o.Repo.AddWorktree(dir, revision.SHA);
-        await this.hostFetch(revision, dir);
+        await this.hostFetch(revision);
         const prepared: PreparedRevision = { Ref: revision, RootDir: dir };
         const install = `pnpm install --offline --frozen-lockfile --ignore-scripts --store-dir ${CONTAINER_STORE} && pnpm rebuild --store-dir ${CONTAINER_STORE}`;
         const r = await this.inSandbox(prepared, 'rw', ['sh', '-c', install], 30 * 60_000);
@@ -65,18 +65,20 @@ export class VitestCatchTarget extends BaseCatchTarget {
     }
 
     /**
-     * `pnpm fetch` on the host, in a folder that holds only host-written files: the revision's lockfile with the
-     * patch information removed, a `package.json` whose `packageManager` pins the image's pnpm, and a
+     * `pnpm fetch` on the host, in a folder that holds only host-written files: the revision's lockfile, read from git
+     * as a blob (never through the worktree, where it could be a symlink), with the patch information removed, a `package.json` whose `packageManager` pins the image's pnpm, and a
      * `pnpm-workspace.yaml` that adds the image's platforms. pnpm switches itself to the pinned version, so the
      * store it writes has the layout the image reads. The version is checked first.
      */
-    private async hostFetch(revision: RevisionRef, worktree: string): Promise<void> {
+    private async hostFetch(revision: RevisionRef): Promise<void> {
         const fetchDir = join(this.o.WorkRoot, `${revision.Kind.toLowerCase()}-fetch`);
         const pinned = this.o.Settings.Sandbox.PnpmVersion;
         const host = this.o.HostRunner ?? DEFAULT_HOST_RUNNER;
+        const lock = await this.o.Repo.Show(revision.SHA, 'pnpm-lock.yaml').catch(() => null);
+        if (lock === null) throw new InfrastructureError(`no pnpm-lock.yaml in ${revision.Kind} ${revision.SHA}`);
         try {
             rmSync(fetchDir, { recursive: true, force: true }); mkdirSync(fetchDir, { recursive: true }); mkdirSync(this.o.StoreDir, { recursive: true });
-            writeFileSync(join(fetchDir, 'pnpm-lock.yaml'), StripPatchInfo(readFileSync(join(worktree, 'pnpm-lock.yaml'), 'utf8')));
+            writeFileSync(join(fetchDir, 'pnpm-lock.yaml'), StripPatchInfo(lock));
             writeFileSync(join(fetchDir, 'package.json'), JSON.stringify({ name: 'jit-fetch', private: true, packageManager: `pnpm@${pinned}` }));
             writeFileSync(join(fetchDir, 'pnpm-workspace.yaml'), FETCH_WORKSPACE_YAML);
         } catch (e) {
