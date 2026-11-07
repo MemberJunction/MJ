@@ -427,7 +427,7 @@ Expected log lines, in order: `planned move armed at 540s`; a second connection 
 
 - [ ] **Step 5: iPhone Safari.** Same call, same checks, from the phone on the same private API (LAN or tunnel). This is the device that happened to keep its memory on 2026-11-05; it must now keep it by design.
 
-- [ ] **Step 6: Mute case (the Realmic reproduction).** Desktop again: talk for 6 minutes, then stay silent (mic muted) through 9:00 and 10:00, then unmute and ask the same question. Expected: continuation from the last question asked before the silence.
+- [ ] **Step 6: Mute case (the muted desktop call's reproduction).** Desktop again: talk for 6 minutes, then stay silent (mic muted) through 9:00 and 10:00, then unmute and ask the same question. Expected: continuation from the last question asked before the silence.
 
 - [ ] **Step 7: Write the run log** with per-run: date/time UTC, model, trigger (planned/1011), move timestamp, seed line (entries/chars/dropped), the question-and-answer after the move, session id, `q.mjs`-style read-only SQL evidence for the session row and the last three conversation details. Attach the DevTools trace path.
 
@@ -447,4 +447,4 @@ If any run fails: do not patch around it. Record the log, return to the spec's �
 - [ ] **Step 1: Verify tracking** — `git branch -vv` shows `[origin/fix/6403-gemini-live-reconnect-memory]`.
 - [ ] **Step 2: Push** — `git push -u origin fix/6403-gemini-live-reconnect-memory` (the pre-push hook runs `check:guards` and `check:standards`).
 - [ ] **Step 3: Open the PR against `next`** with the `open-pr` skill. Body: the problem in two sentences (10-minute close, empty resume with the ephemeral token, Google bug), the fix in three bullets (notebook, seed before audio, planned move at 540 s), test counts per package, the integration-tier counts, and the smoke-test log link. Link MJ#6403. No applicant names.
-- [ ] **Step 4: Comment on MJ#6403** with the two production call findings (one session each; Realmic restarted after silence, Umar continued) and the PR link — only after Soham approves the comment text.
+- [ ] **Step 4: Comment on MJ#6403** with the two production call findings (one session each; the desktop call restarted after silence, the iPhone call continued) and the PR link — only after Soham approves the comment text.

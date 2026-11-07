@@ -17,8 +17,8 @@ restart. Today the agent forgets the whole call most of the time.
 - Google sends exactly one `sessionResumptionUpdate` handle, at setup, before any conversation,
   and never another. `GeminiRealtimeClient` resumes with that handle; Google accepts it.
 - With the ephemeral token MJ mints for client-direct calls, the resumed session is EMPTY in
-  3/3 probes and in 1 of 2 production calls (Realmic, 19:16 UTC); the other production call (Umar,
-  22:07 UTC) kept its context. Google has an open bug for this (forum thread 118577). The resume
+  3/3 probes and in 1 of 2 production calls (desktop Chrome, 19:16 UTC); the other production call
+  (iPhone Safari, 22:07 UTC) kept its context. Google has an open bug for this (forum thread 118577). The resume
   is therefore unreliable, and no MJ code carries the conversation across the move.
 - Seeding the prior turns on the new connection works: a probe that sent 54 prior turns with
   `sendClientContent({ turns, turnComplete: false })` right after `setupComplete` continued at
