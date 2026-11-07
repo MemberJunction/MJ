@@ -1,3 +1,4 @@
+import { UUIDsEqual } from '@memberjunction/global';
 import { AllRunsAgreeVerdict } from '../verdict/AllRunsAgreeVerdict';
 import { RuleFilter } from '../rules/RuleFilter';
 import { AllRules } from '../rules/index';
@@ -50,7 +51,7 @@ export async function AssessStep(o: AssessOptions): Promise<{ Catches: Catch[]; 
 
 /** Verdict for one test; for a weak catch also the rule outcome and, when no drop rule fired, the panel's scores. */
 async function assessTest(gen: GenerationFile, exec: ExecutionFile, t: CandidateTest, d: AssessDeps): Promise<Catch> {
-    const mine = exec.Results.filter((r) => r.CandidateTestID === t.ID).sort((a, b) => a.RunIndex - b.RunIndex);
+    const mine = exec.Results.filter((r) => UUIDsEqual(r.CandidateTestID, t.ID)).sort((a, b) => a.RunIndex - b.RunIndex);
     const baseRuns = mine.filter((r) => r.Revision === 'Base'); const headRuns = mine.filter((r) => r.Revision === 'Head');
     const verdict = new AllRunsAgreeVerdict(exec.TypeErrors[t.ID] ?? { Base: null, Head: null }).Classify(baseRuns, headRuns);
     const c: Catch = { ID: NewID(), RunID: gen.Run.ID, CandidateTestID: t.ID, Verdict: verdict, DroppedByRule: null, Boosts: [], TPProb: null, JudgeBuckets: [], Median: null, Rank: null, Reported: false, CommentID: null };
