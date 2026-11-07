@@ -187,6 +187,18 @@ const CreatePreAuthUploadUrlMutationSchema = z.object({
 });
 
 /**
+ * True when an upload URL points at Azure Blob Storage (host ends with `.blob.core.windows.net`).
+ * Compares the parsed hostname, so the domain appearing in a path or query does not count.
+ */
+export function IsAzureBlobUrl(url: string): boolean {
+  try {
+    return new URL(url).hostname.toLowerCase().endsWith('.blob.core.windows.net');
+  } catch {
+    return false;
+  }
+}
+
+/**
  * World-class Angular component for displaying, previewing, uploading,
  * and managing file attachments linked to an entity record.
  *
@@ -1472,7 +1484,7 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
       xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
 
       // For Azure Blob Storage SAS uploads, add the required block blob header
-      if (uploadUrl.includes('.blob.core.windows.net')) {
+      if (IsAzureBlobUrl(uploadUrl)) {
         xhr.setRequestHeader('x-ms-blob-type', 'BlockBlob');
       }
 
