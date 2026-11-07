@@ -22,6 +22,7 @@ The realtime co-agent stack (1:1 voice + server-bridged meetings) is shipped and
 
 | Doc | What it is |
 |---|---|
+| [`realtime-long-call-reconnects-plan.md`](realtime-long-call-reconnects-plan.md) | **Generic long-call reconnects in core MJ Realtime (#6460)** — architecture & implementation plan (`BaseRealtimeModel`, `BaseRealtimeSession`, `BaseRealtimeClient`, `RefreshRealtimeClientSessionToken`, 3-layer duration cascade, native continue vs. `RealtimeConversationMemory` seed across Gemini, Vertex, xAI, OpenAI, and ElevenLabs). Companion codebase trace, live probe logs, and claim ledger in [`realtime-long-call-reconnects-research.md`](realtime-long-call-reconnects-research.md). |
 | [`bridges-and-widget/`](bridges-and-widget/) | **Execution program** — finish the architecture's edges: a droppable public **web widget** (text+voice) and the **vendor SDK bindings** (telephony first, then Teams/Slack). Per-stream docs with verified signatures, phased tasks, and acceptance criteria; written for handoff. |
 | [`realtime-session-lifecycle-and-followups.md`](realtime-session-lifecycle-and-followups.md) | **The roadmap.** Shipped log + prioritized next steps. |
 | [`realtime-bridges-architecture.md`](realtime-bridges-architecture.md) | Master bridge architecture (Zoom/Teams/Webex/telephony). Phase 0/1 shipped, Phase 2+ planned. |
