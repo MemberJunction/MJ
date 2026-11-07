@@ -49,8 +49,8 @@ import { FlowAgentType } from '../agent-types/flow-agent-type';
 import { AgentRunner } from '../AgentRunner';
 import type { LoopAgentResponse } from '../agent-types/loop-agent-response-type';
 import type { AgentPreExecutionRAGResult } from '../agent-pre-execution-rag';
-import { GetTaskGraphSubmitter, type TaskGraphSubmitter, type TaskGraphSpec, type AIPromptParams, type AIPromptRunResult, type ExecuteAgentParams, type MJAIAgentEntityExtended, type MJAIAgentRunStepEntityExtended, type AgentDecisionRequest, type AgentFinishIf, type BaseAgentNextStep, type AgentChatMessage } from '@memberjunction/ai-core-plus';
-import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
+import { GetTaskGraphSubmitter, type TaskGraphSubmitter, type TaskGraphSpec, type AIPromptParams, type AIPromptRunResult, type ExecuteAgentParams, type MJAIAgentEntityExtended, type MJAIAgentRunStepEntityExtended, type AgentDecisionRequest, type AgentFinishIf, type BaseAgentNextStep, type AgentChatMessage, type AgentConfiguration, type MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import type { MJAIPromptRunEntity, MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { RecordSentPrefixFingerprint, RecordToolCallingDecision } from '@memberjunction/ai-prompts';
 import { SanitizeToolName } from '../native-tools/action-tool-builder';
 import type { AgentToolDefinition } from '../native-tools/agent-tools';
@@ -4107,5 +4107,35 @@ describe('BaseAgent.Execute — a payload change sent with a completion is appli
         expect(result.payload).toEqual({ summary: 'draft', notes: 'kept' });
         const answers = answerTo(params.conversationMessages as AgentChatMessage[], 'call_done');
         expect(answers.find((b) => b.toolCallId === 'call_write')?.isError).toBe(false);
+    });
+});
+
+describe('BaseAgent.Execute — template data a subclass adds after super.preparePromptParams()', () => {
+    /** Adds template data after the base preparation, and records what the trailing-message build saw. */
+    class DataAfterSuperAgent extends HarnessAgent {
+        public SeenByTrailingMessage: unknown[] = [];
+        protected override async preparePromptParams<P>(config: AgentConfiguration, payload: P, params: ExecuteAgentParams): Promise<AIPromptParams> {
+            const promptParams = await super.preparePromptParams(config, payload, params);
+            promptParams.data = { ...promptParams.data, addedBySubclass: 'yes' };
+            return promptParams;
+        }
+        protected override async buildVolatileStateMessage<P>(
+            params: ExecuteAgentParams, promptParams: AIPromptParams, payload: P,
+            childPrompt: MJAIPromptEntityExtended | undefined, agentType: MJAIAgentTypeEntity, systemPrompt?: MJAIPromptEntityExtended
+        ): Promise<AgentChatMessage | null> {
+            this.SeenByTrailingMessage.push(promptParams.data?.addedBySubclass);
+            return super.buildVolatileStateMessage(params, promptParams, payload, childPrompt, agentType, systemPrompt);
+        }
+    }
+
+    it('reaches the trailing-message build, which can render the child prompt, and the prompt runner', async () => {
+        const agent = new DataAfterSuperAgent();
+        const runner = new ScriptedPromptRunner([() => llmEnvelope(successEnvelope())]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+
+        await agent.Execute(makeParams());
+
+        expect(agent.SeenByTrailingMessage).toEqual(['yes']);
+        expect(runner.Calls[0].data?.addedBySubclass).toBe('yes');
     });
 });
