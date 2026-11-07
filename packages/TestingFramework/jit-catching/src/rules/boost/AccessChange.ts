@@ -5,7 +5,7 @@ import type { CatchContext, RuleKind, RuleOutcome } from '../../types';
 const ACCESS_RE = /\b(CanRead|CanCreate|CanUpdate|CanDelete|canRead|canCreate|canUpdate|canDelete|RowLevelSecurity|RLS|Permission|Permissions|Role|Roles|Authorize|IsAuthorized)\b/;
 /**
  * §9.1: the test checks access for roles, users or entities that the diff does not mention, and the answer changed.
- * The strings are the string literals inside calls whose callee names an access check. The rule fires only when the diff mentions none of them.
+ * The strings are the string literals inside calls whose callee name (the last name in the callee) is an access check. The rule fires only when the diff mentions none of them.
  */
 export class AccessChange extends BaseCatchRule {
     public get Name(): string { return 'AccessChange'; }
@@ -27,7 +27,7 @@ function accessLiterals(sf: ts.SourceFile, text: (n: ts.Node) => string): string
     let found = false; const out = new Set<string>();
     const collect = (n: ts.Node): void => { if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) { if (n.text.trim() !== '') out.add(n.text); } ts.forEachChild(n, collect); };
     const visit = (n: ts.Node): void => {
-        if (ts.isCallExpression(n) && ACCESS_RE.test(text(n.expression))) { found = true; n.arguments.forEach(collect); }
+        if (ts.isCallExpression(n) && ACCESS_RE.test(calleeName(n.expression, text))) { found = true; n.arguments.forEach(collect); }
         ts.forEachChild(n, visit);
     };
     visit(sf);
@@ -37,3 +37,5 @@ function accessLiterals(sf: ts.SourceFile, text: (n: ts.Node) => string): string
 function changedLinesText(c: CatchContext): string {
     return c.Analysis.ChangedFiles.flatMap((f) => f.Hunks).flatMap((h) => h.Lines).filter((l) => l.startsWith('+') || l.startsWith('-')).join('\n');
 }
+/** The last name of a callee: `b` for `a.b`, otherwise the callee text. */
+function calleeName(e: ts.Expression, text: (n: ts.Node) => string): string { return ts.isPropertyAccessExpression(e) ? e.name.text : text(e); }

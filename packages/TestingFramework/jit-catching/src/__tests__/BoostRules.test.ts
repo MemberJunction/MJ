@@ -47,3 +47,24 @@ describe('MatchesRisk', () => {
     expect(new MatchesRisk().Evaluate(ctx('', { Assertion: 'expected 1 to be 2', Actual: '1' }, {}, { MutantFailure: mf })).Fired).toBe(false);
   });
 });
+describe('MatchesRisk thrown errors', () => {
+  it('matches a thrown-error pair only on the same error name', () => {
+    const thrown = (name: string) => ({ Assertion: null, Expected: null, Actual: null, Message: `${name}: x`, StackExcerpt: null, ErrorName: name });
+    expect(new MatchesRisk().Evaluate(ctx('', thrown('ReferenceError'), {}, { MutantFailure: thrown('TypeError') })).Fired).toBe(false);
+    expect(new MatchesRisk().Evaluate(ctx('', thrown('TypeError'), {}, { MutantFailure: thrown('TypeError') })).Fired).toBe(true);
+  });
+});
+describe('SaveFailure message', () => {
+  it('needs a Save( or Create( call in the message, not a word like CreatedAt', () => {
+    const src = `${imp} it('t', async () => { await e.Save(); expect(e.CreatedAt).toBeDefined(); });`;
+    expect(new SaveFailure().Evaluate(ctx(src, { Actual: null, Message: 'expected CreatedAt to be defined' })).Fired).toBe(false);
+    expect(new SaveFailure().Evaluate(ctx(src, { Actual: null, Message: 'Save() returned false' })).Fired).toBe(true);
+  });
+});
+describe('AccessChange matcher arguments', () => {
+  it('does not treat a matcher argument as a role', () => {
+    const src = `${imp} it('t', () => { expect(svc.CanRead(u)).toBe('x'); });`;
+    const hunks = [{ Path: 'packages/X/src/svc.ts', OldStart: 1, OldLines: 1, NewStart: 1, NewLines: 1, Lines: ['+  cache.set(entity, result);'] }];
+    expect(new AccessChange().Evaluate(ctx(src, {}, { ChangedFiles: [{ Path: 'packages/X/src/svc.ts', Package: 'x', AddedLines: [1], RemovedLineCount: 0, Hunks: hunks }] })).Fired).toBe(false);
+  });
+});
