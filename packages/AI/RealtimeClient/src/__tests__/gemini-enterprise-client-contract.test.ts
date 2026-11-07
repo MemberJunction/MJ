@@ -568,5 +568,21 @@ describe('GeminiEnterpriseRealtimeClient through the relay (web SDK, fake WebSoc
             expect(record).not.toHaveBeenCalled();
             record.mockRestore();
         });
+
+        it('at a tool call records nothing, and the host gets the user final when the model speaks', async () => {
+            const record = vi.spyOn(RealtimeConversationMemory.prototype, 'Record');
+            const { Client, Socket, Transcripts } = await connectWithHandle();
+            let toolCalls = 0;
+            Client.OnToolCall(() => toolCalls++);
+            Socket.Receive({ serverContent: { inputTranscription: { text: 'where is my order' } } });
+            Socket.Receive({ toolCall: { functionCalls: [{ id: 'c1', name: 'lookup_order', args: {} }] } });
+            await vi.waitFor(() => expect(toolCalls).toBe(1));
+            expect(Transcripts.filter((t) => t.Role === 'User' && t.IsFinal)).toEqual([]);
+
+            Socket.Receive({ serverContent: { outputTranscription: { text: 'It shipped.' } } });
+            await vi.waitFor(() => expect(Transcripts.filter((t) => t.Role === 'User' && t.IsFinal).map((t) => t.Text)).toEqual(['where is my order']));
+            expect(record).not.toHaveBeenCalled();
+            record.mockRestore();
+        });
     });
 });

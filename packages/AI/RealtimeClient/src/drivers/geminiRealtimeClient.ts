@@ -252,8 +252,8 @@ export class GeminiPcmPlayback extends RealtimePcmPlayback {
  *   (`setupComplete`): input that reaches it earlier is dropped. During a move, sends queue and
  *   the latest 2 s of mic audio are held; both go out on the new connection once it is ready.
  * - **Conversation memory**: with an ephemeral token a resume often comes back empty, so the client
- *   keeps a notebook of every final turn the model saw ({@link RealtimeConversationMemory}) and sends
- *   it on the new connection before any input. See {@link seedConversation} and {@link ResumesFromSeed}.
+ *   keeps a notebook of the final turns of normal conversation, not narration
+ *   ({@link RealtimeConversationMemory}), and sends it on the new connection before any input. See {@link seedConversation} and {@link ResumesFromSeed}.
  * - **Open-turn commit**: context notes ride as `turnComplete: false` client content, which
  *   tells the Live API MORE INPUT IS COMING — the server holds ALL generation (including the
  *   normally-automatic continuation after a tool response) until a `turnComplete: true`
@@ -301,7 +301,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      */
     private resumption: RealtimeSessionResumption | null = null;
     /**
-     * Every final turn the model saw, sent on each new connection ({@link seedConversation}). Entries
+     * The final turns of normal conversation, not narration, sent on each new connection ({@link seedConversation}). Entries
      * are recorded when they go out on the wire or arrive final, never when queued: a send queued
      * during a move would otherwise be in the seed and go out again after it.
      */
@@ -399,6 +399,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private pendingAssistantText = '';
     /** Accumulates the in-flight user transcription across delta frames. */
     private pendingUserText = '';
+    /** How much of {@link pendingUserText} is already in the notebook: see {@link recordPendingUserText}. */
+    private pendingUserCharsRecorded = 0;
     /** Accumulates in-flight thought text deltas until finalized on turn completion. */
     private pendingThoughtText = '';
     /** MIME types of model output this session dropped, so each is reported once. */
@@ -1739,6 +1741,9 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         }
         // The answer stops at the call: the avatar's video until the model speaks again is idle.
         this.avatarOutput?.ToolCalled();
+        // The words that caused the call go first: a seed with the question after the exchange reads as a new question,
+        // and the model can call the tool again. The host's final still comes when the model speaks.
+        this.recordPendingUserText();
         if (!this.isNonBlocking) {
             if (this.currentState === 'speaking') {
                 this.currentState = 'connected';
@@ -1834,12 +1839,19 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         }
     }
 
+    /** Puts the user words not yet in the notebook there, and emits nothing. Blank text is not recorded. */
+    private recordPendingUserText(): void {
+        this.record({ Kind: 'user', Text: this.pendingUserText.slice(this.pendingUserCharsRecorded) });
+        this.pendingUserCharsRecorded = this.pendingUserText.length;
+    }
+
     /** Emits the accumulated user turn as final (if non-empty) and clears the accumulator. */
     private finalizeUserTranscript(): void {
         const text = this.pendingUserText;
+        this.recordPendingUserText();
         this.pendingUserText = '';
+        this.pendingUserCharsRecorded = 0;
         if (text.trim().length > 0) {
-            this.record({ Kind: 'user', Text: text });
             this.emitTranscript({ Role: 'User', Text: text, IsFinal: true, Kind: 'normal' });
         }
     }
@@ -2150,6 +2162,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private resetResponseState(): void {
         this.pendingAssistantText = '';
         this.pendingUserText = '';
+        this.pendingUserCharsRecorded = 0;
         this.pendingThoughtText = '';
         this.responseActive = false;
         this.interactionInProgress = false;
