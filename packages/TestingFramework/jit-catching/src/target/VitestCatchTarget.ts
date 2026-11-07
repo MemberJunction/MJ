@@ -180,7 +180,7 @@ export class VitestCatchTarget extends BaseCatchTarget {
     }
 
     private runVitest(revision: PreparedRevision, g: PackageGroup, cmd: string, timeoutMs: number): Promise<SandboxRunResult> {
-        return this.inSandbox(revision, 'ro', ['sh', '-c', cmd], timeoutMs, { TZ: 'UTC' }, viteTmpfs(g.Dir), [g.Dir]);
+        return this.inSandbox(revision, 'ro', ['sh', '-c', cmd], timeoutMs, { TZ: 'UTC' }, ViteTmpfs(g.Dir), [g.Dir]);
     }
 
     /** Per test: how many changed lines its run executed, from a v8 coverage report written inside the container. */
@@ -190,7 +190,7 @@ export class VitestCatchTarget extends BaseCatchTarget {
             for (const [i, t] of g.Tests.entries()) {
                 const report = `/tmp/cov-${t.ID}`;
                 const cmd = `cd ${sq(`${CONTAINER_ROOT}/${g.Dir}`)} && npx vitest run ${sq(g.Files[i])} --coverage.enabled --coverage.provider=v8 --coverage.reporter=json --coverage.reportsDirectory=${report} >/dev/null 2>&1; cat ${report}/coverage-final.json`;
-                const r = await this.inSandbox(revision, 'ro', ['sh', '-c', cmd], 10 * 60_000, { TZ: 'UTC' }, viteTmpfs(g.Dir), [g.Dir]);
+                const r = await this.inSandbox(revision, 'ro', ['sh', '-c', cmd], 10 * 60_000, { TZ: 'UTC' }, ViteTmpfs(g.Dir), [g.Dir]);
                 out.push({ CandidateTestID: t.ID, CoveredChangedLines: CountCoveredChangedLines(r.Stdout, changed, CONTAINER_ROOT) });
             }
         }
@@ -224,7 +224,7 @@ export class VitestCatchTarget extends BaseCatchTarget {
             for (const d of packageDirs) mounts.push({ Host: SafeDir(revision.RootDir, `${d}/${JIT_SUBDIR}`, false), Container: `${CONTAINER_ROOT}/${d}/${JIT_SUBDIR}`, Mode: 'rw' });
             mounts.push({ Host: this.reporterDir(), Container: JIT_REPORTER_MOUNT, Mode: 'ro' });
         }
-        for (const t of tmpfs) ensureMountPoint(revision.RootDir, t.slice(CONTAINER_ROOT.length + 1));
+        for (const t of tmpfs) EnsureMountPoint(revision.RootDir, t.slice(CONTAINER_ROOT.length + 1));
         return this.sandbox.Run({ Mounts: mounts, Tmpfs: tmpfs, WorkDir: CONTAINER_ROOT, Command: command, TimeoutMs: timeoutMs, Env: { HOME: '/tmp', CI: '1', ...env } });
     }
     private reporterDir(): string { return (this.reporter ??= WriteJitReporter(mkdtempSync(join(tmpdir(), 'jit-reporter-')))); }
@@ -270,17 +270,20 @@ function writeNoFollow(path: string, text: string): void {
 
 function lstatOrNull(path: string): Stats | null { try { return lstatSync(path); } catch { return null; } }
 
-/** Folders vite and vitest write to at run time; they get a tmpfs because the worktree is read-only in the test phase. */
-function viteTmpfs(dir: string): string[] {
-    return [`${CONTAINER_ROOT}/${dir}/node_modules/.vite`, `${CONTAINER_ROOT}/${dir}/node_modules/.vite-temp`, `${CONTAINER_ROOT}/node_modules/.vite`];
+/**
+ * Container folders vite and vitest write to at run time for the package at `pkgDir` (repo-relative). They get a
+ * tmpfs because the worktree is read-only in the test phase; vite writes the bundled config to `.vite-temp`.
+ */
+export function ViteTmpfs(pkgDir: string): string[] {
+    return [`${CONTAINER_ROOT}/${pkgDir}/node_modules/.vite`, `${CONTAINER_ROOT}/${pkgDir}/node_modules/.vite-temp`, `${CONTAINER_ROOT}/node_modules/.vite`];
 }
 
 /**
  * Creates a tmpfs mount point on the host, since Docker cannot create one inside a read-only mount. Every part
  * above the leaf (`packages/<dir>/node_modules`, `node_modules`) must already be a real folder, not a symlink;
- * only the leaf is created.
+ * only the leaf is created. Throws `UnsafePathError` otherwise.
  */
-function ensureMountPoint(root: string, rel: string): void {
+export function EnsureMountPoint(root: string, rel: string): void {
     const parent = rel.split('/').slice(0, -1).join('/');
     SafeDir(root, parent, false);
     SafeDir(root, rel, true);

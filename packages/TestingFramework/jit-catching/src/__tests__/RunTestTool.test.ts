@@ -18,6 +18,7 @@ function setup(stdout: string, stderr = '') {
   const root = mkdtempSync(join(tmpdir(), 'jit-rt-')); mkdirSync(join(root, 'packages/MJCore/src/__tests__/jit'), { recursive: true });
   writeFileSync(join(root, 'packages/MJCore/src/a.ts'), 'export const f = () => 1;\n'); writeFileSync(join(root, 'packages/MJCore/package.json'), '{}');
   writeFileSync(join(root, `packages/MJCore/src/__tests__/jit/${ID}.jit.test.ts`), 'x');
+  mkdirSync(join(root, 'node_modules')); mkdirSync(join(root, 'packages/MJCore/node_modules'));
   const calls: SandboxRunOptions[] = [];
   const sandbox = new Sandbox(DEFAULT_SETTINGS.Sandbox, async () => ({ ExitCode: 0, TimedOut: false, Stdout: '', Stderr: '', DurationMs: 1 }));
   vi.spyOn(sandbox, 'Run').mockImplementation(async (o) => { calls.push(o); return { ExitCode: 1, TimedOut: false, Stdout: stdout, Stderr: stderr, DurationMs: 2 }; });
@@ -37,6 +38,13 @@ describe('RunTestTool', () => {
     expect(calls[0].Mounts.map((m) => [m.Container, m.Mode])).toEqual([['/work', 'ro'], ['/work/packages/MJCore/src/__tests__/jit', 'rw'], ['/jit-reporter', 'ro']]);
     expect(calls[0].Command.join(' ')).toContain('--reporter=/jit-reporter/jit-reporter.mjs');
     expect(Object.keys(calls[0].Env ?? {})).not.toContain('ANTHROPIC_API_KEY');
+  });
+  it('gives vite a writable .vite-temp folder on the base run and the mutant run', async () => {
+    const { tool, calls } = setup(failReport);
+    const file = `packages/MJCore/src/__tests__/jit/${ID}.jit.test.ts`;
+    await tool.Run({ File: file });
+    await tool.Run({ File: file, Mutant: { Edits: [{ File: 'packages/MJCore/src/a.ts', Find: '=> 1', Replace: '=> 2' }] } });
+    for (const c of calls) expect(c.Tmpfs).toContain('/work/packages/MJCore/node_modules/.vite-temp');
   });
   it('refuses a file outside the jit folder', async () => {
     const { tool } = setup(passReport);

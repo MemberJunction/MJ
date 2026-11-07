@@ -1,10 +1,11 @@
-import { existsSync, lstatSync, mkdirSync, realpathSync, rmSync } from 'node:fs';
+import { existsSync, lstatSync, realpathSync, rmSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import type { Sandbox, SandboxMount, SandboxRunResult } from '../sandbox/Sandbox';
 import type { FailureDetail, MutantEdit } from '../types';
 import type { Settings } from '../settings';
 import { ParseVitestOutput } from '../target/VitestReport';
 import { JIT_REPORTER_ARG, JIT_REPORTER_MOUNT, WriteJitReporter } from '../target/JitReporter';
+import { EnsureMountPoint, UnsafePathError, ViteTmpfs } from '../target/VitestCatchTarget';
 import { ApplyMutantEdits, CopyPackageForMutant, ValidateMutantEdits } from './Mutant';
 
 export interface RunTestInput { File: string; Mutant?: { Edits: MutantEdit[] }; }
@@ -35,6 +36,7 @@ export class RunTestTool {
         }
         let r: SandboxRunResult;
         try { r = await this.runInSandbox(input.File, mutant?.Scratch ?? null); }
+        catch (e) { if (e instanceof UnsafePathError) return this.refuse(e.message); throw e; }
         finally { if (mutant) rmSync(dirname(mutant.Scratch), { recursive: true, force: true }); }
         const out = this.toOutput(r, input);
         if (input.Mutant && mutant) this.LastMutant = { Edits: input.Mutant.Edits, Patch: mutant.Patch, Failure: out.Status === 'Fail' ? out.Failure : null };
@@ -90,19 +92,25 @@ export class RunTestTool {
             { Host: WriteJitReporter(join(this.o.ScratchRoot, 'jit-reporter')), Container: JIT_REPORTER_MOUNT, Mode: 'ro' },
         ];
         if (scratch) mounts.push({ Host: scratch, Container: `${ROOT}/${pkg}`, Mode: 'rw' });
-        this.ensureViteDirs(scratch);
+        const tmpfs = ViteTmpfs(pkg);
+        for (const t of tmpfs) this.ensureMountPoint(t, scratch);
         const s = this.o.Settings;
         return this.o.Sandbox.Run({
-            Mounts: mounts, Tmpfs: [`${ROOT}/${pkg}/node_modules/.vite`, `${ROOT}/node_modules/.vite`], WorkDir: `${ROOT}/${pkg}`,
+            Mounts: mounts, Tmpfs: tmpfs, WorkDir: `${ROOT}/${pkg}`,
             Command: ['npx', 'vitest', 'run', file.slice(pkg.length + 1), JIT_REPORTER_ARG, `--sequence.seed=${s.SequenceSeed}`, `--testTimeout=${s.TestTimeoutMs}`],
             TimeoutMs: s.TestTimeoutMs * 3 + 60_000, Env: { TZ: 'UTC', HOME: '/tmp', CI: '1' },
         });
     }
 
-    /** Creates the `node_modules/.vite` tmpfs mount points on the host: in the base root, and in the package dir (the scratch copy when present). */
-    private ensureViteDirs(scratch: string | null): void {
-        mkdirSync(join(this.o.BaseRootDir, 'node_modules/.vite'), { recursive: true });
-        mkdirSync(join(scratch ?? join(this.o.BaseRootDir, this.o.PackageRelDir), 'node_modules/.vite'), { recursive: true });
+    /**
+     * Creates the host mount point of one tmpfs container path: in the mutant's scratch copy when the path lies in
+     * the package and a scratch copy is mounted there, otherwise in the base worktree. Throws `UnsafePathError`
+     * when a folder above the leaf is missing or a symlink.
+     */
+    private ensureMountPoint(containerPath: string, scratch: string | null): void {
+        const pkgPrefix = `${ROOT}/${this.o.PackageRelDir}/`;
+        if (scratch && containerPath.startsWith(pkgPrefix)) EnsureMountPoint(scratch, containerPath.slice(pkgPrefix.length));
+        else EnsureMountPoint(this.o.BaseRootDir, containerPath.slice(ROOT.length + 1));
     }
 
     /** Maps the sandbox result to the tool output. Every RunnerError carries an excerpt of stderr (or stdout when stderr is empty) in Error. */
