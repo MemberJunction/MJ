@@ -496,6 +496,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         // it in (issue #5153). Null for playbacks with no output stream (fakes, no WebAudio).
         this.publishRemoteMediaStream(playback.GetOutputStream?.() ?? null);
         const liveConfig = this.prepareAvatar(session, playback);
+        // The earlier session's clock must not fire against the new helper if this connect fails.
+        this.clearPlannedMove();
         this.resumption?.Dispose();
         this.resumption = this.createResumption();
         this.plannedMoveDelayMs = GeminiRealtimeClient.plannedMoveDelayFor(session.connectionLifetimeSeconds);
