@@ -105,7 +105,7 @@ import {
     NormalizeRunViewParameters,
 } from '@memberjunction/core';
 
-import { BytesToBase64, GroupByUUID, IndexByUUID, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, ScanSQLForScreening, SQLExpressionValidator, UUIDsEqual, UUIDSet } from '@memberjunction/global';
+import { BytesToBase64, GroupByUUID, IndexByUUID, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, ScanSQLForScreening, SQLExpressionValidator, UnwrapPhraseQuotes, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
 import { createHash } from 'node:crypto';
@@ -1340,6 +1340,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                         // fault: one warning per key, and the value stays encrypted.
                         if (IsEncryptionKeyUnavailable(decryptError)) {
                             ReportEncryptionKeyUnavailable(decryptError);
+                            continue;
+                        }
+                        // Inactive rows (e.g., disabled template credentials seeded before activation)
+                        // may hold placeholder ciphertext from another environment; preserve ciphertext without spamming error logs.
+                        if (processedRow['IsActive'] === false || processedRow['IsActive'] === 0) {
                             continue;
                         }
                         const message = decryptError instanceof Error ? decryptError.message : String(decryptError);
@@ -4113,11 +4118,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     `tokens, such as an unbalanced quote or bracket.`,
                 );
             }
-            const escapedTerm = this.escapeLikeTerm(safeUserSearchString);
+            // The built-in predicates have no phrase syntax, so they search a quoted phrase without its
+            // quotes (UnwrapPhraseQuotes). A custom format is SQL, screened above as typed, so it gets
+            // the term as typed.
+            const phraseTerm = UnwrapPhraseQuotes(safeUserSearchString);
+            const escapedTerm = this.escapeLikeTerm(phraseTerm);
             for (const field of entityInfo.Fields) {
                 if (!field.IncludeInUserSearchAPI) continue;
                 if (deniedSearchFields.has(field.Name.trim().toLowerCase())) continue; // field security: not searchable
-                const sParam = this.buildPerFieldSearchPredicate(field, escapedTerm, safeUserSearchString);
+                const sParam = this.buildPerFieldSearchPredicate(field, escapedTerm, field.UserSearchParamFormatAPI ? safeUserSearchString : phraseTerm);
                 if (!sParam) continue;
                 if (sUserSearchSQL.length > 0) sUserSearchSQL += ' OR ';
                 sUserSearchSQL += `(${this.QuoteIdentifier(field.Name)} ${sParam})`;
@@ -4187,6 +4196,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
     /**
      * Build the SQL fragment that compares one EntityField against a user search term.
+     *
+     * `createViewUserSearchSQL` passes the term without wrapping phrase quotes (`UnwrapPhraseQuotes`)
+     * as `escapedTerm`, and as `rawSafeTerm` for a field without a custom format; a custom format
+     * receives the term as typed. An override receives the same values.
      *
      * Resolution order:
      *   1. UserSearchParamFormatAPI (custom override) wins if set, with `{0}` replaced
