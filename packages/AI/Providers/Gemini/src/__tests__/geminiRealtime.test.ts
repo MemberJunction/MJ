@@ -1331,7 +1331,8 @@ describe('C9: connect fails fast when the socket closes during setup', () => {
         const session = await driver.StartSession(makeParams());
         const errors: string[] = [];
         session.OnError((e) => errors.push(e.Message));
-        callbacks!.onclose({ code: 1011, reason: 'server restart' });
+        // A clean close: with no handle it ends the session. An abnormal one would resume instead.
+        callbacks!.onclose({ code: 1000, reason: 'server restart' });
         expect(errors.length).toBe(1);
     });
 });
