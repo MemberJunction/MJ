@@ -33,6 +33,7 @@ import type { WhiteboardWidgetStep } from './whiteboard-widget-protocol';
 import { NormalizeWhiteboardPenPalette, RealtimeWhiteboardToolbarComponent, SameWhiteboardPenColor, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
 import { RealtimeWhiteboardZoomComponent } from './whiteboard-zoom.component';
 import { RealtimeWhiteboardAgentSeesPopoverComponent } from './whiteboard-agent-sees-popover.component';
+import { TrimChars } from '@memberjunction/global';
 
 /** Debounce window for the perception feed (the popover's "debounce 750 ms" stat). */
 const SCENE_DELTA_DEBOUNCE_MS = 750;
@@ -626,7 +627,7 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
 
   /** Safe filename fragment from a page name (lowercased, non-alphanumerics collapse to '-'). */
   private static fileNameSlug(name: string): string {
-    return (name ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+    return TrimChars((name ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-'), '-').slice(0, 40);
   }
 
   private downloadBlob(content: string, mimeType: string, fileName: string): void {

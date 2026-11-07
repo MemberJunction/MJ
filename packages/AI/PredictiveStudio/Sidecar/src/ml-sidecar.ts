@@ -67,6 +67,16 @@ export class SidecarError extends Error {
 }
 
 /**
+ * Removes every trailing `/` from a URL. A loop rather than `/\/+$/`, which backtracks
+ * quadratically on a value holding many slashes away from its end.
+ */
+function trimTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url[end - 1] === '/') end--;
+  return url.substring(0, end);
+}
+
+/**
  * Resolve the Python launcher (`server.py`) path.
  * When running from dist/ the path is ../src/python/server.py
  * When running from src/ (e.g. vitest) the path is ./python/server.py
@@ -167,7 +177,7 @@ export class MLSidecar {
 
   constructor(options?: MLSidecarOptions) {
     const url = options?.url ?? process.env.PREDICTIVE_STUDIO_SIDECAR_URL?.trim();
-    this.remoteUrl = url && url.length > 0 ? url.replace(/\/+$/, '') : null;
+    this.remoteUrl = url && url.length > 0 ? trimTrailingSlashes(url) : null;
 
     this.pythonPath = MLSidecar.ResolvePython(options?.pythonPath, process.env, resolveBundledPython());
     this.serverPath = DEFAULT_SERVER_PATH;
