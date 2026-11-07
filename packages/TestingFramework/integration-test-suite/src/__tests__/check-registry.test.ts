@@ -488,7 +488,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'systemone-kev': 10,
         'task-graph-execution': 27,
         'task-graph-orchestration': 18,
-        'templates': 8,
+        'templates': 9,
         'trailing-runtime-state': 6,
         'transaction-groups': 6,
         'transaction-groups-batched': 5,
