@@ -19,10 +19,10 @@
       }
 
       <!-- Header Section -->
-      <div class="query-header" [class.content-saving]="IsSaving">
+      <div class="query-header phone-hero" [class.content-saving]="IsSaving" [class.hero-view]="!EditMode" [class.hero-compact]="!EditMode && !HeroDetailsOpen">
         <div class="query-header-content">
           <!-- Top Row: Name and Run Button -->
-          <div class="query-header-top">
+          <div class="query-header-top phone-hero-top">
             <!-- Left: Query Name -->
             <div class="query-name-section">
               <i class="fa-solid fa-database query-title-icon"></i>
@@ -33,18 +33,19 @@
                   placeholder="Enter query name..." />
               } @else {
                 <h4 class="query-name-display">{{ record.Name || 'Untitled Query' }}</h4>
+              <span class="status-pill phone-hero-only" [style.background]="getStatusBadgeColor()">{{ record.Status || 'Unknown' }}</span>
               }
             </div>
 
             <!-- Right: Action Buttons -->
-            <div class="query-header-actions">
+            <div class="query-header-actions phone-hero-actions">
               @if (record.ID) {
                 <button mjButton
                   variant="primary"
                   [disabled]="EditMode || !record.SQL || record.SQL.trim().length === 0"
                   (click)="runQuery()"
                   title="Run Query"
-                  class="run-query-btn">
+                  class="run-query-btn phone-hero-run">
                   <i class="fa-solid fa-play"></i> Run
                 </button>
               }
@@ -52,7 +53,7 @@
           </div>
 
           <!-- Second Row: Category and Status -->
-          <div class="query-meta-row">
+          <div class="query-meta-row phone-hero-detail">
             <!-- Category -->
             <div class="query-meta-item">
               <label class="meta-label">Category</label>
@@ -84,7 +85,7 @@
             </div>
 
             <!-- Status -->
-            <div class="query-meta-item">
+            <div class="query-meta-item phone-hero-hide">
               <label class="meta-label">Status</label>
               @if (EditMode) {
                 <mj-dropdown
@@ -127,7 +128,7 @@
 
           <!-- Third Row: Description -->
           @if (EditMode || record.Description) {
-            <div class="query-description-row">
+            <div class="query-description-row phone-hero-detail">
               @if (EditMode) {
                 <textarea class="mj-input query-description-input"
                   [(ngModel)]="record.Description"
@@ -141,6 +142,12 @@
             </div>
           }
         </div>
+        @if (!EditMode && HeroSummary) {
+          <button type="button" class="phone-hero-summary" [attr.aria-expanded]="HeroDetailsOpen" (click)="ToggleHeroDetails()">
+            <span class="phone-hero-summary-text">{{ HeroSummary }}</span>
+            <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+          </button>
+        }
       </div>
 
       <!-- Status Warning Banner for Non-Approved Queries -->
@@ -154,9 +161,11 @@
 
       <!-- Main Content Area with Expansion Panels -->
       <div class="query-content" [class.content-saving]="IsSaving">
+        <!-- Phone: one section at a time behind a picker; desktop keeps the accordions -->
+        <mj-accordion-sections [Enabled]="Phone.IsPhone" [ActiveKey]="Phone.Section" (ActiveKeyChange)="Phone.Pick($event)">
 
         <!-- SQL Query Panel -->
-        <mj-accordion-panel
+        <mj-accordion-panel SectionKey="sql" SectionTitle="SQL" SectionIcon="fa-solid fa-code"
           [(Expanded)]="sqlPanelExpanded"
           class="query-panel">
           <ng-template mjAccordionTitle>
@@ -235,7 +244,7 @@
 
         <!-- Technical Description Panel -->
         @if (record.TechnicalDescription || EditMode) {
-          <mj-accordion-panel
+          <mj-accordion-panel SectionKey="description" SectionTitle="Technical Description" SectionIcon="fa-solid fa-book"
             [(Expanded)]="technicalDescriptionPanelExpanded"
             class="query-panel">
             <ng-template mjAccordionTitle>
@@ -287,7 +296,7 @@
 
         <!-- Parameters Panel -->
         @if (record.IsSaved || EditMode) {
-          <mj-accordion-panel
+          <mj-accordion-panel SectionKey="parameters" SectionTitle="Parameters" SectionIcon="fa-solid fa-sliders"
             [(Expanded)]="parametersPanelExpanded"
             class="query-panel">
             <ng-template mjAccordionTitle>
@@ -334,7 +343,7 @@
 
         <!-- Query Fields Panel -->
         @if (record.IsSaved || EditMode) {
-          <mj-accordion-panel
+          <mj-accordion-panel SectionKey="fields" SectionTitle="Fields" SectionIcon="fa-solid fa-table"
             [(Expanded)]="fieldsPanelExpanded"
             class="query-panel">
             <ng-template mjAccordionTitle>
@@ -382,7 +391,7 @@
 
         <!-- Dependent Queries Panel -->
         @if (record.IsSaved && DependentQueries.length > 0) {
-          <mj-accordion-panel
+          <mj-accordion-panel SectionKey="dependents" SectionTitle="Dependent Queries" SectionIcon="fa-solid fa-arrow-left"
             [(Expanded)]="dependentsPanelExpanded"
             class="query-panel">
             <ng-template mjAccordionTitle>
@@ -436,7 +445,7 @@
 
         <!-- Query Entities Panel -->
         @if (record.IsSaved || EditMode) {
-          <mj-accordion-panel
+          <mj-accordion-panel SectionKey="entities" SectionTitle="Entities" SectionIcon="fa-solid fa-database"
             [(Expanded)]="entitiesPanelExpanded"
             class="query-panel">
             <ng-template mjAccordionTitle>
@@ -524,7 +533,7 @@
         }
 
         <!-- Details Panel -->
-        <mj-accordion-panel
+        <mj-accordion-panel SectionKey="details" SectionTitle="Details" SectionIcon="fa-solid fa-info-circle"
           [(Expanded)]="detailsPanelExpanded"
           class="query-panel">
           <ng-template mjAccordionTitle>
@@ -662,7 +671,7 @@
 
         <!-- Permissions Panel -->
         @if (record.IsSaved) {
-          <mj-accordion-panel
+          <mj-accordion-panel SectionKey="permissions" SectionTitle="Permissions" SectionIcon="fa-solid fa-shield-alt"
             [(Expanded)]="permissionsPanelExpanded"
             class="query-panel">
             <ng-template mjAccordionTitle>
@@ -711,6 +720,7 @@
             </div>
           </mj-accordion-panel>
         }
+        </mj-accordion-sections>
 
       </div>
     </form>

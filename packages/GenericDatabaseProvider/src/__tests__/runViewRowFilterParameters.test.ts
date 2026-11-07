@@ -189,6 +189,17 @@ describe('RunView binds row-filter values as parameters (#5713)', () => {
         expect(batch.Parameters).toEqual([new NamedQueryParameter('p0', 'user-a')]);
     });
 
+    it('keeps the row-filter value literal when the ExtraFilter binds its own parameters', async () => {
+        const provider = new RowFilterTestProvider([ownedEntity()], new SQLServerDialect());
+
+        await provider.RunViewAs({ EntityName: 'Notes', ExtraFilter: 'Status = @Status', Parameters: { Status: 'Open' } }, userNamed('user-a'));
+
+        const [run] = provider.Executed;
+        expect(run.SQL).toContain('Status = @p0');
+        expect(run.SQL).toContain("(OwnerID = 'user-a')");
+        expect(run.Parameters).toEqual([new NamedQueryParameter('p0', 'Open')]);
+    });
+
     it('keeps the literal clause when the provider has no binder', async () => {
         const provider = new RowFilterTestProvider([ownedEntity()], null);
 
