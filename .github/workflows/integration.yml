@@ -118,7 +118,7 @@ jobs:
       codegen: ${{ steps.filter.outputs.codegen }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Check changed paths
@@ -153,19 +153,25 @@ jobs:
   # now SKIPS them instead of failing them — "could not run" and "ran and found a problem" stop
   # reporting the same state, which is also what lets a ruleset treat them differently (MJ#4648).
   # Resolve-only: it writes no node_modules and is not a substitute for each job's own install.
+  #
+  # Deliberately NOT named like lockfile-guard.yml's `Lockfile matches package.json`, although both
+  # run the same `pnpm install --frozen-lockfile --lockfile-only`. That name is the required check in
+  # next-protect, and a ruleset matches checks by name only: two jobs reporting under it would make
+  # the verdict depend on which one reported last, and this one does not run on every PR. The
+  # required check is lockfile-guard.yml's; this job only exists so the jobs below can skip.
   preflight:
-    name: Lockfile resolves
+    name: Lockfile resolves (integration preflight)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - name: Set up Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: 'pnpm'
@@ -208,7 +214,7 @@ jobs:
       TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -265,13 +271,13 @@ jobs:
           exit 1
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
       - name: Set up node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: 'pnpm'
@@ -331,7 +337,7 @@ jobs:
         id: dbcache
         # The nightly provisions cold on purpose — see the block comment above.
         if: github.event_name != 'schedule'
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: /tmp/mjdb
           key: ${{ steps.dbkey.outputs.key }}
@@ -511,7 +517,7 @@ jobs:
       - name: Save the provisioned-DB snapshot
         if: (github.event_name == 'push' || github.event_name == 'schedule') && steps.dbcache.outputs.cache-hit != 'true' && steps.dbsnapshot.outcome == 'success'
         continue-on-error: true
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: /tmp/mjdb
           key: ${{ steps.dbkey.outputs.key }}
@@ -633,13 +639,37 @@ jobs:
             return 0
           }
 
+          # Entity Vector Sync - Daily is seeded with RunImmediatelyIfNeverRun and a CI database has
+          # never run it, so MJAPI starts it on every boot: 90-170 s of in-process embedding that
+          # stops /healthcheck answering and times out requests waiting for a pooled connection.
+          # A client shard started alongside it got a provider with no metadata (#6361). The job
+          # has to run, because binary-fields.BF2/BF3 read the rows it writes. So the client shard
+          # waits for it; the server shards don't use MJAPI and start now. After the limit the
+          # client shard starts anyway, and a job that never finished fails the checks that need it.
+          wait_for_first_run_jobs() {
+            local pending=""
+            for _ in $(seq 1 84); do
+              pending=$(docker exec sql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U SA -P 'VeryStr0ngP@ssw0rd' \
+                -d test -h -1 -W -I -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM [__mj].[ScheduledJob] j
+                  WHERE j.[Status] = 'Active' AND j.[RunImmediatelyIfNeverRun] = 1
+                    AND NOT EXISTS (SELECT 1 FROM [__mj].[ScheduledJobRun] r
+                                    WHERE r.[ScheduledJobID] = j.[ID] AND r.[CompletedAt] IS NOT NULL);" | tr -d '[:space:]') || true
+              if [ "${pending}" = "0" ]; then
+                echo "[shard:client] First-run scheduled jobs finished after ${SECONDS}s."
+                return 0
+              fi
+              sleep 5
+            done
+            echo "::warning::First-run scheduled jobs still pending (${pending}) after 420 s; starting the client shard anyway."
+          }
+
           run_shard "server-1" "test_s1" --transport=server --shard=1/3 &
           PID_S1=$!
           run_shard "server-2" "test_s2" --transport=server --shard=2/3 &
           PID_S2=$!
           run_shard "server-3" "test_s3" --transport=server --shard=3/3 &
           PID_S3=$!
-          run_shard "client"   "test"    --transport=client &
+          { wait_for_first_run_jobs; run_shard "client" "test" --transport=client; } &
           PID_CLIENT=$!
 
           wait "${PID_S1}" "${PID_S2}" "${PID_S3}" "${PID_CLIENT}"
@@ -819,7 +849,7 @@ jobs:
 
       - name: Checkout repo
         if: steps.prereq.outputs.READY == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -873,7 +903,7 @@ jobs:
 
       - name: Set up pnpm
         if: steps.prereq.outputs.READY == 'true'
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - name: Create SQL database
         if: steps.prereq.outputs.READY == 'true'
@@ -881,7 +911,7 @@ jobs:
 
       - name: Set up node
         if: steps.prereq.outputs.READY == 'true'
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: 'pnpm'
@@ -990,7 +1020,7 @@ jobs:
           - 6379:6379
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -1040,13 +1070,13 @@ jobs:
           exit 1
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
       - name: Set up node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: 'pnpm'
@@ -1169,7 +1199,7 @@ jobs:
       TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -1219,13 +1249,13 @@ jobs:
           exit 1
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
       - name: Set up node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: 'pnpm'
@@ -1280,6 +1310,10 @@ jobs:
             # only way to act on this failure used to be reproducing the whole job locally. Emit the
             # shape of the change (per-file +/-) and a bounded excerpt instead. Bounded because a
             # full regeneration of __mj.ts is ~100k lines and would bury the log.
+            # `git status` lists untracked files (`??`) but `git diff` ignores them, so a newly
+            # emitted file printed two empty sections. Intent-to-add (-N) makes them show in the
+            # diff as additions without staging their content.
+            git add -A -N -- packages/ metadata/ migrations/ || true
             git diff --stat -- packages/ metadata/ migrations/ > /tmp/drift-stat.txt || true
             git diff -- packages/ metadata/ migrations/ | head -c 100000 > /tmp/drift-diff.txt || true
             echo "--- change shape ---"
@@ -1343,7 +1377,7 @@ jobs:
       MJ_CODEGEN_SKIP_COMMANDS: '1'
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -1393,13 +1427,13 @@ jobs:
           exit 1
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
       - name: Set up node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: 'pnpm'
@@ -1451,6 +1485,10 @@ jobs:
             # only way to act on this failure used to be reproducing the whole job locally. Emit the
             # shape of the change (per-file +/-) and a bounded excerpt instead. Bounded because a
             # full regeneration of __mj.ts is ~100k lines and would bury the log.
+            # `git status` lists untracked files (`??`) but `git diff` ignores them, so a newly
+            # emitted file printed two empty sections. Intent-to-add (-N) makes them show in the
+            # diff as additions without staging their content.
+            git add -A -N -- packages/ metadata/ migrations/ || true
             git diff --stat -- packages/ metadata/ migrations/ > /tmp/drift-stat.txt || true
             git diff -- packages/ metadata/ migrations/ | head -c 100000 > /tmp/drift-diff.txt || true
             echo "--- change shape ---"
@@ -1488,3 +1526,41 @@ jobs:
               echo '</details>'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # Backstop alarm: this workflow's push run on `next` gates nothing, so a red one used to be
+  # visible only to whoever opened the Actions tab. Red opens (or comments on) one rolling issue
+  # for THIS workflow; green closes it. Logic and tests: .github/scripts/backstop-alarm.mjs.
+  # Push to `next` only: line branches (lts/**) and the scheduled lanes are not what the alarm's
+  # title describes. `cancelled` counts as red, as in test.yml: a push run here is never cancelled
+  # by concurrency, so a cancel means a timeout or a manual stop.
+  backstop-alarm:
+    name: Backstop alarm
+    needs: [changes, preflight, integration-sqlserver, integration-live-model, cross-server-invalidation, codegen-drift, codegen-drift-ai]
+    if: always() && github.event_name == 'push' && github.ref_name == 'next'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+          filter: blob:none
+
+      - name: Alert on backstop failure
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/scripts/backstop-alarm.mjs red --workflow "Integration Tier"
+
+      # A cleanup failure must never turn a green run red (that would file an alarm about the
+      # alarm), so this step alone is continue-on-error; the script still logs ::error::.
+      - name: Resolve backstop alarm on green
+        if: ${{ !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/scripts/backstop-alarm.mjs green --workflow "Integration Tier"

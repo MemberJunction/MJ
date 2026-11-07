@@ -4,8 +4,10 @@
 #   UUIDCompliance + MultiProviderCompliance
 #     + FieldSecurityEgressCompliance
 #     + PlatformStringCompliance              (packages/MJGlobal; the "Source guards" job)
-#   PrimaryKeyCompliance                      (packages/MJCore; runs in CI only when a PR touches MJCore)
+#   PrimaryKeyCompliance                      (packages/MJCore; the "Source guards" job)
 #   check:manifest-registrations              (an entity subclass missing from the committed manifests)
+#   check-turbo-root-inputs                   (a test reads repo-root data its turbo.json does not declare)
+#   check-explorer-prebundle-exclude          (a joined workspace's scopes in a committed angular.json)
 #
 # All of them read source text off disk: no build, no database. Each is run even if an earlier one
 # fails, so one invocation reports every violation. Exits non-zero if any scanner fails.
@@ -35,6 +37,14 @@ pnpm --filter @memberjunction/core exec vitest run --passWithNoTests=false \
 # before the PR exists. Pure file reads, like its neighbours above.
 node .github/scripts/check-manifest-registrations.mjs || status=1
 
+# Repo-root data a package's tests read must be in that package's turbo test inputs, or the
+# cached pass replays after the data changes. Pure file reads.
+node .github/scripts/check-turbo-root-inputs.mjs || status=1
+
+# A committed angular.json prebundle exclude holds only "@memberjunction/*" (#3875): a joined
+# workspace's linked scopes are added by `mj dev workspace` and must not be committed.
+node .github/scripts/check-explorer-prebundle-exclude.mjs || status=1
+
 if [ "$status" -ne 0 ]; then
   echo ""
   echo "check:guards failed. The rules behind each scanner:"
@@ -44,6 +54,8 @@ if [ "$status" -ne 0 ]; then
   echo "  entity serialization at egress  -> guides/FIELD_LEVEL_SECURITY_GUIDE.md (Building on field-level security)"
   echo "  platform-name branch (SQL path) -> read the fact from the dialect's facets (@memberjunction/sql-dialect)"
   echo "  entity class not in a manifest  -> regenerate with the pnpm run mj:manifest:* script the failure names"
+  echo "  root data not a turbo input     -> add \$TURBO_ROOT\$/<dir>/** to the package turbo.json (see the script header)"
+  echo "  angular.json prebundle exclude  -> run mj dev workspace clean, or revert the file's prebundle change"
 fi
 
 exit "$status"
