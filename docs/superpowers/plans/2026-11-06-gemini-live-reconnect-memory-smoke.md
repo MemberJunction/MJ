@@ -101,3 +101,97 @@ No reply between the move and the question. No greeting. The interview goes on t
 
    The other answered its own question before repeating it (`"The benefit of using a distributed database system over a centralized one is improved scalability and high availability."`). The 12-minute run did neither. One clean long run does not rule this out on that model. The first rehearsal's log was overwritten; these lines are from its console output at the time. The second's is `.../scratchpad/smoke/rehearse/et.log`.
 4. **User words can land in the notebook as model turns (run 2).** After an `interrupted`, the output transcription carried the participant's words: `265.2s AI final: "write tests first. Please go to the next question."`, again at 677.8 s. The seed carried it (`"model:  write tests first. ..."`). It happens with no move near it and did no visible harm here. Not in this task's scope.
+
+## Layer A, second pass
+
+After commit `79a6b8ae0c` (a planned move does not start at an interrupted turn), with RealtimeClient and Gemini rebuilt. All runs on the first attempt, in parallel, from 2026-11-07T02:06:17Z. Full logs (not committed): `/private/tmp/claude-501/-Users-sohamdesai-Projects-mj-edge-MJ/37cebe67-4b02-4ff5-8834-e2f559164fbc/scratchpad/smoke/pass2/`. They contain no key or token (same search as the first pass). The first pass above stands as written, including run 1's failure.
+
+### What changed in the script
+
+- **Number check.** Run 1 of the first pass failed it because words of the participant reached the new connection and told the model to go on. The check now allows exactly +1 only when a user final landed between the end of the move and the question, and logs a `NUMBER CHECK:` line naming the case. Any other change still fails. One case stays from the first pass: in `--tool-across-move`, +1 is allowed because the tool prompt tells the model to end its reply to the result with the next question. No tool run was repeated in this pass.
+- **New check and log fields.** A move may not start at the `turnComplete` of an interrupted turn, unless it is the helper's deadline. `MOVE done` now logs whether the participant was speaking and how many turns followed the last interruption.
+- **`--quiet-before-move <n>`.** The participant starts nothing in the n seconds before the planned move.
+- **A script bug, found by run d and fixed after the runs.** The window for the answer could end at the question's own log line when that line landed a millisecond later than `AskedAt`, which left the answer empty. A short call after the fix passed (`g-script-check.log`: `"You are Alex, and we are on Question 3: Describe the purpose of a relational database."`). That call does not prove the race is gone, because the race is rare; the fix is by reading the code.
+
+### Runs
+
+| Run | Model, flags | Started (UTC) | Move | Seed | Script | Transcript |
+|---|---|---|---|---|---|---|
+| a | `gemini-3.8-live --minutes 12` | 02:06:16.665 | 545.5 s, at the end of a turn | `seeded 58 entries (chars 6099, dropped 0)` | PASS | PASS |
+| b | same, `--quiet-before-move 25` | 02:06:17.521 | 540.3 s, in a pause | `seeded 54 entries (chars 5921, dropped 0)` | PASS | PASS |
+| c | Extended Thinking, 12 min, `--include-thoughts --settle-seconds 20` | 02:06:16.712 | 540.3 s, under the participant's words | `seeded 54 entries (chars 5496, dropped 0)` | PASS | Memory held; an answer was lost |
+| d | Extended Thinking, `--connection-lifetime 130`, same flags | 02:06:17.523 | 70.2 s, under the participant's words | `seeded 6 entries (chars 678, dropped 0)` | **FAIL** (exit 1, script bug) | Memory held; part of an answer was lost |
+| e | Extended Thinking, `--connection-lifetime 135`, same flags | 02:06:17.104 | 79.6 s, at the end of a turn (armed for 75 s) | `seeded 10 entries (chars 834, dropped 0)` | PASS | PASS |
+| f | Extended Thinking, `--connection-lifetime 140`, same flags | 02:06:17.459 | 80.2 s, in a pause | `seeded 8 entries (chars 798, dropped 0)` | PASS | PASS |
+
+Every run: two connections, the seed first on the second one, no `resume-seed-failed`, no greeting after the move.
+
+**Run a.** The answer was in progress at 540 s. The move waited for the reply's end, as designed. The planned-move case here has no interruption near it: `5 turnComplete(s) since the last interruption`.
+
+```
+  538.0s USER final: "I would use a relational database with indexes, and I would write tests first. Please go to the next question."
+  545.5s AI final: "Prioritizing data integrity and quality testing is essential. Question 25: How do promises resolve in JavaScript?"
+  545.5s [RealtimeSessionResumption] reconnecting (connection-ending)
+  552.0s PARTICIPANT says (repeat): "Sorry, please repeat the question. Which question number are we on, and what is my name?"
+  564.3s AI final: "Your name is Alex, and we are on Question 25: How do promises resolve in JavaScript?"
+  720.4s NUMBER CHECK: 25 before the move, 25 when asked: same number
+```
+
+**Run b.** The same-number case on planned, non-tool `gemini-3.8-live`, which the first pass did not show.
+
+```
+  521.5s AI final: "That highlights the importance of maintaining strong security practices. Question 24: How do you handle database migrations in a staging environment?"
+  540.3s [RealtimeSessionResumption] reconnecting (connection-ending)
+  547.0s PARTICIPANT says (repeat): "Sorry, please repeat the question. Which question number are we on, and what is my name?"
+  561.0s AI final: "Your name is Alex, and we are on Question 24: How do you handle database migrations in a staging environment?"
+  720.5s NUMBER CHECK: 24 before the move, 24 when asked: same number
+```
+
+**Run c.**
+
+```
+  527.8s AI final: "I would write test. Question 25: What is the purpose of a load balancer?"
+  533.4s PARTICIPANT says (answer1): "In my last project, I built a create, read, update, delete service in TypeScript. Next question, please."
+  540.3s [RealtimeSessionResumption] reconnecting (connection-ending)
+  540.9s MOVE done: last question before it = 25, turnOpenAtStart=false, participantSpeakingAtStart=true, 2 turnComplete(s) since the last interruption, ...
+  542.3s USER final: "Please."
+  547.3s AI final: "Let's move to Question 26: What is the difference between a cache and a database?"
+  581.9s AI final: "Your name is Alex, and we are on Question 26. The question is: What is the difference between a cache and a database?"
+  720.4s NUMBER CHECK: 25 before the move, 26 when asked: +1, user final between the move and the question: "Please."
+```
+
+**Run d.** The script reported `the model did not answer the question after the move`. That is the script bug above. The transcript has the answer:
+
+```
+   67.4s PARTICIPANT says (answer3): "I would use a relational database with indexes. And I would write tests first. Please go to the next question."
+   70.2s [RealtimeSessionResumption] reconnecting (connection-ending)
+   75.0s USER final: "And I would write tests first. Please go to the next question."
+   82.9s AI final: "Prioritizing testing ensures a very robust codebase. Question 4: How do you manage state in a complex front end application?"
+  102.5s PARTICIPANT says (repeat): "Sorry, please repeat the question. Which question number are we on, and what is my name?"
+  111.1s AI final: "We're currently on question four."
+  119.1s AI final: "Your name is Alex, and we are on Question 4: How do you manage state in a complex front-end application?"
+```
+
+**Run e.** `114.9s AI final: "Your name is Alex, and we are currently on Question 4: What strategies would you use to optimize the performance of a web application with high traffic?"`, the question asked at 79.6 s, same number.
+
+**Run f.** `114.4s AI final: "I'm asking Question 4, which is about the main components of a CI CD pipeline and their importance, and you are Alex."`, the question asked at 76.4 s, same number.
+
+### Extended Thinking outcomes
+
+Scored from the transcripts, on the reply to the question after the move and on everything else the model said after it.
+
+| Run | Greeting or re-confirming the name | Invented question | Answered its own question | Unprompted reply | Thoughts |
+|---|---|---|---|---|---|
+| c (12 min) | no | no | no | not checked (owed a reply) | 0 |
+| d (short) | no | no | no | not checked (owed a reply) | 0 |
+| e (short) | no | no | no | none in 20.1 s | 0 |
+| f (short) | no | no | no | none in 20.0 s | 0 |
+
+Plain count, this pass: **4 runs, 4 clean on those three counts.** With the first pass and its two rehearsals: **7 moves, 5 clean, 1 greeting with an invented question, 1 answering its own question.** By length: long calls 2 of 2 clean; short calls 3 of 5 clean. Seven moves are too few to give a rate. The two bad ones are not ruled out, and neither run ran on a seed longer than 10 entries. Run d also put a short filler turn before its answer (`"We're currently on question four."`), which is correct and not scored against it.
+
+Thoughts: 0 in all 4 runs, and 0 in the first pass, with `includeThoughts: true` in the pact. **Thought exclusion from the seed is still not exercised live.**
+
+### Findings
+
+1. **A planned move can still start under the participant's words when no transcription has arrived (runs c and d). The fix does not cover this, and it loses speech.** A turn opens at the first transcribed word, and Google's transcription can lag by seconds. In run c the participant had been speaking for 6.9 s when the clock ran out at 540.3 s, with `IsTurnOpen` false. No transcript of that speech ever appeared; only `"Please."` did, on the new connection. So one whole answer was lost, and the model went from question 25 to question 26 on that one word. In run d, about 2.8 s of speech was lost the same way. The audio went to the old connection before the move, so the 2 s the driver holds during a move cannot recover it. Memory held in both runs. This happened in 2 of the 6 long and short runs of this pass. Not patched: driver code is out of this task.
+2. **The interrupted-turn fix is not exercised live by these runs.** None had an `interrupted` near the clock: the counts at the move are 5, 7, 2, 2, none and none `turnComplete`s since the last interruption, and the new check passed on all of them. So "an interrupted turn did not trigger the move" holds here, but only unit tests show the fix itself doing it.

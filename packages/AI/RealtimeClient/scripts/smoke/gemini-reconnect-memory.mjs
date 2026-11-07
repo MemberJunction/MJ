@@ -17,6 +17,7 @@
 //   --settle-seconds <n>         Silence after the move before the first post-move input. Default 6.
 //   --connection-lifetime <n>    Replaces the lifetime in the pact, to rehearse this script's flow in a short call.
 //   --include-thoughts           Asks for thought summaries, on a model that has them, to show they stay out of the seed.
+//   --quiet-before-move <n>      The participant starts nothing in the n seconds before the planned move, so it falls in a pause.
 //   --env-file <path>            Where to read the key when it is not in the environment.
 //
 // What is real: the mint (GeminiRealtime.CreateClientSession), the driver, the SDK, the socket, Google. What is not:
@@ -125,11 +126,16 @@ function readOptions() {
             'settle-seconds': { type: 'string', default: '6' },
             'connection-lifetime': { type: 'string' },
             'include-thoughts': { type: 'boolean', default: false },
+            'quiet-before-move': { type: 'string', default: '0' },
             'env-file': { type: 'string' },
         },
     });
     const minutes = Number(values.minutes);
     const settleSeconds = Number(values['settle-seconds']);
+    const quietBeforeMove = Number(values['quiet-before-move']);
+    if (!(quietBeforeMove >= 0)) {
+        throw new Error(`--quiet-before-move must be 0 or more: got ${values['quiet-before-move']}`);
+    }
     const lifetime = values['connection-lifetime'] === undefined ? undefined : Number(values['connection-lifetime']);
     if (!(minutes > 0 && minutes <= 28)) {
         throw new Error(`--minutes must be above 0 and at most 28 (the token lives 30): got ${values.minutes}`);
@@ -151,6 +157,7 @@ function readOptions() {
         SettleSeconds: settleSeconds,
         Lifetime: lifetime,
         IncludeThoughts: values['include-thoughts'],
+        QuietBeforeMove: quietBeforeMove,
         EnvFile: values['env-file'],
     };
 }
@@ -238,6 +245,7 @@ const run = {
     MoveStartedAt: null,
     MoveDoneAt: null,
     TurnOpenAtMove: null,
+    SpeakingAtMove: null,
     ToolCallPendingAtMove: false,
     NumberBeforeMove: null,
     AskedAt: null,
@@ -327,6 +335,18 @@ class SmokeClient extends GeminiRealtimeClient {
         });
         return wrapSession(session, connection);
     }
+}
+
+/** How many `turnComplete`s followed the last `interrupted` before the move: the cut-off turn's own is the first. */
+function turnsSinceInterruption() {
+    const lines = logLines.filter((line) => line.At <= run.MoveStartedAt).map((line) => line.Text);
+    const at = lines.findLastIndex((text) => /: interrupted$/.test(text));
+    return at < 0 ? null : lines.slice(at + 1).filter((text) => /: turnComplete$/.test(text)).length;
+}
+
+function describeLastInterruption() {
+    const turns = turnsSinceInterruption();
+    return turns === null ? 'no interruption before the move' : `${turns} turnComplete(s) since the last interruption`;
 }
 
 function logInbound(connection, message) {
@@ -463,7 +483,8 @@ class Participant {
         this.client = client;
         this.audio = audio;
         this.options = options;
-        this.toolAskAt = (options.Lifetime ?? 600) - PLANNED_MOVE_MARGIN_S - TOOL_ASK_LEAD_S;
+        this.moveDueAt = (options.Lifetime ?? 600) - PLANNED_MOVE_MARGIN_S;
+        this.toolAskAt = this.moveDueAt - TOOL_ASK_LEAD_S;
     }
 
     /** The move finished: the settle time counts from here. */
@@ -517,6 +538,9 @@ class Participant {
         if (this.options.ToolAcrossMove && elapsedSeconds() >= this.toolAskAt && run.ToolCalls.length === 0 && run.ToolAsks < MAX_TOOL_ASKS) {
             run.ToolAsks++;
             this.say('lookup');
+            return;
+        }
+        if (this.options.QuietBeforeMove > 0 && elapsedSeconds() >= this.moveDueAt - this.options.QuietBeforeMove) {
             return;
         }
         this.sayNextAnswer();
@@ -621,6 +645,7 @@ function onState(client, participant, state) {
     if (state === 'connecting' && run.Listening && run.MoveStartedAt === null) {
         run.MoveStartedAt = elapsedSeconds();
         run.TurnOpenAtMove = client.IsTurnOpen;
+        run.SpeakingAtMove = client.Mic.IsSpeaking;
         run.ToolCallPendingAtMove = run.ToolCalls.length > 0;
         return;
     }
@@ -628,7 +653,7 @@ function onState(client, participant, state) {
         run.MoveDoneAt = elapsedSeconds();
         run.NumberBeforeMove = lastNumberAsked();
         run.UnpromptedWindowOpen = !participant.AwaitsReply;
-        log(`MOVE done: last question before it = ${run.NumberBeforeMove}, turnOpenAtStart=${run.TurnOpenAtMove}, unprompted-reply window ${run.UnpromptedWindowOpen ? 'open' : 'skipped (the participant is owed a reply)'}`);
+        log(`MOVE done: last question before it = ${run.NumberBeforeMove}, turnOpenAtStart=${run.TurnOpenAtMove}, participantSpeakingAtStart=${run.SpeakingAtMove}, ${describeLastInterruption()}, unprompted-reply window ${run.UnpromptedWindowOpen ? 'open' : 'skipped (the participant is owed a reply)'}`);
         participant.Moved();
     }
 }
@@ -683,6 +708,9 @@ function checkTrigger(options, check) {
     check(run.Connections[0]?.CloseCode !== 1011 || run.Connections[0]?.ClosedAt > run.MoveDoneAt, 'Google cut the first connection before the planned move finished');
     // A pending tool call keeps its turn open by design, so that run moves at the deadline, not at a boundary.
     check(options.ToolAcrossMove || run.TurnOpenAtMove === false, 'the planned move started with a turn open');
+    // The cut-off turn's own turnComplete must not start a move; the helper's deadline, about 50 s on, may.
+    const turns = turnsSinceInterruption();
+    check(turns === null || turns !== 1 || run.MoveStartedAt >= moveAt + 40, 'the planned move started at the turnComplete of an interrupted turn');
 }
 
 function checkSeed(check) {
@@ -715,15 +743,34 @@ function checkContent(options, check) {
         return;
     }
     const expected = run.NumberWhenAsked;
-    const nextUtterance = logLines.find((line) => line.At > run.AskedAt && line.Text.startsWith('PARTICIPANT says'));
+    // Skips the question's own line, which can land a millisecond after AskedAt.
+    const nextUtterance = logLines.find((line) => line.At >= run.AskedAt && line.Text.startsWith('PARTICIPANT says') && !line.Text.startsWith('PARTICIPANT says (repeat)'));
     const answer = assistantFinals(run.AskedAt, nextUtterance?.At ?? Infinity).map((f) => f.Text).join(' ');
     log(`ANSWER to the question after the move (expected question ${expected}, was on ${run.NumberBeforeMove} before the move): "${answer}"`);
     check(answer.length > 0, 'the model did not answer the question after the move');
     check(expected !== null && mentionsNumber(answer, expected), `the answer does not name question ${expected}: "${answer}"`);
     check(/\balex\b/i.test(answer), `the answer does not name Alex: "${answer}"`);
-    // The reply to a held tool result asks the next question, so that run may be one further on; no other run may.
-    const allowed = options.ToolAcrossMove ? [run.NumberBeforeMove, run.NumberBeforeMove + 1] : [run.NumberBeforeMove];
-    check(allowed.includes(expected), `the question number moved from ${run.NumberBeforeMove} to ${expected} with no answer in between`);
+    checkNumberAcrossMove(options, expected, check);
+}
+
+/**
+ * The number stays, or goes up by exactly one for a reason the transcript shows: words of the participant that reached
+ * the new connection before the question (they told the model to go on), or the reply to a held tool result, which the
+ * tool prompt tells the model to end with the next question. Anything else fails.
+ */
+function checkNumberAcrossMove(options, expected, check) {
+    const before = run.NumberBeforeMove;
+    const userFinal = run.Finals.find((f) => f.Role === 'User' && f.At >= run.MoveDoneAt && f.At < run.AskedAt);
+    let numberCase = 'unexplained change';
+    if (expected === before) {
+        numberCase = 'same number';
+    } else if (expected === before + 1 && userFinal) {
+        numberCase = `+1, user final between the move and the question: "${userFinal.Text}"`;
+    } else if (expected === before + 1 && options.ToolAcrossMove) {
+        numberCase = '+1, the reply to the held tool result asked the next question';
+    }
+    log(`NUMBER CHECK: ${before} before the move, ${expected} when asked: ${numberCase}`);
+    check(numberCase !== 'unexplained change', `the question number moved from ${before} to ${expected} with no answer in between`);
 }
 
 function checkToolAcrossMove(check) {
