@@ -544,10 +544,24 @@ export function DecideTypeOverlay(
       : { value: MapSourceType(''), winner: 'Discovered' };
   }
   const mapped = MapSourceType(sourceType as string);
+  // #3527: integration schemas used to store every number as nvarchar. An EXISTING string column is not
+  // retyped to a number on re-discovery (schema evolution only widens strings); only new columns are typed.
+  if (IsLegacyStringNumber(declared, mapped)) {
+    return { value: declared, winner: 'Declared' };
+  }
   if (declared.length === 0 || declared === mapped) {
     return { value: mapped, winner: declared === mapped ? 'Declared' : 'Discovered' };
   }
   return { value: mapped, winner: 'Discovered' };
+}
+
+/** The numeric MJ types integration schemas now persist instead of nvarchar (#3527). */
+const TYPED_NUMERIC_FIELD_TYPES: ReadonlySet<string> = new Set(['int', 'bigint', 'decimal', 'float']);
+
+/** True when an existing string column would be retyped to a number — kept as it is (#3527). */
+export function IsLegacyStringNumber(declaredType: string, mappedType: string): boolean {
+  const declared = declaredType.trim().toLowerCase();
+  return (declared === 'nvarchar' || declared === 'varchar') && TYPED_NUMERIC_FIELD_TYPES.has(mappedType);
 }
 
 /** @deprecated Use {@link DecideTypeOverlay}. */
@@ -607,8 +621,13 @@ function MapSourceType(sourceType: string): string {
   if (t === 'text' || t === 'richtext' || t === 'json' || t === 'object' || t === 'array') return 'nvarchar(MAX)';
   if (t === 'nvarchar(max)' || t === 'ntext') return 'nvarchar(MAX)'; // already-MAX → preserve on re-discovery
   if (t === 'string') return 'nvarchar';
-  if (t === 'integer' || t === 'int' || t === 'number') return 'nvarchar'; // stored as nvarchar in integration schemas
-  if (t === 'decimal' || t === 'float' || t === 'currency') return 'nvarchar';
+  // #3527: a declared numeric type is kept, so consumers stop casting strings and a value that fails to
+  // convert is a per-record error rather than a silent string. 'number' gives no width, so it stays text.
+  if (t === 'integer' || t === 'int') return 'int';
+  if (t === 'bigint' || t === 'long') return 'bigint';
+  if (t === 'decimal' || t === 'currency' || t === 'numeric') return 'decimal';
+  if (t === 'float' || t === 'double') return 'float';
+  if (t === 'number') return 'nvarchar';
   if (t === 'boolean' || t === 'bool') return 'bit';
   if (t === 'datetime' || t === 'date' || t === 'timestamp') return 'datetimeoffset';
   if (t === 'enum' || t === 'enumeration' || t === 'picklist') return 'nvarchar';

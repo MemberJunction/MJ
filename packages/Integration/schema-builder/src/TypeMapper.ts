@@ -37,6 +37,24 @@ function normalizeSizedStringType(t: string): string {
 }
 
 /**
+ * MJ field types (what the catalog persists as `IntegrationObjectField.Type`) mapped back to the source
+ * vocabulary of {@link TYPE_MAP} (#3527). Without these, a column persisted as `int`, `bit` or `datetimeoffset`
+ * found no entry and fell to the text fallback, so a declared integer, boolean or date became a string column.
+ */
+const MJ_FIELD_TYPE_ALIASES: Readonly<Record<string, string>> = {
+  int: 'integer',
+  bit: 'boolean',
+  datetimeoffset: 'datetime',
+  datetime2: 'datetime',
+  numeric: 'decimal',
+  uniqueidentifier: 'uuid',
+};
+
+function normalizeMJFieldType(t: string): string {
+  return MJ_FIELD_TYPE_ALIASES[t] ?? t;
+}
+
+/**
  * Maps generic source field types to platform-specific SQL types via the dialect abstraction.
  */
 export class TypeMapper {
@@ -44,7 +62,7 @@ export class TypeMapper {
    * Convert a source field's type to the appropriate SQL type for the given platform.
    */
   MapSourceType(sourceType: string, platform: DatabasePlatform, field: SourceFieldInfo): string {
-    const normalized = normalizeSizedStringType(sourceType.toLowerCase().trim());
+    const normalized = normalizeMJFieldType(normalizeSizedStringType(sourceType.toLowerCase().trim()));
     const dialect = GetDialect(platform);
     const entry = TYPE_MAP.find((t) => t.SourceType === normalized);
 

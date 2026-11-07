@@ -258,3 +258,26 @@ describe('TypeMapper', () => {
         });
     });
 });
+
+// #3527: the catalog persists MJ field types (int, bit, datetimeoffset); they must map to typed columns,
+// not fall to the text fallback.
+describe('TypeMapper — MJ field-type aliases (#3527)', () => {
+    const mapper = new TypeMapper();
+    const field = MakeField({ Precision: 18, Scale: 4 });
+
+    it.each([
+        ['int', 'INT', 'INTEGER'],
+        ['bit', 'BIT', 'BOOLEAN'],
+        ['datetimeoffset', 'DATETIMEOFFSET', 'TIMESTAMPTZ'],
+        ['uniqueidentifier', 'UNIQUEIDENTIFIER', 'UUID'],
+        ['bigint', 'BIGINT', 'BIGINT'],
+    ])('%s maps to a typed column on both dialects', (type, sqlServer, postgres) => {
+        expect(mapper.MapSourceType(type, 'sqlserver', field)).toBe(sqlServer);
+        expect(mapper.MapSourceType(type, 'postgresql', field)).toBe(postgres);
+    });
+
+    it('decimal and numeric map to a decimal column', () => {
+        expect(mapper.MapSourceType('decimal', 'sqlserver', field)).toMatch(/^DECIMAL/);
+        expect(mapper.MapSourceType('numeric', 'postgresql', field)).toMatch(/^NUMERIC/);
+    });
+});

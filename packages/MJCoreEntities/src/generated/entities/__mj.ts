@@ -13501,6 +13501,16 @@ export const MJCompanyIntegrationRecordMapSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Origin: z.union([z.literal('Adopted'), z.literal('Created')]).describe(`
+        * * Field Name: Origin
+        * * Display Name: Origin
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Created
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Adopted
+    *   * Created
+        * * Description: How the integration came to map this MJ row: Created when the sync inserted the row, Adopted when the row already existed and the sync matched it by key fields or primary key. The orphan sweep never hard-deletes an Adopted row; under HardDelete it archives the row when the entity has integration tombstone columns and otherwise leaves it with a warning.`),
     CompanyIntegration: z.string().describe(`
         * * Field Name: CompanyIntegration
         * * Display Name: Company Integration
@@ -81622,6 +81632,24 @@ export class MJCompanyIntegrationRecordMapEntity extends BaseEntity<MJCompanyInt
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Origin
+    * * Display Name: Origin
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Created
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Adopted
+    *   * Created
+    * * Description: How the integration came to map this MJ row: Created when the sync inserted the row, Adopted when the row already existed and the sync matched it by key fields or primary key. The orphan sweep never hard-deletes an Adopted row; under HardDelete it archives the row when the entity has integration tombstone columns and otherwise leaves it with a warning.
+    */
+    get Origin(): 'Adopted' | 'Created' {
+        return this.Get('Origin');
+    }
+    set Origin(value: 'Adopted' | 'Created') {
+        this.Set('Origin', value);
     }
 
     /**
