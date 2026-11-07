@@ -23,7 +23,7 @@ export { FileCatchStore } from './store/FileCatchStore';
 export { GitHub, type PullRequestInfo } from './git/GitHub';
 export { GitRepo, type GitRunner } from './git/GitRepo';
 export { Sandbox } from './sandbox/Sandbox';
-export { RedactionCheck, RedactionError, SecretsFromEnvironment } from './sandbox/Redaction';
+export { RedactionCheck, RedactionError, SecretsFromEnvironment, RedactTail } from './sandbox/Redaction';
 export { RankCatches, SelectReported } from './ranking/Ranker';
 export { AllRunsAgreeVerdict } from './verdict/AllRunsAgreeVerdict';
 export { RunDir } from './pipeline/RunDir';

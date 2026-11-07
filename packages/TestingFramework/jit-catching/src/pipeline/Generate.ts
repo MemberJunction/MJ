@@ -10,7 +10,7 @@ import type { RedactionCheck } from '../sandbox/Redaction';
 import type { Settings } from '../settings';
 import type { ChangeAnalysis, GenerationRequest, GenerationResult, Run, TokenUsage, Trigger } from '../types';
 import { NewID, NewRunID } from '../ids';
-import { RedactTail } from '../target/VitestCatchTarget';
+import { RedactTail } from '../sandbox/Redaction';
 import { RunDir } from './RunDir';
 import { RunWithConcurrency } from './concurrency';
 import { DefaultRedaction, DefaultRunTarget, type PipelineTarget } from './Deps';

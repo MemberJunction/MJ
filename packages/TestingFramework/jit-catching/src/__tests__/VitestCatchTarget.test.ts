@@ -82,8 +82,8 @@ describe('VitestCatchTarget.Run', () => {
 
 describe('VitestCatchTarget.Prepare', () => {
   const LOCK = 'lockfileVersion: 9.0\n\npatchedDependencies:\n  type-graphql@2.0.0-beta.3:\n    hash: abc123\n    path: patches/type-graphql@2.0.0-beta.3.patch\n\nimporters:\n  .:\n    dependencies:\n      type-graphql:\n        version: 2.0.0-beta.3(patch_hash=abc123)(graphql@16.12.0)\n';
-  function prepWorld(hostRunner: (f: string, a: string[], cwd: string) => Promise<string>) {
-    const { target, calls } = fakeTarget(() => ({ Stdout: '', ExitCode: 0 }));
+  function prepWorld(hostRunner: (f: string, a: string[], cwd: string) => Promise<string>, onRun: (o: SandboxRunOptions) => { Stdout: string; ExitCode: number } = () => ({ Stdout: '', ExitCode: 0 })) {
+    const { target, calls } = fakeTarget(onRun);
     const work = mkdtempSync(join(tmpdir(), 'jit-prep-'));
     const shown: string[][] = [];
     (target as never as { o: object }).o = { ...(target as never as { o: object }).o, WorkRoot: work, StoreDir: join(work, 'store'), HostRunner: hostRunner,
@@ -125,6 +125,18 @@ describe('VitestCatchTarget.Prepare', () => {
     const { target } = prepWorld(async (_f, a) => { if (a[0] === '--version') return '10.33.0'; throw new Error(`GET https://registry.example/x failed with ${token}`); });
     const err = await target.Prepare({ Kind: 'Head', SHA: 'h' }).catch((e: Error) => e);
     expect(err).toBeInstanceOf(InfrastructureError); expect((err as Error).message).not.toContain(token);
+  });
+  it('redacts token-shaped text in the sandbox install output before it goes into the InfrastructureError', async () => {
+    const token = 'ghp_' + 'A1b2C3d4'.repeat(5);
+    const { target } = prepWorld(async (_f, a) => (a[0] === '--version' ? '10.33.0' : ''), () => ({ Stdout: `ERR fetching with ${token}`, ExitCode: 1 }));
+    const err = await target.Prepare({ Kind: 'Head', SHA: 'h' }).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(InfrastructureError); expect((err as Error).message).toContain('install failed on Head'); expect((err as Error).message).not.toContain(token);
+  });
+  it('redacts token-shaped text in the build output before it goes into the build error', async () => {
+    const token = 'ghp_' + 'A1b2C3d4'.repeat(5);
+    const { target } = fakeTarget(() => ({ Stdout: `turbo failed with ${token}`, ExitCode: 1 }));
+    const err = await target.BuildPackages({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: jitRoot() }, ['@memberjunction/core']).catch((e: Error) => e);
+    expect((err as Error).message).toContain('build failed on Head'); expect((err as Error).message).not.toContain(token);
   });
   it('refuses to fetch when the host pnpm in the fetch folder is not the pinned version the image uses', async () => {
     const host: string[][] = [];

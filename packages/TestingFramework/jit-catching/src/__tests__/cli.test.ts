@@ -39,4 +39,12 @@ describe('Main', () => {
     expect(await Main(['execute', '--run', 'r1'], d)).toBe(1);
     expect(stderr.join('')).toBe('jit-catch execute: install failed on Head: offline\n');
   });
+
+  it('redacts token-shaped text in the one-line error', async () => {
+    const token = 'ghp_' + 'A1b2C3d4'.repeat(5);
+    const d = deps({ AssessStep: vi.fn(async () => { throw new Error(`gh failed: bad credentials ${token}`); }) });
+    expect(await Main(['assess', '--run', 'r1'], d)).toBe(1);
+    expect(stderr.join('')).not.toContain(token);
+    expect(stderr.join('')).toMatch(/^jit-catch assess: /);
+  });
 });

@@ -52,7 +52,7 @@ export const DEFAULT_SETTINGS: Settings = {
 /** Deep-merges the JSON file at `path` over the defaults and validates the result. Returns a copy of the defaults when no path is given. */
 export function LoadSettings(path: string | undefined): Settings {
     if (!path) return structuredClone(DEFAULT_SETTINGS);
-    const file = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+    const file = parseJsonObject(readFileSync(path, 'utf8'), path);
     return SettingsSchema.parse(merge(DEFAULT_SETTINGS as unknown as Record<string, unknown>, file));
 }
 
@@ -65,3 +65,11 @@ function merge(base: Record<string, unknown>, over: Record<string, unknown>): Re
     return out;
 }
 function isPlainObject(v: unknown): v is Record<string, unknown> { return typeof v === 'object' && v !== null && !Array.isArray(v); }
+
+/** The file's JSON. The parser's message is not kept, because it quotes the file's content. */
+function parseJsonObject(text: string, path: string): Record<string, unknown> {
+    let parsed: unknown;
+    try { parsed = JSON.parse(text); } catch { throw new Error(`settings file is not valid JSON: ${path}`); }
+    if (!isPlainObject(parsed)) throw new Error(`settings file must hold a JSON object: ${path}`);
+    return parsed;
+}

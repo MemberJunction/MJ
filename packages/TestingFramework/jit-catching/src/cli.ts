@@ -5,6 +5,7 @@ import { parseArgs } from 'node:util';
 import { ZodError } from 'zod';
 import { LoadSettings, type Settings } from './settings';
 import { TriggerSchema } from './schemas';
+import { RedactTail } from './sandbox/Redaction';
 import type { Trigger } from './types';
 import { GenerateStep } from './pipeline/Generate';
 import { ExecuteStep } from './pipeline/Execute';
@@ -96,9 +97,9 @@ async function dispatch(p: Parsed, deps: CliDeps): Promise<number> {
     return 0;
 }
 
-/** One line for stderr: a zod error as `path: message` pairs, anything else as the first line of its message. */
+/** One redacted line for stderr: a zod error as `path: message` pairs, anything else as the first line of its message. */
 export function OneLine(e: unknown): string {
-    if (e instanceof ZodError) return e.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
+    if (e instanceof ZodError) return RedactTail(e.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; '));
     const message = e instanceof Error ? e.message : String(e);
-    return message.split('\n').map((l) => l.trim()).find((l) => l.length > 0) ?? 'failed';
+    return RedactTail(message.split('\n').map((l) => l.trim()).find((l) => l.length > 0) ?? 'failed');
 }
