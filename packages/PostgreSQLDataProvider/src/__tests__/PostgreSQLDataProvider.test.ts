@@ -764,4 +764,56 @@ describe('PostgreSQLDataProvider', () => {
             }
         });
     });
+
+    describe('dependency SQL primary key literals', () => {
+        type DepHooks = {
+            BuildHardLinkDependencySQL(deps: Array<{ EntityName: string; RelatedEntityName: string; FieldName: string }>, key: CompositeKey): string;
+            BuildSoftLinkDependencySQL(entityName: string, key: CompositeKey): string;
+        };
+
+        it('escapes quotes in text keys and rejects non-numeric values for numeric keys in BuildHardLinkDependencySQL and BuildSoftLinkDependencySQL', () => {
+            const textEntity = {
+                Name: 'Widgets',
+                ID: '11111111-1111-1111-1111-111111111111',
+                SchemaName: '__mj',
+                BaseView: 'vwWidgets',
+                PrimaryKeys: [{ Name: 'Code', NeedsQuotes: true }],
+                FirstPrimaryKey: { Name: 'Code', NeedsQuotes: true },
+                Fields: [{ Name: 'RecordID', EntityIDFieldName: 'EntityID' }],
+            };
+            const numEntity = {
+                Name: 'Counters',
+                ID: '22222222-2222-2222-2222-222222222222',
+                SchemaName: '__mj',
+                BaseView: 'vwCounters',
+                PrimaryKeys: [{ Name: 'ID', NeedsQuotes: false }],
+                FirstPrimaryKey: { Name: 'ID', NeedsQuotes: false },
+                Fields: [{ Name: 'RecordID', EntityIDFieldName: 'EntityID' }],
+            };
+            const depProvider = Object.create(PostgreSQLDataProvider.prototype) as DepHooks;
+            Object.defineProperty(depProvider, 'Entities', { get: () => [textEntity, numEntity], configurable: true });
+
+            const hardSql = depProvider.BuildHardLinkDependencySQL(
+                [{ EntityName: 'Widgets', RelatedEntityName: 'Widgets', FieldName: 'RecordID' }],
+                CompositeKey.FromKeyValuePair('Code', "O'Brien"),
+            );
+            expect(hardSql).toContain('WHERE "RecordID" = \'O\'\'Brien\'');
+
+            expect(() =>
+                depProvider.BuildHardLinkDependencySQL(
+                    [{ EntityName: 'Counters', RelatedEntityName: 'Widgets', FieldName: 'RecordID' }],
+                    CompositeKey.FromKeyValuePair('ID', '1 OR 1=1'),
+                ),
+            ).toThrow('Invalid non-numeric value provided for numeric key field ID on entity Counters');
+
+            Object.defineProperty(depProvider, 'Entities', { get: () => [textEntity], configurable: true });
+            const softSql = depProvider.BuildSoftLinkDependencySQL('Widgets', CompositeKey.FromKeyValuePair('Code', "O'Brien"));
+            expect(softSql).toContain('AND "RecordID" = \'O\'\'Brien\'');
+
+            Object.defineProperty(depProvider, 'Entities', { get: () => [numEntity], configurable: true });
+            expect(() =>
+                depProvider.BuildSoftLinkDependencySQL('Counters', CompositeKey.FromKeyValuePair('ID', '1 OR 1=1')),
+            ).toThrow('Invalid non-numeric value provided for numeric key field ID on entity Counters');
+        });
+    });
 });

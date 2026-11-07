@@ -150,7 +150,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             const relatedEntityInfo = this.Entities.find(e => e.Name.trim().toLowerCase() === dep.RelatedEntityName?.trim().toLowerCase());
             if (!entityInfo || !relatedEntityInfo) continue;
 
-            const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : '';
+            const pkLiteral = this.RenderPrimaryKeyLiteral(entityInfo.FirstPrimaryKey, compositeKey.GetValueByIndex(0), entityInfo.Name);
             const pkParts: string[] = [];
             for (const pk of entityInfo.PrimaryKeys) {
                 pkParts.push("'" + pk.Name + "' || '|' || CAST(" + pgDialect.QuoteIdentifier(pk.Name) + " AS TEXT)");
@@ -164,7 +164,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
                 + primaryKeySelectString + ' AS "PrimaryKeyValue", '
                 + "'" + dep.FieldName + '\' AS "FieldName" '
                 + 'FROM ' + pgDialect.QuoteSchema(relatedEntityInfo.SchemaName, relatedEntityInfo.BaseView) + ' '
-                + 'WHERE ' + pgDialect.QuoteIdentifier(dep.FieldName) + ' = ' + quotes + compositeKey.GetValueByIndex(0) + quotes;
+                + 'WHERE ' + pgDialect.QuoteIdentifier(dep.FieldName) + ' = ' + pkLiteral;
         }
         return sSQL;
     }
@@ -173,6 +173,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         let sSQL = '';
         this.Entities.forEach(entity => {
             const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
+            const pkLiteral = this.RenderPrimaryKeyLiteral(entity.FirstPrimaryKey, compositeKey.GetValueByIndex(0), entity.Name);
             const pkParts: string[] = [];
             for (const pk of entity.PrimaryKeys) {
                 pkParts.push("'" + pk.Name + "' || '|' || CAST(" + pgDialect.QuoteIdentifier(pk.Name) + " AS TEXT)");
@@ -188,7 +189,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
                     + "'" + f.Name + '\' AS "FieldName" '
                     + 'FROM ' + pgDialect.QuoteSchema(entity.SchemaName, entity.BaseView) + ' '
                     + 'WHERE ' + pgDialect.QuoteIdentifier(f.EntityIDFieldName) + ' = ' + quotes + entity.ID + quotes
-                    + ' AND ' + pgDialect.QuoteIdentifier(f.Name) + ' = ' + quotes + compositeKey.GetValueByIndex(0) + quotes;
+                    + ' AND ' + pgDialect.QuoteIdentifier(f.Name) + ' = ' + pkLiteral;
             });
         });
         return sSQL;
