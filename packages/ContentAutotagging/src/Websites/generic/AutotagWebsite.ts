@@ -2,7 +2,7 @@ import { AutotagBase, AutotagProgressCallback } from '../../Core';
 import { AutotagBaseEngine, ContentSourceParams } from '../../Engine';
 import { ContentSourceTypeParamValue } from '../../Engine/generic/content.types';
 import { RunBudget } from '../../Engine/generic/RunBudget';
-import { RegisterClass, NormalizeUUID } from '@memberjunction/global';
+import { RegisterClass, NormalizeUUID, FilterByUUIDs } from '@memberjunction/global';
 import { IMetadataProvider, UserInfo, Metadata, RunView, LogStatus } from '@memberjunction/core';
 import { MJContentSourceEntity, MJContentItemEntity, MJContentSourceEntity_IContentSourceConfiguration } from '@memberjunction/core-entities';
 import * as cheerio from 'cheerio';
@@ -19,6 +19,7 @@ export class AutotagWebsite extends AutotagBase {
 
     private contextUser: UserInfo;
     private engine: AutotagBaseEngine;
+    private _onProgress?: AutotagProgressCallback;
     protected contentSourceTypeID: string
     // Sensible defaults — overridable per content source via ContentSourceParam rows.
     // CrawlSitesInLowerLevelDomain=true + MaxDepth=2 means we crawl the start URL
@@ -212,7 +213,11 @@ export class AutotagWebsite extends AutotagBase {
         if (provider) this._provider = provider;
         this.contextUser = contextUser;
         this.contentSourceTypeID = this.engine.SetSubclassContentSourceType('Website');
-        const contentSources: MJContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID);
+        const allSources: MJContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID);
+        const contentSources: MJContentSourceEntity[] = contentSourceIDs?.length
+            ? FilterByUUIDs(allSources, contentSourceIDs)
+            : allSources;
+        this._onProgress = onProgress;
 
         // Per-source budget setup — produces a RunBudget for each content
         // source and installs the OnAfterBatch gate on the engine so the
@@ -242,6 +247,7 @@ export class AutotagWebsite extends AutotagBase {
             // budget state into the next Autotag invocation on a shared
             // engine singleton.
             this.engine.OnAfterBatch = null;
+            this._onProgress = undefined;
         }
 
         // Surface per-source budget pause reasons in the log so operators can
@@ -294,6 +300,7 @@ export class AutotagWebsite extends AutotagBase {
                 let yieldedForSource = 0;
                 for await (const link of this.streamAllLinksFromContentSource(startURL, rootURL, regex)) {
                     try {
+                        this._onProgress?.(yieldedForSource, 0, link);
                         const item = await this.processSingleURL(link, contentSourceParams);
                         if (item) {
                             yieldedForSource++;

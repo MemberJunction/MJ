@@ -299,6 +299,36 @@ describe('ParseTemplateParameters', () => {
             expect(findParam(result, '_USER_NAME')?.IsSystemVariable).toBe(true);
             expect(findParam(result, 'regularParam')?.IsSystemVariable).toBe(false);
         });
+
+        it('should never mark a system variable used unconditionally as required (#5156)', () => {
+            const template = '{{ _CURRENT_DATE_AND_TIME }} {{ _USER_NAME | upper }} {{ regularParam }}';
+            const result = ParseTemplateParameters(template);
+            expect(findParam(result, '_CURRENT_DATE_AND_TIME')?.isRequired).toBe(false);
+            expect(findParam(result, '_USER_NAME')?.isRequired).toBe(false);
+            expect(findParam(result, 'regularParam')?.isRequired).toBe(true);
+        });
+
+        it('should not mark system variables read in conditions or comparisons as required (#5156)', () => {
+            const template = [
+                '{% if not _NATIVE_TOOL_CALLING %}Use the JSON envelope.{% endif %}',
+                '{% if _NATIVE_CONTROL_FLOW == \'implicit\' %}Implicit.{% endif %}',
+                '{{ _OUTPUT_EXAMPLE }}',
+                '{{ agentName }}',
+            ].join('\n');
+            const result = ParseTemplateParameters(template);
+            for (const name of ['_NATIVE_TOOL_CALLING', '_NATIVE_CONTROL_FLOW', '_OUTPUT_EXAMPLE']) {
+                expect(findParam(result, name)?.IsSystemVariable).toBe(true);
+                expect(findParam(result, name)?.isRequired).toBe(false);
+            }
+            expect(findParam(result, 'agentName')?.isRequired).toBe(true);
+        });
+
+        it('should not mark a system variable required when its properties are accessed unconditionally', () => {
+            const result = ParseTemplateParameters('{{ _CONTEXT.user.name }}');
+            const param = findParam(result, '_CONTEXT');
+            expect(param?.IsSystemVariable).toBe(true);
+            expect(param?.isRequired).toBe(false);
+        });
     });
 
     // ═══════════════════════════════════════════════════
@@ -874,14 +904,15 @@ describe('ParseTemplateParameters — the Loop Agent Type system prompt', () => 
         const result = ParseTemplateParameters(readFileSync(templatePath, 'utf8'));
         const required = result.parameters.filter((p) => p.isRequired).map((p) => p.name).sort();
 
-        expect(required).toEqual(['_NATIVE_CONTROL_FLOW', '_NATIVE_TOOL_CALLING', 'agentDescription', 'agentName', 'agentSpecificPrompt']);
+        // System variables are never required (#5156): the runner sets the native flags only on some calls.
+        expect(required).toEqual(['agentDescription', 'agentName', 'agentSpecificPrompt']);
     });
 
     it('keeps the native-only flags optional', async () => {
         const { readFileSync } = await import('fs');
         const result = ParseTemplateParameters(readFileSync(templatePath, 'utf8'));
 
-        for (const name of ['_NATIVE_ONLY_REQUESTED', '_NATIVE_CONTROL', '_ARTIFACT_MANIFEST_NATIVE', '_CONVERSATION_TOOLS_NATIVE']) {
+        for (const name of ['_NATIVE_ONLY_REQUESTED', '_NATIVE_CONTROL', '_ARTIFACT_MANIFEST_NATIVE', '_CONVERSATION_TOOLS_NATIVE', '_NATIVE_TOOL_CALLING', '_NATIVE_CONTROL_FLOW']) {
             expect(findParam(result, name)?.isRequired, name).toBe(false);
         }
     });

@@ -170,15 +170,21 @@ export class FrameSampler {
             return;
         }
         const size = ScaleToMaxDimension({ Width: video.videoWidth, Height: video.videoHeight }, this.options.MaxDimension);
-        canvas.width = size.Width;
-        canvas.height = size.Height;
+        if (canvas.width !== size.Width) {
+            canvas.width = size.Width;
+        }
+        if (canvas.height !== size.Height) {
+            canvas.height = size.Height;
+        }
         const context = canvas.getContext('2d');
         if (!context) {
             return;
         }
         context.drawImage(video, 0, 0, size.Width, size.Height);
         const mimeType = this.options.MimeType ?? 'image/jpeg';
-        const data = canvas.toDataURL(mimeType, this.options.Quality ?? DEFAULT_JPEG_QUALITY).split(',')[1] ?? '';
+        const dataUrl = canvas.toDataURL(mimeType, this.options.Quality ?? DEFAULT_JPEG_QUALITY);
+        const commaIdx = dataUrl.indexOf(',');
+        const data = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : '';
         if (data.length > 0) {
             this.options.OnFrame({ Data: data, MimeType: mimeType, Width: size.Width, Height: size.Height, TimestampMs: Date.now() });
         }

@@ -386,6 +386,14 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
         this.enqueueOrRun(() => this.sendReplyCreate(instructions, 'narration', false));
     }
 
+    /** A spoken TURN: the same reply trigger as the update, with the reply kept `normal` (MJ#4591). */
+    public RequestSpokenTurn(instructions: string): void {
+        if (!this.socket) {
+            return;
+        }
+        this.enqueueOrRun(() => this.sendReplyCreate(instructions, 'normal', false));
+    }
+
     /**
      * Feeds an executed tool's result back via `tool.result`, correlated by the provider's
      * `call_id`. EXACTLY-ONCE: the pending id is consumed when the result is accepted, and a

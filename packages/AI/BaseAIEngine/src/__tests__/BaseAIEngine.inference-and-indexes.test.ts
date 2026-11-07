@@ -27,6 +27,9 @@ vi.mock('@memberjunction/core', () => {
         protected _loaded = false;
         get Loaded() { return this._loaded; }
         async Load() { this._loaded = true; }
+        protected GetConfigData<E>(propertyName: string): E[] {
+            return ((this as unknown as Record<string, unknown>)[propertyName] as E[]) ?? [];
+        }
         static _instance: unknown = undefined;
         static getInstance<U>(): U {
             if (!this._instance) this._instance = new this();
@@ -232,6 +235,18 @@ describe('AIEngineBase — inference-provider helpers & lookup indexes', () => {
             ]);
             const map = AIEngineBase.Instance.PromptModelsByPromptID;
             expect(map.get(PROMPT_1.toLowerCase())).toHaveLength(2);
+        });
+
+        it('PromptModelsByPromptID throws the same permission error as PromptModels instead of returning an empty index', () => {
+            set('_promptModels', []);
+            const denied = new Error('PermissionConstrainedError: MJ: AI Prompt Models');
+            const engine = AIEngineBase.Instance as unknown as { GetConfigData: (name: string) => unknown[] };
+            engine.GetConfigData = (name: string) => {
+                if (name === '_promptModels') throw denied;
+                return [];
+            };
+            expect(() => AIEngineBase.Instance.PromptModels).toThrow(denied);
+            expect(() => AIEngineBase.Instance.PromptModelsByPromptID).toThrow(denied);
         });
     });
 

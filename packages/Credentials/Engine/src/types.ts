@@ -282,3 +282,38 @@ export interface TwilioCredentialValues {
     accountSid: string;
     authToken: string;
 }
+
+/**
+ * Values stored for a per-user delegated OAuth 2.0 (`3LO`) credential (Posture 3).
+ * `ownerUserId` is encrypted inside `Values` and strictly enforced by `CredentialEngine`
+ * against `contextUser.ID` on every resolution.
+ */
+export interface UserDelegatedOAuthCredentialValues {
+    [key: string]: string;
+    ownerUserId: string;
+    principalEmail: string;
+    providerName: string;
+    accessToken: string;
+    refreshToken: string;
+    tokenType: string;
+    scope: string;
+    tenantId: string;
+    issuedAt: string;
+}
+
+/**
+ * Options for storing or rotating a per-user delegated OAuth 2.0 (`3LO`) credential.
+ */
+export interface StoreUserDelegatedCredentialOptions {
+    credentialTypeName?: string;
+    providerName: string;
+    ownerUserId: string;
+    principalEmail: string;
+    accessToken: string;
+    refreshToken?: string;
+    tokenType?: string;
+    scope?: string;
+    tenantId?: string;
+    expiresAt?: Date;
+    categoryId?: string;
+}

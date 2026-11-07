@@ -25,6 +25,7 @@ import {
     CreateRealtimeRecordingRouter, FINAL_TERMINAL_RECHECK_MS, REALTIME_RECORDING_MOUNT_PATH, type RealtimeRecordingRouterDeps,
 } from '../rest/RealtimeRecordingHandler.js';
 import { RealtimeSessionNotFoundError, RealtimeSessionOwnershipError } from '../realtimeSessions/ownedRealtimeSession.js';
+import { AuthorizeSessionAccess } from '../realtimeSessions/sessionAccess.js';
 import { RecordingAssemblyScheduler, type IRecordingAssemblyScheduler } from '../realtimeSessions/RecordingAssemblyScheduler.js';
 
 const SESSION = '11111111-1111-4111-8111-111111111111';
@@ -274,9 +275,13 @@ describe('realtime recording REST routes', () => {
                 };
                 return id ? { ContextUser: user as unknown as UserInfo, Provider: {} as unknown as DatabaseProviderBase } : null;
             },
-            LoadConversationScope: async session => {
+            // The real scope rule over this test's conversation rows (no database behind them).
+            AuthorizeSession: async (session, contextUser) => {
                 const row = ledger.Sessions.get(session.ID);
-                return { ExternalID: row?.ConversationExternalID ?? null, Readable: row?.ConversationExternalID !== undefined };
+                return AuthorizeSessionAccess(
+                    { SessionUserID: session.UserID, ConversationExternalID: row?.ConversationExternalID ?? null, ConversationReadable: row?.ConversationExternalID !== undefined },
+                    contextUser,
+                );
             },
             LoadOwnedSession: async (agentSessionId, contextUser) => {
                 const row = ledger.Sessions.get(agentSessionId);

@@ -153,7 +153,8 @@ export const DEFAULT_HIGH_CHURN_SYSTEM_ENTITIES: readonly string[] = [
     'MJ: AI Prompt Runs',
     'MJ: AI Agent Runs',
     'MJ: AI Agent Run Steps',
-    'MJ: Query Execution Histories',
+    'MJ: Diagnostic Session Chunks',
+    'MJ: Diagnostic Bundles',
 ];
 
 /**

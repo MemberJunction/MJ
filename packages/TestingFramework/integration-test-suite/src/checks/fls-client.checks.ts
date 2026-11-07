@@ -31,7 +31,7 @@
 import { RunView, FieldSecurityDenialMessage, FieldSecurityWriteDenialMessage } from '@memberjunction/core';
 import type { IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual, GetGlobalObjectStore } from '@memberjunction/global';
-import { Assert, AssertEqual, IntegrationCheckRegistry, LoadClientConfig, SkipCheck } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, LoadClientConfig, PreflightMJAPI, SkipCheck } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext, FlsClientFixture } from '@memberjunction/testing-integration';
 import {
     SEEDED_FLS_ENTITY, SEED_FIXTURES_COMMAND,
@@ -40,6 +40,7 @@ import {
 } from '@memberjunction/testing-integration';
 import { GraphQLDataProvider, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
+import { WaitUntil } from './wait-until';
 import {
     MJEntityEntity, MJEntityFieldPermissionEntity, MJEmployeeEntity, MJCompanyEntity,
     MJAPIKeyEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity
@@ -52,7 +53,19 @@ import {
  * are polled through the same reader connection.
  */
 const PROPAGATION_TIMEOUT_MS = 150_000;
-const PROPAGATION_POLL_MS = 5_000;
+/**
+ * Gap between wire reads. This was 5s, which — with the three-consecutive-reads stability rule in
+ * {@link WaitForWirePropagation} — put a hard ~10s floor under every call, paid even when the very
+ * first read already satisfied the condition. The stability requirement now has its own knob
+ * (PROPAGATION_STABLE_FOR_MS), so the poll is free to be as prompt as noticing allows.
+ */
+const PROPAGATION_POLL_MS = 250;
+/**
+ * How long the condition must keep holding across those reads. Convergence here IS time-based —
+ * several MJAPI provider instances settling on refreshed metadata — so the window is kept
+ * explicit rather than dropped; it is the part of the old 5s poll that was load-bearing.
+ */
+const PROPAGATION_STABLE_FOR_MS = 1_000;
 
 // ─────────────────────────────────────────────────────────────────── helpers
 
@@ -107,7 +120,7 @@ async function findUserId(ctx: IntegrationCheckContext, email: string): Promise<
  * up to a minute after it is written. Bounded, so a genuinely unauthorized key still fails.
  */
 export async function BuildUserKeyProviderWithRetry(rawKey: string): Promise<IMetadataProvider> {
-    const deadline = Date.now() + 90_000;
+    const deadline = Date.now() + 180_000;
     for (;;) {
         try {
             return await buildUserKeyProvider(rawKey);
@@ -146,9 +159,22 @@ function newSecondaryGraphQLProvider(): GraphQLDataProvider {
     }
 }
 
+/**
+ * Throws when a secondary provider holds no metadata. Config() reports success even when its
+ * metadata load failed, so without this a check gets `null` from GetEntityObject and fails on
+ * the next line with nothing that points at the load (#6361).
+ */
+export function AssertProviderHasMetadata(provider: Pick<IMetadataProvider, 'Entities'>, label: string): void {
+    if (provider.Entities.length === 0) {
+        throw new Error(`${label} connected to MJAPI but loaded no metadata; MJAPI's log has why the load failed.`);
+    }
+}
+
 /** Build a SECONDARY GraphQL provider authenticated by a user API key (separate connection). */
 async function buildUserKeyProvider(rawKey: string): Promise<IMetadataProvider> {
-    return buildSecondaryProvider(undefined, rawKey);
+    const provider = await buildSecondaryProvider(undefined, rawKey);
+    AssertProviderHasMetadata(provider, 'the user key provider');
+    return provider;
 }
 
 /**
@@ -157,7 +183,19 @@ async function buildUserKeyProvider(rawKey: string): Promise<IMetadataProvider> 
  * above all) see the rows; the process-global provider is untouched.
  */
 export async function BuildSystemKeyProvider(): Promise<IMetadataProvider> {
-    return buildSecondaryProvider(LoadClientConfig().MJAPIKey, undefined);
+    const client = LoadClientConfig();
+    await PreflightMJAPI(client.Url, client.MJAPIKey);
+    const deadline = Date.now() + 180_000;
+    for (;;) {
+        try {
+            return await buildSecondaryProvider(client.MJAPIKey, undefined);
+        } catch (e) {
+            if (Date.now() > deadline) {
+                throw e;
+            }
+            await new Promise(resolve => setTimeout(resolve, 3_000));
+        }
+    }
 }
 
 /** A separate connection authenticated by exactly one key: the system key or a user API key. */
@@ -174,8 +212,11 @@ async function buildSecondaryProvider(systemKey: string | undefined, userKey: st
         userKey
     );
     const ok = await provider.Config(config, undefined, true /* separateConnection */);
-    if (!ok) {
-        throw new Error('secondary GraphQLDataProvider Config() returned false');
+    if (!ok || provider.Entities.length === 0) {
+        const cause = provider.LastMetadataLoadError;
+        throw cause
+            ? new Error(`secondary GraphQLDataProvider Config() loaded no entity metadata: ${cause.message}`, { cause })
+            : new Error('secondary GraphQLDataProvider Config() loaded no entity metadata');
     }
     return provider as unknown as IMetadataProvider;
 }
@@ -392,35 +433,32 @@ export async function MintFullAccessUserKey(ctx: IntegrationCheckContext, fx: Mi
  * rule on the reader connection — live coverage of the 5.6 propagation surface.
  */
 export async function WaitForWirePropagation(reader: IMetadataProvider, condition: (rows: Record<string, unknown>[]) => boolean, what: string): Promise<void> {
-    const deadline = Date.now() + PROPAGATION_TIMEOUT_MS;
-    let lastProblem = '';
-    let consecutive = 0;
-    for (;;) {
-        // A FAILED read is 'not yet', not fatal: the freshly-granted scope rule may still be
-        // inside MJAPI's scope-cache staleness envelope, which surfaces as denied RunViews.
-        try {
-            const rows = await ReadEmployeesOverWire(reader);
-            if (condition(rows)) {
+    try {
+        await WaitUntil(
+            // A FAILED read is 'not yet', not fatal: the freshly-granted scope rule may still be
+            // inside MJAPI's scope-cache staleness envelope, which surfaces as denied RunViews.
+            // WaitUntil treats a throwing condition as unsatisfied and reports the last error.
+            async () => condition(await ReadEmployeesOverWire(reader)),
+            what,
+            {
+                TimeoutMs: PROPAGATION_TIMEOUT_MS,
+                PollMs: PROPAGATION_POLL_MS,
                 // Require STABILITY, not one lucky read: enforcement can briefly flap while
-                // MJAPI's provider instances converge on the refreshed metadata.
-                consecutive++;
-                if (consecutive >= 3) {
-                    return;
-                }
-            } else {
-                consecutive = 0;
-                lastProblem = `condition '${what}' not met over ${rows.length} row(s)`;
+                // MJAPI's provider instances converge on the refreshed metadata. Three reads
+                // spanning at least PROPAGATION_STABLE_FOR_MS is the same guarantee the previous
+                // implementation gave — it just no longer buys the time window by making the
+                // poll slow. At the old 5s poll, three required reads meant a hard ~10s floor on
+                // every call EVEN WHEN THE FIRST READ ALREADY SATISFIED the condition, which is
+                // most of the setup cost of the fls client bundles.
+                StableReads: 3,
+                StableForMs: PROPAGATION_STABLE_FOR_MS
             }
-        } catch (e) {
-            consecutive = 0;
-            lastProblem = e instanceof Error ? e.message : String(e);
-        }
-        if (Date.now() > deadline) {
-            throw new Error(
-                `MJAPI did not reach '${what}' for the reader identity within ${PROPAGATION_TIMEOUT_MS / 1000}s ` +
-                `(last problem: ${lastProblem}) — scope-rule honoring or permission-change propagation failed (test-plan 5.6)`);
-        }
-        await new Promise(resolve => setTimeout(resolve, PROPAGATION_POLL_MS));
+        );
+    } catch (e) {
+        throw new Error(
+            `MJAPI did not reach '${what}' for the reader identity within ${PROPAGATION_TIMEOUT_MS / 1000}s ` +
+            `(${e instanceof Error ? e.message : String(e)}) — scope-rule honoring or permission-change ` +
+            `propagation failed (test-plan 5.6)`);
     }
 }
 
@@ -460,16 +498,22 @@ export async function SetupFlsClientFixture(ctx: IntegrationCheckContext): Promi
 
     try {
         await enableOverWire(ctx, entity.ID);
+        if (multiId) {
+            // Write the denier's Phone rule BEFORE tightenReaderEmail so that when
+            // WaitForWirePropagation observes the reader's Email rule enforced on MJAPI,
+            // MJAPI's metadata refresh is guaranteed to have loaded this Phone rule too.
+            fx.DenierEfpRowID = await SetFieldRuleOverWire(
+                ctx, FLS_UPDATE_DENY_FIELD, FLS_DENIER_ROLE, { Read: 'Allow', Update: 'Deny', Create: 'Deny' });
+        }
         fx.ReaderEfpRowID = await tightenReaderEmail(ctx);
         const readerKey = await MintFullAccessUserKey(ctx, fx, readerId, 'IT92 FLS reader (mj-integration-test)');
         const writerKey = await MintFullAccessUserKey(ctx, fx, writerId, 'IT92 FLS writer (mj-integration-test)');
+        const multiKey = multiId
+            ? await MintFullAccessUserKey(ctx, fx, multiId, 'IT92 FLS multi (mj-integration-test)')
+            : undefined;
         fx.ReaderProvider = await BuildUserKeyProviderWithRetry(readerKey);
         fx.WriterProvider = await BuildUserKeyProviderWithRetry(writerKey);
-        if (multiId) {
-            // Readable, but neither updatable nor creatable — the write-denial shape.
-            fx.DenierEfpRowID = await SetFieldRuleOverWire(
-                ctx, FLS_UPDATE_DENY_FIELD, FLS_DENIER_ROLE, { Read: 'Allow', Update: 'Deny', Create: 'Deny' });
-            const multiKey = await MintFullAccessUserKey(ctx, fx, multiId, 'IT92 FLS multi (mj-integration-test)');
+        if (multiKey) {
             fx.MultiProvider = await BuildUserKeyProviderWithRetry(multiKey);
         }
 
@@ -503,6 +547,9 @@ export async function SetupFlsClientFixture(ctx: IntegrationCheckContext): Promi
             fx.ReaderProvider,
             rows => rows.length > 0 && rows.every(r => !(FLS_READER_DENIED_FIELD in r)),
             'denied column stripped from reader list results');
+        if (fx.MultiProvider) {
+            await fx.MultiProvider.Refresh();
+        }
 
         fx.Usable = true;
     } catch (e) {

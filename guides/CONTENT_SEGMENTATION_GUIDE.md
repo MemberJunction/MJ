@@ -392,5 +392,5 @@ contains the segment**. See `TextChunker.offsets.test.ts` for the regression pat
 - **[Search Overview Guide](SEARCH_OVERVIEW_GUIDE.md)** — which search API to reach for; segmentation feeds all the semantic ones.
 - **[Search Scopes & RAG Guide](SEARCH_SCOPES_AND_RAG_GUIDE.md)** — how retrieved chunks reach an agent.
 - **[Content Autotagging Guide](CONTENT_AUTOTAGGING_GUIDE.md)** — the ingestion pipeline that consumes segmentation.
-- **[Duplicate Detection Guide](DUPLICATE_DETECTION_GUIDE.md)** — a second consumer of embeddings; changes to how content is embedded affect it.
+- **[Duplicate Management Guide](DUPLICATE_MANAGEMENT_GUIDE.md)** — a second consumer of embeddings; changes to how content is embedded affect it.
 - **[Text Processing Guide](../packages/AI/Vectors/Core/docs/TEXT_PROCESSING_GUIDE.md)** — `TextChunker`/`TextExtractor` primitives in detail.

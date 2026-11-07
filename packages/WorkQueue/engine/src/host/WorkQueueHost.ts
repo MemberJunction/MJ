@@ -174,6 +174,14 @@ class BudgetedConsumer<TPayload extends WorkJson = WorkJson> implements ITranspo
         return this.settle(this.inner.DeadLetter(delivery, reason, error));
     }
 
+    public DiscardExhausted(delivery: ReceivedDelivery<TPayload>, reason: string, error: string | null): Promise<SettleResult> {
+        return this.settle(
+            this.inner.DiscardExhausted
+                ? this.inner.DiscardExhausted(delivery, reason, error)
+                : this.inner.DeadLetter(delivery, reason, error),
+        );
+    }
+
     public Release(delivery: ReceivedDelivery<TPayload>): Promise<SettleResult> {
         return this.settle(this.inner.Release(delivery));
     }

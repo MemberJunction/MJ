@@ -7,6 +7,8 @@ import { SyncEngine, RecordData, SyncResolutionCollector } from '../lib/sync-eng
 import { OptionalEnvMissingError, OptionalEnvSkipMessage } from '../lib/env-reference';
 import { EnvDisplayMask, MaskedError } from '../lib/env-display';
 import { EnvSqlLog, AddSkippedOptionalEnvField } from '../lib/env-sql-redactor';
+import { ComposeStatementTransforms, LookupSqlLog } from '../lib/lookup-sql';
+import { ResolveSchemaPlaceholders } from '../lib/schema-placeholders';
 import { CreatedRecordKeyFields } from '../lib/created-record-key';
 import { EntityFieldName, RecordFieldNames } from '../lib/entity-field-names';
 import { WatchFileFilter } from '../lib/watch-file-filter';
@@ -51,6 +53,8 @@ export class WatchService {
   private sqlLoggingSession: SqlLoggingSession | null = null;
   /** Leaves env-sourced field values out of the watch SQL log; null when no log is open. */
   private envSqlLog: EnvSqlLog | null = null;
+  /** Writes `@lookup` IDs into the watch SQL log as subqueries; null when no log is open. */
+  private lookupSqlLog: LookupSqlLog | null = null;
   
   constructor(syncEngine: SyncEngine) {
     this.syncEngine = syncEngine;
@@ -159,6 +163,9 @@ export class WatchService {
           for (const warning of this.envSqlLog?.Redactor.Warnings(sqlLogPath) ?? []) {
             callbacks?.onWarn?.(warning);
           }
+          for (const warning of this.lookupSqlLog?.Rewriter.Warnings() ?? []) {
+            callbacks?.onWarn?.(warning);
+          }
         }
       }
     } catch (error) {
@@ -259,7 +266,7 @@ export class WatchService {
     const originalFields = { ...recordData.fields };
 
     // Field name → the variables whose values went into it; used for masking and the SQL log
-    const resolutionCollector: SyncResolutionCollector = { notes: [], fieldPrefix: 'primaryKey', EnvFields: new Map() };
+    const resolutionCollector: SyncResolutionCollector = { notes: [], fieldPrefix: 'primaryKey', EnvFields: new Map(), LookupSources: new Map() };
     const envMask = new EnvDisplayMask(resolutionCollector.EnvFields);
     
     // Build defaults from the record file's folders
@@ -373,6 +380,7 @@ export class WatchService {
     // A save that writes logs the full save SQL (logRecordChangeMetadata), so every env field is in the statement
     if (wasActuallyUpdated) {
       this.envSqlLog?.Redactor.RegisterEntityFields(entity, resolutionCollector.EnvFields, true);
+      this.lookupSqlLog?.Rewriter.RegisterEntityLookups(entity, resolutionCollector.LookupSources);
     }
 
     // Save the record; error text is masked for every variable resolved so far
@@ -503,9 +511,16 @@ export class WatchService {
           
           // Create the SQL logging session
           this.envSqlLog = new EnvSqlLog(this.syncEngine);
+          this.lookupSqlLog = new LookupSqlLog(this.syncEngine);
+          const schemaPlaceholders = ResolveSchemaPlaceholders(syncConfig, configManager.GetMJConfig());
           this.sqlLoggingSession = await provider.CreateSqlLogger(filepath, {
-            TransformStatement: this.envSqlLog.Redactor.Transform,
+            // Env values are left out first, then lookup IDs become subqueries (schema names in them
+            // become placeholders afterwards, in the logger)
+            TransformStatement: ComposeStatementTransforms(this.envSqlLog.Redactor.Transform, this.lookupSqlLog.Rewriter.Transform),
             formatAsMigration: syncConfig.sqlLogging?.formatAsMigration || false,
+            schemaPlaceholders,
+            // Escaping is tied to migration output, never to whether placeholder rules exist
+            escapeFlywaySyntax: syncConfig.sqlLogging?.formatAsMigration === true || syncConfig.sqlLogging?.escapeFlywaySyntax === true,
             description: 'MetadataSync watch operation',
             logRecordChangeMetadata: true,
             // batchSeparator is intentionally omitted — CreateSqlLogger injects the platform-appropriate
@@ -529,6 +544,8 @@ export class WatchService {
   private closeEnvSqlLog(): void {
     this.envSqlLog?.Close();
     this.envSqlLog = null;
+    this.lookupSqlLog?.Close();
+    this.lookupSqlLog = null;
   }
 }
 

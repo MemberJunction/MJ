@@ -319,6 +319,7 @@ All configuration is validated at startup using Zod schemas, with clear error me
 | `excludeSchemas` / `excludeTables` | Filter schemas and tables from metadata discovery |
 | `includeSchemas` | Opt-in positive scope: generate only these schemas (resolved into `excludeSchemas` **for this run**). Heal SQL logged into migrations uses `@IncludedSchemaNames` from this list plus authored `excludeSchemas` — never a snapshot of sibling apps on the publisher DB. |
 | `allowCrossSchemaCascadeDeletes` | Default **false**. Cascade-delete SQL is intra-schema only. `true` restores the old walk of every FK pointing at the entity, including other Open Apps. Dangerous; leave off. |
+| `cleanupStaleRelationships` | Default **false**: One To Many relationships whose join field no longer exists (or now points at another entity) are logged as warnings and kept. `true` deletes them. Only rows with `AutoUpdateFromSchema` set, between two in-scope entities, are considered. |
 | `entityPackageName` | String: npm package this emit writes. Record: install-time host map (those schemas are also skipped for local generation) |
 | `entityImportPackages` | Schema → npm map for peer classes this emit does **not** generate (embeds + related-record collections). See below. |
 | `entityNaming` | Controls ALL CAPS normalization and compound word splitting for entity/field names |

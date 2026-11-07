@@ -41,11 +41,11 @@ export class CreateRecordAction extends BaseRecordMutationAction {
      * 
      * @param params - The action parameters containing:
      *   - EntityName (required): The name of the entity to create
-     *   - Fields (required): Object containing field names and values to set
+     *   - Fields (required): Object (or JSON string) containing field names and values to set
      * 
      * @returns ActionResultSimple with:
      *   - Success: true if record was created successfully
-     *   - ResultCode: SUCCESS, FAILED, ENTITY_NOT_FOUND, VALIDATION_ERROR, PERMISSION_DENIED
+     *   - ResultCode: SUCCESS, FAILED, ENTITY_NOT_FOUND, VALIDATION_ERROR, INVALID_FIELD_NAMES, PERMISSION_DENIED
      *   - Message: Details about the operation
      *   - Params: Output parameter 'PrimaryKey' contains an object with the primary key field(s) and value(s)
      */
@@ -65,18 +65,22 @@ export class CreateRecordAction extends BaseRecordMutationAction {
             if (entityResult.error) return entityResult.error;
             const { entity, entityInfo } = entityResult;
 
+            // Fail fast on a misspelled field before creating anything
+            const fieldNamesError = this.validateFieldNames(entity!, entityInfo!, fields);
+            if (fieldNamesError) return fieldNamesError;
+
             // Set fields on the new entity
             entity!.NewRecord();
             
             // Set field values using base class method
-            this.setFieldValues(entity!, fields, entityName);
+            this.setFieldValues(entity!, fields, entityName, entityInfo);
 
             // Save the record
             const saveResult = await entity!.Save();
             
             if (saveResult) {
                 // Get the primary key value(s)
-                const primaryKeys: Record<string, any> = {};
+                const primaryKeys: Record<string, unknown> = {};
                 for (const pk of entityInfo!.PrimaryKeys) {
                     primaryKeys[pk.Name] = entity!.Get(pk.Name);
                 }

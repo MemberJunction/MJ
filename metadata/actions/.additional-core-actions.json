@@ -1480,6 +1480,9 @@
   {
     "fields": {
       "Name": "HTTP Request",
+      "Config": {
+        "outputTrustLevel": "Untrusted"
+      },
       "Description": "Make HTTP requests with full control over headers, authentication, and request options",
       "DriverClass": "__HTTPRequest",
       "Type": "Custom",
@@ -1731,8 +1734,8 @@
       "ID": "08D2ED22-D063-4E2C-80CD-ECFB50A83DAE"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:51.142Z",
-      "checksum": "26ebae37ddc03f90fd1397a3daef3608dfe8ec6695d6fb93c5ad5ea668c18c0c"
+      "lastModified": "2026-11-03T23:46:06.633Z",
+      "checksum": "98e6316b2014461eec1acfc0429bc11980352f004ed1c951389a00c60b705034"
     }
   },
   {
@@ -4197,6 +4200,9 @@
   {
     "fields": {
       "Name": "Perplexity Search",
+      "Config": {
+        "outputTrustLevel": "Untrusted"
+      },
       "Type": "Custom",
       "Description": "Queries Perplexity in one of two modes. 'search' (default) returns structured title/url/snippet web results from Perplexity's /search endpoint - fast and flat-priced. 'answer' returns a synthesised answer with citations from the Sonar models - slower and token-billed.",
       "Status": "Active",
@@ -4746,8 +4752,8 @@
       "ID": "D4DF539B-F739-4374-949A-01A880BE71EF"
     },
     "sync": {
-      "lastModified": "2026-09-21T02:45:25.878Z",
-      "checksum": "3fe3b7628d0b22b7deb1ba07281513dfef0a9982f439dbe7e08cae18f1344e9b"
+      "lastModified": "2026-11-03T23:46:06.648Z",
+      "checksum": "8d0b77ecd7593ca7c06f035082d11a3dd1c410d75298b719836fd230e407a4a2"
     }
   },
   {
@@ -5455,6 +5461,10 @@
           },
           "primaryKey": {
             "ID": "C9417E55-68B2-4F81-97D1-689E2A1B4723"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:35:15.240Z",
+            "checksum": "af8e7e1703f9d33138007eb7f8c5cc0aa2ba23be05ff578271abdd31cf431299"
           }
         },
         {

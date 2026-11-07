@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/document-parsing",
   "type": "module",
-  "version": "6.2.0-edge.5",
+  "version": "6.2.0",
   "description": "MemberJunction: Document Parsing - one implementation of turning PDF, Word and spreadsheet bytes into text, shared by the actions and the content pipeline.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,7 +19,7 @@
   "dependencies": {
     "exceljs": "^4.4.0",
     "mammoth": "^1.11.0",
-    "pdf-parse": "^1.1.1"
+    "pdf-parse": "^1.1.4"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

@@ -9,7 +9,8 @@ export {
     DEFAULT_EXPIRATION_WARNING_WINDOW_MS,
     CredentialResolutionError,
     CredentialExpiredError,
-    CredentialNotFoundError
+    CredentialNotFoundError,
+    CredentialOwnerMismatchError
 } from './expiration';
 
 export type {
@@ -34,7 +35,9 @@ export {
     AzureServicePrincipalCredentialValues,
     AWSIAMCredentialValues,
     DatabaseConnectionCredentialValues,
-    TwilioCredentialValues
+    TwilioCredentialValues,
+    UserDelegatedOAuthCredentialValues,
+    StoreUserDelegatedCredentialOptions
 } from './types';
 
 // Re-export entity types for convenience

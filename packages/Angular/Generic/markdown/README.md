@@ -116,6 +116,7 @@ export class YourModule {}
 | `containerClass` | `string` | `''` | Custom CSS class for container |
 | `mermaidTheme` | `string` | `'default'` | Mermaid theme (default/dark/forest/neutral/base) |
 | `sanitize` | `boolean` | `true` | Sanitize HTML output |
+| `OpenLinksInNewTab` | `boolean` | `false` | Open rendered HTML links (external and relative/same-origin URLs, whether bare `https://...` autolinks or `[text](url)` links) in a new browser tab (`target="_blank"` with `rel="noopener noreferrer"`). In-page fragment links (`#heading`), `mailto:` / `tel:` / `sms:` links, and raw HTML links with an explicit `target` keep their behaviour. PascalCase only |
 
 ## Outputs
 
@@ -124,6 +125,9 @@ export class YourModule {}
 | `rendered` | `MarkdownRenderEvent` | Emitted when rendering completes |
 | `headingClick` | `HeadingInfo` | Emitted when a heading is clicked |
 | `codeCopied` | `string` | Emitted when code is copied to clipboard |
+| `ImageClicked` | `ImageClickedEventArgs` | Emitted when a rendered image (not one inside a link) is clicked or activated by keyboard; images react only while this is bound |
+
+Tall images can be capped by the host with the `--mj-markdown-image-max-height` CSS custom property (unset: no cap), for example `--mj-markdown-image-max-height: 360px` on a chat column.
 
 ## Migration from ngx-markdown
 

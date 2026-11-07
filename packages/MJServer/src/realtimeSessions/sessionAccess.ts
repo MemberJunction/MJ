@@ -175,6 +175,12 @@ export interface SessionConversationScope {
     Readable: boolean;
 }
 
+/** {@link SessionConversationScope} plus the conversation's owner, for a conversation addressed without a session. */
+export interface ConversationScope extends SessionConversationScope {
+    /** `Conversation.UserID`, or null when the conversation was not read. */
+    UserID: string | null;
+}
+
 /**
  * Reads an already-loaded session's conversation under `contextUser` (so its row-level security applies).
  * A missing conversation, a refused read and a failed read (logged) all report `Readable: false`. For
@@ -186,21 +192,130 @@ export async function LoadSessionConversationScope(
     contextUser: UserInfo,
     provider: IMetadataProvider,
 ): Promise<SessionConversationScope> {
-    const unreadable: SessionConversationScope = { ExternalID: null, Readable: false };
     if (!session.ConversationID) {
+        return { ExternalID: null, Readable: false };
+    }
+    const { ExternalID, Readable } = await LoadConversationScope(session.ConversationID, contextUser, provider);
+    return { ExternalID, Readable };
+}
+
+/**
+ * Decides whether `contextUser` may address an already-loaded `session`: the {@link AuthorizeSessionAccess}
+ * decision, reading the session's conversation only when that decision needs it.
+ *
+ * {@link AuthorizeSessionAccess} decides a principal without a scope identity — a named user with no magic-link
+ * scope, the usual signed-in caller — from the owner check alone, and refuses a non-owner before it looks at
+ * anything else, so neither needs the conversation read. This function and that one encode the same rule on
+ * purpose and live together for that reason: change the rule there, change the read here. The
+ * `AuthorizeLoadedSession` table test in `sessionAccess.test.ts` fails if the two ever disagree.
+ *
+ * @param session - the session, loaded through the caller's own gate
+ * @param contextUser - the authenticated caller; the conversation, when read, is read as this user (RLS applies)
+ * @param provider - the request-scoped provider
+ */
+export async function AuthorizeLoadedSession(
+    session: MJAIAgentSessionEntity,
+    contextUser: UserInfo,
+    provider: IMetadataProvider,
+): Promise<SessionAccessDecision> {
+    const ownsSession = !!contextUser?.ID && !!session.UserID && UUIDsEqual(session.UserID, contextUser.ID);
+    if (!ownsSession || !ResolveSessionScopeIdentity(contextUser)) {
+        return AuthorizeSessionAccess({ SessionUserID: session.UserID, ConversationExternalID: null, ConversationReadable: false }, contextUser);
+    }
+    const conversation = await LoadSessionConversationScope(session, contextUser, provider);
+    return AuthorizeSessionAccess(
+        { SessionUserID: session.UserID, ConversationExternalID: conversation.ExternalID, ConversationReadable: conversation.Readable },
+        contextUser,
+    );
+}
+
+/**
+ * Reads a conversation's owner and scope id under `contextUser` (so its row-level security applies), for a
+ * caller that addresses the conversation directly rather than through a session — a text agent turn, for
+ * example, whose only handle is a message in it. Together with the caller's principal this is exactly the
+ * subject {@link AuthorizeSessionAccess} decides on: `SessionUserID` is the conversation's owner, since the
+ * session a conversation belongs to is owned by the same user.
+ *
+ * An empty id, a missing conversation, a refused read and a failed read (logged) all report
+ * `Readable: false` with no owner, which {@link AuthorizeSessionAccess} then refuses for any scoped caller.
+ */
+export async function LoadConversationScope(
+    conversationId: string | null | undefined,
+    contextUser: UserInfo,
+    provider: IMetadataProvider,
+): Promise<ConversationScope> {
+    const unreadable: ConversationScope = { UserID: null, ExternalID: null, Readable: false };
+    if (!conversationId) {
         return unreadable;
     }
     try {
         const conversation = await provider.GetEntityObject<MJConversationEntity>(CONVERSATION_ENTITY, contextUser);
-        if (!(await conversation.Load(session.ConversationID))) {
+        if (!(await conversation.Load(conversationId))) {
             return unreadable;
         }
-        return { ExternalID: conversation.ExternalID ?? null, Readable: true };
+        return { UserID: conversation.UserID ?? null, ExternalID: conversation.ExternalID ?? null, Readable: true };
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        LogError(`LoadSessionForAccess: could not read conversation ${session.ConversationID} of session ${session.ID}: ${message}`);
+        LogError(`LoadConversationScope: could not read conversation ${conversationId} for user ${contextUser?.ID}: ${message}`);
         return unreadable;
     }
+}
+
+/**
+ * Who may run a conversation turn (a text agent turn, addressed by a message in the conversation) in
+ * `conversationId`, decided the same way as session access.
+ *
+ * A NAMED principal is allowed without a read: its entity permissions and row filters already decided
+ * whether it could load the message, and a named user is fully identified by its `UserID`. An ANONYMOUS
+ * principal is not (see the module doc), so the conversation is read as the caller and
+ * {@link AuthorizeSessionAccess} compares its scope id with the conversation's stamp — the same
+ * decision #5997 applies to the realtime gates, so the text and voice paths agree on ownership.
+ * An unreadable conversation refuses (`not_owner`, there is no owner to match).
+ */
+export async function AuthorizeConversationTurn(
+    conversationId: string,
+    principal: UserInfo,
+    provider: IMetadataProvider,
+): Promise<SessionAccessDecision> {
+    if (!principal?.IsMagicLinkAnonymous) {
+        return { Allowed: true };
+    }
+    const scope = await LoadConversationScope(conversationId, principal, provider);
+    return AuthorizeSessionAccess(
+        { SessionUserID: scope.UserID ?? '', ConversationExternalID: scope.ExternalID, ConversationReadable: scope.Readable },
+        principal,
+    );
+}
+
+/**
+ * Whether an anonymous caller owns any of a LiveKit room's agent sessions — the check MJServer registers with
+ * `RoomAuthorizationService.SetAnonymousSessionOwnerCheck` (`@memberjunction/livekit-room-server` cannot import
+ * this package). Each session is loaded as the caller (its row-level security applies) and decided by
+ * {@link AuthorizeSessionAccess}, the same decision every realtime gate makes, so a room admits exactly the visitor
+ * whose scope id its session's conversation carries (MJ#6044). Nothing to read, or no provider: refused.
+ */
+export async function AuthorizeAnonymousRoomSessions(
+    agentSessionIds: string[],
+    user: UserInfo,
+    provider: IMetadataProvider | undefined,
+): Promise<boolean> {
+    if (agentSessionIds.length === 0 || !provider) {
+        return false;
+    }
+    for (const agentSessionId of agentSessionIds) {
+        const loaded = await LoadSessionForAccess(agentSessionId, user, provider);
+        if (!loaded) {
+            continue;
+        }
+        const decision = AuthorizeSessionAccess(
+            { SessionUserID: loaded.Session.UserID, ConversationExternalID: loaded.ConversationExternalID, ConversationReadable: loaded.ConversationReadable },
+            user,
+        );
+        if (decision.Allowed) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /**

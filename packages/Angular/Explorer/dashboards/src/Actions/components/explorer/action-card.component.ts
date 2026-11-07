@@ -10,6 +10,7 @@ import { MJActionCategoryEntity, MJActionExecutionLogEntity } from '@memberjunct
 import { MJActionEntityExtended } from '@memberjunction/actions-base';
 import { RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { IsActionResultSuccess } from '../../action-result-code';
 
 export interface ActionExecutionStats {
   totalExecutions: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
@@ -146,9 +147,9 @@ export class ActionCardComponent extends BaseAngularComponent {
           if (isSuccess !== undefined) {
             return isSuccess;
           }
-          // Fallback heuristic for unknown result codes
-          const code = e.ResultCode.toLowerCase();
-          return code === 'success' || code === 'ok' || code === 'completed';
+          // No `MJ: Action Result Codes` row declares this code — fall back to the shared
+          // classifier rather than a third private vocabulary.
+          return IsActionResultSuccess(e.ResultCode);
         }).length;
 
         this.ExecutionStats = {

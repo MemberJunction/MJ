@@ -13,7 +13,7 @@
  *
  * TRANSPORT: server. CalendarEventLinks runs server-side, and the fake provider and the handler are
  * ClassFactory registrations in this process. CL1 is the client leg: it needs MJAPI and MJ_API_KEY,
- * and skips loudly without them. It provisions its UI-role user THROUGH MJAPI on a second system-key
+ * and skips (SkipCheck) without them. It provisions its UI-role user THROUGH MJAPI on a second system-key
  * connection, so MJAPI's user cache holds the user with its role, then reads and writes as that user
  * on a third connection authenticated by the user's own API key. The process-global provider stays
  * the database provider throughout.
@@ -66,9 +66,9 @@ import type { CalendarLinkChange, SyncCalendarResult } from '@memberjunction/com
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { EscapeSQLString, MJGlobal, UUIDsEqual } from '@memberjunction/global';
-import { Assert, AssertEqual, IntegrationCheckRegistry, settle } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, settle, SkipCheck } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
-import { BuildSystemKeyProvider, BuildUserKeyProviderWithRetry } from './fls-client.checks';
+import { AssertProviderHasMetadata, BuildSystemKeyProvider, BuildUserKeyProviderWithRetry } from './fls-client.checks';
 
 const BUNDLE = 'calendar-event-links';
 const TAG = '(mj-integration-test — safe to delete)';
@@ -493,15 +493,16 @@ async function mintReaderKey(ctx: IntegrationCheckContext, wire: IMetadataProvid
     return created.RawKey;
 }
 
-/** The reader's own GraphQL connection, or null (with a loud skip) when MJAPI or MJ_API_KEY is missing. */
-async function connectUIReader(ctx: IntegrationCheckContext): Promise<GraphQLDataProvider | null> {
+/** The reader's own GraphQL connection; skips the running check when MJAPI or MJ_API_KEY is missing. */
+async function connectUIReader(ctx: IntegrationCheckContext): Promise<GraphQLDataProvider> {
     let wire: IMetadataProvider;
     try {
         wire = await BuildSystemKeyProvider();
     } catch (e) {
-        console.warn(`  ⚠ ${BUNDLE}.CL1 SKIPPED — needs MJAPI running and MJ_API_KEY set: ${e instanceof Error ? e.message : String(e)}`);
-        return null;
+        SkipCheck(`needs MJAPI running and MJ_API_KEY set: ${e instanceof Error ? e.message : String(e)}`);
     }
+    // Outside the try: CL1 may skip when there is no MJAPI, not when MJAPI answered and failed.
+    AssertProviderHasMetadata(wire, 'the system key provider');
     const userID = await createUIReader(ctx, wire);
     const rawKey = await mintReaderKey(ctx, wire, userID);
     return (await BuildUserKeyProviderWithRetry(rawKey)) as GraphQLDataProvider;
@@ -559,7 +560,6 @@ async function assertCreateRefused(reader: GraphQLDataProvider, typeName: string
 async function checkUIRoleOverGraphQL(ctx: IntegrationCheckContext): Promise<void> {
     const fx = requireFixture();
     const reader = await connectUIReader(ctx);
-    if (!reader) return;
     const seeds = await seedReadableRows(ctx, fx);
     await assertReaderReads(reader, LINK_ENTITY, seeds.LinkID);
     await assertReaderReads(reader, SYNC_STATE_ENTITY, seeds.SyncStateID);

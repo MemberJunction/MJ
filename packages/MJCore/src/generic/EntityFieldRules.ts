@@ -225,6 +225,7 @@ export class EntityFieldRules {
                     ExtraFilter: `[${lookup.MatchField}] = ${EntityFieldRules.sqlLiteral(lookup.MatchValue)}`,
                     Fields: [lookup.ReturnField],
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                     ResultType: 'simple',
                 },
                 this.contextUser,
