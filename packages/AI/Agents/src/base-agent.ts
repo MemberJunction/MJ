@@ -6645,16 +6645,31 @@ export class BaseAgent {
             ApplyScopedPromptConfig(configResolver, scopedConfigPromptId, this.scopedPromptConfigScope(params), promptParams);
         }
 
+        return promptParams;
+    }
+
+    /**
+     * Completes the prompt params once {@link preparePromptParams} — including any subclass override —
+     * has returned: builds the trailing runtime-state message and checks the outgoing history for replayed
+     * reasoning that no longer matches.
+     *
+     * This runs after the hook, not inside it, because building the trailing message can render the child
+     * prompt (a relocated specialization) and caches that render for the prompt runner. Rendered inside the
+     * hook, it would miss the template data a subclass adds after calling `super.preparePromptParams()`, and
+     * the prompt would be sent without it. The history comes from `promptParams.conversationMessages`, so a
+     * subclass's own changes to the outgoing messages are kept and the trailing message stays last.
+     */
+    private async finalizePromptParams<P>(promptParams: AIPromptParams, config: AgentConfiguration, payload: P, params: ExecuteAgentParams): Promise<AIPromptParams> {
         // Prompt-cache layout. The per-iteration state (and, when the child prompt is volatile, the
         // specialization) never lives in the system prompt; it rides as the FINAL message of THIS request.
         // In append-only mode (OpenAI prompt caching), prior runtime-state fragments are retained in history
         // so each turn extends the exact byte prefix of the previous request, maintaining ~93% cache hits.
         // In replace-in-place mode (Gemini/Cerebras), only the latest fragment is attached, keeping history lean.
-        const volatileStateMessage = await this.buildVolatileStateMessage(params, promptParams, payload, childPrompt, agentType, systemPrompt);
+        const volatileStateMessage = await this.buildVolatileStateMessage(params, promptParams, payload, config.childPrompt, config.agentType, config.systemPrompt);
         if (volatileStateMessage) {
             const isAppendOnly = this.shouldUseAppendOnlyTrailingState(promptParams);
             this.restoreTurn1VolatileStateIfNeeded(params, isAppendOnly);
-            promptParams.conversationMessages = this.assembleOutgoingMessages(params.conversationMessages, volatileStateMessage, isAppendOnly);
+            promptParams.conversationMessages = this.assembleOutgoingMessages(promptParams.conversationMessages ?? params.conversationMessages, volatileStateMessage, isAppendOnly);
             if (isAppendOnly) {
                 params.conversationMessages.push(volatileStateMessage);
             }
@@ -6663,7 +6678,6 @@ export class BaseAgent {
         if (promptParams.conversationMessages) {
             promptParams.conversationMessages = this.dropReasoningBehindChangedHistory(params, promptParams.conversationMessages, promptParams);
         }
-
         return promptParams;
     }
 
@@ -16905,7 +16919,8 @@ The context is now within limits. Please retry your request with the recovered c
                 // don't need to save here, the run will be saved later
             }
 
-            const promptParams = await this.preparePromptParams(promptConfig, downstreamPayload, params);
+            const promptParams = await this.finalizePromptParams(
+                await this.preparePromptParams(promptConfig, downstreamPayload, params), promptConfig, downstreamPayload, params);
             
             // Pass cancellation token and streaming callbacks to prompt execution.
             // Coalesce rapid token chunks within a ~35ms window while emitting the first chunk immediately
