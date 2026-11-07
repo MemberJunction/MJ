@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "T3 -> S-T.1",
+    "Description": "Gate G1.5 (phase 1, dataset T3, criterion S-T.1): SamePeriodTarget is refused naming the column and LagTarget (period ≤ t − 1) is accepted, 1 of 1 each (the reference flags `SamePeriodTarget` only, `logs/P5/summary.txt`). SamePeriodTarget is refused both undeclared and declared 0 periods back (future-period-lag, lag 0). It fails when feature resolution drops the same-period PeriodOffsets refusal for either case: an undeclared offset accepted, or a declared offset inside the horizon accepted.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G1.5\",\"owner:PR3\",\"phase:1\",\"dataset:T3\",\"criterion:S-T.1\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "SamePeriodTarget refused by name (future-period-lag) undeclared, 1 of 1, and declared 0 periods back (lag 0), 1 of 1; LagTarget declared one period back trains to Completed, 1 of 1."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-t3-s-t-1"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "2A6DAF43-6330-43DC-8326-C651984A8D22"
+  }
+}
