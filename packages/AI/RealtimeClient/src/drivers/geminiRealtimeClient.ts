@@ -1205,18 +1205,20 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * (30 minutes). After that, or once those connections are spent, every attempt fails and the
      * session ends with a fatal error.
      *
-     * @param handle The resumption handle Google issued.
+     * @param handle The resumption handle Google issued, or `null` to open the connection with the
+     *               session's config unchanged (no `handle` key), for a driver that reseeds
+     *               the conversation itself.
      * @param attempt Marks the attempt abandoned after a timeout or a consumer close; a
      *                connection that opens after that is closed instead of used.
      */
-    protected async resumeSession(handle: string, attempt: RealtimeResumeAttempt): Promise<void> {
+    protected async resumeSession(handle: string | null, attempt: RealtimeResumeAttempt): Promise<void> {
         const target = this.connectTarget;
         if (!target) {
             throw new Error('there is no Gemini Live session to resume');
         }
         const resumeTarget: GeminiConnectTarget = {
             ...target,
-            Config: { ...target.Config, sessionResumption: { ...target.Config.sessionResumption, handle } },
+            Config: handle === null ? target.Config : { ...target.Config, sessionResumption: { ...target.Config.sessionResumption, handle } },
         };
         const opened = await this.openConnection(resumeTarget);
         await GeminiRealtimeClient.awaitSetup(opened);
