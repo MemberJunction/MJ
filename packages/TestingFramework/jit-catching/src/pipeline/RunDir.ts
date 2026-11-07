@@ -5,6 +5,8 @@ import type { RedactionCheck } from '../sandbox/Redaction';
 
 /** A run ID is used as a folder name, so it may hold only letters, digits, `-` and `_`. */
 const RUN_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+/** True when `id` can be used as a run folder name. */
+export function IsValidRunID(id: string): boolean { return RUN_ID_RE.test(id); }
 
 /**
  * The folder of one run, `<root>/.jit-catch/runs/<run ID>`, and the files passed between the three jobs.
@@ -15,7 +17,7 @@ export class RunDir {
     public readonly TranscriptDir: string;
 
     constructor(root: string, public readonly RunID: string, private readonly redaction: RedactionCheck) {
-        if (!RUN_ID_RE.test(RunID)) throw new Error(`invalid run ID ${JSON.stringify(RunID)}: use letters, digits, '-' and '_' only`);
+        if (!IsValidRunID(RunID)) throw new Error(`invalid run ID ${JSON.stringify(RunID)}: use letters, digits, '-' and '_' only`);
         this.Path = join(root, '.jit-catch', 'runs', RunID);
         this.TranscriptDir = join(this.Path, 'transcripts');
         mkdirSync(this.TranscriptDir, { recursive: true });

@@ -11,6 +11,7 @@ import { GenerateStep } from './pipeline/Generate';
 import { ExecuteStep } from './pipeline/Execute';
 import { AssessStep } from './pipeline/Assess';
 import { RunAll } from './pipeline/Run';
+import { IsValidRunID } from './pipeline/RunDir';
 
 export const COMMANDS = ['generate', 'execute', 'assess', 'run', 'recheck', 'feedback', 'backtest', 'label', 'report'] as const;
 export type CommandName = (typeof COMMANDS)[number];
@@ -76,6 +77,7 @@ function parse(argv: string[]): Parsed {
     const p: Parsed = { Command: command, PR: values.pr !== undefined ? Number(values.pr) : null, RunID: values.run ?? null, Base: values.base, Head: values.head, Trigger: trigger.data, SettingsPath: values.settings, Store: values.store };
     if ((command === 'generate' || command === 'run') && p.PR === null && !p.Head) throw new UsageError(`${command} needs --pr or --head`);
     if ((command === 'execute' || command === 'assess') && !p.RunID) throw new UsageError(`${command} needs --run`);
+    if (p.RunID !== null && !IsValidRunID(p.RunID)) throw new UsageError(`--run must be a run ID (letters, digits, '-' and '_'), not ${JSON.stringify(p.RunID)}`);
     return p;
 }
 

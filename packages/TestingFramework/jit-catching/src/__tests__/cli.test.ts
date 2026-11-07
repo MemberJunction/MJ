@@ -47,4 +47,11 @@ describe('Main', () => {
     expect(stderr.join('')).not.toContain(token);
     expect(stderr.join('')).toMatch(/^jit-catch assess: /);
   });
+
+  it('returns 2 with a usage error for a --run value that is not a plain run ID', async () => {
+    const d = deps();
+    expect(await Main(['execute', '--run', '../../x'], d)).toBe(2);
+    expect(stderr.join('')).toMatch(/usage/);
+    expect(d.ExecuteStep).not.toHaveBeenCalled();
+  });
 });
