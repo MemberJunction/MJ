@@ -65,6 +65,12 @@ const GEMINI_OUTPUT_SAMPLE_RATE = 24000;
 
 /** How much microphone audio is held while the session moves to a new connection; older audio is dropped first. */
 const HELD_MIC_AUDIO_SECONDS = 2;
+/**
+ * How long before the connection lifetime the mint reports (`connectionLifetimeSeconds`) the session moves to a new
+ * connection. The provider holds its own copy, `GEMINI_PLANNED_MOVE_MARGIN_SECONDS` in `@memberjunction/ai-gemini`, to
+ * budget the token's uses: this client must not import the provider package, so the two are kept equal by hand.
+ */
+const REALTIME_PLANNED_MOVE_MARGIN_MS = 60_000;
 /** {@link HELD_MIC_AUDIO_SECONDS} of 16 kHz, 16-bit mono PCM, as the base64 characters the chunks travel in. */
 const MAX_HELD_MIC_AUDIO_BASE64_CHARS = Math.ceil((GEMINI_INPUT_SAMPLE_RATE * 2 * HELD_MIC_AUDIO_SECONDS * 4) / 3);
 
@@ -160,6 +166,8 @@ interface GeminiParsedSessionConfig {
     requestedTracks?: readonly RealtimeTrackDescriptor[];
     /** The avatar the server granted this session, or `null` when it granted none. */
     avatar: GeminiAvatarGrant | null;
+    /** How long Google keeps one connection open, from the mint; `undefined` when the mint names none (no planned move). */
+    connectionLifetimeSeconds?: number;
 }
 
 /** A connection {@link GeminiRealtimeClient} opened, with the number that marks it as current. */
@@ -301,6 +309,13 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * move waits until no turn is in progress ({@link IsTurnOpen}). Created per {@link Connect}.
      */
     private resumption: RealtimeSessionResumption | null = null;
+    /**
+     * Ends the connection in use shortly before Google's lifetime for it runs out ({@link armPlannedMove}); Google closes
+     * the socket at that age with no warning. `null` when none is armed.
+     */
+    private plannedMoveTimer: ReturnType<typeof setTimeout> | null = null;
+    /** Milliseconds from a connection coming into use to its planned move; `null` when the session plans none. Set per {@link Connect}. */
+    private plannedMoveDelayMs: number | null = null;
     /**
      * Every final turn the model saw, sent on each new connection ({@link seedConversation}). Entries
      * are recorded when they go out on the wire or arrive final, never when queued: a send queued
@@ -483,6 +498,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         const liveConfig = this.prepareAvatar(session, playback);
         this.resumption?.Dispose();
         this.resumption = this.createResumption();
+        this.plannedMoveDelayMs = GeminiRealtimeClient.plannedMoveDelayFor(session.connectionLifetimeSeconds);
         const target: GeminiConnectTarget = {
             Model: session.model,
             Config: liveConfig,
@@ -709,6 +725,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.playback?.Close();
         this.playback = null;
         // Stop resuming before the socket closes, and drop events still in flight from it.
+        this.clearPlannedMove();
+        this.plannedMoveDelayMs = null;
         this.resumption?.Dispose();
         this.resumption = null;
         this.connectTarget = null;
@@ -1053,9 +1071,12 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         const rawMaxStreams = sessionConfig['maxInboundVideoStreams'];
         const maxInboundVideoStreams =
             typeof rawMaxStreams === 'number' && Number.isInteger(rawMaxStreams) && rawMaxStreams >= 0 ? rawMaxStreams : undefined;
+        const rawLifetime = sessionConfig['connectionLifetimeSeconds'];
+        const connectionLifetimeSeconds =
+            typeof rawLifetime === 'number' && Number.isFinite(rawLifetime) && rawLifetime > 0 ? rawLifetime : undefined;
         return {
             model, liveConfig, idleSignal, supportsScheduling, supportsBlocking, supportsInboundVideo, maxInboundVideoRate,
-            maxInboundVideoStreams,
+            maxInboundVideoStreams, connectionLifetimeSeconds,
             requestedTracks: GeminiRealtimeClient.readRequestedTracks(sessionConfig[REQUESTED_TRACKS_SESSION_KEY]),
             avatar: GeminiRealtimeClient.readAvatarGrant(sessionConfig['avatar']),
         };
@@ -1329,10 +1350,57 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         return event.message || (event.error instanceof Error ? event.error.message : String(event.error ?? 'unknown'));
     }
 
-    /** Makes an opened connection the one in use. */
+    /** Makes an opened connection the one in use, and starts its lifetime clock ({@link armPlannedMove}). */
     private useConnection(opened: GeminiOpenedConnection): void {
         this.session = opened.Session;
         this.currentConnection = opened.ConnectionNumber;
+        this.armPlannedMove();
+    }
+
+    /**
+     * The delay to a connection's planned move: its lifetime minus {@link REALTIME_PLANNED_MOVE_MARGIN_MS}, or `null` when
+     * the mint names no lifetime (Gemini Enterprise: Vertex announces the end itself) or names one the margin leaves no
+     * time in. That absence is the only gate; whether the seed or a handle is the memory does not enter into it.
+     */
+    private static plannedMoveDelayFor(lifetimeSeconds: number | undefined): number | null {
+        if (lifetimeSeconds === undefined) {
+            return null;
+        }
+        const delayMs = lifetimeSeconds * 1000 - REALTIME_PLANNED_MOVE_MARGIN_MS;
+        if (delayMs <= 0) {
+            RealtimeDiagLog(
+                `[GeminiRealtimeClient] no planned move: a connection lifetime of ${lifetimeSeconds}s is not longer than the ` +
+                    `${REALTIME_PLANNED_MOVE_MARGIN_MS / 1000}s margin`
+            );
+            return null;
+        }
+        return delayMs;
+    }
+
+    /**
+     * Starts the clock on the connection now in use: when it runs out, the session moves to a new connection through
+     * {@link RealtimeSessionResumption.ConnectionEnding} (at once with no turn open, at the turn's end, or at its deadline),
+     * so the move comes at a turn boundary instead of Google's cut. Replaces any earlier clock.
+     */
+    private armPlannedMove(): void {
+        this.clearPlannedMove();
+        if (this.plannedMoveDelayMs === null) {
+            return;
+        }
+        const delayMs = this.plannedMoveDelayMs;
+        this.plannedMoveTimer = setTimeout(() => {
+            this.plannedMoveTimer = null;
+            this.resumption?.ConnectionEnding(REALTIME_PLANNED_MOVE_MARGIN_MS);
+        }, delayMs);
+        RealtimeDiagLog(`[GeminiRealtimeClient] planned move armed at ${delayMs / 1000}s`);
+    }
+
+    /** Stops the clock of the connection in use. */
+    private clearPlannedMove(): void {
+        if (this.plannedMoveTimer !== null) {
+            clearTimeout(this.plannedMoveTimer);
+            this.plannedMoveTimer = null;
+        }
     }
 
     /**
@@ -1424,6 +1492,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         if (this.currentState === 'closed' || this.currentState === 'error') {
             return;
         }
+        this.clearPlannedMove();
         this.emitError({ Message: `Gemini Live connection was lost and could not be resumed: ${error.message}`, Fatal: true });
         this.setState('error');
     }
