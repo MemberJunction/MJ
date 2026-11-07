@@ -27,10 +27,13 @@ function world() {
 const req = (root: string): GenerationRequest => ({ Run: { ID: 'r' } as never, Analysis: { IntentType: 'perf', Summary: 's', Title: 't', Body: '', ChangedFiles: [{ Path: 'packages/MJCore/src/a.ts', Package: '@memberjunction/core', AddedLines: [1], RemovedLineCount: 0, Hunks: [] }] } as never,
   Package: '@memberjunction/core', PackageDir: join(root, 'packages/MJCore'), BaseRootDir: root, Method: 'DodgyDiff', Risk: null, Model: 'claude-haiku-5-5', Limits: { ...DEFAULT_SETTINGS.Limits, TestsPerPackage: 2 } });
 
+/** The file IDs a session may write, as its system prompt lists them (`- <id>.jit.test.ts`). */
+function IdsFromPrompt(prompt: string): string[] { return [...prompt.matchAll(/- ([0-9a-f-]{36})\.jit\.test\.ts/g)].map((m) => m[1]); }
+
 /** A scripted agent: writes files and calls run_test through the same hooks the SDK wrapper exposes. */
-function scriptedRunner(script: (hooks: { WriteFile: (p: string, s: string) => Promise<string>; RunTest: (file: string) => Promise<unknown> }) => Promise<void>) {
-  return async function* (_prompt: string, _system: string, o: { Hooks: { WriteFile: (p: string, s: string) => Promise<string>; RunTest: (file: string) => Promise<unknown> } }): AsyncIterable<AgentMessage> {
-    await script(o.Hooks);
+function scriptedRunner(script: (hooks: { WriteFile: (p: string, s: string) => Promise<string>; RunTest: (file: string) => Promise<unknown> }, ids: string[]) => Promise<void>) {
+  return async function* (_prompt: string, system: string, o: { Hooks: { WriteFile: (p: string, s: string) => Promise<string>; RunTest: (file: string) => Promise<unknown> } }): AsyncIterable<AgentMessage> {
+    await script(o.Hooks, IdsFromPrompt(system));
     yield { Type: 'result', Usage: { InputTokens: 100, OutputTokens: 50, CacheReadTokens: 0 }, CostUSD: 0.01, Turns: 3, Subtype: 'success' };
   };
 }
@@ -39,12 +42,22 @@ describe('ClaudeAgentGenerator', () => {
   it('keeps only tests the agent proved pass on base, in the pre-allocated files', async () => {
     const root = world(); const ran: string[] = [];
     const gen = new ClaudeAgentGenerator({ Sandbox: {} as never, ScratchRoot: root, Settings: DEFAULT_SETTINGS, PackageMap: { Get: () => ({ Name: '@memberjunction/core', Dir: 'packages/MJCore', HasVitest: true, HasTests: true }) } as never, TranscriptDir: root,
-      Runner: scriptedRunner(async (h) => { const ids = gen.AllocatedIDs; await h.WriteFile(`packages/MJCore/src/__tests__/jit/${ids[0]}.jit.test.ts`, 'proved'); await h.RunTest(`packages/MJCore/src/__tests__/jit/${ids[0]}.jit.test.ts`); await h.WriteFile(`packages/MJCore/src/__tests__/jit/${ids[1]}.jit.test.ts`, 'never run'); }),
+      Runner: scriptedRunner(async (h, ids) => { await h.WriteFile(`packages/MJCore/src/__tests__/jit/${ids[0]}.jit.test.ts`, 'proved'); await h.RunTest(`packages/MJCore/src/__tests__/jit/${ids[0]}.jit.test.ts`); await h.WriteFile(`packages/MJCore/src/__tests__/jit/${ids[1]}.jit.test.ts`, 'never run'); }),
       RunTestFactory: () => ({ Run: async (i: { File: string }) => { ran.push(i.File); return { Ran: true, Status: 'Pass', TestName: 't', Failure: null, DurationMs: 1 }; }, LastMutant: null }) as never });
     const r = await gen.Generate(req(root));
     expect(r.Tests.filter((t) => t.GenerationOutcome === 'Produced').map((t) => t.Source)).toEqual(['proved']);
     expect(r.Tests.find((t) => t.GenerationOutcome === 'Failed')?.FailureReason).toMatch(/never proved/);
     expect(r.Tokens).toMatchObject({ InputTokens: 100, OutputTokens: 50, Model: 'claude-haiku-5-5' });
+  });
+  it('keeps no allocated IDs on the instance, so parallel sessions each produce tests in their own files', async () => {
+    const root = world();
+    const gen = new ClaudeAgentGenerator({ Sandbox: {} as never, ScratchRoot: root, Settings: DEFAULT_SETTINGS, PackageMap: { Get: () => ({ Name: '@memberjunction/core', Dir: 'packages/MJCore', HasVitest: true, HasTests: true }) } as never, TranscriptDir: root,
+      Runner: scriptedRunner(async (h, ids) => { const f = `packages/MJCore/src/__tests__/jit/${ids[0]}.jit.test.ts`; await h.WriteFile(f, ids[0]); await new Promise((r) => setTimeout(r, 5)); await h.RunTest(f); }),
+      RunTestFactory: () => ({ Run: async () => ({ Ran: true, Status: 'Pass', TestName: 't', Failure: null, DurationMs: 1 }), LastMutant: null }) as never });
+    expect(Object.keys(gen)).not.toContain('AllocatedIDs');
+    const [a, b] = await Promise.all([gen.Generate(req(root)), gen.Generate(req(root))]);
+    for (const r of [a, b]) { expect(r.Tests).toHaveLength(1); expect(r.Tests[0]).toMatchObject({ GenerationOutcome: 'Produced', Source: r.Tests[0].ID }); }
+    expect(a.Tests[0].ID).not.toBe(b.Tests[0].ID);
   });
   it('refuses a write outside the jit folder', async () => {
     const root = world(); let denied = '';
@@ -60,7 +73,7 @@ type Status = 'Pass' | 'Fail' | 'RunnerError';
 /** A generator over `root` whose run_test answers `status`; `script` drives the agent with the allocated IDs. */
 function generator(root: string, script: (h: { WriteFile: (p: string, s: string) => Promise<string>; RunTest: (file: string) => Promise<unknown> }, ids: string[]) => Promise<void>, status: Status = 'Pass', extra: AgentMessage[] = []) {
   const gen: ClaudeAgentGenerator = new ClaudeAgentGenerator({ Sandbox: {} as never, ScratchRoot: root, Settings: DEFAULT_SETTINGS, PackageMap: { Get: () => ({ Name: '@memberjunction/core', Dir: 'packages/MJCore', HasVitest: true, HasTests: true }) } as never, TranscriptDir: join(root, 'transcripts'),
-    Runner: async function* (_p, _s, o) { await script(o.Hooks, gen.AllocatedIDs); yield* extra; yield { Type: 'result', Usage: { InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0 }, CostUSD: 0, Turns: 1, Subtype: 'success' }; },
+    Runner: async function* (_p, system, o) { await script(o.Hooks, IdsFromPrompt(system)); yield* extra; yield { Type: 'result', Usage: { InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0 }, CostUSD: 0, Turns: 1, Subtype: 'success' }; },
     RunTestFactory: () => ({ Run: async () => ({ Ran: true, Status: status, TestName: null, Failure: null, DurationMs: 0 }), LastMutant: null }) as never });
   return gen;
 }
@@ -120,8 +133,8 @@ describe('ClaudeAgentGenerator proof of the content that ran', () => {
   it('does not credit a run to a source written while that run was in progress', async () => {
     const root = world(); const f = `${JIT}/`;
     const gen: ClaudeAgentGenerator = new ClaudeAgentGenerator({ Sandbox: {} as never, ScratchRoot: root, Settings: DEFAULT_SETTINGS, PackageMap: { Get: () => ({ Name: '@memberjunction/core', Dir: 'packages/MJCore', HasVitest: true, HasTests: true }) } as never, TranscriptDir: join(root, 'transcripts'),
-      Runner: async function* (_p, _s, o) {
-        const file = `${f}${gen.AllocatedIDs[0]}.jit.test.ts`;
+      Runner: async function* (_p, system, o) {
+        const file = `${f}${IdsFromPrompt(system)[0]}.jit.test.ts`;
         await o.Hooks.WriteFile(file, 'v1'); await Promise.all([o.Hooks.RunTest(file), o.Hooks.WriteFile(file, 'v2 never run')]);
         yield { Type: 'result', Usage: { InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0 }, CostUSD: 0, Turns: 1, Subtype: 'success' };
       },
