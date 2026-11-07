@@ -66,6 +66,9 @@ export function IsWhiteboardHexColor(value: string): boolean {
   return WHITEBOARD_HEX_COLOR.test(value);
 }
 
+/** Ink color a loaded stroke gets when its persisted color is not a hex color: the first user pen color. */
+const FALLBACK_INK_COLOR = '#cbd5e1';
+
 /**
  * Font family choices for text labels / stickies. The keys are mapped to token-friendly
  * font stacks in the board CSS (`wb-font-serif`, `wb-font-mono`; sans is the default).
@@ -2143,7 +2146,9 @@ export class WhiteboardState {
    * Coerce the closed-set item fields of persisted items so hostile values from a shared
    * board never enter state: `Author` becomes `'agent'` or `'user'`, and a `FontWeight` /
    * `FontFamily` outside its literal set is dropped (the item falls back to the CSS
-   * default). Non-object entries are dropped (restore would skip them anyway).
+   * default). A `Color` that is not a hex color ({@link IsWhiteboardHexColor}) is dropped from
+   * text and replaced on ink, whose color is required. Non-object entries are dropped (restore
+   * would skip them anyway).
    */
   private static normalizePersistedItems(entries: unknown[]): WhiteboardItem[] {
     const items: WhiteboardItem[] = [];
@@ -2158,6 +2163,14 @@ export class WhiteboardState {
       }
       if ('FontFamily' in item && !IsWhiteboardFontFamily(item['FontFamily'])) {
         delete item['FontFamily'];
+      }
+      const color = item['Color'];
+      if ('Color' in item && !(typeof color === 'string' && IsWhiteboardHexColor(color))) {
+        if (item['Kind'] === 'ink') {
+          item['Color'] = FALLBACK_INK_COLOR;
+        } else {
+          delete item['Color'];
+        }
       }
       items.push(item as unknown as WhiteboardItem);
     }

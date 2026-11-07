@@ -5,7 +5,7 @@ import {
   BuildWhiteboardExportSvg,
   WhiteboardExportOptions
 } from '../lib/whiteboard-export';
-import { WhiteboardState, WhiteboardStickyItem, WhiteboardTextItem } from '../lib/whiteboard-state';
+import { WhiteboardInkItem, WhiteboardState, WhiteboardStickyItem, WhiteboardTextItem } from '../lib/whiteboard-state';
 
 /**
  * HOSTILE SHARED BOARDS (CodeQL #366 / #367, issue #5569) — board JSON is shared between
@@ -95,5 +95,48 @@ describe('FromJSON coerces hostile persisted items', () => {
     expect(hostile.Author).toBe('user');
     expect(hostile.FontWeight).toBeUndefined();
     expect(hostile.FontFamily).toBeUndefined();
+  });
+});
+
+describe('hostile Color values (a CSS declaration hidden in a color)', () => {
+  const HOSTILE_COLOR = 'red;background:url(https://attacker.example.test/pixel.gif)';
+
+  function buildColorState(): WhiteboardState {
+    const state = new WhiteboardState();
+    const text = state.AddItem({ Kind: 'text', X: 0, Y: 0, Text: 'label' }, 'user');
+    const ink = state.AddItem({ Kind: 'ink', Points: [{ X: 0, Y: 0 }, { X: 10, Y: 10 }], Color: '#fbbf24', StrokeWidth: 2 }, 'user');
+    Object.assign(state.GetItem(text.ID)!, { Color: HOSTILE_COLOR });
+    Object.assign(state.GetItem(ink.ID)!, { Color: HOSTILE_COLOR });
+    return state;
+  }
+
+  it('HTML, all-pages and SVG exports never write a non-hex color', () => {
+    for (const output of [
+      BuildWhiteboardExportHtml(buildColorState(), OPTS),
+      BuildWhiteboardExportHtmlAllPages(buildColorState(), OPTS),
+      BuildWhiteboardExportSvg(buildColorState()),
+    ]) {
+      expect(output).not.toContain('attacker.example.test');
+      expect(output).not.toContain('background:url');
+    }
+  });
+
+  it('a hex color still renders', () => {
+    const state = new WhiteboardState();
+    state.AddItem({ Kind: 'text', X: 0, Y: 0, Text: 'label', Color: '#f87171' }, 'user');
+    expect(BuildWhiteboardExportHtml(state, OPTS)).toContain('color:#f87171;');
+    expect(BuildWhiteboardExportSvg(state)).toContain('fill="#f87171"');
+  });
+
+  it('FromJSON drops a non-hex text color and replaces a non-hex ink color', () => {
+    const items = [
+      { ID: 'text-1', Kind: 'text', X: 0, Y: 0, Text: 'a', Z: 1, Author: 'user', Color: HOSTILE_COLOR },
+      { ID: 'ink-2', Kind: 'ink', Points: [{ X: 0, Y: 0 }], Z: 2, Author: 'user', Color: HOSTILE_COLOR, StrokeWidth: 2 },
+      { ID: 'text-3', Kind: 'text', X: 0, Y: 0, Text: 'b', Z: 3, Author: 'user', Color: '#4ade80' },
+    ];
+    const state = WhiteboardState.FromJSON(JSON.stringify({ version: 1, items }));
+    expect((state.GetItem('text-1') as WhiteboardTextItem).Color).toBeUndefined();
+    expect((state.GetItem('ink-2') as WhiteboardInkItem).Color).toBe('#cbd5e1');
+    expect((state.GetItem('text-3') as WhiteboardTextItem).Color).toBe('#4ade80');
   });
 });
