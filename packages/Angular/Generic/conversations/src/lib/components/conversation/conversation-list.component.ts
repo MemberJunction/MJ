@@ -24,6 +24,7 @@ import {
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { BeforeFolderEditEventArgs, AfterFolderEditEventArgs } from '../../events/chat-events';
 
 /**
  * A node in the conversation folder tree. Each node holds its project (folder),
@@ -540,7 +541,7 @@ interface ListContextMenu {
             @if (CanManageFolder(ContextMenu.folder)) {
               <button class="menu-item" (click)="ContextEditFolder($event)">
                 <i class="fas fa-pen"></i>
-                <span>Rename</span>
+                <span>{{ FolderEditLabel }}</span>
               </button>
               <div class="menu-divider"></div>
               <button class="menu-item danger" (click)="ContextDeleteFolder($event)">
@@ -1326,6 +1327,17 @@ export class ConversationListComponent implements OnInit, OnDestroy {
    *  header, so a headerless tree would allow one-way folder nesting) — the
    *  chrome-less rendering for embedded hosts. */
   @Input() ShowSectionHeaders: boolean = true;
+  /** Label shown on the folder right-click menu's edit action (default `'Rename'`).
+   *  Hosts that open a full project/workspace editor can set this to `'Edit'`. */
+  @Input() FolderEditLabel: string = 'Rename';
+  /** @deprecated Use {@link FolderEditLabel}. */
+  @Input() set folderEditLabel(value: string) {
+    this.FolderEditLabel = value;
+  }
+  /** @deprecated Use {@link FolderEditLabel}. */
+  get folderEditLabel(): string {
+    return this.FolderEditLabel;
+  }
 
   @Output() ConversationSelected = new EventEmitter<string>();
   /**
@@ -1388,6 +1400,33 @@ export class ConversationListComponent implements OnInit, OnDestroy {
    * cannot answer "where did we discuss X" — the host owns that surface and the routing to it.
    */
   @Output() SearchEscalated = new EventEmitter<string>();
+
+  /**
+   * Cancelable — fired BEFORE the built-in folder edit modal opens. Set `event.Cancel = true`
+   * to open a host-provided project/folder editor instead; `AfterFolderEdit` then does not fire.
+   */
+  @Output() BeforeFolderEdit = new EventEmitter<BeforeFolderEditEventArgs>();
+  /**
+   * @deprecated Use {@link BeforeFolderEdit}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (beforeFolderEdit) keeps working. Must stay AFTER BeforeFolderEdit: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() beforeFolderEdit = this.BeforeFolderEdit;
+  /**
+   * Fired AFTER a folder's edits are saved through the built-in modal.
+   * Not fired when `BeforeFolderEdit` was canceled.
+   */
+  @Output() AfterFolderEdit = new EventEmitter<AfterFolderEditEventArgs>();
+  /**
+   * @deprecated Use {@link AfterFolderEdit}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (afterFolderEdit) keeps working. Must stay AFTER AfterFolderEdit: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() afterFolderEdit = this.AfterFolderEdit;
 
   public DirectMessagesExpanded: boolean = true;
   public PinnedExpanded: boolean = true;
@@ -2498,7 +2537,14 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   public EditFolder(project: MJProjectEntity, event?: Event): void {
     if (event) event.stopPropagation();
-    this.openFolderModal(project, null);
+    const beforeArgs = new BeforeFolderEditEventArgs(project);
+    this.BeforeFolderEdit.emit(beforeArgs);
+    if (beforeArgs.Cancel) {
+      return;
+    }
+    this.openFolderModal(project, null, (saved) => {
+      this.AfterFolderEdit.emit(new AfterFolderEditEventArgs(saved));
+    });
   }
 
   private openFolderModal(

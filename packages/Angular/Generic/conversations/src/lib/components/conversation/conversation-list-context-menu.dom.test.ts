@@ -251,6 +251,62 @@ describe('ConversationListComponent (DOM) — right-click menu on folders and em
     expect(labels.some(l => l.includes('Delete'))).toBe(false);
   });
 
+  it('renders custom FolderEditLabel when configured', () => {
+    const { f } = render((c) => {
+      c.FolderEditLabel = 'Edit';
+    });
+    rightClickOn(f, query(f, '.folder-row') as Element);
+    const labels = menuLabels(f);
+    expect(labels.some(l => l === 'Edit')).toBe(true);
+    expect(labels.some(l => l.includes('Rename'))).toBe(false);
+  });
+
+  it('cancels the built-in folder modal when a BeforeFolderEdit listener sets Cancel = true', () => {
+    const openDialog = vi.fn();
+    const afterEdited = vi.fn();
+    const { f } = render((c) => {
+      c.FolderEditLabel = 'Edit';
+      (c as unknown as { mjDialogService: unknown }).mjDialogService = { open: openDialog };
+      c.BeforeFolderEdit.subscribe((args) => {
+        args.Cancel = true;
+      });
+      c.AfterFolderEdit.subscribe(afterEdited);
+    });
+    rightClickOn(f, query(f, '.folder-row') as Element);
+    findItem(f, 'Edit').click();
+    f.detectChanges();
+    expect(openDialog).not.toHaveBeenCalled();
+    expect(afterEdited).not.toHaveBeenCalled();
+  });
+
+  it('opens the built-in folder modal and emits AfterFolderEdit when BeforeFolderEdit is not canceled', () => {
+    let savedSubscriber: ((p: MJProjectEntity) => void) | null = null;
+    const openDialog = vi.fn(() => ({
+      Content: {
+        instance: {
+          projectSaved: {
+            subscribe: (cb: (p: MJProjectEntity) => void) => {
+              savedSubscriber = cb;
+            },
+          },
+        },
+      },
+    }));
+    const afterEdited = vi.fn();
+    const { f } = render((c) => {
+      (c as unknown as { mjDialogService: unknown }).mjDialogService = { open: openDialog };
+      c.AfterFolderEdit.subscribe(afterEdited);
+    });
+    rightClickOn(f, query(f, '.folder-row') as Element);
+    findItem(f, 'Rename').click();
+    f.detectChanges();
+    expect(openDialog).toHaveBeenCalledTimes(1);
+    const savedProject = project('proj1', 'Work Updated');
+    savedSubscriber!(savedProject);
+    expect(afterEdited).toHaveBeenCalledTimes(1);
+    expect(afterEdited.mock.calls[0][0].Project).toBe(savedProject);
+  });
+
   it('drops the hover action icons from folder rows', () => {
     const { f } = render();
     expect(query(f, '.folder-action-btn')).toBeNull();
