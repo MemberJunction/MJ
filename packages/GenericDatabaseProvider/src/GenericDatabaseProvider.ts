@@ -4130,15 +4130,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                         continue;
                     }
 
-                    const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
-                    const pkValue = ret[entity.FirstPrimaryKey.Name];
+                    const pkField = entity.FirstPrimaryKey;
+                    const pkLiteral = this.RenderPrimaryKeyLiteral(pkField, ret[pkField.Name], entityInfo.Name);
                     let relSql: string;
 
                     if (relInfo.Type.trim().toLowerCase() === 'one to many') {
-                        relSql = `SELECT * FROM ${this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.RelatedEntityBaseView)} WHERE ${this.QuoteIdentifier(relInfo.RelatedEntityJoinField)} = ${quotes}${pkValue}${quotes}`;
+                        relSql = `SELECT * FROM ${this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.RelatedEntityBaseView)} WHERE ${this.QuoteIdentifier(relInfo.RelatedEntityJoinField)} = ${pkLiteral}`;
                     } else {
                         // many to many — use join view
-                        relSql = `SELECT _theview.* FROM ${this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.RelatedEntityBaseView)} _theview INNER JOIN ${this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.JoinView)} _jv ON _theview.${this.QuoteIdentifier(relInfo.RelatedEntityJoinField)} = _jv.${this.QuoteIdentifier(relInfo.JoinEntityInverseJoinField)} WHERE _jv.${this.QuoteIdentifier(relInfo.JoinEntityJoinField)} = ${quotes}${pkValue}${quotes}`;
+                        relSql = `SELECT _theview.* FROM ${this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.RelatedEntityBaseView)} _theview INNER JOIN ${this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.JoinView)} _jv ON _theview.${this.QuoteIdentifier(relInfo.RelatedEntityJoinField)} = _jv.${this.QuoteIdentifier(relInfo.JoinEntityInverseJoinField)} WHERE _jv.${this.QuoteIdentifier(relInfo.JoinEntityJoinField)} = ${pkLiteral}`;
                     }
 
                     const rawRelData = await this.ExecuteSQL<Record<string, unknown>>(relSql, undefined, undefined, user);

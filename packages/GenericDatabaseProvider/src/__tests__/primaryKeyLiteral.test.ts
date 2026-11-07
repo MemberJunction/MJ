@@ -87,4 +87,44 @@ describe('GenericDatabaseProvider Load key', () => {
     it('refuses a non-numeric value before any SQL runs', async () => {
         await expect(load('5 x')).rejects.toThrow('Invalid non-numeric value provided for numeric key field ID on entity Widgets');
     });
+
+    it('escapes a single quote in a text key when loading related entities', async () => {
+        const statements: string[] = [];
+        const loader = Object.create(GenericDatabaseProvider.prototype) as Loader;
+        loader.QuoteIdentifier = (name: string) => `[${name}]`;
+        loader.QuoteSchemaAndView = (schema: string, view: string) => `[${schema}].[${view}]`;
+        loader.ExecuteSQL = async (sql: string) => {
+            statements.push(sql);
+            return [{ Code: "O'Brien" }];
+        };
+        Object.assign(loader, {
+            PostProcessRows: async (rows: Record<string, unknown>[]) => rows,
+            EntityByName: (name: string) =>
+                name === 'WidgetParts' ? ({ Name: 'WidgetParts', SchemaName: 'dbo', BaseView: 'vwWidgetParts' } as EntityInfo) : undefined,
+        });
+        const entity = {
+            FirstPrimaryKey: textKey,
+            EntityInfo: {
+                Name: 'Widgets',
+                SchemaName: 'dbo',
+                BaseView: 'vwWidgets',
+                PrimaryKeys: [textKey],
+                Fields: [textKey],
+                RelatedEntities: [
+                    {
+                        RelatedEntity: 'WidgetParts',
+                        RelatedEntityBaseView: 'vwWidgetParts',
+                        RelatedEntityJoinField: 'WidgetCode',
+                        Type: 'One To Many',
+                    },
+                ],
+            },
+        } as unknown as BaseEntity;
+        const key = { KeyValuePairs: [{ FieldName: 'Code', Value: "O'Brien" }] } as CompositeKey;
+        await loader.Load(entity, key, ['WidgetParts'], null);
+        expect(statements).toEqual([
+            "SELECT * FROM [dbo].[vwWidgets] WHERE [Code]='O''Brien'",
+            "SELECT * FROM [dbo].[vwWidgetParts] WHERE [WidgetCode] = 'O''Brien'",
+        ]);
+    });
 });

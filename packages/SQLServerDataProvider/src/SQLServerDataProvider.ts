@@ -874,7 +874,7 @@ export class SQLServerDataProvider
                             [${entity.SchemaName}].[${entity.BaseView}]
                         WHERE
                             [${f.EntityIDFieldName}] = ${quotes}${entity.ID}${quotes} AND
-                            [${f.Name}] = ${quotes}${compositeKey.GetValueByIndex(0)}${quotes}`; // we only use the first primary key value, this is because we don't yet support composite primary keys
+                            [${f.Name}] = ${SQLServerDataProvider.RenderKeyValueLiteral(compositeKey.GetValueByIndex(0), entity.FirstPrimaryKey.NeedsQuotes, entity.FirstPrimaryKey.Name, entity.Name)}`; // we only use the first primary key value, this is because we don't yet support composite primary keys
       });
     });
     return sSQL;
