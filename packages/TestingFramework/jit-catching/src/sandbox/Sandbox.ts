@@ -6,6 +6,10 @@ import { dirname, join, resolve } from 'node:path';
 import type { Settings } from '../settings';
 
 export interface SandboxMount { Host: string; Container: string; Mode: 'ro' | 'rw'; }
+/**
+ * `Tmpfs` lists container paths that get a 256 MB tmpfs with mode 1777, so the non-root container user can write
+ * there even when the mount point is an existing folder (Docker otherwise copies that folder's mode, owned by root).
+ */
 export interface SandboxRunOptions { Mounts: SandboxMount[]; Tmpfs?: string[]; WorkDir: string; Command: string[]; TimeoutMs: number; Env?: Record<string, string>; }
 export interface SandboxRunResult { ExitCode: number | null; TimedOut: boolean; Stdout: string; Stderr: string; DurationMs: number; }
 export type CommandRunner = (file: string, args: string[], options: { timeoutMs: number }) => Promise<SandboxRunResult>;
@@ -41,7 +45,7 @@ export class Sandbox {
             '--pids-limit', String(this.settings.PidsLimit), '--memory', `${this.settings.MemoryGB}g`, '--cpus', String(this.settings.Cpus),
             '--user', `${userInfo().uid}:${userInfo().gid}`, '--workdir', o.WorkDir];
         for (const m of o.Mounts) args.push('-v', `${checkedHost(m)}:${m.Container}:${m.Mode}`);
-        for (const t of o.Tmpfs ?? []) args.push('--tmpfs', `${t}:rw,size=256m`);
+        for (const t of o.Tmpfs ?? []) args.push('--tmpfs', `${t}:rw,size=256m,mode=1777`);
         for (const [k, v] of Object.entries(o.Env ?? {})) {
             if (!ENV_ALLOW.has(k)) throw new Error(`environment variable ${k} is not allowed in the sandbox`);
             args.push('-e', `${k}=${v}`);
