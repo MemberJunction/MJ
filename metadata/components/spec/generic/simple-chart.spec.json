@@ -175,7 +175,7 @@
     {
       "name": "exportable",
       "type": "boolean",
-      "description": "Shows the built-in export icon (CSV, Excel and PNG) over the chart's top-right corner, shown on hover. CSV and Excel hold the data the chart draws, one row per category with one column per series (per stack value when stackBy is set), after aggregation, sort and limit; PNG is the chart at 3x resolution on white. Set false only for a decorative chart. Never wrap SimpleChart in ExportableData.",
+      "description": "Shows the built-in export icon (CSV, Excel and PNG) over the chart's top-right corner, shown on hover. CSV and Excel hold the data the chart draws, one row per category with one column per series (per stack value when stackBy is set), after aggregation, sort and limit; PNG is the chart at 3x resolution on the background it is shown on. Set false only for a decorative chart. Never wrap SimpleChart in ExportableData.",
       "required": false,
       "defaultValue": true
     },

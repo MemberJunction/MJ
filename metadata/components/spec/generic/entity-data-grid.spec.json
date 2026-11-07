@@ -181,7 +181,7 @@
     {
       "name": "exportable",
       "type": "boolean",
-      "description": "Shows the built-in export icon (CSV and Excel) beside the grid's search box (over its top-right corner on hover when filtering is off). The file holds every record matching extraFilter and the user's text filter, in the current sort, not only the loaded page (up to 100,000 records). Set false only when the grid is not a dataset the user would want as a file. Never wrap EntityDataGrid in ExportableData.",
+      "description": "Shows the built-in export icon (CSV and Excel) beside the grid's search box (over its top-right corner on hover when filtering is off). The file holds every record matching extraFilter and the user's text filter, in the current sort, not only the loaded page (up to 100,000 records; a capped file ends with a note row saying so). Set false only when the grid is not a dataset the user would want as a file. Never wrap EntityDataGrid in ExportableData.",
       "required": false,
       "defaultValue": true
     },

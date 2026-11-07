@@ -62,8 +62,8 @@
     },
     {
       "name": "getRows",
-      "type": "() => Array<object> | Promise<Array<object>>",
-      "description": "Called at export time instead of reading `rows`. For registry components whose rows are not all in memory (EntityDataGrid loads one page at a time). Generated components pass `rows`.",
+      "type": "() => Array<object> | { rows: Array<object>, note?: string } | Promise<Array<object> | { rows: Array<object>, note?: string }>",
+      "description": "Called at export time instead of reading `rows`. For registry components whose rows are not all in memory (EntityDataGrid loads one page at a time). Return `{ rows, note }` to end the file with a note row, such as when the rows were capped. Generated components pass `rows`.",
       "required": false
     },
     {
@@ -76,7 +76,7 @@
     {
       "name": "getImage",
       "type": "() => Promise<string>",
-      "description": "Returns a PNG data URL of the element. Only for registry components that own their chart instance. When omitted, the wrapper finds a Chart.js or ApexCharts chart inside itself and uses that library's own export, then falls back to a capture of its own subtree.",
+      "description": "Returns a PNG data URL of the element, which the wrapper draws on the background the element is shown on. Only for registry components that own their chart instance. When omitted, the wrapper finds a Chart.js or ApexCharts chart inside itself and uses that library's own export, then falls back to a capture of its own subtree.",
       "required": false
     },
     {

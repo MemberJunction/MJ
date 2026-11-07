@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { EnterPrintMode, HorizontalOverflow, PageLayoutWidth, PdfFileName, PinLayoutWidth, PlanPdfPages, SharpenCharts, TableLeadBlock } from '../lib/export/component-pdf-export';
+import { BlendBackgrounds, EnterPrintMode, HorizontalOverflow, IsBlankPixels, PageLayoutWidth, PdfFileName, PinLayoutWidth, PlanPdfPages, SharpenCharts, TableLeadBlock } from '../lib/export/component-pdf-export';
 
 /** jsdom has no layout: give an element the scroll and client heights a browser would report. */
 function setHeights(element: HTMLElement, scrollHeight: number, clientHeight: number): void {
@@ -250,5 +250,52 @@ describe('SharpenCharts', () => {
 
     it('does nothing when the page has not loaded Chart.js', () => {
         expect(() => SharpenCharts({} as Window)()).not.toThrow();
+    });
+});
+
+describe('BlendBackgrounds', () => {
+    const dark = { R: 15, G: 23, B: 42, A: 255 };
+
+    it('is white when nothing behind the component paints a background', () => {
+        expect(BlendBackgrounds([])).toEqual({ R: 255, G: 255, B: 255, A: 255 });
+    });
+
+    it('is the nearest opaque background, so a dark surface stays dark', () => {
+        expect(BlendBackgrounds([dark, { R: 255, G: 255, B: 255, A: 255 }])).toEqual(dark);
+    });
+
+    it('blends a translucent layer over the background behind it', () => {
+        expect(BlendBackgrounds([{ R: 255, G: 255, B: 255, A: 128 }, { R: 0, G: 0, B: 0, A: 255 }])).toEqual({ R: 128, G: 128, B: 128, A: 255 });
+    });
+
+    it('blends a translucent layer over white when no layer is opaque', () => {
+        expect(BlendBackgrounds([{ R: 0, G: 0, B: 0, A: 51 }])).toEqual({ R: 204, G: 204, B: 204, A: 255 });
+    });
+});
+
+describe('IsBlankPixels', () => {
+    const dark = { R: 15, G: 23, B: 42, A: 255 };
+    const fill = (count: number, [r, g, b]: [number, number, number]) => {
+        const pixels = new Uint8ClampedArray(count * 4);
+        for (let i = 0; i < pixels.length; i += 4) {
+            pixels.set([r, g, b, 255], i);
+        }
+        return pixels;
+    };
+
+    it('counts a band of the dark background, or near it, as blank', () => {
+        expect(IsBlankPixels(fill(70, [15, 23, 42]), dark)).toBe(true);
+        expect(IsBlankPixels(fill(70, [20, 28, 47]), dark)).toBe(true);
+    });
+
+    it('does not count a white band as blank on a dark background, nor a dark band on white', () => {
+        expect(IsBlankPixels(fill(70, [255, 255, 255]), dark)).toBe(false);
+        expect(IsBlankPixels(fill(70, [15, 23, 42]), { R: 255, G: 255, B: 255, A: 255 })).toBe(false);
+    });
+
+    it('sees content that differs from the background', () => {
+        const pixels = fill(70, [15, 23, 42]);
+        pixels.set([241, 245, 249, 255], 0);
+        expect(IsBlankPixels(pixels, dark)).toBe(false);
     });
 });

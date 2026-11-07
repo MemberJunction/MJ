@@ -45,17 +45,29 @@ function EntityDataGrid({
     return rows.filter(row => row && fieldNames.some(name => row[name] != null && String(row[name]).toLowerCase().includes(search)));
   }
 
-  /** Every matching record in the given order, up to ENTITY_EXPORT_MAX_ROWS (with a warning when capped). */
+  /**
+   * Every matching record in the given order, up to ENTITY_EXPORT_MAX_ROWS. `totalRowCount` is set
+   * (and a warning logged) only when the cap cut the result short.
+   */
   async function loadAllRowsForExport(rv, params) {
     const result = await rv.RunView({ ...params, ResultType: 'simple', MaxRows: ENTITY_EXPORT_MAX_ROWS });
     if (result && result.Success) {
       const rows = result.Results || [];
-      if (result.TotalRowCount != null && result.TotalRowCount > rows.length) {
+      const capped = result.TotalRowCount != null && result.TotalRowCount > rows.length;
+      if (capped) {
         console.warn(`[EntityDataGrid] Export of ${params.EntityName} is capped at ${rows.length} of ${result.TotalRowCount} records.`);
       }
-      return rows;
+      return { rows, totalRowCount: capped ? result.TotalRowCount : null };
     }
     throw new Error(`Loading ${params.EntityName} for export failed: ${result?.ErrorMessage || 'RunView returned no result'}`);
+  }
+
+  /** The last line of a capped export, so the file says it is partial. The text filter only saw the loaded records. */
+  function cappedExportNote(loaded, total, filterText) {
+    const count = `${loaded.toLocaleString('en-US')} of ${total.toLocaleString('en-US')}`;
+    return filterText
+      ? `Partial export: only the first ${count} records were searched for "${filterText}".`
+      : `Partial export: the first ${count} records.`;
   }
 
   // Get DataGrid and ExportableData components from registry
@@ -715,8 +727,9 @@ function EntityDataGrid({
     const params = { EntityName: entityName, ExtraFilter: extraFilter || '', OrderBy: effectiveOrderBy };
     // Validated against metadata, so RunView accepts them; the primary keys ride along so the file keeps record identity.
     if (entityInfo) params.Fields = [...new Set([...autoDetectedPrimaryKeys, ...fieldNames])];
-    const rows = await loadAllRowsForExport(utilities.rv, params);
-    return filterRowsByText(rows, fieldNames, currentFilter);
+    const { rows, totalRowCount } = await loadAllRowsForExport(utilities.rv, params);
+    const filtered = filterRowsByText(rows, fieldNames, currentFilter);
+    return totalRowCount ? { rows: filtered, note: cappedExportNote(rows.length, totalRowCount, currentFilter) } : filtered;
   };
 
   // Render error state

@@ -158,9 +158,9 @@ When groupBy field is date/datetime:
 `exportable={true}` (default):
 - An export icon (via the registry `ExportableData` component) over the chart's top-right corner (`placement="overlay"`), shown on hover or keyboard focus; no space is reserved. Subtle until hovered or focused; always visible on touch devices.
 - Menu: **CSV**, **Excel** and **PNG image**. Files are named `<exportLabel or title or '<groupBy> chart'>_<YYYY-MM-DD>.<ext>`.
-- CSV/Excel hold the data the chart draws, in wide rows: one row per category (x-axis label or pie slice) in drawn order, after aggregation, `sortBy` and `limit`. Columns: the category (headed by `groupBy`, typed as a date when the chart treats groupBy as a date), then one column per series. Single series: one value column headed `Count` or `<valueField> (<aggregateMethod>)`. Stacked (`stackBy`): one column per stack value, with 0 where the chart draws no segment.
+- CSV/Excel hold the data the chart draws, in wide rows: one row per category (x-axis label or pie slice) in drawn order, after aggregation, `sortBy` and `limit`. Columns: the category (headed by `groupBy`, typed as a date when the chart treats groupBy as a date, with the day the x-axis shows, never a time it does not), then one column per series. Single series: one value column headed `Count` or `<valueField> (<aggregateMethod>)`. Stacked (`stackBy`): one column per stack value, with 0 where the chart draws no segment.
 - Value columns are numbers, or currency when the value field is a money field (or, without metadata, its name contains "amount", matching the axis formatting).
-- PNG: the Chart.js chart re-rendered at 3x pixel ratio with animation off, on a white background, then restored.
+- PNG: the Chart.js chart re-rendered at 3x pixel ratio with animation off, then restored. ExportableData draws it on the background the chart is shown on, so dark-theme labels stay readable.
 - `exportable={false}` renders no export icon and no wrapper. `enableExport` is a deprecated alias: if either is false there is no export.
 - The title is shown only when `title` is set (the old "always show the title when export is on" behaviour is gone).
 - Callers must NOT wrap SimpleChart in `ExportableData`; that would give the chart two icons.

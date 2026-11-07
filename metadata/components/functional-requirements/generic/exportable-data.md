@@ -9,7 +9,7 @@ Give every table and chart in an interactive component the same export affordanc
 - While a file is being prepared (async `getRows`, image capture) the menu item shows a spinner; a failure shows a short message and logs the error. It never throws into the host component.
 
 ## Data
-- Exports `rows` (or the result of `getRows()`) with `columns`, in column order.
+- Exports `rows` (or the result of `getRows()`) with `columns`, in column order. `getRows` may return `{ rows, note }`; the note becomes the file's last row, for a caller whose rows are partial.
 - A table exports every row that passes the user's filters, in the current sort, across all pages.
 - A chart exports what it draws, in wide rows.
 - Empty rows: the menu still opens; CSV and Excel produce a header-only file.
@@ -19,7 +19,7 @@ Give every table and chart in an interactive component the same export affordanc
 |---|---|
 | CSV | UTF-8 with BOM, RFC 4180 quoting, CRLF line endings, header row of column labels. Dates as ISO `YYYY-MM-DD` (or ISO date-time when the value has a time). Cells starting with `=`, `+`, `-` or `@` are prefixed with `'` so spreadsheets do not run them as formulas. |
 | Excel | One `.xlsx` sheet named after the label (31-character limit). Typed cells: number, currency (`$#,##0.00`), percent (`0.0%`), date (`yyyy-mm-dd`, or with time), boolean. A filter on the header row and column widths fitted to content. (The community build of SheetJS writes no cell styles, so the header is not bold or frozen.) |
-| PNG | Charts only. Native export when the chart library offers one (Chart.js at 3× pixel ratio on a white background; ApexCharts at scale 3), otherwise an html2canvas capture of the wrapper's subtree at 2×. |
+| PNG | Charts only. Native export when the chart library offers one (Chart.js at 3× pixel ratio; ApexCharts at scale 3), otherwise an html2canvas capture of the wrapper's subtree at 2×. Drawn on the background the element is shown on, so a dark theme's labels stay readable. |
 
 - Filename: `<label>_<YYYY-MM-DD>.<ext>`, with characters outside letters, digits, space, `-` and `_` replaced by `_`.
 - Excel's row limit (1,048,576) is enforced: larger exports are cut off, with a note row at the end.

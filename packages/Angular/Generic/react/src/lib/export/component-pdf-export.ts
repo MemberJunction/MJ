@@ -513,10 +513,81 @@ function showPreparingCover(root: HTMLElement): () => void {
     return () => cover.remove();
 }
 
-/** The capture and where its elements sit, for choosing page breaks. */
+/** A colour as 0–255 channels; `A` is opacity, 255 for opaque. */
+export interface RgbaColor {
+    R: number;
+    G: number;
+    B: number;
+    A: number;
+}
+
+/** The capture background when nothing behind the component paints one. */
+const WHITE: RgbaColor = { R: 255, G: 255, B: 255, A: 255 };
+
+/** A band pixel within this distance of the background, on every channel, counts as background. */
+const BLANK_PIXEL_TOLERANCE = 10;
+
+/** The capture, where its elements sit (for choosing page breaks), and the background it was drawn on. */
 interface CapturedComponent {
     Canvas: HTMLCanvasElement;
     Blocks: CaptureBlock[];
+    Background: RgbaColor;
+}
+
+/**
+ * Resolves a CSS colour to channels by painting it on a 1×1 canvas, so every syntax a computed style
+ * can hold (`rgb()`, `color(srgb …)` from `color-mix()`, `oklch()`) comes out the same way. An
+ * unparseable colour, or no canvas, reads as transparent.
+ */
+function resolveCssColor(css: string): RgbaColor {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) {
+        return { R: 0, G: 0, B: 0, A: 0 };
+    }
+    context.fillStyle = 'transparent';
+    context.fillStyle = css;
+    context.fillRect(0, 0, 1, 1);
+    const [R, G, B, A] = context.getImageData(0, 0, 1, 1).data;
+    return { R, G, B, A };
+}
+
+/**
+ * The colour a stack of backgrounds shows, nearest first: each translucent layer is blended over the
+ * ones behind it, down to the first opaque layer, or over white when none is opaque.
+ */
+export function BlendBackgrounds(layers: RgbaColor[]): RgbaColor {
+    const opaqueIndex = layers.findIndex(layer => layer.A >= 255);
+    const visible = opaqueIndex >= 0 ? layers.slice(0, opaqueIndex + 1) : [...layers, WHITE];
+    return visible.reduceRight<RgbaColor>((behind, layer) => {
+        const alpha = layer.A / 255;
+        const mix = (front: number, back: number) => Math.round(front * alpha + back * (1 - alpha));
+        return { R: mix(layer.R, behind.R), G: mix(layer.G, behind.G), B: mix(layer.B, behind.B), A: 255 };
+    }, WHITE);
+}
+
+/**
+ * The background the component is seen on. Its root is often transparent and shows an ancestor's
+ * surface, which in a dark theme is dark under light text; capturing on white would lose that text.
+ */
+function captureBackground(root: HTMLElement): RgbaColor {
+    const layers: RgbaColor[] = [];
+    for (let element: HTMLElement | null = root; element; element = element.parentElement) {
+        const layer = resolveCssColor(getComputedStyle(element).backgroundColor);
+        if (layer.A > 0) {
+            layers.push(layer);
+        }
+        if (layer.A >= 255) {
+            break;
+        }
+    }
+    return BlendBackgrounds(layers);
+}
+
+function cssColor(color: RgbaColor): string {
+    return `rgb(${color.R}, ${color.G}, ${color.B})`;
 }
 
 /**
@@ -641,15 +712,16 @@ async function captureAtPageWidth(root: HTMLElement, orientation: PdfOrientation
             await settleLayout();
         }
         const width = root.scrollWidth;
+        const background = captureBackground(root);
         const { toCanvas } = await loadHtmlToImage();
         const canvas = await toCanvas(root, {
             pixelRatio: CAPTURE_PIXEL_RATIO,
-            backgroundColor: '#ffffff',
+            backgroundColor: cssColor(background),
             width,
             height: root.scrollHeight,
             filter: node => !(node instanceof HTMLElement) || isCapturedNode(node),
         });
-        return { Canvas: canvas, Blocks: captureBlocks(root, canvas.width / Math.max(width, 1), orientation) };
+        return { Canvas: canvas, Blocks: captureBlocks(root, canvas.width / Math.max(width, 1), orientation), Background: background };
     } finally {
         exitPrintMode?.();
         restoreWidth();
@@ -659,32 +731,37 @@ async function captureAtPageWidth(root: HTMLElement, orientation: PdfOrientation
 }
 
 /** Copies one band of the captured canvas into its own canvas, for one page. */
-function sliceCanvas(source: HTMLCanvasElement, slice: PdfPageSlice): HTMLCanvasElement {
+function sliceCanvas(source: HTMLCanvasElement, slice: PdfPageSlice, background: RgbaColor): HTMLCanvasElement {
     const band = document.createElement('canvas');
     band.width = source.width;
     band.height = slice.SourceHeight;
     const context = band.getContext('2d');
     if (context) {
-        context.fillStyle = '#ffffff';
+        context.fillStyle = cssColor(background);
         context.fillRect(0, 0, band.width, band.height);
         context.drawImage(source, 0, slice.SourceY, source.width, slice.SourceHeight, 0, 0, source.width, slice.SourceHeight);
     }
     return band;
 }
 
-/** True when a band holds nothing but (near-)white pixels, such as trailing padding. */
-function isBlankBand(band: HTMLCanvasElement): boolean {
-    const context = band.getContext('2d');
-    if (!context || band.width === 0 || band.height === 0) {
-        return true;
-    }
-    const pixels = context.getImageData(0, 0, band.width, band.height).data;
+/** True when RGBA pixel data holds nothing but the background colour (or very near it). */
+export function IsBlankPixels(pixels: Uint8ClampedArray, background: RgbaColor): boolean {
+    const near = (value: number, target: number) => Math.abs(value - target) <= BLANK_PIXEL_TOLERANCE;
     for (let i = 0; i < pixels.length; i += 4 * 7) { // every 7th pixel is plenty for page-sized content
-        if (pixels[i] < 245 || pixels[i + 1] < 245 || pixels[i + 2] < 245) {
+        if (!near(pixels[i], background.R) || !near(pixels[i + 1], background.G) || !near(pixels[i + 2], background.B)) {
             return false;
         }
     }
     return true;
+}
+
+/** True when a band holds nothing but the capture background, such as trailing padding. */
+function isBlankBand(band: HTMLCanvasElement, background: RgbaColor): boolean {
+    const context = band.getContext('2d');
+    if (!context || band.width === 0 || band.height === 0) {
+        return true;
+    }
+    return IsBlankPixels(context.getImageData(0, 0, band.width, band.height).data, background);
 }
 
 /** The JPEG file bytes of a canvas. */
@@ -702,8 +779,8 @@ function jpegBytes(canvas: HTMLCanvasElement): Uint8Array {
 function buildPdf(captured: CapturedComponent, orientation: PdfOrientation): Uint8Array<ArrayBuffer> {
     const canvas = captured.Canvas;
     const plan = PlanPdfPages(canvas.width, canvas.height, orientation, captured.Blocks);
-    const bands = plan.Slices.map(slice => ({ slice, band: sliceCanvas(canvas, slice) }));
-    const printed = bands.filter(({ band }) => !isBlankBand(band));
+    const bands = plan.Slices.map(slice => ({ slice, band: sliceCanvas(canvas, slice, captured.Background) }));
+    const printed = bands.filter(({ band }) => !isBlankBand(band, captured.Background));
     const pages: PdfImagePage[] = (printed.length > 0 ? printed : bands.slice(0, 1)).map(({ slice, band }) => ({
         Jpeg: jpegBytes(band),
         PixelWidth: band.width,

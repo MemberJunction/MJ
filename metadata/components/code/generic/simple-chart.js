@@ -49,9 +49,16 @@ function SimpleChart({
     return `${valueField} (${aggregateMethod})`;
   }
 
+  /** A date category as the x-axis shows it (`YYYY-MM-DD`); other values unchanged. */
+  function axisDateLabel(label) {
+    if (typeof label !== 'string' || label === 'Unknown') return label;
+    const date = new Date(label);
+    return isNaN(date.getTime()) ? label : date.toISOString().split('T')[0];
+  }
+
   /**
    * The drawn data in wide rows: one row per category (x-axis label or slice) with one column per
-   * series. Stacked charts get one column per stack value. Field keys are positional (`category`,
+   * series. Date categories carry the axis's text, so the file shows the day the chart shows. Stacked charts get one column per stack value. Field keys are positional (`category`,
    * `series0`, …) so a stack value can never collide with the category column; labels carry the names.
    */
   function buildChartExport(processed, options) {
@@ -63,7 +70,8 @@ function SimpleChart({
       ? processed.datasets.map(dataset => ({ label: dataset.label, values: dataset.data }))
       : [{ label: chartValueExportLabel(aggregateMethod, valueField), values: processed.values }];
     series.forEach((entry, index) => columns.push({ field: `series${index}`, label: entry.label, type: valueType }));
-    const categoryValues = isStacked ? processed.categories : processed.chartData.map(point => point.label);
+    const categoryLabels = isStacked ? processed.categories : processed.chartData.map(point => point.label);
+    const categoryValues = processed.isDateField ? categoryLabels.map(axisDateLabel) : categoryLabels;
     const rows = categoryValues.map((category, rowIndex) => {
       const row = { category };
       series.forEach((entry, index) => { row[`series${index}`] = entry.values[rowIndex]; });
@@ -72,26 +80,10 @@ function SimpleChart({
     return { rows, columns };
   }
 
-  /** Draws a PNG data URL onto white, so the transparent canvas does not export with a black background. */
-  function chartImageOnWhite(dataURL) {
-    return new Promise((resolve, reject) => {
-      const image = new Image();
-      image.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = image.naturalWidth;
-        canvas.height = image.naturalHeight;
-        const context = canvas.getContext('2d');
-        context.fillStyle = '#ffffff';
-        context.fillRect(0, 0, canvas.width, canvas.height);
-        context.drawImage(image, 0, 0);
-        resolve(canvas.toDataURL('image/png'));
-      };
-      image.onerror = () => reject(new Error('SimpleChart image could not be decoded'));
-      image.src = dataURL;
-    });
-  }
-
-  /** The Chart.js 4 chart re-rendered at 3x pixel ratio with animation off, then restored. Null without a chart. */
+  /**
+   * The Chart.js 4 chart re-rendered at 3x pixel ratio with animation off, then restored. Null without a chart.
+   * The PNG is transparent; ExportableData draws it on the background the chart is shown on.
+   */
   async function captureChartImage(chart) {
     if (!chart) return null;
     const original = { devicePixelRatio: chart.options.devicePixelRatio, animation: chart.options.animation };
@@ -100,7 +92,7 @@ function SimpleChart({
       chart.options.animation = false;
       chart.resize();
       chart.update('none');
-      return await chartImageOnWhite(chart.toBase64Image('image/png', 1));
+      return chart.toBase64Image('image/png', 1);
     } finally {
       chart.options.devicePixelRatio = original.devicePixelRatio;
       chart.options.animation = original.animation;
@@ -771,14 +763,9 @@ function SimpleChart({
               size: 11
             },
             callback: function(value) {
-              const label = this.getLabelForValue(value);
+              const raw = this.getLabelForValue(value);
               // Format date values for display on the axis
-              if (processData.isDateField && typeof label === 'string' && label !== 'Unknown') {
-                const date = new Date(label);
-                if (!isNaN(date.getTime())) {
-                  return date.toISOString().split('T')[0];
-                }
-              }
+              const label = processData.isDateField ? axisDateLabel(raw) : raw;
               if (typeof label === 'string' && label.length > 18) {
                 return label.substring(0, 16) + '…';
               }

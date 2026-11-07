@@ -465,11 +465,11 @@ useEffect(() => {
 Replaces the old `window.SimpleChartExport` handler and its "⬇ Export" button, which are gone.
 
 Helpers declared at the top of the component body (plain functions, no hooks; MJ components must be a single top-level function):
-- `buildChartExport(processData, {groupBy, stackBy, aggregateMethod, valueField, entityInfo})` returns `{rows, columns}` from the processed data the chart draws. Field keys are positional (`category`, `series0`, `series1`, …) so a stack value can never collide with the category column; the labels carry the real names.
+- `buildChartExport(processData, {groupBy, stackBy, aggregateMethod, valueField, entityInfo})` returns `{rows, columns}` from the processed data the chart draws. Field keys are positional (`category`, `series0`, `series1`, …) so a stack value can never collide with the category column; the labels carry the real names. A date category goes through `axisDateLabel` (the same `YYYY-MM-DD` the x-axis tick callback shows), so the file never adds a local time the chart did not show.
   - Single series: `rows = chartData.map((point, i) => ({ category: point.label, series0: values[i] }))`.
   - Stacked: `rows = categories.map((category, i) => ({ category, series0: datasets[0].data[i], … }))`, one column per dataset (stack value).
 - `chartValueExportType` / `chartValueExportLabel`: value column type (number or currency) and header (`Count` or `<valueField> (<aggregateMethod>)`).
-- `captureChartImage(chart)`: sets `options.devicePixelRatio = 3` and `options.animation = false`, `resize()`, `update('none')`, `toBase64Image()`, draws it on a white canvas, then restores both options and re-renders.
+- `captureChartImage(chart)`: sets `options.devicePixelRatio = 3` and `options.animation = false`, `resize()`, `update('none')`, `toBase64Image()`, then restores both options and re-renders. The PNG is transparent; ExportableData draws it on the chart's background.
 - `chartExportID(label)`: kebab-case of the label plus `-chart`, else `simple-chart`.
 
 `chartExport` is a `useMemo` over `processData` and the props above, declared before the early returns so the hook order never changes. Export is on when `exportable !== false && enableExport !== false` and `components.ExportableData` exists.

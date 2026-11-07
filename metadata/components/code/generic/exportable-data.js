@@ -1,6 +1,5 @@
 // ExportableData wraps one table or chart and gives it CSV, Excel and (charts only) PNG export.
-// MJ's linter allows one top-level function per component file, so the helpers live inside it; the
-// writers are pure functions that the unit tests extract from the body.
+// MJ's linter allows one top-level function per component file, so the helpers live inside it.
 function ExportableData({
   exportID,
   label,
@@ -19,7 +18,7 @@ function ExportableData({
   savedUserSettings,
   onSaveUserSettings
 }) {
-  const EXCEL_MAX_DATA_ROWS = 1048574; // Excel's 1,048,576 rows, less the header and the truncation note
+  const EXCEL_MAX_DATA_ROWS = 1048573; // Excel's 1,048,576 rows, less the header, the truncation note and the caller's note
   const EXCEL_NUMBER_FORMATS = {
     number: 'General',
     currency: '$#,##0.00',
@@ -134,13 +133,14 @@ function ExportableData({
     return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   }
 
-  /** RFC 4180 CSV with a UTF-8 BOM and CRLF line endings. */
-  function buildCsv(rows, columns) {
+  /** RFC 4180 CSV with a UTF-8 BOM and CRLF line endings; `note`, when given, is the last line. */
+  function buildCsv(rows, columns, note) {
     const header = columns.map(column => toCsvField({ kind: 'string', value: column.label }));
     const lines = [header.join(',')];
     for (const row of rows || []) {
       lines.push(columns.map(column => toCsvField(toCell(row ? row[column.field] : undefined, column.type))).join(','));
     }
+    if (note) lines.push(toCsvField({ kind: 'string', value: note }));
     return '﻿' + lines.join('\r\n') + '\r\n';
   }
 
@@ -162,8 +162,8 @@ function ExportableData({
     return String(cell.value).length;
   }
 
-  /** One typed sheet: header row with an autofilter, fitted column widths, a note row when cut off. */
-  function buildWorksheet(xlsx, rows, columns) {
+  /** One typed sheet: header row with an autofilter, fitted column widths, note rows when cut off or given a `note`. */
+  function buildWorksheet(xlsx, rows, columns, note) {
     const sheet = {};
     const widths = columns.map(column => String(column.label).length);
     const dataRows = (rows || []).slice(0, EXCEL_MAX_DATA_ROWS);
@@ -178,11 +178,13 @@ function ExportableData({
         widths[c] = Math.max(widths[c], cellWidth(cell));
       });
     });
-    let lastRow = dataRows.length;
-    if ((rows || []).length > dataRows.length) {
-      lastRow += 1;
-      sheet[xlsx.utils.encode_cell({ r: lastRow, c: 0 })] = { t: 's', v: `Truncated: ${dataRows.length} of ${rows.length} rows fit in Excel.` };
-    }
+    const notes = [];
+    if ((rows || []).length > dataRows.length) notes.push(`Truncated: ${dataRows.length} of ${rows.length} rows fit in Excel.`);
+    if (note) notes.push(note);
+    notes.forEach((text, index) => {
+      sheet[xlsx.utils.encode_cell({ r: dataRows.length + 1 + index, c: 0 })] = { t: 's', v: text };
+    });
+    const lastRow = dataRows.length + notes.length;
     const lastColumn = Math.max(columns.length - 1, 0);
     sheet['!ref'] = xlsx.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: lastRow, c: lastColumn } });
     sheet['!autofilter'] = { ref: xlsx.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 0, c: lastColumn } }) };
@@ -195,9 +197,9 @@ function ExportableData({
     return (String(label || 'Data').replace(/[:\\/?*[\]]/g, ' ').trim() || 'Data').substring(0, 31);
   }
 
-  function buildXlsxBlob(xlsx, rows, columns, label) {
+  function buildXlsxBlob(xlsx, rows, columns, label, note) {
     const workbook = xlsx.utils.book_new();
-    xlsx.utils.book_append_sheet(workbook, buildWorksheet(xlsx, rows, columns), toSheetName(label));
+    xlsx.utils.book_append_sheet(workbook, buildWorksheet(xlsx, rows, columns, note), toSheetName(label));
     const bytes = xlsx.write(workbook, { bookType: 'xlsx', type: 'array' });
     return new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   }
@@ -229,8 +231,40 @@ function ExportableData({
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  /** Draws a PNG data URL onto a white background, so transparent chart canvases do not export black. */
-  function onWhiteBackground(dataURL) {
+  /** A CSS colour as [r, g, b, a] (0-255), read back from a 1x1 canvas so every colour syntax resolves; transparent when it cannot. */
+  function resolveCssColor(css) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    const context = canvas.getContext('2d');
+    if (!context) return [0, 0, 0, 0];
+    context.fillStyle = 'transparent';
+    context.fillStyle = css;
+    context.fillRect(0, 0, 1, 1);
+    return Array.from(context.getImageData(0, 0, 1, 1).data);
+  }
+
+  /**
+   * The background the element is seen on, as a CSS colour: the nearest opaque background-color from
+   * the element up, with translucent ones blended over it, else white. In a dark theme a chart's text
+   * is light, so an image drawn on white would lose its labels and legend.
+   */
+  function exportBackground(element) {
+    const layers = [];
+    for (let node = element; node; node = node.parentElement) {
+      const layer = resolveCssColor(getComputedStyle(node).backgroundColor);
+      if (layer[3] > 0) layers.push(layer);
+      if (layer[3] >= 255) break;
+    }
+    const [r, g, b] = layers.reduceRight((behind, layer) => {
+      const alpha = layer[3] / 255;
+      return behind.map((channel, i) => Math.round(layer[i] * alpha + channel * (1 - alpha)));
+    }, [255, 255, 255]);
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+
+  /** Draws a PNG data URL onto `background`, so a transparent chart canvas keeps the colour it is shown on. */
+  function onBackground(dataURL, background) {
     return new Promise((resolve, reject) => {
       const image = new Image();
       image.onload = () => {
@@ -238,7 +272,7 @@ function ExportableData({
         canvas.width = image.naturalWidth;
         canvas.height = image.naturalHeight;
         const context = canvas.getContext('2d');
-        context.fillStyle = '#ffffff';
+        context.fillStyle = background;
         context.fillRect(0, 0, canvas.width, canvas.height);
         context.drawImage(image, 0, 0);
         resolve(canvas.toDataURL('image/png'));
@@ -248,7 +282,7 @@ function ExportableData({
     });
   }
 
-  /** Chart.js re-rendered at 3x pixel ratio with animation off, then restored. Null when there is not exactly one chart. */
+  /** Chart.js re-rendered at 3x pixel ratio with animation off, then restored, as a PNG data URL. Null when there is not exactly one chart. */
   async function captureChartJs(container) {
     const chartLibrary = findChartLibraries().chartJs;
     if (!chartLibrary || typeof chartLibrary.getChart !== 'function') return null;
@@ -261,7 +295,7 @@ function ExportableData({
       chart.options.animation = false;
       chart.resize();
       chart.update('none');
-      return await onWhiteBackground(chart.toBase64Image('image/png', 1));
+      return chart.toBase64Image('image/png', 1);
     } finally {
       chart.options.devicePixelRatio = original.devicePixelRatio;
       chart.options.animation = original.animation;
@@ -278,7 +312,7 @@ function ExportableData({
     const chart = apexLibrary.getChartByID(String(charts[0].id || '').replace(/^apexcharts/, ''));
     if (!chart || typeof chart.dataURI !== 'function') return null;
     const result = await chart.dataURI({ scale: 3 });
-    return result && result.imgURI ? onWhiteBackground(result.imgURI) : null;
+    return result && result.imgURI ? result.imgURI : null;
   }
 
   /** Last resort: a picture of the wrapper's own subtree, without the export button. */
@@ -359,7 +393,7 @@ function ExportableData({
     const size = captureSize(container);
     const canvas = await html2canvas(container, {
       scale: 2,
-      backgroundColor: '#ffffff',
+      backgroundColor: exportBackground(container),
       logging: false,
       width: size.width,
       height: size.height,
@@ -368,17 +402,19 @@ function ExportableData({
     return canvas.toDataURL('image/png');
   }
 
+  /** The chart as a PNG data URL on the background it is shown on (an opaque image is unchanged). */
   async function captureImage(getImage, container) {
-    if (typeof getImage === 'function') {
-      const provided = await getImage();
-      if (provided) return provided;
-    }
-    return (await captureChartJs(container)) || (await captureApexChart(container)) || captureSubtree(container);
+    const provided = typeof getImage === 'function' ? await getImage() : null;
+    const image = provided || (await captureChartJs(container)) || (await captureApexChart(container));
+    return image ? onBackground(image, exportBackground(container)) : captureSubtree(container);
   }
 
-  async function resolveRows(rows, getRows) {
+  /** The rows to export and an optional note for the end of the file: `getRows` may return `{ rows, note }`. */
+  async function resolveExportData(rows, getRows) {
     const resolved = typeof getRows === 'function' ? await getRows() : rows;
-    return Array.isArray(resolved) ? resolved : [];
+    if (Array.isArray(resolved)) return { rows: resolved, note: null };
+    if (resolved && Array.isArray(resolved.rows)) return { rows: resolved.rows, note: resolved.note ? String(resolved.note) : null };
+    return { rows: [], note: null };
   }
 
   /** Builds the file for one format from the wrapper's current props. */
@@ -386,13 +422,13 @@ function ExportableData({
     if (format === 'png') {
       return { blob: dataURLToBlob(await captureImage(current.getImage, container)), fileName: buildFileName(current.label, 'png') };
     }
-    const rows = await resolveRows(current.rows, current.getRows);
+    const { rows, note } = await resolveExportData(current.rows, current.getRows);
     const columns = resolveColumns(current.columns, rows, current.exportID);
     if (format === 'csv') {
-      return { blob: new Blob([buildCsv(rows, columns)], { type: 'text/csv;charset=utf-8' }), fileName: buildFileName(current.label, 'csv') };
+      return { blob: new Blob([buildCsv(rows, columns, note)], { type: 'text/csv;charset=utf-8' }), fileName: buildFileName(current.label, 'csv') };
     }
     if (typeof XLSX === 'undefined') throw new Error('The xlsx library is not loaded');
-    return { blob: buildXlsxBlob(XLSX, rows, columns, current.label), fileName: buildFileName(current.label, 'xlsx') };
+    return { blob: buildXlsxBlob(XLSX, rows, columns, current.label, note), fileName: buildFileName(current.label, 'xlsx') };
   }
 
   function menuItemsFor(kind, busyFormat, failedFormat) {
@@ -448,7 +484,7 @@ function ExportableData({
           ExportID: exportID,
           GetLabel: () => latestProps.current.label,
           GetKind: () => latestProps.current.kind,
-          GetRows: () => resolveRows(latestProps.current.rows, latestProps.current.getRows),
+          GetRows: async () => (await resolveExportData(latestProps.current.rows, latestProps.current.getRows)).rows,
           GetColumns: () => resolveColumns(latestProps.current.columns, latestProps.current.rows || [], exportID),
           GetImage: () => captureImage(latestProps.current.getImage, containerRef.current),
           Element: containerRef.current

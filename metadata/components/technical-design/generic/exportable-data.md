@@ -10,7 +10,7 @@
 - Nothing in the child is cloned or given extra props; the wrapper finds chart instances by searching its own subtree.
 
 ## Data flow
-1. On a menu click, resolve rows: `await getRows()` when given, else `rows`, else `[]`.
+1. On a menu click, resolve rows: `await getRows()` when given, else `rows`, else `[]`. `getRows` may return `{ rows, note }` instead of an array; the note is written as the file's last row (CSV and Excel). The host registration's `GetRows` returns the rows only.
 2. Resolve columns: `columns`, else the keys of the first row as `string` columns (logs a `console.warn` with the `exportID`).
 3. Normalize each cell by column type (shared by CSV and Excel):
    - `number` / `currency` / `percent`: `Number(value)` when finite, else empty.
@@ -28,9 +28,11 @@ The download goes through one internal `deliverFile(blob, fileName, utilities)` 
 ## PNG
 In order:
 1. `getImage()` when given.
-2. A Chart.js chart in the subtree: `Chart.getChart(canvas)`. Temporarily set `devicePixelRatio: 3`, `animation: false`, resize, `toBase64Image('image/png')`, paint onto a white background canvas, then restore options and resize.
+2. A Chart.js chart in the subtree: `Chart.getChart(canvas)`. Temporarily set `devicePixelRatio: 3`, `animation: false`, resize, `toBase64Image('image/png')`, then restore options and resize.
 3. An ApexCharts chart in the subtree (`.apexcharts-canvas`): find the instance through `ApexCharts.getChartByID` on the element's id, then `dataURI({ scale: 3 })`.
-4. Fallback: `html2canvas(wrapperDiv, { scale: 2, backgroundColor: '#ffffff', ignoreElements: the export button })`.
+4. Fallback: `html2canvas(wrapperDiv, { scale: 2, backgroundColor: <background>, ignoreElements: the export button })`.
+
+The image from steps 1–3 is drawn onto a canvas filled with `<background>`: the nearest opaque `background-color` from the wrapper up (translucent ones blended over it, white when there is none), resolved through a 1×1 canvas so any CSS colour syntax works. A dark theme's light chart text would vanish on white. An opaque image is unchanged.
 
 ## Runtime registration
 When the host provides `utilities.export.RegisterElement` (MJ host releases after this component; provisional name), register on mount and call the returned function on unmount:
