@@ -58881,10 +58881,11 @@ export interface MJAIModelTypeEntity_RealtimeUnitPrice {
 }
 
 /**
- * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
- * their own; the cost rows stay the authority for token prices. A price belongs to the host that
- * charges it, so set this on the model-vendor row: a price on the model or the model type would
- * reach every vendor that serves the model.
+ * Prices for realtime usage that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own: avatar video, and audio tokens, which providers bill at a different rate from the
+ * text tokens a cost row prices. The cost rows stay the authority for every other token price. A
+ * price belongs to the host that charges it, so set this on the model-vendor row: a price on the
+ * model or the model type would reach every vendor that serves the model.
  */
 export interface MJAIModelTypeEntity_RealtimePricingSettings {
     /**
@@ -58898,6 +58899,22 @@ export interface MJAIModelTypeEntity_RealtimePricingSettings {
      * at 6,192 tokens per second.
      */
     AvatarVideoOutput?: MJAIModelTypeEntity_RealtimeUnitPrice | null;
+    /**
+     * The price of audio input tokens, charged on a line of its own instead of at the cost row's
+     * input rate. Realtime providers bill audio tokens at a different rate from text tokens (GPT
+     * Realtime: several times the text rate), and a cost row holds one input rate. `'Per 1M Tokens'`
+     * only; any other unit is not applied. Cached audio input tokens are priced at the cost row's cache-read rate, not here. Without this
+     * price, audio input tokens are priced at the cost row's input rate and the run's default cost
+     * line is marked as blended.
+     */
+    AudioInput?: MJAIModelTypeEntity_RealtimeUnitPrice | null;
+    /**
+     * The price of audio output tokens, charged on a line of its own instead of at the cost row's
+     * output rate. `'Per 1M Tokens'` only; any other unit is not applied. Without this price, audio
+     * output tokens are priced at the cost row's output rate and the run's default cost line is
+     * marked as blended.
+     */
+    AudioOutput?: MJAIModelTypeEntity_RealtimeUnitPrice | null;
 }
 
 /** Realtime (speech-to-speech) knobs. */
@@ -59578,10 +59595,11 @@ export interface MJAIModelVendorEntity_RealtimeUnitPrice {
 }
 
 /**
- * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
- * their own; the cost rows stay the authority for token prices. A price belongs to the host that
- * charges it, so set this on the model-vendor row: a price on the model or the model type would
- * reach every vendor that serves the model.
+ * Prices for realtime usage that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own: avatar video, and audio tokens, which providers bill at a different rate from the
+ * text tokens a cost row prices. The cost rows stay the authority for every other token price. A
+ * price belongs to the host that charges it, so set this on the model-vendor row: a price on the
+ * model or the model type would reach every vendor that serves the model.
  */
 export interface MJAIModelVendorEntity_RealtimePricingSettings {
     /**
@@ -59595,6 +59613,22 @@ export interface MJAIModelVendorEntity_RealtimePricingSettings {
      * at 6,192 tokens per second.
      */
     AvatarVideoOutput?: MJAIModelVendorEntity_RealtimeUnitPrice | null;
+    /**
+     * The price of audio input tokens, charged on a line of its own instead of at the cost row's
+     * input rate. Realtime providers bill audio tokens at a different rate from text tokens (GPT
+     * Realtime: several times the text rate), and a cost row holds one input rate. `'Per 1M Tokens'`
+     * only; any other unit is not applied. Cached audio input tokens are priced at the cost row's cache-read rate, not here. Without this
+     * price, audio input tokens are priced at the cost row's input rate and the run's default cost
+     * line is marked as blended.
+     */
+    AudioInput?: MJAIModelVendorEntity_RealtimeUnitPrice | null;
+    /**
+     * The price of audio output tokens, charged on a line of its own instead of at the cost row's
+     * output rate. `'Per 1M Tokens'` only; any other unit is not applied. Without this price, audio
+     * output tokens are priced at the cost row's output rate and the run's default cost line is
+     * marked as blended.
+     */
+    AudioOutput?: MJAIModelVendorEntity_RealtimeUnitPrice | null;
 }
 
 /** Realtime (speech-to-speech) knobs. */
@@ -60467,10 +60501,11 @@ export interface MJAIModelEntity_RealtimeUnitPrice {
 }
 
 /**
- * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
- * their own; the cost rows stay the authority for token prices. A price belongs to the host that
- * charges it, so set this on the model-vendor row: a price on the model or the model type would
- * reach every vendor that serves the model.
+ * Prices for realtime usage that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own: avatar video, and audio tokens, which providers bill at a different rate from the
+ * text tokens a cost row prices. The cost rows stay the authority for every other token price. A
+ * price belongs to the host that charges it, so set this on the model-vendor row: a price on the
+ * model or the model type would reach every vendor that serves the model.
  */
 export interface MJAIModelEntity_RealtimePricingSettings {
     /**
@@ -60484,6 +60519,22 @@ export interface MJAIModelEntity_RealtimePricingSettings {
      * at 6,192 tokens per second.
      */
     AvatarVideoOutput?: MJAIModelEntity_RealtimeUnitPrice | null;
+    /**
+     * The price of audio input tokens, charged on a line of its own instead of at the cost row's
+     * input rate. Realtime providers bill audio tokens at a different rate from text tokens (GPT
+     * Realtime: several times the text rate), and a cost row holds one input rate. `'Per 1M Tokens'`
+     * only; any other unit is not applied. Cached audio input tokens are priced at the cost row's cache-read rate, not here. Without this
+     * price, audio input tokens are priced at the cost row's input rate and the run's default cost
+     * line is marked as blended.
+     */
+    AudioInput?: MJAIModelEntity_RealtimeUnitPrice | null;
+    /**
+     * The price of audio output tokens, charged on a line of its own instead of at the cost row's
+     * output rate. `'Per 1M Tokens'` only; any other unit is not applied. Without this price, audio
+     * output tokens are priced at the cost row's output rate and the run's default cost line is
+     * marked as blended.
+     */
+    AudioOutput?: MJAIModelEntity_RealtimeUnitPrice | null;
 }
 
 /** Realtime (speech-to-speech) knobs. */
@@ -62079,10 +62130,11 @@ export interface MJAIPromptModelEntity_RealtimeUnitPrice {
 }
 
 /**
- * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
- * their own; the cost rows stay the authority for token prices. A price belongs to the host that
- * charges it, so set this on the model-vendor row: a price on the model or the model type would
- * reach every vendor that serves the model.
+ * Prices for realtime usage that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own: avatar video, and audio tokens, which providers bill at a different rate from the
+ * text tokens a cost row prices. The cost rows stay the authority for every other token price. A
+ * price belongs to the host that charges it, so set this on the model-vendor row: a price on the
+ * model or the model type would reach every vendor that serves the model.
  */
 export interface MJAIPromptModelEntity_RealtimePricingSettings {
     /**
@@ -62096,6 +62148,22 @@ export interface MJAIPromptModelEntity_RealtimePricingSettings {
      * at 6,192 tokens per second.
      */
     AvatarVideoOutput?: MJAIPromptModelEntity_RealtimeUnitPrice | null;
+    /**
+     * The price of audio input tokens, charged on a line of its own instead of at the cost row's
+     * input rate. Realtime providers bill audio tokens at a different rate from text tokens (GPT
+     * Realtime: several times the text rate), and a cost row holds one input rate. `'Per 1M Tokens'`
+     * only; any other unit is not applied. Cached audio input tokens are priced at the cost row's cache-read rate, not here. Without this
+     * price, audio input tokens are priced at the cost row's input rate and the run's default cost
+     * line is marked as blended.
+     */
+    AudioInput?: MJAIPromptModelEntity_RealtimeUnitPrice | null;
+    /**
+     * The price of audio output tokens, charged on a line of its own instead of at the cost row's
+     * output rate. `'Per 1M Tokens'` only; any other unit is not applied. Without this price, audio
+     * output tokens are priced at the cost row's output rate and the run's default cost line is
+     * marked as blended.
+     */
+    AudioOutput?: MJAIPromptModelEntity_RealtimeUnitPrice | null;
 }
 
 /** Realtime (speech-to-speech) knobs. */
@@ -64914,10 +64982,11 @@ export interface MJAIPromptEntity_RealtimeUnitPrice {
 }
 
 /**
- * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
- * their own; the cost rows stay the authority for token prices. A price belongs to the host that
- * charges it, so set this on the model-vendor row: a price on the model or the model type would
- * reach every vendor that serves the model.
+ * Prices for realtime usage that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own: avatar video, and audio tokens, which providers bill at a different rate from the
+ * text tokens a cost row prices. The cost rows stay the authority for every other token price. A
+ * price belongs to the host that charges it, so set this on the model-vendor row: a price on the
+ * model or the model type would reach every vendor that serves the model.
  */
 export interface MJAIPromptEntity_RealtimePricingSettings {
     /**
@@ -64931,6 +65000,22 @@ export interface MJAIPromptEntity_RealtimePricingSettings {
      * at 6,192 tokens per second.
      */
     AvatarVideoOutput?: MJAIPromptEntity_RealtimeUnitPrice | null;
+    /**
+     * The price of audio input tokens, charged on a line of its own instead of at the cost row's
+     * input rate. Realtime providers bill audio tokens at a different rate from text tokens (GPT
+     * Realtime: several times the text rate), and a cost row holds one input rate. `'Per 1M Tokens'`
+     * only; any other unit is not applied. Cached audio input tokens are priced at the cost row's cache-read rate, not here. Without this
+     * price, audio input tokens are priced at the cost row's input rate and the run's default cost
+     * line is marked as blended.
+     */
+    AudioInput?: MJAIPromptEntity_RealtimeUnitPrice | null;
+    /**
+     * The price of audio output tokens, charged on a line of its own instead of at the cost row's
+     * output rate. `'Per 1M Tokens'` only; any other unit is not applied. Without this price, audio
+     * output tokens are priced at the cost row's output rate and the run's default cost line is
+     * marked as blended.
+     */
+    AudioOutput?: MJAIPromptEntity_RealtimeUnitPrice | null;
 }
 
 /** Realtime (speech-to-speech) knobs. */
@@ -68333,10 +68418,11 @@ export interface MJAIVendorEntity_RealtimeUnitPrice {
 }
 
 /**
- * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
- * their own; the cost rows stay the authority for token prices. A price belongs to the host that
- * charges it, so set this on the model-vendor row: a price on the model or the model type would
- * reach every vendor that serves the model.
+ * Prices for realtime usage that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own: avatar video, and audio tokens, which providers bill at a different rate from the
+ * text tokens a cost row prices. The cost rows stay the authority for every other token price. A
+ * price belongs to the host that charges it, so set this on the model-vendor row: a price on the
+ * model or the model type would reach every vendor that serves the model.
  */
 export interface MJAIVendorEntity_RealtimePricingSettings {
     /**
@@ -68350,6 +68436,22 @@ export interface MJAIVendorEntity_RealtimePricingSettings {
      * at 6,192 tokens per second.
      */
     AvatarVideoOutput?: MJAIVendorEntity_RealtimeUnitPrice | null;
+    /**
+     * The price of audio input tokens, charged on a line of its own instead of at the cost row's
+     * input rate. Realtime providers bill audio tokens at a different rate from text tokens (GPT
+     * Realtime: several times the text rate), and a cost row holds one input rate. `'Per 1M Tokens'`
+     * only; any other unit is not applied. Cached audio input tokens are priced at the cost row's cache-read rate, not here. Without this
+     * price, audio input tokens are priced at the cost row's input rate and the run's default cost
+     * line is marked as blended.
+     */
+    AudioInput?: MJAIVendorEntity_RealtimeUnitPrice | null;
+    /**
+     * The price of audio output tokens, charged on a line of its own instead of at the cost row's
+     * output rate. `'Per 1M Tokens'` only; any other unit is not applied. Without this price, audio
+     * output tokens are priced at the cost row's output rate and the run's default cost line is
+     * marked as blended.
+     */
+    AudioOutput?: MJAIVendorEntity_RealtimeUnitPrice | null;
 }
 
 /** Realtime (speech-to-speech) knobs. */
