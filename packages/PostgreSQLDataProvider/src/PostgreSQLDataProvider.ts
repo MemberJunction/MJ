@@ -213,7 +213,6 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             const fkField = relatedEntityInfo.Fields.find(f => f.Name.trim().toLowerCase() === dep.FieldName?.trim().toLowerCase());
             if (fkField?.EntityIDFieldName && fkField.EntityIDFieldName.trim().length > 0) continue;
 
-            const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
             const pksToProject = relatedEntityInfo.PrimaryKeys?.length ? relatedEntityInfo.PrimaryKeys : entityInfo.PrimaryKeys;
             const pkParts: string[] = [];
             for (const pk of pksToProject) {
@@ -221,8 +220,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             }
             const primaryKeySelectString = pkParts.join(" || '" + CompositeKey.DefaultFieldDelimiter + "' || ");
             const sourceObject = this.resolveDependencySourceObject(relatedEntityInfo, [dep.FieldName]);
-            const rawVal = String(compositeKey.GetValueByIndex(0) ?? '');
-            const escapedVal = quotes.length > 0 ? rawVal.replace(/'/g, "''") : rawVal;
+            const pkLiteral = this.RenderPrimaryKeyLiteral(entityInfo.FirstPrimaryKey, compositeKey.GetValueByIndex(0), entityInfo.Name); // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
 
             if (sSQL.length > 0) sSQL += ' UNION ALL ';
             sSQL += 'SELECT '
@@ -233,7 +231,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
                 + 'false AS "IsSoftLink", '
                 + 'NULL AS "EntityIDFieldName" '
                 + 'FROM ' + pgDialect.QuoteSchema(relatedEntityInfo.SchemaName, sourceObject) + ' '
-                + 'WHERE ' + pgDialect.QuoteIdentifier(dep.FieldName) + ' = ' + quotes + escapedVal + quotes;
+                + 'WHERE ' + pgDialect.QuoteIdentifier(dep.FieldName) + ' = ' + pkLiteral;
         }
         return sSQL;
     }

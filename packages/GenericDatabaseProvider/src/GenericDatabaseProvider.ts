@@ -7812,15 +7812,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
                     // An EntityRelationship joins on ONE column (RelatedEntityJoinField / JoinEntityJoinField)
                     // that references this entity's key — a single-column foreign-key target by metadata design.
-                    const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: relationship join field is a single-column FK target
-                    const pkValue = ret[entity.FirstPrimaryKey.Name]; // first-pk-ok: relationship join field is a single-column FK target
+                    const pkField = entityInfo.FirstPrimaryKey ?? entityInfo.PrimaryKeys?.[0] ?? (entity.FirstPrimaryKey as unknown as EntityFieldInfo); // first-pk-ok: relationship join field is a single-column FK target
+                    const pkLiteral = this.RenderPrimaryKeyLiteral(pkField, ret[pkField.Name], entityInfo.Name);
                     let relSql: string;
 
                     if (relInfo.Type.trim().toLowerCase() === 'one to many') {
-                        relSql = `SELECT * FROM ${this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.RelatedEntityBaseView)} WHERE ${this.QuoteIdentifier(relInfo.RelatedEntityJoinField)} = ${quotes}${pkValue}${quotes}`;
+                        relSql = `SELECT * FROM ${this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.RelatedEntityBaseView)} WHERE ${this.QuoteIdentifier(relInfo.RelatedEntityJoinField)} = ${pkLiteral}`;
                     } else {
                         // many to many — use join view
-                        relSql = `SELECT _theview.* FROM ${this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.RelatedEntityBaseView)} _theview INNER JOIN ${this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.JoinView)} _jv ON _theview.${this.QuoteIdentifier(relInfo.RelatedEntityJoinField)} = _jv.${this.QuoteIdentifier(relInfo.JoinEntityInverseJoinField)} WHERE _jv.${this.QuoteIdentifier(relInfo.JoinEntityJoinField)} = ${quotes}${pkValue}${quotes}`;
+                        relSql = `SELECT _theview.* FROM ${this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.RelatedEntityBaseView)} _theview INNER JOIN ${this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.JoinView)} _jv ON _theview.${this.QuoteIdentifier(relInfo.RelatedEntityJoinField)} = _jv.${this.QuoteIdentifier(relInfo.JoinEntityInverseJoinField)} WHERE _jv.${this.QuoteIdentifier(relInfo.JoinEntityJoinField)} = ${pkLiteral}`;
                     }
 
                     const rawRelData = await this.ExecuteSQL<Record<string, unknown>>(relSql, undefined, undefined, user);
