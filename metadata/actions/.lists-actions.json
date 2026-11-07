@@ -626,7 +626,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "JSON-stringified array of at least 2 ListSource objects to combine. JSON-stringified ListSource: {kind:'list', listId} | {kind:'view', viewId} | {kind:'adhoc', entityName, filter}.",
+            "Description": "JSON-stringified array of at least 2 ListSource objects to combine. JSON-stringified ListSource: {kind:'list', listId} | {kind:'view', viewId} | {kind:'adhoc', entityName, extraFilter}.",
             "IsRequired": true
           },
           "primaryKey": {
@@ -640,7 +640,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Optional ListSource for the list to write the result into. Omit for a preview that changes nothing. JSON-stringified ListSource: {kind:'list', listId} | {kind:'view', viewId} | {kind:'adhoc', entityName, filter}.",
+            "Description": "Optional ListSource for the list to write the result into. Omit for a preview that changes nothing. JSON-stringified ListSource: {kind:'list', listId} | {kind:'view', viewId} | {kind:'adhoc', entityName, extraFilter}.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -1381,7 +1381,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "The audience to resolve. Read-only: nothing is changed. JSON-stringified ListSource: {kind:'list', listId} | {kind:'view', viewId} | {kind:'adhoc', entityName, filter}.",
+            "Description": "The audience to resolve. Read-only: nothing is changed. JSON-stringified ListSource: {kind:'list', listId} | {kind:'view', viewId} | {kind:'adhoc', entityName, extraFilter}.",
             "IsRequired": true
           },
           "primaryKey": {
@@ -1873,7 +1873,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "The audience to send to. JSON-stringified ListSource: {kind:'list', listId} | {kind:'view', viewId} | {kind:'adhoc', entityName, filter}.",
+            "Description": "The audience to send to. JSON-stringified ListSource: {kind:'list', listId} | {kind:'view', viewId} | {kind:'adhoc', entityName, extraFilter}.",
             "IsRequired": true
           },
           "primaryKey": {
