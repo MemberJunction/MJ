@@ -1381,7 +1381,7 @@ GO
          )
       END;
 
-/* SQL text to sync entity unique keys (249 added, 0 updated, 0 removed) */
+/* SQL text to sync entity unique keys (263 added, 0 updated, 0 removed) */
 INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('45137c63-177d-4f89-8493-69efbc55a2c1', '00766B45-E83F-EF11-86D4-0022481D1B23', 'UQ_ExplorerNavigationItem_Name', 'Name', NULL);
 INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('7883c891-960b-40a4-ae68-07d7a3ec00cf', '00766B45-E83F-EF11-86D4-0022481D1B23', 'UQ_ExplorerNavigationItem_Route', 'Route', NULL);
 INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('1b65ae6c-3f1d-4982-8a82-4a653f1b994c', '02B2ECDF-FC92-4D19-B332-F840EA708565', 'UQ_AIConfigurationParam_Config_Name', 'ConfigurationID,Name', NULL);
@@ -1631,6 +1631,20 @@ INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name
 INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('33a056e1-de1f-4b4a-a282-1471dd5c8dc1', 'FE37218E-259F-47F2-909D-9AECBE5385DB', 'UQ_QuerySQL_Query_Dialect', 'QueryID,SQLDialectID', NULL);
 INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('b8b096c5-50fb-4387-9fd8-9ad9d09177ae', 'FF238F34-2837-EF11-86D4-6045BDEE16E6', 'UQ_AIModelAction_AIActionID_AIModelID', 'AIActionID,AIModelID', NULL);
 INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('8c9dc15f-d84f-4c83-9b03-f9971e40f7aa', 'FF24FF6C-8047-4FCB-A9E4-A737DE7CB66B', 'UQ_AIClientToolDefinition_Name', 'Name', NULL);
+INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('4da93ecd-7d2b-4c30-8e8f-5e7ddbf77539', '03BDCB52-1A3A-408A-8079-879493A8598A', 'UQ_GraphEdge', 'GraphID,EdgeTypeID,SourceEntityID,SourceRecordID,TargetEntityID,TargetRecordID', NULL);
+INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('6c01e108-bd3d-4bc0-b424-e2aedffdcf12', '0A75D64D-9396-4B77-871A-D88577F2AC4F', 'UQ_DiagnosticSenderRegistration_InstallID', 'InstallID', NULL);
+INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('738ca288-1df3-4e82-af79-4f210c782caa', '11579CD9-246E-416F-8915-61CF7B77842F', 'UQ_GraphEdgeTypeEndpoint', 'EdgeTypeID,Side,EntityID', NULL);
+INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('92e881e5-39ab-48ed-a870-b536965e74ff', '1A487757-9198-4346-85CE-8A5374E82FE9', 'UQ_Graph_Name', 'Name', NULL);
+INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('79f26920-ba29-401e-8c14-79fd348dad3f', '2CC24F2C-6C7C-4EC8-BDA7-3FDBBEC4535D', 'UQ_GraphConcept_GraphID_Name', 'GraphID,Name', NULL);
+INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('0fc53143-78c2-47e4-975a-703d5a2ef5f8', '361B37C8-08FD-4A66-8A83-AC5DC3CB28B9', 'UQ_DocumentSequenceCounter_Key_Scope', 'SequenceKey,ScopeKey', NULL);
+INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('20425249-34bd-48fc-b230-1a0df603b46e', '4E40BD04-842D-4CAE-841D-D69DEC4B17E9', 'UQ_GraphAuthorityTier_Name', 'Name', NULL);
+INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('891014ae-7da6-473d-a394-1f92e91b66d8', '8ECBEA4B-2D6B-44E1-886C-96E904637866', 'UQ_VideoArchetype_CompanyID_Name', 'CompanyID,Name', NULL);
+INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('6263a9dc-bce0-47d1-8565-748a583a82b3', '95AE4A10-7D58-4D55-BE27-5B934A958411', 'UQ_DiagnosticSessionChunk_Session_Source_Host_Kind_Seq', 'DiagnosticSessionID,Source,HostInstanceLabel,ContentKind,Sequence', NULL);
+INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('4cfd420c-efe6-4d87-9c59-c3dbc4bb1316', '9F985FC5-8DB9-4BBA-8EA4-B0AF90A76F3D', 'UQ_GraphEdgeType_Global_Name', 'Name', '([GraphID] IS NULL)');
+INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('65a58511-55bb-4c27-8c1d-fca2f771d32c', '9F985FC5-8DB9-4BBA-8EA4-B0AF90A76F3D', 'UQ_GraphEdgeType_Scoped_Name', 'GraphID,Name', '([GraphID] IS NOT NULL)');
+INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('5321974f-fd4c-444e-9ee5-e1048e88c755', 'C52B0468-A653-49AD-9FC6-097D7374E803', 'UQ_GraphType_Name', 'Name', NULL);
+INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('8fa1d8ff-715c-4e03-8128-0a34e023566d', 'C94C4F04-F747-49B8-9C57-AEB656A64592', 'UQ_GraphEdgeProvider_Graph_Name', 'GraphID,Name', NULL);
+INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('d946841d-e986-4768-b631-2d0dc8d7dd69', 'DB47217B-E302-43AA-BAF0-1B53A26DBC67', 'UQ_GraphConceptType_Name', 'Name', NULL);
 
 
 /* Create Entity Relationship: MJ: Entities -> MJ: Entity Unique Keys (One To Many via EntityID) */
