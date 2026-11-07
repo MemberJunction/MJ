@@ -274,6 +274,14 @@ export class ControlFlowAnalyzer {
         }
       }
 
+      // A typeof guard in a ternary's test narrows its consequent:
+      // `typeof a === 'string' && typeof b === 'string' ? a.localeCompare(b) : a - b`
+      if (t.isConditionalExpression(node) &&
+          this.detectTypeofGuardRecursive(node.test, varName) === expectedType &&
+          this.isInConsequent(path, currentPath)) {
+        return true;
+      }
+
       // Check if we're inside a logical && expression with typeof guard
       if (t.isLogicalExpression(node) && node.operator === '&&') {
         const detectedType = this.detectTypeofGuard(node.left, varName);

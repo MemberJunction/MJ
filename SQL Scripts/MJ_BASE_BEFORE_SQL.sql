@@ -1651,7 +1651,7 @@ GO
 
 
 -- spDeleteEntityWithCoreDependencies is no longer defined here. Its current definition ships
--- only in migrations (latest: migrations/v6/V202611031410__v6.2.x__Entity_Unique_Key_Sets.sql).
+-- only in migrations (latest: migrations/v6/V202611061200__v6.2.x__Entity_Unique_Key_Sets.sql).
 -- The body that used to live here predated the FK coverage and transaction handling, so running
 -- this script would have replaced the migrated proc with an older, weaker one.
 
