@@ -405,6 +405,22 @@ describe('RealtimeSessionResumption', () => {
         });
     });
 
+    describe('CanReconnect', () => {
+        it('by default needs a handle', () => {
+            const harness = new Harness();
+            expect(harness.Resumption.CanReconnect).toBe(false);
+            harness.Resumption.RecordHandle('h1', true);
+            expect(harness.Resumption.CanReconnect).toBe(true);
+        });
+
+        it('with RequiresHandle false needs none', () => {
+            const harness = new Harness(undefined, { RequiresHandle: false });
+            expect(harness.Resumption.CanReconnect).toBe(true);
+            harness.Resumption.RecordHandle('h1', true);
+            expect(harness.Resumption.CanReconnect).toBe(true);
+        });
+    });
+
     describe('ResumableAtTurnEnd', () => {
         const TURN_END_MODE = { ResumableAtTurnEnd: true };
 
