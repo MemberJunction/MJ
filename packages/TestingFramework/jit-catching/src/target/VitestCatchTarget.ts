@@ -86,14 +86,14 @@ export class VitestCatchTarget extends BaseCatchTarget {
         }
         await this.checkHostPnpm(host, fetchDir, pinned);
         try { await host('pnpm', ['fetch', '--store-dir', this.o.StoreDir], fetchDir); }
-        catch (e) { throw new InfrastructureError(`host pnpm fetch failed on ${revision.Kind}: ${(e as Error).message.slice(-4000)}`); }
+        catch (e) { throw new InfrastructureError(`host pnpm fetch failed on ${revision.Kind}: ${RedactTail((e as Error).message)}`); }
     }
 
-    /** Throws when the pnpm that runs in the fetch folder is not the pinned version. */
+    /** Throws when the pnpm that runs in the fetch folder is not the pinned version; the version is the last non-empty output line. */
     private async checkHostPnpm(host: HostRunner, fetchDir: string, pinned: string): Promise<void> {
         let actual: string;
-        try { actual = (await host('pnpm', ['--version'], fetchDir)).trim(); }
-        catch (e) { throw new InfrastructureError(`host pnpm --version failed: ${(e as Error).message.slice(-4000)}`); }
+        try { actual = (await host('pnpm', ['--version'], fetchDir)).split('\n').map((l) => l.trim()).filter((l) => l.length > 0).pop() ?? ''; }
+        catch (e) { throw new InfrastructureError(`host pnpm --version failed: ${RedactTail((e as Error).message)}`); }
         if (actual !== pinned) throw new InfrastructureError(`host pnpm is ${actual} in the fetch folder, but the sandbox image uses ${pinned}`);
     }
 
@@ -123,6 +123,7 @@ export class VitestCatchTarget extends BaseCatchTarget {
      * folder must be a real folder inside the worktree, and the file is opened without following a symlink.
      */
     public async WriteTests(revision: PreparedRevision, tests: CandidateTest[]): Promise<void> {
+        for (const t of tests) checkedFilePath(t, this.packageDir(t.Package));
         for (const t of tests) {
             const jit = SafeDir(revision.RootDir, `${this.packageDir(t.Package)}/${JIT_SUBDIR}`, true);
             writeNoFollow(join(jit, basename(t.FilePath)), t.Source);
@@ -138,7 +139,7 @@ export class VitestCatchTarget extends BaseCatchTarget {
         for (const g of this.groups(tests)) {
             const config = `${JIT_SUBDIR}/tsconfig.jit.json`;
             const json = JSON.stringify({ extends: '../../../tsconfig.json', compilerOptions: { noEmit: true, composite: false, incremental: false, declaration: false, declarationMap: false }, include: g.Files.map((f) => `./${f.slice(JIT_SUBDIR.length + 1)}`), exclude: [] });
-            const cmd = `cd ${CONTAINER_ROOT}/${g.Dir} && printf '%s' '${json}' > ${config} && npx tsc --noEmit -p ${config} 2>&1; rc=$?; rm -f ${config}; exit $rc`;
+            const cmd = `cd ${sq(`${CONTAINER_ROOT}/${g.Dir}`)} && printf '%s' ${sq(json)} > ${config} && npx tsc --noEmit --pretty false -p ${config} 2>&1; rc=$?; rm -f ${config}; exit $rc`;
             const r = await this.inSandbox(revision, 'ro', ['sh', '-c', cmd], 10 * 60_000, {}, [], [g.Dir]);
             for (const [i, t] of g.Tests.entries()) {
                 const lines = r.Stdout.split('\n').filter((l) => l.startsWith(g.Files[i]));
@@ -164,14 +165,14 @@ export class VitestCatchTarget extends BaseCatchTarget {
     private async runRepeat(revision: PreparedRevision, g: PackageGroup, m: ReportMapping): Promise<ExecutionResult[]> {
         const ids = g.Tests.map((t) => t.ID);
         const timedOut = () => RunnerErrorResult(ids, m.Revision, m.RunIndex, 'sandbox timed out').map((x) => ({ ...x, Status: 'Timeout' as const }));
-        const base = `cd ${CONTAINER_ROOT}/${g.Dir} && npx vitest run ${g.Files.join(' ')} --sequence.seed=${this.o.Settings.SequenceSeed} --testTimeout=${this.o.Settings.TestTimeoutMs}`;
+        const base = `cd ${sq(`${CONTAINER_ROOT}/${g.Dir}`)} && npx vitest run ${g.Files.map(sq).join(' ')} --sequence.seed=${this.o.Settings.SequenceSeed} --testTimeout=${this.o.Settings.TestTimeoutMs}`;
         const timeout = this.o.Settings.TestTimeoutMs * (g.Files.length + 2) + 120_000;
         const r = await this.runVitest(revision, g, `${base} ${JIT_REPORTER_ARG}`, timeout);
         if (r.TimedOut) return timedOut();
         const parsed = ParseJitReport(r.Stdout, m);
         if (parsed) return markUnran(parsed, m, ranFilesFromJitReport(r.Stdout));
         // vitest writes the JSON report to a file in the rw jit folder and stdout carries only that file, so test chatter cannot mix in.
-        const out = `${CONTAINER_ROOT}/${g.Dir}/${JIT_SUBDIR}/.jit-report-${m.Revision.toLowerCase()}-${m.RunIndex}.json`;
+        const out = sq(`${CONTAINER_ROOT}/${g.Dir}/${JIT_SUBDIR}/.jit-report-${m.Revision.toLowerCase()}-${m.RunIndex}.json`);
         const j = await this.runVitest(revision, g, `${base} --reporter=json --outputFile=${out} >/dev/null 2>&1; cat ${out}; rm -f ${out}`, timeout);
         if (j.TimedOut) return timedOut();
         if (safeJson<object>(j.Stdout) === null) return RunnerErrorResult(ids, m.Revision, m.RunIndex, `vitest produced no report: ${SandboxEvidence(r)}`);
@@ -188,7 +189,7 @@ export class VitestCatchTarget extends BaseCatchTarget {
         for (const g of this.groups(tests)) {
             for (const [i, t] of g.Tests.entries()) {
                 const report = `/tmp/cov-${t.ID}`;
-                const cmd = `cd ${CONTAINER_ROOT}/${g.Dir} && npx vitest run ${g.Files[i]} --coverage.enabled --coverage.provider=v8 --coverage.reporter=json --coverage.reportsDirectory=${report} >/dev/null 2>&1; cat ${report}/coverage-final.json`;
+                const cmd = `cd ${sq(`${CONTAINER_ROOT}/${g.Dir}`)} && npx vitest run ${sq(g.Files[i])} --coverage.enabled --coverage.provider=v8 --coverage.reporter=json --coverage.reportsDirectory=${report} >/dev/null 2>&1; cat ${report}/coverage-final.json`;
                 const r = await this.inSandbox(revision, 'ro', ['sh', '-c', cmd], 10 * 60_000, { TZ: 'UTC' }, viteTmpfs(g.Dir), [g.Dir]);
                 out.push({ CandidateTestID: t.ID, CoveredChangedLines: CountCoveredChangedLines(r.Stdout, changed, CONTAINER_ROOT) });
             }
@@ -200,11 +201,11 @@ export class VitestCatchTarget extends BaseCatchTarget {
         await this.o.Repo.RemoveWorktree(revision.RootDir).catch(() => rmSync(revision.RootDir, { recursive: true, force: true }));
     }
 
-    /** Tests grouped by package, with each test file relative to its package folder. */
+    /** Tests grouped by package, with each test file relative to its package folder. Every FilePath is checked first. */
     private groups(tests: CandidateTest[]): PackageGroup[] {
         const byDir = new Map<string, PackageGroup>();
         for (const t of tests) {
-            const dir = this.packageDir(t.Package);
+            const dir = this.packageDir(t.Package); checkedFilePath(t, dir);
             const g = byDir.get(dir) ?? { Dir: dir, Tests: [], Files: [] };
             g.Tests.push(t); g.Files.push(t.FilePath.slice(dir.length + 1)); byDir.set(dir, g);
         }
@@ -228,6 +229,17 @@ export class VitestCatchTarget extends BaseCatchTarget {
     }
     private reporterDir(): string { return (this.reporter ??= WriteJitReporter(mkdtempSync(join(tmpdir(), 'jit-reporter-')))); }
 }
+
+const TEST_ID = /^[A-Za-z0-9_-]+$/;
+
+/** Throws unless the test's FilePath is exactly `<package dir>/src/__tests__/jit/<ID>.jit.test.ts` with a plain ID. */
+function checkedFilePath(t: CandidateTest, dir: string): void {
+    const expected = `${dir}/${JIT_SUBDIR}/${t.ID}.jit.test.ts`;
+    if (!TEST_ID.test(t.ID) || t.FilePath !== expected) throw new UnsafePathError(`refusing test ${t.ID}: FilePath ${t.FilePath} is not ${expected}`);
+}
+
+/** Single-quotes a value for `sh -c`. */
+function sq(value: string): string { return `'${value.replace(/'/g, `'\\''`)}'`; }
 
 /**
  * Walks `rel` below `root` one part at a time. Each part must be a real folder, not a symlink; missing parts are
@@ -268,15 +280,20 @@ function ensureMountPoint(path: string): void {
     try { mkdirSync(path, { recursive: true }); } catch { /* a missing mount point surfaces as a sandbox error */ }
 }
 
-/**
- * Exit code and the last 2000 characters of stderr (stdout when stderr is empty) of a sandbox run, with this
- * process's secret values replaced. Output that still matches a key pattern is withheld.
- */
+/** Exit code and the redacted tail of stderr (stdout when stderr is empty) of a sandbox run. */
 export function SandboxEvidence(r: SandboxRunResult): string {
-    let text = (r.Stderr.trim() || r.Stdout.trim()).slice(-2000);
-    for (const secret of SecretsFromEnvironment()) text = text.split(secret).join('[REDACTED]');
-    const match = new RedactionCheck([]).Check(text);
-    return `exit ${r.ExitCode ?? 'none'}: ${match ? `[output withheld: ${match.Kind}]` : text}`;
+    return `exit ${r.ExitCode ?? 'none'}: ${RedactTail(r.Stderr.trim() || r.Stdout.trim())}`;
+}
+
+/**
+ * The last 2000 characters of `text` with this process's secret values replaced. Text that still matches a
+ * key pattern is withheld as a whole.
+ */
+export function RedactTail(text: string): string {
+    let out = text.slice(-2000);
+    for (const secret of SecretsFromEnvironment()) out = out.split(secret).join('[REDACTED]');
+    const match = new RedactionCheck([]).Check(out);
+    return match ? `[output withheld: ${match.Kind}]` : out;
 }
 
 function tail(r: SandboxRunResult): string { return `${r.Stderr}\n${r.Stdout}`.trim().slice(-4000); }

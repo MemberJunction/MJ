@@ -52,7 +52,7 @@ describe('VitestCatchTarget.Run', () => {
     const { target, calls } = fakeTarget((o) => ({ Stdout: o.Command.join(' ').includes('--reporter=json') ? '{"testResults":[]}' : 'no reporter', ExitCode: 1 }));
     await target.Run({ Ref: { Kind: 'Base', SHA: 'b' }, RootDir: jitRoot() }, [test(ID1)], 1);
     const cmd = calls[1].Command.join(' ');
-    expect(cmd).toMatch(/--outputFile=\/work\/packages\/MJCore\/src\/__tests__\/jit\/[^ ]+\.json/);
+    expect(cmd).toMatch(/--outputFile='?\/work\/packages\/MJCore\/src\/__tests__\/jit\/[^ ]+\.json/);
     expect(cmd).toMatch(/--reporter=json --outputFile=\S+ >\/dev\/null 2>&1; cat /);
   });
   it('puts the sandbox exit code and stderr in the RunnerError when neither reporter produced a report', async () => {
@@ -61,11 +61,6 @@ describe('VitestCatchTarget.Run', () => {
     const results = await target.Run({ Ref: { Kind: 'Base', SHA: 'b' }, RootDir: jitRoot() }, [test(ID1)], 1);
     expect(results[0].Status).toBe('RunnerError');
     expect(results[0].Failure?.Message).toContain('exit 1'); expect(results[0].Failure?.Message).toContain('Cannot find module');
-  });
-  it('reports a tsc failure with no per-file error as a type-check error for every test, with exit code and output', async () => {
-    const { target } = fakeTarget(() => ({ Stdout: "error TS5058: The specified path does not exist: 'src/__tests__/jit/tsconfig.jit.json'.", ExitCode: 1 }));
-    const out = await target.TypeCheck({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: jitRoot() }, [test(ID1)]);
-    expect(out.get(ID1)).toContain('exit 1'); expect(out.get(ID1)).toContain('TS5058');
   });
   it('maps a test file whose tests were all skipped or todo to RunnerError, not Pass', async () => {
     const file = `/work/packages/MJCore/src/__tests__/jit/${ID1}.jit.test.ts`;
@@ -118,6 +113,16 @@ describe('VitestCatchTarget.Prepare', () => {
     await expect(target.Prepare({ Kind: 'Head', SHA: 'h' })).rejects.toBeInstanceOf(InfrastructureError);
     expect(calls).toHaveLength(0);
   });
+  it('reads the pnpm version from the last non-empty line, so a self-switch progress line is not a mismatch', async () => {
+    const { target } = prepWorld(async (_f, a) => (a[0] === '--version' ? 'Progress: resolved 1, reused 0, downloaded 1, added 1, done\n10.33.0\n\n' : ''));
+    await expect(target.Prepare({ Kind: 'Head', SHA: 'h' })).resolves.toMatchObject({ Ref: { Kind: 'Head', SHA: 'h' } });
+  });
+  it('redacts token-shaped text in a host pnpm error before it goes into the InfrastructureError', async () => {
+    const token = 'ghp_' + 'A1b2C3d4'.repeat(5);
+    const { target } = prepWorld(async (_f, a) => { if (a[0] === '--version') return '10.33.0'; throw new Error(`GET https://registry.example/x failed with ${token}`); });
+    const err = await target.Prepare({ Kind: 'Head', SHA: 'h' }).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(InfrastructureError); expect((err as Error).message).not.toContain(token);
+  });
   it('refuses to fetch when the host pnpm in the fetch folder is not the pinned version the image uses', async () => {
     const host: string[][] = [];
     const { target, calls } = prepWorld(async (_f, a) => { host.push(a); return '11.24.0\n'; });
@@ -162,6 +167,16 @@ describe('VitestCatchTarget.TypeCheck', () => {
     expect(calls[0].Command.join(' ')).toContain('tsc --noEmit');
     expect(out.get(ID1)).toContain('TS2339');
   });
+  it('reports a tsc failure with no per-file error as a type-check error for every test, with exit code and output', async () => {
+    const { target } = fakeTarget(() => ({ Stdout: "error TS5058: The specified path does not exist: 'src/__tests__/jit/tsconfig.jit.json'.", ExitCode: 1 }));
+    const out = await target.TypeCheck({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: jitRoot() }, [test(ID1)]);
+    expect(out.get(ID1)).toContain('exit 1'); expect(out.get(ID1)).toContain('TS5058');
+  });
+  it('turns off tsc pretty output so colour codes cannot hide the per-file error lines', async () => {
+    const { target, calls } = fakeTarget(() => ({ Stdout: '', ExitCode: 0 }));
+    await target.TypeCheck({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: jitRoot() }, [test(ID1)]);
+    expect(calls[0].Command.join(' ')).toContain('--pretty false');
+  });
 });
 
 describe('VitestCatchTarget path safety', () => {
@@ -191,6 +206,27 @@ describe('VitestCatchTarget path safety', () => {
     const { target, calls } = fakeTarget(() => ({ Stdout: '', ExitCode: 0 }));
     await expect(target.Run({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: root }, [test(ID1)], 1)).rejects.toThrow(/symlink/);
     expect(calls).toHaveLength(0); expect(existsSync(join(outside, 'x'))).toBe(false);
+  });
+});
+
+describe('VitestCatchTarget FilePath checks', () => {
+  const bad = (): CandidateTest => ({ ...test(ID1), FilePath: `packages/MJCore/src/__tests__/jit/../../../../../evil/${ID1}.jit.test.ts` });
+  it('refuses a FilePath with .. segments before it writes anything', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'jit-root-'));
+    const { target } = fakeTarget(() => ({ Stdout: '', ExitCode: 0 }));
+    await expect(target.WriteTests({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: root }, [bad()])).rejects.toThrow(/FilePath/);
+    expect(readdirSync(root)).toEqual([]);
+  });
+  it('refuses a FilePath that is not <package>/src/__tests__/jit/<ID>.jit.test.ts before it runs anything', async () => {
+    const { target, calls } = fakeTarget(() => ({ Stdout: '', ExitCode: 0 }));
+    await expect(target.Run({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: jitRoot() }, [{ ...test(ID1), FilePath: `packages/MJCore/src/__tests__/jit/other.jit.test.ts` }], 1)).rejects.toThrow(/FilePath/);
+    expect(calls).toHaveLength(0);
+  });
+  it('quotes the package folder and file names it passes to the shell', async () => {
+    const { target, calls } = fakeTarget(() => ({ Stdout: '', ExitCode: 0 }));
+    await target.Run({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: jitRoot() }, [test(ID1)], 1);
+    const cmd = calls[0].Command.join(' ');
+    expect(cmd).toContain(`cd '/work/packages/MJCore'`); expect(cmd).toContain(`'src/__tests__/jit/${ID1}.jit.test.ts'`);
   });
 });
 
