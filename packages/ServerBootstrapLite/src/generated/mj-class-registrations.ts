@@ -223,7 +223,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (463 classes)
+// @memberjunction/core-entities (477 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -429,6 +429,11 @@ import {
     MJDataContextItemEntity,
     MJDatasetEntity,
     MJDatasetItemEntity,
+    MJDiagnosticBundleEntity,
+    MJDiagnosticSenderRegistrationEntity,
+    MJDiagnosticSessionChunkEntity,
+    MJDiagnosticSessionEntity,
+    MJDocumentSequenceCounterEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -489,6 +494,15 @@ import {
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJGraphAuthorityTierEntity,
+    MJGraphConceptEntity,
+    MJGraphConceptTypeEntity,
+    MJGraphEdgeEntity,
+    MJGraphEdgeProviderEntity,
+    MJGraphEdgeTypeEndpointEntity,
+    MJGraphEdgeTypeEntity,
+    MJGraphEntity,
+    MJGraphTypeEntity,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
@@ -1753,6 +1767,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJDataContextItemEntity,
     MJDatasetEntity,
     MJDatasetItemEntity,
+    MJDiagnosticBundleEntity,
+    MJDiagnosticSenderRegistrationEntity,
+    MJDiagnosticSessionChunkEntity,
+    MJDiagnosticSessionEntity,
+    MJDocumentSequenceCounterEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -1813,6 +1832,15 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJGraphAuthorityTierEntity,
+    MJGraphConceptEntity,
+    MJGraphConceptTypeEntity,
+    MJGraphEdgeEntity,
+    MJGraphEdgeProviderEntity,
+    MJGraphEdgeTypeEndpointEntity,
+    MJGraphEdgeTypeEntity,
+    MJGraphEntity,
+    MJGraphTypeEntity,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
@@ -1871,6 +1899,10 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJOutputFormatTypeEntity,
     MJPermissionDomainEntity,
     MJPhoneNumberEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
@@ -1885,10 +1917,6 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueryParameterEntity,
     MJQueryPermissionEntity,
     MJQuerySQLEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
@@ -2075,6 +2103,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MergeContactsAction,
     CreateJotFormAction,
     CreateSurveyMonkeyAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     CreateTypeformAction,
     ExportGoogleFormsCSVAction,
     ExportJotFormCSVAction,
@@ -2089,10 +2121,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetSingleJotFormSubmissionAction,
     GetSingleSurveyMonkeyResponseAction,
     GetSingleTypeformResponseAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     GetSurveyMonkeyDetailsAction,
     GetSurveyMonkeyResponsesAction,
     GetSurveyMonkeyStatisticsAction,
@@ -2279,6 +2307,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ClaudeCodeCliAdapter,
     CodexAdapter,
     GeminiCliAdapter,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     HarnessAgentBase,
     HarnessAgentType,
     OpenCodeAdapter,
@@ -2293,10 +2325,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     FormBuilderDesignerAgent,
     RecordProcessCancelRunServerOperation,
     RecordProcessGetRunStatusServerOperation,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     RecordProcessPauseRunServerOperation,
     RecordProcessResumeRunServerOperation,
     RecordProcessRunNowServerOperation,
@@ -2483,6 +2511,10 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GetArchitectureDiagramReferenceAction,
     GetDefaultFormScaffoldForEntityAction,
     GetDownloadUrlAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     GetEntityDetailsAction,
     GetEntityListAction,
     GetEntitySchemaForFormAction,
@@ -2497,10 +2529,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GetRecordListMembershipAction,
     GetRecordsAction,
     GetSignatureStatusAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     GetStockPriceAction,
     GetUploadUrlAction,
     GetWeatherAction,
@@ -2642,7 +2670,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1125;
+export const CLASS_REGISTRATIONS_COUNT = 1139;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

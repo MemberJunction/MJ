@@ -26,7 +26,9 @@ export class MJCompanyFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentExamples', sectionName: 'AI Agent Examples', isExpanded: false },
             { sectionKey: 'mJSignatureAccounts', sectionName: 'Signature Accounts', isExpanded: false },
             { sectionKey: 'mJBrandKits', sectionName: 'Brand Kits', isExpanded: false },
-            { sectionKey: 'mJVideoArchetypes', sectionName: 'Video Archetypes', isExpanded: false }
+            { sectionKey: 'mJVideoArchetypes', sectionName: 'Video Archetypes', isExpanded: false },
+            { sectionKey: 'mJDiagnosticSessions', sectionName: 'Diagnostic Sessions', isExpanded: false },
+            { sectionKey: 'mJDiagnosticBundles', sectionName: 'Diagnostic Bundles', isExpanded: false }
         ]);
     }
 }

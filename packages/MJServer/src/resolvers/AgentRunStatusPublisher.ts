@@ -17,19 +17,27 @@ import type {
 import type { EntityInfo } from '@memberjunction/core';
 import type { UserPayload } from '../types.js';
 import { PublishStatusUpdate, StatusUpdateOwnerID } from '../generic/PushStatusResolver.js';
-import { ProjectEntityObjectForCaller } from '../generic/fieldSecurityTransport.js';
+import { ProjectEntityObjectForCaller, ProjectValuesForCaller } from '../generic/fieldSecurityTransport.js';
 
 const SIGNIFICANT_STEPS = ['prompt_execution', 'action_execution', 'subagent_execution', 'decision_processing'];
 
 /** The run fields the published messages read. Entities and test fakes both satisfy this. */
 interface StatusRun {
     ID?: string;
+    AgentID?: string;
+    Agent?: string | null;
+    ParentRunID?: string | null;
+    Status?: string;
+    ConversationID?: string | null;
     ConversationDetailID?: string;
     ErrorMessage?: string;
     Steps?: Array<{ StepName?: string }>;
     EntityInfo?: EntityInfo | null;
     GetAll?: () => Record<string, unknown>;
 }
+
+/** The run fields a streamed chunk carries. */
+type RunSummary = Pick<StatusRun, 'ID' | 'AgentID' | 'Agent' | 'ParentRunID' | 'Status' | 'ConversationID' | 'ConversationDetailID'>;
 
 export class AgentRunStatusPublisher {
     private run: StatusRun | null = null;
@@ -102,7 +110,7 @@ export class AgentRunStatusPublisher {
                 agentRunId: agentRun.ID,
                 type: 'streaming',
                 ...this.replyRow(),
-                agentRun: this.runValues(agentRun),
+                agentRun: this.runSummary(agentRun),
                 streaming: {
                     content: chunk.content,
                     isPartial: !chunk.isComplete,
@@ -186,6 +194,23 @@ export class AgentRunStatusPublisher {
         }
         const getAll = agentRun.GetAll;
         return ProjectEntityObjectForCaller({ EntityInfo: agentRun.EntityInfo, GetAll: () => getAll.call(agentRun) }, this.userPayload?.userRecord);
+    }
+
+    /**
+     * The run's identifying fields as the recipient may read them. A streamed chunk carries only
+     * these: the run's `GetAll()` holds every step and prompt run, and a run streams many chunks.
+     */
+    private runSummary(agentRun: StatusRun): RunSummary {
+        const summary: RunSummary = {
+            ID: agentRun.ID,
+            AgentID: agentRun.AgentID,
+            Agent: agentRun.Agent,
+            ParentRunID: agentRun.ParentRunID,
+            Status: agentRun.Status,
+            ConversationID: agentRun.ConversationID,
+            ConversationDetailID: agentRun.ConversationDetailID,
+        };
+        return ProjectValuesForCaller(agentRun.EntityInfo, summary, this.userPayload?.userRecord);
     }
 
     private publish(type: 'ExecutionProgress' | 'StreamingContent', data: unknown): void {

@@ -20,6 +20,7 @@ import { FieldRulesBulkUpdateChecks } from '../checks/field-rules-bulk-update.ch
 import { RemoteOperationsChecks } from '../checks/remote-operations.checks';
 import { AiSkillsChecks } from '../checks/ai-skills.checks';
 import { ApiKeysChecks } from '../checks/api-keys.checks';
+import { DiagnosticsChecks } from '../checks/diagnostics.checks';
 import { PredictiveStudioChecks } from '../checks/predictive-studio.checks';
 import { RemoteOpWireProgressChecks } from '../checks/remote-op-wire-progress.checks';
 import { PromptRunnerChecks } from '../checks/prompt-runner.checks';
@@ -110,6 +111,7 @@ import { VideoGenerationCostChecks } from '../checks/video-generation-cost.check
 import { VideoStudioHandoffChecks } from '../checks/video-studio-handoff.checks';
 import { VideoStudioProductionChecks } from '../checks/video-studio-production.checks';
 import { VideoStudioLiveSmokeChecks } from '../checks/video-studio-live-smoke.checks';
+import { SemanticGraphChecks } from '../checks/semantic-graph.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -161,7 +163,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
     const bundles: Array<[string, NamedCheck[], number]> = [
         ['server-cache', ServerCacheChecks, 35],
         ['cache-immutability', CacheImmutabilityChecks, 15], // F1-F15 freeze-on-write runtime contract (IT81); F13/F14 cover review findings C1/C2, F15 covers M3 (dataset key collision)
-        ['client-cache', ClientCacheChecks, 14],
+        ['client-cache', ClientCacheChecks, 26],
         ['runquery-cache', RunQueryCacheChecks, 21], // Q11 (B46 category collision) + Q12 (B45 hit-vs-miss permission parity) added 2026-07-20; Q13–Q21 (query definition changes) added 2026-10-14
         // RLS1–RLS12 (rls-isolation.checks.ts) + KF1–KF6 (keyrowfilter.checks.ts, API-key row filters)
         // + RF1–RF3 (rolerowfilter.checks.ts, role filter edits) share one bundle
@@ -174,6 +176,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['remote-operations', RemoteOperationsChecks, 7],
         ['ai-skills', AiSkillsChecks, 21],
         ['api-keys', ApiKeysChecks, 3],
+        ['diagnostics', DiagnosticsChecks, 4], // DIAG1-DIAG4 session capture, bundle assembly, encrypted intake (IT163)
         ['predictive-studio', PredictiveStudioChecks, 5],
         ['remote-op-wire-progress', RemoteOpWireProgressChecks, 1],
         ['prompt-runner', PromptRunnerChecks, 1],
@@ -272,6 +275,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['entity-status-fanout-client', EntityStatusFanoutClientChecks, 3], // SF1-SF3 entity save pushes reach every session of the user (IT159)
         ['encrypted-read-client', EncryptedReadClientChecks, 4], // ER1-ER4 encrypted field plaintext over GraphQL, miss and hit (IT160)
         ['ciphertext-cache', CiphertextCacheChecks, 5], // CT0-CT4 ciphertext at rest in the RunViewCache, plaintext to the caller (IT161)
+        ['semantic-graph', SemanticGraphChecks, 7], // SG1-SG7 Semantic Graph substrate, Content Pipeline GraphStage overlay, and Executable Canon DAG similarity & telemetry (IT162)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -362,7 +366,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'chief-of-staff': 8,
         'ciphertext-cache': 5,
         'class-resolution': 5,
-        'client-cache': 14,
+        'client-cache': 26,
         'cloudflare-clef': 6,
         'codegen-determinism': 6,
         'communication': 5,
@@ -373,6 +377,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'conversation-authorship-client': 12,
         'conversation-compaction': 23,
         'dataset-cache': 4,
+        'diagnostics': 4,
         'encrypted-read-client': 4,
         'entity-actions': 8,
         'entity-embedded': 6,
@@ -467,6 +472,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'search-provider-trust': 2,
         'search-scope-bound': 3,
         'self-avatar-client': 6,
+        'semantic-graph': 7,
         'server-cache': 35,
         'shipped-agents-live': 4,
         'sqlpipe-extraction-fixtures': 40,
@@ -519,7 +525,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(177);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(179);
     });
 });
 
@@ -877,6 +883,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'self-avatar-client.AV4',
         'self-avatar-client.AV5',
         'self-avatar-client.AV6',
+        'semantic-graph.SG4',
         'server-cache.S17',
         'server-cache.S23',
         'server-cache.S24',

@@ -36,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (463 classes)
+// @memberjunction/core-entities (477 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -242,6 +242,11 @@ import {
     MJDataContextItemEntity,
     MJDatasetEntity,
     MJDatasetItemEntity,
+    MJDiagnosticBundleEntity,
+    MJDiagnosticSenderRegistrationEntity,
+    MJDiagnosticSessionChunkEntity,
+    MJDiagnosticSessionEntity,
+    MJDocumentSequenceCounterEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -302,6 +307,15 @@ import {
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJGraphAuthorityTierEntity,
+    MJGraphConceptEntity,
+    MJGraphConceptTypeEntity,
+    MJGraphEdgeEntity,
+    MJGraphEdgeProviderEntity,
+    MJGraphEdgeTypeEndpointEntity,
+    MJGraphEdgeTypeEntity,
+    MJGraphEntity,
+    MJGraphTypeEntity,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
@@ -1100,6 +1114,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJDataContextItemEntity,
     MJDatasetEntity,
     MJDatasetItemEntity,
+    MJDiagnosticBundleEntity,
+    MJDiagnosticSenderRegistrationEntity,
+    MJDiagnosticSessionChunkEntity,
+    MJDiagnosticSessionEntity,
+    MJDocumentSequenceCounterEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -1160,6 +1179,15 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJGraphAuthorityTierEntity,
+    MJGraphConceptEntity,
+    MJGraphConceptTypeEntity,
+    MJGraphEdgeEntity,
+    MJGraphEdgeProviderEntity,
+    MJGraphEdgeTypeEndpointEntity,
+    MJGraphEdgeTypeEntity,
+    MJGraphEntity,
+    MJGraphTypeEntity,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
@@ -1269,6 +1297,10 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRubricScaleEntity,
     MJRubricScaleLevelEntity,
     MJRubricVersionEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJSQLDialectEntity,
     MJScheduledJobEntity,
     MJScheduledJobRunEntity,
@@ -1283,10 +1315,6 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSearchScopeEntityEntity,
     MJSearchScopeExternalIndexEntity,
     MJSearchScopePermissionEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
     MJSearchScopeTestQueryEntity,
@@ -1473,6 +1501,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJActionExecutionLogFormComponentExtended,
     MJActionFormComponentExtended,
     MJEntityActionFormComponentExtended,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     MJEntityFormComponentExtended,
     MJFileFormComponentExtended,
     MJListFormComponentExtended,
@@ -1487,10 +1519,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJRubricScaleLevelFormComponentExtended,
     MJRubricVersionFormComponentExtended,
     MJTemplateFormComponentExtended,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     MJTestFormComponentExtended,
     MJTestRubricFormComponentExtended,
     MJTestRunFeedbackFormComponentExtended,
@@ -1668,7 +1696,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 763;
+export const CLASS_REGISTRATIONS_COUNT = 777;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -8,6 +8,7 @@ import {
   EntityFieldInfo,
   EntityFieldTSType,
   EntityInfo,
+  EntityLifecyclePolicyEngine,
   EntityPermissionType,
   EntitySaveOptions,
   IMetadataProvider,
@@ -25,6 +26,7 @@ import {
   RunView,
   RunViewParams,
   RunViewResult,
+  ServerOperationScopeManager,
   UserInfo,
   ViewPropertyValues,
 } from '@memberjunction/core';
@@ -70,6 +72,9 @@ import { Subscription } from 'rxjs';
  *
  * `mj: projects` (conversation folders) is refused a change to `OwnerUserID` or `ParentID` by anyone but the
  * stored owner, a rule that reads the stored owner, so it must hold even if a host stops tracking its changes.
+ *
+ * `mj: diagnostic sender registrations` is refused a change to its guarded fields by a rule that decides on
+ * `Dirty`, so the baseline must be the stored row.
  */
 const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
   'mj: record changes',
@@ -79,6 +84,7 @@ const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
   'mj: ai agent sessions',
   'mj: ai agent runs',
   'mj: projects',
+  'mj: diagnostic sender registrations',
 ]);
 
 /** One field's values in a concurrency-conflict diagnostic. */
@@ -1897,6 +1903,7 @@ export class ResolverBase {
   }
 
   protected async CreateRecord(entityName: string, input: any, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
+    return ServerOperationScopeManager.Instance.RunInClientCrudBoundary(async () => {
     // Check API key scope authorization for entity create operations
     await this.CheckAPIKeyScopeAuthorization('entity:create', entityName, userPayload);
 
@@ -1947,6 +1954,7 @@ export class ResolverBase {
         });
       }
     } else return null;
+    });
   }
 
   // Before/After CREATE Event Hooks for Sub-Classes to Override
@@ -1956,6 +1964,7 @@ export class ResolverBase {
   protected async AfterCreate(provider: DatabaseProviderBase, input: any) {}
 
   protected async UpdateRecord(entityName: string, input: any, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
+    return ServerOperationScopeManager.Instance.RunInClientCrudBoundary(async () => {
     // Check API key scope authorization for entity update operations
     await this.CheckAPIKeyScopeAuthorization('entity:update', entityName, userPayload);
 
@@ -2062,6 +2071,7 @@ export class ResolverBase {
       throw new GraphQLError('Save Canceled by BeforeSave() handler in ResolverBase', {
         extensions: { code: 'SAVE_ENTITY_ERROR', entityName },
       });
+    });
   }
   
   /**
@@ -2152,6 +2162,7 @@ export class ResolverBase {
     return (
       entityInfo.TrackRecordChanges ||
       ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW.has(entityInfo.Name.trim().toLowerCase()) ||
+      EntityLifecyclePolicyEngine.Instance.RequiresStoredTruthOnUpdate(entityInfo) ||
       !this.hasCompleteOldValues(entityInfo, input.OldValues___) ||
       hasDeniedReadFields ||
       hasNarrowedAuditPayload ||
@@ -2665,6 +2676,7 @@ export class ResolverBase {
     userPayload: UserPayload,
     pubSub: PubSubEngine
   ) {
+    return ServerOperationScopeManager.Instance.RunInClientCrudBoundary(async () => {
     // Check API key scope authorization for entity delete operations
     await this.CheckAPIKeyScopeAuthorization('entity:delete', entityName, userPayload);
 
@@ -2708,6 +2720,7 @@ export class ResolverBase {
         extensions: { code: 'DELETE_ENTITY_ERROR', entityName },
       });
     }
+    });
   }
 
   // Before/After DELETE Event Hooks for Sub-Classes to Override

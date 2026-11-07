@@ -16,9 +16,9 @@ import {
     MJEntityDocumentEntity,
     MJEntityRecordDocumentEntity,
 } from '@memberjunction/core-entities';
-import { ConfidenceScale, FieldConfidenceMap } from '@memberjunction/content-pipeline-base';
+import { ConfidenceScale, FieldConfidenceMap, ResolveGraphOverlayConfig } from '@memberjunction/content-pipeline-base';
 import { ContentVectorInfrastructure } from '@memberjunction/content-autotagging';
-import { UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { SafeJSONParse, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { RecordProcessExecutor } from '@memberjunction/record-set-processor';
 import { ContentPipelineDeleteMarker } from './ContentPipelineDeleteMarker.js';
 import { ContentSourceConfigurationResolver } from './ContentSourceConfigurationResolver.js';
@@ -36,6 +36,8 @@ export const CONTENT_PIPELINE_TAG_PROCESS_ID = '60BE8612-B278-4C06-A06C-CF9365D9
 export const CONTENT_PIPELINE_SEGMENT_PROCESS_ID = '88F8296E-6300-4938-817C-E3FF2D85DE4E';
 /** Shipped Record Process ID for `Content Pipeline — Embed`. */
 export const CONTENT_PIPELINE_EMBED_PROCESS_ID = '9A90F785-8D21-403E-9810-6FFEB75FEFBD';
+/** Shipped Record Process ID for `Content Pipeline — Graph`. */
+export const CONTENT_PIPELINE_GRAPH_PROCESS_ID = 'D153F7AE-A176-4D0C-8530-845A81BE775A';
 /** Shipped Record Process ID for `Content Pipeline — Delete` (`DeleteContentItem`). */
 export const CONTENT_PIPELINE_DELETE_PROCESS_ID = '13FF9508-4BDB-4BF3-A938-AA36EDD2ED46';
 /** Shipped Record Process ID for `Content Pipeline — Delete Chunks` (`Delete`). */
@@ -127,6 +129,8 @@ interface ContentSourceSummary {
     ContentFileTypeID: string;
     EntityDocumentID: string | null;
     VectorIndexID: string | null;
+    GraphID?: string | null;
+    Configuration?: string | null;
 }
 
 interface ExistingContentItemSummary {
@@ -201,7 +205,7 @@ export class ContentUploadIngestor {
 
         const item = await this.createPendingContentItem(source, request, entityRecordDocumentID, provider, contextUser);
         if (request.RunNow) {
-            await this.runStagesNow(item.ID, contextUser, provider);
+            await this.runStagesNow(item.ID, source, contextUser, provider);
         }
 
         return {
@@ -286,7 +290,7 @@ export class ContentUploadIngestor {
         }
         if (request.RunNow) {
             await this.prepareExistingTreeForRetry(existing.ID, provider, contextUser);
-            await this.runStagesNow(existing.ID, contextUser, provider);
+            await this.runStagesNow(existing.ID, source, contextUser, provider);
         }
         return {
             ContentItemID: existing.ID,
@@ -458,6 +462,8 @@ export class ContentUploadIngestor {
                 ContentFileTypeID: cached.ContentFileTypeID,
                 EntityDocumentID: cached.EntityDocumentID ?? null,
                 VectorIndexID: cached.VectorIndexID ?? null,
+                GraphID: cached.GraphID ?? null,
+                Configuration: cached.Configuration ?? null,
             };
         }
 
@@ -472,6 +478,8 @@ export class ContentUploadIngestor {
             ContentFileTypeID: source.ContentFileTypeID,
             EntityDocumentID: source.EntityDocumentID ?? null,
             VectorIndexID: source.VectorIndexID ?? null,
+            GraphID: source.GraphID ?? null,
+            Configuration: source.Configuration ?? null,
         };
     }
 
@@ -672,9 +680,10 @@ export class ContentUploadIngestor {
         return status === null || status === undefined || status === 'Pending';
     }
 
-    /** Extract → Segment → Tag → Embed over the root's live tree; a stage failure stops only what depends on it. */
+    /** Extract → Segment → Tag → Embed (→ Graph when enabled) over the root's live tree; a stage failure stops only what depends on it. */
     private async runStagesNow(
         rootItemID: string,
+        source: ContentSourceSummary,
         contextUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<void> {
@@ -695,11 +704,27 @@ export class ContentUploadIngestor {
             return;
         }
 
+        const completedSegmentItemIDs = completedSegmentItems.map((i) => i.ID);
         await this.runEmbedStage(
-            completedSegmentItems.map((i) => i.ID),
+            completedSegmentItemIDs,
             contextUser,
             provider,
         );
+
+        const parsedConfig = source.Configuration
+            ? (SafeJSONParse<Record<string, unknown>>(source.Configuration) ?? undefined)
+            : undefined;
+        const overlayConfig = ResolveGraphOverlayConfig(source.GraphID ?? null, parsedConfig);
+        if (overlayConfig.EnableGraphOverlay && overlayConfig.GraphID) {
+            await this.executeProcessStage(
+                CONTENT_PIPELINE_GRAPH_PROCESS_ID,
+                'Graph',
+                completedSegmentItemIDs,
+                null,
+                contextUser,
+                provider,
+            );
+        }
     }
 
     /** Runs Extract on the tree's Pending items and returns the items whose extraction completed. */

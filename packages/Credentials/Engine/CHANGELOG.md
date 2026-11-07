@@ -1,5 +1,293 @@
 # @memberjunction/credentials
 
+## 6.2.0
+
+### Minor Changes
+
+- cc41d33: Chief of Staff Phase 2: Executive Cockpit, event-driven agent wakes, and a per-user OAuth prototype.
+  - **Executive Cockpit (`ChiefOfStaffDashboardComponent`, `@memberjunction/ng-dashboards`).** A new Explorer surface registered as `ChiefOfStaffDashboard` with four tabs: an overview of counts, Priorities & OKRs built from `MJ_BizApps_Tasks: Tasks` when that OpenApp is installed, Approvals & Wakes (one-click Approve/Reject on pending `MJ: AI Agent Requests`, Wake Now / pause / resume on `MJ: User Routines` of type `AgentWake`), and a Governance tab that edits the user's `MJ: AI Agent User Policies` row. Tab, health filter and search round-trip through query params. The cockpit publishes read-only agent context and navigation tools; approvals, policy saves, wakes and task edits are deliberately not exposed to the agent. Metadata adds an opt-in `Chief of Staff` application whose only nav item is the cockpit.
+  - **Event-driven agent wakes (`AgentWakeTriggerService`, `@memberjunction/ai-agents`).** When an action-created `MJ: AI Agent Requests` row moves from `Requested` to `Approved`, `Rejected` or `Responded`, or a new inter-agent request is created, `MJAIAgentRequestEntityServer.Save()` upserts a one-shot `AgentWake` routine with the resolved request in `resumeState`, so the owning user's agent runs on the dispatcher's next sweep instead of waiting for its cron. A routing method for inbound utility-mailbox email is included but has no ingestion caller yet.
+  - **Per-user OAuth 2.0 (3LO) prototype (`CommunicationUserOAuthService`, `@memberjunction/core-actions`; `@memberjunction/credentials`).** PKCE S256 authorization flow with four enterprise gates (admin opt-in, allowed email domains, allowed tenant IDs, strict principal match) and owner-bound credential storage: `CredentialEngine.StoreUserDelegatedCredential` / `GetUserDelegatedCredential` / `RevokeUserDelegatedCredential`, with `CredentialOwnerMismatchError` thrown when a delegated credential is resolved by a different user. Off by default: the administrator gates (`AllowUserDelegatedOAuth`, `AllowedEmailDomains`, `AllowedOAuthTenantIDs`) live on `MJ: Communication Providers` and credentials are stored through `CredentialEngine`; there are no API routes or token transport implementation yet, and no communication provider consumes the stored token.
+  - **Chief of Staff actions.** Approval requests created by the calendar/email, inter-agent and outbound-call actions now carry the `Approval` request type. The agent prompt template and action descriptions name the BizApps entities correctly (`MJ_BizApps_Tasks: Tasks`, `MJ_BizApps_Issues: Issues`) and warn against querying system catalogs.
+  - **Review follow-ups.** The approval-creating actions resolve the `Approval` type through `AIEngine.Instance.ResolveAgentRequestTypeID` (the request-type cache shipped with the CRUD key-shape fix) instead of a hardcoded id (new result code `REQUEST_TYPE_NOT_FOUND`); the cockpit resolves the agent by name too. The inter-agent and outbound-call actions are renamed after what they do: `Send Inter-Agent Request` (`SendInterAgentRequestAction`, envelope type `InterAgentCoordinationEnvelope`, delivery mode `InterAgent`; the previous `InterAgentCoS` value is still accepted on in-flight rows) and `Prepare Outbound Call Brief` (`PrepareOutboundCallBriefAction`, `OutboundCallBrief`). `AgentWakeTriggerService` resolves inbound-mailbox senders through `UserCache` (roles loaded) and serializes wake upserts per user, agent and workstream. `CredentialEngine` hides `UserOAuth3LO:*` rows from the shared accessors (`Credentials`, `GetCredentialById`, `GetCredentialByName`, `GetDefaultCredentialForType`), checks the stored owner before overwriting a delegated row, and serializes the delegated create path.
+
+- e8e6cd6: Enforce credential expiration in `CredentialEngine`.
+
+  `Credential.ExpiresAt` has existed since v2.129, the credential editor lets you set it, and the Credentials dashboard counts expired and expiring-soon credentials. Nothing enforced it. `CredentialEngine.getCredential()` filtered on `IsActive` only, so an expired credential resolved and was handed to callers exactly like a live one — despite the column's own description promising that "expired credentials are treated as inactive". Operators could see an expiry date in the UI and reasonably believe it meant something.
+
+  **Enforcement.** Expiry is now evaluated in `getCredential()`, at resolution time rather than at cache-load time — the engine caches credential rows for the life of the process, so a credential that lapses between two calls is caught on the second call rather than staying live until the next refresh. The check runs before the values are decrypted, so a blocked credential never reaches the caller.
+
+  **Policy** is configurable via `CredentialEngine.Instance.ExpirationConfig`:
+  - `policy: 'block'` (default) throws `CredentialExpiredError`.
+  - `policy: 'warn'` returns the credential flagged and logged — an escape hatch for cleaning up stale expiry dates, not a safe steady state.
+  - `graceMs` (default `0`) lets a `'block'` policy tolerate a short, noisy overrun where a hard cutoff at the expiry instant is riskier than the overrun. Grace never changes the reported status: a credential inside grace still reports `expired`, so dashboards and audit logs stay truthful.
+  - `warningWindowMs` (default 30 days, matching the dashboard's existing "expiring soon" KPI window) controls when a credential begins reporting `expiring-soon` and warning. It never blocks.
+
+  **Typed errors.** `CredentialExpiredError` and `CredentialNotFoundError` (both extending `CredentialResolutionError`) let callers tell a credential that needs rotating from one that does not exist — previously both surfaced as "Credential not found", sending operators hunting for a record that was sitting right there. `CredentialNotFoundError`'s message is byte-identical to the string thrown before, so callers matching on message text keep working.
+
+  **Lookup semantics.** `getCredentialByName()` and `getDefaultCredentialForType()` now exclude expired credentials. `getCredentialById()` deliberately does not: addressing by primary key is an exact request, and rotation tooling must be able to load an expired record in order to replace it. The same need is served per-call by the new `expirationPolicy` option.
+
+  **Consolidation.** `AIPromptRunner` had hand-rolled `new Date(c.ExpiresAt) < new Date()` comparisons in two places and none on its resolve-by-ID path — the inconsistency that having no shared primitive produces. Both now call `CredentialEngine.GetExpirationStatus()`, so the failover path honors the same window and grace period the engine applies.
+
+  `ResolvedCredential` gains `expirationStatus` and `daysUntilExpiration`, and every resolution records its expiration status in the audit log so an auditor can answer "was any credential used while expired?".
+
+  ⚠️ **Behavior change.** Under the default `'block'` policy, an expired credential that previously resolved now throws. Any deployment carrying stale `ExpiresAt` values will see failures on upgrade where it previously saw silent success. This is the intended correction — the credential was already expired and the platform was ignoring it — but it is worth an inventory query before rolling out:
+
+  ```sql
+  SELECT ID, Name, ExpiresAt FROM __mj.Credential
+  WHERE IsActive = 1 AND ExpiresAt IS NOT NULL AND ExpiresAt <= SYSDATETIMEOFFSET();
+  ```
+
+  Deployments that need a staged rollout can start on `policy: 'warn'` (or a non-zero `graceMs`) and tighten once that query comes back empty.
+
+### Patch Changes
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [1419ba7]
+- Updated dependencies [a709bb6]
+- Updated dependencies [39b35f1]
+- Updated dependencies [e97d95c]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [a50948e]
+- Updated dependencies [2552b1e]
+- Updated dependencies [25bb295]
+- Updated dependencies [432cb73]
+- Updated dependencies [3080e83]
+- Updated dependencies [4c6a28b]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [6c36fb6]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [cc36de5]
+- Updated dependencies [9cb815b]
+- Updated dependencies [709de1a]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [d2db108]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [d43d86e]
+- Updated dependencies [a3539d2]
+- Updated dependencies [db39145]
+- Updated dependencies [41274aa]
+- Updated dependencies [91cba84]
+- Updated dependencies [b14c72f]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [c671f85]
+- Updated dependencies [49f26d9]
+- Updated dependencies [5e4205c]
+- Updated dependencies [7be1684]
+- Updated dependencies [21f9e15]
+- Updated dependencies [1090caa]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [f2248d5]
+- Updated dependencies [81aea34]
+- Updated dependencies [7384dd6]
+- Updated dependencies [6849b00]
+- Updated dependencies [67f6c85]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [5465489]
+- Updated dependencies [3bace5a]
+- Updated dependencies [88e6902]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [4248fb3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [59e32e0]
+- Updated dependencies [d122a41]
+- Updated dependencies [0a7c255]
+- Updated dependencies [0adaf76]
+- Updated dependencies [0ff7523]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [307da67]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [f65fec7]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [cb205de]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [0c634ba]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [223669e]
+- Updated dependencies [683f652]
+- Updated dependencies [914e6ff]
+- Updated dependencies [a8be410]
+- Updated dependencies [7316ac3]
+- Updated dependencies [2274f42]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [0fb3649]
+- Updated dependencies [131f3c4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [705ab4e]
+- Updated dependencies [a7da50b]
+- Updated dependencies [0f04590]
+- Updated dependencies [5fed75a]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [f26084f]
+- Updated dependencies [db39145]
+- Updated dependencies [f48dffc]
+- Updated dependencies [41c2c08]
+- Updated dependencies [630bb88]
+- Updated dependencies [e69634e]
+- Updated dependencies [6779eed]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [44faf83]
+- Updated dependencies [17cc774]
+- Updated dependencies [dae1d31]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [80905a1]
+- Updated dependencies [4c97994]
+- Updated dependencies [397ae9a]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [7e72c86]
+- Updated dependencies [a17a228]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [ce758af]
+- Updated dependencies [89a5b59]
+- Updated dependencies [1ea4085]
+- Updated dependencies [aee2d53]
+- Updated dependencies [8420f36]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [25f7b82]
+- Updated dependencies [8b90b41]
+- Updated dependencies [104125c]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [d296edd]
+- Updated dependencies [66fd011]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [509d2aa]
+- Updated dependencies [68f5c01]
+- Updated dependencies [196160a]
+- Updated dependencies [5513c2a]
+- Updated dependencies [90829e3]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [8c120db]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [aac148b]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [539dfe3]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [60bd774]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [ac18db8]
+- Updated dependencies [35da130]
+- Updated dependencies [5b41d48]
+- Updated dependencies [4b9542c]
+- Updated dependencies [28c92e0]
+- Updated dependencies [5f707d1]
+- Updated dependencies [369e229]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [aca4317]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [718b01c]
+- Updated dependencies [57fea6a]
+- Updated dependencies [374b1a4]
+- Updated dependencies [2c590b0]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [2854a2e]
+- Updated dependencies [b0b2cc9]
+- Updated dependencies [dc38250]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/core-entities@6.2.0
+  - @memberjunction/global@6.2.0
+  - @memberjunction/core@6.2.0
+
+## 6.2.0-edge.8
+
+### Patch Changes
+
+- Updated dependencies [6c36fb6]
+- Updated dependencies [9cb815b]
+- Updated dependencies [d2db108]
+- Updated dependencies [c671f85]
+- Updated dependencies [6849b00]
+- Updated dependencies [59e32e0]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [e69634e]
+- Updated dependencies [539dfe3]
+- Updated dependencies [ac18db8]
+  - @memberjunction/core@6.2.0-edge.8
+  - @memberjunction/core-entities@6.2.0-edge.8
+  - @memberjunction/global@6.2.0-edge.8
+
 ## 6.2.0-edge.7
 
 ### Patch Changes

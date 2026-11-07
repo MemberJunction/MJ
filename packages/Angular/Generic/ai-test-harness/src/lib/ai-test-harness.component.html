@@ -55,11 +55,18 @@
               accept=".json"
               style="display: none"
               (change)="onFileSelected($event)">
+            <!-- On phones the sidebar takes the whole pane, so the toggle reads as Settings / Chat. -->
             <button
               class="custom-button icon-only"
               (click)="toggleSidebar()"
-              title="Toggle sidebar">
-              <i class="fa-solid" [class.fa-chevron-right]="!showSidebar" [class.fa-chevron-left]="showSidebar"></i>
+              [title]="SidebarToggleLabel"
+              [attr.aria-label]="SidebarToggleLabel"
+              [attr.aria-expanded]="ShowSidebar">
+              @if (IsPhone) {
+                <i class="fa-solid" [class.fa-sliders]="!ShowSidebar" [class.fa-comments]="ShowSidebar" aria-hidden="true"></i>
+              } @else {
+                <i class="fa-solid" [class.fa-chevron-right]="!showSidebar" [class.fa-chevron-left]="showSidebar" aria-hidden="true"></i>
+              }
             </button>
           </div>
         </div>
@@ -73,10 +80,13 @@
           style="height: 100%; width: 100%;"
           [gutterSize]="8"
           (dragEnd)="OnHarnessSplitDragEnd($event.sizes)">
-          <!-- Chat Area (Left Pane) -->
+          <!-- Chat Area (Left Pane). Hidden on phones while the sidebar has the screen; angular-split
+               only collapses it to 0px, so inert also takes its composer out of the tab order. -->
           <as-split-area
             [size]="HarnessSplitSizes[0]"
-            [minSize]="25">
+            [minSize]="25"
+            [visible]="ChatPaneVisible"
+            [attr.inert]="ChatPaneVisible ? null : ''">
             <div class="chat-area">
               @if (EffectiveMode === 'workflow') {
                 <!-- You do not talk to a workflow. Its first step is compiled from its own graph, so
