@@ -1793,6 +1793,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
         if (this.closedByConsumer) {
             return;
         }
+        // An intentional copy of the same line in GeminiRealtimeClient.handleTransportClose: the client package cannot import the provider package.
         const isAbnormal = code !== undefined && code !== 0 && code !== 1000 && code !== 1005;
         // A clean close with no handle is the far end ending the call, not Google's cut at the connection limit.
         if ((this.resumption?.Handle || isAbnormal) && this.resumption?.ConnectionLost()) {
