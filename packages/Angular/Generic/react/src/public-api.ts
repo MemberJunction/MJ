@@ -15,6 +15,10 @@ export * from './lib/services/script-loader.service';
 export * from './lib/services/react-bridge.service';
 export * from './lib/services/angular-adapter.service';
 
+// Export
+export * from './lib/export/component-pdf-export';
+export * from './lib/export/image-pdf-writer';
+
 // Configuration
 export * from './lib/config/react-debug.config';
 
