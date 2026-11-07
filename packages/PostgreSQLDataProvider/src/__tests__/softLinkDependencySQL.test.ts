@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { CompositeKey, EntityInfo } from '@memberjunction/core';
+import { CompositeKey, EntityDependency, EntityInfo } from '@memberjunction/core';
 import { PostgreSQLDataProvider } from '../PostgreSQLDataProvider.js';
 
 // Mock pg so the provider can be constructed without a real database.
@@ -54,6 +54,9 @@ class TestProvider extends PostgreSQLDataProvider {
     }
     public buildSoftLinkSQL(entityName: string, key: CompositeKey): string {
         return this.BuildSoftLinkDependencySQL(entityName, key);
+    }
+    public buildHardLinkSQL(deps: EntityDependency[], key: CompositeKey): string {
+        return this.BuildHardLinkDependencySQL(deps, key);
     }
 }
 
@@ -139,5 +142,38 @@ describe('PostgreSQLDataProvider.BuildSoftLinkDependencySQL', () => {
             Fields: [{ Name: 'PersonID', EntityIDFieldName: null }],
         });
         expect(new TestProvider([target, plain]).buildSoftLinkSQL('Persons', CompositeKey.FromID(RECORD_GUID))).toBe('');
+    });
+});
+
+describe('PostgreSQLDataProvider.BuildHardLinkDependencySQL', () => {
+    it('escapes an apostrophe in a text primary key and rejects a non-numeric value for a numeric key', () => {
+        const textParent = mockEntity({
+            Name: 'Widgets',
+            ID: TARGET_ENTITY_ID,
+            BaseView: 'vwWidgets',
+            pk: [{ Name: 'Code', NeedsQuotes: true }],
+        });
+        const numParent = mockEntity({
+            Name: 'Counters',
+            ID: TARGET_ENTITY_ID,
+            BaseView: 'vwCounters',
+            pk: [{ Name: 'ID', NeedsQuotes: false }],
+        });
+        const child = mockEntity({
+            Name: 'WidgetUses',
+            ID: HOLDER_ENTITY_ID,
+            BaseView: 'vwWidgetUses',
+            Fields: [{ Name: 'WidgetCode', EntityIDFieldName: null }],
+        });
+        const provider = new TestProvider([textParent, numParent, child]);
+
+        const textDeps = [{ EntityName: 'Widgets', RelatedEntityName: 'WidgetUses', FieldName: 'WidgetCode' } as EntityDependency];
+        const sql = provider.buildHardLinkSQL(textDeps, CompositeKey.FromKeyValuePair('Code', "O'Brien"));
+        expect(sql).toContain('WHERE "WidgetCode" = \'O\'\'Brien\'');
+
+        const numDeps = [{ EntityName: 'Counters', RelatedEntityName: 'WidgetUses', FieldName: 'WidgetCode' } as EntityDependency];
+        expect(() => provider.buildHardLinkSQL(numDeps, CompositeKey.FromKeyValuePair('ID', '1 OR 1=1'))).toThrow(
+            'Invalid non-numeric value provided for numeric key field ID on entity Counters',
+        );
     });
 });

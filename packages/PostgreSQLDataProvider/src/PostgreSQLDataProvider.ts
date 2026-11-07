@@ -153,7 +153,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             const relatedEntityInfo = this.Entities.find(e => e.Name.trim().toLowerCase() === dep.RelatedEntityName?.trim().toLowerCase());
             if (!entityInfo || !relatedEntityInfo) continue;
 
-            const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
+            const pkLiteral = this.RenderPrimaryKeyLiteral(entityInfo.FirstPrimaryKey, compositeKey.GetValueByIndex(0), entityInfo.Name); // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
             const pkParts: string[] = [];
             for (const pk of entityInfo.PrimaryKeys) {
                 pkParts.push("'" + pk.Name + "' || '|' || CAST(" + pgDialect.QuoteIdentifier(pk.Name) + " AS TEXT)");
@@ -169,7 +169,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
                 + 'false AS "IsSoftLink", '
                 + 'NULL AS "EntityIDFieldName" '
                 + 'FROM ' + pgDialect.QuoteSchema(relatedEntityInfo.SchemaName, relatedEntityInfo.BaseView) + ' '
-                + 'WHERE ' + pgDialect.QuoteIdentifier(dep.FieldName) + ' = ' + quotes + compositeKey.GetValueByIndex(0) + quotes;
+                + 'WHERE ' + pgDialect.QuoteIdentifier(dep.FieldName) + ' = ' + pkLiteral;
         }
         return sSQL;
     }
