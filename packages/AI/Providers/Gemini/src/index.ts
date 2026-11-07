@@ -73,6 +73,18 @@ export const GEMINI_LEADING_USER_TURN_TEXT = 'Proceed with the task described in
  */
 export const GEMINI_TRAILING_USER_TURN_TEXT = 'Continue with the task.';
 
+/**
+ * The model turn placed between two consecutive user text turns, which Gemini would otherwise read as
+ * one turn. Gemini's implicit cache reuses a previous request only up to a turn boundary that the new
+ * request repeats, and a user turn that grows from one request to the next is never reused (measured
+ * on Gemini 3.8 Flash: a growing single user turn caches nothing; the same text split by a model turn
+ * caches everything before the last boundary). An agent's history is often all user messages — the
+ * envelope path keeps action results, retries and runtime state as user messages — so without a
+ * separator every request is the system prompt plus one changing turn, and nothing is cached.
+ * The Anthropic driver uses the same filler to keep roles alternating around its cache breakpoint.
+ */
+export const GEMINI_USER_TURN_SEPARATOR_TEXT = 'OK';
+
 @RegisterClass(BaseLLM, "GeminiLLM")
 export class GeminiLLM extends BaseLLM {
     protected _gemini: GoogleGenAI | null = null;
@@ -177,9 +189,13 @@ export class GeminiLLM extends BaseLLM {
      * one role are combined, and the conversation opens with a user turn (see
      * {@link GEMINI_LEADING_USER_TURN_TEXT}).
      *
-     * Two exceptions to combining:
+     * Exceptions to combining:
      * - A model turn with nothing in it (an assistant message with no text, no calls and no
      *   reasoning) is dropped. It carries nothing, and Gemini rejects an empty turn.
+     * - Two user turns with no function responses are kept apart by a
+     *   {@link GEMINI_USER_TURN_SEPARATOR_TEXT} model turn, so each message is a cache boundary that
+     *   the next request repeats. Function-response turns are never separated this way: a function
+     *   response must follow the model turn that made the call.
      * - A user turn that follows a function-response turn is kept as a turn of its own. Vertex AI
      *   rejects a turn whose function responses are followed by text with "Requests ending with a
      *   model turn are not supported", although the turn is the user's. Google AI Studio accepts both
@@ -192,7 +208,10 @@ export class GeminiLLM extends BaseLLM {
                 continue;
             }
             const current = result[result.length - 1];
-            if (current && current.role === message.role && !GeminiLLM.endsFunctionResponseTurn(current, message)) {
+            if (current && GeminiLLM.areSeparateUserTextTurns(current, message)) {
+                result.push({ role: 'model', parts: [{ text: GEMINI_USER_TURN_SEPARATOR_TEXT }] });
+                result.push({ role: message.role, parts: [...(message.parts ?? [])] });
+            } else if (current && current.role === message.role && !GeminiLLM.endsFunctionResponseTurn(current, message)) {
                 current.parts = [...(current.parts ?? []), ...(message.parts ?? [])];
             } else {
                 result.push({ role: message.role, parts: [...(message.parts ?? [])] });
@@ -208,6 +227,12 @@ export class GeminiLLM extends BaseLLM {
     private static isEmptyModelTurn(content: Content): boolean {
         return content.role === 'model'
             && (content.parts ?? []).every((p) => p.text === '' && !p.thoughtSignature && !p.thought && Object.keys(p).length === 1);
+    }
+
+    /** Whether two adjacent turns are both user turns without function responses, to be kept apart by a separator. */
+    private static areSeparateUserTextTurns(current: Content, next: Content): boolean {
+        const hasResponses = (c: Content) => (c.parts ?? []).some((p) => !!p.functionResponse);
+        return current.role === 'user' && next.role === 'user' && !hasResponses(current) && !hasResponses(next);
     }
 
     /** Whether `next` is a user turn of other parts after a function-response turn, and so must stay separate. */

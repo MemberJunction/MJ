@@ -10,7 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import { GoogleGenAI, type Content, type GenerateContentParameters } from '@google/genai';
 import { ChatParams, type ChatMessage } from '@memberjunction/ai';
-import { GeminiLLM, GEMINI_TRAILING_USER_TURN_TEXT } from '../index';
+import { GeminiLLM, GEMINI_TRAILING_USER_TURN_TEXT, GEMINI_USER_TURN_SEPARATOR_TEXT } from '../index';
 
 /** The Query Writer's third request, as MJ stored it. Only the first call of each turn is signed. */
 function QueryWriterThirdRequest(origin: string): ChatMessage[] {
@@ -110,6 +110,8 @@ describe('GeminiLLM — the turns a native tool loop sends', () => {
 
         const contents = sent[0].contents as Content[];
         expect(TurnProblems(contents)).toEqual([]);
-        expect(contents.map((c) => c.role)).toEqual(['user']);
+        // The two user messages stay apart behind a separator model turn (a cache boundary), not an empty one.
+        expect(contents.map((c) => c.role)).toEqual(['user', 'model', 'user']);
+        expect(contents[1].parts).toEqual([{ text: GEMINI_USER_TURN_SEPARATOR_TEXT }]);
     });
 });
