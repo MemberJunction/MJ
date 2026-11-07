@@ -23,9 +23,13 @@ import {
   ComputeKPIs,
   ParseDate,
   ResolveCostCurrency,
-  ToLiveExecutionStatus
+  ToLiveExecutionStatus,
+  ParseUtcBucket,
+  FoldRunsByHourOfWeek,
+  SumRuns,
+  ComputeModelLeaderboard
 } from './ai-usage-analytics.compute';
-import { AIUsageHourlyRow } from './ai-usage-analytics.types';
+import { AIUsageByModelRow, AIUsageHourlyRow } from './ai-usage-analytics.types';
 
 function createHourlyRow(overrides: Partial<AIUsageHourlyRow> = {}): AIUsageHourlyRow {
   return {
@@ -951,5 +955,153 @@ describe('ai-usage-analytics.compute', () => {
       expect(kpis.costPerToken).toBeCloseTo(1.00 / 1000);
       expect(kpis.dailyCostBurn).toBe(1.00);
     });
+  });
+});
+
+function createByModelRow(overrides: Partial<AIUsageByModelRow> = {}): AIUsageByModelRow {
+  return {
+    VendorID: null, ModelID: null, CostCurrency: null, Runs: 0, PricedRuns: 0, UnpricedRuns: 0, OwnCost: null,
+    TokensPrompt: 0, TokensCompletion: 0, LatencyP50: null, LatencyP95: null, CacheEfficiencyPct: null,
+    ...overrides
+  };
+}
+
+describe('usage patterns from the hourly aggregate', () => {
+  const utc = () => 0;
+
+  it('reads a bucket without a zone designator as UTC', () => {
+    expect(ParseUtcBucket('2026-09-07T03:00:00')?.toISOString()).toBe('2026-09-07T03:00:00.000Z');
+    expect(ParseUtcBucket('2026-09-07T03:00:00Z')?.toISOString()).toBe('2026-09-07T03:00:00.000Z');
+    expect(ParseUtcBucket('2026-09-07T03:00:00+02:00')?.toISOString()).toBe('2026-09-07T01:00:00.000Z');
+    expect(ParseUtcBucket('not a date')).toBeNull();
+    expect(ParseUtcBucket(null)).toBeNull();
+  });
+
+  it('sums Runs per hour of week, Monday first', () => {
+    // 2026-09-07 is a Monday, 2026-09-13 a Sunday.
+    const counts = FoldRunsByHourOfWeek([
+      createHourlyRow({ HourBucket: '2026-09-07T09:00:00Z', Runs: 4 }),
+      createHourlyRow({ HourBucket: '2026-09-07T09:00:00Z', Runs: 6 }), // same hour, another model/agent
+      createHourlyRow({ HourBucket: '2026-09-14T09:00:00Z', Runs: 1 }), // next Monday, same cell
+      createHourlyRow({ HourBucket: '2026-09-13T23:00:00Z', Runs: 2 }),
+    ], utc);
+    expect(counts[0][9]).toBe(11);
+    expect(counts[6][23]).toBe(2);
+    expect(counts.flat().reduce((a, b) => a + b, 0)).toBe(13);
+  });
+
+  it('shifts by a whole-hour offset, crossing midnight into the next day', () => {
+    // Monday 23:00 UTC at UTC+2 is Tuesday 01:00.
+    const counts = FoldRunsByHourOfWeek([createHourlyRow({ HourBucket: '2026-09-07T23:00:00Z', Runs: 3 })], () => 120);
+    expect(counts[1][1]).toBe(3);
+  });
+
+  it('places each UTC hour at the local hour it starts in for a +5:30 zone', () => {
+    // 03:00 UTC is 08:30 local: the bucket lands in the 8 o'clock cell.
+    const counts = FoldRunsByHourOfWeek([createHourlyRow({ HourBucket: '2026-09-07T03:00:00Z', Runs: 5 })], () => 330);
+    expect(counts[0][8]).toBe(5);
+  });
+
+  it('shifts backward for a negative offset', () => {
+    // Monday 02:00 UTC at UTC-5 is Sunday 21:00.
+    const counts = FoldRunsByHourOfWeek([createHourlyRow({ HourBucket: '2026-09-07T02:00:00Z', Runs: 7 })], () => -300);
+    expect(counts[6][21]).toBe(7);
+  });
+
+  it('returns an all-zero matrix and zero runs for an empty range', () => {
+    const counts = FoldRunsByHourOfWeek([], utc);
+    expect(counts.length).toBe(7);
+    expect(counts.every(day => day.length === 24 && day.every(c => c === 0))).toBe(true);
+    expect(SumRuns([])).toBe(0);
+  });
+});
+
+describe('ComputeModelLeaderboard', () => {
+  const M1 = 'AAAAAAAA-0000-0000-0000-000000000001';
+  const M2 = 'AAAAAAAA-0000-0000-0000-000000000002';
+  const V1 = 'BBBBBBBB-0000-0000-0000-000000000001';
+  const V2 = 'BBBBBBBB-0000-0000-0000-000000000002';
+
+  it('groups a model across hours, agents and users, and takes the success rate from SucceededRuns', () => {
+    const rows = [
+      createHourlyRow({ ModelID: M1, VendorID: V1, AgentID: 'a1', Runs: 6, SucceededRuns: 6, CostCurrency: 'USD', PricedRuns: 6, OwnCost: 0.6, TokensPrompt: 600, TokensCompletion: 400 }),
+      createHourlyRow({ ModelID: M1.toLowerCase(), VendorID: V1, AgentID: 'a2', UserID: 'u2', HourBucket: '2026-09-01T11:00:00Z', Runs: 4, SucceededRuns: 2, CostCurrency: 'USD', PricedRuns: 4, OwnCost: 0.4, TokensPrompt: 600, TokensCompletion: 400 }),
+      createHourlyRow({ ModelID: M2, VendorID: V2, Runs: 1, SucceededRuns: 1, UnpricedRuns: 1 }),
+    ];
+    const result = ComputeModelLeaderboard(rows, []);
+    expect(result).toHaveLength(2);
+    const m1 = result.find(r => r.ModelID === M1)!;
+    expect(m1.Runs).toBe(10);
+    expect(m1.SuccessRate).toBe(80);
+    expect(m1.Costs).toEqual([{ Currency: 'USD', Amount: 1.0 }]);
+    expect(m1.CostPer1KTokens).toBeCloseTo(1.0 / 2000 * 1000);
+    expect(m1.VendorID).toBe(V1);
+  });
+
+  it('keeps each currency as its own figure and prices per 1K in the primary currency only', () => {
+    const rows = [
+      createHourlyRow({ ModelID: M1, VendorID: V1, Runs: 3, SucceededRuns: 3, CostCurrency: 'USD', PricedRuns: 3, OwnCost: 3, TokensPrompt: 3000 }),
+      createHourlyRow({ ModelID: M1, VendorID: V1, Runs: 1, SucceededRuns: 1, CostCurrency: 'EUR', PricedRuns: 1, OwnCost: 2, TokensPrompt: 1000 }),
+      createHourlyRow({ ModelID: M1, VendorID: V1, Runs: 2, SucceededRuns: 2, UnpricedRuns: 2, TokensPrompt: 500 }),
+    ];
+    const [m1] = ComputeModelLeaderboard(rows, []);
+    expect(m1.Costs).toEqual([{ Currency: 'USD', Amount: 3 }, { Currency: 'EUR', Amount: 2 }]);
+    expect(m1.CostCurrency).toBe('USD');
+    // USD cost over the USD rows' tokens plus the currency-less (unpriced) rows', never EUR's.
+    expect(m1.CostPer1KTokens).toBeCloseTo((3 / 3500) * 1000);
+    expect(m1.PricedRuns).toBe(4);
+    expect(m1.UnpricedRuns).toBe(2);
+  });
+
+  it('reports no cost (not zero) for a model with no priced runs', () => {
+    const [m] = ComputeModelLeaderboard([createHourlyRow({ ModelID: M2, Runs: 2, SucceededRuns: 2, UnpricedRuns: 2, TokensPrompt: 10 })], []);
+    expect(m.Costs).toEqual([]);
+    expect(m.CostCurrency).toBeNull();
+    expect(m.CostPer1KTokens).toBeNull();
+  });
+
+  it('computes cache hit rate from the summed token columns', () => {
+    const [m] = ComputeModelLeaderboard([
+      createHourlyRow({ ModelID: M1, Runs: 1, TokensPrompt: 100, TokensCacheRead: 300, TokensCacheWrite: 100 }),
+      createHourlyRow({ ModelID: M1, Runs: 1, TokensPrompt: 100, TokensCacheRead: 0, TokensCacheWrite: 0 }),
+    ], []);
+    expect(m.CacheHitRate).toBeCloseTo(300 / 600);
+  });
+
+  it('takes latency percentiles from the by-model rows, weighted by runs across partitions', () => {
+    const hourly = [createHourlyRow({ ModelID: M1, VendorID: V1, Runs: 4, SucceededRuns: 4 })];
+    const byModel = [
+      createByModelRow({ ModelID: M1, VendorID: V1, CostCurrency: 'USD', Runs: 3, LatencyP50: 1000, LatencyP95: 2000 }),
+      createByModelRow({ ModelID: M1, VendorID: V1, CostCurrency: null, Runs: 1, LatencyP50: 2000, LatencyP95: 6000 }),
+    ];
+    const [m] = ComputeModelLeaderboard(hourly, byModel);
+    expect(m.LatencyP50).toBe(1250);
+    expect(m.LatencyP95).toBe(3000);
+  });
+
+  it('has no latency when the by-model query returned nothing for the model', () => {
+    const [m] = ComputeModelLeaderboard([createHourlyRow({ ModelID: M1, Runs: 1 })], []);
+    expect(m.LatencyP50).toBeNull();
+    expect(m.LatencyP95).toBeNull();
+  });
+
+  it('applies the vendor filter to both row sets', () => {
+    const hourly = [
+      createHourlyRow({ ModelID: M1, VendorID: V1, Runs: 2, SucceededRuns: 2 }),
+      createHourlyRow({ ModelID: M1, VendorID: V2, Runs: 5, SucceededRuns: 5 }),
+      createHourlyRow({ ModelID: M2, VendorID: V2, Runs: 1, SucceededRuns: 1 }),
+    ];
+    const byModel = [
+      createByModelRow({ ModelID: M1, VendorID: V1, Runs: 2, LatencyP50: 100, LatencyP95: 100 }),
+      createByModelRow({ ModelID: M1, VendorID: V2, Runs: 5, LatencyP50: 900, LatencyP95: 900 }),
+    ];
+    const result = ComputeModelLeaderboard(hourly, byModel, V1.toLowerCase());
+    expect(result).toHaveLength(1);
+    expect(result[0].Runs).toBe(2);
+    expect(result[0].LatencyP50).toBe(100);
+  });
+
+  it('returns nothing for an empty range', () => {
+    expect(ComputeModelLeaderboard([], [])).toEqual([]);
   });
 });
