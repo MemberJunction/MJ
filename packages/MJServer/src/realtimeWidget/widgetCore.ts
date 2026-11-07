@@ -12,8 +12,9 @@
  * @module @memberjunction/server/widget
  */
 
-import { BuildSessionClaims } from '../auth/magicLink/magicLinkCore.js';
+import { BuildSessionClaims, IsRoleGrantable } from '../auth/magicLink/magicLinkCore.js';
 import type { MagicLinkJWTClaims } from '../auth/magicLink/types.js';
+import { NormalizeOrigin } from '../requestOrigin.js';
 
 /**
  * The magic-link resource-scope `resourceType` used for a widget guest session. Pairs with the
@@ -31,7 +32,28 @@ export type WidgetMintErrorCode =
     | 'host_assertion_invalid'
     | 'upgrade_not_enabled'
     | 'invalid_email'
+    | 'guest_role_not_isolated'
     | 'server_error';
+
+/**
+ * The one stock role whose row filters key on the per-visitor scope id (`{{ScopeResourceID}}`) rather than on
+ * `UserID`. Every anonymous widget guest authenticates as the ONE shared Anonymous user, so a role whose filters
+ * compare `UserID` (the stock `UI` role, for instance) lets every guest read and update every other guest's rows
+ * through the generic API (MJ#6043). A widget may therefore grant only this role, or a role the deployment has
+ * explicitly listed as safe for anonymous visitors — the same opt-in list magic-link invites use.
+ */
+export const WIDGET_GUEST_ROLE_NAME = 'Widget Guest';
+
+/** Which roles, beyond {@link WIDGET_GUEST_ROLE_NAME}, a deployment allows a widget to hand to an anonymous guest. */
+export interface GuestRolePolicy {
+  /** Role names (case-insensitive) the deployment has opted in, normally `magicLink.grantableRoleNames`. */
+  GrantableRoleNames: readonly string[];
+}
+
+/** Pure check: may a widget grant `roleName` to an anonymous guest under `policy`? See {@link WIDGET_GUEST_ROLE_NAME}. */
+export function IsIsolatedGuestRole(roleName: string | null | undefined, policy: GuestRolePolicy): boolean {
+  return IsRoleGrantable(roleName, WIDGET_GUEST_ROLE_NAME, policy.GrantableRoleNames);
+}
 
 /** The minimal widget-instance shape the pure validators need (a subset of the entity). */
 export interface WidgetInstanceEligibilityInput {
@@ -56,22 +78,17 @@ export function ParseAllowedOrigins(allowedOrigins: string | null | undefined): 
     list = JSON.parse(raw);
   } catch {
     // Not JSON — tolerate a CSV form.
-    return raw.split(',').map((s) => normalizeOrigin(s)).filter((s): s is string => !!s);
+    return raw.split(',').map((s) => NormalizeOrigin(s)).filter((s): s is string => !!s);
   }
   if (!Array.isArray(list)) {
     return [];
   }
-  return list.filter((s): s is string => typeof s === 'string').map(normalizeOrigin).filter((s): s is string => !!s);
+  return list.filter((s): s is string => typeof s === 'string').map(NormalizeOrigin).filter((s): s is string => !!s);
 }
 
 /** @deprecated Use {@link ParseAllowedOrigins}. */
 export function parseAllowedOrigins(allowedOrigins: string | null | undefined): string[] {
   return ParseAllowedOrigins(allowedOrigins);
-}
-
-/** Lowercases + trims an origin and strips a trailing slash for stable comparison. */
-function normalizeOrigin(origin: string): string {
-  return origin.trim().toLowerCase().replace(/\/+$/, '');
 }
 
 /**
@@ -108,7 +125,7 @@ export function IsOriginAllowed(requestOrigin: string | null | undefined, allowe
   if (!requestOrigin || allowedOrigins.length === 0) {
     return false;
   }
-  const candidate = normalizeOrigin(requestOrigin);
+  const candidate = NormalizeOrigin(requestOrigin);
   return allowedOrigins.some((o) => o === candidate);
 }
 

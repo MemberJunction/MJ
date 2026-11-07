@@ -7,6 +7,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { QueryCompositionEngine } from '../queryCompositionEngine';
+import { RenderPipeline } from '../renderPipeline';
 import { UserInfo } from '@memberjunction/core';
 import { MJQueryEntityExtended, QueryEngine } from '@memberjunction/core-entities';
 import {
@@ -64,6 +65,22 @@ function setupAndResolve(
     return { result, engine };
 }
 
+/**
+ * Composes an edge case through the render pipeline with the outer values it passes on. A
+ * composition that passes an outer value through needs a render: compose-only resolution
+ * (`ResolveComposition`) takes static arguments only.
+ */
+function setupAndRender(
+    edgeCase: CompositionEdgeCase, parameters: Record<string, string>,
+): { result: { HasCompositions: boolean; ResolvedSQL: string; CTEs: ReturnType<QueryCompositionEngine['ResolveComposition']>['CTEs']; AnyDependencyUsesTemplates: boolean } } {
+    mockQueryEngineQueries(edgeCase.dependencies.map(d => makeQueryInfo(d, edgeCase.dialect)));
+    const mockUser = { UserRoles: [{ Role: 'Admin' }] } as unknown as UserInfo;
+    const platform = edgeCase.dialect === 'PostgreSQL' ? 'postgresql' : 'sqlserver';
+    const rendered = RenderPipeline.Run(edgeCase.outerSQL, { Platform: platform, ContextUser: mockUser, UsesTemplate: true, Parameters: parameters });
+    const usesTemplates = edgeCase.dependencies.some(d => d.sql.includes('{{') || d.sql.includes('{%'));
+    return { result: { HasCompositions: rendered.HasCompositions, ResolvedSQL: rendered.FinalSQL, CTEs: rendered.CTEs, AnyDependencyUsesTemplates: usesTemplates } };
+}
+
 // ── Tests ──
 
 describe('Composition Engine Edge Cases', () => {
@@ -86,7 +103,7 @@ describe('Composition Engine Edge Cases', () => {
 
         it('should strip ORDER BY inside {% if %} conditional block', () => {
             const ec = ORDER_BY_EDGE_CASES.find(e => e.description.includes('inside {% if %}'))!;
-            const { result } = setupAndResolve(ec);
+            const { result } = setupAndRender(ec, { SortBy: 'FirstName' });
 
             expect(result.HasCompositions).toBe(true);
             // The resolved SQL should not cause a CTE error
@@ -260,7 +277,7 @@ describe('Composition Engine Edge Cases', () => {
 
         it('should hoist CTE when dependency has Nunjucks template tokens inside CTE body', () => {
             const ec = CTE_HOISTING_EDGE_CASES.find(e => e.description.includes('Nunjucks template tokens inside CTE'))!;
-            const { result } = setupAndResolve(ec);
+            const { result } = setupAndRender(ec, { ScoreThreshold: '50' });
 
             expect(result.HasCompositions).toBe(true);
             // Must NOT produce nested WITH
@@ -325,7 +342,7 @@ describe('Composition Engine Edge Cases', () => {
 
         it('should hoist CTE when Nunjucks {% if %} block is inside CTE body', () => {
             const ec = CTE_HOISTING_EDGE_CASES.find(e => e.description.includes('conditional block wrapping'))!;
-            const { result } = setupAndResolve(ec);
+            const { result } = setupAndRender(ec, { ShowAll: '1' });
 
             expect(result.HasCompositions).toBe(true);
             expect(result.ResolvedSQL).not.toMatch(/AS\s*\(\s*WITH/i);
@@ -367,7 +384,7 @@ describe('Composition Engine Edge Cases', () => {
 
         it('should create distinct CTEs for same query with different parameters', () => {
             const ec = MULTIPLE_DEPENDENCY_EDGE_CASES.find(e => e.description.includes('different parameters'))!;
-            const { result } = setupAndResolve(ec);
+            const { result } = setupAndRender(ec, { CurrentYear: '2025', PreviousYear: '2024' });
 
             expect(result.HasCompositions).toBe(true);
             // Same dependency referenced twice with different params = 2 CTEs
@@ -545,7 +562,7 @@ describe('Composition Engine Edge Cases', () => {
     describe('Template Parameter Edge Cases', () => {
         it('should handle pass-through parameter', () => {
             const ec = TEMPLATE_PARAMETER_EDGE_CASES.find(e => e.description.includes('Pass-through'))!;
-            const { result } = setupAndResolve(ec);
+            const { result } = setupAndRender(ec, { MinActivityCount: '5' });
 
             expect(result.HasCompositions).toBe(true);
             expect(result.AnyDependencyUsesTemplates).toBe(true);
@@ -563,7 +580,7 @@ describe('Composition Engine Edge Cases', () => {
 
         it('should handle mixed parameters (static + pass-through)', () => {
             const ec = TEMPLATE_PARAMETER_EDGE_CASES.find(e => e.description.includes('Mixed'))!;
-            const { result } = setupAndResolve(ec);
+            const { result } = setupAndRender(ec, { MinActivityCount: '5' });
 
             expect(result.HasCompositions).toBe(true);
             // Both params stored in CTE metadata
@@ -585,8 +602,10 @@ describe('Composition Engine Edge Cases', () => {
             const { result } = setupAndResolve(ec);
 
             expect(result.HasCompositions).toBe(true);
-            // The 'true' value should be substituted for IncludeInactive
-            expect(result.ResolvedSQL).toContain("'true'");
+            // The dependency renders with IncludeInactive='true' (render-then-compose evaluates the static
+            // argument instead of substituting it into the dependency's template), so the block is left out.
+            expect(result.ResolvedSQL).not.toContain('m.Active = 1');
+            expect(result.CTEs[0].Parameters).toEqual({ IncludeInactive: 'true' });
         });
     });
 

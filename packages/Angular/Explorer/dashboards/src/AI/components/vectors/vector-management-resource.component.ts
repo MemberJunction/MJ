@@ -213,6 +213,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                 ResultType: 'simple',
                 OrderBy: 'Priority ASC',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             });
             if (result.Success && result.Results.length > 0 && result.Results[0].TemplateText) {
                 this.EditDocTemplate = result.Results[0].TemplateText;
@@ -284,6 +285,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                 ResultType: 'entity_object',
                 OrderBy: 'Priority ASC',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
             });
             if (result.Success && result.Results.length > 0) {
                 const content = result.Results[0];
@@ -468,6 +470,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             Fields: ['ID'],
             ResultType: 'simple',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         });
         if (result.Success && result.Results.length > 0) {
             return result.Results[0].ID;
@@ -1355,8 +1358,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         this.vectorIndexes = [...AIEngineBase.Instance.VectorIndexes];
 
         // Build per-EntityDocument aggregate stats (vector count + last synced).
-        // Each query fetches only the most recent row (MaxRows: 1) and uses
-        // TotalRowCount for the actual vector count — avoids loading all rows.
+        // Each query fetches the two most recent rows and uses TotalRowCount for the
+        // vector count, which avoids loading all rows. A full page triggers the
+        // count, and a short page is itself the total.
         // AI Models come from a different domain — fetched in the same batch.
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const erdQueries = this.entityDocuments.map(doc => ({
@@ -1382,7 +1386,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                 const rows = result.Results as { __mj_UpdatedAt: string }[];
                 const lastDate = rows.length > 0 ? new Date(rows[0].__mj_UpdatedAt) : null;
                 this.erdStats.set(this.entityDocuments[i].ID, {
-                    vectorCount: result.TotalRowCount,
+                    vectorCount: result.TotalRowCount ?? 0,
                     lastSynced: lastDate,
                 });
             }
@@ -1496,7 +1500,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     private buildVectorDBHealth(): void {
         if (this.vectorDatabases.length > 0) {
-            const db = this.vectorDatabases[0];
+            const activeDbID = this.vectorIndexes[0]?.VectorDatabaseID ?? this.entityDocuments[0]?.VectorDatabaseID;
+            const db = (activeDbID ? this.vectorDatabases.find(d => UUIDsEqual(d.ID, activeDbID)) : undefined) ?? this.vectorDatabases[0];
             this.VectorDBName = db.Name;
             // "Degraded" here doesn't mean the database is unhealthy — it means no
             // records have been vectorized yet. Say that plainly so users don't
@@ -1785,6 +1790,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             ExtraFilter: `Name='${EscapeSQLString(this.SaveDocumentName)}'`,
             ResultType: 'entity_object',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         });
 
         if (existing.Success && existing.Results.length > 0) {
@@ -1836,6 +1842,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                 : `Name='${EscapeSQLString(templateName)}' AND UserID='${md.CurrentUser.ID}'`,
             ResultType: 'entity_object',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         });
         if (existing.Success && existing.Results.length > 0) {
             return existing.Results[0];
@@ -1861,6 +1868,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             ResultType: 'entity_object',
             OrderBy: 'Priority ASC',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         });
         if (existing.Success && existing.Results.length > 0) {
             return existing.Results[0];
@@ -1879,6 +1887,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             Fields: ['Name'],
             ResultType: 'simple',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         });
         return result.Success && result.Results.length > 0 && result.Results[0].Name === name;
     }
@@ -1946,7 +1955,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         });
 
         if (result.Success) {
-            row.VectorCount = result.TotalRowCount;
+            row.VectorCount = result.TotalRowCount ?? 0;
             row.LastSynced = result.Results.length > 0 ? new Date(result.Results[0].__mj_UpdatedAt) : (row.LastSynced ?? new Date());
             row.Status = row.VectorCount > 0 ? 'Synced' : 'Pending';
             row.PercentComplete = 100;

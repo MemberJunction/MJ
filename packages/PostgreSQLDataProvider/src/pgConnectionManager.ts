@@ -117,6 +117,14 @@ export class PGConnectionManager {
             // see MJPostgresTypes. Pools passed to InitializeWithExistingPool must set
             // this themselves; type parsers can't be retrofitted onto an existing pool.
             types: MJPostgresTypes,
+            // TCP keepalive (SO_KEEPALIVE) on every pooled socket. A long CodeGen run leaves
+            // pooled connections idle for minutes at a time; without keepalive probes, a NAT
+            // gateway / load balancer / security-group idle timer anywhere on the path (e.g. a
+            // GitHub-Actions runner talking to a public Aurora endpoint) silently drops the
+            // flow and the next use of that socket surfaces as `read ECONNRESET`. Probing from
+            // 10s keeps the mapping alive well inside every common idle window.
+            keepAlive: true,
+            keepAliveInitialDelayMillis: 10000,
             // Optional libpq startup options (e.g. `-c statement_timeout=30000`) — applied
             // by every backend from connection #1, including the verify-SELECT-1 below.
             ...(config.Options ? { options: config.Options } : {}),

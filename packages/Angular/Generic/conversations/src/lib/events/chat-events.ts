@@ -18,6 +18,8 @@
  */
 
 import type { ExecuteAgentResult } from '@memberjunction/ai-core-plus';
+import type { SessionEndReason } from '@memberjunction/conversations-runtime';
+import type { MJProjectEntity } from '@memberjunction/core-entities';
 import type { AgentTurnInfo, AgentTurnRoute } from '../models/agent-turn.model';
 
 /**
@@ -242,12 +244,73 @@ export class SessionChannelStateChangedEventArgs {
 }
 
 /**
- * Informational. A session ended client-side. Narrowed to
- * `explicit | error | unknown` — see {@link SessionStartedEventArgs} module comment.
+ * Informational. A session ended client-side. `Reason` is the runtime's
+ * `SessionEndReason` — see {@link SessionStartedEventArgs} module comment.
  */
 export class SessionEndedEventArgs {
     constructor(
         public readonly SessionId: string,
-        public readonly Reason: 'explicit' | 'error' | 'unknown'
+        public readonly Reason: SessionEndReason
     ) {}
 }
+
+// ────────────────────────────────────────────────────────────────────
+// Folder / Project editing
+// ────────────────────────────────────────────────────────────────────
+
+/**
+ * Fired BEFORE a folder's edit/rename modal is opened from the conversation list.
+ * Listeners can cancel (`Cancel = true`) to open their own custom folder/project
+ * editor instead of MJ's built-in `ProjectFormModalComponent`; `AfterFolderEdit`
+ * then does not fire.
+ *
+ * Listeners run synchronously: `EditFolder()` reads `Cancel` as soon as `emit()` returns.
+ */
+export class BeforeFolderEditEventArgs extends CancellableChatEventArgs {
+    constructor(public readonly Project: MJProjectEntity) {
+        super();
+    }
+}
+
+/**
+ * Fired AFTER a folder's edits are saved through the built-in modal.
+ * NOT fired when `BeforeFolderEditEventArgs` was canceled or the modal was dismissed without saving.
+ */
+export class AfterFolderEditEventArgs {
+    constructor(public readonly Project: MJProjectEntity) {}
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Artifact panel opening
+// ────────────────────────────────────────────────────────────────────
+
+/**
+ * Fired BEFORE the chat area opens its built-in right-hand artifact viewer drawer.
+ * Listeners can cancel (`Cancel = true`) to open the artifact in a host-managed
+ * workspace drawer or surface instead; `ShowArtifactPanel` stays unchanged and
+ * `AfterArtifactPanelOpen` does not fire.
+ *
+ * Listeners run synchronously: the chat area reads `Cancel` as soon as `emit()` returns.
+ */
+export class BeforeArtifactPanelOpenEventArgs extends CancellableChatEventArgs {
+    constructor(
+        public readonly ArtifactId: string,
+        public readonly VersionNumber?: number,
+        public readonly VersionId?: string
+    ) {
+        super();
+    }
+}
+
+/**
+ * Fired AFTER the chat area opens its built-in artifact viewer drawer.
+ * NOT fired when `BeforeArtifactPanelOpenEventArgs` was canceled.
+ */
+export class AfterArtifactPanelOpenEventArgs {
+    constructor(
+        public readonly ArtifactId: string,
+        public readonly VersionNumber?: number,
+        public readonly VersionId?: string
+    ) {}
+}
+

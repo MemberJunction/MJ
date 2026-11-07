@@ -2,7 +2,7 @@ import { BaseEntity, EntitySaveOptions, LogError, LogStatus, RunView, SimpleEmbe
 import { Float32VectorToBase64, RegisterClass } from '@memberjunction/global';
 import { MJTagEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
 import { TagEngine } from '@memberjunction/tag-engine';
-import { EmbedTextLocalHelper } from './util';
+import { EmbedTextLocalHelper, IsLocalEmbeddingStaleHelper } from './util';
 
 /**
  * Server-side Tag entity that:
@@ -28,6 +28,11 @@ export class MJTagEntityServer extends MJTagEntity {
 
     protected override async EmbedTextLocal(textToEmbed: string): Promise<SimpleEmbeddingResult> {
         return EmbedTextLocalHelper(this, textToEmbed);
+    }
+
+    /** A stored vector from a model other than the default local one is re-embedded on save. */
+    protected override async IsEmbeddingStale(embeddingModelID: string | null): Promise<boolean> {
+        return IsLocalEmbeddingStaleHelper(this, embeddingModelID);
     }
 
     public override SupportsEmbedTextLocal(): boolean {
@@ -143,7 +148,9 @@ export class MJTagEntityServer extends MJTagEntity {
         const nameDirty = !this.IsSaved || (nameField?.Dirty ?? false);
         const descDirty = !this.IsSaved || (descField?.Dirty ?? false);
 
-        if (!nameDirty && !descDirty) return;
+        const textChanged = nameDirty || descDirty;
+        const stale = this.EmbeddingVector != null && await this.IsEmbeddingStale(this.EmbeddingModelID);
+        if (!textChanged && !stale) return;
 
         const trimmedName = this.Name?.trim();
         if (!trimmedName) {
@@ -162,13 +169,14 @@ export class MJTagEntityServer extends MJTagEntity {
                 this.EmbeddingVector = JSON.stringify(result.vector);
                 this.EmbeddingVectorBinary = Float32VectorToBase64(result.vector);
                 if (result.modelID) this.EmbeddingModelID = result.modelID;
-            } else {
-                this.EmbeddingVector = null;
-                this.EmbeddingVectorBinary = null;
-                this.EmbeddingModelID = null;
+                return;
             }
         } catch (error) {
             LogError(`[MJTagEntityServer] Embedding refresh failed for tag "${this.Name}": ${error instanceof Error ? error.message : String(error)}`);
+        }
+        // A vector computed from old text must go; one that is only from an older model still matches
+        // the text, so keep it until a re-embed succeeds.
+        if (textChanged) {
             this.EmbeddingVector = null;
             this.EmbeddingVectorBinary = null;
             this.EmbeddingModelID = null;

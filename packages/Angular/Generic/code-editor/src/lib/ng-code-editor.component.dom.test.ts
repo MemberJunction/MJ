@@ -138,3 +138,22 @@ describe('CodeEditorComponent (DOM — toolbar)', () => {
     expect(actions[0].buttonId).toBe('copy');
   });
 });
+
+describe('CodeEditorComponent readonly', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('makes the editor editable again when readonly is cleared, unless it is disabled', () => {
+    vi.spyOn(CodeEditorComponent.prototype, 'ngOnInit').mockImplementation(function (this: CodeEditorComponent) {
+      Object.assign(this, { view: { destroy() { /* no-op */ }, dispatch() { /* no-op */ } } });
+    });
+    const f = renderComponentFixture(CodeEditorComponent, { ...MOD });
+    const editable = vi.spyOn(f.componentInstance, 'SetEditable');
+    f.componentInstance.readonly = true;
+    f.componentInstance.readonly = false;
+    expect(editable.mock.calls.map(c => c[0])).toEqual([false, true]);
+    f.componentInstance.disabled = true;
+    editable.mockClear();
+    f.componentInstance.readonly = false;
+    expect(editable.mock.calls.map(c => c[0])).toEqual([false]);
+  });
+});

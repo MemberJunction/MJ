@@ -1,0 +1,137 @@
+[
+  {
+    "fields": {
+      "Name": "Diagnostics Session Started",
+      "Description": "A diagnostic recording session was started on the instance.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-205000000001"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.761Z",
+      "checksum": "4761dc2fdcc51dcb832c6701c8a162d89a4123b1d449e3b96890c6f912ff96f3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Diagnostics Session Stopped",
+      "Description": "A diagnostic recording session was stopped and its chunks were flushed.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-205000000002"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.791Z",
+      "checksum": "efdc8ad7046ac74a0ce88381c3b81ec92b3e049aa29138c510617fede24139ad"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Diagnostics Bundle Built",
+      "Description": "A .mjdiag diagnostic bundle was assembled, scrubbed, and verified.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-205000000003"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.816Z",
+      "checksum": "d6326483e27240126570750a76440177f8b1c447b42c4fc296e3f410fb21f8ce"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Diagnostics Bundle Previewed",
+      "Description": "An operator inspected a diagnostic bundle's manifest, scrubbing summary, and findings.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-205000000004"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.844Z",
+      "checksum": "267c26e2ee19907cf6fcdfb7dcce41fe9b60f0950662d5b637f5ee563f461f1b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Diagnostics Bundle Downloaded",
+      "Description": "A diagnostic bundle archive was downloaded via a single-use signed capability token.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-205000000005"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.873Z",
+      "checksum": "4df075e45978804dc614d8c60dc59d02edb56170e9fa1e9375c1581b89f77e1b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Diagnostics Bundle Sent",
+      "Description": "An encrypted diagnostic bundle was transmitted to an external collector or storage account.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-205000000006"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.904Z",
+      "checksum": "1d247fb6b59229e5b533fb6b86e3b3a96ae43115e02bb396a3942ddf59534b83"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Diagnostics Bundle Send Failed",
+      "Description": "An attempt to transmit an encrypted diagnostic bundle externally failed.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-205000000007"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.934Z",
+      "checksum": "a1cdca34574613914f1996615699bc84c2c052d614c23e24f8e8ac8a4302c56d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Diagnostics Bundle Received",
+      "Description": "An external .mjdiag.enc bundle was ingested, cryptographically verified, structurally validated, and malware-checked by the MJAPI intake endpoint.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-205000000008"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.960Z",
+      "checksum": "8fbf6480dccfe7059d735410b55c915b9710f4e8fd1e96e09b918da693657890"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Diagnostics Sharing Settings Changed",
+      "Description": "Instance configuration settings governing diagnostic capture, literal scrubbing, or external transmission were modified.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-205000000009"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.986Z",
+      "checksum": "07f163425ebe2bad2a425ae775f73b5a51b9e26674745813c45d2accc7120ab5"
+    }
+  }
+]

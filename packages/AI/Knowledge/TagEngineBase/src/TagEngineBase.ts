@@ -356,7 +356,8 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
             EntityName: 'MJ: Tagged Items',
             ExtraFilter: `TagID='${tagID}' AND EntityID='${entityID}' AND RecordID='${recordID}'`,
             ResultType: 'entity_object',
-            MaxRows: 1
+            MaxRows: 1,
+            SkipTotalRowCount: true
         }, contextUser);
 
         if (result.Success && result.Results.length > 0) {

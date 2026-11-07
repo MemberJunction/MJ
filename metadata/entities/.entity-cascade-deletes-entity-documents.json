@@ -6,6 +6,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Entity Documents"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:05.624Z",
+      "checksum": "7b718a22243e88d9ac3a54df9395ab7c01a939ccb17fdde4c757ee0da8ecb42e"
     }
   }
 ]

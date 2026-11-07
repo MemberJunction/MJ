@@ -41,6 +41,7 @@ export type {
 export { ResolveDependencyGraph } from './dependency/dependency-graph-builder.js';
 export type {
     ManifestFetcher,
+    DependencyVersionResolver,
     FetchedManifest,
     RootApp,
     GraphResolutionResult
@@ -70,6 +71,7 @@ export {
 } from './github/github-client.js';
 export type {
     GitHubClientOptions,
+    GitHubTokenSource,
     GitHubRelease,
     ManifestFetchResult,
     MigrationDownloadResult

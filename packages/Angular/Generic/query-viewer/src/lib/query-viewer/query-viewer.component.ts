@@ -222,6 +222,12 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
     /** What the parameter form shows: the user's values, with the mapped ones over them. */
     public ParameterFormValues: QueryParameterValues = {};
 
+    /**
+     * The parameter values the rows on screen were produced with (mapped ones included, server-set
+     * ones left out), or null before the first successful run. The grid's Open in Excel carries them.
+     */
+    public LastRunParameters: QueryParameterValues | null = null;
+
     /** The names of the mapped parameters, which the parameter form shows read-only. */
     public ReadOnlyParameters: string[] = [];
 
@@ -256,6 +262,7 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
         // Reset state
         this.QueryInfo = null;
         this.QueryData = [];
+        this.LastRunParameters = null;
         this.HasRun = false;
         this.LastError = null;
         this.ExecutionTimeMs = null;
@@ -415,9 +422,10 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
 
         try {
             const runQuery = this.RunQueryToUse;
+            const runValues = this.withoutServerSetParameters(normalizedParams);
             const runParams: RunQueryParams = {
                 QueryID: this._queryId,
-                Parameters: this.withoutServerSetParameters(normalizedParams) as Record<string, unknown>
+                Parameters: runValues as Record<string, unknown>
             };
 
             // Add server-side paging when PageSize > 0
@@ -432,6 +440,7 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
 
             if (result.Success) {
                 this.QueryData = result.Results || [];
+                this.LastRunParameters = runValues;
                 this.HasRun = true;
                 this.ShowParamsPanel = false;
 

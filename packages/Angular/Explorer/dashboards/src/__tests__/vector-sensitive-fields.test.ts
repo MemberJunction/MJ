@@ -345,7 +345,7 @@ describe('calibration against MJ core entity field names', () => {
         // evidence that lowered it.
         const refused = FIELDS.filter((f) => IsSensitiveFieldName(f));
         expect(refused.length).toBeGreaterThanOrEqual(30);
-        expect(refused.length).toBeLessThanOrEqual(55);
+        expect(refused.length).toBeLessThanOrEqual(60);
         // And as a rate, so the bracket keeps its meaning if the fixture doubles in size.
         // 40/2111 is 1.9%; 3% leaves room for real additions and none for a broad one.
         expect(refused.length / FIELDS.length).toBeLessThan(0.03);
@@ -412,5 +412,19 @@ describe('the asymmetry argument has a limit, and the limit is also pinned', () 
         expect(IsSensitiveFieldName('Meeting')).toBe(false);
         expect(IsSensitiveFieldName('StackTrace')).toBe(false);
         expect(IsSensitiveFieldName('EmbeddedRecordObject')).toBe(false);
+    });
+});
+
+describe('PIN, one-time password, passcode and biometric columns', () => {
+    it('refuses them', () => {
+        for (const name of ['UserPin', 'PIN', 'OTPCode', 'Passcode', 'BiometricTemplate', 'BiometricEnabled']) {
+            expect(IsSensitiveFieldName(name), `must refuse ${name}`).toBe(true);
+        }
+    });
+
+    it('does not refuse look-alikes that merely contain the letters', () => {
+        for (const name of ['Shipping', 'Pinned', 'PinnedAt', 'Option', 'Hotpot']) {
+            expect(IsSensitiveFieldName(name), `must accept ${name}`).toBe(false);
+        }
     });
 });

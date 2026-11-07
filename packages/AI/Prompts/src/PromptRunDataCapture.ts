@@ -57,12 +57,20 @@ export function ReadServerTemplateDataCaptureDefault(searchFrom: string = proces
     return DEFAULT_TEMPLATE_DATA_CAPTURE;
 }
 
+const JSON_STRING_NEEDS_ESCAPE = /["\\\x00-\x1f\ud800-\udfff]/;
+
 /** UTF-8 byte length of a value's JSON form; -1 when it cannot be serialized. */
 function jsonByteLength(value: unknown): number {
     if (value === undefined) return 0;
     if (value === null) return 4;
     if (typeof value === 'boolean') return value ? 4 : 5;
     if (typeof value === 'number') return Number.isFinite(value) ? String(value).length : 4;
+    if (typeof value === 'string') {
+        if (!JSON_STRING_NEEDS_ESCAPE.test(value)) {
+            return Buffer.byteLength(value, 'utf8') + 2;
+        }
+        return Buffer.byteLength(JSON.stringify(value), 'utf8');
+    }
     try {
         const json = JSON.stringify(value);
         return json === undefined ? 0 : Buffer.byteLength(json, 'utf8');

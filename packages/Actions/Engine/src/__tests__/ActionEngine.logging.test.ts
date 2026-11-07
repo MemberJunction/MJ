@@ -398,7 +398,8 @@ describe('LoggingMode', () => {
 
         expect(result.Success).toBe(false);
         expect(logRows[0].EndedAt).toBeInstanceOf(Date);
-        expect(logRows[0].ResultCode ?? null).toBeNull();
+        // The action's own code is logged even though it matches none of the metadata result codes.
+        expect(logRows[0].ResultCode).toBe('FAILED');
         expect(logRows[0].Message).toBe('nope');
     });
 

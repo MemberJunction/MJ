@@ -472,6 +472,83 @@ describe('ActionMetadataGenerator', () => {
         });
     });
 
+    describe('primary keys', () => {
+        const UUID = /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/;
+
+        /** Every primary key ID in the output: actions, params and result codes. */
+        function allIDs(result: ReturnType<ActionMetadataGenerator['Generate']>): string[] {
+            return result.ActionRecords.flatMap(a => [
+                a.primaryKey.ID,
+                ...a.relatedEntities['MJ: Action Params'].map(p => p.primaryKey.ID),
+                ...a.relatedEntities['MJ: Action Result Codes'].map(c => c.primaryKey.ID),
+            ]);
+        }
+
+        it('gives every action, param and result code an upper-case UUID primary key', () => {
+            const ids = allIDs(generator.Generate(createConfig()));
+            expect(ids.length).toBeGreaterThan(0);
+            for (const id of ids) expect(id).toMatch(UUID);
+        });
+
+        it('never repeats an ID within one run', () => {
+            const ids = allIDs(generator.Generate(createConfig()));
+            expect(new Set(ids).size).toBe(ids.length);
+        });
+
+        it('reuses the IDs of the previous output when regenerating, so a re-push updates the same rows', () => {
+            const first = generator.Generate(createConfig());
+            const previous = JSON.parse(JSON.stringify(first.ActionRecords));
+            const second = generator.Generate(createConfig({ ExistingActionRecords: previous }));
+
+            expect(allIDs(second)).toEqual(allIDs(first));
+        });
+
+        it('keeps existing IDs for unchanged records and mints new ones only for what is new', () => {
+            const first = generator.Generate(createConfig());
+            const previous = JSON.parse(JSON.stringify(first.ActionRecords));
+            const widened = createMinimalObject();
+            widened.Fields.push({ Name: 'phone', DisplayName: 'Phone', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false });
+            const second = generator.Generate(createConfig({ Objects: [widened], ExistingActionRecords: previous }));
+
+            const create = (r: typeof second) => r.ActionRecords.find(a => a.fields['Name'] === 'TestCRM - Create Contact')!;
+            const paramID = (r: typeof second, name: string) => create(r).relatedEntities['MJ: Action Params'].find(p => p.fields['Name'] === name)?.primaryKey.ID;
+
+            expect(create(second).primaryKey.ID).toBe(create(first).primaryKey.ID);
+            expect(paramID(second, 'email')).toBe(paramID(first, 'email'));
+            expect(paramID(second, 'phone')).toMatch(UUID);
+            expect(new Set(allIDs(first))).not.toContain(paramID(second, 'phone'));
+        });
+
+        it('matches params by name and type, so an input and an output of the same name keep separate IDs', () => {
+            const first = generator.Generate(createConfig());
+            const previous = JSON.parse(JSON.stringify(first.ActionRecords));
+            const second = generator.Generate(createConfig({ ExistingActionRecords: previous }));
+
+            const get = second.ActionRecords.find(a => a.fields['Name'] === 'TestCRM - Get Contact')!;
+            const ids = get.relatedEntities['MJ: Action Params'].map(p => p.primaryKey.ID);
+            expect(new Set(ids).size).toBe(ids.length);
+        });
+
+        it('does not hand the same existing ID to two records', () => {
+            const first = generator.Generate(createConfig());
+            const previous = JSON.parse(JSON.stringify(first.ActionRecords));
+            // Corrupt the previous file: two actions claim one ID.
+            previous[1].primaryKey.ID = previous[0].primaryKey.ID;
+            const ids = allIDs(generator.Generate(createConfig({ ExistingActionRecords: previous })));
+
+            expect(new Set(ids).size).toBe(ids.length);
+        });
+
+        it('mints new IDs when an existing record has none', () => {
+            const first = generator.Generate(createConfig());
+            const previous = JSON.parse(JSON.stringify(first.ActionRecords)).map((a: Record<string, unknown>) => ({ ...a, primaryKey: undefined }));
+            const second = generator.Generate(createConfig({ ExistingActionRecords: previous }));
+
+            expect(second.ActionRecords[0].primaryKey.ID).toMatch(UUID);
+            expect(second.ActionRecords[0].primaryKey.ID).not.toBe(first.ActionRecords[0].primaryKey.ID);
+        });
+    });
+
     describe('DisplayName fallback', () => {
         it('should humanize object name when DisplayName is empty', () => {
             const config = createConfig({

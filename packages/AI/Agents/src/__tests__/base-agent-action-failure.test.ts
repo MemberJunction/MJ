@@ -920,6 +920,72 @@ describe('BaseAgent — Fix 2A: Action Failure Handling & Circuit Breaker', () =
             expect(guidanceMsg).toContain("DO NOT retry calling 'Perplexity Search' with identical arguments");
         });
 
+        it('a refusal by the user\'s agent policy gets a policy directive, not the "adjust your parameters" warning', async () => {
+            harness.runAction = () => {
+                const ar = new ActionResult();
+                ar.Success = false;
+                ar.Message = "Action 'Perplexity Search' targets external recipients and RequireApprovalForExternalComms is enabled.";
+                ar.Params = [];
+                // The policy gate's code matches none of the action's metadata result codes: Result stays
+                // undefined and only the text code carries it.
+                ar.ResultCode = 'POLICY_APPROVAL_REQUIRED';
+                return ar;
+            };
+
+            const { agent } = makeAgent([
+                () => llmEnvelope(actionsEnvelope()),
+                () => llmEnvelope(successEnvelope()),
+            ]);
+
+            const params = makeParams();
+            const result = await agent.Execute(params);
+            expect(result.success).toBe(true);
+
+            const contents = params.conversationMessages.map(m => typeof m.content === 'string' ? m.content : '');
+            const guidanceMsg = contents.find(c => c.includes('[CRITICAL/POLICY_APPROVAL_REQUIRED]'));
+
+            expect(guidanceMsg).toBeDefined();
+            expect(guidanceMsg).toContain("DO NOT retry 'Perplexity Search'");
+            expect(guidanceMsg).toContain('ask them to approve it');
+            expect(contents.some(c => c.includes('[WARNING/ACTION_FAILURE]'))).toBe(false);
+            // The text code reaches the model's result view instead of a bare ERROR.
+            expect(contents.some(c => c.includes('POLICY_APPROVAL_REQUIRED —'))).toBe(true);
+        });
+
+        it('a policy refusal repeated with the same arguments still gets the policy directive, not REPEATED_IDENTICAL_CALL', async () => {
+            harness.runAction = () => {
+                harness.runActionCallCount++;
+                const ar = new ActionResult();
+                ar.Success = false;
+                ar.Message = 'Quiet hours: the policy defers this action until 08:00.';
+                ar.Params = [];
+                ar.ResultCode = 'POLICY_DEFERRED_OUTSIDE_TIME_WINDOW';
+                return ar;
+            };
+
+            // The same refused call twice, then the model gives up.
+            const { agent } = makeAgent([
+                () => llmEnvelope(actionsEnvelope()),
+                () => llmEnvelope(actionsEnvelope()),
+                () => llmEnvelope(successEnvelope()),
+            ]);
+
+            const params = makeParams();
+            const result = await agent.Execute(params);
+            expect(result.success).toBe(true);
+            expect(harness.runActionCallCount).toBe(2);
+
+            const guidance = params.conversationMessages
+                .map(m => typeof m.content === 'string' ? m.content : '')
+                .filter(c => c.includes('Action Execution Failure Guidance'));
+            expect(guidance).toHaveLength(2);
+            expect(guidance[0]).toContain('[CRITICAL/POLICY_DEFERRED]');
+            // The second identical call would otherwise trip the identical-arguments rule and be told to
+            // "adjust your parameters" — the one thing a deferred call must not do.
+            expect(guidance[1]).toContain('[CRITICAL/POLICY_DEFERRED]');
+            expect(guidance.some(g => g.includes('[CRITICAL/REPEATED_IDENTICAL_CALL]'))).toBe(false);
+        });
+
         it('once the budget is spent the directive says ATTEMPTS_EXHAUSTED, never REPEATED_IDENTICAL_CALL', async () => {
             harness.runAction = () => {
                 harness.runActionCallCount++;

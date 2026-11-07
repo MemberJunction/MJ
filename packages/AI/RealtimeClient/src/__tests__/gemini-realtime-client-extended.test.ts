@@ -861,4 +861,55 @@ describe('GeminiRealtimeClient (extended)', () => {
             ]);
         });
     });
+
+    // ── Extended Thinking: one frame that completes the turn AND reports IDLE ────────────────────
+    describe('Extended Thinking: a frame carrying turnComplete and interactionStatus IDLE together', () => {
+        const extended = () =>
+            makeGeminiConfig({
+                model: 'gemini-3.8-live-extended-thinking',
+                config: {},
+                idleSignal: 'interactionStatus',
+                supportsScheduling: false,
+                supportsBlocking: false,
+            });
+        const turnCompleteAndIdle = () =>
+            ({ serverContent: { turnComplete: true }, interactionStatus: 'IDLE' }) as unknown as LiveServerMessage;
+
+        it('keeps a narration reply tagged narration, so the runtime never captions or saves it', async () => {
+            await connect(client, extended());
+            const { transcripts } = collect(client);
+            client.RequestSpokenUpdate('Tell the visitor you are still looking.');
+            beginModelTurn(client, 'Still looking, one moment.');
+            client.Emit(turnCompleteAndIdle());
+
+            const finals = transcripts.filter((t) => t.IsFinal && t.Role === 'Assistant');
+            expect(finals).toEqual([{ Role: 'Assistant', Text: 'Still looking, one moment.', IsFinal: true, Kind: 'narration' }]);
+        });
+
+        it('does not commit a context note the finished generation already consumed, so the model does not speak again', async () => {
+            await connect(client, extended());
+            client.SendContextNote('The visitor can see a whiteboard.');
+            client.RequestSpokenTurn('Greet the visitor.');
+            beginModelTurn(client, 'Hello, welcome.');
+            client.Emit(turnCompleteAndIdle());
+
+            // Only the note itself: no bare { turnComplete: true }, which would start a second, unsolicited reply.
+            expect(client.Fake.ClientContents).toEqual([
+                { turns: [{ role: 'user', parts: [{ text: 'The visitor can see a whiteboard.' }] }], turnComplete: false },
+            ]);
+        });
+
+        it('does not commit it when IDLE arrives in its own frame after the turn completed either', async () => {
+            await connect(client, extended());
+            client.SendContextNote('The visitor can see a whiteboard.');
+            client.RequestSpokenTurn('Greet the visitor.');
+            beginModelTurn(client, 'Hello, welcome.');
+            completeTurn(client);
+            client.Emit({ interactionStatus: 'IDLE' } as unknown as LiveServerMessage);
+
+            expect(client.Fake.ClientContents).toHaveLength(1);
+            expect(client.IsBusy).toBe(false);
+        });
+    });
 });
+

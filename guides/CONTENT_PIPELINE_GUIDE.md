@@ -3,11 +3,12 @@
 **Read this before building or customizing content ingestion, document extraction, classification/autotagging, segmentation, vector embedding, or RAG retrieval pipelines in MemberJunction.**
 
 - **Packages**:
-  - [`@memberjunction/content-pipeline-base`](../packages/ContentPipeline/base/README.md) — `WorkingRecord`, `BasePipelineStage`, `ConfidenceScale`, `BaseAccessDriver`, `BaseContentExtractor`, `BaseContentClassifier`, byte-signature detection, and `PipelineTuning` (zero database dependencies)
-  - [`@memberjunction/content-pipeline`](../packages/ContentPipeline/engine/README.md) — `PipelineProcessor` (`WorkType = 'Pipeline Stage'`), `WorkingRecordHydrator`, `WorkingRecordCommitter`, `AccessResolver`, `ExtractorCascade`, `ManagedPromptClassifier`, and the built-in stages (`Discover`, `Extract`, `Tag`, `Segment`, `Embed`, `Delete`, `DeleteContentItem`, `NoOp`)
+  - [`@memberjunction/content-pipeline-base`](../packages/ContentPipeline/base/README.md) — `WorkingRecord`, `BasePipelineStage`, `ConfidenceScale`, `BaseAccessDriver`, `BaseContentExtractor`, `BaseContentClassifier`, `BaseConceptSynthesizer`, `ClusterContentIntoConceptSeeds`, `ResolveGraphOverlayConfig`, byte-signature detection, and `PipelineTuning` (zero database dependencies)
+  - [`@memberjunction/content-pipeline`](../packages/ContentPipeline/engine/README.md) — `PipelineProcessor` (`WorkType = 'Pipeline Stage'`), `WorkingRecordHydrator`, `WorkingRecordCommitter`, `AccessResolver`, `ExtractorCascade`, `ManagedPromptClassifier`, `ManagedPromptConceptSynthesizer`, and the built-in stages (`Discover`, `Extract`, `Tag`, `Segment`, `Embed`, `Graph`, `Delete`, `DeleteContentItem`, `NoOp`)
   - [`@memberjunction/content-autotagging`](../packages/ContentAutotagging/README.md) — Source-type drivers (`AutotagBase` subclasses: `AutotagLocalFileSystem`, `AutotagCloudStorage`, `AutotagRSSFeed`, `AutotagWebsite`, `AutotagEntity`) and shared vector/prompt infrastructure (`ContentVectorInfrastructure`, `ContentVectorMetadata`, `ContentAutotagPrompt`)
   - [`@memberjunction/document-parsing`](../packages/DocumentParsing/src/index.ts) — Shared PDF, Word (`docx`), and Excel (`xlsx`) text extraction helpers
 - **Companion Guides**:
+  - **[Canon-First Methodology & Semantic Graphs Guide](CANON_AND_SEMANTIC_GRAPHS_GUIDE.md)** — How `ContentSource.GraphID` and `GraphStage` project document chunks and tags into `MJ: Graphs`, `MJ: Graph Concepts`, and `MJ: Graph Edges`
   - **[Record Set Processing & Record Processes Guide](RECORD_SET_PROCESSING_GUIDE.md)** — The execution substrate (`MJ: Record Processes`, batching, concurrency, rate limiting, resume, and `DryRun`)
   - **[Content Segmentation Guide](CONTENT_SEGMENTATION_GUIDE.md)** — How text and media are split into meaningful chunks via [`@memberjunction/ai-segmentation`](../packages/AI/Segmentation/README.md)
   - **[Taxonomy & Tagging Guide](TAXONOMY_TAGGING_GUIDE.md)** — How the formal `MJ: Tags` taxonomy is governed, scoped, embedded, and resolved
@@ -504,7 +505,24 @@ See the **[Taxonomy & Tagging Guide](TAXONOMY_TAGGING_GUIDE.md)** for full detai
 
 ---
 
-### Stage 6: `Delete` and `DeleteContentItem`
+### Stage 6: `Graph` (Semantic Graph & Canon Overlay)
+
+- **Class**: [`GraphStage`](../packages/ContentPipeline/engine/src/stages/GraphStage.ts) (`@RegisterClass(BasePipelineStage, 'Graph')`)
+- **Entity**: `MJ: Content Items`
+- **Synthesizer Registry**: `BaseConceptSynthesizer` (`@memberjunction/content-pipeline-base`), defaulting to [`ManagedPromptConceptSynthesizer`](../packages/ContentPipeline/engine/src/ManagedPromptConceptSynthesizer.ts) (`@RegisterClass(BaseConceptSynthesizer, 'ManagedPrompt')`)
+
+When a `ContentSource` has `GraphID` set (or `Configuration.GraphOverlay.EnableGraphOverlay = true`), `GraphStage` projects the item's segmented `MJ: Content Item Chunks` and governed `MJ: Content Item Tags` into `MJ: Graph Concepts` and `MJ: Graph Edges`:
+
+1. **Resolves `ResolvedGraphOverlayConfig`** via `ResolveGraphOverlayConfig(source.GraphID, sourceConfig, context.Configuration)` with defaults tailored to `TargetGraphType` (`'Canon'` defaults to `ConceptTaxonomyMode: 'propose-only'`, `GroundingMode: 'full-canon'`, `AuthorityTier: 'ExecutiveSOP'`; `'Knowledge'` defaults to `'auto-grow'`, `'none'`, `'Reference'`).
+2. **Pre-clusters chunks deterministically** (`ClusterContentIntoConceptSeeds`) across section heading breadcrumbs (`Decorator`), governed tags, and existing `MJ: Graph Concepts` (`Name` + `Synonyms`), sorting chunks within each concept seed by `AuthorityTierPrecedence` (`Bylaws` > `BoardPolicy` > `ExecutiveSOP` > `DepartmentPractice` > `Reference` > `Inferred`) and flagging numeric/currency threshold discrepancies (`PotentialConflicts`).
+3. **Synthesizes `MJ: Graph Concepts` and `MJ: Graph Edges`** (`SourcedFrom`, `Mentions`, `Broader Than`, `Describes`, `Defines`, `Measures`, `Implements`, and `Contradicts`) and attaches the `GraphStageExecutionSummary` to `record.SetExtension('Graph', 'summary', summary)`.
+4. **Supports both single-source dedicated graphs and multi-source shared graphs**: Multiple `MJ: Content Sources` (e.g., *Association Bylaws*, *Board Policies*, and *Department SOPs*) can point to the same `GraphID` while declaring different `AuthorityTier`s.
+
+See the **[Canon-First Methodology & Semantic Graphs Guide](CANON_AND_SEMANTIC_GRAPHS_GUIDE.md)** for full details.
+
+---
+
+### Stage 7: `Delete` and `DeleteContentItem`
 
 - **Classes**:
   - [`DeleteContentItemStage`](../packages/ContentPipeline/engine/src/stages/DeleteStage.ts) (`@RegisterClass(BasePipelineStage, 'DeleteContentItem')`) — runs over `MJ: Content Items` where `DeleteStatus = 'Pending'`
@@ -536,6 +554,7 @@ Each `MJ: Content Sources` record has a `Configuration` JSON column that control
 | `TagMatchThreshold` | `number` | `0.9` (`0.8` in `ContentItemTagBridge`) | Minimum cosine similarity score (`0`–`1`) for semantic tag matching (`0.9` in `AutotagEntity`, fixed at `0.8` in `ContentItemTagBridge`) |
 | `ShareTaxonomyWithLLM` | `boolean` | `true` | Whether `AutotagEntity` injects the existing tag taxonomy into its classification prompt |
 | `MaxItemsPerRun` / `MaxNewTagsPerRun` / `MaxNewTagsPerItem` / `MaxTokensPerRun` / `MaxCostPerRun` | `number` | unlimited | Per-run / per-item budget caps used by `AutotagEntity` (`RunBudget`) |
+| `GraphOverlay` | `ContentSourceGraphOverlayConfig` | — | Opt-in Semantic Graph / Canon overlay settings (`EnableGraphOverlay`, `GraphID`, `TargetGraphType` = `'Canon' \| 'Knowledge' \| 'Network' \| 'Custom'`, `ConceptTaxonomyMode` = `'constrained' \| 'propose-only' \| 'auto-grow'`, `AuthorityTier`, `GroundingMode` = `'none' \| 'schema-and-queries' \| 'full-canon'`, `ConceptMatchThreshold`, `MaxNewConceptsPerRun`, `SynthesizerKey`) |
 | `Website` | `IContentSourceWebsiteConfiguration` | — | Website crawler settings (`MaxDepth`, `CrawlSitesInLowerLevelDomain`, `CrawlOtherSitesInTopLevelDomain`, `URLPattern`, `RootURL`) |
 
 In MJ Explorer, these settings are surfaced automatically on the `MJ: Content Sources` form via two dynamically injected `BaseFormPanel` components in `@memberjunction/ng-core-entity-forms`:
@@ -568,6 +587,16 @@ For full retrieval configuration, see:
 
 ---
 
+## Uploads
+
+`ContentUploadIngestor` (`@memberjunction/content-pipeline`) is the server-side entry point for pushing caller-stored `MJ: Files` records into an `Upload` content source (`DriverClass: 'AutotagUpload'`). `ContentUploadIngestor.Ingest({ ContentSourceID, FileID, Name, Description, Origin, RunNow, ContextUser, Provider })` idempotently creates (or revives the existing) `MJ: Content Items` row with `FileID`, `URL = UploadItemURL(FileID)` (`upload://<normalized-file-id>`), `FieldConfidence` recording `Title` at `ConfidenceScale.CallerTitle` so extraction never overwrites the caller's `Name`, and all stage statuses set to `'Pending'`; when `RunNow` is `true`, it runs `Extract`, `Segment`, `Tag`, and `Embed` in order through `RecordProcessExecutor.RunByID` with a `records` scope and logs stage failures without throwing past the caller. If the resolved vector index is read-only, `EmbedStage` marks chunks `EmbeddingStatus = 'Skipped'`; to re-embed them after switching to a writable vector index, set `EmbeddingStatus = 'Pending'` on those `MJ: Content Item Chunks` rows and run `Content Pipeline — Embed`. `ContentUploadIngestor.Remove({ ContentItemID, FileID, ContentSourceID, RunNow, ContextUser, Provider })` marks the `MJ: Content Items` row, its descendants, and their chunks as `DeleteStatus = 'Pending'` via `ContentPipelineDeleteMarker`, detaching `FileID = null` on each root `upload://<FileID>` item right after its mark (a root that cannot be marked keeps its file) (and runs `DeleteContentItem` and `Delete` when `RunNow` is `true`). A stored `MJ: Files` row is treated as the caller's if and only if the item's locator is exactly `upload://<FileID>` (no `#member` suffix and matching `FileID`); push-only sources get no special case and there is no "keep when unsure" path, so archive members' durable copies (`upload://<rootFileID>#member`) and any other pipeline-written copies are deleted by `DeleteContentItemStage`. Items moved onto an `Upload` source must be (re)ingested through `ContentUploadIngestor` so they receive the `upload://<FileID>` locator; otherwise their `FileID` is treated as a pipeline copy.
+
+When `Origin: { EntityName, RecordID }` is supplied to `Ingest`, `ContentUploadIngestor` finds or creates one `MJ: Entity Record Documents` row with `EntityID`, `RecordID` formatted with `CompositeKey.FromURLSegment(entityInfo, Origin.RecordID).ToCompactURLSegment()` (matching `AutotagEntity`, while also matching legacy `ToRecordID()` rows when looking up an existing ERD), `EntityDocumentID` taken from `ContentSource.EntityDocumentID`, and `VectorIndexID` resolved via `ContentVectorInfrastructure.ResolveVectorIndexID`, then sets `ContentItem.EntityRecordDocumentID` to that row so `SearchEngine` promotes hits to the origin entity and enforces its row-level permissions and scope filters. When `Origin` is omitted, no `MJ: Entity Record Documents` row is created and `ContentItem.EntityRecordDocumentID` remains `null`. Such an item is not promoted to an origin entity, so `SearchEngine` gates it only by `MJ: Content Items` permissions: anyone who can read Content Items can find it in search. Supply `Origin` when the upload belongs to a record whose permissions should apply.
+
+Because uploaded content is pushed rather than crawled, `AutotagUpload` declares `IsPushOnly = true` and `SupportsExhaustiveWalk = false`. Both `Discover` and `Sync` runs in `DiscoverStage` return `Outcome.Skipped` for any driver where `IsPushOnly === true` before walking or running `PipelineProcessor.reconcileSyncOrphans`, ensuring a scheduled `Sync` never fails the source or marks uploaded `MJ: Content Items` as orphans for deletion.
+
+---
+
 ## 9. Shipped Record Processes & Testing
 
 ### The 9 Shipped Record Processes
@@ -593,9 +622,10 @@ Setting `"IsTest": true` in `RecordProcess.Configuration` (or running a Record P
 ### Automated Test Coverage
 
 - **Unit Tests**:
-  - `packages/ContentPipeline/base/src/__tests__/` — `WorkingRecord.test.ts`, `ByteSignature.test.ts`, `FileTypeResolution.test.ts`, `DurableCopy.test.ts`, `PipelineTuning.test.ts`, and `Stage.test.ts`.
-  - `packages/ContentPipeline/engine/src/__tests__/` — `PipelineProcessor.test.ts`, `AccessResolver.test.ts`, `ContentFetcher.test.ts`, `ContentSourceConfigurationResolver.test.ts`, `DetectionCatalog.test.ts`, `ExtractorCascade.test.ts`, `ArchiveExtractor.test.ts`, `DiscoverStage.test.ts`, `ExtractStage.test.ts`, `TagSegmentStages.test.ts`, `EmbedStage.test.ts`, `EmbedRouting.test.ts`, `DeleteStage.test.ts`, `Filters.test.ts`, `Reprocessing.test.ts`, `ReviewFixes.test.ts`, and `TestMode.test.ts`.
+  - `packages/ContentPipeline/base/src/__tests__/` — `WorkingRecord.test.ts`, `ByteSignature.test.ts`, `FileTypeResolution.test.ts`, `DurableCopy.test.ts`, `PipelineTuning.test.ts`, `Stage.test.ts`, and `ConceptSeedClustering.test.ts`.
+  - `packages/ContentPipeline/engine/src/__tests__/` — `PipelineProcessor.test.ts`, `AccessResolver.test.ts`, `ContentFetcher.test.ts`, `ContentSourceConfigurationResolver.test.ts`, `ContentUploadIngestor.test.ts`, `DetectionCatalog.test.ts`, `ExtractorCascade.test.ts`, `ArchiveExtractor.test.ts`, `DiscoverStage.test.ts`, `ExtractStage.test.ts`, `TagSegmentStages.test.ts`, `EmbedStage.test.ts`, `EmbedRouting.test.ts`, `GraphStage.test.ts`, `DeleteStage.test.ts`, `Filters.test.ts`, `Reprocessing.test.ts`, `ReviewFixes.test.ts`, and `TestMode.test.ts`.
   - `packages/ContentAutotagging/src/__tests__/` — `AutotagBaseEngine.test.ts`, `AutotagEntity.test.ts`, `AutotagWebsite.test.ts`, `LocalFileSystemFetch.test.ts`, `ContentAutotagPrompt.test.ts`, `ContentDeduplication.test.ts`, `ContentVectorInfrastructure.test.ts`, `FieldPathResolver.test.ts`, `RunBudget.test.ts`, `ScopeContextResolver.test.ts`, and `content-types.test.ts`.
 - **Integration Tests (`@memberjunction/integration-test-suite`)**:
   - [`content-pipeline.checks.ts`](../packages/TestingFramework/integration-test-suite/src/checks/content-pipeline.checks.ts) (`IT137`, checks `CP1`–`CP15`, `RequiresMutation: true`) — Validates end-to-end `Discover` item creation and `ForceDiscovery` clearing, `Extract` + `Segment` chunk production, `Embed` namespace routing and `VectorRecordID` receipts, unchanged walk/extract no-ops, re-segmentation superseding all prior chunks, `Delete` vector removal and unreferenced chunk row purge, `MetadataOnly` in-place vector updates, item cascade deletion, incremental `Since` window, `Columns` whitelist and framework-owned column refusal, nested archive depth limit, `Sync` orphan removal/revival/empty-walk circuit breaker, and `Access` session resolution plus cross-origin header stripping against SQL Server.
   - [`content-vectorization.checks.ts`](../packages/TestingFramework/integration-test-suite/src/checks/content-vectorization.checks.ts) (`IT67`, checks `CV1`–`CV10`) — Validates vector index resolution cascade, `ContentVectorMetadata`, and end-to-end vectorization infrastructure.
+  - [`semantic-graph.checks.ts`](../packages/TestingFramework/integration-test-suite/src/checks/semantic-graph.checks.ts) (`IT162`, checks `SG1`–`SG7`) — Validates the Semantic Graph substrate, `ContentSource.GraphID`, `GraphStage` multi-source clustering + authority-tier conflict detection + live `Provider.Entities` grounding, and Executable Canon DAG similarity & telemetry.

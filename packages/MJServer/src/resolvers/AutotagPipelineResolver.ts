@@ -1,6 +1,7 @@
 import { Resolver, Mutation, Ctx, Arg, ObjectType, Field } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IsValidUUID, EscapeSQLString } from '@memberjunction/global';
 import { MJContentProcessRunEntity } from '@memberjunction/core-entities';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { ActionEngineServer } from '@memberjunction/actions';
@@ -32,6 +33,7 @@ export class AutotagPipelineResolver extends ResolverBase {
     async RunAutotagPipeline(
         @Arg('contentSourceIDs', () => [String], { nullable: true }) contentSourceIDs: string[] | undefined,
         @Arg('forceReprocess', { nullable: true }) forceReprocess: boolean | undefined,
+        @Arg('pipelineRunID', { nullable: true }) clientPipelineRunID: string | undefined,
         @Ctx() { userPayload, providers }: AppContext = {} as AppContext
     ): Promise<AutotagPipelineResult> {
         try {
@@ -40,14 +42,37 @@ export class AutotagPipelineResolver extends ResolverBase {
                 return { Success: false, Status: 'Error', ErrorMessage: 'Unable to determine current user' };
             }
 
-            const pipelineRunID = uuidv4();
-            LogStatus(`RunAutotagPipeline: starting pipeline ${pipelineRunID}`);
-
             // Capture the per-request provider snapshot before returning so the fire-and-forget
             // background job binds to the same connection the caller used. Without this, the
             // background job would silently use the global default — wrong for multi-tenant.
-            const provider = (GetReadWriteProvider(providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider)
-                ?? (new Metadata() as unknown as IMetadataProvider);
+            const provider: IMetadataProvider = GetReadWriteProvider(providers, { allowFallbackToReadOnly: true }) ?? Metadata.Provider;
+
+            let pipelineRunID: string;
+            if (clientPipelineRunID != null) {
+                if (!IsValidUUID(clientPipelineRunID)) {
+                    return { Success: false, Status: 'Error', ErrorMessage: 'Invalid pipelineRunID format' };
+                }
+                const rv = RunView.FromMetadataProvider(provider);
+                const existing = await rv.RunView<{ ID: string }>({
+                    EntityName: 'MJ: Content Process Runs',
+                    ExtraFilter: `ID='${EscapeSQLString(clientPipelineRunID)}'`,
+                    Fields: ['ID'],
+                    ResultType: 'simple',
+                    MaxRows: 1,
+                    SkipTotalRowCount: true,
+                }, currentUser);
+                if (!existing.Success) {
+                    return { Success: false, Status: 'Error', ErrorMessage: existing.ErrorMessage || 'Failed to validate pipelineRunID' };
+                }
+                if (existing.Results.length > 0) {
+                    return { Success: false, Status: 'Error', ErrorMessage: `Pipeline run ${clientPipelineRunID} already exists` };
+                }
+                pipelineRunID = clientPipelineRunID;
+            } else {
+                pipelineRunID = uuidv4();
+            }
+
+            LogStatus(`RunAutotagPipeline: starting pipeline ${pipelineRunID}`);
 
             // Fire-and-forget: start the pipeline in the background and return immediately
             this.runPipelineInBackground(pipelineRunID, currentUser, provider, contentSourceIDs, forceReprocess);
@@ -101,9 +126,19 @@ export class AutotagPipelineResolver extends ResolverBase {
             // and keeps the process run record in sync
             this.publishProgress(pipelineRunID, 'autotag', 0, 0, startTime, 'Running autotaggers...');
 
+            let lastTotal = 0;
+            let lastProcessed = 0;
+            let lastLabel = 'Scanning & extracting content from sources...';
+
             const progressCallback = (processed: number, total: number, currentItem?: string) => {
-                const pct = total > 0 ? Math.round((processed / total) * 80) : 0; // 0-80% for tagging
-                this.publishProgress(pipelineRunID, 'autotag', total, pct, startTime, currentItem || `${processed}/${total} items`);
+                lastProcessed = processed;
+                lastTotal = total;
+                if (currentItem) {
+                    lastLabel = currentItem;
+                } else if (total > 0) {
+                    lastLabel = `${processed}/${total} items`;
+                }
+                this.publishProgress(pipelineRunID, 'autotag', total, processed, startTime, lastLabel);
                 this.updateProcessRunProgress(processRun, processed, total);
             };
 
@@ -121,12 +156,21 @@ export class AutotagPipelineResolver extends ResolverBase {
                 actionParams.push({ Name: 'ForceReprocess', Value: 1, Type: 'Input' });
             }
 
-            const result = await ActionEngineServer.Instance.RunAction({
-                Action: action,
-                ContextUser: currentUser,
-                Filters: [],
-                Params: actionParams
-            });
+            const heartbeatTimer = setInterval(() => {
+                this.publishProgress(pipelineRunID, 'autotag', lastTotal, lastProcessed, startTime, lastLabel);
+            }, 3000);
+
+            let result;
+            try {
+                result = await ActionEngineServer.Instance.RunAction({
+                    Action: action,
+                    ContextUser: currentUser,
+                    Filters: [],
+                    Params: actionParams
+                });
+            } finally {
+                clearInterval(heartbeatTimer);
+            }
 
             // Stage: vectorize complete
             this.publishProgress(pipelineRunID, 'vectorize', 100, 90, startTime, 'Vectorizing content...');
@@ -170,7 +214,8 @@ export class AutotagPipelineResolver extends ResolverBase {
                     EntityName: 'MJ: Content Sources',
                     Fields: ['ID'],
                     ResultType: 'simple',
-                    MaxRows: 1
+                    MaxRows: 1,
+                    SkipTotalRowCount: true
                 }, currentUser);
                 if (result.Success && result.Results.length > 0) {
                     sourceID = result.Results[0].ID;
