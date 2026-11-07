@@ -247,7 +247,8 @@ export class ThrowawayDatabase {
         if (!existsSync(script)) {
             return;
         }
-        const result = await this.runLogged('restore-sync-write-back', [script], process.env);
+        // Runs even after an abort, so an interrupted push still leaves metadata/ clean.
+        const result = await this.runLogged('restore-sync-write-back', [script], process.env, true);
         if (result.ExitCode !== 0) {
             console.warn(`    [rig] metadata write-back not fully restored:\n${this.LogTail(result)}`);
         }
@@ -280,9 +281,12 @@ export class ThrowawayDatabase {
         return result;
     }
 
-    /** Runs `node <nodeArgs>` from the repo root with its output in a numbered log file. */
-    private async runLogged(label: string, nodeArgs: string[], env: NodeJS.ProcessEnv): Promise<CliRunResult> {
-        if (this.aborted) {
+    /**
+     * Runs `node <nodeArgs>` from the repo root with its output in a numbered log file. After
+     * `Abort()` it refuses to start, unless `runAfterAbort` is set.
+     */
+    private async runLogged(label: string, nodeArgs: string[], env: NodeJS.ProcessEnv, runAfterAbort = false): Promise<CliRunResult> {
+        if (this.aborted && !runAfterAbort) {
             throw new Error(`The rig is stopping; not starting ${label}`);
         }
         this.stepCounter++;
@@ -314,8 +318,15 @@ export class ThrowawayDatabase {
         return tail(readFileSync(result.LogPath, 'utf8'));
     }
 
-    /** A pool connected to this database as the main login. Reused across calls. */
+    /**
+     * A pool connected to this database as the main login. Reused across calls. Refuses after
+     * `Abort()`: a scenario still running would otherwise open a new connection on the database
+     * being dropped, and the drop's `ROLLBACK IMMEDIATE` killing it crashes the process mid-drop.
+     */
     public async Pool(): Promise<sql.ConnectionPool> {
+        if (this.aborted) {
+            throw new Error('The rig is stopping');
+        }
         if (!this.pool) {
             this.pool = await new sql.ConnectionPool(this.poolConfig(this.Name)).connect();
         }

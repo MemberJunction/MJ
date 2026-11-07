@@ -209,6 +209,13 @@ describe('ThrowawayDatabase', () => {
         await expect(db.RunCli('after', ['0'])).rejects.toThrow(/rig is stopping/);
     });
 
+    it('opens no database connection after Abort', async () => {
+        const db = new ThrowawayDatabase('mj_rig_test_pool', SERVER, repoRoot);
+        await db.Abort();
+        await expect(db.Query('SELECT 1')).rejects.toThrow(/rig is stopping/);
+        await expect(db.Exec('SELECT 1')).rejects.toThrow(/rig is stopping/);
+    });
+
     it('drops nothing it did not create', async () => {
         const db = new ThrowawayDatabase('mj_rig_test_drop', SERVER, repoRoot);
         expect(db.Created).toBe(false);
