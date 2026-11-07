@@ -162,6 +162,15 @@ export class RealtimeSessionResumption {
         return this._handle;
     }
 
+    /**
+     * Whether a reconnect has what it needs: a handle, or
+     * {@link RealtimeSessionResumptionOptions.RequiresHandle} `false`. A driver reads it to tell a
+     * connection problem it can recover from from one that ends the session.
+     */
+    public get CanReconnect(): boolean {
+        return !this.requiresHandle || this._handle !== null;
+    }
+
     /** Whether a reconnect is in progress. */
     public get IsReconnecting(): boolean {
         return this._reconnecting;
@@ -245,7 +254,7 @@ export class RealtimeSessionResumption {
         }
         this._endingAnnounced = true;
         const atMovePoint = this.options.ResumableAtTurnEnd ? !this._turnOpen : this._resumableNow;
-        if (atMovePoint && this.canReconnect()) {
+        if (atMovePoint && this.CanReconnect) {
             this.startReconnect('connection-ending');
             return;
         }
@@ -263,7 +272,7 @@ export class RealtimeSessionResumption {
      *          reconnects (with `null` when no handle was issued).
      */
     public ConnectionLost(): boolean {
-        if (this._disposed || this._exhausted || !this.canReconnect()) {
+        if (this._disposed || this._exhausted || !this.CanReconnect) {
             return false;
         }
         if (!this._reconnecting) {
@@ -283,7 +292,7 @@ export class RealtimeSessionResumption {
     }
 
     private startReconnect(reason: RealtimeReconnectReason): void {
-        if (this._reconnecting || this._disposed || this._exhausted || !this.canReconnect()) {
+        if (this._reconnecting || this._disposed || this._exhausted || !this.CanReconnect) {
             return;
         }
         this._reconnecting = true;
@@ -291,11 +300,6 @@ export class RealtimeSessionResumption {
         this.options.Log?.(`[RealtimeSessionResumption] reconnecting (${reason})`);
         this.options.OnReconnecting?.(reason);
         this.scheduleAttempt(0);
-    }
-
-    /** Whether a reconnect may run: a handle exists, or the options say none is needed. */
-    private canReconnect(): boolean {
-        return !this.requiresHandle || this._handle !== null;
     }
 
     private scheduleAttempt(index: number): void {
@@ -306,7 +310,7 @@ export class RealtimeSessionResumption {
     }
 
     private async attempt(index: number): Promise<void> {
-        if (this._disposed || !this.canReconnect()) {
+        if (this._disposed || !this.CanReconnect) {
             return;
         }
         const attempt = { Abandoned: false };

@@ -252,7 +252,7 @@ export class GeminiPcmPlayback extends RealtimePcmPlayback {
  * - **Conversation memory**: a resumed session can come back empty (with an ephemeral token it
  *   usually does), so the client keeps a notebook of every final turn the model saw
  *   ({@link RealtimeConversationMemory}) and sends it on the new connection before any input.
- *   See {@link seedConversation}.
+ *   See {@link seedConversation} and {@link ResumesFromSeed}.
  * - **Open-turn commit**: context notes ride as `turnComplete: false` client content, which
  *   tells the Live API MORE INPUT IS COMING — the server holds ALL generation (including the
  *   normally-automatic continuation after a tool response) until a `turnComplete: true`
@@ -331,6 +331,16 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * the session that replaced it. `0` while no connection is in use.
      */
     private currentConnection = 0;
+
+    /**
+     * Whether a new connection gets its conversation from this client's notebook (a seed) rather than from Google's
+     * handle. `true` here: with an ephemeral token Google can restore an empty session, and issues one handle only.
+     * A driver whose handle does restore the session, and whose transport can't carry a seed, overrides it with `false`;
+     * then a move waits for a handle issued after the turn, a reconnect needs a handle, and no seed goes out.
+     */
+    protected get ResumesFromSeed(): boolean {
+        return true;
+    }
 
     /** Returns the latest session resumption handle reported by the server, if any. */
     public get ResumptionHandle(): string | null {
@@ -1128,16 +1138,16 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     }
 
     /**
-     * Reports a websocket error. While the session can resume, with a handle or without one, the
-     * error is only logged: a websocket `error` is followed by a `close`, and
-     * {@link handleTransportClose} decides from there, so ending the session here would kill a
-     * resume before it starts. (An error that no close follows leaves the session waiting, as it
-     * always has with a handle.)
+     * Reports a websocket error. While the session can resume (see
+     * {@link RealtimeSessionResumption.CanReconnect}) the error is only logged: a websocket `error`
+     * is followed by a `close`, and {@link handleTransportClose} decides from there, so ending the
+     * session here would kill a resume before it starts. (An error that no close follows leaves the
+     * session waiting, as it always has with a handle.) Otherwise it is fatal.
      */
     private handleTransportError(event: ErrorEvent): void {
         const detail = GeminiRealtimeClient.transportErrorDetail(event);
         RealtimeDiagLog(`[GeminiRealtimeClient] Transport error: ${detail}`);
-        if (this.resumption) {
+        if (this.resumption?.CanReconnect) {
             return;
         }
         this.emitError({ Message: `Gemini Live transport error: ${detail}`, Fatal: true });
@@ -1148,8 +1158,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * Handles a close of the current connection that the consumer did not ask for. MJAPI's relay
      * closing at the session's time limit ends the call with a `time-limit` error. Otherwise any close
      * reconnects when Google issued a resumption handle, and an abnormal close reconnects without one
-     * (the seed carries the conversation). A close that does not reconnect ends the session, as an
-     * error when it was abnormal.
+     * when the seed carries the conversation ({@link ResumesFromSeed}). A close that does not reconnect
+     * ends the session, as an error when it was abnormal.
      */
     private handleTransportClose(event?: CloseEvent): void {
         const code = event?.code;
@@ -1220,16 +1230,16 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * Google confirms its setup, and closes the old one. Until then the old connection stays in
      * use, so what it still sends (the rest of a turn the deadline cut, its usage) is handled.
      * Mic capture and playout carry over untouched. Rejects when the connection can't be opened or
-     * its setup fails, so {@link RealtimeSessionResumption} can retry. The handle does not carry the
-     * conversation: {@link handleResumed} seeds it on the new connection in every case.
+     * its setup fails, so {@link RealtimeSessionResumption} can retry.
      *
      * The resume reuses the session's ephemeral token. Google counts a resume as a new session, so
      * the server driver mints the token to open several connections until its `expireTime`
      * (30 minutes). After that, or once those connections are spent, every attempt fails and the
      * session ends with a fatal error.
      *
-     * @param handle The resumption handle Google issued, or `null` when it issued none: the
-     *               connection then opens with the session's config unchanged (no `handle` key).
+     * @param handle The resumption handle Google issued, or `null` when it issued none and the seed
+     *               carries the conversation ({@link ResumesFromSeed}): the connection then opens
+     *               with the session's config unchanged (no `handle` key).
      * @param attempt Marks the attempt abandoned after a timeout or a consumer close; a
      *                connection that opens after that is closed instead of used.
      */
@@ -1316,8 +1326,9 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
 
     /**
      * Builds the resumption helper for a newly connected session; see {@link resumption}. From the
-     * moment a move starts, input waits for the new connection ({@link connectionReady}). The seed,
-     * not the handle, is the memory, so a move happens at a turn boundary and needs no handle.
+     * moment a move starts, input waits for the new connection ({@link connectionReady}). When the
+     * seed is the memory ({@link ResumesFromSeed}), a move happens at a turn boundary and needs no
+     * handle; otherwise it waits for a handle issued after the turn.
      */
     private createResumption(): RealtimeSessionResumption {
         return new RealtimeSessionResumption({
@@ -1330,18 +1341,19 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             OnReconnected: () => this.handleResumed(),
             OnReconnectFailed: (error) => this.handleResumeFailed(error),
             Log: (message) => RealtimeDiagLog(message),
-            ResumableAtTurnEnd: true,
-            RequiresHandle: false,
+            ResumableAtTurnEnd: this.ResumesFromSeed,
+            RequiresHandle: !this.ResumesFromSeed,
         });
     }
 
     /**
      * The session continues on a new connection, whose setup Google has confirmed. A turn cut off
      * by a drop or the deadline never completes there, so the turn state is reset (its partial
-     * transcripts are emitted as final, which also records them). The conversation goes out first
-     * ({@link seedConversation}), so the model has it before any new input; then the mic audio held
-     * during the move, then the sends queued behind it. An avatar's video plays out what arrived of
-     * that turn and holds its last frame.
+     * transcripts are emitted as final, which also records them). When the seed is the memory
+     * ({@link ResumesFromSeed}) the conversation goes out first ({@link seedConversation}), so the
+     * model has it before any new input. Then the mic audio held during the move, then the sends
+     * queued behind it. An avatar's video plays out what arrived of that turn and holds its last
+     * frame.
      */
     private handleResumed(): void {
         this.avatarOutput?.Resumed();
@@ -1351,11 +1363,11 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.responseActive = false;
         this.interactionInProgress = false;
         this.activeResponseKind = 'normal';
-        // A commit owed to the old connection's tool response: on the new one it would start a reply nobody asked for.
-        this.toolResponseAwaitsCommit = false;
         this.clearSafetyBackstop();
         this.endTurn();
-        if (this.session) {
+        if (this.ResumesFromSeed && this.session) {
+            // A commit owed to the old connection's tool response: on a reseeded one it would start a reply nobody asked for.
+            this.toolResponseAwaitsCommit = false;
             this.seedConversation(this.session);
         }
         this.connectionReady = true;
@@ -1717,8 +1729,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         }
         // The answer stops at the call: the avatar's video until the model speaks again is idle.
         this.avatarOutput?.ToolCalled();
-        // The user's turn is over, and it led to this call: their words go first, in the transcript and the notebook.
-        this.finalizeUserTranscript();
+        if (this.ResumesFromSeed) {
+            // The user's turn is over, and it led to this call: their words go first, in the transcript and the seed.
+            this.finalizeUserTranscript();
+        }
         if (!this.isNonBlocking) {
             if (this.currentState === 'speaking') {
                 this.currentState = 'connected';
