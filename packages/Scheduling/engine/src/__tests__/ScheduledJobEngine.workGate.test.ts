@@ -13,8 +13,10 @@ vi.mock('os', () => ({
     hostname: () => 'test-host',
 }));
 
-const { dbCalls, fakeProvider } = vi.hoisted(() => {
+const { dbCalls, fakeProvider, jobTable } = vi.hoisted(() => {
     const dbCalls = { runView: 0, executeSQL: 0 };
+    /** What the reconcile probe sees in the job table: its row count and newest update. */
+    const jobTable = { count: 1, newest: '2026-11-03T00:00:00.000Z' };
     const fakeProvider = {
         MJCoreSchemaName: '__mj',
         ExecuteSQL: async (): Promise<Array<Record<string, unknown>>> => {
@@ -22,7 +24,7 @@ const { dbCalls, fakeProvider } = vi.hoisted(() => {
             return [{ permission_name: 'EXECUTE' }];
         },
     };
-    return { dbCalls, fakeProvider };
+    return { dbCalls, fakeProvider, jobTable };
 });
 
 vi.mock('@memberjunction/core', () => ({
@@ -63,7 +65,7 @@ vi.mock('@memberjunction/core', () => ({
     RunView: class {
         async RunView(): Promise<{ Success: boolean; Results: unknown[]; TotalRowCount: number }> {
             dbCalls.runView++;
-            return { Success: true, Results: [], TotalRowCount: 0 };
+            return { Success: true, Results: [{ ID: 'newest', __mj_UpdatedAt: jobTable.newest }], TotalRowCount: jobTable.count };
         }
     },
 }));
@@ -163,6 +165,9 @@ type EngineInternals = {
     cleanupStaleLocks: () => Promise<void>;
     probeLockSprocPermissions: () => Promise<void>;
     gateDrivers: Map<string, BaseScheduledJob | null>;
+    onBaseJobsChanged: () => Promise<void>;
+    _lastReconcileAt: number;
+    _jobTableSnapshot?: unknown;
 };
 
 const START = new Date('2026-11-03T12:00:30.000Z');
@@ -213,6 +218,10 @@ describe('SchedulingEngine work gate (#6217)', () => {
             return null;
         });
         engine.JobReconcileIntervalMs = 0;
+        internals._lastReconcileAt = 0;
+        internals._jobTableSnapshot = undefined;
+        jobTable.count = 1;
+        jobTable.newest = '2026-11-03T00:00:00.000Z';
         dbCalls.runView = 0;
         dbCalls.executeSQL = 0;
     });
@@ -300,5 +309,76 @@ describe('SchedulingEngine work gate (#6217)', () => {
         gated.WorkDue = null;
         await engine.StartPolling(user);
         expect(gated.Prepared).toBe(1);
+    });
+
+    it('re-arms the timer when a job change brings a due time forward', async () => {
+        base._scheduledJobs = [job('dispatcher', 'type-gated', new Date(START.getTime() - MINUTE))];
+        gated.WorkDue = null;
+        await engine.StartPolling(user);
+        expect(engine.ActivePollingInterval).toBe(60 * MINUTE);
+
+        // a job saved on this server while the timer sleeps for an hour
+        base._scheduledJobs = [...base._scheduledJobs, job('plain', 'type-plain', new Date(START.getTime() + 2 * MINUTE))];
+        await internals.onBaseJobsChanged();
+
+        await vi.advanceTimersByTimeAsync(2 * MINUTE);
+        expect(executed).toEqual(['plain']);
+    });
+
+    it('re-arms at the end of a tick for a due time the tick brought forward', async () => {
+        // due in 10 minutes, then every minute: the timer armed at the top of the tick uses the 10-minute gap
+        base._scheduledJobs = [job('plain', 'type-plain', new Date(START.getTime() + 10 * MINUTE))];
+        await engine.StartPolling(user);
+
+        await vi.advanceTimersByTimeAsync(10 * MINUTE);
+        expect(executed).toEqual(['plain']);
+
+        await vi.advanceTimersByTimeAsync(MINUTE);
+        expect(executed).toEqual(['plain', 'plain']);
+    });
+
+    describe('reconcile of job rows written without a cache event (#4822)', () => {
+        /** Make the next Config(true) load these rows, as a reload from the database would. */
+        function databaseNowHolds(rows: JobRow[]): void {
+            jobTable.count = rows.length;
+            jobTable.newest = new Date().toISOString();
+            vi.spyOn(engine, 'Config').mockImplementation(async (forceRefresh?: boolean) => {
+                if (forceRefresh) {
+                    base._scheduledJobs = rows;
+                }
+                return true;
+            });
+        }
+
+        beforeEach(() => {
+            engine.JobReconcileIntervalMs = 5 * MINUTE;
+        });
+
+        it('does not run a job disabled elsewhere before its due time', async () => {
+            base._scheduledJobs = [job('plain', 'type-plain', new Date(START.getTime() + 30 * MINUTE))];
+            await engine.StartPolling(user);
+
+            await vi.advanceTimersByTimeAsync(5 * MINUTE);
+            databaseNowHolds([]); // the only job set to Disabled; the active list is now empty
+
+            await vi.advanceTimersByTimeAsync(26 * MINUTE);
+            expect(executed).toEqual([]);
+        });
+
+        it('loads a job added elsewhere before the first tick at that tick', async () => {
+            base._scheduledJobs = [job('dispatcher', 'type-gated', new Date(START.getTime() - MINUTE))];
+            gated.WorkDue = null;
+            await engine.StartPolling(user);
+            expect(engine.ActivePollingInterval).toBe(60 * MINUTE);
+
+            await vi.advanceTimersByTimeAsync(5 * MINUTE);
+            const added = job('plain', 'type-plain', new Date(START.getTime() + 10 * MINUTE));
+            added.MissedRunPolicy = 'RunOnce';
+            databaseNowHolds([...base._scheduledJobs, added]);
+
+            await vi.advanceTimersByTimeAsync(55 * MINUTE);
+            expect(engine.ScheduledJobs.map(j => j.ID)).toEqual(['dispatcher', 'plain']);
+            expect(executed).toContain('plain');
+        });
     });
 });

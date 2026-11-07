@@ -10,10 +10,7 @@ vi.mock('@memberjunction/core', () => ({
         protected async Load(_configs: unknown[], _provider: unknown, forceRefresh?: boolean): Promise<void> {
             loads.push({ forceRefresh });
         }
-        protected async HandleIndividualBaseEntityEvent(): Promise<boolean> {
-            return true;
-        }
-        protected async OnExternalCacheChange(): Promise<void> {
+        protected NotifyDataChange(): void {
             // no-op
         }
         static getInstance<T>(): T {
@@ -73,6 +70,12 @@ describe('UserRoutineScheduleIndex.RoutineDueAtMs', () => {
         expect(due(routine({ NextRunAt: null, EndAt: at(-1) }))).toBeNull();
     });
 
+    it('is never for an overdue routine whose window has closed since', () => {
+        // NextRunAt 60 minutes ago, window closed 55 minutes ago: the dispatcher would find nothing to run.
+        expect(due(routine({ NextRunAt: at(-60), EndAt: at(-55) }))).toBeNull();
+        expect(due(routine({ NextRunAt: at(-60), EndAt: at(5) }))).toBe(at(-60).getTime());
+    });
+
     it('reads string dates from a serialized cache payload', () => {
         const fromCache = routine({ NextRunAt: at(10).toISOString() as unknown as Date });
         expect(due(fromCache)).toBe(at(10).getTime());
@@ -121,6 +124,16 @@ describe('UserRoutineScheduleIndex', () => {
         await index.EnsureFresh(user, provider, 60 * 60_000, t0 + 60 * 60_000 - 50);
         expect(loads).toEqual([{ forceRefresh: false }, { forceRefresh: true }]);
         expect(changes).toHaveLength(2);
+        sub.unsubscribe();
+    });
+
+    it('signals a change after the routine rows change, and only for routines', () => {
+        const changes: number[] = [];
+        const sub = index.Changed$.subscribe(() => changes.push(1));
+        type Notify = { NotifyDataChange(config: { EntityName?: string }, data: unknown[], changeType?: string): void };
+        (index as unknown as Notify).NotifyDataChange({ EntityName: 'MJ: User Routines' }, [], 'update');
+        (index as unknown as Notify).NotifyDataChange({ EntityName: 'MJ: Scheduled Jobs' }, [], 'update');
+        expect(changes).toHaveLength(1);
         sub.unsubscribe();
     });
 });

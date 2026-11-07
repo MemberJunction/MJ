@@ -186,7 +186,8 @@ const scheduledJobsSchema = z.object({
   /**
    * Longest the scheduler sleeps when nothing is due, and how often it re-reads the user routine
    * index (#6217). Without Redis, a routine saved on another server reaches this one only through
-   * that re-read, so this bounds how late such a change applies. Minimum 1.
+   * that re-read, and a scheduled job added or moved earlier without a cache event only at the next
+   * wake, so this bounds how late such a change applies. Minimum 1.
    */
   routineIndexRefreshMinutes: z.number().min(1).optional().default(60),
 });

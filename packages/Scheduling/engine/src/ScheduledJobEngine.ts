@@ -98,8 +98,11 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     /**
      * How often a polling tick checks the `MJ: Scheduled Jobs` table for rows written behind the engine's back (#4822):
      * by a script, raw SQL, or a process that publishes no cache event. One cheap query (row count and newest
-     * `__mj_UpdatedAt`); a difference reloads the job list. The check rides existing ticks and adds no wake-ups, so
-     * when the tick interval is longer than this it simply runs on every tick. 0 turns it off.
+     * `__mj_UpdatedAt`); a difference reloads the job list. The baseline is taken when polling starts, and each tick
+     * checks before it dispatches. The check rides existing ticks and adds no wake-ups, so when the tick interval is
+     * longer than this it runs on every tick. Since the timer sleeps until the next due time (#6217), up to
+     * {@link WorkGateRefreshMs}, a job added or moved earlier without a cache event can be noticed that late; a job
+     * with `MissedRunPolicy = Skip` whose next occurrence passes in that time skips it. 0 turns it off.
      */
     public JobReconcileIntervalMs: number = 5 * 60_000;
 
@@ -405,6 +408,14 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
                 this.pollingTimer = setTimeout(poll, interval);
             }
 
+            // Reconcile before dispatching (#4822): the timer wakes exactly at a job's due time, so a job
+            // paused, removed or moved without a cache event must be reloaded before the due check reads it.
+            try {
+                await this.ReconcileJobsIfDue(contextUser);
+            } catch (error) {
+                this.logError('Error during scheduled job reconcile', error);
+            }
+
             // Re-read gate state that has gone stale (cheap when it has not), before due checks use it.
             await this.prepareWorkGates(contextUser);
 
@@ -427,12 +438,6 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
                 // scheduled the next poll before any await could fire.
             }
 
-            try {
-                await this.ReconcileJobsIfDue(contextUser);
-            } catch (error) {
-                this.logError('Error during scheduled job reconcile', error);
-            }
-
             // The timer armed at the top used the interval from before this tick's dispatch. Now that
             // the tick has moved NextRunAt values on, arm it for the next due time instead (#6217).
             this.rearmPollingTimer();
@@ -443,6 +448,15 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         // us between StartPolling returning and the first poll firing.
         this.pollingTimer = setTimeout(poll, this.ActivePollingInterval ?? 60_000);
         this.log('Started scheduled job polling');
+
+        // Take the reconcile baseline now (#4822), so a job row written without a cache event before the
+        // first tick shows up as a change at that tick. After isPolling is set, so a change found here
+        // cannot re-enter StartPolling through onBaseJobsChanged.
+        try {
+            await this.ReconcileJobsIfDue(contextUser);
+        } catch (error) {
+            this.logError('Error during scheduled job reconcile', error);
+        }
     }
 
     /**

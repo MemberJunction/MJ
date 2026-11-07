@@ -7,7 +7,7 @@
  * @module @memberjunction/scheduling-engine
  */
 
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, CacheChangedEvent, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJUserRoutineEntity } from '@memberjunction/core-entities';
 import { ToEpochMs } from '@memberjunction/global';
 import { Observable, Subject } from 'rxjs';
@@ -23,8 +23,8 @@ const USER_ROUTINES_ENTITY = 'MJ: User Routines';
  * the scheduler re-reads the index on its safety-net cadence ({@link EnsureFresh}).
  *
  * The rows are loaded unfiltered (no `Filter`), so the base engine applies entity events through
- * its immediate-mutation path and the index is reconciled by the time {@link Changed$} fires; the
- * Active check is done in memory.
+ * its immediate-mutation path where it can; the Active check is done in memory. {@link Changed$}
+ * fires from `NotifyDataChange`, after the rows have changed on every update path.
  */
 export class UserRoutineScheduleIndex extends BaseEngine<UserRoutineScheduleIndex> {
     public static get Instance(): UserRoutineScheduleIndex {
@@ -120,7 +120,8 @@ export class UserRoutineScheduleIndex extends BaseEngine<UserRoutineScheduleInde
         }
 
         const dueMs = Math.max(ToEpochMs(routine.NextRunAt), startMs ?? Number.MIN_SAFE_INTEGER);
-        if (endMs !== null && endMs <= dueMs) {
+        // A window that has closed by the due time, or by now for an overdue routine, never runs it.
+        if (endMs !== null && endMs <= Math.max(dueMs, nowMs)) {
             return null;
         }
         return dueMs;
@@ -145,25 +146,21 @@ export class UserRoutineScheduleIndex extends BaseEngine<UserRoutineScheduleInde
         };
     }
 
-    protected override async HandleIndividualBaseEntityEvent(event: BaseEntityEvent): Promise<boolean> {
-        const handled = await super.HandleIndividualBaseEntityEvent(event);
-        if (this.isUserRoutinesEvent(event)) {
-            this._changed.next();
-        }
-        return handled;
-    }
-
-    protected override async OnExternalCacheChange(config: BaseEnginePropertyConfig, event: CacheChangedEvent): Promise<void> {
-        await super.OnExternalCacheChange(config, event);
+    /**
+     * Every path that changes the routine rows ends here: a load or re-read, an immediate or
+     * debounced entity event, a change applied after a transaction commits, and a shared-cache
+     * update. Hooking it (rather than the event handlers) means {@link Changed$} fires after the
+     * rows have changed, never before a deferred update lands.
+     */
+    protected override NotifyDataChange(
+        config: BaseEnginePropertyConfig,
+        data: unknown[],
+        changeType: 'refresh' | 'add' | 'update' | 'delete' = 'refresh',
+        affectedEntity?: BaseEntity
+    ): void {
+        super.NotifyDataChange(config, data, changeType, affectedEntity);
         if (config.EntityName?.toLowerCase().trim() === USER_ROUTINES_ENTITY.toLowerCase()) {
             this._changed.next();
         }
-    }
-
-    private isUserRoutinesEvent(event: BaseEntityEvent): boolean {
-        const name = event.type === 'remote-invalidate'
-            ? event.entityName
-            : event.baseEntity?.EntityInfo?.Name;
-        return name?.toLowerCase().trim() === USER_ROUTINES_ENTITY.toLowerCase();
     }
 }
