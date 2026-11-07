@@ -3,7 +3,8 @@
  *
  * Displays a time-of-day heatmap (7 days × 24 hours), day-of-week distribution bars,
  * peak hours summary cards, and an hourly throughput bar chart.
- * Data loaded from MJ: AI Prompt Runs for the last 30 days.
+ * Data comes from the AIUsageHourly aggregate for the selected range, so every run in range is
+ * counted (not a sample of the most recent ones).
  */
 
 import {
@@ -11,22 +12,12 @@ import {
     OnInit, OnDestroy, ChangeDetectorRef, inject
 } from '@angular/core';
 import { Subject } from 'rxjs';
-import { RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { AIInstrumentationService } from '../../../services/ai-instrumentation.service';
+import { AIUsageHourlyRow } from '../../../services/ai-usage-analytics.types';
+import { ComputeCacheHitRate, FoldRunsByHourOfWeek, SumRuns } from '../../../services/ai-usage-analytics.compute';
 
 // ── Interfaces ──
-
-interface PromptRunRecord {
-    ID: string;
-    RunAt: string;
-    Success: boolean;
-    Cost: number | null;
-    TokensUsed: number | null;
-    TokensPrompt: number | null;
-    TokensCacheRead: number | null;
-    TokensCacheWrite: number | null;
-    ExecutionTimeMS: number | null;
-}
 
 interface HeatmapCell {
     Day: number;       // 0-6 (Mon-Sun)
@@ -60,9 +51,14 @@ interface HourlyBar {
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
-const FIELDS: string[] = [
-    'ID', 'RunAt', 'Success', 'Cost', 'TokensUsed', 'TokensPrompt', 'TokensCacheRead', 'TokensCacheWrite', 'ExecutionTimeMS'
-];
+/** How far back each time-range option reaches, in milliseconds. */
+const RANGE_MS: Record<string, number> = {
+    '1h': 3600000,
+    '6h': 6 * 3600000,
+    '24h': 86400000,
+    '7d': 7 * 86400000,
+    '30d': 30 * 86400000,
+};
 
 @Component({
     standalone: false,
@@ -77,13 +73,13 @@ const FIELDS: string[] = [
         } @else if (TotalRuns === 0) {
             <mj-empty-state Icon="fa-solid fa-chart-line"
                 Title="No Data Available"
-                Message="No prompt runs found in the last 30 days." />
+                Message="No prompt runs found in the selected range." />
         } @else {
             <!-- Heatmap -->
             <div class="panel">
                 <div class="panel__header">
                     <h4 class="panel__title">Time-of-Day Heatmap</h4>
-                    <span class="panel__subtitle">Execution count by day and hour &bull; sampled from {{ TotalRuns | number }} recent runs</span>
+                    <span class="panel__subtitle">Execution count by day and hour &bull; {{ TotalRuns | number }} runs in range</span>
                 </div>
                 <div class="heatmap-wrapper">
                     <div class="heatmap-grid">
@@ -531,6 +527,7 @@ export class AnalyticsUsagePatternsComponent extends BaseAngularComponent implem
     // ── Private ──
     private destroy$ = new Subject<void>();
     private cdr = inject(ChangeDetectorRef);
+    private instrumentation = inject(AIInstrumentationService);
 
     async ngOnInit(): Promise<void> {
         await this.loadData();
@@ -585,15 +582,15 @@ export class AnalyticsUsagePatternsComponent extends BaseAngularComponent implem
         this.cdr.detectChanges();
 
         try {
-            const runs = await this.fetchPromptRuns();
-            this.TotalRuns = runs.length;
+            const rows = await this.fetchUsageRows();
+            this.TotalRuns = SumRuns(rows);
 
-            if (runs.length > 0) {
-                const dayCounts = this.buildDayHourCounts(runs);
+            if (this.TotalRuns > 0) {
+                const dayCounts = FoldRunsByHourOfWeek(rows);
                 this.HeatmapCells = this.buildHeatmap(dayCounts);
                 this.DayDistributions = this.buildDayDistributions(dayCounts);
                 this.HourlyBars = this.buildHourlyBars(dayCounts);
-                this.PeakSummaries = this.buildPeakSummaries(dayCounts, runs);
+                this.PeakSummaries = this.buildPeakSummaries(dayCounts, rows);
             }
         } catch (err) {
             console.error('Usage patterns data load failed:', err);
@@ -603,51 +600,12 @@ export class AnalyticsUsagePatternsComponent extends BaseAngularComponent implem
         }
     }
 
-    private async fetchPromptRuns(): Promise<PromptRunRecord[]> {
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const since = new Date();
-        switch (this.TimeRange) {
-            case '1h': since.setHours(since.getHours() - 1); break;
-            case '6h': since.setHours(since.getHours() - 6); break;
-            case '24h': since.setDate(since.getDate() - 1); break;
-            case '7d': since.setDate(since.getDate() - 7); break;
-            case '30d': default: since.setDate(since.getDate() - 30); break;
-        }
-        const sinceStr = since.toISOString();
-
-        const result = await rv.RunView<PromptRunRecord>({
-            EntityName: 'MJ: AI Prompt Runs',
-            ExtraFilter: `RunAt >= '${sinceStr}'`,
-            Fields: FIELDS,
-            OrderBy: 'RunAt DESC',
-            MaxRows: 1000,
-            ResultType: 'simple'
-        });
-
-        if (!result.Success) {
-            console.error('Failed to load prompt runs:', result.ErrorMessage);
-            return [];
-        }
-
-        return result.Results ?? [];
-    }
-
-    /**
-     * Build a 7×24 count matrix: dayCounts[dayIndex][hour] = count.
-     * dayIndex 0 = Monday, 6 = Sunday. Uses the JS Date getDay() offset.
-     */
-    private buildDayHourCounts(runs: PromptRunRecord[]): number[][] {
-        const counts: number[][] = Array.from({ length: 7 }, () => new Array(24).fill(0));
-
-        for (const run of runs) {
-            const dt = new Date(run.RunAt);
-            const jsDay = dt.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-            const dayIndex = jsDay === 0 ? 6 : jsDay - 1; // Convert to 0=Mon, 6=Sun
-            const hour = dt.getHours();
-            counts[dayIndex][hour]++;
-        }
-
-        return counts;
+    /** Hourly usage rows for the selected range: every run in range, already aggregated server-side. */
+    private async fetchUsageRows(): Promise<AIUsageHourlyRow[]> {
+        this.instrumentation.Provider = this.ProviderToUse;
+        const end = new Date();
+        const start = new Date(end.getTime() - (RANGE_MS[this.TimeRange] ?? RANGE_MS['30d']));
+        return this.instrumentation.GetUsageHourly(start, end);
     }
 
     private buildHeatmap(dayCounts: number[][]): HeatmapCell[][] {
@@ -689,7 +647,7 @@ export class AnalyticsUsagePatternsComponent extends BaseAngularComponent implem
         }));
     }
 
-    private buildPeakSummaries(dayCounts: number[][], runs: PromptRunRecord[]): PeakSummary[] {
+    private buildPeakSummaries(dayCounts: number[][], rows: AIUsageHourlyRow[]): PeakSummary[] {
         const hourSums = HOURS.map(h =>
             dayCounts.reduce((sum, dayHours) => sum + dayHours[h], 0)
         );
@@ -736,14 +694,14 @@ export class AnalyticsUsagePatternsComponent extends BaseAngularComponent implem
 
         // Overall prompt-cache hit rate for the period (cache reads / total input processed)
         let cacheRead = 0, inputForHit = 0;
-        for (const r of runs) {
+        for (const r of rows) {
             const read = r.TokensCacheRead ?? 0;
             cacheRead += read;
             inputForHit += (r.TokensPrompt ?? 0) + read + (r.TokensCacheWrite ?? 0);
         }
         const cacheHitRate: PeakSummary = {
             Label: 'Cache Hit Rate',
-            Value: inputForHit > 0 ? `${Math.round((cacheRead / inputForHit) * 100)}%` : '—',
+            Value: inputForHit > 0 ? `${Math.round(ComputeCacheHitRate(rows) * 100)}%` : '—',
             Count: cacheRead,
             Icon: 'fa-solid fa-bolt',
             CountUnit: 'cached tokens'

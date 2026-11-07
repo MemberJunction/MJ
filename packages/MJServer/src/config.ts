@@ -301,6 +301,13 @@ const cacheSettingsSchema = z.object({
    */
   sharedCacheTTLSeconds: z.number().int().nonnegative().optional(),
   /**
+   * Longest a read from the shared Redis cache waits, in milliseconds, before it is answered as a
+   * cache miss and the server reads the database instead. Writes and invalidations have no limit.
+   * The REDIS_READ_TIMEOUT_MS environment variable overrides it. 0 waits without a limit. When
+   * neither is set, 2000.
+   */
+  redisReadTimeoutMs: z.number().int().nonnegative().optional(),
+  /**
    * How often, in seconds, loaded engines compare their rows with the database and reload what
    * changed without an MJ event (direct SQL, other applications). With a shared cache one server
    * does it per interval. 0 = disabled. Default: 300 (5 minutes).

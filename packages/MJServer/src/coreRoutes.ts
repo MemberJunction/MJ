@@ -36,10 +36,17 @@ export interface CoreAuthenticatedRouters {
     Widget?: Router;
 }
 
-/** `/healthcheck` — mounted first so platform probes never meet the auth middleware. */
+/**
+ * `/healthcheck` (readiness) and `/healthcheck/live` (liveness) — mounted first so platform probes never
+ * meet the auth middleware. These answer once the server is ready; before that the startup gate
+ * (`startupGate.ts`) answers the same paths (503 with the phase, and 200 for liveness).
+ */
 export function MountHealthcheckRoute(app: Application): void {
     app.get(ApiRoute('/healthcheck'), cors<cors.CorsRequest>(), (_req, res) => {
         res.status(200).json({ status: 'ok' });
+    });
+    app.get(ApiRoute('/healthcheck/live'), cors<cors.CorsRequest>(), (_req, res) => {
+        res.status(200).json({ status: 'alive' });
     });
 }
 
