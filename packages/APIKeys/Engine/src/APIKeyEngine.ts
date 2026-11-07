@@ -30,7 +30,7 @@ import {
     MJAPIScopeEntity,
     MJUserEntity
 } from '@memberjunction/core-entities';
-import { UUIDsEqual, MJGlobal, MJEvent, MJEventType } from '@memberjunction/global';
+import { UUIDsEqual, MJGlobal, MJEvent, MJEventType, EscapeSQLString } from '@memberjunction/global';
 import { APIKeysEngineBase } from '@memberjunction/api-keys-base';
 import { ScopeEvaluator } from './ScopeEvaluator';
 import { UsageLogger } from './UsageLogger';
@@ -580,7 +580,7 @@ export class APIKeyEngine {
             const rv = new RunView();
             const userResult = await rv.RunView<MJUserEntity>({
                 EntityName: 'MJ: Users',
-                ExtraFilter: `ID = '${apiKey.UserID}'`,
+                ExtraFilter: `ID = '${EscapeSQLString(apiKey.UserID)}'`,
                 ResultType: 'entity_object'
             }, contextUser);
 
