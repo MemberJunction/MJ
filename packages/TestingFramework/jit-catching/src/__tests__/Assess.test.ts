@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AssessStep } from '../pipeline/Assess';
@@ -58,5 +58,12 @@ describe('AssessStep', () => {
       Deps: { JudgePanel: { Judge: judge }, Rules: new RuleFilter(AllRules()), Store: store, Redaction: redaction } })).rejects.toThrow(/base worktree/);
     expect(judge).not.toHaveBeenCalled();
     expect(await store.GetRun(RUN_ID)).toBeNull();
+  });
+
+  it('an unknown run fails before the store folder is created', async () => {
+    const fresh = mkdtempSync(join(tmpdir(), 'jit-assess-')); const store = join(fresh, 'store');
+    await expect(AssessStep({ RunID: 'nope', RepoRoot: fresh, Settings: DEFAULT_SETTINGS, StoreDir: store })).rejects.toThrow('run nope not found');
+    expect(existsSync(store)).toBe(false);
+    expect(existsSync(join(fresh, '.jit-catch', 'runs', 'nope'))).toBe(false);
   });
 });

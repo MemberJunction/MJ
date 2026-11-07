@@ -10,7 +10,8 @@ export function IsValidRunID(id: string): boolean { return RUN_ID_RE.test(id); }
 
 /**
  * The folder of one run, `<root>/.jit-catch/runs/<run ID>`, and the files passed between the three jobs.
- * Every read is validated with its zod schema; every write is validated and passes the redaction check first.
+ * The constructor only computes paths; a write creates the run folder. Every read is validated with its zod
+ * schema; every write is validated and passes the redaction check first.
  */
 export class RunDir {
     public readonly Path: string;
@@ -20,8 +21,10 @@ export class RunDir {
         if (!IsValidRunID(RunID)) throw new Error(`invalid run ID ${JSON.stringify(RunID)}: use letters, digits, '-' and '_' only`);
         this.Path = join(root, '.jit-catch', 'runs', RunID);
         this.TranscriptDir = join(this.Path, 'transcripts');
-        mkdirSync(this.TranscriptDir, { recursive: true });
     }
+
+    /** Creates the run folder and its transcript folder. */
+    public Create(): void { mkdirSync(this.TranscriptDir, { recursive: true }); }
 
     public WriteGeneration(f: GenerationFile): void { this.write('generation.json', GenerationFileSchema.parse(f)); }
     public ReadGeneration(): GenerationFile { return GenerationFileSchema.parse(this.read('generation.json')); }
@@ -32,12 +35,14 @@ export class RunDir {
     private write(name: string, data: GenerationFile | ExecutionFile | AssessmentFile): void {
         const text = JSON.stringify(data, null, 2);
         this.redaction.AssertClean(text, name);
+        mkdirSync(this.Path, { recursive: true });
         writeFileSync(join(this.Path, name), text);
     }
 
     /** Parsed JSON of one run file; the caller validates it with the file's schema. */
     private read(name: string): unknown {
         const p = join(this.Path, name);
+        if (!existsSync(this.Path)) throw new Error(`run ${this.RunID} not found`);
         if (!existsSync(p)) throw new Error(`run ${this.RunID} has no ${name}`);
         return JSON.parse(readFileSync(p, 'utf8'));
     }

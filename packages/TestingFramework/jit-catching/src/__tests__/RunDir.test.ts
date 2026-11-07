@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { RunDir } from '../pipeline/RunDir';
@@ -31,5 +31,16 @@ describe('RunDir', () => {
   });
   it('refuses a run ID that is not a plain name', () => {
     expect(() => new RunDir(mkdtempSync(join(tmpdir(), 'jit-rundir-')), '../escape', new RedactionCheck([]))).toThrow(/run ID/);
+  });
+  it('reading an unknown run throws and creates nothing', () => {
+    const root = mkdtempSync(join(tmpdir(), 'jit-rundir-'));
+    expect(() => new RunDir(root, 'nope', new RedactionCheck([])).ReadGeneration()).toThrow('run nope not found');
+    expect(existsSync(join(root, '.jit-catch', 'runs', 'nope'))).toBe(false);
+  });
+  it('Create makes the run and transcript folders', () => {
+    const d = new RunDir(mkdtempSync(join(tmpdir(), 'jit-rundir-')), RUN_ID, new RedactionCheck([]));
+    expect(existsSync(d.Path)).toBe(false);
+    d.Create();
+    expect(existsSync(d.TranscriptDir)).toBe(true);
   });
 });

@@ -33,11 +33,11 @@ const MAX_PROMOTIONS = 3;
  */
 export async function AssessStep(o: AssessOptions): Promise<{ Catches: Catch[]; Promotions: PromotionCandidate[] }> {
     const redaction = o.Deps?.Redaction ?? DefaultRedaction();
-    const d = o.Deps ?? defaultDeps(o, redaction);
     const dir = new RunDir(o.RepoRoot, o.RunID, redaction);
     const gen = dir.ReadGeneration(); const exec = dir.ReadExecution();
     if (exec.RunID !== gen.Run.ID) throw new Error(`execution.json is for run ${exec.RunID}, not ${gen.Run.ID}`);
     CheckedBaseRootDir(dir, gen.BaseRootDir);
+    const d = o.Deps ?? defaultDeps(o, redaction);
     const assessed: Catch[] = [];
     for (const t of exec.Tests) assessed.push(await assessTest(gen, exec, t, d));
     const catches = SelectReported(RankCatches(assessed), o.Settings.Thresholds.Label, 'Label');

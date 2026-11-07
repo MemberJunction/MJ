@@ -24,9 +24,9 @@ type TypeErrors = ExecutionFile['TypeErrors'];
 export async function ExecuteStep(o: ExecuteOptions): Promise<void> {
     const redaction = o.Deps?.Redaction ?? DefaultRedaction();
     const dir = new RunDir(o.RepoRoot, o.RunID, redaction);
-    const d = o.Deps ?? defaultDeps(o, dir, redaction);
     const gen = dir.ReadGeneration();
     const baseRoot = CheckedBaseRootDir(dir, gen.BaseRootDir);
+    const d = o.Deps ?? defaultDeps(o, dir, redaction);
     const tests = gen.Tests.filter((t) => t.GenerationOutcome === 'Produced');
     if (tests.length === 0) { dir.WriteExecution(emptyExecution(gen)); process.stdout.write(`run ${o.RunID}: no produced tests to execute\n`); return; }
     const base: PreparedRevision = { Ref: { Kind: 'Base', SHA: gen.Run.BaseSHA }, RootDir: baseRoot };

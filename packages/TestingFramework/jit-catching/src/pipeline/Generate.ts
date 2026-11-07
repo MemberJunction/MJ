@@ -44,6 +44,7 @@ export async function GenerateStep(o: GenerateOptions): Promise<{ RunID: string 
     const run: Run = { ID: NewRunID(o.PR, HeadSHA), Trigger: o.Trigger, PRNumber: o.PR, BaseSHA, HeadSHA, Status: 'Generated', GeneratorModel: o.Settings.GeneratorModel,
         TokensByModel: [], RunnerMinutes: 0, StartedAt: new Date().toISOString(), EndedAt: null };
     const dir = new RunDir(o.RepoRoot, run.ID, d.Redaction);
+    dir.Create();
     const t = d.ForRun(dir);
     await t.EnsureImage();
     const base = await t.Target.Prepare({ Kind: 'Base', SHA: BaseSHA });
