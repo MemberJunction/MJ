@@ -8,6 +8,7 @@ import { MJListEntity, MJListDetailEntity, MJListDetailEntityExtended, MJListCat
 import { CompositeKey, Metadata, RunView, RunViewResult, EntityInfo, LogError, LogStatus } from '@memberjunction/core';
 import { ListShareDialogConfig, ListShareDialogResult, GetRecordDisplayField, IsTextSearchableField, FormatRecordDisplayValue } from '@memberjunction/ng-list-management';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
+import { SectionPickerItem } from '@memberjunction/ng-ui-components';
 
 export type ListSection = 'overview' | 'items' | 'sharing' | 'activity' | 'settings';
 
@@ -710,6 +711,19 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     }
 
     // === Navigation ===
+
+    /** The enabled rail items as `mj-section-picker` items: same order, the badge as the count. */
+    public get SectionPickerItems(): SectionPickerItem[] {
+        return this.NavItems
+            .filter((item) => !item.disabled)
+            .map((item) => ({ Key: item.id, Title: item.label, Icon: item.icon, Count: item.badge ?? null }));
+    }
+
+    /** A pick from the phone section sheet; a key that names no rail item is ignored. */
+    public OnSectionPicked(key: string): void {
+        const item = this.NavItems.find((i) => i.id === key);
+        if (item) this.SetActiveSection(item.id);
+    }
 
     public SetActiveSection(section: ListSection): void {
         const navItem = this.NavItems.find(n => n.id === section);
