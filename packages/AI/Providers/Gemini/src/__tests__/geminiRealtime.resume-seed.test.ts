@@ -601,6 +601,40 @@ describe('GeminiRealtime server session: reseeding the conversation on resume', 
         });
     });
 
+    describe('a connection that keeps closing right after setup', () => {
+        it('ends the session once, with the reason, and opens no more connections', async () => {
+            // The first reconnect is not rapid; five more are allowed; the one after those fails.
+            for (let index = 0; index < 7; index++) {
+                await dropAndResume(index);
+            }
+            expect(driver.Connections).toHaveLength(7);
+            expect(errors).toHaveLength(1);
+            expect(errors[0].Fatal).toBe(true);
+            expect(errors[0].Message).toContain('could not be resumed');
+            expect(errors[0].Message).toContain('5 reconnects');
+        });
+
+        it('a websocket error before each close changes nothing', async () => {
+            for (let index = 0; index < 7; index++) {
+                driver.ErrorOn(index, 'socket reset');
+                await dropAndResume(index);
+            }
+            expect(driver.Connections).toHaveLength(7);
+            expect(errors).toHaveLength(1);
+            expect(errors[0].Message).toContain('could not be resumed');
+        });
+
+        it('on Vertex AI, a handle still means no cap', async () => {
+            await start({}, 'enterprise');
+            driver.EmitOn(0, RESUMABLE('h1'));
+            for (let index = 0; index < 8; index++) {
+                await dropAndResume(index);
+            }
+            expect(driver.Connections).toHaveLength(9);
+            expect(errors).toEqual([]);
+        });
+    });
+
     describe('Close', () => {
         it('clears the notebook', async () => {
             const clear = vi.spyOn(RealtimeConversationMemory.prototype, 'Clear');
