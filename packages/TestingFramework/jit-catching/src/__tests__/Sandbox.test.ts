@@ -19,7 +19,7 @@ describe('Sandbox.BuildArgs', () => {
   it('mounts exactly what is asked, with the mode', () => {
     const a = sb.BuildArgs({ ...base, Mounts: [...base.Mounts, { Host: '/h/jit', Container: '/work/packages/X/src/__tests__/jit', Mode: 'rw' }], Tmpfs: ['/work/node_modules/.vite'] });
     expect(a).toContain('-v'); expect(a).toContain('/h/base:/work:ro'); expect(a).toContain('/h/jit:/work/packages/X/src/__tests__/jit:rw');
-    expect(a).toContain('--tmpfs'); expect(a).toContain('/work/node_modules/.vite:rw,size=256m');
+    expect(a).toContain('--tmpfs'); expect(a).toContain('/work/node_modules/.vite:rw,size=256m,mode=1777');
   });
   it('passes no environment except the allow list', () => {
     const a = sb.BuildArgs({ ...base, Env: { TZ: 'UTC', HOME: '/tmp' } });
