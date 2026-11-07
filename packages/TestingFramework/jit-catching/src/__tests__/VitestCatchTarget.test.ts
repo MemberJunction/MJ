@@ -52,6 +52,18 @@ describe('VitestCatchTarget.Run', () => {
     expect(cmd).toMatch(/--outputFile=\/work\/packages\/MJCore\/src\/__tests__\/jit\/[^ ]+\.json/);
     expect(cmd).toMatch(/--reporter=json --outputFile=\S+ >\/dev\/null 2>&1; cat /);
   });
+  it('puts the sandbox exit code and stderr in the RunnerError when neither reporter produced a report', async () => {
+    const { target } = fakeTarget(() => ({ Stdout: '', ExitCode: 1 }));
+    vi.spyOn((target as never as { sandbox: Sandbox }).sandbox, 'Run').mockResolvedValue({ ExitCode: 1, TimedOut: false, Stdout: '', Stderr: "Error: Cannot find module 'x'", DurationMs: 5 });
+    const results = await target.Run({ Ref: { Kind: 'Base', SHA: 'b' }, RootDir: '/work/base' }, [test(ID1)], 1);
+    expect(results[0].Status).toBe('RunnerError');
+    expect(results[0].Failure?.Message).toContain('exit 1'); expect(results[0].Failure?.Message).toContain('Cannot find module');
+  });
+  it('reports a tsc failure with no per-file error as a type-check error for every test, with exit code and output', async () => {
+    const { target } = fakeTarget(() => ({ Stdout: "error TS5058: The specified path does not exist: 'src/__tests__/jit/tsconfig.jit.json'.", ExitCode: 1 }));
+    const out = await target.TypeCheck({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: '/work/head' }, [test(ID1)]);
+    expect(out.get(ID1)).toContain('exit 1'); expect(out.get(ID1)).toContain('TS5058');
+  });
   it('maps a test file whose tests were all skipped or todo to RunnerError, not Pass', async () => {
     const file = `/work/packages/MJCore/src/__tests__/jit/${ID1}.jit.test.ts`;
     const jit = { Tests: [{ File: file, Name: 'a', State: 'skipped', DurationMs: 0, Errors: [] }, { File: file, Name: 'b', State: 'pending', DurationMs: 0, Errors: [] }], ModuleErrors: [] };

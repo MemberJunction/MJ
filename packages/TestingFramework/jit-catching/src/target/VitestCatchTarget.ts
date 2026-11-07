@@ -12,6 +12,7 @@ import type { Settings } from '../settings';
 import { ParseJitReport, ParseVitestJson, RunnerErrorResult, type ReportMapping } from './VitestReport';
 import { JIT_REPORTER_ARG, JIT_REPORTER_MOUNT, WriteJitReporter } from './JitReporter';
 import { StripPatchInfo } from './LockfileStrip';
+import { RedactionCheck, SecretsFromEnvironment } from '../sandbox/Redaction';
 
 const execFileAsync = promisify(execFile);
 /** Runs one trusted command on the host and returns its stdout. Injected so tests see the calls; the default is execFile. */
@@ -129,6 +130,8 @@ export class VitestCatchTarget extends BaseCatchTarget {
                 const lines = r.Stdout.split('\n').filter((l) => l.startsWith(g.Files[i]));
                 if (lines.length) out.set(t.ID, lines.join('\n').slice(0, 4000));
             }
+            // tsc failed before checking any file (config or setup error): every test in the package fails type-check.
+            if (r.ExitCode !== 0 && !/^\S.*\(\d+,\d+\): error TS/m.test(r.Stdout)) for (const t of g.Tests) out.set(t.ID, `tsc failed: ${SandboxEvidence(r)}`);
         }
         return out;
     }
@@ -157,6 +160,7 @@ export class VitestCatchTarget extends BaseCatchTarget {
         const out = `${CONTAINER_ROOT}/${g.Dir}/${JIT_SUBDIR}/.jit-report-${m.Revision.toLowerCase()}-${m.RunIndex}.json`;
         const j = await this.runVitest(revision, g, `${base} --reporter=json --outputFile=${out} >/dev/null 2>&1; cat ${out}; rm -f ${out}`, timeout);
         if (j.TimedOut) return timedOut();
+        if (safeJson<object>(j.Stdout) === null) return RunnerErrorResult(ids, m.Revision, m.RunIndex, `vitest produced no report: ${SandboxEvidence(r)}`);
         return markUnran(ParseVitestJson(j.Stdout, m), m, ranFilesFromJson(j.Stdout));
     }
 
@@ -219,6 +223,17 @@ function viteTmpfs(dir: string): string[] {
 /** Creates a tmpfs mount point on the host; Docker cannot create one inside a read-only mount. */
 function ensureMountPoint(path: string): void {
     try { mkdirSync(path, { recursive: true }); } catch { /* a missing mount point surfaces as a sandbox error */ }
+}
+
+/**
+ * Exit code and the last 2000 characters of stderr (stdout when stderr is empty) of a sandbox run, with this
+ * process's secret values replaced. Output that still matches a key pattern is withheld.
+ */
+export function SandboxEvidence(r: SandboxRunResult): string {
+    let text = (r.Stderr.trim() || r.Stdout.trim()).slice(-2000);
+    for (const secret of SecretsFromEnvironment()) text = text.split(secret).join('[REDACTED]');
+    const match = new RedactionCheck([]).Check(text);
+    return `exit ${r.ExitCode ?? 'none'}: ${match ? `[output withheld: ${match.Kind}]` : text}`;
 }
 
 function tail(r: SandboxRunResult): string { return `${r.Stderr}\n${r.Stdout}`.trim().slice(-4000); }
