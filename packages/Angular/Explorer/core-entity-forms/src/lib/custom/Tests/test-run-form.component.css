@@ -358,6 +358,11 @@
   z-index: 10;
 }
 
+/* Phone section picker: hidden until the 768px rule swaps it in for the strip */
+.phone-section-picker {
+  display: none;
+}
+
 .tabs {
   display: flex;
   padding: 0 20px;
@@ -1336,6 +1341,16 @@
    Responsive Design - Mobile
    =========================== */
 @media (max-width: 768px) {
+  /* The tab strip becomes one section-picker button (same pattern as the standard record form). */
+  .tabs {
+    display: none;
+  }
+
+  .phone-section-picker {
+    display: block;
+    padding: 4px 8px;
+  }
+
   .test-run-form {
     height: auto;
     min-height: 100%;
@@ -1950,5 +1965,26 @@
 
   .tags-editor-footer {
     padding: 10px 12px;
+  }
+}
+
+/* Phone (375px): the action row wraps instead of running past the edge, the SHOW
+   toggle takes its own line, and the breadcrumb wraps. (The tab strip is
+   hidden on phones; the section picker replaces it.) */
+@media (max-width: 768px) {
+  .header-actions {
+    flex-wrap: wrap;
+  }
+
+  .header-actions app-evaluation-mode-toggle {
+    flex-basis: 100%;
+  }
+
+  .breadcrumb ol {
+    flex-wrap: wrap;
+  }
+
+  .breadcrumb li {
+    min-width: 0;
   }
 }
