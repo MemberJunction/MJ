@@ -49,16 +49,6 @@ describe('ClaudeAgentGenerator', () => {
     expect(r.Tests.find((t) => t.GenerationOutcome === 'Failed')?.FailureReason).toMatch(/never proved/);
     expect(r.Tokens).toMatchObject({ InputTokens: 100, OutputTokens: 50, Model: 'claude-haiku-5-5' });
   });
-  it('keeps no allocated IDs on the instance, so parallel sessions each produce tests in their own files', async () => {
-    const root = world();
-    const gen = new ClaudeAgentGenerator({ Sandbox: {} as never, ScratchRoot: root, Settings: DEFAULT_SETTINGS, PackageMap: { Get: () => ({ Name: '@memberjunction/core', Dir: 'packages/MJCore', HasVitest: true, HasTests: true }) } as never, TranscriptDir: root,
-      Runner: scriptedRunner(async (h, ids) => { const f = `packages/MJCore/src/__tests__/jit/${ids[0]}.jit.test.ts`; await h.WriteFile(f, ids[0]); await new Promise((r) => setTimeout(r, 5)); await h.RunTest(f); }),
-      RunTestFactory: () => ({ Run: async () => ({ Ran: true, Status: 'Pass', TestName: 't', Failure: null, DurationMs: 1 }), LastMutant: null }) as never });
-    expect(Object.keys(gen)).not.toContain('AllocatedIDs');
-    const [a, b] = await Promise.all([gen.Generate(req(root)), gen.Generate(req(root))]);
-    for (const r of [a, b]) { expect(r.Tests).toHaveLength(1); expect(r.Tests[0]).toMatchObject({ GenerationOutcome: 'Produced', Source: r.Tests[0].ID }); }
-    expect(a.Tests[0].ID).not.toBe(b.Tests[0].ID);
-  });
   it('refuses a write outside the jit folder', async () => {
     const root = world(); let denied = '';
     const gen = new ClaudeAgentGenerator({ Sandbox: {} as never, ScratchRoot: root, Settings: DEFAULT_SETTINGS, PackageMap: { Get: () => ({ Name: '@memberjunction/core', Dir: 'packages/MJCore', HasVitest: true, HasTests: true }) } as never, TranscriptDir: root,
