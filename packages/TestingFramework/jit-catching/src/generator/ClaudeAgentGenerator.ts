@@ -42,17 +42,15 @@ const WRITE_FLAGS = constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC |
 
 /** One Agent SDK session per (package, method[, risk]) that only writes tests and proves them with run_test (§8.2, §8.3). */
 export class ClaudeAgentGenerator extends BaseTestGenerator {
-    /** File names (without `.jit.test.ts`) the current session may write. */
-    public AllocatedIDs: string[] = [];
     private readonly runner: AgentRunner;
     constructor(private readonly o: ClaudeAgentGeneratorOptions) { super(); this.runner = o.Runner ?? SdkRunner; }
 
     public async Generate(r: GenerationRequest): Promise<GenerationResult> {
         const pkg = this.o.PackageMap.Get(r.Package); if (!pkg) throw new Error(`unknown package ${r.Package}`);
         const jitDir = `${pkg.Dir}/src/__tests__/jit`; mkdirSync(join(r.BaseRootDir, jitDir), { recursive: true });
-        this.AllocatedIDs = Array.from({ length: r.Method === 'DodgyDiff' ? r.Limits.TestsPerPackage : r.Limits.TestsPerRisk }, () => NewID());
+        const ids = Array.from({ length: r.Method === 'DodgyDiff' ? r.Limits.TestsPerPackage : r.Limits.TestsPerRisk }, () => NewID());
         const factory = this.o.RunTestFactory ?? ((x: RunTestToolOptions) => new RunTestTool(x));
-        const s: Session = { Request: r, PackageDir: pkg.Dir, JitDir: jitDir, IDs: this.AllocatedIDs, Files: new Map(), Transcript: [],
+        const s: Session = { Request: r, PackageDir: pkg.Dir, JitDir: jitDir, IDs: ids, Files: new Map(), Transcript: [],
             Tool: factory({ Sandbox: this.o.Sandbox, BaseRootDir: r.BaseRootDir, PackageRelDir: pkg.Dir, PackageName: r.Package, ScratchRoot: this.o.ScratchRoot, Settings: this.o.Settings }) };
         let usage: TokenUsage = { Model: r.Model, InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 }; let subtype = 'none';
         const transcriptPath = this.transcriptPath(s);

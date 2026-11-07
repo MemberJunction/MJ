@@ -50,3 +50,14 @@ export function SecretsFromEnvironment(env: NodeJS.ProcessEnv = process.env): st
     return ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'TURBO_TOKEN', 'ACTIONS_RUNTIME_TOKEN', 'GITHUB_TOKEN', 'GH_TOKEN']
         .map((n) => env[n] ?? '').filter((v) => v.length > 0);
 }
+
+/**
+ * The last 2000 characters of `text` with this process's secret values replaced. Text that still matches a
+ * key pattern is withheld as a whole.
+ */
+export function RedactTail(text: string): string {
+    let out = text.slice(-2000);
+    for (const secret of SecretsFromEnvironment()) out = out.split(secret).join('[REDACTED]');
+    const match = new RedactionCheck([]).Check(out);
+    return match ? `[output withheld: ${match.Kind}]` : out;
+}

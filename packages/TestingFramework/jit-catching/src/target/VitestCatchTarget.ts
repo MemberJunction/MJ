@@ -12,7 +12,7 @@ import type { Settings } from '../settings';
 import { ParseJitReport, ParseVitestJson, RunnerErrorResult, type ReportMapping } from './VitestReport';
 import { JIT_REPORTER_ARG, JIT_REPORTER_MOUNT, WriteJitReporter } from './JitReporter';
 import { StripPatchInfo } from './LockfileStrip';
-import { RedactionCheck, SecretsFromEnvironment } from '../sandbox/Redaction';
+import { RedactTail } from '../sandbox/Redaction';
 
 const execFileAsync = promisify(execFile);
 /** Runs one trusted command on the host and returns its stdout. Injected so tests see the calls; the default is execFile. */
@@ -60,7 +60,7 @@ export class VitestCatchTarget extends BaseCatchTarget {
         const prepared: PreparedRevision = { Ref: revision, RootDir: dir };
         const install = `pnpm install --offline --frozen-lockfile --ignore-scripts --store-dir ${CONTAINER_STORE} && pnpm rebuild --store-dir ${CONTAINER_STORE}`;
         const r = await this.inSandbox(prepared, 'rw', ['sh', '-c', install], 30 * 60_000);
-        if (r.ExitCode !== 0) throw new InfrastructureError(`install failed on ${revision.Kind}: ${tail(r)}`);
+        if (r.ExitCode !== 0) throw new InfrastructureError(`install failed on ${revision.Kind}: ${RedactTail(tail(r))}`);
         return prepared;
     }
 
@@ -104,7 +104,7 @@ export class VitestCatchTarget extends BaseCatchTarget {
         const cmd = `npx turbo run build ${filters} --cache=local:rw,remote:r --log-order=stream --summarize`;
         const r = await this.inSandbox(revision, 'rw', ['sh', '-c', cmd], 45 * 60_000, { TURBO_CACHE_DIR: `${CONTAINER_ROOT}/.turbo/cache`, TURBO_TELEMETRY_DISABLED: '1' });
         this.keepTurboSummaries(revision);
-        if (r.ExitCode !== 0) throw new Error(`build failed on ${revision.Ref.Kind}: ${tail(r)}`);
+        if (r.ExitCode !== 0) throw new Error(`build failed on ${revision.Ref.Kind}: ${RedactTail(tail(r))}`);
     }
 
     /**
@@ -289,17 +289,6 @@ function ensureMountPoint(root: string, rel: string): void {
 /** Exit code and the redacted tail of stderr (stdout when stderr is empty) of a sandbox run. */
 export function SandboxEvidence(r: SandboxRunResult): string {
     return `exit ${r.ExitCode ?? 'none'}: ${RedactTail(r.Stderr.trim() || r.Stdout.trim())}`;
-}
-
-/**
- * The last 2000 characters of `text` with this process's secret values replaced. Text that still matches a
- * key pattern is withheld as a whole.
- */
-export function RedactTail(text: string): string {
-    let out = text.slice(-2000);
-    for (const secret of SecretsFromEnvironment()) out = out.split(secret).join('[REDACTED]');
-    const match = new RedactionCheck([]).Check(out);
-    return match ? `[output withheld: ${match.Kind}]` : out;
 }
 
 function tail(r: SandboxRunResult): string { return `${r.Stderr}\n${r.Stdout}`.trim().slice(-4000); }

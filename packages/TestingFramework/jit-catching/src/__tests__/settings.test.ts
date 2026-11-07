@@ -22,4 +22,10 @@ describe('LoadSettings', () => {
     writeFileSync(p, JSON.stringify({ Repeats: 0 }));
     expect(() => LoadSettings(p)).toThrow(/Repeats/);
   });
+  it('does not echo the content of a settings file that is not valid JSON', () => {
+    const token = 'ghp_' + 'A1b2C3d4'.repeat(5);
+    const p = join(mkdtempSync(join(tmpdir(), 'jit-')), 's.json'); writeFileSync(p, `${token} is not json`);
+    const err = (() => { try { LoadSettings(p); return null; } catch (e) { return e as Error; } })();
+    expect(err?.message).toBe(`settings file is not valid JSON: ${p}`);
+  });
 });
