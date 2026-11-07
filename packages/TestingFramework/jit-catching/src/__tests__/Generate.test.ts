@@ -7,7 +7,7 @@ import { RunDir } from '../pipeline/RunDir';
 import { RedactionCheck } from '../sandbox/Redaction';
 import { DEFAULT_SETTINGS } from '../settings';
 import type { ChangeAnalysis, GenerationRequest, GenerationResult, PreparedRevision, RevisionRef } from '../types';
-import { analysis, BASE_SHA, candidate, HEAD_SHA, ID_A, PKG, PKG_DIR } from './helpers/pipelineFixtures';
+import { analysis, BASE_SHA, candidate, FULL_ENV, HEAD_SHA, ID_A, PKG, PKG_DIR } from './helpers/pipelineFixtures';
 
 describe('GenerateStep', () => {
   it('without a PR takes the title from the head commit, sends one DodgyDiff and one IntentAware request per risk, and keeps the base worktree', async () => {
@@ -29,7 +29,7 @@ describe('GenerateStep', () => {
     };
     vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const subject = vi.fn(async () => 'fix(x): keep Open');
-    const { RunID } = await GenerateStep({ PR: null, BaseSHA: BASE_SHA, HeadSHA: HEAD_SHA, Trigger: 'Backtest', RepoRoot: root, Settings: DEFAULT_SETTINGS,
+    const { RunID } = await GenerateStep({ PR: null, BaseSHA: BASE_SHA, HeadSHA: HEAD_SHA, Trigger: 'Backtest', RepoRoot: root, Settings: DEFAULT_SETTINGS, Env: FULL_ENV,
       Deps: { GitHub: { GetPullRequest: vi.fn() }, Repo: { Fetch: async () => undefined, MergeBase: vi.fn(), Subject: subject }, Redaction: redaction, ForRun: () => tools } });
 
     expect(subject).toHaveBeenCalledWith(HEAD_SHA);
@@ -58,7 +58,7 @@ describe('GenerateStep', () => {
       PackageMap: { Get: () => info, PackageForPath: () => info },
     };
     vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-    const { RunID } = await GenerateStep({ PR: null, BaseSHA: BASE_SHA, HeadSHA: HEAD_SHA, Trigger: 'Local', RepoRoot: root, Settings: DEFAULT_SETTINGS,
+    const { RunID } = await GenerateStep({ PR: null, BaseSHA: BASE_SHA, HeadSHA: HEAD_SHA, Trigger: 'Local', RepoRoot: root, Settings: DEFAULT_SETTINGS, Env: FULL_ENV,
       Deps: { GitHub: { GetPullRequest: vi.fn() }, Repo: { Fetch: async () => undefined, MergeBase: vi.fn(), Subject: async () => 's' }, Redaction: redaction, ForRun: () => tools } });
     const g = new RunDir(root, RunID, redaction).ReadGeneration();
     expect(g.Tests).toHaveLength(2);
@@ -66,5 +66,15 @@ describe('GenerateStep', () => {
     expect(g.Tests[1]).toMatchObject({ Package: PKG, Method: 'IntentAware', RiskID: 'R1', GenerationOutcome: 'Failed', FailureReason: 'generation session failed: agent crashed', Source: '',
       Tokens: { Model: DEFAULT_SETTINGS.GeneratorModel, InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 } });
     expect(g.Tests[1].FilePath).toBe(`${PKG_DIR}/src/__tests__/jit/${g.Tests[1].ID}.jit.test.ts`);
+  });
+
+  it('refuses before any GitHub, repo or target call when a key is missing or Claude Code is the parent', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'jit-gen-'));
+    for (const env of [{ ...FULL_ENV, ANTHROPIC_API_KEY: undefined }, { ...FULL_ENV, CLAUDECODE: '1' }]) {
+      const forRun = vi.fn(); const getPr = vi.fn(); const fetch = vi.fn();
+      await expect(GenerateStep({ PR: 12, Trigger: 'Local', RepoRoot: root, Settings: DEFAULT_SETTINGS, Env: env,
+        Deps: { GitHub: { GetPullRequest: getPr }, Repo: { Fetch: fetch, MergeBase: vi.fn(), Subject: vi.fn() }, Redaction: new RedactionCheck([]), ForRun: forRun } })).rejects.toThrow(/ANTHROPIC_API_KEY|Claude Code/);
+      expect(getPr).not.toHaveBeenCalled(); expect(fetch).not.toHaveBeenCalled(); expect(forRun).not.toHaveBeenCalled();
+    }
   });
 });

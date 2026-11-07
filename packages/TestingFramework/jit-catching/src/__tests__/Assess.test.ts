@@ -11,7 +11,7 @@ import { RedactionCheck } from '../sandbox/Redaction';
 import { DEFAULT_SETTINGS } from '../settings';
 import type { PanelResult } from '../judges/JudgePanel';
 import type { CatchContext } from '../types';
-import { candidate, generation, ID_A, ID_B, ID_C, PKG_DIR, results, RUN_ID } from './helpers/pipelineFixtures';
+import { candidate, FULL_ENV, generation, ID_A, ID_B, ID_C, PKG_DIR, results, RUN_ID } from './helpers/pipelineFixtures';
 
 const SVC = 'export class Svc { private secret = 1; public Open(): number { return 4; } }\n';
 const SOURCE_A = `import { it, expect } from 'vitest';\nimport { Svc } from '../../svc';\nit('opens', () => { expect(new Svc().Open()).toBe(3); });\n`;
@@ -34,7 +34,7 @@ describe('AssessStep', () => {
   it('judges surviving weak catches, ranks them, offers promotions and saves the run', async () => {
     const judge = vi.fn(async (_c: CatchContext): Promise<PanelResult> => ({ TPProb: 0.8, Buckets: [{ Model: 'm', Bucket: 'High', Reason: 'real regression' }], Median: 'High' }));
     const store = new FileCatchStore(storeDir, redaction);
-    const out = await AssessStep({ RunID: RUN_ID, RepoRoot: root, Settings: DEFAULT_SETTINGS, StoreDir: storeDir,
+    const out = await AssessStep({ RunID: RUN_ID, RepoRoot: root, Settings: DEFAULT_SETTINGS, StoreDir: storeDir, Env: FULL_ENV,
       Deps: { JudgePanel: { Judge: judge }, Rules: new RuleFilter(AllRules()), Store: store, Redaction: redaction } });
 
     const a = out.Catches.find((c) => c.CandidateTestID === ID_A);
@@ -54,15 +54,24 @@ describe('AssessStep', () => {
     dir.WriteGeneration(generation(outside, [candidate(ID_A, SOURCE_A)]));
     const judge = vi.fn(async (_c: CatchContext): Promise<PanelResult> => ({ TPProb: null, Buckets: [], Median: null }));
     const store = new FileCatchStore(storeDir, redaction);
-    await expect(AssessStep({ RunID: RUN_ID, RepoRoot: root, Settings: DEFAULT_SETTINGS, StoreDir: storeDir,
+    await expect(AssessStep({ RunID: RUN_ID, RepoRoot: root, Settings: DEFAULT_SETTINGS, StoreDir: storeDir, Env: FULL_ENV,
       Deps: { JudgePanel: { Judge: judge }, Rules: new RuleFilter(AllRules()), Store: store, Redaction: redaction } })).rejects.toThrow(/base worktree/);
+    expect(judge).not.toHaveBeenCalled();
+    expect(await store.GetRun(RUN_ID)).toBeNull();
+  });
+
+  it('refuses before judging or saving when a judge vendor key is missing', async () => {
+    const judge = vi.fn(async (_c: CatchContext): Promise<PanelResult> => ({ TPProb: null, Buckets: [], Median: null }));
+    const store = new FileCatchStore(storeDir, redaction);
+    await expect(AssessStep({ RunID: RUN_ID, RepoRoot: root, Settings: DEFAULT_SETTINGS, StoreDir: storeDir, Env: { ...FULL_ENV, GEMINI_API_KEY: undefined },
+      Deps: { JudgePanel: { Judge: judge }, Rules: new RuleFilter(AllRules()), Store: store, Redaction: redaction } })).rejects.toThrow(/GEMINI_API_KEY/);
     expect(judge).not.toHaveBeenCalled();
     expect(await store.GetRun(RUN_ID)).toBeNull();
   });
 
   it('an unknown run fails before the store folder is created', async () => {
     const fresh = mkdtempSync(join(tmpdir(), 'jit-assess-')); const store = join(fresh, 'store');
-    await expect(AssessStep({ RunID: 'nope', RepoRoot: fresh, Settings: DEFAULT_SETTINGS, StoreDir: store })).rejects.toThrow('run nope not found');
+    await expect(AssessStep({ RunID: 'nope', RepoRoot: fresh, Settings: DEFAULT_SETTINGS, StoreDir: store, Env: FULL_ENV })).rejects.toThrow('run nope not found');
     expect(existsSync(store)).toBe(false);
     expect(existsSync(join(fresh, '.jit-catch', 'runs', 'nope'))).toBe(false);
   });

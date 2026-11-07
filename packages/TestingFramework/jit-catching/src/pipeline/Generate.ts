@@ -14,6 +14,7 @@ import { RedactTail } from '../sandbox/Redaction';
 import { RunDir } from './RunDir';
 import { RunWithConcurrency } from './concurrency';
 import { DefaultRedaction, DefaultRunTarget, type PipelineTarget } from './Deps';
+import { PreflightEnv } from './Preflight';
 
 /** The tools that write into one run's folder, built once the run ID is known. */
 export interface GenerateTools {
@@ -30,14 +31,18 @@ export interface GenerateDeps {
     Redaction: RedactionCheck;
     ForRun: (dir: RunDir) => GenerateTools;
 }
-/** With `PR` null, `HeadSHA` is required; `BaseSHA` defaults to the merge base of head and `origin/next`. */
-export interface GenerateOptions { PR: number | null; BaseSHA?: string; HeadSHA?: string; Trigger: Trigger; RepoRoot: string; Settings: Settings; Deps?: GenerateDeps; }
+/**
+ * With `PR` null, `HeadSHA` is required; `BaseSHA` defaults to the merge base of head and `origin/next`.
+ * `Env` is the environment the preflight check reads; it defaults to `process.env`.
+ */
+export interface GenerateOptions { PR: number | null; BaseSHA?: string; HeadSHA?: string; Trigger: Trigger; RepoRoot: string; Settings: Settings; Deps?: GenerateDeps; Env?: NodeJS.ProcessEnv; }
 
 /**
- * Job 1: resolves the revisions, prepares and builds base, analyses the change, runs one generation session per
+ * Job 1: checks the environment, resolves the revisions, prepares and builds base, analyses the change, runs one generation session per
  * (package, method[, risk]) and writes `generation.json`. The base worktree stays for the execute and assess jobs.
  */
 export async function GenerateStep(o: GenerateOptions): Promise<{ RunID: string }> {
+    PreflightEnv(o.Settings, o.Env ?? process.env, 'Generate');
     const d = o.Deps ?? DefaultGenerateDeps(o);
     const pr = o.PR !== null ? await d.GitHub.GetPullRequest(o.PR) : null;
     const { BaseSHA, HeadSHA } = await resolveRevisions(o, d, pr);

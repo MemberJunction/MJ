@@ -16,6 +16,7 @@ import type { ExecutionFile, GenerationFile } from '../schemas';
 import type { CandidateTest, Catch, CatchContext, PromotionCandidate } from '../types';
 import { CheckedBaseRootDir, RunDir } from './RunDir';
 import { DefaultRedaction } from './Deps';
+import { PreflightEnv } from './Preflight';
 
 export interface AssessDeps {
     JudgePanel: Pick<JudgePanel, 'Judge'>;
@@ -23,16 +24,18 @@ export interface AssessDeps {
     Store: BaseCatchStore;
     Redaction: RedactionCheck;
 }
-export interface AssessOptions { RunID: string; RepoRoot: string; Settings: Settings; StoreDir: string; Deps?: AssessDeps; }
+/** `Env` is the environment the preflight check reads; it defaults to `process.env`. */
+export interface AssessOptions { RunID: string; RepoRoot: string; Settings: Settings; StoreDir: string; Deps?: AssessDeps; Env?: NodeJS.ProcessEnv; }
 
 const MAX_PROMOTIONS = 3;
 
 /**
- * Job 3: reads `generation.json` and `execution.json`, gives every executed test a verdict, filters weak catches with
+ * Job 3: checks the environment, reads `generation.json` and `execution.json`, gives every executed test a verdict, filters weak catches with
  * the rules (which read the base worktree) and judges the survivors, ranks and selects with the Label threshold,
  * offers up to three promotion candidates, saves everything to the store and writes `assessment.json`.
  */
 export async function AssessStep(o: AssessOptions): Promise<{ Catches: Catch[]; Promotions: PromotionCandidate[] }> {
+    PreflightEnv(o.Settings, o.Env ?? process.env, 'Assess');
     const redaction = o.Deps?.Redaction ?? DefaultRedaction();
     const dir = new RunDir(o.RepoRoot, o.RunID, redaction);
     const gen = dir.ReadGeneration(); const exec = dir.ReadExecution();

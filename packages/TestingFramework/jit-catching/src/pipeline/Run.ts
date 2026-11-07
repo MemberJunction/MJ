@@ -6,15 +6,17 @@ import { ExecuteStep } from './Execute';
 import { AssessStep } from './Assess';
 import { CheckedBaseRootDir, RunDir } from './RunDir';
 import { DefaultRedaction, DefaultRunTarget } from './Deps';
+import { PreflightEnv } from './Preflight';
 
 /** `PR` null runs on `BaseSHA`/`HeadSHA` instead. `Trigger` defaults to `Local`. */
 export interface RunAllOptions { PR: number | null; BaseSHA?: string; HeadSHA?: string; Trigger?: Trigger; RepoRoot: string; Settings: Settings; StoreDir: string; }
 
 /**
- * Generate, execute and assess on this machine with the real dependencies, then remove the base worktree.
+ * Checks the keys of every step first, then generates, executes and assesses on this machine with the real dependencies, and removes the base worktree.
  * When a step fails, the run folder and the base worktree stay so the failed step can be run again on its own.
  */
 export async function RunAll(o: RunAllOptions): Promise<{ RunID: string; Reported: Catch[] }> {
+    PreflightEnv(o.Settings, process.env, 'Assess');
     const { RunID } = await GenerateStep({ PR: o.PR, BaseSHA: o.BaseSHA, HeadSHA: o.HeadSHA, Trigger: o.Trigger ?? 'Local', RepoRoot: o.RepoRoot, Settings: o.Settings });
     await ExecuteStep({ RunID, RepoRoot: o.RepoRoot, Settings: o.Settings });
     const { Catches } = await AssessStep({ RunID, RepoRoot: o.RepoRoot, Settings: o.Settings, StoreDir: o.StoreDir });
