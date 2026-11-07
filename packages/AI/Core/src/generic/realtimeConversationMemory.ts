@@ -104,3 +104,42 @@ function entryChars(entry: RealtimeMemoryEntry): number {
             return entry.Text.length;
     }
 }
+
+/**
+ * Renders a seed as the conversation turns a resumed session is reseeded with: a preamble that tells the
+ * model to carry on, then the entries, with adjacent entries of one role merged into one turn. Text only,
+ * so a provider needs no function-call wire shape to send it. A caller sends nothing for a seed with no
+ * entries: a preamble with no transcript behind it would mislead the model.
+ */
+export function RenderRealtimeMemorySeed(seed: RealtimeMemorySeed): ReadonlyArray<{ Role: 'user' | 'model'; Texts: readonly string[] }> {
+    const turns: Array<{ Role: 'user' | 'model'; Texts: string[] }> = [{ Role: 'user', Texts: [resumePreamble(seed.DroppedEntries)] }];
+    for (const entry of seed.Entries) {
+        const role = entry.Kind === 'assistant' || entry.Kind === 'toolCall' ? 'model' : 'user';
+        const last = turns[turns.length - 1];
+        if (last.Role === role) {
+            last.Texts.push(entryText(entry));
+        } else {
+            turns.push({ Role: role, Texts: [entryText(entry)] });
+        }
+    }
+    return turns;
+}
+
+function resumePreamble(dropped: number): string {
+    const omitted = dropped > 0 ? `; ${dropped} earlier entries omitted` : '';
+    return (
+        `[Connection resumed. Transcript so far, for continuity${omitted}. Continue exactly where the conversation left off. ` +
+        'Do not greet again and do not restart. If you already remember this conversation, this is the same one.]'
+    );
+}
+
+function entryText(entry: RealtimeMemoryEntry): string {
+    switch (entry.Kind) {
+        case 'toolCall':
+            return `[called ${entry.Name} ${entry.ArgumentsJson}]`;
+        case 'toolResult':
+            return `[${entry.Name} returned ${entry.OutputJson}]`;
+        default:
+            return entry.Text;
+    }
+}

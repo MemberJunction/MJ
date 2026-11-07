@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import type { LiveServerContent, LiveServerMessage } from '@google/genai';
+import type { Content, LiveServerContent, LiveServerMessage } from '@google/genai';
 import { REALTIME_CONNECTION_SETUP_TIMEOUT_MS, type ClientRealtimeSessionConfig, type JSONObject } from '@memberjunction/ai';
 import type { GeminiClientConnectArgs, GeminiLiveClientSession } from '../drivers/geminiRealtimeClient';
 import {
@@ -121,22 +121,31 @@ describe('GeminiRealtimeClient session resumption', () => {
             expect(emitted.errors).toEqual([]);
         });
 
-        it('waits for a resumable point instead of resuming mid-turn', async () => {
+        it('waits for the turn in progress instead of resuming mid-turn, then moves with the stored handle', async () => {
             client.EmitOn(0, RESUMABLE('h1'));
-            client.EmitOn(0, NOT_RESUMABLE);
+            client.EmitOn(0, HEARD('what time is it'));
             client.EmitOn(0, GO_AWAY('60s'));
             await vi.advanceTimersByTimeAsync(5000);
             expect(client.Connections).toHaveLength(1);
 
-            client.EmitOn(0, RESUMABLE('h2'));
+            client.EmitOn(0, TURN_COMPLETE);
             await vi.advanceTimersByTimeAsync(0);
             expect(client.Connections).toHaveLength(2);
-            expect(client.Connections[1].Args.Config.sessionResumption).toEqual({ handle: 'h2' });
+            expect(client.Connections[1].Args.Config.sessionResumption).toEqual({ handle: 'h1' });
+        });
+
+        it("does not wait on Google's resumable flag: with no turn open it moves at once", async () => {
+            client.EmitOn(0, RESUMABLE('h1'));
+            client.EmitOn(0, NOT_RESUMABLE);
+            client.EmitOn(0, GO_AWAY('60s'));
+            await vi.advanceTimersByTimeAsync(0);
+            expect(client.Connections).toHaveLength(2);
+            expect(client.Connections[1].Args.Config.sessionResumption).toEqual({ handle: 'h1' });
         });
 
         it('falls back to the last handle shortly before the deadline in timeLeft', async () => {
             client.EmitOn(0, RESUMABLE('h1'));
-            client.EmitOn(0, NOT_RESUMABLE);
+            client.EmitOn(0, HEARD('a long question'));
             client.EmitOn(0, GO_AWAY('20s'));
             await vi.advanceTimersByTimeAsync(13332);
             expect(client.Connections).toHaveLength(1);
@@ -203,10 +212,62 @@ describe('GeminiRealtimeClient session resumption', () => {
             expect(emitted.states[emitted.states.length - 1]).toBe('error');
         });
 
-        it('keeps the old behavior with no handle: an abnormal close is fatal', () => {
+        it('resumes without a handle: an abnormal close opens a new connection and is not fatal', async () => {
             client.CloseOn(0, 1006);
-            expect(emitted.errors).toHaveLength(1);
-            expect(emitted.states[emitted.states.length - 1]).toBe('error');
+            expect(emitted.states.at(-1)).toBe('connecting');
+            await vi.advanceTimersByTimeAsync(0);
+
+            expect(client.Connections).toHaveLength(2);
+            expect(client.Connections[1].Args.Config.sessionResumption).toEqual({});
+            expect(emitted.errors).toEqual([]);
+            expect(emitted.states.at(-1)).toBe('listening');
+        });
+
+        it('with no handle, a transport error is only logged and the close that follows resumes', async () => {
+            client.ErrorOn(0);
+            expect(emitted.errors).toEqual([]);
+            expect(emitted.states.at(-1)).toBe('listening');
+            client.CloseOn(0, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(client.Connections).toHaveLength(2);
+            expect(emitted.errors).toEqual([]);
+            expect(emitted.states.at(-1)).toBe('listening');
+        });
+
+        it.each([1000, 1005])('with no handle, a clean close (%i) is the server ending the call: closed, no resume', async (code) => {
+            client.CloseOn(0, code);
+            await vi.advanceTimersByTimeAsync(5000);
+            expect(client.Connections).toHaveLength(1);
+            expect(emitted.errors).toEqual([]);
+            expect(emitted.states.at(-1)).toBe('closed');
+        });
+
+        it('with a handle, a clean close still resumes', async () => {
+            client.EmitOn(0, RESUMABLE('h1'));
+            client.CloseOn(0, 1000);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(client.Connections).toHaveLength(2);
+            expect(emitted.states.at(-1)).toBe('listening');
+        });
+
+        it('with no handle, fails the session with the close reason when every attempt closes before its setup', async () => {
+            client.AutoConfirmSetup = false;
+            client.CloseOn(0, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+            client.CloseOn(1, 1007);
+            await vi.advanceTimersByTimeAsync(1000);
+            client.CloseOn(2, 1007);
+            await vi.advanceTimersByTimeAsync(3000);
+            client.CloseOn(3, 1007);
+            await vi.advanceTimersByTimeAsync(0);
+
+            expect(emitted.errors).toEqual([
+                {
+                    Message: 'Gemini Live connection was lost and could not be resumed: Gemini Live closed the connection before confirming its setup (1007): gone',
+                    Fatal: true,
+                },
+            ]);
+            expect(emitted.states.at(-1)).toBe('error');
         });
 
         it('ends the cut-off turn and sends queued messages on the new connection', async () => {
@@ -221,7 +282,11 @@ describe('GeminiRealtimeClient session resumption', () => {
             await vi.advanceTimersByTimeAsync(0);
 
             expect(emitted.transcripts.some((t) => t.Role === 'Assistant' && t.IsFinal && t.Text === 'Half a sen')).toBe(true);
-            expect(client.Connections[1].Session.ClientContents).toHaveLength(1);
+            // The seed, with the cut-off turn in it, then the note queued behind the move.
+            const [seed, note, ...rest] = client.Connections[1].Session.ClientContents;
+            expect(seed.turns?.at(-1)).toEqual({ role: 'model', parts: [{ text: 'Half a sen' }] });
+            expect(note).toEqual({ turns: [{ role: 'user', parts: [{ text: 'queued while the model was talking' }] }], turnComplete: false });
+            expect(rest).toEqual([]);
             expect(client.IsBusy).toBe(false);
         });
     });
@@ -254,10 +319,9 @@ describe('GeminiRealtimeClient session resumption', () => {
         });
     });
 
-    // Vertex AI never sends `resumable: false`: it marks every update resumable and sends one 20-70 ms after each
-    // turnComplete. These runs replay that cadence.
+    // The move starts at turnComplete, with the handle stored by then: the seed, not a handle issued after the turn, carries it.
     describe('a planned move waits for the turn in progress (#5354)', () => {
-        it('a goAway mid-answer lets the answer finish on the old connection, then moves at the handle after turnComplete', async () => {
+        it('a goAway mid-answer lets the answer finish on the old connection, then moves at turnComplete with the whole answer in the seed', async () => {
             client.EmitOn(0, RESUMABLE('h1'));
             client.EmitOn(0, HEARD('count slowly to three'));
             client.EmitOn(0, SAID('One, two,'));
@@ -267,13 +331,11 @@ describe('GeminiRealtimeClient session resumption', () => {
 
             client.EmitOn(0, SAID(' three.'));
             client.EmitOn(0, TURN_COMPLETE);
-            await vi.advanceTimersByTimeAsync(50);
-            expect(client.Connections).toHaveLength(1); // h1 predates the answer: resuming from it would drop it
-
-            client.EmitOn(0, RESUMABLE('h2'));
             await vi.advanceTimersByTimeAsync(0);
             expect(client.Connections).toHaveLength(2);
-            expect(client.Connections[1].Args.Config.sessionResumption).toEqual({ handle: 'h2' });
+            // h1 predates the answer, and resuming from it alone would drop it: the seed carries the answer.
+            expect(client.Connections[1].Args.Config.sessionResumption).toEqual({ handle: 'h1' });
+            expect(client.Connections[1].Session.ClientContents[0].turns?.at(-1)).toEqual({ role: 'model', parts: [{ text: 'One, two, three.' }] });
             expect(emitted.transcripts.filter((t) => t.Role === 'Assistant' && t.IsFinal).map((t) => t.Text)).toEqual(['One, two, three.']);
             expect(emitted.errors).toEqual([]);
         });
@@ -287,9 +349,8 @@ describe('GeminiRealtimeClient session resumption', () => {
 
             client.EmitOn(0, SAID('It is noon.'));
             client.EmitOn(0, TURN_COMPLETE);
-            client.EmitOn(0, RESUMABLE('h2'));
             await vi.advanceTimersByTimeAsync(0);
-            expect(client.Connections[1]?.Args.Config.sessionResumption).toEqual({ handle: 'h2' });
+            expect(client.Connections[1]?.Args.Config.sessionResumption).toEqual({ handle: 'h1' });
         });
 
         it('a goAway right after a typed question waits too', async () => {
@@ -301,9 +362,8 @@ describe('GeminiRealtimeClient session resumption', () => {
             expect(client.Connections[0].Session.RealtimeInputs).toEqual([{ text: 'what time is it' }]);
 
             client.EmitOn(0, TURN_COMPLETE);
-            client.EmitOn(0, RESUMABLE('h2'));
             await vi.advanceTimersByTimeAsync(0);
-            expect(client.Connections[1]?.Args.Config.sessionResumption).toEqual({ handle: 'h2' });
+            expect(client.Connections[1]?.Args.Config.sessionResumption).toEqual({ handle: 'h1' });
         });
 
         it('with no answer coming, the deadline still moves the session, with the last handle', async () => {
@@ -333,16 +393,18 @@ describe('GeminiRealtimeClient session resumption', () => {
             client.EmitOn(0, RESUMABLE('h1'));
             client.EmitOn(0, TOOL_CALL('call-1'));
             client.EmitOn(0, GO_AWAY('30s'));
-            client.EmitOn(0, RESUMABLE('h2')); // kept for a drop, not moved on
+            client.EmitOn(0, RESUMABLE('h2')); // stored, not a reason to move
             await vi.advanceTimersByTimeAsync(1000);
             expect(client.Connections).toHaveLength(1);
 
             client.SendToolResult('call-1', '{"status":"shipped"}');
+            await vi.advanceTimersByTimeAsync(1000);
+            expect(client.Connections).toHaveLength(1); // the result is out, but the turn it continues is not over
+
             client.EmitOn(0, SAID('It shipped.'));
             client.EmitOn(0, TURN_COMPLETE);
-            client.EmitOn(0, RESUMABLE('h3'));
             await vi.advanceTimersByTimeAsync(0);
-            expect(client.Connections[1]?.Args.Config.sessionResumption).toEqual({ handle: 'h3' });
+            expect(client.Connections[1]?.Args.Config.sessionResumption).toEqual({ handle: 'h2' });
             expect(client.Connections[0].Session.ToolResponses).toHaveLength(1);
         });
     });
@@ -379,9 +441,8 @@ describe('GeminiRealtimeClient session resumption', () => {
 
             other.SendToolResult('call-1', '{"status":"shipped"}');
             expect(other.IsTurnOpen).toBe(false);
-            other.EmitOn(0, RESUMABLE('h2'));
             await vi.advanceTimersByTimeAsync(0);
-            expect(other.Connections[1]?.Args.Config.sessionResumption).toEqual({ handle: 'h2' });
+            expect(other.Connections[1]?.Args.Config.sessionResumption).toEqual({ handle: 'h1' });
         });
 
         it('on an interactionStatus model, closes at the IDLE status, not at turnComplete', async () => {
@@ -403,6 +464,338 @@ describe('GeminiRealtimeClient session resumption', () => {
             await vi.advanceTimersByTimeAsync(0);
             expect(client.Connections).toHaveLength(2);
             expect(client.IsTurnOpen).toBe(false);
+        });
+    });
+
+    describe('conversation memory across a resume', () => {
+        const PREAMBLE =
+            '[Connection resumed. Transcript so far, for continuity. Continue exactly where the conversation left off. ' +
+            'Do not greet again and do not restart. If you already remember this conversation, this is the same one.]';
+        /** Each turn as `role:text|text`, so a failure shows the whole seed. */
+        const texts = (turns: Content[] | undefined): string[] =>
+            (turns ?? []).map((turn) => `${turn.role}:${(turn.parts ?? []).map((part) => part.text).join('|')}`);
+        const seedOn = (index: number): string[] => texts(client.Connections[index].Session.ClientContents[0]?.turns);
+
+        it('seeds the preamble and every entry, in order, with turnComplete false', async () => {
+            client.EmitOn(0, RESUMABLE('h1'));
+            client.EmitOn(0, HEARD('hi'));
+            client.EmitOn(0, SAID('Question 1'));
+            client.EmitOn(0, TURN_COMPLETE);
+            client.SendText('typed answer');
+            client.EmitOn(0, TURN_COMPLETE); // the typed turn holds the note until it ends
+            client.SendContextNote('note');
+            client.EmitOn(0, TOOL_CALL('c1'));
+            client.SendToolResult('c1', '{"ok":true}');
+            client.EmitOn(0, HEARD('more'));
+            client.EmitOn(0, SAID('Question 2'));
+            client.EmitOn(0, TURN_COMPLETE);
+            client.CloseOn(0, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+
+            const contents = client.Connections[1].Session.ClientContents;
+            expect(contents).toHaveLength(1);
+            expect(contents[0].turnComplete).toBe(false);
+            expect(texts(contents[0].turns)).toEqual([
+                `user:${PREAMBLE}|hi`,
+                'model:Question 1',
+                'user:typed answer|note',
+                'model:[called lookup_order {}]',
+                'user:[lookup_order returned {"ok":true}]|more',
+                'model:Question 2',
+            ]);
+        });
+
+        it('sends the seed before the mic audio held during the move', async () => {
+            client.EmitOn(0, HEARD('hi'));
+            client.EmitOn(0, SAID('Question 1'));
+            client.EmitOn(0, TURN_COMPLETE);
+            client.AutoConfirmSetup = false;
+            client.CloseOn(0, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+            client.OnPcmChunk?.('AAAA');
+            client.OnPcmChunk?.('BBBB');
+
+            client.ConfirmSetupOn(1);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(client.Connections[1].Session.Calls).toEqual(['clientContent', 'realtimeInput', 'realtimeInput']);
+        });
+
+        it('an empty notebook seeds nothing', async () => {
+            client.EmitOn(0, RESUMABLE('h1'));
+            client.CloseOn(0, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(client.Connections[1].Session.ClientContents).toEqual([]);
+            expect(emitted.states.at(-1)).toBe('listening');
+        });
+
+        it('the cut-off partial transcript is in the seed', async () => {
+            client.EmitOn(0, RESUMABLE('h1'));
+            client.EmitOn(0, HEARD('hi'));
+            client.EmitOn(0, SAID('Half a sen'));
+            client.CloseOn(0, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(seedOn(1)).toEqual([`user:${PREAMBLE}|hi`, 'model:Half a sen']);
+        });
+
+        it('a user partial cut off before the model spoke is in the seed', async () => {
+            client.EmitOn(0, HEARD('half a ques'));
+            client.CloseOn(0, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(seedOn(1)).toEqual([`user:${PREAMBLE}|half a ques`]);
+        });
+
+        it('narration and thought turns are not in the seed, and neither is the trigger of a narration', async () => {
+            client.EmitOn(0, HEARD('hi'));
+            client.EmitOn(0, SAID('Question 1'));
+            client.EmitOn(0, TURN_COMPLETE);
+            client.RequestSpokenUpdate('tell them to wait');
+            client.EmitOn(0, SAID('One moment.'));
+            client.EmitOn(0, TURN_COMPLETE);
+            client.EmitOn(0, CONTENT({ modelTurn: { role: 'model', parts: [{ thought: true, text: 'Planning the answer' }] } }));
+            client.EmitOn(0, TURN_COMPLETE);
+            client.CloseOn(0, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(emitted.transcripts.some((t) => t.IsFinal && t.Kind === 'narration' && t.Text === 'One moment.')).toBe(true);
+            expect(emitted.transcripts.some((t) => t.IsFinal && t.IsThought && t.Text === 'Planning the answer')).toBe(true);
+            expect(seedOn(1)).toEqual([`user:${PREAMBLE}|hi`, 'model:Question 1']);
+        });
+
+        it('a spoken turn and its reply are in the seed', async () => {
+            client.RequestSpokenTurn('greet the participant');
+            client.EmitOn(0, SAID('Hello.'));
+            client.EmitOn(0, TURN_COMPLETE);
+            client.CloseOn(0, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(seedOn(1)).toEqual([`user:${PREAMBLE}|greet the participant`, 'model:Hello.']);
+        });
+
+        it('a 1011 with no handle recorded resumes and seeds instead of ending the call', async () => {
+            client.EmitOn(0, HEARD('hi'));
+            client.EmitOn(0, SAID('Question 1'));
+            client.EmitOn(0, TURN_COMPLETE);
+            client.CloseOn(0, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+
+            expect(client.Connections).toHaveLength(2);
+            expect(client.Connections[1].Args.Config.sessionResumption).toEqual({});
+            expect(seedOn(1)).toEqual([`user:${PREAMBLE}|hi`, 'model:Question 1']);
+            expect(emitted.errors).toEqual([]);
+            expect(emitted.states.at(-1)).toBe('listening');
+        });
+
+        it('drops the oldest entries past the cap and says so in the preamble', async () => {
+            for (let i = 0; i < 30; i++) {
+                client.EmitOn(0, HEARD(`${i}`.padEnd(1000, 'u')));
+                client.EmitOn(0, SAID(`${i}`.padEnd(1000, 'a')));
+                client.EmitOn(0, TURN_COMPLETE);
+            }
+            client.CloseOn(0, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+
+            // 60 entries of 1,000 characters against a cap of 24,000.
+            const parts = (client.Connections[1].Session.ClientContents[0].turns ?? []).flatMap((turn) => turn.parts ?? []).map((part) => part.text);
+            expect(parts[0]).toContain('for continuity; 36 earlier entries omitted. Continue');
+            expect(parts).toHaveLength(25);
+            expect(parts[1]).toBe('18'.padEnd(1000, 'u'));
+            expect(parts[24]).toBe('29'.padEnd(1000, 'a'));
+        });
+
+        it('a failing seed is a non-fatal error and the resume still completes', async () => {
+            client.EmitOn(0, RESUMABLE('h1'));
+            client.EmitOn(0, HEARD('hi'));
+            client.EmitOn(0, SAID('Question 1'));
+            client.EmitOn(0, TURN_COMPLETE);
+            client.AutoConfirmSetup = false;
+            client.CloseOn(0, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+            client.OnPcmChunk?.('AAAA');
+            client.Connections[1].Session.ThrowOnClientContent = new Error('socket not open');
+
+            client.ConfirmSetupOn(1);
+            await vi.advanceTimersByTimeAsync(0);
+
+            expect(emitted.errors).toEqual([
+                { Message: 'Gemini Live resumed without the conversation so far: socket not open', Code: 'resume-seed-failed', Fatal: false },
+            ]);
+            expect(emitted.states.at(-1)).toBe('listening');
+            expect(client.Connections[1].Session.RealtimeInputs).toEqual([{ audio: { data: 'AAAA', mimeType: 'audio/pcm;rate=16000' } }]);
+        });
+
+        it('a second drop reseeds the full ledger', async () => {
+            client.EmitOn(0, HEARD('first'));
+            client.EmitOn(0, SAID('Question 1'));
+            client.EmitOn(0, TURN_COMPLETE);
+            client.CloseOn(0, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+            client.EmitOn(1, HEARD('second'));
+            client.EmitOn(1, SAID('Question 2'));
+            client.EmitOn(1, TURN_COMPLETE);
+            client.CloseOn(1, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+
+            expect(seedOn(2)).toEqual([`user:${PREAMBLE}|first`, 'model:Question 1', 'user:second', 'model:Question 2']);
+        });
+
+        it('a note queued during a move is not in the seed and lands after it', async () => {
+            client.EmitOn(0, HEARD('hi'));
+            client.EmitOn(0, SAID('Question 1'));
+            client.EmitOn(0, TURN_COMPLETE);
+            client.AutoConfirmSetup = false;
+            client.CloseOn(0, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+            client.SendContextNote('queued note');
+
+            client.ConfirmSetupOn(1);
+            await vi.advanceTimersByTimeAsync(0);
+            const contents = client.Connections[1].Session.ClientContents;
+            expect(contents).toHaveLength(2);
+            expect(texts(contents[0].turns)).toEqual([`user:${PREAMBLE}|hi`, 'model:Question 1']);
+            expect(texts(contents[1].turns)).toEqual(['user:queued note']);
+
+            // It went out, so the next seed has it.
+            client.CloseOn(1, 1011);
+            await vi.advanceTimersByTimeAsync(1);
+            client.ConfirmSetupOn(2);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(seedOn(2)).toEqual([`user:${PREAMBLE}|hi`, 'model:Question 1', 'user:queued note']);
+        });
+
+        it('a SendText queued during a move is not in the seed and goes out after it', async () => {
+            client.EmitOn(0, HEARD('hi'));
+            client.EmitOn(0, SAID('Question 1'));
+            client.EmitOn(0, TURN_COMPLETE);
+            client.AutoConfirmSetup = false;
+            client.CloseOn(0, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+            client.SendText('queued text');
+
+            client.ConfirmSetupOn(1);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(seedOn(1)).toEqual([`user:${PREAMBLE}|hi`, 'model:Question 1']);
+            expect(client.Connections[1].Session.Calls).toEqual(['clientContent', 'realtimeInput']);
+            expect(client.Connections[1].Session.RealtimeInputs).toEqual([{ text: 'queued text' }]);
+        });
+
+        it('records a tool call before the host sees it, so a host that answers at once keeps the pair in order', async () => {
+            client.OnToolCall((call) => client.SendToolResult(call.CallID, '{"ok":true}'));
+            client.EmitOn(0, TOOL_CALL('c1'));
+            client.CloseOn(0, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(seedOn(1)).toEqual([`user:${PREAMBLE}`, 'model:[called lookup_order {}]', 'user:[lookup_order returned {"ok":true}]']);
+        });
+
+        it("records the user's words before the tool call they led to", async () => {
+            client.EmitOn(0, HEARD('where is my order'));
+            client.EmitOn(0, TOOL_CALL('c1'));
+            client.SendToolResult('c1', '{"ok":true}');
+            client.EmitOn(0, SAID('It shipped.'));
+            client.EmitOn(0, TURN_COMPLETE);
+            client.CloseOn(0, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(seedOn(1)).toEqual([
+                `user:${PREAMBLE}|where is my order`,
+                'model:[called lookup_order {}]',
+                'user:[lookup_order returned {"ok":true}]',
+                'model:It shipped.',
+            ]);
+        });
+
+        it('records the tool result the model got: scheduling hints stripped, free text wrapped', async () => {
+            client.EmitOn(0, TOOL_CALL('c1'));
+            client.SendToolResult('c1', '{"status":"shipped","__mj_scheduling":"SILENT"}');
+            client.EmitOn(0, TURN_COMPLETE);
+            client.EmitOn(0, TOOL_CALL('c2'));
+            client.SendToolResult('c2', 'done');
+            client.EmitOn(0, TURN_COMPLETE);
+            client.CloseOn(0, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(seedOn(1)).toEqual([
+                `user:${PREAMBLE}`,
+                'model:[called lookup_order {}]',
+                'user:[lookup_order returned {"status":"shipped"}]',
+                'model:[called lookup_order {}]',
+                'user:[lookup_order returned {"result":"done"}]',
+            ]);
+        });
+
+        it('the commit a tool response owed on the old connection is not sent on the new one, so the seed starts no reply', async () => {
+            const thinking = await connectAnother({ idleSignal: 'interactionStatus', supportsBlocking: false });
+            thinking.SendContextNote('note');
+            thinking.EmitOn(0, TOOL_CALL('c1'));
+            thinking.SendToolResult('c1', '{"ok":true}');
+            thinking.CloseOn(0, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(thinking.Connections).toHaveLength(2);
+
+            thinking.EmitOn(1, { interaction_status: 'IN_PROGRESS' } as unknown as LiveServerMessage);
+            thinking.EmitOn(1, { interaction_status: 'IDLE' } as unknown as LiveServerMessage);
+            expect(thinking.Connections[1].Session.ClientContents.filter((content) => content.turnComplete === true)).toEqual([]);
+        });
+
+        it('Disconnect clears the notebook', async () => {
+            client.EmitOn(0, HEARD('hi'));
+            client.EmitOn(0, SAID('Question 1'));
+            client.EmitOn(0, TURN_COMPLETE);
+            await client.Disconnect();
+            await client.Connect(sessionConfig(), new FakeMediaStream([new FakeTrack()]));
+            client.CloseOn(1, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(client.Connections[2].Session.ClientContents).toEqual([]);
+        });
+
+        it('a new Connect starts an empty notebook', async () => {
+            client.EmitOn(0, HEARD('hi'));
+            client.EmitOn(0, SAID('Question 1'));
+            client.EmitOn(0, TURN_COMPLETE);
+            await client.Connect(sessionConfig(), new FakeMediaStream([new FakeTrack()]));
+            client.CloseOn(1, 1011);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(client.Connections[2].Session.ClientContents).toEqual([]);
+        });
+
+        describe('diagnostics', () => {
+            let logged: string[];
+
+            beforeEach(() => {
+                vi.stubEnv('MJ_VERBOSE', 'true');
+                logged = [];
+                vi.spyOn(console, 'log').mockImplementation((line: string) => {
+                    logged.push(line);
+                });
+            });
+
+            afterEach(() => {
+                vi.unstubAllEnvs();
+                vi.restoreAllMocks();
+            });
+
+            it('reports the seed by its counts, never its text', async () => {
+                client.EmitOn(0, HEARD('private words'));
+                client.EmitOn(0, SAID('Question 1'));
+                client.EmitOn(0, TURN_COMPLETE);
+                client.CloseOn(0, 1011);
+                await vi.advanceTimersByTimeAsync(0);
+                expect(logged).toContain('[GeminiRealtimeClient] seeded 2 entries (chars 23, dropped 0)');
+                expect(logged.filter((line) => line.includes('private words') || line.includes('Question 1'))).toEqual([]);
+            });
+
+            it('reports an empty notebook', async () => {
+                client.CloseOn(0, 1011);
+                await vi.advanceTimersByTimeAsync(0);
+                expect(logged).toContain('[GeminiRealtimeClient] no conversation to seed');
+            });
+
+            it('reports a failed seed by its counts, never its text', async () => {
+                client.EmitOn(0, HEARD('private words'));
+                client.AutoConfirmSetup = false;
+                client.CloseOn(0, 1011);
+                await vi.advanceTimersByTimeAsync(0);
+                client.Connections[1].Session.ThrowOnClientContent = new Error('socket not open');
+                client.ConfirmSetupOn(1);
+                await vi.advanceTimersByTimeAsync(0);
+                expect(logged).toContain('[GeminiRealtimeClient] seed failed: socket not open (entries 1, chars 13, dropped 0)');
+                expect(logged.filter((line) => line.includes('private words'))).toEqual([]);
+            });
         });
     });
 
