@@ -2007,35 +2007,42 @@ class GeminiRealtimeSession implements IRealtimeSession {
         // During a move the update waits for the new connection and commits there, so it counts as committed.
         const waitsForConnection = this.moving;
         this.enqueueOrRun(() => {
-            this.responseActive = true;
-            this.markTurnOpen();
-            const live = this.requireLive();
-            if (this.meetingMode) {
-                // MEETING mode: the agent has been heard accumulating audio inside the open activity window
-                // (no auto-response). Commit the turn with `activityEnd` to elicit exactly ONE response — the
-                // bridge is the sole trigger. Any instructions ride as a realtime-text nudge first so the
-                // model has the "respond now" framing, then the window is closed (reopened on next audio).
-                if (instructions && instructions.trim().length > 0) {
-                    live.sendRealtimeInput({ text: instructions });
-                }
-                // If no activity window is open (no fresh room audio since the last commit — e.g. a back-to-back
-                // continuation right after this agent spoke), OPEN one first. Otherwise the `activityEnd` closes
-                // nothing, Gemini never forms a turn → no `turnComplete`, and the bridge's floor would wedge.
-                if (!this.manualActivityOpen) {
-                    live.sendRealtimeInput({ activityStart: {} });
-                }
-                live.sendRealtimeInput({ activityEnd: {} });
-                this.manualActivityOpen = false;
-                this.armMeetingResponseWatchdog();
-                committed = true;
-                RealtimeDiagLog('[GeminiRealtime][diag] meeting: activityEnd SENT — committed the turn, expecting ONE model response now');
-                return;
-            }
-            live.sendRealtimeInput({ text: instructions });
+            this.sendTurnTrigger(this.requireLive(), instructions);
+            committed = true;
         });
         // Meeting mode: report whether we actually committed a turn (so the bridge can release the floor if
         // not). Non-meeting (narration) always reports sent — it queues rather than wedges a floor.
         return this.meetingMode ? committed || waitsForConnection : true;
+    }
+
+    /**
+     * Sends text that starts a model turn, and marks the turn started: realtime text outside meeting mode, and in meeting
+     * mode the text followed by the `activityEnd` that commits the turn, since nothing else forms one there.
+     */
+    private sendTurnTrigger(live: GeminiLiveSession, text: string): void {
+        this.responseActive = true;
+        this.markTurnOpen();
+        if (!this.meetingMode) {
+            live.sendRealtimeInput({ text });
+            return;
+        }
+        // MEETING mode: the agent has been heard accumulating audio inside the open activity window
+        // (no auto-response). Commit the turn with `activityEnd` to elicit exactly ONE response — the
+        // bridge is the sole trigger. Any text rides as a realtime-text nudge first so the model has the
+        // "respond now" framing, then the window is closed (reopened on next audio).
+        if (text && text.trim().length > 0) {
+            live.sendRealtimeInput({ text });
+        }
+        // If no activity window is open (no fresh room audio since the last commit — e.g. a back-to-back
+        // continuation right after this agent spoke), OPEN one first. Otherwise the `activityEnd` closes
+        // nothing, Gemini never forms a turn → no `turnComplete`, and the bridge's floor would wedge.
+        if (!this.manualActivityOpen) {
+            live.sendRealtimeInput({ activityStart: {} });
+        }
+        live.sendRealtimeInput({ activityEnd: {} });
+        this.manualActivityOpen = false;
+        this.armMeetingResponseWatchdog();
+        RealtimeDiagLog('[GeminiRealtime][diag] meeting: activityEnd SENT — committed the turn, expecting ONE model response now');
     }
 
     /**
