@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CountCoveredChangedLines, InfrastructureError, VitestCatchTarget } from '../target/VitestCatchTarget';
@@ -18,8 +18,11 @@ const test = (id: string): CandidateTest => ({ ID: id, RunID: 'r', Package: '@me
   FilePath: `packages/MJCore/src/__tests__/jit/${id}.jit.test.ts`, Source: 'x', GenerationOutcome: 'Produced', FailureReason: null, Tokens: { Model: 'm', InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 }, TranscriptURL: null });
 const ID1 = '11111111-1111-1111-1111-111111111111';
 const JIT = 'packages/MJCore/src/__tests__/jit';
-/** A worktree root on disk with a real jit folder for packages/MJCore. */
-function jitRoot(): string { const r = mkdtempSync(join(tmpdir(), 'jit-root-')); mkdirSync(join(r, JIT), { recursive: true }); return r; }
+/** A worktree root on disk with a real jit folder and real node_modules folders for packages/MJCore. */
+function jitRoot(): string {
+  const r = mkdtempSync(join(tmpdir(), 'jit-root-')); mkdirSync(join(r, JIT), { recursive: true });
+  mkdirSync(join(r, 'packages/MJCore/node_modules')); mkdirSync(join(r, 'node_modules')); return r;
+}
 
 describe('VitestCatchTarget.Run', () => {
   it('runs each package once per repeat with the fixed seed and the custom reporter, in the sandbox, and maps results', async () => {
@@ -199,6 +202,13 @@ describe('VitestCatchTarget path safety', () => {
     const { target } = fakeTarget(() => ({ Stdout: '', ExitCode: 0 }));
     await target.WriteTests({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: root }, [test(ID1)]);
     expect(readFileSync(join(root, JIT, `${ID1}.jit.test.ts`), 'utf8')).toBe('x');
+  });
+  it('refuses to create a tmpfs mount point through a symlinked node_modules, and creates nothing outside the worktree', async () => {
+    const root = jitRoot(); const outside = mkdtempSync(join(tmpdir(), 'jit-outside-'));
+    rmSync(join(root, 'packages/MJCore/node_modules'), { recursive: true }); symlinkSync(outside, join(root, 'packages/MJCore/node_modules'));
+    const { target, calls } = fakeTarget(() => ({ Stdout: '', ExitCode: 0 }));
+    await expect(target.Run({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: root }, [test(ID1)], 1)).rejects.toThrow(/symlink/);
+    expect(calls).toHaveLength(0); expect(readdirSync(outside)).toEqual([]);
   });
   it('refuses to mount a symlinked jit folder read-write for a run, and starts no container', async () => {
     const root = mkdtempSync(join(tmpdir(), 'jit-root-')); const outside = mkdtempSync(join(tmpdir(), 'jit-outside-'));

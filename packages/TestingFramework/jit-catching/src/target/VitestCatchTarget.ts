@@ -224,7 +224,7 @@ export class VitestCatchTarget extends BaseCatchTarget {
             for (const d of packageDirs) mounts.push({ Host: SafeDir(revision.RootDir, `${d}/${JIT_SUBDIR}`, false), Container: `${CONTAINER_ROOT}/${d}/${JIT_SUBDIR}`, Mode: 'rw' });
             mounts.push({ Host: this.reporterDir(), Container: JIT_REPORTER_MOUNT, Mode: 'ro' });
         }
-        for (const t of tmpfs) ensureMountPoint(join(revision.RootDir, t.slice(CONTAINER_ROOT.length + 1)));
+        for (const t of tmpfs) ensureMountPoint(revision.RootDir, t.slice(CONTAINER_ROOT.length + 1));
         return this.sandbox.Run({ Mounts: mounts, Tmpfs: tmpfs, WorkDir: CONTAINER_ROOT, Command: command, TimeoutMs: timeoutMs, Env: { HOME: '/tmp', CI: '1', ...env } });
     }
     private reporterDir(): string { return (this.reporter ??= WriteJitReporter(mkdtempSync(join(tmpdir(), 'jit-reporter-')))); }
@@ -275,9 +275,15 @@ function viteTmpfs(dir: string): string[] {
     return [`${CONTAINER_ROOT}/${dir}/node_modules/.vite`, `${CONTAINER_ROOT}/${dir}/node_modules/.vite-temp`, `${CONTAINER_ROOT}/node_modules/.vite`];
 }
 
-/** Creates a tmpfs mount point on the host; Docker cannot create one inside a read-only mount. */
-function ensureMountPoint(path: string): void {
-    try { mkdirSync(path, { recursive: true }); } catch { /* a missing mount point surfaces as a sandbox error */ }
+/**
+ * Creates a tmpfs mount point on the host, since Docker cannot create one inside a read-only mount. Every part
+ * above the leaf (`packages/<dir>/node_modules`, `node_modules`) must already be a real folder, not a symlink;
+ * only the leaf is created.
+ */
+function ensureMountPoint(root: string, rel: string): void {
+    const parent = rel.split('/').slice(0, -1).join('/');
+    SafeDir(root, parent, false);
+    SafeDir(root, rel, true);
 }
 
 /** Exit code and the redacted tail of stderr (stdout when stderr is empty) of a sandbox run. */
