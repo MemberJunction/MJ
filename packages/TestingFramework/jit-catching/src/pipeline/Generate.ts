@@ -3,6 +3,7 @@ import { GitHub, type PullRequestInfo } from '../git/GitHub';
 import { GitRepo } from '../git/GitRepo';
 import { ChangeAnalyzer, type PullRequestText } from '../analyzer/ChangeAnalyzer';
 import { ClaudeAgentGenerator } from '../generator/ClaudeAgentGenerator';
+import { NoUsage, SessionError } from '../generator/UsageCounter';
 import { CreateLLM } from '../judges/ProviderFactory';
 import type { PackageMap } from '../analyzer/PackageMap';
 import type { BaseTestGenerator } from '../contracts/BaseTestGenerator';
@@ -19,7 +20,7 @@ import { PreflightEnv } from './Preflight';
 /** The tools that write into one run's folder, built once the run ID is known. */
 export interface GenerateTools {
     Target: Pick<PipelineTarget, 'Prepare' | 'BuildPackages'>;
-    Analyzer: Pick<ChangeAnalyzer, 'Analyze'>;
+    Analyzer: Pick<ChangeAnalyzer, 'Analyze' | 'Usage'>;
     Generator: Pick<BaseTestGenerator, 'Generate'>;
     PackageMap: Pick<PackageMap, 'Get' | 'PackageForPath'>;
     /** Builds the sandbox image; called once before the first Prepare. */
@@ -39,7 +40,7 @@ export interface GenerateOptions { PR: number | null; BaseSHA?: string; HeadSHA?
 
 /**
  * Job 1: checks the environment, resolves the revisions, prepares and builds base, analyses the change, runs one generation session per
- * (package, method[, risk]) and writes `generation.json`. The base worktree stays for the execute and assess jobs.
+ * (package, method[, risk]) and writes `generation.json` with the analyzer's and the sessions' tokens per model. The base worktree stays for the execute and assess jobs.
  */
 export async function GenerateStep(o: GenerateOptions): Promise<{ RunID: string }> {
     PreflightEnv(o.Settings, o.Env ?? process.env, 'Generate');
@@ -58,7 +59,7 @@ export async function GenerateStep(o: GenerateOptions): Promise<{ RunID: string 
     const requests = buildRequests(run, analysis, base.RootDir, o.Settings, t.PackageMap);
     const results = await RunWithConcurrency(requests, o.Settings.Limits.ParallelSessions, (r) => generateOrFail(t, r));
     const tests = results.flatMap((r) => r.Tests);
-    run.TokensByModel = SumTokens(results.map((r) => r.Tokens)); run.EndedAt = new Date().toISOString();
+    run.TokensByModel = SumTokens([t.Analyzer.Usage, ...results.map((r) => r.Tokens)]); run.EndedAt = new Date().toISOString();
     dir.WriteGeneration({ Run: run, Analysis: analysis, Tests: tests, BaseRootDir: base.RootDir });
     const produced = tests.filter((x) => x.GenerationOutcome === 'Produced').length;
     process.stdout.write(`run ${run.ID}: ${produced} produced, ${tests.length - produced} failed, ${requests.length} sessions\n`);
@@ -96,7 +97,7 @@ function buildRequests(run: Run, analysis: ChangeAnalysis, baseRoot: string, set
 
 /**
  * Runs one generation session. A session that throws becomes one failed test for its request, with the redacted
- * first line of the error as reason and zero tokens, so the other sessions still finish.
+ * first line of the error as reason and the tokens a `SessionError` carries (zero otherwise), so the other sessions still finish.
  */
 async function generateOrFail(t: GenerateTools, r: GenerationRequest): Promise<GenerationResult> {
     try { return await t.Generator.Generate(r); }
@@ -104,7 +105,7 @@ async function generateOrFail(t: GenerateTools, r: GenerationRequest): Promise<G
         const message = (e instanceof Error ? e.message : String(e)).split('\n')[0].trim();
         const dir = t.PackageMap.Get(r.Package)?.Dir; const id = NewID();
         if (!dir) throw e;
-        const tokens: TokenUsage = { Model: r.Model, InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 };
+        const tokens: TokenUsage = e instanceof SessionError ? e.Usage : NoUsage(r.Model);
         return { Tokens: tokens, TranscriptPath: null, Tests: [{ ID: id, RunID: r.Run.ID, Package: r.Package, Method: r.Method, RiskID: r.Risk?.ID ?? null,
             RiskText: r.Risk ? `${r.Risk.WhatCouldBreak} (${r.Risk.Symbol})` : null, Mutant: null, MutantFailure: null, FilePath: `${dir}/src/__tests__/jit/${id}.jit.test.ts`,
             Source: '', GenerationOutcome: 'Failed', FailureReason: `generation session failed: ${RedactTail(message)}`, Tokens: tokens, TranscriptURL: null }] };

@@ -30,4 +30,12 @@ describe('JudgePanel', () => {
     const r = await new JudgePanel([new BucketJudge(new TestLLM(), 'claude-opus-5-5')]).Judge(c);
     expect(r.Buckets[0]).toMatchObject({ Model: 'claude-opus-5-5', Bucket: 'Medium' });
   });
+  it('collects the token usage every judge reported, priced per model', async () => {
+    const price = { Input: 1, Output: 4, CachedInput: 0.5 };
+    const r = await new JudgePanel([new BucketJudge(new TestLLM().Script({ kind: 'succeed', content: '{"bucket":"High","reason":"x"}' }), 'b-model', price),
+      new TpProbJudge(new TestLLM().Script({ kind: 'succeed', content: 'Yes' }), 'tp-model', null)]).Judge(ctx());
+    expect(r.Usage).toEqual([
+      { Model: 'b-model', InputTokens: 10, OutputTokens: 5, CacheReadTokens: 0, CostUSD: (10 * 1 + 5 * 4) / 1_000_000 },
+      { Model: 'tp-model', InputTokens: 10, OutputTokens: 5, CacheReadTokens: 0, CostUSD: 0 }]);
+  });
 });

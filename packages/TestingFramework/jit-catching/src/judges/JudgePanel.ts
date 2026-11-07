@@ -3,13 +3,13 @@ import { UNTRUSTED_OPEN, UNTRUSTED_CLOSE } from '../analyzer/ChangeAnalyzer';
 import { JUDGE_ERROR_PREFIX } from './SafeChat';
 import { NeutraliseMarkers } from '../sandbox/Redaction';
 import type { BaseCatchJudge } from '../contracts/BaseCatchJudge';
-import type { Bucket, CatchContext, JudgeBucket, JudgeScore } from '../types';
+import type { Bucket, CatchContext, JudgeBucket, JudgeScore, TokenUsage } from '../types';
 
 /** Score of each bucket: High 1, Medium 0, Low −1. */
 export const BUCKET_SCORE: Record<Bucket, number> = { High: 1, Medium: 0, Low: -1 };
 
-/** The panel's result for one weak catch. */
-export interface PanelResult { TPProb: number | null; Buckets: JudgeBucket[]; Median: Bucket | null; }
+/** The panel's result for one weak catch. `Usage` lists the token usage each judge reported, in judge order. */
+export interface PanelResult { TPProb: number | null; Buckets: JudgeBucket[]; Median: Bucket | null; Usage: TokenUsage[]; }
 
 /**
  * §9.2 judge input for one weak catch. PR title, summary, test source and head failure go in one untrusted block;
@@ -66,6 +66,7 @@ export class JudgePanel {
         const tp = scores.find((s) => s.Judge === 'TpProb' && !s.Reason.startsWith(JUDGE_ERROR_PREFIX));
         const buckets: JudgeBucket[] = scores.flatMap((s) => (s.Bucket === null ? [] : [{ Model: s.Model, Bucket: s.Bucket, Reason: s.Reason }]));
         const median = buckets.length ? GetConsensus(buckets.map((b) => BUCKET_SCORE[b.Bucket]), 'Median').Overall : null;
-        return { TPProb: tp?.Score ?? null, Buckets: buckets, Median: median === null ? null : toBucket(median) };
+        const usage = scores.flatMap((s) => (s.Usage ? [s.Usage] : []));
+        return { TPProb: tp?.Score ?? null, Buckets: buckets, Median: median === null ? null : toBucket(median), Usage: usage };
     }
 }

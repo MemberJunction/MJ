@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ClaudeAgentGenerator, SdkRunner, type AgentMessage } from '../generator/ClaudeAgentGenerator';
 import { DEFAULT_SETTINGS } from '../settings';
+import { SessionError } from '../generator/UsageCounter';
 import type { GenerationRequest } from '../types';
 
 /** SDK messages the mocked `query` yields, and what it does after them. */
@@ -184,6 +185,13 @@ describe('SdkRunner', () => {
     expect((await can('Read', { file_path: join(root, 'a.ts') }, o)).behavior).toBe('allow');
     expect((await can('Read', { file_path: '/etc/passwd' }, o)).behavior).toBe('deny');
     expect((await can('Bash', { command: 'ls' }, o)).behavior).toBe('deny');
+  });
+  it('a session that throws before its result message throws a SessionError with the host usage so far', async () => {
+    env(); sdk.after = 'throw'; sdk.messages = [init('ANTHROPIC_API_KEY'), assistant('m1', 40), assistant('m2', 60)];
+    const err = await collect(SdkRunner('p', 's', runOptions())).then(() => null, (e: Error) => e);
+    expect(err).toBeInstanceOf(SessionError);
+    expect((err as SessionError).Usage).toEqual({ Model: 'claude-haiku-5-5', InputTokens: 100, OutputTokens: 2, CacheReadTokens: 0, CostUSD: (100 * 1 + 2 * 5) / 1_000_000 });
+    expect(err?.message).toMatch(/exited with code 1/);
   });
   it('keeps the result message when the SDK throws after error_max_turns', async () => {
     env(); sdk.after = 'throw';

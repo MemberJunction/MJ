@@ -41,6 +41,7 @@ export const DEFAULT_SETTINGS: Settings = {
     Prices: {
         'claude-opus-5-5': { Input: 4, Output: 20, CachedInput: 0.2 }, 'claude-sonnet-5-5': { Input: 2, Output: 10, CachedInput: 0.2 },
         'claude-haiku-5-5': { Input: 0.1, Output: 0.5, CachedInput: 0.1 }, 'gemini-4-argon': { Input: 2, Output: 10, CachedInput: 0.1 },
+        'gpt-4.1-mini': { Input: 0.4, Output: 1.6, CachedInput: 0.1 }, 'gpt-5.1': { Input: 1.25, Output: 10, CachedInput: 0.125 },
     },
     Sandbox: { Image: 'jit-sandbox:local', MemoryGB: 6, Cpus: 3, PidsLimit: 1024, PnpmVersion: '10.33.0' },
     RiskPaths: [

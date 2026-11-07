@@ -32,7 +32,8 @@ describe('AssessStep', () => {
   });
 
   it('judges surviving weak catches, ranks them, offers promotions and saves the run', async () => {
-    const judge = vi.fn(async (_c: CatchContext): Promise<PanelResult> => ({ TPProb: 0.8, Buckets: [{ Model: 'm', Bucket: 'High', Reason: 'real regression' }], Median: 'High' }));
+    const judge = vi.fn(async (_c: CatchContext): Promise<PanelResult> => ({ TPProb: 0.8, Buckets: [{ Model: 'm', Bucket: 'High', Reason: 'real regression' }], Median: 'High',
+      Usage: [{ Model: 'judge-model', InputTokens: 11, OutputTokens: 2, CacheReadTokens: 0, CostUSD: 0.125 }] }));
     const store = new FileCatchStore(storeDir, redaction);
     const out = await AssessStep({ RunID: RUN_ID, RepoRoot: root, Settings: DEFAULT_SETTINGS, StoreDir: storeDir, Env: FULL_ENV,
       Deps: { JudgePanel: { Judge: judge }, Rules: new RuleFilter(AllRules()), Store: store, Redaction: redaction } });
@@ -45,6 +46,7 @@ describe('AssessStep', () => {
     expect(judge.mock.calls[0][0].Test.ID).toBe(ID_A);
     expect(out.Promotions).toEqual([{ CandidateTestID: ID_B, RunID: RUN_ID, NewlyCoveredLines: 4, State: 'Offered' }]);
     expect(await store.GetRun(RUN_ID)).toMatchObject({ Status: 'Assessed' });
+    expect((await store.GetRun(RUN_ID))?.TokensByModel).toContainEqual({ Model: 'judge-model', InputTokens: 11, OutputTokens: 2, CacheReadTokens: 0, CostUSD: 0.125 });
     expect((await store.ListCatches(RUN_ID)).map((x) => x.CandidateTestID).sort()).toEqual([ID_A, ID_B, ID_C].sort());
   });
 
@@ -52,7 +54,7 @@ describe('AssessStep', () => {
     const outside = mkdtempSync(join(tmpdir(), 'jit-outside-'));
     const dir = new RunDir(root, RUN_ID, redaction);
     dir.WriteGeneration(generation(outside, [candidate(ID_A, SOURCE_A)]));
-    const judge = vi.fn(async (_c: CatchContext): Promise<PanelResult> => ({ TPProb: null, Buckets: [], Median: null }));
+    const judge = vi.fn(async (_c: CatchContext): Promise<PanelResult> => ({ TPProb: null, Buckets: [], Median: null, Usage: [] }));
     const store = new FileCatchStore(storeDir, redaction);
     await expect(AssessStep({ RunID: RUN_ID, RepoRoot: root, Settings: DEFAULT_SETTINGS, StoreDir: storeDir, Env: FULL_ENV,
       Deps: { JudgePanel: { Judge: judge }, Rules: new RuleFilter(AllRules()), Store: store, Redaction: redaction } })).rejects.toThrow(/base worktree/);
@@ -61,7 +63,7 @@ describe('AssessStep', () => {
   });
 
   it('refuses before judging or saving when a judge vendor key is missing', async () => {
-    const judge = vi.fn(async (_c: CatchContext): Promise<PanelResult> => ({ TPProb: null, Buckets: [], Median: null }));
+    const judge = vi.fn(async (_c: CatchContext): Promise<PanelResult> => ({ TPProb: null, Buckets: [], Median: null, Usage: [] }));
     const store = new FileCatchStore(storeDir, redaction);
     await expect(AssessStep({ RunID: RUN_ID, RepoRoot: root, Settings: DEFAULT_SETTINGS, StoreDir: storeDir, Env: { ...FULL_ENV, GEMINI_API_KEY: undefined },
       Deps: { JudgePanel: { Judge: judge }, Rules: new RuleFilter(AllRules()), Store: store, Redaction: redaction } })).rejects.toThrow(/GEMINI_API_KEY/);

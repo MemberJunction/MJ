@@ -28,4 +28,9 @@ describe('LoadSettings', () => {
     const err = (() => { try { LoadSettings(p); return null; } catch (e) { return e as Error; } })();
     expect(err?.message).toBe(`settings file is not valid JSON: ${p}`);
   });
+  it('has a price for every model the default settings call', () => {
+    const s = DEFAULT_SETTINGS;
+    const models = [s.GeneratorModel, s.AnalyzerModel, s.Judges.TpProbModel, ...s.Judges.BucketModels.map((b) => b.Model)];
+    expect(models.filter((m) => !s.Prices[m])).toEqual([]);
+  });
 });

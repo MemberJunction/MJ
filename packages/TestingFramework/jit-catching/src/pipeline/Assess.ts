@@ -13,10 +13,11 @@ import type { BaseCatchStore } from '../contracts/BaseCatchStore';
 import type { RedactionCheck } from '../sandbox/Redaction';
 import type { Settings } from '../settings';
 import type { ExecutionFile, GenerationFile } from '../schemas';
-import type { CandidateTest, Catch, CatchContext, PromotionCandidate } from '../types';
+import type { CandidateTest, Catch, CatchContext, PromotionCandidate, TokenUsage } from '../types';
 import { CheckedBaseRootDir, RunDir } from './RunDir';
 import { DefaultRedaction } from './Deps';
 import { PreflightEnv } from './Preflight';
+import { SumTokens } from './Generate';
 
 export interface AssessDeps {
     JudgePanel: Pick<JudgePanel, 'Judge'>;
@@ -32,7 +33,8 @@ const MAX_PROMOTIONS = 3;
 /**
  * Job 3: checks the environment, reads `generation.json` and `execution.json`, gives every executed test a verdict, filters weak catches with
  * the rules (which read the base worktree) and judges the survivors, ranks and selects with the Label threshold,
- * offers up to three promotion candidates, saves everything to the store and writes `assessment.json`.
+ * offers up to three promotion candidates, saves everything to the store (the run with the judges' tokens added to
+ * its tokens per model) and writes `assessment.json`.
  */
 export async function AssessStep(o: AssessOptions): Promise<{ Catches: Catch[]; Promotions: PromotionCandidate[] }> {
     PreflightEnv(o.Settings, o.Env ?? process.env, 'Assess');
@@ -42,18 +44,21 @@ export async function AssessStep(o: AssessOptions): Promise<{ Catches: Catch[]; 
     if (exec.RunID !== gen.Run.ID) throw new Error(`execution.json is for run ${exec.RunID}, not ${gen.Run.ID}`);
     CheckedBaseRootDir(dir, gen.BaseRootDir);
     const d = o.Deps ?? defaultDeps(o, redaction);
-    const assessed: Catch[] = [];
-    for (const t of exec.Tests) assessed.push(await assessTest(gen, exec, t, d));
+    const assessed: Catch[] = []; const judgeUsage: TokenUsage[] = [];
+    for (const t of exec.Tests) assessed.push(await assessTest(gen, exec, t, d, judgeUsage));
     const catches = SelectReported(RankCatches(assessed), o.Settings.Thresholds.Label, 'Label');
     const promotions = promotionsOf(gen, exec, catches);
-    await save(d.Store, gen, exec, catches, promotions);
+    await save(d.Store, gen, exec, catches, promotions, judgeUsage);
     dir.WriteAssessment({ RunID: gen.Run.ID, Catches: catches, Promotions: promotions });
     process.stdout.write(Summary(gen, exec, catches, promotions));
     return { Catches: catches, Promotions: promotions };
 }
 
-/** Verdict for one test; for a weak catch also the rule outcome and, when no drop rule fired, the panel's scores. */
-async function assessTest(gen: GenerationFile, exec: ExecutionFile, t: CandidateTest, d: AssessDeps): Promise<Catch> {
+/**
+ * Verdict for one test; for a weak catch also the rule outcome and, when no drop rule fired, the panel's scores.
+ * The panel's token usage is appended to `judgeUsage`.
+ */
+async function assessTest(gen: GenerationFile, exec: ExecutionFile, t: CandidateTest, d: AssessDeps, judgeUsage: TokenUsage[]): Promise<Catch> {
     const mine = exec.Results.filter((r) => UUIDsEqual(r.CandidateTestID, t.ID)).sort((a, b) => a.RunIndex - b.RunIndex);
     const baseRuns = mine.filter((r) => r.Revision === 'Base'); const headRuns = mine.filter((r) => r.Revision === 'Head');
     const verdict = new AllRunsAgreeVerdict(exec.TypeErrors[t.ID] ?? { Base: null, Head: null }).Classify(baseRuns, headRuns);
@@ -64,6 +69,7 @@ async function assessTest(gen: GenerationFile, exec: ExecutionFile, t: Candidate
     ctx.Boosts = filter.Boosts;
     if (filter.DroppedBy !== null) return { ...c, DroppedByRule: filter.DroppedBy, Boosts: filter.Boosts };
     const panel: PanelResult = await d.JudgePanel.Judge(ctx);
+    judgeUsage.push(...panel.Usage);
     return { ...c, Boosts: filter.Boosts, TPProb: panel.TPProb, JudgeBuckets: panel.Buckets, Median: panel.Median };
 }
 
@@ -75,8 +81,8 @@ function promotionsOf(gen: GenerationFile, exec: ExecutionFile, catches: Catch[]
         .map((c) => ({ CandidateTestID: c.CandidateTestID, RunID: gen.Run.ID, NewlyCoveredLines: c.CoveredChangedLines, State: 'Offered' }));
 }
 
-async function save(store: BaseCatchStore, gen: GenerationFile, exec: ExecutionFile, catches: Catch[], promotions: PromotionCandidate[]): Promise<void> {
-    await store.SaveRun({ ...gen.Run, Status: 'Assessed', EndedAt: new Date().toISOString() });
+async function save(store: BaseCatchStore, gen: GenerationFile, exec: ExecutionFile, catches: Catch[], promotions: PromotionCandidate[], judgeUsage: TokenUsage[]): Promise<void> {
+    await store.SaveRun({ ...gen.Run, Status: 'Assessed', EndedAt: new Date().toISOString(), TokensByModel: SumTokens([...gen.Run.TokensByModel, ...judgeUsage]) });
     await store.SaveCandidateTests(gen.Tests);
     await store.SaveExecutionResults(exec.Results);
     await store.SaveCatches(catches);
@@ -103,8 +109,8 @@ export function Summary(gen: GenerationFile, exec: ExecutionFile, catches: Catch
 function defaultDeps(o: AssessOptions, redaction: RedactionCheck): AssessDeps {
     let panel: JudgePanel | null = null;
     const build = (): JudgePanel => new JudgePanel([
-        new TpProbJudge(CreateLLM('OpenAI'), o.Settings.Judges.TpProbModel),
-        ...o.Settings.Judges.BucketModels.map((b) => new BucketJudge(CreateLLM(b.Vendor), b.Model)),
+        new TpProbJudge(CreateLLM('OpenAI'), o.Settings.Judges.TpProbModel, o.Settings.Prices[o.Settings.Judges.TpProbModel] ?? null),
+        ...o.Settings.Judges.BucketModels.map((b) => new BucketJudge(CreateLLM(b.Vendor), b.Model, o.Settings.Prices[b.Model] ?? null)),
     ]);
     return { JudgePanel: { Judge: (c) => (panel ??= build()).Judge(c) }, Rules: new RuleFilter(AllRules()), Store: new FileCatchStore(o.StoreDir, redaction), Redaction: redaction };
 }

@@ -1,13 +1,14 @@
 import { z } from 'zod';
 import type { BaseLLM } from '@memberjunction/ai';
 import { GetTextFromContent } from '@memberjunction/ai';
-import type { ChangeAnalysis, ChangedFile, IntentType, Risk, Run } from '../types';
+import type { ChangeAnalysis, ChangedFile, IntentType, Risk, Run, TokenUsage } from '../types';
 import type { GitRepo } from '../git/GitRepo';
 import type { PackageMap, WorkspacePackage } from './PackageMap';
 import { ParseUnifiedDiff, AddedLinesByFile } from '../git/DiffParser';
 import { ComputeRiskScore } from './RiskScore';
 import type { Settings } from '../settings';
 import { NeutraliseMarkers } from '../sandbox/Redaction';
+import { AddUsage, NoUsage, UsageFromChat } from '../generator/UsageCounter';
 
 export const UNTRUSTED_OPEN = '<<<untrusted-pr-text>>>';
 export const UNTRUSTED_CLOSE = '<<<end-untrusted-pr-text>>>';
@@ -30,9 +31,12 @@ export interface PullRequestText { Title: string; Body: string; }
 
 /** §8.1: changed packages, files and lines from git; intent, summary and risks from one LLM call. */
 export class ChangeAnalyzer {
-    constructor(private readonly o: ChangeAnalyzerOptions) {}
+    /** Tokens and priced cost of the LLM calls of the latest `Analyze`, retries included. */
+    public Usage: TokenUsage;
+    constructor(private readonly o: ChangeAnalyzerOptions) { this.Usage = NoUsage(o.Model); }
 
     public async Analyze(run: Run, pr: PullRequestText): Promise<ChangeAnalysis> {
+        this.Usage = NoUsage(this.o.Model);
         const paths = (await this.o.Repo.ChangedPaths(run.BaseSHA, run.HeadSHA)).filter((p) => SOURCE_RE.test(p) && !TEST_RE.test(p) && p.startsWith('packages/'));
         const diff = await this.o.Repo.Diff(run.BaseSHA, run.HeadSHA, paths);
         const hunks = ParseUnifiedDiff(diff);
@@ -77,6 +81,7 @@ A risk names a file and symbol the diff touches, what could break for a caller, 
         const user = `Conventional Commit prefix: ${prefix ?? 'none'}\n${UNTRUSTED_OPEN}\nTitle: ${NeutraliseMarkers(pr.Title)}\nBody:\n${NeutraliseMarkers(pr.Body).slice(0, 6000)}\n${UNTRUSTED_CLOSE}\n\nDiff (TypeScript source only):\n${UNTRUSTED_DIFF_OPEN}\n${NeutraliseMarkers(diff).slice(0, 120_000)}\n${UNTRUSTED_DIFF_CLOSE}`;
         for (let attempt = 0; attempt < 2; attempt++) {
             const r = await this.o.LLM.ChatCompletion({ model: this.o.Model, messages: [{ role: 'system', content: system }, { role: 'user', content: user }], temperature: 0, maxOutputTokens: 2000 });
+            this.Usage = AddUsage(this.Usage, UsageFromChat(this.o.Model, r.data?.usage, this.o.Settings.Prices[this.o.Model] ?? null));
             const text = r.success ? GetTextFromContent(r.data.choices[0]?.message.content ?? '') : '';
             const parsed = AnswerSchema.safeParse(tryJson(text));
             if (parsed.success) return parsed.data;

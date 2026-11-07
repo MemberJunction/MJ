@@ -74,7 +74,8 @@ export interface CatchContext {
     Ast?: TestAst;
 }
 export interface RuleOutcome { Fired: boolean; Reason: string; }
-export interface JudgeScore { Judge: string; Model: string; Score: number; Bucket: Bucket | null; Reason: string; }
+/** `Usage` is the tokens and priced cost of the judge's provider calls, when any call returned. */
+export interface JudgeScore { Judge: string; Model: string; Score: number; Bucket: Bucket | null; Reason: string; Usage?: TokenUsage; }
 
 export interface GenerationLimits {
     TestsPerPackage: number; RisksPerPackage: number; TestsPerRisk: number; PackagesPerPR: number; ParallelSessions: number;
