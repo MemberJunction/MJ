@@ -760,6 +760,10 @@ describe('removeNPrefix', () => {
     expect(RemoveNPrefix("SET x = N'BD-3N'")).toBe("SET x = 'BD-3N'");
   });
 
+  it("leaves an N directly after a string literal alone ('a'N'b')", () => {
+    expect(RemoveNPrefix("SET x = 'a'N'b'")).toBe("SET x = 'a'N'b'");
+  });
+
   it("leaves N' inside a comment alone", () => {
     expect(RemoveNPrefix("-- see N'x'\nSET y = N'z'")).toBe("-- see N'x'\nSET y = 'z'");
   });

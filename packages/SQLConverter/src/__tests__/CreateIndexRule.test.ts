@@ -192,6 +192,11 @@ describe('CreateIndexRule — index names and ASC/DESC columns (issue #5567)', (
       .toBe('CREATE INDEX "IX_Foo_Name" ON dbo."Foo" ("Name" ASC, "__mj_CreatedAt" DESC, "Code" DESC);');
   });
 
+  it('quotes an all-lower-case __mj_ column by its prefix', () => {
+    expect(convert('CREATE INDEX IX_t ON [dbo].[t] (__mj_createdat DESC)').trim())
+      .toBe('CREATE INDEX "IX_t" ON dbo."t" ("__mj_createdat" DESC);');
+  });
+
   it('leaves lower-case columns and an already quoted name alone', () => {
     expect(convert('CREATE UNIQUE INDEX [UX_a] ON [dbo].[t] (id DESC, code)').trim())
       .toBe('CREATE UNIQUE INDEX "UX_a" ON dbo."t" (id DESC, code);');

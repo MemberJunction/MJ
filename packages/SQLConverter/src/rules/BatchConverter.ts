@@ -127,6 +127,8 @@ export function ConvertFile(config: BatchConverterConfig): BatchConverterResult 
   // Convert each batch
   log('Converting batches...');
   let lastPct = -1;
+  // Tables an earlier batch deletes rows from, for keeping a later unique index after the delete.
+  const deletedFrom = new Set<string>();
 
   for (let i = 0; i < batches.length; i++) {
     const pct = Math.floor(((i + 1) * 100) / stats.TotalBatches);
@@ -141,7 +143,12 @@ export function ConvertFile(config: BatchConverterConfig): BatchConverterResult 
     try {
       const result = convertBatch(batch, batchType, sortedRules, context, stats);
       if (result !== null) {
-        routeToGroup(result, batchType, groups, batch);
+        if (createsUniqueIndexOnDeletedTable(result, deletedFrom)) {
+          groups.Data.push(result);
+        } else {
+          routeToGroup(result, batchType, groups, batch);
+        }
+        for (const table of deletedTables(result)) deletedFrom.add(table);
         stats.Converted++;
       }
     } catch (err) {
@@ -482,6 +489,31 @@ function routeToGroup(result: string, batchType: StatementType, groups: OutputGr
   } else {
     groups.Other.push(result);
   }
+}
+
+/** `schema.table` → `table`, unquoted and lower-cased, for comparing table references. */
+function tableKey(ref: string): string {
+  return (ref.split('.').pop() ?? ref).replace(/["[\]]/g, '').toLowerCase();
+}
+
+/** The tables a converted batch deletes rows from (`DELETE FROM t …`), as {@link tableKey}s. */
+function deletedTables(sql: string): string[] {
+  return [...StripComments(sql).matchAll(/\bDELETE\s+FROM\s+([^\s(;]+)/gi)].map(m => tableKey(m[1]));
+}
+
+/**
+ * True when a converted batch creates a unique index on a table an earlier batch deleted rows
+ * from. The output puts DDL before data, which would build the index before the delete that
+ * removes the duplicates it forbids (the ListDetail clean-up of v5.48), and the index fails. Such
+ * an index goes with the data instead, so it keeps its source order after the delete.
+ */
+function createsUniqueIndexOnDeletedTable(sql: string, deletedFrom: Set<string>): boolean {
+  if (deletedFrom.size === 0) return false;
+  const code = StripComments(sql);
+  for (const m of code.matchAll(/\bCREATE\s+UNIQUE\s+(?:\w+\s+)?INDEX\b[^;]*?\bON\s+([^\s(;]+)\s*\(/gi)) {
+    if (deletedFrom.has(tableKey(m[1]))) return true;
+  }
+  return false;
 }
 
 /** True when a conditional batch's statements are data changes or data assertions, with no DDL. */

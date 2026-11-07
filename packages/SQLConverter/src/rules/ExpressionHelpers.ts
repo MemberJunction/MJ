@@ -433,7 +433,10 @@ function buildDateDiffExpr(e: string, s: string, extractExpr: string, useTimesta
 
 /**
  * DATEDIFF(day, s, e): T-SQL counts the midnight boundaries crossed, which is what PostgreSQL's
- * `date - date` gives, as an integer and with no time zone. The old
+ * `date - date` gives, as an integer. DATE and TIMESTAMP operands involve no time zone. A
+ * TIMESTAMPTZ operand (most MJ date columns) is cast to a date in the session's time zone, so the
+ * count depends on it: `2026-11-01 23:00Z` to `2026-11-02 01:00Z` gives 1 in a UTC session and 0
+ * in Asia/Tokyo; it matches T-SQL on UTC values only when the session is in UTC. The old
  * `EXTRACT(DAY FROM (e::TIMESTAMPTZ - s::TIMESTAMPTZ))` lost a day across a daylight-saving change
  * in the session's zone and truncated part days (23:00 → 01:00 gave 0, T-SQL gives 1), issue #5920.
  * TIME expressions have no date part and keep the interval form.

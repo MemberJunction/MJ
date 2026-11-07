@@ -1280,6 +1280,8 @@ def _transpile_drop_index(txt: str) -> str | None:
 # (issue #5919). PostgreSQL has these functions (CodeGen's support objects or the core
 # migrations), but with positional, differently named parameters, and the forms the core
 # migrations install take only an EXCLUDED-schemas list.
+# Of these, only spUpdateExistingEntityFieldsFromSchema and spDeleteUnneededEntityFields take an
+# entity-ID list, as their second parameter in every installed form (`p_entityids`).
 _CORE_REFRESH_PROCS = {
     "spupdateexistingentitiesfromschema": "spUpdateExistingEntitiesFromSchema",
     "spupdateexistingentityfieldsfromschema": "spUpdateExistingEntityFieldsFromSchema",
@@ -1287,6 +1289,7 @@ _CORE_REFRESH_PROCS = {
     "spupdateschemainfofromdatabase": "spUpdateSchemaInfoFromDatabase",
     "spdeleteunneededentityfields": "spDeleteUnneededEntityFields",
 }
+_CORE_REFRESH_PROCS_WITH_ENTITY_IDS = {"spUpdateExistingEntityFieldsFromSchema", "spDeleteUnneededEntityFields"}
 _CORE_EXEC = _re.compile(
     r"^\s*EXEC(?:UTE)?\s+(?P<schema>\[[^\]]+\]|\"[^\"]+\"|\$\{[\w:]+\}|" + _re.escape(FLYWAY_SENTINEL) + r"|\w+)\s*\.\s*"
     r"(?P<proc>\[[^\]]+\]|\"[^\"]+\"|\w+)(?P<args>(?:\s+[\s\S]*?)?)\s*;?\s*$",
@@ -1327,12 +1330,14 @@ def _transpile_core_refresh_exec(txt: str) -> str | None:
     """`EXEC <core>.spUpdateExistingEntitiesFromSchema @ExcludedSchemaNames='…'[, @IncludedSchemaNames='…'][, @EntityIDs='…']`
     (and the other refresh procs in _CORE_REFRESH_PROCS) → a PG call (issue #5919).
 
-    The PG functions are called with one positional argument, the excluded-schemas list, because
-    that is the only parameter every installed form has. `@IncludedSchemaNames` has no PG
-    counterpart there, so the call runs in a DO block that excludes, at apply time, every schema
-    not named in the included list (decision pg.2). `@EntityIDs` only narrows the refresh within
-    those schemas and is not passed. Returns None when this is not such a call or an argument is
-    not understood; the caller then reports it.
+    The PG functions are called positionally: first the excluded-schemas list, the one parameter
+    every installed form has, then `@EntityIDs` for the two procs that take it. Dropping
+    `@EntityIDs` would widen the call from the named entities to every entity in the schemas,
+    which for spDeleteUnneededEntityFields deletes more than the source asked. `@IncludedSchemaNames`
+    has no PG counterpart in the installed forms, so the call runs in a DO block that excludes, at
+    apply time, every schema not named in the included list (decision pg.2). Returns None when this
+    is not such a call, an argument is not understood, or `@EntityIDs` is given to a proc that has
+    no such parameter; the caller then reports it.
     """
     m = _CORE_EXEC.match(_strip_leading_sql_comments(txt))
     if not m:
@@ -1356,9 +1361,14 @@ def _transpile_core_refresh_exec(txt: str) -> str | None:
     target = f'{_core_schema_ref(m.group("schema"))}."{proc}"'
     excluded = named.get("excludedschemanames")
     included = named.get("includedschemanames")
+    extra = ""
+    if named.get("entityids") is not None:
+        if proc not in _CORE_REFRESH_PROCS_WITH_ENTITY_IDS:
+            return None
+        extra = ", " + _pg_string(named["entityids"])
     if not included:
         arg = "NULL" if excluded is None else _pg_string(excluded)
-        return f"SELECT {target}({arg})"
+        return f"SELECT {target}({arg}{extra})"
     given = "''" if excluded is None else _pg_string(excluded)
     return (
         "DO $mj_refresh$\n"
@@ -1370,7 +1380,7 @@ def _transpile_core_refresh_exec(txt: str) -> str | None:
         "    INTO v_excluded\n"
         "    FROM pg_namespace\n"
         "   WHERE lower(nspname) <> ALL (string_to_array(lower(replace(" + _pg_string(included) + ", ' ', '')), ','));\n"
-        f"  PERFORM {target}(v_excluded);\n"
+        f"  PERFORM {target}(v_excluded{extra});\n"
         "END $mj_refresh$"
     )
 

@@ -230,6 +230,8 @@ GO
     expect(out).toContain('DROP INDEX IF EXISTS __mj."IX_ListDetail_ListID";');
     expect(out).toContain('CREATE UNIQUE INDEX IF NOT EXISTS "UQ_ListDetail_ListID_RecordID" ON __mj."ListDetail" ("ListID", "RecordID");');
     expect(out).not.toMatch(/sys\.indexes|SKIPPED/);
+    // The unique index is built after the delete that removes the duplicates it forbids.
+    expect(out.indexOf('CREATE UNIQUE INDEX')).toBeGreaterThan(out.indexOf('DELETE FROM __mj."ListDetail"'));
     expect(result.Stats.Gaps).toBe(0);
   });
 });

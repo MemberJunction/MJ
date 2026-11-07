@@ -1206,10 +1206,16 @@ for _proc in ("spUpdateExistingEntitiesFromSchema", "spUpdateExistingEntityField
                         "string_to_array(lower(replace('${flyway:defaultSchema}', ' ', '')), ',')",
                         f'PERFORM ${{mjSchema}}."{_proc}"(v_excluded);'],
           must_not_contain=["EXEC", "@IncludedSchemaNames"])
-check("core refresh EXEC drops @EntityIDs (narrows within the schemas only)",
-      "EXEC [${mjSchema}].[spDeleteUnneededEntityFields] @ExcludedSchemaNames='sys', @EntityIDs='a,b';",
-      must_contain=['SELECT ${mjSchema}."spDeleteUnneededEntityFields"(\'sys\')'],
-      must_not_contain=["a,b"])
+for _proc in ("spUpdateExistingEntityFieldsFromSchema", "spDeleteUnneededEntityFields"):
+    check(f"core refresh EXEC passes @EntityIDs to {_proc} as its second argument",
+          f"EXEC [${{mjSchema}}].[{_proc}] @ExcludedSchemaNames='sys', @EntityIDs='a,b';",
+          must_contain=[f'SELECT ${{mjSchema}}."{_proc}"(\'sys\', \'a,b\')'])
+check("core refresh EXEC with @EntityIDs and @IncludedSchemaNames passes both through the DO block",
+      "EXEC [${mjSchema}].[spDeleteUnneededEntityFields] @ExcludedSchemaNames='sys', @IncludedSchemaNames='app', @EntityIDs='a,b';",
+      must_contain=["DO $mj_refresh$", 'PERFORM ${mjSchema}."spDeleteUnneededEntityFields"(v_excluded, \'a,b\');'])
+check("core refresh EXEC with @EntityIDs on a proc that has no such parameter stays a reported gap",
+      "EXEC [${mjSchema}].[spUpdateExistingEntitiesFromSchema] @ExcludedSchemaNames='sys', @EntityIDs='a,b';",
+      expect_unhandled=1)
 check("core refresh EXEC with an unknown argument stays a reported gap",
       "EXEC [${mjSchema}].[spUpdateExistingEntitiesFromSchema] @Mode='x';",
       expect_unhandled=1)
