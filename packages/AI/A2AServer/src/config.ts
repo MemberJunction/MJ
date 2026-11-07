@@ -43,7 +43,16 @@ const a2aServerInfoSchema = z.object({
   agentName: z.string().optional().default("MemberJunction"),
   agentDescription: z.string().optional().default("MemberJunction A2A Agent"),
   streamingEnabled: z.boolean().optional().default(true),
+  taskStoreMode: z.enum(['entity', 'memory']).optional().default('memory').describe(
+    "Where A2A tasks are kept. 'memory' (the default): in this process, so tasks/get, cancel and resubscribe must reach the replica that holds the task. " +
+    "'entity': in MJ: Tasks rows filed under the 'A2A Task' task type (seeded by metadata), so any replica can serve them. Every A2A caller then needs " +
+    "Create and Update permission on MJ: Tasks; a caller without it gets 'The task could not be saved'."
+  ),
   userEmail: z.string().optional().describe("Email address of the service user for work done without a caller, such as building the agent card. Tasks run as their authenticated caller, not as this user."),
+  statusPollIntervalMs: z.coerce.number().optional().default(5000).describe(
+    "In durable mode ('entity'), interval in milliseconds at which a running replica polls stored status " +
+    "to detect cancellation from another replica, and at which an SSE resubscriber polls stored status (default 5000)."
+  ),
 });
 
 const configInfoSchema = z.object({

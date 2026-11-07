@@ -342,10 +342,11 @@ describe('calibration against MJ core entity field names', () => {
         // ceiling sits well below a doubling of the blast radius, so re-adding `tin` (+43)
         // or widening `token` back to a bare substring (+35) fails here rather than
         // silently making the guard unusable again. Raise it only with the same kind of
-        // evidence that lowered it.
+        // evidence that lowered it (e.g. +3 from Action saga compensation fields
+        // CompensationAction, CompensationActionID, CompensationInputMapping).
         const refused = FIELDS.filter((f) => IsSensitiveFieldName(f));
         expect(refused.length).toBeGreaterThanOrEqual(30);
-        expect(refused.length).toBeLessThanOrEqual(60);
+        expect(refused.length).toBeLessThanOrEqual(65);
         // And as a rate, so the bracket keeps its meaning if the fixture doubles in size.
         // 40/2111 is 1.9%; 3% leaves room for real additions and none for a broad one.
         expect(refused.length / FIELDS.length).toBeLessThan(0.03);

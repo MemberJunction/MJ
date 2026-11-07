@@ -26,16 +26,26 @@ const requestLog: Array<{ method?: string; path?: string; body?: string }> = [];
 class MockClientRequest extends EventEmitter {
   private writtenBody = '';
   constructor(
-    private readonly options: { method?: string; path?: string },
+    private readonly options: { method?: string; path?: string; signal?: AbortSignal },
     private readonly onResponse: (res: EventEmitter & { statusCode: number }) => void,
   ) {
     super();
+    if (this.options.signal?.aborted) {
+      queueMicrotask(() => this.emit('error', new Error('The operation was aborted')));
+    } else {
+      this.options.signal?.addEventListener('abort', () => {
+        this.emit('error', new Error('The operation was aborted'));
+      });
+    }
   }
   write(data: string) {
     this.writtenBody += data;
   }
   end() {
     requestLog.push({ method: this.options.method, path: this.options.path, body: this.writtenBody });
+    if (this.options.signal?.aborted) {
+      return;
+    }
     const canned = responseQueue.shift();
     // Defer to next tick so callers can attach 'error'/'timeout' handlers first.
     queueMicrotask(() => {
@@ -57,7 +67,7 @@ class MockClientRequest extends EventEmitter {
 vi.mock('node:http', () => ({
   default: {
     request: (
-      options: { method?: string; path?: string },
+      options: { method?: string; path?: string; signal?: AbortSignal },
       cb: (res: EventEmitter & { statusCode: number }) => void,
     ) => new MockClientRequest(options, cb),
   },
@@ -194,5 +204,12 @@ describe('MLSidecar (remote mode)', () => {
   it('stop() is a no-op in remote mode', async () => {
     const s = new MLSidecar({ url: URL_BASE });
     await expect(s.stop()).resolves.toBeUndefined();
+  });
+
+  it('forwards AbortSignal to http.request in predict and aborts request (S1)', async () => {
+    const s = new MLSidecar({ url: URL_BASE });
+    const controller = new AbortController();
+    controller.abort();
+    await expect(s.predict(buildPredictRequest(), controller.signal)).rejects.toThrow(/aborted/);
   });
 });

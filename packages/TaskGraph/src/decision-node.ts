@@ -20,6 +20,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import type { MJTaskEntity_ITaskStepConfiguration } from '@memberjunction/core-entities';
 import { ParseConditionOutput } from './condition-gate';
+import type { TaskCompensationStepMetadata } from './saga-compensation';
 
 /**
  * What a Decision step keeps in `Task.Configuration.decision`: its spec configuration, plus the name
@@ -50,6 +51,16 @@ export type TaskStepConfiguration = MJTaskEntity_ITaskStepConfiguration & {
     /** Settings for an Agent step, extended with optional configuration preset name. */
     agent?: NonNullable<MJTaskEntity_ITaskStepConfiguration['agent']> & {
         presetName?: string;
+    };
+    /** Optional saga compensation metadata for an Action step or synthesized compensation task. */
+    compensation?: TaskCompensationStepMetadata;
+    /**
+     * Runtime execution metadata, plus whether the node's output was tainted when it ran (its input
+     * taint OR its own untrusted output). Written for every node that ran, `false` included, so a node
+     * that never ran is told apart from one that ran clean (see `UpstreamCarriesTaint`).
+     */
+    runtime?: NonNullable<MJTaskEntity_ITaskStepConfiguration['runtime']> & {
+        isOutputTainted?: boolean;
     };
 };
 

@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT165 - Task Graph Security and Saga",
+    "Description": "Exercises task-graph security envelopes, saga compensation claims, the A2A task store's row boundary, and live dispatcher taint gating with compensation against real MJ: Tasks rows (deterministic, mutating, self-cleaning). TGS1: a submitted graph's parent and every child carry the submitting run's envelope in Task.SecurityEnvelope, and an edit to it on an existing row is refused while an ordinary edit saves. TGS2: of two concurrent compensation rows for one forward step (CompensatesTaskID), exactly one lands. TGS3: the durable A2A store reads a task-graph step's ID as not found and will not write over or cancel it, while an A2A task saves under the 'A2A Task' type and reads back. TGS4: runs a small graph through the real dispatcher on the test DB, asserting that taint from an untrusted action propagates through a Decision step to gate a downstream action, failing the graph and triggering saga compensation of completed compensatable steps.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Envelopes are on every row and immutable; one compensation per forward step; the A2A store touches only A2A Task rows; live dispatcher gates tainted actions downstream of Decision steps and compensates completed steps."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "task-graph-security"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "77D08A88-0BC8-4374-AF0D-51F175AA152B"
+  }
+}

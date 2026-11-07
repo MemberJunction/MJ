@@ -17,7 +17,9 @@
  * a non-Owner-type user may create a request only for themselves and may update only a request
  * that was already theirs (the PRE-save `RequestForUserID`). Owner-type users, the scheduler's
  * system user among them, are exempt, which is what cross-user paths such as Send Inter-Agent
- * Request run under.
+ * Request run under. `AgentFeedbackCoordinator.CreateFeedbackRequest` saves a feedback request
+ * as the system user only when its assignee came from metadata (agent type, category, request
+ * type); an assignee the caller chose is held to this rule.
  */
 
 import { BaseEntity, EntitySaveOptions, LogError, LogStatus, Metadata, IMetadataProvider, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';

@@ -103,6 +103,10 @@ describe('ResolverBase.MustLoadTruthFromDatabase & hasCompleteOldValues', () => 
         expect(probe.MustLoad({ Name: 'MJ: AI Agent Sessions', TrackRecordChanges: false }, true)).toBe(true);
     });
 
+    it('always loads a graph edge, so client OldValues cannot fake its stored status, content or review stamp', () => {
+        expect(probe.MustLoad({ Name: 'MJ: Graph Edges', TrackRecordChanges: false }, true)).toBe(true);
+    });
+
     it("always loads a conversation folder, so client OldValues cannot pose as its stored owner", () => {
         expect(probe.MustLoad({ Name: 'MJ: Projects', TrackRecordChanges: false }, true)).toBe(true);
     });

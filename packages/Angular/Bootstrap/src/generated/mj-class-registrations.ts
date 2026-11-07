@@ -36,17 +36,21 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (477 classes)
+// @memberjunction/core-entities (484 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
     AccessControlRuleProvider,
+    AlternateBaseViewEdgeProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
     DashboardPermissionProvider,
+    EntityMetadataEdgeProvider,
     EntityPermissionProvider,
+    ForeignKeyEdgeProvider,
+    JoinEntityEdgeProvider,
     MJAIActionEntity,
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
@@ -513,7 +517,10 @@ import {
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    QueryEdgeProvider,
+    QueryMetadataEdgeProvider,
     QueryPermissionProvider,
+    RecordLinkEdgeProvider,
     ResourcePermissionProvider,
 } from '@memberjunction/core-entities';
 
@@ -909,12 +916,16 @@ const CLASS_REGISTRATIONS_0: any[] = [
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
     AccessControlRuleProvider,
+    AlternateBaseViewEdgeProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
     DashboardPermissionProvider,
+    EntityMetadataEdgeProvider,
     EntityPermissionProvider,
+    ForeignKeyEdgeProvider,
+    JoinEntityEdgeProvider,
     MJAIActionEntity,
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
@@ -1089,14 +1100,14 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJConversationDetailEntity,
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
-    MJConversationEntity,
-    MJConversationSkillEntity,
-    MJConversationWidgetInstanceEntity,
-    MJCountryEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJConversationEntity,
+    MJConversationSkillEntity,
+    MJConversationWidgetInstanceEntity,
+    MJCountryEntity,
     MJCredentialCategoryEntity,
     MJCredentialEntity,
     MJCredentialTypeEntity,
@@ -1293,14 +1304,14 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRubricCriterionLevelEntity,
     MJRubricEntity,
     MJRubricEvaluationEntity,
-    MJRubricEvaluationScoreEntity,
-    MJRubricScaleEntity,
-    MJRubricScaleLevelEntity,
-    MJRubricVersionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRubricEvaluationScoreEntity,
+    MJRubricScaleEntity,
+    MJRubricScaleLevelEntity,
+    MJRubricVersionEntity,
     MJSQLDialectEntity,
     MJScheduledJobEntity,
     MJScheduledJobRunEntity,
@@ -1389,7 +1400,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    QueryEdgeProvider,
+    QueryMetadataEdgeProvider,
     QueryPermissionProvider,
+    RecordLinkEdgeProvider,
     ResourcePermissionProvider,
     MJActionEntityExtended,
     MJEntityActionEntityExtended,
@@ -1494,6 +1508,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJAIAgentChannelFormComponentExtended,
     MJAIAgentFormComponentExtended,
     MJAIAgentRubricFormComponentExtended,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     MJAIAgentRunFormComponentExtended,
     MJAIAgentSessionFormComponentExtended,
     MJAIPromptFormComponentExtended,
@@ -1501,10 +1519,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJActionExecutionLogFormComponentExtended,
     MJActionFormComponentExtended,
     MJEntityActionFormComponentExtended,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     MJEntityFormComponentExtended,
     MJFileFormComponentExtended,
     MJListFormComponentExtended,
@@ -1696,7 +1710,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 777;
+export const CLASS_REGISTRATIONS_COUNT = 784;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

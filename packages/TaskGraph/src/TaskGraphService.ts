@@ -30,26 +30,32 @@ import {
     MJTaskTypeEntity,
     MJAIAgentEntity,
     MJAIAgentRequestEntity,
+    type MJActionEntity,
 } from '@memberjunction/core-entities';
 import {
     FormatValidationErrors,
     NormalizeDependency,
+    ParseTaskSecurityEnvelope,
     RankGraphNodes,
+    SerializeTaskSecurityEnvelope,
     SanitizeInvocationEnvelope,
     ValidateTaskGraphSpec,
+    type TaskGraphFailurePolicy,
     type TaskGraphInvocationEnvelope,
     type TaskGraphSpec,
     type TaskGraphSpecNode,
+    type TaskSecurityEnvelope,
     type ForEachOperation,
     type WhileOperation,
     ConfigOf,
 } from '@memberjunction/ai-core-plus';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IsValidUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentDecisionService } from '@memberjunction/ai-agents';
 import { ResolveRecordsByNameOrToolName } from './resolve-by-tool-name';
 import { HeldDecisionAnswers, type DecisionTaskRow, type TaskStepConfiguration } from './decision-node';
+import { CompensationFromSpec, IsCompensationTask, type SagaExecutionState } from './saga-compensation';
 import { TaskClaimStore, type TaskGraphDebugFieldWrite } from './TaskClaimStore';
 import { ParseTaskGraphDebugState, type EdgeOverrideVerdict, type StepTarget, type TaskGraphDebugState } from './debug-state';
 import { KickTaskGraphDispatchers } from './task-graph-kick';
@@ -101,6 +107,12 @@ export type TaskGraphSubmitContext = {
     Invocation?: TaskGraphInvocationEnvelope;
     /** Seed `$.debug` on the parent at insert. See `TaskGraphStartDebug`. */
     Debug?: { paused?: boolean };
+    /**
+     * The submitting run's security envelope. Written to `Task.SecurityEnvelope` on the parent and on
+     * every child row at insert, never afterwards (`MJTaskEntityServer` refuses a change), and enforced
+     * by the dispatcher on every node.
+     */
+    SecurityEnvelope?: TaskSecurityEnvelope;
 };
 
 /**
@@ -175,6 +187,14 @@ export type TaskGraphParentMetadata = {
      * throwing, exactly as the walker's would on a missing key.
      */
     invocation?: { data?: unknown; context?: unknown };
+    /**
+     * Workflow-level saga failure policy (`'Halt'` default, or `'CompensateCompleted'`).
+     */
+    failurePolicy?: TaskGraphFailurePolicy;
+    /**
+     * Current saga lifecycle state when `failurePolicy === 'CompensateCompleted'`.
+     */
+    sagaState?: SagaExecutionState;
 };
 
 /**
@@ -196,6 +216,14 @@ const DEFAULT_PARENT_METADATA: TaskGraphParentMetadata = {
     submittedByAgentRunID: null,
     submittedByUserID: null,
 };
+
+const VALID_SAGA_STATES: ReadonlySet<string> = new Set([
+    'Running',
+    'Compensating',
+    'Compensated',
+    'CompensationEscalated',
+    'CompensationFailed',
+]);
 
 /**
  * Parses a parent Task's continuation metadata.
@@ -219,7 +247,14 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
                 .map((name) => name.trim())
                 .filter((name) => name.length > 0)
             : undefined;
-        return {
+        const failurePolicy =
+            parsed.failurePolicy === 'CompensateCompleted' || parsed.failurePolicy === 'Halt'
+                ? parsed.failurePolicy
+                : undefined;
+        const sagaState = VALID_SAGA_STATES.has(parsed.sagaState as string)
+            ? parsed.sagaState
+            : undefined;
+        const out: TaskGraphParentMetadata = {
             ...DEFAULT_PARENT_METADATA,
             ...parsed,
             // Guard the two fields the dispatcher branches on. A JSON round-trip, a hand edit, or a
@@ -238,7 +273,12 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
             parentAgentHierarchy: parentAgentHierarchy && parentAgentHierarchy.length > 0
                 ? parentAgentHierarchy
                 : undefined,
+            ...(failurePolicy !== undefined ? { failurePolicy } : {}),
+            ...(sagaState !== undefined ? { sagaState } : {}),
         };
+        if (failurePolicy === undefined) delete out.failurePolicy;
+        if (sagaState === undefined) delete out.sagaState;
+        return out;
     } catch {
         return { ...DEFAULT_PARENT_METADATA };
     }
@@ -253,6 +293,8 @@ export function BuildTaskGraphParentInputPayload(args: {
     continuation: TaskGraphParentMetadata['continuation'];
     reinvokeDepth: number;
     failureSemantics: NonNullable<TaskGraphParentMetadata['failureSemantics']>;
+    failurePolicy?: TaskGraphFailurePolicy;
+    sagaState?: SagaExecutionState;
     submittedByAgentRunID: string | null;
     submittedByUserID: string | null;
     parentAgentHierarchy?: string[];
@@ -269,6 +311,8 @@ export function BuildTaskGraphParentInputPayload(args: {
         continuation: args.continuation,
         reinvokeDepth: args.reinvokeDepth,
         failureSemantics: args.failureSemantics,
+        ...(args.failurePolicy && args.failurePolicy !== 'Halt' ? { failurePolicy: args.failurePolicy } : {}),
+        ...(args.sagaState ? { sagaState: args.sagaState } : {}),
         submittedByAgentRunID: args.submittedByAgentRunID,
         submittedByUserID: args.submittedByUserID,
         ...(parentAgentHierarchy.length > 0 ? { parentAgentHierarchy } : {}),
@@ -312,6 +356,13 @@ export type TaskGraphCancelResult = {
 export function IsReinvokeCapReached(meta: TaskGraphParentMetadata): boolean {
     return meta.reinvokeDepth >= MAX_REINVOKE_DEPTH;
 }
+
+/** The outcome of {@link TaskGraphService.RetryTask}. */
+export type TaskGraphRetryOutcome = {
+    Success: boolean;
+    /** Why the retry was refused or failed, fit to show the person who asked. */
+    ErrorMessage?: string;
+};
 
 export type TaskGraphSubmitResult = {
     Success: boolean;
@@ -415,6 +466,10 @@ export function BuildStepConfiguration(node: TaskGraphSpecNode): TaskStepConfigu
     const outputMapping = action?.outputMapping;
     if (inputMapping) config.inputMapping = inputMapping;
     if (outputMapping) config.outputMapping = outputMapping;
+    // Every setting the spec's compensation names travels, `retryCount` and the `compensationInputMapping`
+    // alias included (folded into `inputMapping`): dropping them made a spec's retry and mapping vanish.
+    const compensation = CompensationFromSpec(action?.compensation);
+    if (compensation) config.compensation = compensation;
 
     if (node.policy) {
         config.policy = {
@@ -476,11 +531,25 @@ export function DecisionPromptNameOf(node: TaskGraphSpecNode): string | null {
     return decision.promptName?.trim() || AgentDecisionService.DEFAULT_PROMPT_NAME;
 }
 
-/** Every action name a node references, including the action(s) a loop repeats. */
+/** The distinct non-blank IDs in `values`, compared as UUIDs, in first-seen order. */
+function uniqueIDs(values: readonly string[]): string[] {
+    const seen = new UUIDSet();
+    const out: string[] = [];
+    for (const value of values) {
+        if (!value || seen.Has(value)) continue;
+        seen.Add(value);
+        out.push(value);
+    }
+    return out;
+}
+
+/** Every action name a node references, including the action(s) a loop repeats and any named compensation action. */
 function actionNamesIn(node: TaskGraphSpecNode): string[] {
     const loopOp = LoopOperationOf(node);
+    const actionCfg = ConfigOf(node, 'Action');
     const names = [
-        ConfigOf(node, 'Action')?.actionName,
+        actionCfg?.actionName,
+        actionCfg?.compensation?.compensationActionName,
         loopOp?.action?.name,
         ...(loopOp?.steps?.map((s) => s.name) ?? []),
     ];
@@ -684,6 +753,14 @@ export class TaskGraphService {
             return { Success: false, ErrorMessage: message };
         }
 
+        // 1d. The security envelope must read back as the one written, or every node would be refused
+        //     after the graph is already persisted. Refused here, before anything is written.
+        const envelopeRefusal = this.envelopeRefusal(context.SecurityEnvelope);
+        if (envelopeRefusal) {
+            LogError(`[TaskGraphService] "${spec.workflowName}" was not started: ${envelopeRefusal}`);
+            return { Success: false, ErrorMessage: envelopeRefusal };
+        }
+
         try {
             // 2. Resolve every agent, action, and prompt in parallel BEFORE writing anything. An
             //    unresolvable name is a hard error, not a skipped node: silently dropping a task
@@ -705,6 +782,11 @@ export class TaskGraphService {
             }
             if (!promptIDsByName.Success) {
                 return { Success: false, ErrorMessage: promptIDsByName.ErrorMessage };
+            }
+            const compensationCheck = await this.validateCompensationActionIDs(spec, context);
+            if (!compensationCheck.Success) {
+                LogError(`[TaskGraphService] ${compensationCheck.ErrorMessage}`);
+                return { Success: false, ErrorMessage: compensationCheck.ErrorMessage };
             }
 
             const taskTypeID = await this.ensureTaskType(context);
@@ -1025,16 +1107,27 @@ export class TaskGraphService {
      * past this node.
      */
     public async Retry(taskID: string, context: TaskGraphSubmitContext, inputPayload?: unknown): Promise<boolean> {
+        return (await this.RetryTask(taskID, context, inputPayload)).Success;
+    }
+
+    /** {@link Retry}, with the reason when the retry is refused, for a caller that shows it to a person. */
+    public async RetryTask(taskID: string, context: TaskGraphSubmitContext, inputPayload?: unknown): Promise<TaskGraphRetryOutcome> {
         try {
             const task = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
-            if (!(await task.Load(taskID))) return false;
+            if (!(await task.Load(taskID))) return { Success: false, ErrorMessage: 'The task could not be loaded.' };
             const editedInput = inputPayload === undefined
                 ? undefined
                 : typeof inputPayload === 'string' ? inputPayload : JSON.stringify(inputPayload);
             const refusal = RetryRefusal(task, editedInput);
             if (refusal) {
                 LogError(`[TaskGraphService] Cannot retry task ${taskID}: ${refusal}.`);
-                return false;
+                return { Success: false, ErrorMessage: `The task cannot be retried: ${refusal}.` };
+            }
+            const siblings = task.ParentID ? await this.loadChildren(task.ParentID, context) : [];
+            const rollingBack = task.ParentID ? await this.rollbackStartedRefusal(task.ParentID, siblings, context) : null;
+            if (rollingBack) {
+                LogError(`[TaskGraphService] Cannot retry task ${taskID}: ${rollingBack}`);
+                return { Success: false, ErrorMessage: rollingBack };
             }
             const expectedStatus = task.Status === 'Complete' ? 'Complete' : 'Failed';
 
@@ -1055,28 +1148,47 @@ export class TaskGraphService {
                 );
                 if (!wrote) {
                     LogError(`[TaskGraphService] Could not apply the edited input to task ${taskID}; retry refused rather than re-running the old brief.`);
-                    return false;
+                    return { Success: false, ErrorMessage: 'The edited input could not be saved, so the task was not retried.' };
                 }
                 // Keep the in-memory row in step with what was just written, so the save below does
                 // not put the old input back.
                 task.InputPayload = json;
             }
             PrepareTaskForRetry(task);
-            if (!(await task.Save())) return false;
+            if (!(await task.Save())) return { Success: false, ErrorMessage: 'The task could not be saved.' };
 
-            if (task.ParentID) {
-                for (const sibling of await this.loadChildren(task.ParentID, context)) {
-                    if (sibling.Status === 'Blocked') {
-                        sibling.Status = 'Pending';
-                        await sibling.Save();
-                    }
+            for (const sibling of siblings) {
+                if (sibling.Status === 'Blocked') {
+                    sibling.Status = 'Pending';
+                    await sibling.Save();
                 }
             }
-            return true;
+            return { Success: true };
         } catch (e) {
             LogError(`[TaskGraphService] Retry failed for ${taskID}: ${e instanceof Error ? e.message : String(e)}`);
-            return false;
+            return { Success: false, ErrorMessage: 'The retry failed.' };
         }
+    }
+
+    /**
+     * Why no step of this graph may be retried, or null (S9): its rollback has started. A saga
+     * (`failurePolicy: 'CompensateCompleted'`) undoes the completed steps after a failure, so re-running
+     * the failed step would act on state the rollback has already reversed, and its dependents would
+     * run on top of that. Started means a compensation or escalation row exists, or the graph records
+     * a saga state.
+     */
+    private async rollbackStartedRefusal(
+        parentTaskID: string,
+        siblings: readonly MJTaskEntity[],
+        context: TaskGraphSubmitContext,
+    ): Promise<string | null> {
+        const refusal = 'The workflow has started rolling back the steps that completed, so a step cannot be retried: ' +
+            'it would run against state the rollback has undone. Submit the workflow again instead.';
+        if (siblings.some((t) => IsCompensationTask(t))) return refusal;
+        const parent = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
+        if (!(await parent.Load(parentTaskID))) return null;
+        const sagaState = ParseTaskGraphParentMetadata(parent.InputPayload).sagaState;
+        return sagaState && sagaState !== 'Running' ? refusal : null;
     }
 
     // ────────────────────────────────────────────────────────────────────────
@@ -1560,6 +1672,51 @@ export class TaskGraphService {
         return { Success: true, Map: found };
     }
 
+    /**
+     * Refuses a graph whose node names a compensation action by an ID that is not an action (S7).
+     *
+     * The ID is written by the model and stays in the node's JSON until a rollback inserts the
+     * compensation task — the first point a foreign key sees it. There an unknown ID failed the insert
+     * on every pass, so the step was never undone. Checked here, as the caller, before anything is written.
+     */
+    private async validateCompensationActionIDs(
+        spec: TaskGraphSpec,
+        context: TaskGraphSubmitContext,
+    ): Promise<{ Success: boolean; ErrorMessage?: string }> {
+        const ids = uniqueIDs(spec.tasks.map((node) => ConfigOf(node, 'Action')?.compensation?.compensationActionId?.trim() ?? ''));
+        if (ids.length === 0) return { Success: true };
+        const notIDs = ids.filter((id) => !IsValidUUID(id));
+        if (notIDs.length > 0) {
+            return {
+                Success: false,
+                ErrorMessage: `Task graph "${spec.workflowName}" was not started: ${notIDs.length} compensationActionId value(s) are not action IDs (${notIDs.join(', ')}). Name the action with compensationActionName instead.`,
+            };
+        }
+        const result = await RunView.FromMetadataProvider(context.Provider).RunView<Pick<MJActionEntity, 'ID'>>(
+            {
+                EntityName: 'MJ: Actions',
+                ExtraFilter: `ID IN (${ids.map((id) => `'${EscapeSQLString(id)}'`).join(',')})`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+            },
+            context.ContextUser,
+        );
+        if (!result.Success) {
+            return { Success: false, ErrorMessage: `Task graph "${spec.workflowName}" was not started: its compensation actions could not be checked (${result.ErrorMessage}).` };
+        }
+        const found = new UUIDSet((result.Results ?? []).map((row) => row.ID));
+        const missing = ids.filter((id) => !found.Has(id));
+        if (missing.length > 0) {
+            return {
+                Success: false,
+                ErrorMessage:
+                    `Task graph "${spec.workflowName}" was not started: it names ${missing.length} compensation action(s) that do not exist (${missing.join(', ')}). ` +
+                    `Its rollback could never run them.`,
+            };
+        }
+        return { Success: true };
+    }
+
     private async resolveActions(
         spec: TaskGraphSpec,
         context: TaskGraphSubmitContext,
@@ -1654,6 +1811,12 @@ export class TaskGraphService {
         return rows[0]?.ID ?? null;
     }
 
+    /** Why the submitted envelope cannot be stored and enforced, or null when it can (or there is none). */
+    private envelopeRefusal(envelope: TaskSecurityEnvelope | undefined): string | null {
+        const parsed = ParseTaskSecurityEnvelope(SerializeTaskSecurityEnvelope(envelope));
+        return parsed.Status === 'Invalid' ? parsed.Reason : null;
+    }
+
     /** Writes the parent task that represents the graph as a whole. */
     private async persistParent(spec: TaskGraphSpec, taskTypeID: string, context: TaskGraphSubmitContext): Promise<string> {
         const parent = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
@@ -1695,6 +1858,7 @@ export class TaskGraphService {
             continuation: spec.continuation ?? 'message',
             reinvokeDepth: context.ReinvokeDepth ?? 0,
             failureSemantics: spec.failureSemantics ?? 'block',
+            failurePolicy: spec.failurePolicy ?? 'Halt',
             submittedByAgentRunID: context.AgentRunID ?? null,
             submittedByUserID: context.ContextUser?.ID ?? null,
             parentAgentHierarchy: context.ParentAgentHierarchy,
@@ -1703,6 +1867,7 @@ export class TaskGraphService {
                 : null,
             startPaused: context.Debug?.paused === true,
         }));
+        parent.SecurityEnvelope = SerializeTaskSecurityEnvelope(context.SecurityEnvelope);
         if (!(await parent.Save())) {
             throw new Error(`Could not create parent task: ${parent.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
@@ -1831,12 +1996,29 @@ export class TaskGraphService {
                             .filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].length > 0),
                     )
                     : undefined;
+                const builtConfig = buildStepConfiguration(node);
+                const resolvedCompensation = builtConfig?.compensation
+                    ? {
+                        ...builtConfig.compensation,
+                        ...(
+                            !builtConfig.compensation.compensationActionId &&
+                            builtConfig.compensation.compensationActionName &&
+                            actionIDsByName.get(builtConfig.compensation.compensationActionName)
+                                ? { compensationActionId: actionIDsByName.get(builtConfig.compensation.compensationActionName) }
+                                : {}
+                        ),
+                    }
+                    : undefined;
                 const configuration: TaskStepConfiguration = {
-                    ...buildStepConfiguration(node),
+                    ...builtConfig,
+                    ...(resolvedCompensation ? { compensation: resolvedCompensation } : {}),
                     ...(stepActionIds && Object.keys(stepActionIds).length > 0 ? { stepActionIds } : {}),
                     sequence: ranks.get(node.tempId),
                 };
                 task.Configuration = JSON.stringify(configuration);
+                // Every child carries the envelope, not only the parent: a node is enforced from its
+                // own row too, so losing the parent row can never run it unconstrained.
+                task.SecurityEnvelope = SerializeTaskSecurityEnvelope(context.SecurityEnvelope);
 
                 // Input rides in its own column; Description stays human-readable.
                 task.InputPayload = node.inputPayload ? JSON.stringify(node.inputPayload) : null;

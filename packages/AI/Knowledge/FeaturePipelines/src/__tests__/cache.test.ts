@@ -24,9 +24,17 @@ const { MockRunView, logErrorSpy } = vi.hoisted(() => {
             if (MockRunView.failWith) {
                 return { Success: false, Results: [], ErrorMessage: MockRunView.failWith };
             }
+            const rawResults = MockRunView.queue.shift() ?? MockRunView.mockResults;
+            const filter = params.ExtraFilter ?? '';
+            const filtered = filter.includes("Role = 'Champion'")
+                ? rawResults.filter((r) => (r as { Role?: string }).Role !== 'Challenger')
+                : rawResults;
+            const results = typeof params.MaxRows === 'number' && params.MaxRows > 0
+                ? filtered.slice(0, params.MaxRows)
+                : filtered;
             return {
                 Success: true,
-                Results: MockRunView.queue.shift() ?? MockRunView.mockResults,
+                Results: results,
             };
         }
         public async RunViews(params: RunViewParams[]) {
@@ -421,7 +429,7 @@ describe('FeatureValueCacheService', () => {
                 expect(outcome).toEqual({ Upserted: 0, Unchanged: 1, Previous: { SeniorityLevel: null } });
                 expect(save).toHaveBeenCalledTimes(1);
                 const reread = MockRunView.calls[2];
-                expect(reread.ExtraFilter).toBe(`RecordProcessID = 'rp-1' AND ValueKeyHash IN ('${keyHash}')`);
+                expect(reread.ExtraFilter).toBe(`RecordProcessID = 'rp-1' AND ValueKeyHash IN ('${keyHash}') AND Role = 'Champion'`);
                 expect(reread.BypassCache).toBe(true);
             });
 
@@ -589,6 +597,64 @@ describe('FeatureValueCacheService', () => {
             expect(await FeatureValueCacheService.Instance.RetireHumanValue(humanRef)).toBe(0);
             MockRunView.mockResults = [{ Delete: vi.fn().mockResolvedValue(false), LatestResult: { CompleteMessage: 'FK violation' } }];
             await expect(FeatureValueCacheService.Instance.RetireHumanValue(humanRef)).rejects.toThrow(/failed retiring the Human 'SeniorityLevel' value of record 'person-1': FK violation/);
+        });
+
+        it('ignores a newer Role = Challenger row in GetLatestValue, GetLatestPipelineValues, and RetireHumanValue (D2)', async () => {
+            const empty = { ValueText: null, ValueNumeric: null, ValueBoolean: null, ValueDate: null, ValueJSON: null };
+            const newerChallenger = {
+                FeatureName: 'SeniorityLevel',
+                ...empty,
+                ValueText: 'Challenger-VP',
+                Role: 'Challenger',
+                ComputedAt: new Date('2026-11-06T12:00:00Z'),
+            };
+            const olderChampion = {
+                FeatureName: 'SeniorityLevel',
+                ...empty,
+                ValueText: 'Champion-Director',
+                Role: 'Champion',
+                ComputedAt: new Date('2026-11-06T11:00:00Z'),
+            };
+
+            // 1. GetLatestValue returns Champion even when Challenger is first (newest ComputedAt)
+            MockRunView.mockResults = [newerChallenger, olderChampion];
+            const latestSingle = await FeatureValueCacheService.Instance.GetLatestValue({
+                RecordProcessID: 'rp-1',
+                EntityID: 'ENT-P',
+                RecordID: 'person-1',
+                FeatureName: 'SeniorityLevel',
+                Source: 'Pipeline',
+                ContextUser: mockUser,
+                Provider: lookupProvider,
+            });
+            expect(latestSingle?.ValueText).toBe('Champion-Director');
+            expect(MockRunView.lastParams?.ExtraFilter).toContain("Role = 'Champion'");
+
+            // 2. GetLatestPipelineValues returns Champion even when Challenger is first
+            MockRunView.queue = [[newerChallenger, olderChampion]];
+            const latestBatch = await FeatureValueCacheService.Instance.GetLatestPipelineValues({
+                RecordProcessID: 'rp-1',
+                EntityID: 'ENT-P',
+                RecordID: 'person-1',
+                FeatureNames: ['SeniorityLevel'],
+                ContextUser: mockUser,
+                Provider: lookupProvider,
+            });
+            expect(latestBatch.get('senioritylevel')?.ValueText).toBe('Champion-Director');
+            expect(MockRunView.lastParams?.ExtraFilter).toContain("Role = 'Champion'");
+
+            // 3. RetireHumanValue filters on Role = 'Champion' and does not delete Challenger rows
+            const challengerDelete = vi.fn().mockResolvedValue(true);
+            const championDelete = vi.fn().mockResolvedValue(true);
+            MockRunView.mockResults = [
+                { Role: 'Challenger', Delete: challengerDelete, LatestResult: null },
+                { Role: 'Champion', Delete: championDelete, LatestResult: null },
+            ];
+            const retiredCount = await FeatureValueCacheService.Instance.RetireHumanValue(humanRef);
+            expect(retiredCount).toBe(1);
+            expect(challengerDelete).not.toHaveBeenCalled();
+            expect(championDelete).toHaveBeenCalledTimes(1);
+            expect(MockRunView.lastParams?.ExtraFilter).toContain("Role = 'Champion'");
         });
     });
 

@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import type { UserInfo, IMetadataProvider, BaseEntity } from '@memberjunction/core';
+import { describe, it, expect, vi } from 'vitest';
+import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import type {
   PredictRequest,
@@ -21,6 +21,12 @@ import {
 } from '../ml-model-inference-processor';
 import { ModelNotScorableError, ModelNeedsTrainingError } from '../model-readiness';
 import { InMemoryArtifactLoader } from '../artifact-loader';
+import {
+  ShadowScoringCoordinator,
+  type IRecordProcessChallengerConfig,
+  type ShadowFeatureValueAuditRecord,
+  type ShadowScoreEnvelope,
+} from '../shadow-scoring';
 import type { IMLModelLoader, ISidecarPredictor, MLInferenceDeps } from '../types';
 import { FeatureAssemblyExecutor } from '../../feature-assembly';
 import type {
@@ -326,5 +332,290 @@ describe('MLModelInferenceProcessor — lifecycle status gate (W1 → S7.3, F-SC
     model.ArtifactFileID = null;
     const { deps } = buildDeps(model);
     await expect(buildProcessor(deps).Preflight(CTX)).rejects.toBeInstanceOf(ModelNotScorableError);
+  });
+});
+
+describe('MLModelInferenceProcessor — shadow scoring integration (D3, D10, D13)', () => {
+  const challengerConfig: IRecordProcessChallengerConfig = {
+    Enabled: true,
+    SampleRate: 1.0,
+    WorkType: 'ML Model',
+    ChallengerModelID: 'model-challenger-2',
+    MaxLatencyMs: 50,
+  };
+
+  it('converts MatrixToFeatureRows exactly ONCE for an N-record batch and maps each record to its own feature row (D3, D13)', async () => {
+    const { deps } = buildDeps();
+    const publishedEnvelopes: ShadowScoreEnvelope[] = [];
+    const shadowCoordinator = new ShadowScoringCoordinator({
+      WorkQueuePublisher: {
+        PublishShadowItem: async (env) => {
+          publishedEnvelopes.push(env);
+        },
+      },
+    });
+
+    const proc = new MLModelInferenceProcessor(
+      {
+        modelId: 'model-1',
+        deps,
+        recordProcessId: 'rp-batch-1',
+        challengerConfig,
+        shadowCoordinator,
+      },
+      new TestAssembler(new InMemoryDataAccess()),
+    );
+
+    const spy = vi.spyOn(MLModelInferenceProcessor, 'MatrixToFeatureRows');
+    try {
+      const records = [
+        memberRecord('m1', 10, 1, 'NYC'),
+        memberRecord('m2', 20, 2, 'LA'),
+        memberRecord('m3', 30, 3, 'NYC'),
+        memberRecord('m4', 40, 4, 'LA'),
+      ];
+      const results = await proc.ProcessBatch(records, { ...CTX, RecordProcessID: 'rp-batch-1' });
+      await shadowCoordinator.FlushInFlight();
+
+      expect(results).toHaveLength(4);
+      expect(results.every((r) => r.Status === 'Succeeded')).toBe(true);
+      // D3: MatrixToFeatureRows must be called once for the batch, not once + N times
+      expect(spy).toHaveBeenCalledTimes(1);
+
+      // D13: Each record in the batch gets its own row-aligned FrozenFeatures
+      expect(publishedEnvelopes).toHaveLength(4);
+      expect(publishedEnvelopes.map((e) => e.RecordID)).toEqual(['m1', 'm2', 'm3', 'm4']);
+      expect(publishedEnvelopes[0].FrozenFeatures).toEqual({ tenure: 10, events_at_signup: 1, city: 'NYC' });
+      expect(publishedEnvelopes[1].FrozenFeatures).toEqual({ tenure: 20, events_at_signup: 2, city: 'LA' });
+      expect(publishedEnvelopes[2].FrozenFeatures).toEqual({ tenure: 30, events_at_signup: 3, city: 'NYC' });
+      expect(publishedEnvelopes[3].FrozenFeatures).toEqual({ tenure: 40, events_at_signup: 4, city: 'LA' });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('checks ShouldSample BEFORE constructing envelopes and skips shadow dispatch completely when DryRun is true (D3, D13)', async () => {
+    const { deps } = buildDeps();
+    let dispatchCalls = 0;
+    const shadowCoordinator = new ShadowScoringCoordinator({
+      Rng: () => 0.99, // above SampleRate 0.10 -> not sampled
+      WorkQueuePublisher: {
+        PublishShadowItem: async () => {
+          dispatchCalls++;
+        },
+      },
+    });
+
+    const procUnsampled = new MLModelInferenceProcessor(
+      {
+        modelId: 'model-1',
+        deps,
+        challengerConfig: { ...challengerConfig, SampleRate: 0.1 },
+        shadowCoordinator,
+      },
+      new TestAssembler(new InMemoryDataAccess()),
+    );
+
+    await procUnsampled.ProcessRecord(memberRecord('m1', 12, 3, 'NYC'), CTX);
+    await shadowCoordinator.FlushInFlight();
+    expect(dispatchCalls).toBe(0);
+
+    // Now with SampleRate 1.0 but DryRun = true -> must skip shadow dispatch
+    const alwaysSampleCoordinator = new ShadowScoringCoordinator({
+      WorkQueuePublisher: {
+        PublishShadowItem: async () => {
+          dispatchCalls++;
+        },
+      },
+    });
+    const procDryRun = new MLModelInferenceProcessor(
+      {
+        modelId: 'model-1',
+        deps,
+        challengerConfig,
+        shadowCoordinator: alwaysSampleCoordinator,
+      },
+      new TestAssembler(new InMemoryDataAccess()),
+    );
+
+    const dryResult = await procDryRun.ProcessRecord(memberRecord('m1', 12, 3, 'NYC'), {
+      ...CTX,
+      DryRun: true,
+    });
+    await alwaysSampleCoordinator.FlushInFlight();
+    expect(dryResult.Status).toBe('Succeeded');
+    expect(dispatchCalls).toBe(0);
+  });
+
+  it('records per-record amortized champion latency in ProcessBatch rather than full batch latency (D10)', async () => {
+    const { deps } = buildDeps();
+    deps.sidecar = {
+      predict: async (req: PredictRequest): Promise<PredictResponse> => {
+        await new Promise((r) => setTimeout(r, 80));
+        return { predictions: (req.rows ?? []).map(() => ({ score: 0.75, class: 'renew' })) };
+      },
+    };
+
+    const publishedEnvelopes: ShadowScoreEnvelope[] = [];
+    const shadowCoordinator = new ShadowScoringCoordinator({
+      WorkQueuePublisher: {
+        PublishShadowItem: async (env) => {
+          publishedEnvelopes.push(env);
+        },
+      },
+    });
+
+    const proc = new MLModelInferenceProcessor(
+      {
+        modelId: 'model-1',
+        deps,
+        challengerConfig,
+        shadowCoordinator,
+      },
+      new TestAssembler(new InMemoryDataAccess()),
+    );
+
+    const batchSize = 4;
+    const records = Array.from({ length: batchSize }, (_, i) => memberRecord(`m${i}`, 10 + i, 2, 'NYC'));
+    const startedAt = Date.now();
+    await proc.ProcessBatch(records, CTX);
+    const totalWallMs = Date.now() - startedAt;
+    await shadowCoordinator.FlushInFlight();
+
+    expect(publishedEnvelopes).toHaveLength(batchSize);
+    for (const env of publishedEnvelopes) {
+      expect(env.ChampionLatencyMs).toBeDefined();
+      // Per-record latency is batch time / 4, strictly less than half the total batch wall-clock duration
+      expect(env.ChampionLatencyMs!).toBeLessThan(totalWallMs * 0.6);
+      expect(env.ChampionLatencyMs!).toBeGreaterThan(0);
+    }
+  });
+
+  it('never fails the champion or mutates the target business entity when the challenger times out or throws (D13)', async () => {
+    const { deps } = buildDeps();
+    const auditRecords: ShadowFeatureValueAuditRecord[] = [];
+    const shadowCoordinator = new ShadowScoringCoordinator({
+      ChallengerRunner: {
+        RunChallenger: async (env) => {
+          // Challenger attempts to mutate FrozenFeatures and then times out
+          expect(Object.isFrozen(env.FrozenFeatures)).toBe(true);
+          await new Promise((r) => setTimeout(r, 120));
+          throw new Error('Challenger exploded');
+        },
+      },
+      AuditSink: {
+        RecordShadowAudit: async (rec) => {
+          auditRecords.push(rec);
+        },
+      },
+    });
+
+    const proc = new MLModelInferenceProcessor(
+      {
+        modelId: 'model-1',
+        deps,
+        challengerConfig: { ...challengerConfig, MaxLatencyMs: 20 },
+        shadowCoordinator,
+      },
+      new TestAssembler(new InMemoryDataAccess()),
+    );
+
+    // Pass a real business entity double into ProcessRecord and verify the processor + challenger leave it untouched
+    const businessEntityFields = {
+      ID: 'mem-real-1',
+      tenure: 15,
+      events_at_signup: 4,
+      city: 'NYC',
+      RenewalProbability: 0.11,
+      RenewalStatus: 'Existing',
+    };
+    let setCalledOnBusinessEntity = false;
+    const businessEntityDouble = {
+      GetAll: () => ({ ...businessEntityFields }),
+      Set: () => {
+        setCalledOnBusinessEntity = true;
+      },
+    };
+
+    const championResult = await proc.ProcessRecord(
+      {
+        EntityID: 'ent-members',
+        RecordID: 'mem-real-1',
+        Record: businessEntityDouble,
+      },
+      CTX,
+    );
+
+    expect(championResult.Status).toBe('Succeeded');
+    const payload = championResult.ResultPayload as MLInferenceResultPayload;
+    expect(payload.score).toBeCloseTo(0.5, 5);
+    expect(payload.class).toBe('renew');
+
+    await shadowCoordinator.FlushInFlight();
+
+    // Challenger timed out and was recorded as Role = 'Challenger'
+    expect(auditRecords).toHaveLength(1);
+    expect(auditRecords[0].Role).toBe('Challenger');
+    expect(auditRecords[0].TimedOut).toBe(true);
+
+    // Target business entity was never mutated by the processor or the shadow challenger
+    expect(setCalledOnBusinessEntity).toBe(false);
+    expect(businessEntityFields).toEqual({
+      ID: 'mem-real-1',
+      tenure: 15,
+      events_at_signup: 4,
+      city: 'NYC',
+      RenewalProbability: 0.11,
+      RenewalStatus: 'Existing',
+    });
+  });
+
+  it('skips challengerConfig with WorkType !== "ML Model" and logs a single error on construction instead of per record (R7)', async () => {
+    const { deps } = buildDeps();
+    const errorLogs: string[] = [];
+    const origConsoleError = console.error;
+    console.error = (...args: unknown[]) => {
+      errorLogs.push(args.map((a) => String(a)).join(' '));
+    };
+
+    try {
+      let publishedCount = 0;
+      const shadowCoordinator = new ShadowScoringCoordinator({
+        WorkQueuePublisher: {
+          PublishShadowItem: async () => {
+            publishedCount++;
+          },
+        },
+      });
+
+      const proc = new MLModelInferenceProcessor(
+        {
+          modelId: 'model-1',
+          deps,
+          recordProcessId: 'rp-mismatched-wt',
+          challengerConfig: {
+            Enabled: true,
+            SampleRate: 1.0,
+            WorkType: 'Infer',
+            ChallengerPromptID: 'prompt-challenger-1',
+            ChallengerModelID: 'model-challenger-ignored',
+          },
+          shadowCoordinator,
+        },
+        new TestAssembler(new InMemoryDataAccess()),
+      );
+
+      expect(errorLogs.filter((m) => m.includes('WorkType')).length).toBe(1);
+
+      await proc.ProcessRecord(memberRecord('m1', 10, 1, 'NYC'), CTX);
+      await proc.ProcessRecord(memberRecord('m2', 20, 2, 'LA'), CTX);
+      await proc.ProcessRecord(memberRecord('m3', 30, 3, 'NYC'), CTX);
+      await shadowCoordinator.FlushInFlight();
+
+      expect(publishedCount).toBe(0);
+      expect(errorLogs.filter((m) => m.includes('WorkType')).length).toBe(1);
+    } finally {
+      console.error = origConsoleError;
+    }
   });
 });

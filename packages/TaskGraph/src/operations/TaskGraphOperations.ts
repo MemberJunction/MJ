@@ -261,12 +261,9 @@ export class TaskGraphRetryTaskServerOperation extends TaskGraphRetryTaskOperati
     ): Promise<TaskGraphControlOutput> {
         if (!input?.taskID) throw new Error('taskID is required');
 
-        const ok = await new TaskGraphService().Retry(input.taskID, submitContext(provider, user, ''), input.inputPayload);
-        if (!ok) {
-            return {
-                success: false,
-                errorMessage: 'Retry failed; the task may be neither Failed nor a Decision step holding an answer below its minConfidence.',
-            };
+        const outcome = await new TaskGraphService().RetryTask(input.taskID, submitContext(provider, user, ''), input.inputPayload);
+        if (!outcome.Success) {
+            return { success: false, errorMessage: outcome.ErrorMessage ?? 'The task could not be retried.' };
         }
 
         const task = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', user);

@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT164 - Graph Runtime Permissions",
+    "Description": "Exercises the semantic graph runtime against the live database (server transport). GR1: the seeded \"MJ Canon\" graph is Preload, runs its three metadata edge providers, and traverses entity References edges. GR2: a user who cannot run a query never sees its node, whether filtered, used as a seed, or present as an audience reader of a user who can. GR3: a real Save() of an edge that starts Approved (Declared or Inferred), by a user who may create edges but does not hold Graph: Approve Edges, is refused by the approval gate and writes nothing. GR4: Get Graph Context resolves to GetGraphContextAction, has its metadata row, fails with GRAPH_NOT_FOUND for an unknown graph and expands a real seed. GR5 (mutation tier): a JoinEntityEdgeProvider over MJ: User Roles on a temporary graph expands a user to exactly their roles. GR6 (mutation tier): a QueryEdgeProvider over a temporary query granted to Developer yields edges for the caller but none for a user without the query's run permission, alone or as an audience reader. GR5 and GR6 delete everything they create.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "The canon graph traverses metadata edges; query nodes are invisible to users who cannot run the query, including through an audience; a pre-approved edge cannot be saved without Graph: Approve Edges; Get Graph Context is registered and runs; JoinEntity and Query edge providers expand correctly and respect query permissions."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "graph-runtime"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "FEC36427-DBAD-4FA1-A499-C4404B3ECA94"
+  }
+}
