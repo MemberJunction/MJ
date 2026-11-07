@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { TestLLM } from '@memberjunction/unit-testing';
 import { scripted, ctx } from './helpers/judgeFixtures';
 import { TpProbJudge } from '../judges/TpProbJudge';
+import { JUDGE_ERROR_PREFIX } from '../judges/SafeChat';
 
 describe('TpProbJudge', () => {
   const logprobs = (yes: number, no: number) => ({ content: [{ token: 'Yes', logprob: Math.log(yes), bytes: null, top_logprobs: [{ token: 'Yes', logprob: Math.log(yes), bytes: null }, { token: 'No', logprob: Math.log(no), bytes: null }] }], refusal: null });
@@ -16,8 +17,15 @@ describe('TpProbJudge', () => {
   it('records a thrown provider error and a success: false result the same way', async () => {
     for (const outcome of [{ kind: 'throw' as const, error: new Error('404 model not found') }, { kind: 'fail' as const, error: new Error('404 model not found') }]) {
       const s = await new TpProbJudge(new TestLLM().Script(outcome), 'm').Judge(ctx());
-      expect(s).toMatchObject({ Score: 0, Bucket: null }); expect(s.Reason).toMatch(/^provider error/);
+      expect(s).toMatchObject({ Score: 0, Bucket: null }); expect(s.Reason).toMatch(/^error: provider error/);
     }
   });
   it('asks for exactly one output token with logprobs', async () => { const llm = scripted({ content: 'Yes' }); await new TpProbJudge(llm, 'm').Judge(ctx()); expect(llm.Calls[0]).toMatchObject({ includeLogProbs: true, topLogProbs: 5, maxOutputTokens: 1 }); });
+  it('does not count "Not" as "no"', async () => {
+    const lp = { content: [{ token: 'Yes', logprob: Math.log(0.6), bytes: null, top_logprobs: [{ token: 'Yes', logprob: Math.log(0.6), bytes: null }, { token: 'Not', logprob: Math.log(0.3), bytes: null }] }], refusal: null };
+    expect((await new TpProbJudge(scripted({ content: 'Yes', logprobs: lp }), 'm').Judge(ctx())).Score).toBeCloseTo(0.6, 2);
+  });
+  it('starts the reason with the error prefix when no logprobs come back', async () => {
+    expect((await new TpProbJudge(scripted({ content: 'Yes' }), 'm').Judge(ctx())).Reason.startsWith(JUDGE_ERROR_PREFIX)).toBe(true);
+  });
 });

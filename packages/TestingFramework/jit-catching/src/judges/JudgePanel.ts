@@ -1,5 +1,6 @@
 import { GetConsensus } from '@memberjunction/rubrics';
 import { UNTRUSTED_OPEN, UNTRUSTED_CLOSE } from '../analyzer/ChangeAnalyzer';
+import { JUDGE_ERROR_PREFIX } from './SafeChat';
 import type { BaseCatchJudge } from '../contracts/BaseCatchJudge';
 import type { Bucket, CatchContext, JudgeBucket, JudgeScore } from '../types';
 
@@ -44,22 +45,30 @@ export function BuildJudgeInput(c: CatchContext): string {
 /** Maps a median bucket score back to a bucket: ≥ 0.5 High, ≤ −0.5 Low, otherwise Medium. */
 function toBucket(score: number): Bucket { return score >= 0.5 ? 'High' : score <= -0.5 ? 'Low' : 'Medium'; }
 
+/** The judge's `Model` when it has one, otherwise its `Name`. */
+function modelOf(j: BaseCatchJudge): string {
+    return 'Model' in j && typeof j.Model === 'string' ? j.Model : j.Name;
+}
+
 /** Runs every judge on one weak catch. The `TpProb` judge gives TP Prob; the others give buckets, combined by median. */
 export class JudgePanel {
     constructor(private readonly judges: BaseCatchJudge[]) {}
 
-    /** Never throws: a failed bucket judge counts as Medium with the error as reason; a failed TP Prob judge gives no TP Prob. */
+    /**
+     * Never throws. A bucket judge that throws counts as Medium with the error as reason.
+     * A TP Prob judge that throws, or whose Reason starts with {@link JUDGE_ERROR_PREFIX}, gives a null TP Prob.
+     */
     public async Judge(c: CatchContext): Promise<PanelResult> {
         const all = await Promise.all(this.judges.map(async (j): Promise<JudgeScore | null> => {
             try {
                 return await j.Judge(c);
             } catch (e) {
                 if (j.Name === 'TpProb') return null;
-                return { Judge: j.Name, Model: j.Name, Score: 0, Bucket: 'Medium', Reason: `judge failed: ${e instanceof Error ? e.message : String(e)}` };
+                return { Judge: j.Name, Model: modelOf(j), Score: 0, Bucket: 'Medium', Reason: `${JUDGE_ERROR_PREFIX}judge failed: ${e instanceof Error ? e.message : String(e)}` };
             }
         }));
         const scores = all.filter((s): s is JudgeScore => s !== null);
-        const tp = scores.find((s) => s.Judge === 'TpProb');
+        const tp = scores.find((s) => s.Judge === 'TpProb' && !s.Reason.startsWith(JUDGE_ERROR_PREFIX));
         const buckets: JudgeBucket[] = scores.flatMap((s) => (s.Bucket === null ? [] : [{ Model: s.Model, Bucket: s.Bucket, Reason: s.Reason }]));
         const median = buckets.length ? GetConsensus(buckets.map((b) => BUCKET_SCORE[b.Bucket]), 'Median').Overall : null;
         return { TPProb: tp?.Score ?? null, Buckets: buckets, Median: median === null ? null : toBucket(median) };
