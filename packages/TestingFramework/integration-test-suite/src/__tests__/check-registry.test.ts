@@ -115,6 +115,7 @@ import { VideoStudioLiveSmokeChecks } from '../checks/video-studio-live-smoke.ch
 import { SemanticGraphChecks } from '../checks/semantic-graph.checks';
 import { GraphRuntimeChecks } from '../checks/graph-runtime.checks';
 import { TaskGraphSecurityChecks } from '../checks/task-graph-security.checks';
+import { RunViewFeatureChecks } from '../checks/runview-features.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -168,9 +169,9 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['cache-immutability', CacheImmutabilityChecks, 15], // F1-F15 freeze-on-write runtime contract (IT81); F13/F14 cover review findings C1/C2, F15 covers M3 (dataset key collision)
         ['client-cache', ClientCacheChecks, 26],
         ['runquery-cache', RunQueryCacheChecks, 21], // Q11 (B46 category collision) + Q12 (B45 hit-vs-miss permission parity) added 2026-07-20; Q13–Q21 (query definition changes) added 2026-10-14
-        // RLS1–RLS12 (rls-isolation.checks.ts) + KF1–KF6 (keyrowfilter.checks.ts, API-key row filters)
+        // RLS1–RLS14 (rls-isolation.checks.ts) + KF1–KF6 (keyrowfilter.checks.ts, API-key row filters)
         // + RF1–RF3 (rolerowfilter.checks.ts, role filter edits) share one bundle
-        ['rls-isolation', [...RlsIsolationChecks, ...KeyRowFilterChecks, ...RoleRowFilterChecks], 20],
+        ['rls-isolation', [...RlsIsolationChecks, ...KeyRowFilterChecks, ...RoleRowFilterChecks], 22],
         ['rls-isolation-client', RlsIsolationClientChecks, 1],
         ['record-process', RecordProcessChecks, 12],
         ['record-process-facade', RecordProcessFacadeChecks, 2],
@@ -226,7 +227,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['materialized-read', MaterializedReadChecks, 3], // MR1-MR2 served-from-snapshot proof + MR3 delete-path FK cleanup (IT79)
         ['materialized-entity-read', MaterializedEntityReadChecks, 2], // EMR1-EMR2 entity base-view RunView redirect (IT78)
         ['form-contributions', FormContributionsChecks, 17], // FC1-FC17 metadata form contributions: schema, actions, clamp, kill switch, scoping, section claims, component guard (IT104)
-        ['scoped-anon-elevation', ScopedAnonElevationChecks, 6], // SA1-SA6 scoped-anonymous elevation permission contract (IT68)
+        ['scoped-anon-elevation', ScopedAnonElevationChecks, 7], // SA1-SA6 scoped-anonymous elevation permission contract + SA7 magic-link single-use consume (IT68)
         ['entity-graph', EntityGraphChecks, 11], // EG1-EG8 related-record collection graph saves (IT72)
         ['entity-embedded', EntityEmbeddedChecks, 6], // EE1-EE6 owner-held embedded records
         ['entity-graph-client', EntityGraphClientChecks, 9], // EGC1-EGC9 graph saves over the GraphQL wire (IT73)
@@ -282,6 +283,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['semantic-graph', SemanticGraphChecks, 7], // SG1-SG7 Semantic Graph substrate, Content Pipeline GraphStage overlay, and Executable Canon DAG similarity & telemetry (IT162)
         ['graph-runtime', GraphRuntimeChecks, 6], // GR1-GR6 MJ Canon traversal, per-caller query visibility, the edge approval gate on a real Save, Get Graph Context, JoinEntity and QueryEdgeProvider fixtures (IT164)
         ['task-graph-security', TaskGraphSecurityChecks, 4], // TGS1-TGS4 envelope on every row and immutable, one compensation per step, A2A store row boundary, dispatcher taint gate & compensation (IT165)
+        ['runview-features', RunViewFeatureChecks, 12], // RVF1-RVF12 RunView cross-feature edges and RunViewParams.Parameters wire binding (IT32)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -459,7 +461,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'remote-op-ai-authoring': 3,
         'remote-op-wire-progress': 1,
         'remote-operations': 7,
-        'rls-isolation': 20,
+        'rls-isolation': 22,
         'rls-isolation-client': 1,
         'role-elevation': 6,
         'rubrics': 15,
@@ -469,12 +471,12 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'runquery-params': 10,
         'runquery-rendering': 13,
         'runquery-rendering-client': 10,
-        'runview-features': 7,
+        'runview-features': 12,
         'runview-matrix': 19,
         'scheduled-jobs': 2,
         'scheduling-concurrency': 3,
         'scope-enforcement': 5,
-        'scoped-anon-elevation': 6,
+        'scoped-anon-elevation': 7,
         'search': 8,
         'search-origin-gate': 4,
         'search-provider-trust': 2,
@@ -888,6 +890,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'rubrics.R8',
         'rubrics.R9',
         'rubrics.W1',
+        'scoped-anon-elevation.SA7',
         'self-avatar-client.AV1',
         'self-avatar-client.AV2',
         'self-avatar-client.AV3',

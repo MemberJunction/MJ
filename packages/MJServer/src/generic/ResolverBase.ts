@@ -19,11 +19,13 @@ import {
   LogErrorEx,
   LogStatus,
   Metadata,
+  NormalizeRunViewParameters,
   ProjectEntityValuesForUser,
   ReadableFieldsTransportKey,
   RecordChangeFieldSecurityProjector,
   RecordChangePayloadFields,
   RunView,
+  RunViewParameters,
   RunViewParams,
   RunViewResult,
   ServerOperationScopeManager,
@@ -702,7 +704,8 @@ export class ResolverBase {
           viewInput.IncludeBinaryFields,
           viewInput.AlternateBaseView,
           viewInput.Properties,
-          viewInput.SkipTotalRowCount
+          viewInput.SkipTotalRowCount,
+          viewInput.Parameters
         );
       }
       else {
@@ -752,7 +755,8 @@ export class ResolverBase {
         viewInput.IncludeBinaryFields,
         viewInput.AlternateBaseView,
         viewInput.Properties,
-        viewInput.SkipTotalRowCount
+        viewInput.SkipTotalRowCount,
+        viewInput.Parameters
       );
     } catch (err) {
       console.log(err);
@@ -803,7 +807,8 @@ export class ResolverBase {
         viewInput.IncludeBinaryFields,
         viewInput.AlternateBaseView,
         undefined,
-        viewInput.SkipTotalRowCount
+        viewInput.SkipTotalRowCount,
+        viewInput.Parameters
       );
     } catch (err) {
       console.log(err);
@@ -881,6 +886,7 @@ export class ResolverBase {
           skipTotalRowCount: viewInput.SkipTotalRowCount,
           alternateBaseView: viewInput.AlternateBaseView,
           properties: viewInput.Properties,
+          parameters: viewInput.Parameters,
         });
       } catch (err) {
         LogError(err);
@@ -1261,6 +1267,18 @@ export class ResolverBase {
   }
 
   /**
+   * Validates and normalizes a client-supplied {@link RunViewParameters} map at the GraphQL boundary
+   * using the shared {@link NormalizeRunViewParameters} validator from `@memberjunction/core`.
+   */
+  protected sanitizeRunViewParameters(raw: RunViewParameters | undefined): RunViewParameters | undefined {
+    const normalized = NormalizeRunViewParameters(raw);
+    if (normalized.size === 0) {
+      return undefined;
+    }
+    return Object.fromEntries(normalized);
+  }
+
+  /**
    * Optimized RunViewGenericInternal implementation with:
    * - Field filtering at source (Fix #7)
    * - Improved error handling (Fix #9)
@@ -1290,10 +1308,13 @@ export class ResolverBase {
     includeBinaryFields?: boolean,
     alternateBaseView?: string,
     properties?: ViewPropertyValues,
-    skipTotalRowCount?: boolean
+    skipTotalRowCount?: boolean,
+    parameters?: RunViewParameters
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
+
+      const sanitizedParameters = this.sanitizeRunViewParameters(parameters);
 
       // Prefer the authenticated session's payload user — it is the authoritative per-request
       // identity and (for magic-link sessions) carries the per-session resource scope / synthesized
@@ -1376,6 +1397,7 @@ export class ResolverBase {
           SkipTotalRowCount: skipTotalRowCount,
           AlternateBaseView: alternateBaseView,
           Properties: properties,
+          Parameters: sanitizedParameters,
           TimeZone: userPayload?.TimeZone,
           PreserveRestrictedApiCiphertext: true,
         },
@@ -1514,6 +1536,8 @@ export class ResolverBase {
           rt = 'count_only';
         }
 
+        const sanitizedParameters = this.sanitizeRunViewParameters(param.parameters);
+
         // Build parameters
         runViewParams.push({
           ViewID: param.viewInfo.ID,
@@ -1542,6 +1566,7 @@ export class ResolverBase {
           SkipTotalRowCount: param.skipTotalRowCount,
           AlternateBaseView: param.alternateBaseView,
           Properties: param.properties,
+          Parameters: sanitizedParameters,
           TimeZone: param.userPayload?.TimeZone,
           PreserveRestrictedApiCiphertext: true,
         });
