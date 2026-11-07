@@ -1255,6 +1255,154 @@ _ALTER_COLUMN = _re.compile(
 )
 
 
+# T-SQL `DROP INDEX [IF EXISTS] name ON table` (issue #5955). PostgreSQL has no `ON` clause: an
+# index lives in its table's schema and is dropped by schema-qualified name. sqlglot 27.x cannot
+# parse the T-SQL form (a parse-error gap) and 30.x passes it through as invalid PG; both now get
+# the PG form. One index per statement — a comma list falls through to the existing gap.
+_DROP_INDEX = _re.compile(
+    r"^\s*DROP\s+INDEX\s+(?:IF\s+EXISTS\s+)?(?P<name>\[[^\]]+\]|\"[^\"]+\"|\w+)\s+ON\s+(?P<tbl>[^,;]+?)\s*;?\s*$",
+    _re.IGNORECASE | _re.DOTALL,
+)
+
+
+def _transpile_drop_index(txt: str) -> str | None:
+    """`DROP INDEX ix ON s.t` → `DROP INDEX IF EXISTS "s"."ix"`. Returns None for any other shape."""
+    m = _DROP_INDEX.match(_strip_leading_sql_comments(txt))
+    if not m:
+        return None
+    schema_toks = _IDENT_TOKEN.findall(m.group("tbl"))[:-1]
+    prefix = "".join(_ident_token_to_pg(t) + "." for t in schema_toks)
+    name = m.group("name").strip('[]"')
+    return f'DROP INDEX IF EXISTS {prefix}"{name}"'
+
+
+# CodeGen's core metadata-refresh procs, which an Open App migration calls in its hand region
+# (issue #5919). PostgreSQL has these functions (CodeGen's support objects or the core
+# migrations), but with positional, differently named parameters, and the forms the core
+# migrations install take only an EXCLUDED-schemas list.
+# Of these, only spUpdateExistingEntityFieldsFromSchema and spDeleteUnneededEntityFields take an
+# entity-ID list, as their second parameter in every installed form (`p_entityids`).
+_CORE_REFRESH_PROCS = {
+    "spupdateexistingentitiesfromschema": "spUpdateExistingEntitiesFromSchema",
+    "spupdateexistingentityfieldsfromschema": "spUpdateExistingEntityFieldsFromSchema",
+    "spsetdefaultcolumnwidthwhereneeded": "spSetDefaultColumnWidthWhereNeeded",
+    "spupdateschemainfofromdatabase": "spUpdateSchemaInfoFromDatabase",
+    "spdeleteunneededentityfields": "spDeleteUnneededEntityFields",
+}
+_CORE_REFRESH_PROCS_WITH_ENTITY_IDS = {"spUpdateExistingEntityFieldsFromSchema", "spDeleteUnneededEntityFields"}
+_CORE_EXEC = _re.compile(
+    r"^\s*EXEC(?:UTE)?\s+(?P<schema>\[[^\]]+\]|\"[^\"]+\"|\$\{[\w:]+\}|" + _re.escape(FLYWAY_SENTINEL) + r"|\w+)\s*\.\s*"
+    r"(?P<proc>\[[^\]]+\]|\"[^\"]+\"|\w+)(?P<args>(?:\s+[\s\S]*?)?)\s*;?\s*$",
+    _re.IGNORECASE,
+)
+_NAMED_ARG = _re.compile(r"^\s*@(?P<name>\w+)\s*=\s*(?P<value>N?'(?:[^']|'')*'|NULL)\s*$", _re.IGNORECASE)
+
+
+def _core_schema_ref(tok: str) -> str:
+    """Schema token of a core EXEC → PG: a `${…}` placeholder stays bare (substituted later)."""
+    name = tok.strip().strip('[]"')
+    if name == FLYWAY_SENTINEL:
+        return FLYWAY_MACRO
+    if name.startswith("${"):
+        return name
+    return f'"{name}"'
+
+
+def _split_exec_args(args: str) -> list[str] | None:
+    """Split `@a='x', @b=N'y'` at top-level commas (outside string literals); None if unbalanced."""
+    parts, cur, in_str = [], "", False
+    for ch in args:
+        if ch == "'":
+            in_str = not in_str
+        if ch == "," and not in_str:
+            parts.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    if in_str:
+        return None
+    if cur.strip():
+        parts.append(cur)
+    return parts
+
+
+def _transpile_core_refresh_exec(txt: str) -> str | None:
+    """`EXEC <core>.spUpdateExistingEntitiesFromSchema @ExcludedSchemaNames='…'[, @IncludedSchemaNames='…'][, @EntityIDs='…']`
+    (and the other refresh procs in _CORE_REFRESH_PROCS) → a PG call (issue #5919).
+
+    The PG functions are called positionally: first the excluded-schemas list, the one parameter
+    every installed form has, then `@EntityIDs` for the two procs that take it. Dropping
+    `@EntityIDs` would widen the call from the named entities to every entity in the schemas,
+    which for spDeleteUnneededEntityFields deletes more than the source asked. `@IncludedSchemaNames`
+    has no PG counterpart in the installed forms, so the call runs in a DO block that excludes, at
+    apply time, every schema not named in the included list (decision pg.2). Returns None when this
+    is not such a call, an argument is not understood, or `@EntityIDs` is given to a proc that has
+    no such parameter; the caller then reports it.
+    """
+    m = _CORE_EXEC.match(_strip_leading_sql_comments(txt))
+    if not m:
+        return None
+    proc = _CORE_REFRESH_PROCS.get(m.group("proc").strip('[]"').lower())
+    if proc is None:
+        return None
+    raw_args = _split_exec_args(m.group("args") or "")
+    if raw_args is None:
+        return None
+    named: dict[str, str | None] = {}
+    for raw in raw_args:
+        a = _NAMED_ARG.match(raw)
+        if not a:
+            return None
+        key = a.group("name").lower()
+        if key not in ("excludedschemanames", "includedschemanames", "entityids"):
+            return None
+        val = a.group("value")
+        named[key] = None if val.upper() == "NULL" else _unquote_tsql_string(val)
+    target = f'{_core_schema_ref(m.group("schema"))}."{proc}"'
+    excluded = named.get("excludedschemanames")
+    included = named.get("includedschemanames")
+    extra = ""
+    if named.get("entityids") is not None:
+        if proc not in _CORE_REFRESH_PROCS_WITH_ENTITY_IDS:
+            return None
+        extra = ", " + _pg_string(named["entityids"])
+    if not included:
+        arg = "NULL" if excluded is None else _pg_string(excluded)
+        return f"SELECT {target}({arg}{extra})"
+    given = "''" if excluded is None else _pg_string(excluded)
+    return (
+        "DO $mj_refresh$\n"
+        "DECLARE v_excluded TEXT;\n"
+        "BEGIN\n"
+        "  -- T-SQL passed an included-schemas list; the PG function takes only an excluded list, so\n"
+        "  -- exclude every schema not in the included list, plus the excluded list as given.\n"
+        "  SELECT concat_ws(',', NULLIF(" + given + ", ''), string_agg(nspname, ','))\n"
+        "    INTO v_excluded\n"
+        "    FROM pg_namespace\n"
+        "   WHERE lower(nspname) <> ALL (string_to_array(lower(replace(" + _pg_string(included) + ", ' ', '')), ','));\n"
+        f"  PERFORM {target}(v_excluded{extra});\n"
+        "END $mj_refresh$"
+    )
+
+
+# `EXEC sp_refreshview '<schema>.<view>'` — CodeGen writes one after every column change to a view's
+# table. PostgreSQL has no equivalent (a view's column list is fixed at CREATE), so the converter
+# cannot carry it: it is reported as a named warning so the view is rebuilt by hand (issue #5649,
+# decision pg.5), not dropped without a trace.
+_SP_REFRESHVIEW = _re.compile(
+    r"^\s*EXEC(?:UTE)?\s+(?:\[?sys\]?\.)?\[?sp_refreshview\]?\s+(?:@viewname\s*=\s*)?N?'(?P<view>[^']+)'\s*;?\s*$",
+    _re.IGNORECASE,
+)
+
+
+def _refreshview_target(txt: str) -> str | None:
+    """The view named by `EXEC sp_refreshview '<view>'`, or None for any other statement."""
+    m = _SP_REFRESHVIEW.match(_strip_leading_sql_comments(txt))
+    if not m:
+        return None
+    return m.group("view").replace(FLYWAY_SENTINEL, FLYWAY_MACRO)
+
+
 def _transpile_alter_column(txt: str) -> str | None:
     """`ALTER TABLE t ALTER COLUMN c <type> [NOT NULL|NULL]` → PG TYPE change + nullability.
     Returns None if txt isn't an ALTER COLUMN (or its type can't be parsed)."""
@@ -1445,6 +1593,45 @@ def _parse_resilient(protected: str) -> list[tuple[exp.Expression | None, str]]:
 _WITH_CHECK_ADD = _re.compile(r"\bWITH\s+(?:NOCHECK|CHECK)\s+(?=ADD\b)", _re.IGNORECASE)
 
 
+def _delete_cte_target(stmt: exp.Delete) -> exp.CTE | None:
+    """The CTE a `WITH c AS (…) DELETE FROM c …` deletes through, or None for a plain DELETE."""
+    target = stmt.this
+    with_ = stmt.args.get("with")
+    if not isinstance(target, exp.Table) or target.args.get("db") or with_ is None:
+        return None
+    for cte in with_.expressions:
+        if (cte.alias or "").lower() == (target.name or "").lower():
+            return cte
+    return None
+
+
+def _rewrite_delete_from_cte(stmt: exp.Delete, cte: exp.CTE) -> exp.Delete | None:
+    """T-SQL deletes base-table rows through a single-table CTE (the ROW_NUMBER dedup idiom);
+    PostgreSQL cannot DELETE FROM a CTE (issue #3166). Carry each row's `ctid` out of the CTE
+    and delete from the base table by it:
+        WITH c AS (SELECT ctid AS mj_ctid, … FROM t …) DELETE FROM t WHERE ctid IN (SELECT mj_ctid FROM c WHERE p)
+    Returns None for any CTE whose rows do not map one-to-one onto one table (a join, several
+    FROM tables, DISTINCT, GROUP BY, a set operation); the caller reports those as a gap."""
+    sel = cte.this
+    if not isinstance(sel, exp.Select) or sel.args.get("joins") or sel.args.get("distinct") or sel.args.get("group"):
+        return None
+    from_ = sel.args.get("from")
+    base = from_.this if from_ is not None else None
+    if not isinstance(base, exp.Table) or len(from_.expressions or []) > 0:
+        return None
+    qualifier = base.alias or None
+    sel.select(exp.alias_(exp.column("ctid", table=qualifier), "mj_ctid"), copy=False)
+    inner = exp.select("mj_ctid").from_(exp.to_table(cte.alias))
+    where = stmt.args.get("where")
+    if where is not None:
+        inner = inner.where(where.this)
+    target = base.copy()
+    target.set("alias", None)
+    stmt.set("this", target)
+    stmt.set("where", exp.Where(this=exp.In(this=exp.column("ctid"), query=exp.Subquery(this=inner))))
+    return stmt
+
+
 def _has_computed_column(stmt: exp.Expression) -> bool:
     """True if `stmt` declares a computed/generated column (T-SQL `col AS (expr) [PERSISTED]`).
     Such columns cannot be transpiled mechanically: sqlglot emits `GENERATED ALWAYS AS (...)
@@ -1493,6 +1680,10 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict], l
                 dropped.append({"kind": "ROUTINE-END", "snippet": tail[:80]})
                 continue
         if stmt is None:
+            di = _transpile_drop_index(raw)
+            if di is not None:
+                out.append(di)
+                continue
             unhandled.append({"kind": "parse-error", "snippet": raw.strip()[:80]})
             continue
         # A T-SQL `IF …` statement that the IF-EXISTS envelope did NOT capture (e.g. a
@@ -1575,6 +1766,15 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict], l
                 for t in (stmt.args.get("tables") or [])):
             unhandled.append({"kind": "DELETE-TOP", "snippet": stmt.sql(dialect="tsql")[:80]})
             continue
+        # `WITH c AS (…) DELETE FROM c` — PG cannot delete through a CTE. Rewrite the single-table
+        # form to a ctid delete on the base table; report any other shape (issue #3166).
+        if isinstance(stmt, exp.Delete):
+            cte = _delete_cte_target(stmt)
+            if cte is not None:
+                txt = stmt.sql(dialect="tsql")
+                if _rewrite_delete_from_cte(stmt, cte) is None:
+                    unhandled.append({"kind": "DELETE-FROM-CTE", "snippet": txt[:80]})
+                    continue
         # Computed/generated columns (`col AS (expr) [PERSISTED]`) can't be transpiled — report
         # (would emit a type-less `GENERATED ALWAYS AS (...) STORED`; see _has_computed_column).
         # Only CREATE/ALTER declare columns — gate on type so the subtree walk skips the huge
@@ -1596,6 +1796,18 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict], l
             ac = _transpile_alter_column(txt)
             if ac is not None:
                 out.append(ac)
+                continue
+            di = _transpile_drop_index(txt)
+            if di is not None:
+                out.append(di)
+                continue
+            cr = _transpile_core_refresh_exec(txt)
+            if cr is not None:
+                out.append(cr)
+                continue
+            rv = _refreshview_target(txt)
+            if rv is not None:
+                dropped.append({"kind": "SP-REFRESHVIEW", "snippet": rv})
                 continue
             # SQL Server batch-control noise — not needed on PG, drop silently.
             if _re.match(r"^\s*(BEGIN\s+TRY|END\s+TRY|BEGIN\s+CATCH|END\s+CATCH|SET\s+NOEXEC|GO)\b", txt, _re.IGNORECASE):
@@ -1648,6 +1860,12 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict], l
             elif dk == "TRIGGER":
                 unhandled.append({"kind": "DROP-TRIGGER", "snippet": stmt.sql(dialect="tsql")[:80]})
                 continue
+            elif dk == "INDEX":
+                # 30.x parses the T-SQL `DROP INDEX ix ON t` and would emit it unchanged.
+                di = _transpile_drop_index(raw or stmt.sql(dialect="tsql"))
+                if di is not None:
+                    out.append(di)
+                    continue
         if isinstance(stmt, exp.Create) and (stmt.args.get("kind") or "").upper() in (
                 "NONCLUSTERED INDEX", "CLUSTERED INDEX"):
             stmt.set("kind", "INDEX")  # PG has no CLUSTERED/NONCLUSTERED qualifier

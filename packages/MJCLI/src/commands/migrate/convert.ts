@@ -11,6 +11,7 @@ import {
   IncrementalBaker,
   BakeApplyError,
   SelectBakeableEntities,
+  DiffFieldDefaults,
   SplitMigration,
 } from '@memberjunction/sql-converter';
 import type {
@@ -20,6 +21,7 @@ import type {
   MigrationConversionResult,
   BakedMigrationResult,
   BakerWorkingDB,
+  EntityFieldDefault,
 } from '@memberjunction/sql-converter';
 import { MJPostgresTranspiler, type BitColumnRef } from '@memberjunction/sqlglot-ts';
 // Type-only import: erased at runtime, so the heavy codegen-lib value graph is NOT loaded
@@ -38,7 +40,7 @@ const MJ_CORE_SCHEMA = '__mj';
  * `mode`). An INTERSECTION (not a bare `Pick`) because `MigrationConversionResult` has no `mode`
  * field — the baker's `mode`/`reconciliation` are optional here (issue #3252 Phase 4b).
  */
-type ConvertedShape = Pick<MigrationConversionResult, 'status' | 'pgSQL' | 'unhandled' | 'handProcedural'> & {
+type ConvertedShape = Pick<MigrationConversionResult, 'status' | 'pgSQL' | 'unhandled' | 'handProcedural' | 'warnings'> & {
   mode?: BakedMigrationResult['mode'];
   reconciliation?: MigrationConversionResult['reconciliation'];
 };
@@ -405,17 +407,26 @@ export default class MigrateConvert extends Command {
     this.log(`  Indexes:     ${totalStats.IndexesCreated}`);
     this.log(`  Inserts:     ${totalStats.InsertsConverted}`);
     this.log(`  Grants:      ${totalStats.GrantsConverted}`);
+    this.printWarnings(totalStats.Warnings);
 
     // Post-conversion: deduplicate EntityField Sequence values across files
     // to prevent UQ_EntityField_EntityID_Sequence violations on PG
+    // Only the files written by THIS run may be edited: every other .pg.sql in the folder is
+    // committed history that may already be applied, so a fix lands on the side of a collision
+    // that this run produced (issue #3166).
     this.log('\nRunning EntityField Sequence deduplication...');
-    const dedupResult = deduplicateEntityFieldSequences(outputDir);
-    if (dedupResult.totalCollisions > 0) {
-      this.log(`  Fixed ${dedupResult.totalCollisions} sequence collision(s) across ${dedupResult.fixes.length} INSERT(s):`);
+    const writtenThisRun = new Set(unconverted.map((m) => path.basename(m.OutputFile)));
+    const dedupResult = deduplicateEntityFieldSequences(outputDir, false, writtenThisRun);
+    if (dedupResult.fixes.length > 0) {
+      this.log(`  Fixed ${dedupResult.fixes.length} sequence collision(s) in files written by this run:`);
       for (const fix of dedupResult.fixes) {
         this.log(`    ${fix.file} line ${fix.line}: ${fix.originalSequence} → ${fix.newSequence}`);
       }
-    } else {
+    }
+    if (dedupResult.committedCollisions.length > 0) {
+      this.log(`  Left ${dedupResult.committedCollisions.length} collision(s) between committed files unchanged.`);
+    }
+    if (dedupResult.totalCollisions === 0) {
       this.log(`  No collisions found (${dedupResult.totalInserts} EntityField INSERTs scanned).`);
     }
 
@@ -488,6 +499,7 @@ export default class MigrateConvert extends Command {
     const regenReseed: string[] = [];
     const needsHand: { file: string; routines: string[] }[] = [];
     const withUnhandled: { file: string; count: number }[] = [];
+    const warnings: string[] = [];
     const gapReport: {
       sourceFile: string;
       outputFile: string;
@@ -534,6 +546,7 @@ export default class MigrateConvert extends Command {
         break;
       }
 
+      warnings.push(...result.warnings);
       const decision = DecideConvertWrite(result, bakeCodegen);
       // A needs-hand / gap-no-bake migration is NEVER written as a discoverable .pg.sql — that
       // would mark it converted forever and let Skyway apply an incomplete file. The .needs-hand
@@ -596,6 +609,7 @@ export default class MigrateConvert extends Command {
     }
 
     this.printSplitSummary(converted, regenReseed, needsHand, withUnhandled, flags['dry-run'], bakeCodegen);
+    this.printWarnings(warnings);
 
     // A halt (bake-mode gap or a conversion failure) ALWAYS ends the run non-zero, BEFORE the
     // unconditional `process.exit(0)` below — otherwise a bake run could exit 0 despite a gap
@@ -678,7 +692,7 @@ export default class MigrateConvert extends Command {
    * matching `import type` at the top is erased at runtime, so it does not defeat the deferral.
    */
   private async buildBaker(transpiler: MJPostgresTranspiler, schema: string, coreSchema: string): Promise<IncrementalBaker> {
-    const { RunCodeGenBase, SQLCodeGenBase, initializeConfig, dbPlatform, configInfo } = await import('@memberjunction/codegen-lib');
+    const { RunCodeGenBase, SQLCodeGenBase, PostgreSQLCodeGenProvider, initializeConfig, dbPlatform, configInfo } = await import('@memberjunction/codegen-lib');
 
     if (dbPlatform() !== 'postgresql') {
       this.error('--bake-codegen requires DB_PLATFORM=postgresql with PG_* connection env (the working DB CodeGen objects are captured from).');
@@ -776,8 +790,51 @@ export default class MigrateConvert extends Command {
       // Provider order is name-sorted (PostProcessEntityMetadata), matching a full run.
       listBakeableEntities: async (targetSchema: string) =>
         SelectBakeableEntities(ds.provider.Entities, targetSchema, configInfo.excludeSchemas ?? []),
+      // PostgreSQL's field sync for the migration's entities, between apply and capture (issue
+      // #5650): a default added to an existing column reaches the metadata the baked spCreate is
+      // generated from. CodeGen's support objects are ensured first, as `mj codegen` does, since
+      // the sync with an entity-ID scope is one of them.
+      syncFieldDefaults: async (entityNames: string[]) => {
+        const ids = entityNames
+          .map((n) => ds.provider.EntityByName(n)?.ID)
+          .filter((id): id is string => typeof id === 'string');
+        if (ids.length === 0) return [];
+        const lit = (v: string) => `'${v.replaceAll("'", "''")}'`;
+        const support = new PostgreSQLCodeGenProvider().getMetadataSupportObjectsSQL(coreSchema);
+        if (support) await ds.connection.query(support);
+        const snapshot = async (): Promise<EntityFieldDefault[]> => {
+          const { recordset } = await ds.connection.query(
+            `SELECT f."ID", e."Name" AS "EntityName", f."Name" AS "FieldName", f."DefaultValue"
+               FROM ${coreSchema}."EntityField" f JOIN ${coreSchema}."Entity" e ON e."ID" = f."EntityID"
+              WHERE f."EntityID" IN (${ids.map(lit).join(', ')})
+              ORDER BY e."Name", f."Sequence"`,
+          );
+          return recordset.map((r) => ({
+            ID: String(r.ID),
+            EntityName: String(r.EntityName),
+            FieldName: String(r.FieldName),
+            DefaultValue: r.DefaultValue === null || r.DefaultValue === undefined ? null : String(r.DefaultValue),
+          }));
+        };
+        const before = await snapshot();
+        const excluded = (configInfo.excludeSchemas ?? []).join(',');
+        await ds.connection.query(
+          `SELECT * FROM ${coreSchema}."spUpdateExistingEntityFieldsFromSchema"(${lit(excluded)}, ${lit(ids.join(','))})`,
+        );
+        return DiffFieldDefaults(before, await snapshot());
+      },
     };
     return new IncrementalBaker({ transpiler, db, schema, coreSchema });
+  }
+
+  /**
+   * Print the named, non-blocking warnings (issue #5649): work the converter cannot do that a
+   * person finishes by hand. They do not fail the run or stop a bake.
+   */
+  private printWarnings(warnings: string[]): void {
+    if (warnings.length === 0) return;
+    this.logToStderr(`\n  ⚠ ${warnings.length} warning(s) to finish by hand (the run is not failed):`);
+    for (const w of warnings) this.logToStderr(`    ${w}`);
   }
 
   /** Warn when the legacy path is about to transpile CodeGen CRUD procedures. */
@@ -908,5 +965,6 @@ export default class MigrateConvert extends Command {
     target.ErrorBatches.push(...source.ErrorBatches);
     target.SkippedBatches.push(...source.SkippedBatches);
     target.GapBatches.push(...source.GapBatches);
+    target.Warnings.push(...source.Warnings);
   }
 }

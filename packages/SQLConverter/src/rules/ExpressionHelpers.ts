@@ -431,6 +431,21 @@ function buildDateDiffExpr(e: string, s: string, extractExpr: string, useTimesta
     .replace(/\$S/g, s);
 }
 
+/**
+ * DATEDIFF(day, s, e): T-SQL counts the midnight boundaries crossed, which is what PostgreSQL's
+ * `date - date` gives, as an integer. DATE and TIMESTAMP operands involve no time zone. A
+ * TIMESTAMPTZ operand (most MJ date columns) is cast to a date in the session's time zone, so the
+ * count depends on it: `2026-11-01 23:00Z` to `2026-11-02 01:00Z` gives 1 in a UTC session and 0
+ * in Asia/Tokyo; it matches T-SQL on UTC values only when the session is in UTC. The old
+ * `EXTRACT(DAY FROM (e::TIMESTAMPTZ - s::TIMESTAMPTZ))` lost a day across a daylight-saving change
+ * in the session's zone and truncated part days (23:00 → 01:00 gave 0, T-SQL gives 1), issue #5920.
+ * TIME expressions have no date part and keep the interval form.
+ */
+function dateDiffDays(e: string, s: string, useTimestamp: boolean): string {
+  if (!useTimestamp) return buildDateDiffExpr(e, s, `EXTRACT(DAY FROM ($E - $S))`, false);
+  return `((${e})::date - (${s})::date)`;
+}
+
 function convertDateDiff(sql: string): string {
   const pattern = /\bDATEDIFF\s*\(/gi;
   let result = '';
@@ -453,7 +468,7 @@ function convertDateDiff(sql: string): string {
     let replacement: string;
     switch (unitLower) {
       case 'day': case 'dd': case 'd':
-        replacement = buildDateDiffExpr(e, s, `EXTRACT(DAY FROM ($E - $S))`, useTimestamp); break;
+        replacement = dateDiffDays(e, s, useTimestamp); break;
       case 'hour': case 'hh':
         replacement = buildDateDiffExpr(e, s, `EXTRACT(EPOCH FROM ($E - $S)) / 3600`, useTimestamp); break;
       case 'minute': case 'mi': case 'n':
@@ -465,7 +480,7 @@ function convertDateDiff(sql: string): string {
       case 'month': case 'mm': case 'm':
         replacement = buildDateDiffExpr(e, s, `(EXTRACT(YEAR FROM AGE($E, $S)) * 12 + EXTRACT(MONTH FROM AGE($E, $S)))`, useTimestamp); break;
       default:
-        replacement = buildDateDiffExpr(e, s, `EXTRACT(DAY FROM ($E - $S))`, useTimestamp); break;
+        replacement = dateDiffDays(e, s, useTimestamp); break;
     }
     result += sql.slice(lastIdx, match.index) + replacement;
     lastIdx = parsed.endIdx;
@@ -883,11 +898,114 @@ export function convertCastTypes(sql: string): string {
   return ConvertCastTypes(sql);
 }
 
+/** Text of `sql` with string-literal contents and comments blanked to spaces, so offsets match `sql`. */
+function maskNonCode(sql: string): string {
+  return segmentSQL(sql).map((seg) => {
+    if (seg.type === 'code') return seg.text;
+    if (seg.type === 'comment') return seg.text.replace(/[^\n]/g, ' ');
+    return seg.text.length >= 2 ? `'${' '.repeat(seg.text.length - 2)}'` : seg.text;
+  }).join('');
+}
+
+/** UUID text, as T-SQL's TRY_CONVERT(UNIQUEIDENTIFIER, …) accepts it. */
+const UUID_TEXT_PATTERN = '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+
+/** Integer TRY_CONVERT targets and the PostgreSQL type each casts to. */
+const TRY_CONVERT_INTEGER_TYPES: Record<string, string> = {
+  INT: 'INTEGER', INTEGER: 'INTEGER', BIGINT: 'BIGINT', SMALLINT: 'SMALLINT', TINYINT: 'SMALLINT',
+};
+
+/**
+ * Convert T-SQL `TRY_CONVERT(type, x[, style])`, which returns NULL where a cast would fail.
+ * PostgreSQL has no such function, so each supported target becomes a guarded cast:
+ * - uniqueidentifier → `CASE WHEN (x)::text ~* '<uuid pattern>' THEN (x)::uuid END`
+ * - int / integer / bigint / smallint / tinyint → `CASE WHEN btrim((x)::text) ~ '^[+-]?[0-9]+$' THEN (x)::<type> END`
+ * Any other target is left as written; {@link HasTryConvert} finds it so the caller can report a
+ * gap. Before, the call reached PostgreSQL as `"TRY_CONVERT"(UUID, x)` (issue #5799).
+ */
+export function ConvertTryConvert(sql: string): string {
+  const masked = maskNonCode(sql);
+  const pattern = /\bTRY_CONVERT\s*\(/gi;
+  let result = '';
+  let lastIdx = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(masked)) !== null) {
+    const openIdx = match.index + match[0].length - 1;
+    const close = FindMatchingParen(masked, openIdx);
+    if (close < 0) break;
+    const args = splitTopLevelCommas(sql.slice(openIdx + 1, close)).map((a) => a.trim());
+    const target = (args[0] ?? '').toUpperCase().replace(/\s+/g, '');
+    const x = args[1];
+    let replacement: string | null = null;
+    if (x && (target === 'UNIQUEIDENTIFIER' || target === 'UUID')) {
+      replacement = `CASE WHEN (${x})::text ~* '${UUID_TEXT_PATTERN}' THEN (${x})::uuid END`;
+    } else if (x && TRY_CONVERT_INTEGER_TYPES[target]) {
+      replacement = `CASE WHEN btrim((${x})::text) ~ '^[+-]?[0-9]+$' THEN (${x})::${TRY_CONVERT_INTEGER_TYPES[target]} END`;
+    }
+    if (replacement === null) continue;
+    result += sql.slice(lastIdx, match.index) + replacement;
+    lastIdx = close + 1;
+    pattern.lastIndex = lastIdx;
+  }
+  return result + sql.slice(lastIdx);
+}
+
+/** Whether code (not a literal or comment) in `sql` still calls TRY_CONVERT, quoted or not. */
+export function HasTryConvert(sql: string): boolean {
+  return /(?<![\w.])"?TRY_CONVERT"?\s*\(/i.test(maskNonCode(sql));
+}
+
+/**
+ * Add `RECURSIVE` to a `WITH` whose CTE list holds a CTE that reads itself (`FROM name` or
+ * `JOIN name` inside its own body). PostgreSQL rejects a self-reference without it, where T-SQL
+ * needs no keyword (issue #5799). A `WITH` that is not a CTE list (`WITH (NOLOCK)`, `WITH CHECK`)
+ * and one that already says RECURSIVE are left alone.
+ */
+export function AddRecursiveToSelfReferencingCtes(sql: string): string {
+  const masked = maskNonCode(sql);
+  const inserts: number[] = [];
+  const withPattern = /\bWITH\s+(?!RECURSIVE\b)/gi;
+  let match: RegExpExecArray | null;
+  while ((match = withPattern.exec(masked)) !== null) {
+    if (cteListReadsItself(masked, match.index + match[0].length)) inserts.push(match.index + 4);
+  }
+  let result = sql;
+  for (const at of inserts.reverse()) result = `${result.slice(0, at)} RECURSIVE${result.slice(at)}`;
+  return result;
+}
+
+/** Parse the CTE list starting at `from` in masked SQL; true when one CTE's body names itself. */
+function cteListReadsItself(masked: string, from: number): boolean {
+  let pos = from;
+  for (;;) {
+    const head = masked.slice(pos).match(/^\s*"?(\w+)"?\s*/);
+    if (!head) return false;
+    const name = head[1];
+    pos += head[0].length;
+    if (masked[pos] === '(') {
+      const colsEnd = FindMatchingParen(masked, pos);
+      if (colsEnd < 0) return false;
+      pos = colsEnd + 1;
+    }
+    const as = masked.slice(pos).match(/^\s*AS\s*\(/i);
+    if (!as) return false;
+    const open = pos + as[0].length - 1;
+    const close = FindMatchingParen(masked, open);
+    if (close < 0) return false;
+    const body = masked.slice(open + 1, close);
+    if (new RegExp(`\\b(?:FROM|JOIN)\\s+"?${EscapeRegExp(name)}"?(?![\\w"])`, 'i').test(body)) return true;
+    const comma = masked.slice(close + 1).match(/^\s*,/);
+    if (!comma) return false;
+    pos = close + 1 + comma[0].length;
+  }
+}
+
 /**
  * Convert T-SQL CONVERT(type, expr[, style]) → CAST(expr AS mapped_type).
- * Drops the optional style parameter.
+ * Drops the optional style parameter. TRY_CONVERT is converted first ({@link ConvertTryConvert}).
  */
 export function ConvertConvertFunction(sql: string): string {
+  sql = ConvertTryConvert(sql);
   // 3-arg: CONVERT(type, expr, style)
   sql = sql.replace(
     /\bCONVERT\s*\(\s*(\w+(?:\s*\([^)]*\))?)\s*,\s*([^,)]+)\s*,\s*[^)]+\)/gi,
@@ -930,16 +1048,27 @@ function mapInlineType(tsqlType: string): string {
  * That bug silently corrupted ISO codes in v5.25 Metadata_Sync and
  * caused spCreateStateProvince to hit UQ_StateProvince_ISO3166_2.
  *
- * Fix: only strip N' in contexts where a string literal *starts* — i.e.
- * after a non-quote boundary character (whitespace, punctuation, paren,
- * operator, comma, equals, start of line). This leaves N' inside a
- * string alone.
+ * Fix: only strip an N that sits in code directly before a string literal opens,
+ * after a boundary character (whitespace, punctuation, paren, operator, comma,
+ * equals, start of input). The scan walks code / string / comment segments, so
+ * text inside a literal is never touched — including an escaped `N''x''` inside
+ * a stored query, which a plain regex read as a prefix (issue #5838).
  */
 export function RemoveNPrefix(sql: string): string {
-  // Anchors: start of string, or after one of the "string-start" context chars.
-  // Whitespace, comma, paren, comparison operators, brackets, semicolon.
-  return sql.replace(/(^|[\s(,=<>!+\-*\/[;])N'/g, "$1'");
+  let result = '';
+  let previousType: 'code' | 'string' | 'comment' | null = null;
+  for (const seg of segmentSQL(sql)) {
+    if (seg.type === 'string' && previousType !== 'string' && N_PREFIX_BEFORE_LITERAL.test(result)) {
+      result = result.slice(0, -1);
+    }
+    result += seg.text;
+    if (seg.text) previousType = seg.type;
+  }
+  return result;
 }
+
+/** A code tail ending in the `N` of a unicode-literal prefix: boundary (or start), then `N`. */
+const N_PREFIX_BEFORE_LITERAL = /(?:^|[\s(,=<>!+\-*\/[;])N$/;
 
 /** @deprecated Use {@link RemoveNPrefix}. */
 export function removeNPrefix(sql: string): string {
