@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, constants, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync, writeSync, type Stats } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, join, sep } from 'node:path';
 import { promisify } from 'node:util';
 import { BaseCatchTarget } from '../contracts/BaseCatchTarget';
 import type { CandidateTest, ChangedLines, CoverageResult, ExecutionResult, PreparedRevision, RevisionRef } from '../types';
@@ -22,6 +22,8 @@ const DEFAULT_HOST_RUNNER: HostRunner = async (file, args, cwd) => (await execFi
 export interface TargetOptions { Repo: GitRepo; Sandbox: Sandbox; Settings: Settings; WorkRoot: string; PackageMap: PackageMap; StoreDir: string; HostRunner?: HostRunner; }
 /** A revision could not be prepared (host fetch or sandbox install). The PR is an infrastructure failure, not a test result. */
 export class InfrastructureError extends Error {}
+/** A host path the target refuses to write through or mount read-write: a symlink, a non-folder, or a folder outside the worktree. */
+export class UnsafePathError extends Error {}
 
 const CONTAINER_ROOT = '/work';
 const CONTAINER_STORE = '/pnpm-store';
@@ -110,9 +112,15 @@ export class VitestCatchTarget extends BaseCatchTarget {
         for (const f of readdirSync(from)) if (f.endsWith('.json')) copyFileSync(join(from, f), join(to, f));
     }
 
-    /** Writes each test's source at its `FilePath` inside the worktree. */
+    /**
+     * Writes each test's source into its package's jit folder. Every folder from the worktree root down to the jit
+     * folder must be a real folder inside the worktree, and the file is opened without following a symlink.
+     */
     public async WriteTests(revision: PreparedRevision, tests: CandidateTest[]): Promise<void> {
-        for (const t of tests) { const p = join(revision.RootDir, t.FilePath); mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, t.Source); }
+        for (const t of tests) {
+            const jit = SafeDir(revision.RootDir, `${this.packageDir(t.Package)}/${JIT_SUBDIR}`, true);
+            writeNoFollow(join(jit, basename(t.FilePath)), t.Source);
+        }
     }
 
     /**
@@ -206,7 +214,7 @@ export class VitestCatchTarget extends BaseCatchTarget {
         const mounts: SandboxMount[] = [{ Host: revision.RootDir, Container: CONTAINER_ROOT, Mode: mode }];
         if (mode === 'rw') mounts.push({ Host: this.o.StoreDir, Container: CONTAINER_STORE, Mode: 'rw' });
         if (mode === 'ro') {
-            for (const d of packageDirs) mounts.push({ Host: join(revision.RootDir, d, JIT_SUBDIR), Container: `${CONTAINER_ROOT}/${d}/${JIT_SUBDIR}`, Mode: 'rw' });
+            for (const d of packageDirs) mounts.push({ Host: SafeDir(revision.RootDir, `${d}/${JIT_SUBDIR}`, false), Container: `${CONTAINER_ROOT}/${d}/${JIT_SUBDIR}`, Mode: 'rw' });
             mounts.push({ Host: this.reporterDir(), Container: JIT_REPORTER_MOUNT, Mode: 'ro' });
         }
         for (const t of tmpfs) ensureMountPoint(join(revision.RootDir, t.slice(CONTAINER_ROOT.length + 1)));
@@ -214,6 +222,35 @@ export class VitestCatchTarget extends BaseCatchTarget {
     }
     private reporterDir(): string { return (this.reporter ??= WriteJitReporter(mkdtempSync(join(tmpdir(), 'jit-reporter-')))); }
 }
+
+/**
+ * Walks `rel` below `root` one part at a time. Each part must be a real folder, not a symlink; missing parts are
+ * created when `create` is true and refused otherwise. The real path of the result must lie inside the real root.
+ */
+export function SafeDir(root: string, rel: string, create: boolean): string {
+    let p = root;
+    for (const part of rel.split('/')) {
+        p = join(p, part);
+        let st = lstatOrNull(p);
+        if (!st && create) { mkdirSync(p); st = lstatOrNull(p); }
+        if (!st) throw new UnsafePathError(`refusing ${p}: it does not exist`);
+        if (st.isSymbolicLink()) throw new UnsafePathError(`refusing ${p}: it is a symlink`);
+        if (!st.isDirectory()) throw new UnsafePathError(`refusing ${p}: it is not a folder`);
+    }
+    if (!realpathSync.native(p).startsWith(realpathSync.native(root) + sep)) throw new UnsafePathError(`refusing ${p}: it resolves outside the worktree`);
+    return p;
+}
+
+/** Writes `text` to `path`, refusing an existing symlink or non-file and opening with O_NOFOLLOW. */
+function writeNoFollow(path: string, text: string): void {
+    const st = lstatOrNull(path);
+    if (st?.isSymbolicLink()) throw new UnsafePathError(`refusing ${path}: it is a symlink`);
+    if (st && !st.isFile()) throw new UnsafePathError(`refusing ${path}: it is not a regular file`);
+    const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o644);
+    try { writeSync(fd, text); } finally { closeSync(fd); }
+}
+
+function lstatOrNull(path: string): Stats | null { try { return lstatSync(path); } catch { return null; } }
 
 /** Folders vite and vitest write to at run time; they get a tmpfs because the worktree is read-only in the test phase. */
 function viteTmpfs(dir: string): string[] {

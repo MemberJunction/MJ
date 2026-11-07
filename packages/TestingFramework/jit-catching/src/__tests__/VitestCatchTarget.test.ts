@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CountCoveredChangedLines, InfrastructureError, VitestCatchTarget } from '../target/VitestCatchTarget';
@@ -17,12 +17,15 @@ function fakeTarget(onRun: (o: SandboxRunOptions) => { Stdout: string; ExitCode:
 const test = (id: string): CandidateTest => ({ ID: id, RunID: 'r', Package: '@memberjunction/core', Method: 'DodgyDiff', RiskID: null, RiskText: null, Mutant: null, MutantFailure: null,
   FilePath: `packages/MJCore/src/__tests__/jit/${id}.jit.test.ts`, Source: 'x', GenerationOutcome: 'Produced', FailureReason: null, Tokens: { Model: 'm', InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 }, TranscriptURL: null });
 const ID1 = '11111111-1111-1111-1111-111111111111';
+const JIT = 'packages/MJCore/src/__tests__/jit';
+/** A worktree root on disk with a real jit folder for packages/MJCore. */
+function jitRoot(): string { const r = mkdtempSync(join(tmpdir(), 'jit-root-')); mkdirSync(join(r, JIT), { recursive: true }); return r; }
 
 describe('VitestCatchTarget.Run', () => {
   it('runs each package once per repeat with the fixed seed and the custom reporter, in the sandbox, and maps results', async () => {
     const jit = { Tests: [{ File: `/work/packages/MJCore/src/__tests__/jit/${ID1}.jit.test.ts`, Name: 't', State: 'passed', DurationMs: 1, Errors: [] }], ModuleErrors: [] };
     const { target, calls } = fakeTarget(() => ({ Stdout: `JIT_REPORT ${JSON.stringify(jit)}\n`, ExitCode: 0 }));
-    const results = await target.Run({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: '/work/head' }, [test(ID1)], 3);
+    const results = await target.Run({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: jitRoot() }, [test(ID1)], 3);
     expect(calls).toHaveLength(3);
     const cmd = calls[0].Command.join(' ');
     expect(cmd).toContain('vitest run'); expect(cmd).toContain('--reporter=/jit-reporter/jit-reporter.mjs'); expect(cmd).not.toContain('--reporter=json');
@@ -35,19 +38,19 @@ describe('VitestCatchTarget.Run', () => {
   it('runs a repeat once more with --reporter=json when the custom reporter printed no JIT_REPORT line', async () => {
     const json = { testResults: [{ name: `/work/packages/MJCore/src/__tests__/jit/${ID1}.jit.test.ts`, status: 'passed', assertionResults: [{ fullName: 't', status: 'passed', duration: 1, failureMessages: [] }] }] };
     const { target, calls } = fakeTarget((o) => ({ Stdout: o.Command.join(' ').includes('--reporter=json') ? JSON.stringify(json) : 'Error: Failed to load custom Reporter', ExitCode: 1 }));
-    const results = await target.Run({ Ref: { Kind: 'Base', SHA: 'b' }, RootDir: '/work/base' }, [test(ID1)], 1);
+    const results = await target.Run({ Ref: { Kind: 'Base', SHA: 'b' }, RootDir: jitRoot() }, [test(ID1)], 1);
     expect(calls).toHaveLength(2); expect(calls[1].Command.join(' ')).toContain('--reporter=json');
     expect(results.map((r) => r.Status)).toEqual(['Pass']);
   });
   it('turns a sandbox timeout into Timeout results for every test in that package', async () => {
     const { target } = fakeTarget(() => ({ Stdout: '', ExitCode: 0 }));
     vi.spyOn((target as never as { sandbox: Sandbox }).sandbox, 'Run').mockResolvedValue({ ExitCode: null, TimedOut: true, Stdout: '', Stderr: '', DurationMs: 9 });
-    const results = await target.Run({ Ref: { Kind: 'Base', SHA: 'b' }, RootDir: '/work/base' }, [test(ID1)], 1);
+    const results = await target.Run({ Ref: { Kind: 'Base', SHA: 'b' }, RootDir: jitRoot() }, [test(ID1)], 1);
     expect(results[0].Status).toBe('Timeout');
   });
   it('reads the JSON fallback report from an --outputFile in the jit folder, so test chatter on stdout cannot confuse it', async () => {
     const { target, calls } = fakeTarget((o) => ({ Stdout: o.Command.join(' ').includes('--reporter=json') ? '{"testResults":[]}' : 'no reporter', ExitCode: 1 }));
-    await target.Run({ Ref: { Kind: 'Base', SHA: 'b' }, RootDir: '/work/base' }, [test(ID1)], 1);
+    await target.Run({ Ref: { Kind: 'Base', SHA: 'b' }, RootDir: jitRoot() }, [test(ID1)], 1);
     const cmd = calls[1].Command.join(' ');
     expect(cmd).toMatch(/--outputFile=\/work\/packages\/MJCore\/src\/__tests__\/jit\/[^ ]+\.json/);
     expect(cmd).toMatch(/--reporter=json --outputFile=\S+ >\/dev\/null 2>&1; cat /);
@@ -55,26 +58,26 @@ describe('VitestCatchTarget.Run', () => {
   it('puts the sandbox exit code and stderr in the RunnerError when neither reporter produced a report', async () => {
     const { target } = fakeTarget(() => ({ Stdout: '', ExitCode: 1 }));
     vi.spyOn((target as never as { sandbox: Sandbox }).sandbox, 'Run').mockResolvedValue({ ExitCode: 1, TimedOut: false, Stdout: '', Stderr: "Error: Cannot find module 'x'", DurationMs: 5 });
-    const results = await target.Run({ Ref: { Kind: 'Base', SHA: 'b' }, RootDir: '/work/base' }, [test(ID1)], 1);
+    const results = await target.Run({ Ref: { Kind: 'Base', SHA: 'b' }, RootDir: jitRoot() }, [test(ID1)], 1);
     expect(results[0].Status).toBe('RunnerError');
     expect(results[0].Failure?.Message).toContain('exit 1'); expect(results[0].Failure?.Message).toContain('Cannot find module');
   });
   it('reports a tsc failure with no per-file error as a type-check error for every test, with exit code and output', async () => {
     const { target } = fakeTarget(() => ({ Stdout: "error TS5058: The specified path does not exist: 'src/__tests__/jit/tsconfig.jit.json'.", ExitCode: 1 }));
-    const out = await target.TypeCheck({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: '/work/head' }, [test(ID1)]);
+    const out = await target.TypeCheck({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: jitRoot() }, [test(ID1)]);
     expect(out.get(ID1)).toContain('exit 1'); expect(out.get(ID1)).toContain('TS5058');
   });
   it('maps a test file whose tests were all skipped or todo to RunnerError, not Pass', async () => {
     const file = `/work/packages/MJCore/src/__tests__/jit/${ID1}.jit.test.ts`;
     const jit = { Tests: [{ File: file, Name: 'a', State: 'skipped', DurationMs: 0, Errors: [] }, { File: file, Name: 'b', State: 'pending', DurationMs: 0, Errors: [] }], ModuleErrors: [] };
     const { target } = fakeTarget(() => ({ Stdout: `JIT_REPORT ${JSON.stringify(jit)}\n`, ExitCode: 0 }));
-    const results = await target.Run({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: '/work/head' }, [test(ID1)], 1);
+    const results = await target.Run({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: jitRoot() }, [test(ID1)], 1);
     expect(results.map((r) => r.Status)).toEqual(['RunnerError']);
   });
   it('maps a JSON-fallback file whose assertions were all skipped or todo to RunnerError, not Pass', async () => {
     const json = { testResults: [{ name: `/work/packages/MJCore/src/__tests__/jit/${ID1}.jit.test.ts`, status: 'passed', assertionResults: [{ fullName: 't', status: 'todo', duration: 0, failureMessages: [] }] }] };
     const { target } = fakeTarget((o) => ({ Stdout: o.Command.join(' ').includes('--reporter=json') ? JSON.stringify(json) : '', ExitCode: 0 }));
-    const results = await target.Run({ Ref: { Kind: 'Base', SHA: 'b' }, RootDir: '/work/base' }, [test(ID1)], 1);
+    const results = await target.Run({ Ref: { Kind: 'Base', SHA: 'b' }, RootDir: jitRoot() }, [test(ID1)], 1);
     expect(results.map((r) => r.Status)).toEqual(['RunnerError']);
   });
 });
@@ -130,9 +133,39 @@ describe('VitestCatchTarget.BuildPackages', () => {
 describe('VitestCatchTarget.TypeCheck', () => {
   it('runs tsc --noEmit on the package with the jit file included and reports the error text per test', async () => {
     const { target, calls } = fakeTarget(() => ({ Stdout: `src/__tests__/jit/${ID1}.jit.test.ts(3,5): error TS2339: Property 'x' does not exist`, ExitCode: 2 }));
-    const out = await target.TypeCheck({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: '/work/head' }, [test(ID1)]);
+    const out = await target.TypeCheck({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: jitRoot() }, [test(ID1)]);
     expect(calls[0].Command.join(' ')).toContain('tsc --noEmit');
     expect(out.get(ID1)).toContain('TS2339');
+  });
+});
+
+describe('VitestCatchTarget path safety', () => {
+  it('refuses to write tests when the jit folder is a symlink, and writes nothing outside the worktree', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'jit-root-')); const outside = mkdtempSync(join(tmpdir(), 'jit-outside-'));
+    mkdirSync(join(root, 'packages/MJCore/src/__tests__'), { recursive: true }); symlinkSync(outside, join(root, JIT));
+    const { target } = fakeTarget(() => ({ Stdout: '', ExitCode: 0 }));
+    await expect(target.WriteTests({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: root }, [test(ID1)])).rejects.toThrow(/symlink/);
+    expect(readdirSync(outside)).toEqual([]);
+  });
+  it('refuses to write a test whose target file is a symlink, and leaves the link target unchanged', async () => {
+    const root = jitRoot(); const outside = join(mkdtempSync(join(tmpdir(), 'jit-outside-')), 'victim.txt');
+    writeFileSync(outside, 'keep'); symlinkSync(outside, join(root, JIT, `${ID1}.jit.test.ts`));
+    const { target } = fakeTarget(() => ({ Stdout: '', ExitCode: 0 }));
+    await expect(target.WriteTests({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: root }, [test(ID1)])).rejects.toThrow(/symlink/);
+    expect(readFileSync(outside, 'utf8')).toBe('keep');
+  });
+  it('writes a test into a real jit folder it creates inside the worktree', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'jit-root-'));
+    const { target } = fakeTarget(() => ({ Stdout: '', ExitCode: 0 }));
+    await target.WriteTests({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: root }, [test(ID1)]);
+    expect(readFileSync(join(root, JIT, `${ID1}.jit.test.ts`), 'utf8')).toBe('x');
+  });
+  it('refuses to mount a symlinked jit folder read-write for a run, and starts no container', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'jit-root-')); const outside = mkdtempSync(join(tmpdir(), 'jit-outside-'));
+    mkdirSync(join(root, 'packages/MJCore/src/__tests__'), { recursive: true }); symlinkSync(outside, join(root, JIT));
+    const { target, calls } = fakeTarget(() => ({ Stdout: '', ExitCode: 0 }));
+    await expect(target.Run({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: root }, [test(ID1)], 1)).rejects.toThrow(/symlink/);
+    expect(calls).toHaveLength(0); expect(existsSync(join(outside, 'x'))).toBe(false);
   });
 });
 
