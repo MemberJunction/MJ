@@ -15,6 +15,8 @@
  * @module @memberjunction/actions-base
  */
 
+import { SafeExpressionEvaluator } from '@memberjunction/global';
+
 /** The before/after picture of one save, as seen by a filter. */
 export type EntityChangeContext = {
     /**
@@ -149,6 +151,26 @@ export function BuildEntityChangeContext(entity: ChangeTrackedEntity): EntityCha
     return { OldValues: oldValues, NewValues: newValues, ChangedFields: changed, IsCreate: isCreate };
 }
 
+/** The values a change-filter expression may read: the before/after bags of the save. */
+export const CHANGE_FILTER_VALUE_NAMES: readonly string[] = ['OldValues', 'NewValues'];
+
+/** The helpers a change-filter expression may call by bare name. */
+export const CHANGE_FILTER_CALLABLE_NAMES: readonly string[] = ['DidFieldChange', 'DidFieldChangeToValue'];
+
+/**
+ * Why a change-filter expression is refused, or `null` when it is allowed.
+ *
+ * Change filters are written by Record Process and workflow authors and end up as JavaScript that
+ * MJAPI compiles and runs, so they go through the same allowlist as every other user-authored
+ * expression ({@link SafeExpressionEvaluator.ScreenExpression}): one expression, the names in
+ * {@link CHANGE_FILTER_VALUE_NAMES}, calls to {@link CHANGE_FILTER_CALLABLE_NAMES}, approved globals
+ * and safe methods. Anything else (`fetch(...)`, `process`, `ActionFilterContext.params`, a
+ * statement) is refused here, before it is stored.
+ */
+export function ScreenChangeFilter(filter: string): string | null {
+    return SafeExpressionEvaluator.ScreenExpression(filter.trim(), CHANGE_FILTER_VALUE_NAMES, CHANGE_FILTER_CALLABLE_NAMES);
+}
+
 /**
  * Wraps a filter expression as the body of an `ActionFilter.Code`.
  *
@@ -164,8 +186,15 @@ export function BuildEntityChangeContext(entity: ChangeTrackedEntity): EntityCha
  * The shorthands are destructured from the context rather than injected as separate function
  * arguments, so an author's expression sees exactly the names the field's documentation promises
  * and nothing else leaks in.
+ *
+ * @throws when {@link ScreenChangeFilter} refuses the expression, so no caller can store code built
+ * from an unscreened filter.
  */
 export function BuildChangeFilterCode(filter: string): string {
+    const refusal = ScreenChangeFilter(filter);
+    if (refusal) {
+        throw new Error(`Change filter refused: ${refusal}`);
+    }
     return [
         '// Generated from a change-filter expression. Edit the definition that owns this row,',
         '// not the row itself — re-saving the owner overwrites this code.',
@@ -175,7 +204,7 @@ export function BuildChangeFilterCode(filter: string): string {
 }
 
 /**
- * Whether a filter expression parses.
+ * Whether a filter expression is allowed ({@link ScreenChangeFilter}) and parses.
  *
  * Compiles but never invokes, so nothing in the expression can run here. `EvalError` is treated as
  * "cannot tell" rather than "invalid": under a Content-Security-Policy that forbids `new Function`,
@@ -183,6 +212,10 @@ export function BuildChangeFilterCode(filter: string): string {
  * server that actually evaluates it.
  */
 export function IsChangeFilterParseable(filter: string): { Parseable: boolean; Message?: string } {
+    const refusal = ScreenChangeFilter(filter);
+    if (refusal) {
+        return { Parseable: false, Message: refusal };
+    }
     try {
         new Function('ActionFilterContext', BuildChangeFilterCode(filter));
         return { Parseable: true };

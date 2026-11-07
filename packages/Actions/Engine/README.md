@@ -305,6 +305,13 @@ return NewValues.Amount > 100 && OldValues.Amount <= 100;
 | `OldValues` / `NewValues` | both sides, by field name |
 | `change` | the full `EntityChangeContext`, or `undefined` when there was no save behind the run |
 
+A Record Process `OnChangeFilter` or a workflow trigger `filter` is a single expression over these
+names, not free-form code. `ScreenChangeFilter` (in `@memberjunction/actions-base`) checks it against
+the same allowlist as other user-written expressions before it is saved and compiled: `OldValues`,
+`NewValues`, calls to `DidFieldChange` / `DidFieldChangeToValue`, the approved globals and the safe
+methods. `ActionFilterContext`, host globals and statements are refused. Hand-written Action Filter
+`Code` is not screened.
+
 Three behaviours worth knowing:
 
 - **A create reports no changes.** A record whose Status started at `Approved` did not *become*
