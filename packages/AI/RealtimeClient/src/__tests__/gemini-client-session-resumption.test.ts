@@ -846,6 +846,20 @@ describe('GeminiRealtimeClient session resumption', () => {
             expect(session.ClientContents).toEqual([]);
         });
 
+        it('a connection that keeps closing right after setup ends the call once, with the reason', async () => {
+            // The first reconnect is not rapid; five more are allowed; the one after those fails.
+            for (let index = 0; index < 7; index++) {
+                client.CloseOn(index, 1011);
+                await vi.advanceTimersByTimeAsync(0);
+            }
+            expect(client.Connections).toHaveLength(7);
+            expect(emitted.errors).toHaveLength(1);
+            expect(emitted.errors[0].Fatal).toBe(true);
+            expect(emitted.errors[0].Message).toContain('could not be resumed');
+            expect(emitted.errors[0].Message).toContain('5 reconnects');
+            expect(emitted.states.at(-1)).toBe('error');
+        });
+
         it('Disconnect clears the notebook', async () => {
             client.EmitOn(0, HEARD('hi'));
             client.EmitOn(0, SAID('Question 1'));
