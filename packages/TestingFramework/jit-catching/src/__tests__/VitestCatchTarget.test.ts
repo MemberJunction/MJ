@@ -137,6 +137,22 @@ describe('VitestCatchTarget.BuildPackages', () => {
     expect(calls[0].Command.join(' ')).toContain('--summarize');
     expect(readdirSync(join(work, 'turbo-summaries', 'head'))).toEqual(['abc.json']);
   });
+  it('copies only regular summary files and skips a symlinked entry', async () => {
+    const work = mkdtempSync(join(tmpdir(), 'jit-build-')); const head = join(work, 'head'); const secret = join(mkdtempSync(join(tmpdir(), 'jit-outside-')), 'host.json');
+    writeFileSync(secret, '{"host":true}');
+    const { target } = fakeTarget(() => { mkdirSync(join(head, '.turbo/runs'), { recursive: true }); writeFileSync(join(head, '.turbo/runs/abc.json'), '{"tasks":[]}'); symlinkSync(secret, join(head, '.turbo/runs/evil.json')); return { Stdout: '', ExitCode: 0 }; });
+    (target as never as { o: object }).o = { ...(target as never as { o: object }).o, WorkRoot: work } as never;
+    await target.BuildPackages({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: head }, ['@memberjunction/core']);
+    expect(readdirSync(join(work, 'turbo-summaries', 'head'))).toEqual(['abc.json']);
+  });
+  it('copies nothing when the runs folder itself is a symlink', async () => {
+    const work = mkdtempSync(join(tmpdir(), 'jit-build-')); const head = join(work, 'head'); const outside = mkdtempSync(join(tmpdir(), 'jit-outside-'));
+    writeFileSync(join(outside, 'host.json'), '{}');
+    const { target } = fakeTarget(() => { mkdirSync(join(head, '.turbo'), { recursive: true }); symlinkSync(outside, join(head, '.turbo/runs')); return { Stdout: '', ExitCode: 0 }; });
+    (target as never as { o: object }).o = { ...(target as never as { o: object }).o, WorkRoot: work } as never;
+    await target.BuildPackages({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: head }, ['@memberjunction/core']);
+    expect(existsSync(join(work, 'turbo-summaries', 'head', 'host.json'))).toBe(false);
+  });
 });
 
 describe('VitestCatchTarget.TypeCheck', () => {

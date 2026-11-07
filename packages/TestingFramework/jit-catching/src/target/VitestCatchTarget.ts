@@ -107,11 +107,15 @@ export class VitestCatchTarget extends BaseCatchTarget {
         if (r.ExitCode !== 0) throw new Error(`build failed on ${revision.Ref.Kind}: ${tail(r)}`);
     }
 
-    /** Copies turbo's run summaries out of the worktree, so base and head task hashes can be compared (design §5.4, Q4). */
+    /**
+     * Copies turbo's run summaries out of the worktree, so base and head task hashes can be compared (design §5.4, Q4).
+     * Only regular `.json` files in real `.turbo/runs` folders are copied; symlinks and anything else are skipped.
+     */
     private keepTurboSummaries(revision: PreparedRevision): void {
-        const from = join(revision.RootDir, '.turbo', 'runs'); if (!existsSync(from)) return;
+        const turbo = join(revision.RootDir, '.turbo'); const from = join(turbo, 'runs');
+        if (!lstatOrNull(turbo)?.isDirectory() || !lstatOrNull(from)?.isDirectory()) return;
         const to = join(this.o.WorkRoot, 'turbo-summaries', revision.Ref.Kind.toLowerCase()); mkdirSync(to, { recursive: true });
-        for (const f of readdirSync(from)) if (f.endsWith('.json')) copyFileSync(join(from, f), join(to, f));
+        for (const f of readdirSync(from)) if (f.endsWith('.json') && lstatOrNull(join(from, f))?.isFile()) copyFileSync(join(from, f), join(to, f));
     }
 
     /**
