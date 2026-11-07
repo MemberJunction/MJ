@@ -1216,6 +1216,31 @@ describe('GeminiRealtimeClient session resumption', () => {
             expect(c.Connections).toHaveLength(2);
         });
 
+        it('a second Connect whose first connection fails leaves no timer and causes no move', async () => {
+            const c = await connectAnother({ connectionLifetimeSeconds: 600 });
+            await vi.advanceTimersByTimeAsync(100_000);
+            c.FailConnects = 1;
+            await expect(c.Connect(sessionConfig({ connectionLifetimeSeconds: 600 }), new FakeMediaStream([new FakeTrack()]))).rejects.toThrow();
+            expect(vi.getTimerCount()).toBe(0); // the first Connect's clock must not outlive the helper it was armed against
+            const connectionsBefore = c.Connections.length;
+            await advance(700_000);
+            expect(c.Connections).toHaveLength(connectionsBefore);
+        });
+
+        it('a resume whose first attempt fails and second succeeds arms the clock on the connection that did open', async () => {
+            const c = await connectAnother({ connectionLifetimeSeconds: 600 });
+            closeOneExchange(c);
+            await advance(100_000);
+            c.FailConnects = 1;
+            c.CloseOn(0, 1011);
+            await advance(1_000); // attempt 1 fails, attempt 2 (after 1 s) opens
+            expect(c.Connections).toHaveLength(2);
+            await advance(538_000); // 639 s from the start; the first clock would have fired at 540 s
+            expect(c.Connections).toHaveLength(2);
+            await advance(2_000); // 540 s after the new connection came into use
+            expect(c.Connections).toHaveLength(3);
+        });
+
         describe('diagnostics', () => {
             let logged: string[];
 
