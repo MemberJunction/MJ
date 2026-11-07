@@ -7,6 +7,7 @@ import { ParseVitestOutput } from '../target/VitestReport';
 import { JIT_REPORTER_ARG, JIT_REPORTER_MOUNT, WriteJitReporter } from '../target/JitReporter';
 import { EnsureMountPoint, UnsafePathError, ViteTmpfs } from '../target/VitestCatchTarget';
 import { PurgeNonRegularEntries } from '../target/JitFolder';
+import { RedactTail } from '../sandbox/Redaction';
 import { ApplyMutantEdits, CopyPackageForMutant, ValidateMutantEdits } from './Mutant';
 
 export interface RunTestInput { File: string; Mutant?: { Edits: MutantEdit[] }; }
@@ -15,7 +16,6 @@ export interface RunTestToolOptions { Sandbox: Sandbox; BaseRootDir: string; Pac
 export interface LastMutantRecord { Edits: MutantEdit[]; Patch: string; Failure: FailureDetail | null; }
 
 const ROOT = '/work';
-const OUTPUT_EXCERPT_CHARS = 500;
 
 /** A mutant prepared on the host: the scratch package copy and the patch that produced it. */
 interface PreparedMutant { Scratch: string; Patch: string; }
@@ -120,11 +120,11 @@ export class RunTestTool {
         else EnsureMountPoint(this.o.BaseRootDir, containerPath.slice(ROOT.length + 1));
     }
 
-    /** Maps the sandbox result to the tool output. Every RunnerError carries an excerpt of stderr (or stdout when stderr is empty) in Error. */
+    /** Maps the sandbox result to the tool output. Every RunnerError carries the redacted tail of stderr (or stdout when stderr is empty) in Error. */
     private toOutput(r: SandboxRunResult, input: RunTestInput): RunTestOutput {
         if (r.TimedOut) return { Ran: true, Status: 'Timeout', TestName: null, Failure: null, DurationMs: r.DurationMs };
         const [res] = ParseVitestOutput(r.Stdout, { FilePathToTestID: { [input.File]: 'probe' }, Revision: input.Mutant ? 'Mutant' : 'Base', RunIndex: 0 });
-        const excerpt = (r.Stderr || r.Stdout).slice(0, OUTPUT_EXCERPT_CHARS);
+        const excerpt = RedactTail((r.Stderr || r.Stdout).trim());
         if (!res) return { Ran: true, Status: 'RunnerError', TestName: null, Failure: null, DurationMs: r.DurationMs, Error: excerpt };
         const out: RunTestOutput = { Ran: true, Status: res.Status, TestName: res.TestName, Failure: res.Failure, DurationMs: res.DurationMs };
         if (res.Status === 'RunnerError') out.Error = excerpt;

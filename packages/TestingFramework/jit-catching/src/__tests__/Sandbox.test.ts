@@ -9,6 +9,21 @@ import { DEFAULT_SETTINGS } from '../settings';
 const sb = new Sandbox(DEFAULT_SETTINGS.Sandbox);
 const base = { Mounts: [{ Host: '/h/base', Container: '/work', Mode: 'ro' as const }], WorkDir: '/work', Command: ['sh', '-c', 'true'], TimeoutMs: 1000 };
 
+describe('Sandbox host checks', () => {
+  it('refuses to run as root', () => {
+    const root = new Sandbox(DEFAULT_SETTINGS.Sandbox, undefined, { Uid: 0, Gid: 0, Home: '/root' });
+    expect(() => root.BuildArgs(base)).toThrow(/root/);
+  });
+  it('refuses a mount in a dot-folder directly under HOME, and allows a plain folder there', () => {
+    const home = realpathSync(mkdtempSync(join(tmpdir(), 'jit-home-')));
+    mkdirSync(join(home, '.aws', 'x'), { recursive: true }); mkdirSync(join(home, 'work', 'x'), { recursive: true });
+    const s = new Sandbox(DEFAULT_SETTINGS.Sandbox, undefined, { Uid: 501, Gid: 20, Home: home });
+    expect(() => s.BuildArgs({ ...base, Mounts: [{ Host: join(home, '.aws', 'x'), Container: '/s', Mode: 'ro' }] })).toThrow(/refusing to mount/);
+    expect(() => s.BuildArgs({ ...base, Mounts: [{ Host: join(home, '.aws'), Container: '/s', Mode: 'ro' }] })).toThrow(/refusing to mount/);
+    expect(s.BuildArgs({ ...base, Mounts: [{ Host: join(home, 'work', 'x'), Container: '/s', Mode: 'ro' }] }).join(' ')).toContain(`${join(home, 'work', 'x')}:/s:ro`);
+  });
+});
+
 describe('Sandbox.BuildArgs', () => {
   it('always passes the hardening flags', () => {
     const a = sb.BuildArgs(base).join(' ');

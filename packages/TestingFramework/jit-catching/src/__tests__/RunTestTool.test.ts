@@ -109,6 +109,12 @@ describe('RunTestTool', () => {
     const out = await tool.Run({ File: `packages/MJCore/src/__tests__/jit/${ID}.jit.test.ts` });
     expect(out.Ran).toBe(false); expect(calls).toHaveLength(0);
   });
+  it('keeps the end of a long stderr in the RunnerError, where vitest prints the error', async () => {
+    parse.empty = true;
+    const { tool } = setup('', `${' RUN  v4.0.18 /work/packages/MJCore\n'.repeat(100)}Error: Cannot find module 'missing-dep'`);
+    const out = await tool.Run({ File: `packages/MJCore/src/__tests__/jit/${ID}.jit.test.ts` });
+    expect(out.Status).toBe('RunnerError'); expect(out.Error).toContain("Error: Cannot find module 'missing-dep'");
+  });
   it('puts the stderr excerpt in Error for a RunnerError from the parser', async () => {
     const { tool } = setup('', 'boom-stderr');
     const out = await tool.Run({ File: `packages/MJCore/src/__tests__/jit/${ID}.jit.test.ts` });
