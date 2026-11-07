@@ -284,7 +284,9 @@ export class URLLinkValidatorAction extends BaseAction {
             const timeoutId = setTimeout(() => controller.abort(), 5000);
 
             try {
-                const response = await fetch(`https://${hostname}`, {
+                // Use SafeFetch so redirects / private targets are re-validated (same SSRF
+                // protection as the main validateURL fetch above).
+                const response = await SafeFetch(`https://${hostname}`, {
                     method: 'HEAD',
                     signal: controller.signal
                 });

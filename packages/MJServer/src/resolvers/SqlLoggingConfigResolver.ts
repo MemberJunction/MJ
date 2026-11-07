@@ -443,12 +443,18 @@ export class SqlLoggingConfigResolver extends ResolverBase {
     const allowedDir = path.resolve(config.sqlLogging.allowedLogDirectory ?? './logs/sql');
     await this.ensureDirectoryExists(allowedDir);
 
+    // Reject client-supplied file names carrying path separators or traversal segments outright
+    if (input.fileName && (input.fileName.includes('/') || input.fileName.includes('\\') || input.fileName.includes('..'))) {
+      throw new Error('Invalid file name - path separators and parent directory references are not allowed');
+    }
+
     const fileName = input.fileName || `${SqlLoggingConfigResolver.LOG_FILE_PREFIX}${new Date().toISOString().replace(/[:.]/g, '-')}.sql`;
     const filePath = path.join(allowedDir, fileName);
 
-    // Validate file path is within allowed directory
+    // Validate file path is within allowed directory (separator-aware, so a sibling
+    // directory with the allowed dir as a name prefix cannot pass the check)
     const resolvedPath = path.resolve(filePath);
-    if (!resolvedPath.startsWith(allowedDir)) {
+    if (!(resolvedPath === allowedDir || resolvedPath.startsWith(allowedDir + path.sep))) {
       throw new Error('Invalid file path - must be within allowed log directory');
     }
 
