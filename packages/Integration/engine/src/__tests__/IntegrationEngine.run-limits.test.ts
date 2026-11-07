@@ -436,6 +436,12 @@ describe('run-limit helpers', () => {
         expect(SubtractWatermarkSeconds('not-a-date', 30)).toBe('not-a-date');
     });
 
+    it('SubtractWatermarkSeconds reads a zoneless ISO watermark as UTC, not server-local time', () => {
+        expect(SubtractWatermarkSeconds('2026-01-01T10:00:00', 300)).toBe('2026-01-01T09:55:00.000Z');
+        expect(SubtractWatermarkSeconds('2026-01-01T10:00:00.250', 300)).toBe('2026-01-01T09:55:00.250Z');
+        expect(SubtractWatermarkSeconds('2026-01-01T10:00:00-06:00', 300)).toBe('2026-01-01T15:55:00.000Z');
+    });
+
     it('BuildBatchCapMessage names the object, the cap and both settings', () => {
         const m = BuildBatchCapMessage('contacts', DEFAULT_MAX_BATCHES_PER_MAP, 200);
         expect(m).toContain('contacts');

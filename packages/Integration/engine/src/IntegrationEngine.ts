@@ -393,7 +393,7 @@ export const DEFAULT_MAX_BATCHES_PER_MAP = 5000;
 /** Operator message for an object that hit the per-run page cap (#4823). Names the two settings that fix it. */
 export function BuildBatchCapMessage(objectName: string, cap: number, batchSize: number): string {
     return `Safety limit reached: ${cap} batches of ${batchSize} for '${objectName}'. The object was not fully ` +
-        `fetched, so the run is marked failed and its watermark is held. Raise 'batchSize' or 'maxBatchesPerMap' ` +
+        `fetched, so the run is marked failed; the watermark advances only past the batches that finished. Raise 'batchSize' or 'maxBatchesPerMap' ` +
         `in this connection's Configuration if the object really holds more than ${cap * batchSize} rows.`;
 }
 
@@ -411,7 +411,10 @@ export function RunFailed(result: Pick<SyncResult, 'RecordsErrored' | 'Errors'>)
  * the overlap is an optimisation for late commits, never a reason to fail or widen to a full fetch.
  */
 export function SubtractWatermarkSeconds(watermark: string, seconds: number): string {
-    const ms = Date.parse(watermark);
+    // A zoneless ISO date-time means UTC, as in the external-data-source connectors (ParseIso8601AsUtc):
+    // Date.parse would read it as server-local time and move the filter by the server's offset.
+    const zoneless = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(watermark);
+    const ms = Date.parse(zoneless ? `${watermark}Z` : watermark);
     if (Number.isNaN(ms)) return watermark;
     return new Date(ms - seconds * 1000).toISOString();
 }
@@ -3159,7 +3162,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             if (batchCount > MAX_BATCHES_PER_MAP) {
                 // #4823: this used to log and stop, and the run reported success — a snapshot
                 // connector then restarted from the top every run and never finished the object.
-                // It is now a Critical error, so the run ends Failed and the watermark is held.
+                // It is now a Critical error, so the run ends Failed; the watermark covers only finished batches.
                 const capMessage = BuildBatchCapMessage(entityMap.ExternalObjectName, MAX_BATCHES_PER_MAP, askedBatchSize());
                 console.error(`[IntegrationEngine] ${capMessage}`);
                 result.Errors.push({
@@ -4752,12 +4755,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * swallowed: the orphan itself was handled, and the worst consequence of a surviving map
      * row is one redundant re-detection on the next full sync.
      */
-    private async deleteRecordMapRow(mapRowID: string, contextUser: UserInfo): Promise<void> {
+    private async deleteRecordMapRow(mapRowID: string, contextUser: UserInfo, inWriteGroup = false): Promise<void> {
         try {
             const md = this.ProviderToUse;
             const mapRow = await md.GetEntityObject('MJ: Company Integration Record Maps', contextUser);
             const loaded = await mapRow.InnerLoad(CompositeKey.FromID(mapRowID));
             if (!loaded) return;
+            // From the apply pass, the prune commits or rolls back with the row delete it follows.
+            if (inWriteGroup) this.enrolInWriteGroup(mapRow);
             const ok = await mapRow.Delete();
             if (!ok) {
                 console.warn(`[IntegrationEngine] Record-map prune blocked for ${mapRowID} — ${mapRow.LatestResult?.CompleteMessage ?? 'unknown reason'}`);
@@ -4936,12 +4941,117 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * trimmed strings). Sources like NetForum flag deletions on a live row instead of dropping it.
      */
     private isSourceFlaggedDeleted(record: MappedRecord, entityMap: ICompanyIntegrationEntityMap): boolean {
+        const flag = this.sourceDeleteFlag(entityMap);
+        if (!flag) return false;
+        const value = record.ExternalRecord.Fields?.[flag.Field];
+        if (value === undefined || value === null) return false;
+        return String(value).trim() === flag.Value;
+    }
+
+    /** The entity map's source delete flag (#5202), or null when its Configuration does not name one. */
+    private sourceDeleteFlag(entityMap: ICompanyIntegrationEntityMap): { Field: string; Value: string } | null {
         const cfg = this.parseEntityMapConfig(entityMap);
         const field = typeof cfg?.sourceDeleteField === 'string' ? cfg.sourceDeleteField.trim() : '';
-        if (!field || cfg?.sourceDeleteValue === undefined || cfg.sourceDeleteValue === null) return false;
-        const value = record.ExternalRecord.Fields?.[field];
-        if (value === undefined || value === null) return false;
-        return String(value).trim() === String(cfg.sourceDeleteValue).trim();
+        if (!field || cfg?.sourceDeleteValue === undefined || cfg.sourceDeleteValue === null) return null;
+        return { Field: field, Value: String(cfg.sourceDeleteValue).trim() };
+    }
+
+    /** True when the entity map's Configuration names a source delete flag (#5202). */
+    private hasSourceDeleteFlag(entityMap: ICompanyIntegrationEntityMap): boolean {
+        return this.sourceDeleteFlag(entityMap) !== null;
+    }
+
+    /** True when a loaded row already carries the tombstone: IsTombstoned, or SyncStatus 'Archived' without it. */
+    private isArchived(entity: { Get(fieldName: string): unknown }, has: (name: string) => boolean): boolean {
+        if (has('__mj_integration_IsTombstoned')) return entity.Get('__mj_integration_IsTombstoned') === true;
+        if (has('__mj_integration_SyncStatus')) return entity.Get('__mj_integration_SyncStatus') === 'Archived';
+        return true; // nothing to tombstone with — no write can change that
+    }
+
+    /**
+     * #5202 under HardDelete — the source flags a matched record deleted. The record map's `Origin` decides,
+     * the same way the orphan sweep does (#3528):
+     * - `Created` (the sync inserted the row): delete it and prune its map, so later syncs that still see
+     *   the flagged row skip it instead of matching a row that is gone. A row already gone counts as
+     *   skipped and its map is pruned too.
+     * - `Adopted`, or no map row (matched by key fields, so it existed before the sync): never hard-deleted.
+     *   It is archived, or kept with `ADOPTED_ROW_KEPT` when the entity has no tombstone columns. Its map is
+     *   kept, so a row already archived is skipped without a write and a cleared flag brings it back.
+     */
+    private async applySourceFlaggedHardDelete(
+        record: MappedRecord,
+        companyIntegration: MJCompanyIntegrationEntity,
+        entityMap: ICompanyIntegrationEntityMap,
+        result: SyncResult,
+        contextUser: UserInfo,
+        logger?: SyncLogger
+    ): Promise<void> {
+        if (!record.MatchedMJRecordID) {
+            result.RecordsSkipped++;
+            return;
+        }
+        const mapRow = await this.findRecordMapRow(companyIntegration.ID, entityMap.EntityID, record.ExternalRecord.ExternalID, contextUser);
+        if (mapRow && mapRow.Origin !== 'Adopted') {
+            const outcome = await this.deleteRecord(record, entityMap, contextUser, logger);
+            if (outcome === 'deleted' || outcome === 'gone') {
+                await this.deleteRecordMapRow(mapRow.ID, contextUser, true);
+            }
+            if (outcome === 'deleted') result.RecordsDeleted++;
+            else if (outcome === 'gone' || outcome === 'refused') result.RecordsSkipped++;
+            else result.RecordsErrored++;
+            return;
+        }
+
+        const md = this.ProviderToUse;
+        const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
+        this.enrolInWriteGroup(entity);
+        const pkFields = md.EntityByName(record.MJEntityName)?.PrimaryKeys ?? [];
+        const loaded = await entity.InnerLoad(this.buildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
+        const fields = entity.Fields ?? [];
+        if (!loaded || (CanArchive(fields) && this.isArchived(entity, n => fields.some(f => f.Name === n)))) {
+            result.RecordsSkipped++;
+            return;
+        }
+        const outcome = await this.archiveRecord(entity, entityMap, logger);
+        if (outcome === 'archived') {
+            result.RecordsDeleted++;
+        } else if (outcome === 'refused') {
+            result.RecordsSkipped++;
+            logger?.warning(
+                entityMap.ExternalObjectName ?? entityMap.ID,
+                'ADOPTED_ROW_KEPT',
+                `${record.MJEntityName} ${record.MatchedMJRecordID} was not created by this integration (it was matched to an existing row), ` +
+                `so it is not hard-deleted, and the entity has no tombstone columns to archive it.`,
+                { entityRecordID: record.MatchedMJRecordID, externalID: record.ExternalRecord.ExternalID },
+            );
+        } else {
+            result.RecordsErrored++;
+            console.warn(`[IntegrationEngine] Archive of adopted ${record.MJEntityName} ${record.MatchedMJRecordID} failed — ${entity.LatestResult?.CompleteMessage ?? 'unknown reason'}`);
+        }
+    }
+
+    /** The record map row for one external record, or null when there is none (or the read failed). */
+    private async findRecordMapRow(
+        companyIntegrationID: string,
+        entityID: string,
+        externalID: string,
+        contextUser: UserInfo
+    ): Promise<{ ID: string; Origin: string | null } | null> {
+        const md = this.ProviderToUse;
+        const quotedExternalID = md instanceof DatabaseProviderBase
+            ? QuoteTextLiteral(externalID, md.Dialect)
+            : `'${externalID.replace(/'/g, "''")}'`;
+        const rv = new RunView();
+        const existing = await rv.RunView<{ ID: string; Origin: string | null }>({
+            EntityName: 'MJ: Company Integration Record Maps',
+            ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND EntityID='${entityID}' AND ExternalSystemRecordID=${quotedExternalID}`,
+            Fields: ['ID', 'Origin'],
+            MaxRows: 1,
+            SkipTotalRowCount: true,
+            ResultType: 'simple',
+            BypassCache: true,
+        }, contextUser);
+        return existing.Success && existing.Results.length > 0 ? existing.Results[0] : null;
     }
 
     /** Opt-in partition (Merkle) reconcile flag from the entity map Configuration (GQL-managed). */
@@ -5640,21 +5750,20 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         // #5202 — the source flags this record deleted. DoNothing writes it as before; SoftDelete writes it
         // tombstoned (inserting it tombstoned when MJ has no row yet, so history stays queryable); HardDelete
-        // removes an existing row and skips the insert of a new one.
+        // removes an existing row the sync created, archives an adopted one, and skips the insert of a new one.
         if (record.ChangeType !== 'Delete' && record.ChangeType !== 'Skip' && this.isSourceFlaggedDeleted(record, entityMap)) {
             if (entityMap.DeleteBehavior === 'HardDelete') {
-                if (record.MatchedMJRecordID) {
-                    const outcome = await this.deleteRecord(record, entityMap, contextUser, logger);
-                    if (outcome === 'deleted') result.RecordsDeleted++;
-                    else if (outcome === 'refused') result.RecordsSkipped++;
-                    else result.RecordsErrored++;
-                } else {
-                    result.RecordsSkipped++;
-                }
+                await this.applySourceFlaggedHardDelete(record, companyIntegration, entityMap, result, contextUser, logger);
                 return;
             }
             if (entityMap.DeleteBehavior === 'SoftDelete') {
-                record.SourceDeleted = true;
+                // Same rule as the orphan sweep: an entity with no tombstone columns cannot be archived, so
+                // the row is written live and the map warns once per run instead of failing silently.
+                if (CanArchive(this.ProviderToUse.EntityByName(record.MJEntityName)?.Fields)) {
+                    record.SourceDeleted = true;
+                } else {
+                    this.warnSoftDeleteUnsupported(entityMap, logger);
+                }
             }
         }
 
@@ -5673,7 +5782,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 case 'Delete': {
                     const outcome = await this.deleteRecord(record, entityMap, contextUser, logger);
                     if (outcome === 'deleted') result.RecordsDeleted++;
-                    else if (outcome === 'refused') result.RecordsSkipped++;
+                    else if (outcome === 'refused' || outcome === 'gone') result.RecordsSkipped++;
                     else result.RecordsErrored++;
                     break;
                 }
@@ -5810,7 +5919,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // integration column is the sanctioned access here — these runtime-created tables have no
             // generated entity type (the engine already .Set()s the same __mj_integration_* columns).
             const hasHashColumn = entityInfo?.Fields.some(f => f.Name === CONTENT_HASH_COLUMN) ?? false;
-            if (hasHashColumn) {
+            // The hash covers mapped fields only, so it cannot see a source delete flag change (#5202).
+            if (hasHashColumn && !this.hasSourceDeleteFlag(entityMap)) {
                 const storedHash = entity.Get(CONTENT_HASH_COLUMN);
                 if (typeof storedHash === 'string' && storedHash.length > 0
                     && storedHash === ComputeContentHash(record.MappedFields ?? {})) {
@@ -5953,7 +6063,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // computed hash of the incoming mapped fields, the record is provably
         // unchanged — skip the per-record DB load AND the write. The dirty-flag check
         // below is the fallback for entities without the hash column.
-        if (precheckHashes) {
+        // Not when the map has a source delete flag (#5202): the hash covers mapped fields only, so a flag
+        // that was set or cleared with no mapped field changing would be skipped here.
+        if (precheckHashes && !this.hasSourceDeleteFlag(entityMap)) {
             const stored = precheckHashes.Hashes.get(record.MatchedMJRecordID);
             if (stored && stored === ComputeContentHash(record.MappedFields ?? {})) {
                 result.RecordsSkipped++;
@@ -6186,14 +6298,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      *
      * @returns `deleted` when the row was removed or archived; `refused` when SoftDelete cannot archive
      * because the entity has no tombstone columns (#3528 — reported once per map per run, not counted as a
-     * delete); `failed` otherwise (no map entry, row missing, DoNothing, or the write failed).
+     * delete); `gone` when the matched row no longer exists in MJ (already deleted — nothing to do, not an
+     * error); `failed` otherwise (no map entry, DoNothing, or the write failed).
      */
     private async deleteRecord(
         record: MappedRecord,
         entityMap: ICompanyIntegrationEntityMap,
         contextUser: UserInfo,
         logger?: SyncLogger
-    ): Promise<'deleted' | 'refused' | 'failed'> {
+    ): Promise<'deleted' | 'refused' | 'gone' | 'failed'> {
         if (!record.MatchedMJRecordID) {
             console.log(`[IntegrationEngine] Skipping delete for ${record.ExternalRecord.ObjectType} ExternalID=${record.ExternalRecord.ExternalID} — no MJ record map entry (record was never synced)`);
             return 'failed';
@@ -6209,7 +6322,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const loaded = await entity.InnerLoad(this.buildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
         if (!loaded) {
             console.log(`[IntegrationEngine] Skipping delete for ${record.MJEntityName} ${record.MatchedMJRecordID} — record not found in MJ DB (may have been deleted already)`);
-            return 'failed';
+            return 'gone';
         }
 
         // SoftDelete = mark the mirror row Archived and keep it; HardDelete physically removes it.
@@ -6516,6 +6629,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     ): boolean {
         if (!entityInfo) return false;
         const has = (name: string) => entityInfo.Fields.some(f => f.Name === name);
+        // #5202 — a source-flagged row needs a write until it is tombstoned, and none once it is. This comes
+        // first: the tombstone and SyncStatus checks below would otherwise rewrite it on every sync.
+        if (record?.SourceDeleted) return !this.isArchived(entity, has);
         if (has('__mj_integration_IsTombstoned') && entity.Get('__mj_integration_IsTombstoned') === true) return true;
         if (has('__mj_integration_SyncMessage') && entity.Get('__mj_integration_SyncMessage') != null) return true;
         if (has('__mj_integration_SyncStatus') && entity.Get('__mj_integration_SyncStatus') !== 'Active') return true;
