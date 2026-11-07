@@ -10168,10 +10168,13 @@ The context is now within limits. Please retry your request with the recovered c
         currentPayload: P,
         currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
+        // Read before validation: a subclass may change the step in place (turn a Chat into a Success),
+        // and only a change the prompt step held as a completion draft can have been discarded.
+        const heldCompletionChange = BaseAgent.carriesCompletionChange(nextStep) ? nextStep.payloadChangeRequest : undefined;
         const validatedNextStep = await this.validateNextStep<P>(params, nextStep, currentPayload, this._agentRun, currentStep);
         
         // Check guardrails if next step would continue execution
-        const guardrailCheckedStep = this.noteDiscardedCompletionChange(nextStep, await this.checkExecutionGuardrails<P>(
+        const guardrailCheckedStep = this.noteDiscardedCompletionChange(heldCompletionChange, await this.checkExecutionGuardrails<P>(
             params, 
             validatedNextStep, 
             currentPayload, 
@@ -10230,15 +10233,21 @@ The context is now within limits. Please retry your request with the recovered c
      * for the change again with the next completion. Otherwise the model would take the change as
      * saved and its work would be lost. The change is removed from the step, so nothing later
      * applies it. Any other step is returned as it is.
+     *
+     * `heldChange` is the change the prompt step held as a draft, read from the step before
+     * validation, so a step a subclass changed in place is judged by what the model sent. A native
+     * model still has its `complete_task` call in the history; an envelope response is not kept in
+     * the history, so the envelope note quotes the change back for the model to correct and resend.
      */
-    private noteDiscardedCompletionChange<P>(original: BaseAgentNextStep<P>, step: BaseAgentNextStep<P>): BaseAgentNextStep<P> {
-        if (!BaseAgent.carriesCompletionChange(original) || step.step === 'Success') {
+    private noteDiscardedCompletionChange<P>(heldChange: AgentPayloadChangeRequest<P> | undefined, step: BaseAgentNextStep<P>): BaseAgentNextStep<P> {
+        if (!heldChange || step.step === 'Success') {
             return step;
         }
         const native = !!step.payloadToolCallId && this.nativeToolNameForCall(step, step.payloadToolCallId) === COMPLETE_TASK_TOOL;
         const note = native
             ? 'The payloadChangeRequest sent with this complete_task call was NOT applied. Send it again with your next complete_task call.'
-            : 'The payloadChangeRequest sent with this completion was NOT applied. Send it again with your next completion.';
+            : 'The payloadChangeRequest sent with this completion was NOT applied. Send it again with your next completion, '
+                + `corrected as needed. This is the change you sent:\n\`\`\`json\n${JSON.stringify(heldChange, null, 2)}\n\`\`\``;
         const field = step.retryInstructions ? 'retryInstructions' : step.message ? 'message' : 'errorMessage';
         const { payloadChangeRequest: _discarded, ...rest } = step;
         return { ...rest, [field]: step[field] ? `${step[field]}\n\n${note}` : note };

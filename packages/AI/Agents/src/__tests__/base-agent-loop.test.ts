@@ -49,7 +49,7 @@ import { FlowAgentType } from '../agent-types/flow-agent-type';
 import { AgentRunner } from '../AgentRunner';
 import type { LoopAgentResponse } from '../agent-types/loop-agent-response-type';
 import type { AgentPreExecutionRAGResult } from '../agent-pre-execution-rag';
-import { GetTaskGraphSubmitter, type TaskGraphSubmitter, type TaskGraphSpec, type AIPromptParams, type AIPromptRunResult, type ExecuteAgentParams, type MJAIAgentEntityExtended, type MJAIAgentRunStepEntityExtended, type AgentDecisionRequest, type AgentFinishIf, type BaseAgentNextStep, type AgentChatMessage, type AgentConfiguration, type MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { GetTaskGraphSubmitter, type TaskGraphSubmitter, type TaskGraphSpec, type AIPromptParams, type AIPromptRunResult, type ExecuteAgentParams, type MJAIAgentEntityExtended, type MJAIAgentRunStepEntityExtended, type MJAIAgentRunEntityExtended, type AgentDecisionRequest, type AgentFinishIf, type BaseAgentNextStep, type AgentChatMessage, type AgentConfiguration, type MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import type { MJAIPromptRunEntity, MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { RecordSentPrefixFingerprint, RecordToolCallingDecision } from '@memberjunction/ai-prompts';
 import { SanitizeToolName } from '../native-tools/action-tool-builder';
@@ -4066,9 +4066,11 @@ describe('BaseAgent.Execute — a payload change sent with a completion is appli
         expect(runner.Calls).toHaveLength(2);
         const retry = params.conversationMessages.find((m) => typeof m.content === 'string' && m.content.startsWith('Retrying due to:'));
         expect(injectedPayload(runner.Calls[1])).toEqual({ summary: 'draft' });
-        // The draft was what failed: the title it added is not reported missing, the count is.
-        expect(retry?.content).toMatch(/count/);
-        expect(retry?.content).not.toMatch(/title/i);
+        // The draft was what failed: the title it added is not reported missing, the count is. (The
+        // note after the validation errors quotes the change back, title included.)
+        const validationErrors = String(retry?.content).split('\n\nThe payloadChangeRequest')[0];
+        expect(validationErrors).toMatch(/count/);
+        expect(validationErrors).not.toMatch(/title/i);
         expect(retry?.content).toMatch(/NOT applied/);
         // The accepted completion's change is applied.
         expect(result.success).toBe(true);
@@ -4087,6 +4089,65 @@ describe('BaseAgent.Execute — a payload change sent with a completion is appli
         expect(result.success).toBe(true);
         expect(result.payload).toEqual({ summary: 'draft', verdict: 'approved' });
         expect(answerTo(params.conversationMessages as AgentChatMessage[], 'call_done')[0]).toMatchObject({ isError: false, content: 'Task complete.' });
+    });
+
+    it('envelope: the Retry quotes the discarded change, since the history does not hold the response that sent it', async () => {
+        const { agent } = makeMinExecAgent([
+            () => llmEnvelope(successEnvelope({ payloadChangeRequest: { newElements: { verdict: 'approved' } } })),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams({ payload: { summary: 'draft' } });
+
+        await agent.Execute(params);
+
+        const retry = params.conversationMessages.find((m) => typeof m.content === 'string' && m.content.startsWith('Retrying due to:'));
+        expect(retry?.content).toContain('This is the change you sent:\n```json\n');
+        expect(retry?.content).toContain(JSON.stringify({ newElements: { verdict: 'approved' } }, null, 2));
+    });
+
+    it('native: the refusal does not quote the change, since the complete_task call is in the history', async () => {
+        const { agent } = makeMinExecAgent([
+            () => llmImplicitCalls([completeTask('call_done', { newElements: { verdict: 'approved' } })]),
+            () => llmImplicitCalls([completeTask('call_done_2')]),
+        ]);
+        const params = makeParams({ payload: { summary: 'draft' } });
+
+        await agent.Execute(params);
+
+        const [answer] = answerTo(params.conversationMessages as AgentChatMessage[], 'call_done');
+        expect(answer.content).toMatch(/NOT applied/);
+        expect(answer.content).not.toContain('```json');
+    });
+
+    it('does not report a Chat change as discarded when a subclass turns the Chat step into a Success in place', async () => {
+        /** Validates a Chat reply as a completion, changing the step in place. */
+        class ChatAsCompletionAgent extends MinExecAgent {
+            protected override async validateChatNextStep<P>(
+                params: ExecuteAgentParams, nextStep: BaseAgentNextStep<P>, currentPayload: P,
+                agentRun: MJAIAgentRunEntityExtended, currentStep: MJAIAgentRunStepEntityExtended
+            ): Promise<BaseAgentNextStep<P>> {
+                nextStep.step = 'Success';
+                return this.validateSuccessNextStep(params, nextStep, currentPayload, agentRun, currentStep);
+            }
+        }
+        const agent = new ChatAsCompletionAgent();
+        const runner = new ScriptedPromptRunner([
+            () => llmEnvelope({ taskComplete: false, message: 'Here is the plan.', nextStep: { type: 'Chat' }, payloadChangeRequest: { newElements: { verdict: 'approved' } } }),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+        const params = makeParams({ payload: { summary: 'draft' } });
+
+        const result = await agent.Execute(params);
+
+        expect(runner.Calls).toHaveLength(2);
+        // A Chat step's change is applied at once, so it is in the next request and the final payload...
+        expect(injectedPayload(runner.Calls[1])).toEqual({ summary: 'draft', verdict: 'approved' });
+        expect(result.payload).toEqual({ summary: 'draft', verdict: 'approved' });
+        // ...and the refusal must not tell the model to send it again.
+        const retry = params.conversationMessages.find((m) => typeof m.content === 'string' && m.content.startsWith('Retrying due to:'));
+        expect(retry?.content).toMatch(/Minimum execution requirements not met/);
+        expect(retry?.content).not.toMatch(/NOT applied/);
     });
 
     it('keeps a payload_change_request made on the same turn as a refused complete_task', async () => {
