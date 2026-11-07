@@ -2,6 +2,7 @@
 "@memberjunction/a2aserver": minor
 "@memberjunction/ai-agents": minor
 "@memberjunction/ai-core-plus": minor
+"@memberjunction/codegen-lib": minor
 "@memberjunction/context-crush": minor
 "@memberjunction/core-actions": minor
 "@memberjunction/core-entities": minor
@@ -13,6 +14,7 @@
 "@memberjunction/ng-bootstrap": minor
 "@memberjunction/ng-bootstrap-lite": minor
 "@memberjunction/ng-core-entity-forms": minor
+"@memberjunction/ng-dashboards": minor
 "@memberjunction/predictive-studio": minor
 "@memberjunction/predictive-studio-sidecar": minor
 "@memberjunction/search-engine": minor
