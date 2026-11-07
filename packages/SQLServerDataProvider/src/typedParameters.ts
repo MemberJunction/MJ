@@ -81,7 +81,16 @@ export function MssqlTypeFor(sqlType: string): sql.ISqlType | null {
 
 /** Adds each parameter to `request` as a named input declared with its type. */
 export function BindTypedParameters(request: sql.Request, parameters: readonly TypedQueryParameter[]): void {
+    const boundByName = new Map<string, { sqlType: string; value: TypedQueryParameterValue }>();
     for (const p of parameters) {
+        const existing = boundByName.get(p.Name);
+        if (existing) {
+            if (existing.sqlType !== p.SQLType || !Object.is(existing.value, p.Value)) {
+                throw new Error(`Duplicate typed query parameter '@${p.Name}' bound with conflicting type or value.`);
+            }
+            continue;
+        }
+        boundByName.set(p.Name, { sqlType: p.SQLType, value: p.Value });
         const type = MssqlTypeFor(p.SQLType);
         if (!type) {
             throw new Error(`Parameter '${p.Name}' has the SQL type '${p.SQLType}', which the SQL Server binding does not know.`);

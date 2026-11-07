@@ -74,6 +74,7 @@ import {
   SaveReturnContext,
   IsTypedQueryParameterList,
   IsNamedQueryParameterList,
+  NamedQueryParameter,
   TypedQueryParameter,
   DescribeStatementFailure,
   SummarizeSqlParameters,
@@ -181,7 +182,15 @@ function buildRequest(
   }
   if (IsNamedQueryParameterList(parameters)) {
     // Named inputs whose type the driver infers; the statement already references them by name.
+    const boundByName = new Map<string, unknown>();
     for (const p of parameters) {
+      if (boundByName.has(p.Name)) {
+        if (!Object.is(boundByName.get(p.Name), p.Value)) {
+          throw new Error(`Duplicate query parameter '@${p.Name}' bound with conflicting values.`);
+        }
+        continue;
+      }
+      boundByName.set(p.Name, p.Value);
       request.input(p.Name, p.Value);
     }
     return { request, processedQuery: query };
@@ -1108,7 +1117,7 @@ export class SQLServerDataProvider
    * Uses multiple result sets to return status for each view efficiently.
    */
   protected async getBatchedServerCacheStatus(
-    items: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }>,
+    items: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string; queryParameters?: NamedQueryParameter[] }>,
     contextUser?: UserInfo
   ): Promise<Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>> {
     const results = new Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>();
@@ -1120,8 +1129,10 @@ export class SQLServerDataProvider
     // Build array of SQL statements for batch execution (recording per-item resolution errors
     // in `results` without aborting valid sibling items in the batch)
     const sqlStatements: string[] = [];
+    const batchParameters: Array<NamedQueryParameter[] | undefined> = [];
+    let hasAnyParameters = false;
     const validItems: Array<{ index: number }> = [];
-    for (const { index, entityInfo, whereSQL, item } of items) {
+    for (const { index, entityInfo, whereSQL, item, queryParameters } of items) {
       // The freshness probe MUST target the same physical view the read targets. For a
       // DataSource:'Materialized' read that's the materialized_vw<CodeName> wrapper (a full SELECT *
       // snapshot of the base view, so it carries __mj_UpdatedAt) — NOT the live base view. Probing the
@@ -1134,6 +1145,12 @@ export class SQLServerDataProvider
       try {
         const effectiveTarget = await this.resolveEffectiveBaseViewTarget(entityInfo, item.params, contextUser);
         sqlStatements.push(this.BuildCacheStatusSQL(entityInfo, effectiveTarget.viewName, whereSQL, effectiveTarget.schemaName));
+        if (queryParameters && queryParameters.length > 0) {
+          batchParameters.push(queryParameters);
+          hasAnyParameters = true;
+        } else {
+          batchParameters.push(undefined);
+        }
         validItems.push({ index });
       } catch (err) {
         results.set(index, {
@@ -1149,7 +1166,12 @@ export class SQLServerDataProvider
 
     try {
       // Execute the batched SQL using existing ExecuteSQLBatch method
-      const resultSets = await this.ExecuteSQLBatch(sqlStatements, undefined, undefined, contextUser);
+      const resultSets = await this.ExecuteSQLBatch(
+        sqlStatements,
+        hasAnyParameters ? batchParameters : undefined,
+        undefined,
+        contextUser,
+      );
 
       // Process each result set and map to the corresponding item index
       for (let i = 0; i < validItems.length; i++) {
@@ -1190,6 +1212,7 @@ export class SQLServerDataProvider
     orderBySQL: string,
     user: UserInfo,
     schemaNameOverride?: string,
+    queryParameters?: NamedQueryParameter[],
   ): Promise<{ executeViewSQL: string; runID: string }> {
     // entityInfo + effectiveBaseView are passed in (no reverse-lookup by base-view name) so the logged
     // read honors DataSource:'Materialized' and AlternateBaseView — effectiveBaseView is the materialized
@@ -1206,7 +1229,8 @@ export class SQLServerDataProvider
             INSERT INTO @ViewIDList (ID) (SELECT ${pkName} FROM [${targetSchema}].${effectiveBaseView} WHERE (${whereSQL}))
             EXEC [${this.MJCoreSchemaName}].spCreateUserViewRunWithDetail(${viewId},${user.Email}, @ViewIDLIst)
             `;
-    const runIDResult = await this.ExecuteSQL(sSQL, undefined, undefined, user);
+    const boundParams = queryParameters && queryParameters.length > 0 ? queryParameters : undefined;
+    const runIDResult = await this.ExecuteSQL(sSQL, boundParams, undefined, user);
     const runID: string = runIDResult[0].UserViewRunID;
     const sRetSQL: string = `SELECT * FROM [${targetSchema}].${effectiveBaseView} WHERE ${pkName} IN
                                     (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE UserViewRunID=${runID})
@@ -2875,6 +2899,157 @@ export class SQLServerDataProvider
   }
 
   /**
+   * Builds the combined SQL statement and bound parameter map/list for a multi-query batch.
+   *
+   * When multiple statements in the batch pass `NamedQueryParameter[]` or `TypedQueryParameter[]`
+   * with the same parameter name and identical value/type (such as RunView's `[dataSQL, countSQL, aggregateSQL]`),
+   * they share the single `@name` declaration without rewriting the query text.
+   * If a subsequent statement in the batch binds the same parameter name to a *different* value or SQL type,
+   * the colliding parameter is scoped to `q{queryIndex}_{name}` and rewritten outside string literals,
+   * quoted identifiers, and SQL comments so independent statements in a batch never overwrite or shadow each other.
+   */
+  private static buildBatchExecutionPayload(
+    queries: string[],
+    parameters?: unknown[][],
+  ): { batchSQL: string; effectiveBatchParams: Record<string, unknown> | TypedQueryParameter[] } {
+    let batchSQL = '';
+    const batchParameters: Record<string, unknown> = {};
+    const typedBatchParameters: TypedQueryParameter[] = [];
+    const boundParameterNames = new Set<string>();
+    const boundMeta = new Map<string, { value: unknown; sqlType?: string }>();
+    let globalParamIndex = 0;
+
+    queries.forEach((query, queryIndex) => {
+      let processedQuery = query;
+
+      if (parameters && parameters[queryIndex]) {
+        const queryParams = parameters[queryIndex];
+        if (IsTypedQueryParameterList(queryParams)) {
+          const localNames = new Set(queryParams.map(p => p.Name));
+          for (const p of queryParams) {
+            const existing = boundMeta.get(p.Name);
+            if (!existing) {
+              boundParameterNames.add(p.Name);
+              boundMeta.set(p.Name, { value: p.Value, sqlType: p.SQLType });
+              typedBatchParameters.push(p);
+              batchParameters[p.Name] = p.Value;
+            } else if (Object.is(existing.value, p.Value) && existing.sqlType === p.SQLType) {
+              // Identical name, value, and SQL type across batched statements — share @Name directly
+            } else {
+              const scopedName = SQLServerDataProvider.allocateScopedBatchParamName(
+                queryIndex,
+                p.Name,
+                boundParameterNames,
+                localNames,
+              );
+              boundParameterNames.add(scopedName);
+              boundMeta.set(scopedName, { value: p.Value, sqlType: p.SQLType });
+              typedBatchParameters.push(new TypedQueryParameter(scopedName, p.SQLType, p.Value));
+              batchParameters[scopedName] = p.Value;
+              processedQuery = GenericDatabaseProvider.RewriteSqlParameterReferences(
+                processedQuery,
+                p.Name,
+                scopedName,
+                SQLServerDataProvider._dialectInstance,
+              );
+            }
+          }
+        } else if (IsNamedQueryParameterList(queryParams)) {
+          const localNames = new Set(queryParams.map(p => p.Name));
+          for (const p of queryParams) {
+            const existing = boundMeta.get(p.Name);
+            if (!existing) {
+              boundParameterNames.add(p.Name);
+              boundMeta.set(p.Name, { value: p.Value });
+              batchParameters[p.Name] = p.Value;
+            } else if (Object.is(existing.value, p.Value) && existing.sqlType === undefined) {
+              // Identical name and value across batched statements — share @Name directly
+            } else {
+              const scopedName = SQLServerDataProvider.allocateScopedBatchParamName(
+                queryIndex,
+                p.Name,
+                boundParameterNames,
+                localNames,
+              );
+              boundParameterNames.add(scopedName);
+              boundMeta.set(scopedName, { value: p.Value });
+              batchParameters[scopedName] = p.Value;
+              processedQuery = GenericDatabaseProvider.RewriteSqlParameterReferences(
+                processedQuery,
+                p.Name,
+                scopedName,
+                SQLServerDataProvider._dialectInstance,
+              );
+            }
+          }
+        } else if (Array.isArray(queryParams)) {
+          // Handle positional parameters
+          queryParams.forEach((value) => {
+            const paramName = `p${globalParamIndex}`;
+            batchParameters[paramName] = value;
+            globalParamIndex++;
+          });
+          // Replace ? placeholders with parameter names
+          let localParamIndex = globalParamIndex - queryParams.length;
+          processedQuery = processedQuery.replace(/\?/g, () => `@p${localParamIndex++}`);
+        } else if (typeof queryParams === 'object') {
+          // Handle named parameters - prefix with query index to avoid conflicts
+          for (const [key, value] of Object.entries(queryParams)) {
+            const paramName = `q${queryIndex}_${key}`;
+            batchParameters[paramName] = value;
+            // Replace parameter references in query
+            // `key` is a caller-supplied parameter name, so it is DATA on both
+            // sides. Escaped before interpolation because a `$` in it acts as an
+            // end-anchor — the pattern then matches nothing, the placeholder is
+            // never rewritten, and mssql fails with "Must declare the scalar
+            // variable" while batchParameters holds the prefixed name. Carried
+            // through a replacement function for the same reason on the other
+            // side. Sibling of the escapeRegExp fix in PostgreSQLDataProvider.
+            // See issue #3171.
+            const prefixed = `@${paramName}`;
+            processedQuery = processedQuery.replace(
+              new RegExp(`@${EscapeRegExpLiteral(key)}\\b`, 'g'),
+              () => prefixed,
+            );
+          }
+        }
+      }
+
+      batchSQL += processedQuery;
+      if (queryIndex < queries.length - 1) {
+        batchSQL += ';\n';
+      }
+    });
+
+    const effectiveBatchParams =
+      typedBatchParameters.length > 0 && typedBatchParameters.length === boundParameterNames.size && globalParamIndex === 0
+        ? typedBatchParameters
+        : batchParameters;
+
+    return { batchSQL, effectiveBatchParams };
+  }
+
+  private static allocateScopedBatchParamName(
+    queryIndex: number,
+    baseName: string,
+    boundNames: ReadonlySet<string>,
+    localNames: ReadonlySet<string>,
+  ): string {
+    const candidate = `q${queryIndex}_${baseName}`;
+    if (!boundNames.has(candidate) && !localNames.has(candidate)) {
+      return candidate;
+    }
+    let suffix = 1;
+    while (
+      boundNames.has(`q${queryIndex}_${suffix}_${baseName}`) ||
+      localNames.has(`q${queryIndex}_${suffix}_${baseName}`)
+    ) {
+      suffix++;
+    }
+    return `q${queryIndex}_${suffix}_${baseName}`;
+  }
+
+  /**
    * Static method to execute a batch of SQL queries using a provided connection source.
    * This allows the batch logic to be reused from external contexts like TransactionGroup.
    * All queries are combined into a single SQL statement and executed together within
@@ -2892,55 +3067,7 @@ export class SQLServerDataProvider
     contextUser?: UserInfo,
   ): Promise<any[][]> {
     try {
-      // Build combined batch SQL and parameters
-      let batchSQL = '';
-      const batchParameters: Record<string, any> = {};
-      let globalParamIndex = 0;
-
-      queries.forEach((query, queryIndex) => {
-        let processedQuery = query;
-        
-        // Add parameters for this query if provided
-        if (parameters && parameters[queryIndex]) {
-          const queryParams = parameters[queryIndex];
-          if (Array.isArray(queryParams)) {
-            // Handle positional parameters
-            queryParams.forEach((value, localIndex) => {
-              const paramName = `p${globalParamIndex}`;
-              batchParameters[paramName] = value;
-              globalParamIndex++;
-            });
-            // Replace ? placeholders with parameter names
-            let localParamIndex = globalParamIndex - queryParams.length;
-            processedQuery = processedQuery.replace(/\?/g, () => `@p${localParamIndex++}`);
-          } else if (typeof queryParams === 'object') {
-            // Handle named parameters - prefix with query index to avoid conflicts
-            for (const [key, value] of Object.entries(queryParams)) {
-              const paramName = `q${queryIndex}_${key}`;
-              batchParameters[paramName] = value;
-              // Replace parameter references in query
-              // `key` is a caller-supplied parameter name, so it is DATA on both
-              // sides. Escaped before interpolation because a `$` in it acts as an
-              // end-anchor — the pattern then matches nothing, the placeholder is
-              // never rewritten, and mssql fails with "Must declare the scalar
-              // variable" while batchParameters holds the prefixed name. Carried
-              // through a replacement function for the same reason on the other
-              // side. Sibling of the escapeRegExp fix in PostgreSQLDataProvider.
-              // See issue #3171.
-              const prefixed = `@${paramName}`;
-              processedQuery = processedQuery.replace(
-                new RegExp(`@${EscapeRegExpLiteral(key)}\\b`, 'g'),
-                () => prefixed,
-              );
-            }
-          }
-        }
-
-        batchSQL += processedQuery;
-        if (queryIndex < queries.length - 1) {
-          batchSQL += ';\n';
-        }
-      });
+      const { batchSQL, effectiveBatchParams } = SQLServerDataProvider.buildBatchExecutionPayload(queries, parameters);
 
       // Create execution context for batch SQL
       let pool: sql.ConnectionPool;
@@ -2970,11 +3097,8 @@ export class SQLServerDataProvider
         }
       };
       
-      // Use named parameters for batch SQL
-      const namedParams: Record<string, any> = batchParameters;
-      
       // Execute using the centralized core function
-      const result = await executeSQLCore(batchSQL, namedParams, context, {
+      const result = await executeSQLCore(batchSQL, effectiveBatchParams, context, {
         description: 'Batch execution',
         ignoreLogging: false,
         isMutation: false,
@@ -3022,55 +3146,7 @@ export class SQLServerDataProvider
       if (joinsAmbient) {
         this.AssertAmbientTransactionUsable();
       }
-      // Build combined batch SQL and parameters (same as static method)
-      let batchSQL = '';
-      const batchParameters: Record<string, any> = {};
-      let globalParamIndex = 0;
-
-      queries.forEach((query, queryIndex) => {
-        let processedQuery = query;
-        
-        // Add parameters for this query if provided
-        if (parameters && parameters[queryIndex]) {
-          const queryParams = parameters[queryIndex];
-          if (Array.isArray(queryParams)) {
-            // Handle positional parameters
-            queryParams.forEach((value, localIndex) => {
-              const paramName = `p${globalParamIndex}`;
-              batchParameters[paramName] = value;
-              globalParamIndex++;
-            });
-            // Replace ? placeholders with parameter names
-            let localParamIndex = globalParamIndex - queryParams.length;
-            processedQuery = processedQuery.replace(/\?/g, () => `@p${localParamIndex++}`);
-          } else if (typeof queryParams === 'object') {
-            // Handle named parameters - prefix with query index to avoid conflicts
-            for (const [key, value] of Object.entries(queryParams)) {
-              const paramName = `q${queryIndex}_${key}`;
-              batchParameters[paramName] = value;
-              // Replace parameter references in query
-              // `key` is a caller-supplied parameter name, so it is DATA on both
-              // sides. Escaped before interpolation because a `$` in it acts as an
-              // end-anchor — the pattern then matches nothing, the placeholder is
-              // never rewritten, and mssql fails with "Must declare the scalar
-              // variable" while batchParameters holds the prefixed name. Carried
-              // through a replacement function for the same reason on the other
-              // side. Sibling of the escapeRegExp fix in PostgreSQLDataProvider.
-              // See issue #3171.
-              const prefixed = `@${paramName}`;
-              processedQuery = processedQuery.replace(
-                new RegExp(`@${EscapeRegExpLiteral(key)}\\b`, 'g'),
-                () => prefixed,
-              );
-            }
-          }
-        }
-
-        batchSQL += processedQuery;
-        if (queryIndex < queries.length - 1) {
-          batchSQL += ';\n';
-        }
-      });
+      const { batchSQL, effectiveBatchParams } = SQLServerDataProvider.buildBatchExecutionPayload(queries, parameters);
 
       // Create execution context
       const context: SQLExecutionContext = {
@@ -3083,7 +3159,7 @@ export class SQLServerDataProvider
       };
 
       // Execute using instance method (which handles queue for transactions)
-      const result = await this._internalExecuteSQLInstance(batchSQL, batchParameters, context, {
+      const result = await this._internalExecuteSQLInstance(batchSQL, effectiveBatchParams, context, {
         description: options?.description || 'Batch execution',
         ignoreLogging: options?.ignoreLogging || false,
         isMutation: options?.isMutation || false,
