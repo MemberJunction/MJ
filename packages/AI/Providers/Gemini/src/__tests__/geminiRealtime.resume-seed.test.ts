@@ -95,6 +95,7 @@ const SAID = (text: string): LiveServerMessage => CONTENT({ outputTranscription:
 const HEARD_FINAL = (text: string): LiveServerMessage => CONTENT({ inputTranscription: { text, finished: true } });
 const SAID_FINAL = (text: string): LiveServerMessage => CONTENT({ outputTranscription: { text, finished: true } });
 const TURN_COMPLETE = CONTENT({ turnComplete: true });
+const INTERRUPTED = CONTENT({ interrupted: true });
 const TOOL_CALL = (id: string): LiveServerMessage =>
     ({ toolCall: { functionCalls: [{ id, name: 'lookup_order', args: {} }] } }) as LiveServerMessage;
 const AUDIO_FRAME = (byte: number): { Data: ArrayBuffer; Kind: 'audio' } => ({ Data: new Uint8Array([byte, byte]).buffer, Kind: 'audio' });
@@ -698,6 +699,59 @@ describe('GeminiRealtime server session: reseeding the conversation on resume', 
         });
     });
 
+    // The participant is speaking at an interruption, so the turn it cuts off is no place to move (MJ#6403).
+    describe('an interrupted turn is not a move point', () => {
+        it('interrupted then turnComplete after a goAway starts no move; the next reply\'s turnComplete does', async () => {
+            driver.EmitOn(0, RESUMABLE('h1'));
+            driver.EmitOn(0, SAID('Half'));
+            driver.EmitOn(0, GO_AWAY('30s'));
+            driver.EmitOn(0, INTERRUPTED);
+            driver.EmitOn(0, TURN_COMPLETE);
+            await vi.advanceTimersByTimeAsync(5000);
+            expect(driver.Connections).toHaveLength(1);
+
+            driver.EmitOn(0, HEARD('and then'));
+            driver.EmitOn(0, SAID('Reply'));
+            driver.EmitOn(0, TURN_COMPLETE);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(driver.Connections).toHaveLength(2);
+        });
+
+        it('an interruption with no move announced changes nothing: a later goAway moves at once', async () => {
+            driver.EmitOn(0, RESUMABLE('h1'));
+            driver.EmitOn(0, SAID('Half'));
+            driver.EmitOn(0, INTERRUPTED);
+            driver.EmitOn(0, TURN_COMPLETE);
+            driver.EmitOn(0, HEARD('hello'));
+            driver.EmitOn(0, SAID('Reply'));
+            driver.EmitOn(0, TURN_COMPLETE);
+            driver.EmitOn(0, GO_AWAY('30s'));
+            await vi.advanceTimersByTimeAsync(0);
+            expect(driver.Connections).toHaveLength(2);
+        });
+
+        it('with no reply coming, the deadline still moves the session', async () => {
+            driver.EmitOn(0, RESUMABLE('h1'));
+            driver.EmitOn(0, SAID('Half'));
+            driver.EmitOn(0, GO_AWAY('30s'));
+            driver.EmitOn(0, INTERRUPTED);
+            driver.EmitOn(0, TURN_COMPLETE);
+            await vi.advanceTimersByTimeAsync(5000);
+            expect(driver.Connections).toHaveLength(1);
+            await vi.advanceTimersByTimeAsync(30_000);
+            expect(driver.Connections).toHaveLength(2);
+        });
+
+        it('the session still reports the turn closed at that turnComplete', () => {
+            driver.EmitOn(0, SAID('Half'));
+            expect(session.IsTurnOpen).toBe(true);
+            driver.EmitOn(0, GO_AWAY('30s'));
+            driver.EmitOn(0, INTERRUPTED);
+            driver.EmitOn(0, TURN_COMPLETE);
+            expect(session.IsTurnOpen).toBe(false);
+        });
+    });
+
     // Vertex handles do restore the conversation: a seed there would duplicate history, so the session stays as it was.
     describe('on the Vertex AI endpoint', () => {
         beforeEach(async () => {
@@ -722,6 +776,17 @@ describe('GeminiRealtime server session: reseeding the conversation on resume', 
             expect(driver.Connections[1]?.Args.Config.sessionResumption).toEqual({ handle: 'h2' });
             expect(driver.Connections[1].Fake.Calls).toEqual([]);
             expect(errors).toEqual([]);
+        });
+
+        it('an interrupted turn still ends at its turnComplete for the move: the next fresh handle moves (MJ#6403 pin)', async () => {
+            driver.EmitOn(0, RESUMABLE('h1'));
+            driver.EmitOn(0, SAID('One, two,'));
+            driver.EmitOn(0, GO_AWAY('30s'));
+            driver.EmitOn(0, INTERRUPTED);
+            driver.EmitOn(0, TURN_COMPLETE);
+            driver.EmitOn(0, RESUMABLE('h2'));
+            await vi.advanceTimersByTimeAsync(0);
+            expect(driver.Connections[1]?.Args.Config.sessionResumption).toEqual({ handle: 'h2' });
         });
 
         it('a drop with a handle resumes from it, and no seed goes out', async () => {

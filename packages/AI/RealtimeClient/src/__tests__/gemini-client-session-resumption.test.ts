@@ -75,6 +75,7 @@ const HEARD = (text: string): LiveServerMessage => CONTENT({ inputTranscription:
 /** The model's words, as Google transcribes them. */
 const SAID = (text: string): LiveServerMessage => CONTENT({ outputTranscription: { text } });
 const TURN_COMPLETE = CONTENT({ turnComplete: true });
+const INTERRUPTED = CONTENT({ interrupted: true });
 const TOOL_CALL = (id: string): LiveServerMessage =>
     ({ toolCall: { functionCalls: [{ id, name: 'lookup_order', args: {} }] } }) as LiveServerMessage;
 
@@ -1127,6 +1128,63 @@ describe('GeminiRealtimeClient session resumption', () => {
             expect(c.Connections).toHaveLength(2);
             expect(c.Connections[0].Session.Closed).toBe(true);
             expect(c.Connections[1].Session.ClientContents[0].turnComplete).toBe(false);
+        });
+
+        describe('an interrupted turn is not a move point (MJ#6403)', () => {
+            it('interrupted then turnComplete at 540 s starts no move; the next reply\'s turnComplete does', async () => {
+                const c = await connectAnother({ connectionLifetimeSeconds: 600 });
+                closeOneExchange(c);
+                c.EmitOn(0, SAID('Half')); // a turn is open when the clock runs out
+                await advance(540_000);
+                c.EmitOn(0, INTERRUPTED); // the participant is speaking
+                c.EmitOn(0, TURN_COMPLETE);
+                await advance(0);
+                expect(c.Connections).toHaveLength(1);
+
+                c.EmitOn(0, HEARD('and then'));
+                c.EmitOn(0, SAID('Reply'));
+                c.EmitOn(0, TURN_COMPLETE);
+                await advance(0);
+                expect(c.Connections).toHaveLength(2);
+                expect(seedOf(c, 1)).toContain('and then');
+            });
+
+            it('an interruption with no move announced changes nothing: a later move at once still comes once the next turn has ended', async () => {
+                const c = await connectAnother({ connectionLifetimeSeconds: 600 });
+                closeOneExchange(c);
+                c.EmitOn(0, SAID('Half'));
+                c.EmitOn(0, INTERRUPTED);
+                c.EmitOn(0, TURN_COMPLETE);
+                c.EmitOn(0, HEARD('hello'));
+                c.EmitOn(0, SAID('Reply'));
+                c.EmitOn(0, TURN_COMPLETE);
+                await advance(540_000);
+                expect(c.Connections).toHaveLength(2); // no turn open: at once
+            });
+
+            it('with no reply coming, the deadline still moves the session', async () => {
+                const c = await connectAnother({ connectionLifetimeSeconds: 600 });
+                closeOneExchange(c);
+                c.EmitOn(0, SAID('Half'));
+                await advance(540_000);
+                c.EmitOn(0, INTERRUPTED);
+                c.EmitOn(0, TURN_COMPLETE);
+                await advance(40_000);
+                expect(c.Connections).toHaveLength(1);
+                await advance(10_000);
+                expect(c.Connections).toHaveLength(2);
+            });
+
+            it('the host still sees the turn closed at that turnComplete', async () => {
+                const c = await connectAnother({ connectionLifetimeSeconds: 600 });
+                closeOneExchange(c);
+                c.EmitOn(0, SAID('Half'));
+                expect(c.IsTurnOpen).toBe(true);
+                await advance(540_000);
+                c.EmitOn(0, INTERRUPTED);
+                c.EmitOn(0, TURN_COMPLETE);
+                expect(c.IsTurnOpen).toBe(false);
+            });
         });
 
         it('moves at the deadline when a turn runs through the whole minute', async () => {
