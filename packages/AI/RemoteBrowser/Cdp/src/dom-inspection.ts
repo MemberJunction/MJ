@@ -347,28 +347,100 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
 
   if (req.Op === 'fill') {
     const controls = visibleFields();
-    const find = (targetRaw: string, desired: string | boolean): Control | null => {
+    const inspectedLabel = (el: Control): string => {
+      const type = typeOf(el);
+      let label = fieldLabel(el);
+      if (type === 'radio' || type === 'checkbox') {
+        const value = clean(el.value);
+        if (value && value.toLowerCase() !== 'on' && !label.toLowerCase().includes(value.toLowerCase())) {
+          label = `${label} (${value})`;
+        }
+      }
+      return label;
+    };
+    const groupLegend = (el: Control): string =>
+      clean(el.closest('fieldset')?.querySelector('legend')?.textContent);
+
+    const findAll = (targetRaw: string, desired: string | boolean): Array<{ control: Control; matchedByOption: boolean }> => {
       const target = targetRaw.trim().toLowerCase();
       if (/^f\d+$/.test(target)) {
         // A ref only ever names the field the latest inspect stamped, and only while it is visible.
         const ref = byRef(target);
-        return controls.find((c) => c === ref) ?? null;
+        const match = controls.find((c) => c === ref);
+        return match ? [{ control: match, matchedByOption: false }] : [];
       }
-      // A radio group named by its group, with the value naming the option.
-      const radios = controls.filter((c) => typeOf(c) === 'radio' && ((c.getAttribute('name') ?? '').toLowerCase() === target || fieldLabel(c).toLowerCase().includes(target)));
-      if (radios.length > 1 && typeof desired === 'string') {
+      if (typeof desired === 'string') {
         const want = desired.trim().toLowerCase();
-        const radio = radios.find((r) => r.value.toLowerCase() === want || fieldLabel(r).toLowerCase().includes(want));
-        if (radio) {
-          return radio;
+        const isBooleanKeyword = /^(true|false|1|0|yes|no|on|off|checked|unchecked)$/i.test(want);
+        // A radio group named by its group, with the value naming the option.
+        const radios = controls.filter(
+          (c) =>
+            typeOf(c) === 'radio' &&
+            ((c.getAttribute('name') ?? '').toLowerCase() === target ||
+              groupLegend(c).toLowerCase() === target ||
+              fieldLabel(c).toLowerCase().includes(target)),
+        );
+        if (radios.length > 1) {
+          const radio =
+            radios.find(
+              (r) =>
+                r.value.toLowerCase() === want ||
+                fieldLabel(r).toLowerCase() === want ||
+                inspectedLabel(r).toLowerCase() === want,
+            ) ??
+            radios.find(
+              (r) =>
+                fieldLabel(r).toLowerCase().includes(want) ||
+                inspectedLabel(r).toLowerCase().includes(want) ||
+                r.value.toLowerCase().includes(want),
+            );
+          if (radio) {
+            return [{ control: radio, matchedByOption: true }];
+          }
+          if (!isBooleanKeyword && radios.some((r) => (r.getAttribute('name') ?? '').toLowerCase() === target)) {
+            return [];
+          }
+        }
+        // A checkbox group named by its shared name or fieldset legend, with the value naming one or more options.
+        const checkboxes = controls.filter(
+          (c) =>
+            typeOf(c) === 'checkbox' &&
+            ((c.getAttribute('name') ?? '').toLowerCase() === target ||
+              groupLegend(c).toLowerCase() === target ||
+              (groupLegend(c) && groupLegend(c).toLowerCase().includes(target))),
+        );
+        if (checkboxes.length > 1 && !isBooleanKeyword) {
+          const tokens = want.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
+          const candidates = tokens.length > 1 ? [want, ...tokens] : [want];
+          const matched = checkboxes.filter((cb) => {
+            const val = cb.value.toLowerCase();
+            const lbl = fieldLabel(cb).toLowerCase();
+            const insp = inspectedLabel(cb).toLowerCase();
+            return candidates.some(
+              (tok) =>
+                val === tok ||
+                lbl === tok ||
+                insp === tok ||
+                lbl.includes(tok) ||
+                insp.includes(tok) ||
+                (val !== 'on' && val.includes(tok)),
+            );
+          });
+          if (matched.length > 0) {
+            return matched.map((control) => ({ control, matchedByOption: true }));
+          }
+          if (checkboxes.some((cb) => (cb.getAttribute('name') ?? '').toLowerCase() === target)) {
+            return [];
+          }
         }
       }
-      const names = (c: Control) => [c.id, c.getAttribute('name') ?? '', fieldLabel(c), c.getAttribute('placeholder') ?? ''].map((s) => s.toLowerCase());
-      return (
+      const names = (c: Control) =>
+        [c.id, c.getAttribute('name') ?? '', fieldLabel(c), inspectedLabel(c), c.getAttribute('placeholder') ?? ''].map((s) => s.toLowerCase());
+      const single =
         controls.find((c) => names(c).includes(target)) ??
         controls.find((c) => names(c).slice(1).some((n) => n && n.includes(target))) ??
-        null
-      );
+        null;
+      return single ? [{ control: single, matchedByOption: false }] : [];
     };
 
     const fire = (el: Element, ...types: string[]) => types.forEach((t) => el.dispatchEvent(new Event(t, { bubbles: true })));
@@ -376,60 +448,66 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
     const errors: string[] = [];
 
     for (const item of req.Values) {
-      const control = find(item.Target, item.Value);
-      if (!control) {
+      const targets = findAll(item.Target, item.Value);
+      if (targets.length === 0) {
         errors.push(`Field "${item.Target}" was not found on the current page; inspect again for fresh refs.`);
         continue;
       }
-      const ref = control.getAttribute(REF_ATTR) || item.Target;
-      const label = fieldLabel(control);
-      if (isProtected(control)) {
-        errors.push(`Field "${label}" (${ref}) is a protected credential or payment input; ask the user to fill it in the browser.`);
-        continue;
-      }
-      if (isLocked(control)) {
-        errors.push(`Field "${label}" (${ref}) is disabled or read-only.`);
-        continue;
-      }
-      const type = typeOf(control);
-      if (type === 'checkbox' || type === 'radio') {
-        const input = control as HTMLInputElement;
-        const shouldCheck = typeof item.Value === 'boolean' ? item.Value : !/^(false|0|no|off|unchecked)$/i.test(String(item.Value).trim());
-        if (input.checked !== shouldCheck) {
-          input.click();
-          if (input.checked !== shouldCheck) {
-            input.checked = shouldCheck;
-            fire(input, 'input', 'change');
-          }
-        }
-        filled.push({ Ref: ref, Label: label, Value: String(input.checked) });
-        continue;
-      }
-      if (control.tagName === 'SELECT') {
-        const select = control as HTMLSelectElement;
-        const want = String(item.Value).trim().toLowerCase();
-        const options = Array.from(select.options);
-        const match =
-          options.find((o) => o.value.toLowerCase() === want || clean(o.text).toLowerCase() === want) ??
-          options.find((o) => clean(o.text).toLowerCase().includes(want) || o.value.toLowerCase().includes(want));
-        if (!match) {
-          errors.push(`Select field "${label}" (${ref}) has no option matching "${String(item.Value)}". Options: ${options.map((o) => clean(o.text) || o.value).filter(Boolean).join(', ')}`);
+      for (const { control, matchedByOption } of targets) {
+        const ref = control.getAttribute(REF_ATTR) || item.Target;
+        const label = fieldLabel(control);
+        if (isProtected(control)) {
+          errors.push(`Field "${label}" (${ref}) is a protected credential or payment input; ask the user to fill it in the browser.`);
           continue;
         }
-        select.value = match.value;
-        fire(select, 'input', 'change', 'blur');
-        filled.push({ Ref: ref, Label: label, Value: clean(match.text) || select.value });
-        continue;
-      }
-      // The native setter, not `el.value =`: React and Vue track the value through it.
-      const text = control as HTMLInputElement | HTMLTextAreaElement;
-      const proto = text.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-      text.focus();
-      Object.getOwnPropertyDescriptor(proto, 'value')?.set?.call(text, String(item.Value));
-      fire(text, 'input', 'change', 'blur');
-      filled.push({ Ref: ref, Label: label, Value: text.value });
-      if (String(item.Value) !== '' && text.value === '') {
-        errors.push(`Field "${label}" (${ref}) reads back empty after "${String(item.Value)}"; it likely expects another format.`);
+        if (isLocked(control)) {
+          errors.push(`Field "${label}" (${ref}) is disabled or read-only.`);
+          continue;
+        }
+        const type = typeOf(control);
+        if (type === 'checkbox' || type === 'radio') {
+          const input = control as HTMLInputElement;
+          const shouldCheck = matchedByOption
+            ? true
+            : typeof item.Value === 'boolean'
+              ? item.Value
+              : !/^(false|0|no|off|unchecked)$/i.test(String(item.Value).trim());
+          if (input.checked !== shouldCheck) {
+            input.click();
+            if (input.checked !== shouldCheck) {
+              input.checked = shouldCheck;
+              fire(input, 'input', 'change');
+            }
+          }
+          filled.push({ Ref: ref, Label: label, Value: String(input.checked) });
+          continue;
+        }
+        if (control.tagName === 'SELECT') {
+          const select = control as HTMLSelectElement;
+          const want = String(item.Value).trim().toLowerCase();
+          const options = Array.from(select.options);
+          const match =
+            options.find((o) => o.value.toLowerCase() === want || clean(o.text).toLowerCase() === want) ??
+            options.find((o) => clean(o.text).toLowerCase().includes(want) || o.value.toLowerCase().includes(want));
+          if (!match) {
+            errors.push(`Select field "${label}" (${ref}) has no option matching "${String(item.Value)}". Options: ${options.map((o) => clean(o.text) || o.value).filter(Boolean).join(', ')}`);
+            continue;
+          }
+          select.value = match.value;
+          fire(select, 'input', 'change', 'blur');
+          filled.push({ Ref: ref, Label: label, Value: clean(match.text) || select.value });
+          continue;
+        }
+        // The native setter, not `el.value =`: React and Vue track the value through it.
+        const text = control as HTMLInputElement | HTMLTextAreaElement;
+        const proto = text.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        text.focus();
+        Object.getOwnPropertyDescriptor(proto, 'value')?.set?.call(text, String(item.Value));
+        fire(text, 'input', 'change', 'blur');
+        filled.push({ Ref: ref, Label: label, Value: text.value });
+        if (String(item.Value) !== '' && text.value === '') {
+          errors.push(`Field "${label}" (${ref}) reads back empty after "${String(item.Value)}"; it likely expects another format.`);
+        }
       }
     }
     return { filled, errors };

@@ -431,7 +431,28 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * and the `browser_*` tools that let this conversation's agents drive it. Defaults false; a host
    * that wants an agent-driven browser beside the chat sets true.
    */
-  @Input() AllowRemoteBrowser = false;
+  private _allowRemoteBrowser = false;
+  @Input()
+  set AllowRemoteBrowser(value: boolean) {
+    this._allowRemoteBrowser = value;
+    if (!value) {
+      this.standbyPreparedConversationId = null;
+      this.CloseRemoteBrowserPanel();
+      void this.remoteBrowser?.Close?.();
+    }
+  }
+  get AllowRemoteBrowser(): boolean {
+    return this._allowRemoteBrowser;
+  }
+
+  /** @deprecated Use {@link AllowRemoteBrowser}. */
+  @Input() set allowRemoteBrowser(value: ConversationChatAreaComponent['AllowRemoteBrowser']) {
+    this.AllowRemoteBrowser = value;
+  }
+  /** @deprecated Use {@link AllowRemoteBrowser}. */
+  get allowRemoteBrowser(): ConversationChatAreaComponent['AllowRemoteBrowser'] {
+    return this.AllowRemoteBrowser;
+  }
 
   /**
    * Host-level cap for stopping and continuing agent runs: the composer's Stop and Stop all, the
@@ -8158,11 +8179,20 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * chat area owns them). Cached: it is bound to an input, so a fresh object per check would re-fire it.
    */
   public get EffectiveAppContext(): Record<string, unknown> | null {
+    if (
+      this.AllowRemoteBrowser &&
+      this.ConversationId &&
+      this.agentClientService &&
+      !UUIDsEqual(this.standbyPreparedConversationId, this.ConversationId)
+    ) {
+      this.standbyPreparedConversationId = this.ConversationId;
+      this.ensureRemoteBrowser().SetConversation?.(this.ConversationId);
+    }
     const controller = this.remoteBrowser;
     if (!controller) {
       return this.AppContext;
     }
-    const owns = controller.ConversationId !== null && controller.OwnsTools;
+    const owns = controller.OwnsTools;
     let memo = this.effectiveAppContextMemo;
     if (!memo || memo.Base !== this.AppContext || memo.Version !== controller.StateVersion || memo.Owns !== owns) {
       memo = { Base: this.AppContext, Version: controller.StateVersion, Owns: owns, Value: controller.WithBrowserContext(this.AppContext) };
@@ -8170,6 +8200,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
     return memo.Value;
   }
+  private standbyPreparedConversationId: string | null = null;
   private effectiveAppContextMemo: { Base: Record<string, unknown> | null; Version: number; Owns: boolean; Value: Record<string, unknown> | null } | null = null;
 
   /**

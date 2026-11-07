@@ -114,6 +114,31 @@ describe('fill', () => {
         expect(result.Success).toBe(false);
         expect((document.querySelector('[name="csrf"]') as HTMLInputElement).value).toBe('t0k3n');
     });
+
+    it('matches checkbox groups by option value or comma-separated list, and matches inspected (Value) labels', async () => {
+        render(`
+          <form>
+            <fieldset>
+              <legend>Primary areas of interest</legend>
+              <label><input type="checkbox" name="interests" value="Board Governance" data-visible> Board Governance</label>
+              <label><input type="checkbox" name="interests" value="AI &amp; Automation" data-visible> AI &amp; Automation</label>
+              <label><input type="checkbox" name="interests" value="Member Engagement" data-visible> Member Engagement</label>
+            </fieldset>
+            <label><input type="checkbox" name="newsletter" value="Yes" data-visible> Send me AIIA news and event updates.</label>
+          </form>`);
+        await session.ExecuteAction({ Kind: 'inspect' });
+        const result = await session.ExecuteAction({
+            Kind: 'fill',
+            Values: [
+                { Target: 'interests', Value: 'AI & Automation, Member Engagement' },
+                { Target: 'Send me AIIA news and event updates. (Yes)', Value: true },
+            ],
+        });
+        expect(result.Success).toBe(true);
+        const inputs = Array.from(document.querySelectorAll<HTMLInputElement>('input[name="interests"]'));
+        expect(inputs.map((i) => i.checked)).toEqual([false, true, true]);
+        expect((document.querySelector<HTMLInputElement>('input[name="newsletter"]')!).checked).toBe(true);
+    });
 });
 
 describe('click guard', () => {
