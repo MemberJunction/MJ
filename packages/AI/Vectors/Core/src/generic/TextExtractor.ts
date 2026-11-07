@@ -26,8 +26,8 @@ export class TextExtractor {
         let text = html;
 
         // Remove script and style elements entirely
-        text = text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-        text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+        text = TextExtractor.removeElements(text, /<script/gi, /<\/script>/gi);
+        text = TextExtractor.removeElements(text, /<style/gi, /<\/style>/gi);
 
         // Replace block-level elements with newlines
         text = text.replace(/<\/(p|div|h[1-6]|li|tr|br|blockquote|pre)>/gi, '\n');
@@ -102,6 +102,38 @@ export class TextExtractor {
     // ─────────────────────────────────────────────
     // Private Helpers
     // ─────────────────────────────────────────────
+
+    /**
+     * Remove every element from its opening tag (`opener`, then anything up to the next `>`) through
+     * the first `closer` after it, case-insensitively. The same result as
+     * `/<script[^>]*>[\s\S]*?<\/script>/gi`, scanned by index: that regex rescans to the end of the
+     * text for every unclosed `<script`, which is quadratic (CodeQL js/polynomial-redos). Once no `>`
+     * or no closing tag remains, no later opening can match either, so the scan stops.
+     *
+     * @param opener Global, case-insensitive regex for the tag's opening, e.g. `/<script/gi`.
+     * @param closer Global, case-insensitive regex for the closing tag, e.g. `/<\/script>/gi`.
+     */
+    private static removeElements(html: string, opener: RegExp, closer: RegExp): string {
+        let out = '';
+        let copied = 0;
+        opener.lastIndex = 0;
+        let open: RegExpExecArray | null;
+        while ((open = opener.exec(html)) !== null) {
+            const tagEnd = html.indexOf('>', open.index + open[0].length);
+            if (tagEnd === -1) {
+                break;
+            }
+            closer.lastIndex = tagEnd + 1;
+            const close = closer.exec(html);
+            if (!close) {
+                break;
+            }
+            out += html.slice(copied, open.index);
+            copied = close.index + close[0].length;
+            opener.lastIndex = copied;
+        }
+        return out + html.slice(copied);
+    }
 
     private static decodeHTMLEntities(text: string): string {
         const entityMap: Record<string, string> = {

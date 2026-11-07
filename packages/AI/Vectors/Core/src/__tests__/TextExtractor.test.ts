@@ -32,6 +32,24 @@ describe('TextExtractor', () => {
             expect(result).not.toContain('color');
         });
 
+        it.each([
+            ['<SCRIPT type="x">a</Script>keep', 'keep'],
+            ['a<script>1</script>b<script>2</script>c', 'abc'],
+            ['<scripts>x</script>y', 'y'],
+            ['a<script>never closed', 'a never closed'],
+            ['<style>p { color: red }</style><script>s()</script>t', 't'],
+            ['x<style media="print">', 'x'],
+        ])('removes script and style elements from %j', (html, expected) => {
+            expect(TextExtractor.ExtractFromHTML(html)).toBe(expected);
+        });
+
+        it('reads 400k characters of unclosed script and style tags in linear time', () => {
+            const started = Date.now();
+            expect(TextExtractor.ExtractFromHTML('<script>'.repeat(50_000))).toBe('');
+            expect(TextExtractor.ExtractFromHTML('<style>'.repeat(50_000))).toBe('');
+            expect(Date.now() - started).toBeLessThan(2500);
+        });
+
         it('should decode HTML entities', () => {
             const html = '&amp; &lt; &gt; &quot; &#39; &nbsp;';
             const result = TextExtractor.ExtractFromHTML(html);
