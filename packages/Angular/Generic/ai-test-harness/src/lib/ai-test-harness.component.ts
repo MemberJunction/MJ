@@ -7,7 +7,7 @@ import { MJTemplateParamEntity, MJAIConfigurationEntity, MJTaskEntity, UserInfoE
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { MJConfirmService } from '@memberjunction/ng-ui-components';
+import { MJConfirmService, IsPhoneViewport, WatchPhoneViewport } from '@memberjunction/ng-ui-components';
 import { ChatMessage } from '@memberjunction/ai';
 import { Subject, Subscription } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -744,6 +744,46 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     /** Whether the configuration sidebar is currently visible */
     public ShowSidebar = true;
 
+    /**
+     * Phone width (768px and below). There the chat and the sidebar do not share the screen: the
+     * chat shows, and the sidebar toggle swaps the whole pane to settings and back.
+     */
+    public IsPhone = false;
+
+    /** Stops following the breakpoint; set at init, called from ngOnDestroy. */
+    private stopPhoneWatch: () => void = () => undefined;
+
+    /** The chat pane of the split. Hidden on phones while the sidebar has the screen. */
+    public get ChatPaneVisible(): boolean {
+        return !this.IsPhone || !this.ShowSidebar;
+    }
+
+    /** The sidebar toggle's accessible name: what pressing it does, which differs on phones. */
+    public get SidebarToggleLabel(): string {
+        if (this.IsPhone) return this.ShowSidebar ? 'Back to chat' : 'Show settings';
+        return this.ShowSidebar ? 'Hide sidebar' : 'Show sidebar';
+    }
+
+    /** The sidebar starts open on desktop and closed on phones, where it would take the whole screen. */
+    private get defaultShowSidebar(): boolean {
+        return !this.IsPhone;
+    }
+
+    /**
+     * Records the breakpoint and resets the sidebar to that width's default, so crossing it (a
+     * rotation, a resized window) never leaves a phone on settings or a desktop without the sidebar.
+     */
+    public ApplyPhoneViewport(isPhone: boolean): void {
+        const crossed = isPhone !== this.IsPhone;
+        this.IsPhone = isPhone;
+        if (crossed) this.ShowSidebar = this.defaultShowSidebar;
+    }
+
+    private syncPhoneViewport(): void {
+        this.ApplyPhoneViewport(IsPhoneViewport());
+        this.cdr.markForCheck();
+    }
+
     /** @deprecated Use {@link ShowSidebar}. */
     public get showSidebar() {
       return this.ShowSidebar;
@@ -957,6 +997,8 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * and initializes the harness to a clean state.
      */
     async ngOnInit() {
+        this.syncPhoneViewport();
+        this.stopPhoneWatch = WatchPhoneViewport(() => this.syncPhoneViewport());
         console.log('🚀 AITestHarnessComponent.ngOnInit');
         console.log('📌 originalPromptRunId:', this.OriginalPromptRunId);
         console.log('🎯 entity:', this.entity);
@@ -1021,6 +1063,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * to prevent memory leaks.
      */
     ngOnDestroy() {
+        this.stopPhoneWatch();
         this.destroy$.next();
         this.destroy$.complete();
         if (this.elapsedTimeInterval) {
@@ -1596,7 +1639,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         this.AgentVariables = [{ name: '', value: '', type: 'string' }];
         this.TemplateVariables = [];
         this.CurrentConversationId = null;
-        this.ShowSidebar = true;
+        this.ShowSidebar = this.defaultShowSidebar;
         // Clear execution data and tracking when explicitly resetting
         this.CurrentAgentRun = null;
         this.lastProcessedRunId = null;
@@ -1942,6 +1985,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             ResultType: 'simple',
             BypassCache: true,
             MaxRows: 1,
+            SkipTotalRowCount: true,
         });
         const id = result.Success ? result.Results?.[0]?.ID : undefined;
         if (!id) return;

@@ -24,6 +24,8 @@ vi.mock('@memberjunction/ai', () => ({
     // The module's default resolver is built from this at import time. Mocked alongside GetAIAPIKey
     // because MakeAIAPIKeyResolver closes over it through a same-module binding a mock cannot reach.
     MakeAIAPIKeyResolver: () => (driverClass: string) => (driverClass === 'EnvKeyedDriver' ? 'env-key' : undefined),
+    // Words the log line a null selection writes.
+    CredentialScopeAllows: (scope: string | undefined, source: string) => (scope ?? 'Any') === 'Any' || source === 'Runtime',
 }));
 
 /** A `MJ: AI Model Vendors` row shaped as the selector reads it. */

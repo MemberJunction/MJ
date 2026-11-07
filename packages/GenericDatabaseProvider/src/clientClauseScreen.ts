@@ -1,5 +1,13 @@
 import { CurrentFieldSecurityGeneration, EntityPermissionType, IsPlatformSQL, type EntityInfo, type PlatformSQL, type UserInfo } from '@memberjunction/core';
-import { FindForbiddenFunctionCalls, IsKeyword, LexSQL, SignificantTokens, SQLParser } from '@memberjunction/sql-parser';
+import {
+    FindForbiddenFunctionCalls,
+    IsKeyword,
+    LexSQL,
+    SignificantTokens,
+    SQLParser,
+    StrictFragmentValidator,
+    type StrictValidationResult,
+} from '@memberjunction/sql-parser';
 import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
 
 /** A client-supplied SQL fragment: plain text, or a set of per-platform variants. */
@@ -72,31 +80,6 @@ export interface StatementReads {
     SelectCount: number;
 }
 
-/**
- * How a dialect matches a FROM item to a CTE. Each function returns the name as the dialect
- * compares it, or null when the screen cannot tell.
- */
-interface CTENameRules {
-    /** The name a CTE declares, from its name node in the parse tree. */
-    DeclaredName(node: unknown): string | null;
-    /** The name an unqualified FROM item reads, from its text in the parse tree. */
-    ReferenceName(text: string): string | null;
-    /** Whether a CTE body sees its own CTE without RECURSIVE (SQL Server). */
-    BodySeesItself: boolean;
-}
-
-/** The state of one walk of a parse tree. */
-interface StatementWalk {
-    Reads: StatementReads;
-    Visited: WeakSet<object>;
-    Aliases: ReadonlyMap<string, string> | null;
-    Names: CTENameRules;
-    /** A FROM item node to leave out (the clause screen's parse wrapper). */
-    Skip: object | undefined;
-    /** Each CTE name the walk has met, with the number of CTEs of that name in scope at the current node. */
-    InScope: Map<string, number>;
-}
-
 /** One variant of a clause, with the dialect it would run under. */
 interface ClauseVariant {
     Text: string;
@@ -133,11 +116,6 @@ export class ClientClauseScreen {
         'string_split', 'openjson', 'generate_series', 'unnest', 'regexp_split_to_table', 'string_to_table',
         'json_array_elements', 'json_array_elements_text', 'jsonb_array_elements', 'jsonb_array_elements_text',
         'json_each', 'json_each_text', 'jsonb_each', 'jsonb_each_text',
-    ]);
-
-    private static readonly WRITE_NODE_TYPES = new Set<string>([
-        'insert', 'update', 'delete', 'merge', 'replace', 'drop', 'create', 'alter', 'truncate',
-        'rename', 'call', 'exec', 'execute', 'grant', 'revoke', 'use', 'load', 'copy', 'do',
     ]);
 
     /**
@@ -183,21 +161,13 @@ export class ClientClauseScreen {
         const fragment = ClientClauseScreen.toDialectQuoting(clause, dialect);
         ClientClauseScreen.AssertNoIdentifierAliasNames(fragment, dialect, label);
         ClientClauseScreen.AssertNoForbiddenFunctionCalls(fragment, dialect, label);
-        const wrapped =
+        const result =
             label === 'OrderBy'
-                ? `SELECT 1 FROM __mj_clause_screen ORDER BY ${fragment}`
-                : `SELECT 1 FROM __mj_clause_screen WHERE (${fragment})`;
-        const parser = new SQLParser(wrapped, dialect);
-        if (!parser.IsValid && options?.LeaveUnparseableToProvider) return;
-        if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
-            throw new Error(`Invalid ${label}: not a safe read-only filter fragment — refusing under uncertainty`);
-        }
-        if (ClientClauseScreen.AstContainsWriteNode(parser.AST)) {
-            throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
-        }
-
-        const reads = ClientClauseScreen.CollectStatementReads(parser, ClientClauseScreen.wrapperFromItem(parser.AST));
-        ClientClauseScreen.AssertEverySelectAccountedFor(wrapped, dialect, reads, label);
+                ? StrictFragmentValidator.ValidateOrderBy(fragment, dialect, { CollectReads: true })
+                : StrictFragmentValidator.ValidateFilter(fragment, dialect, { CollectReads: true });
+        if (result.Refusal === 'Unparseable' && options?.LeaveUnparseableToProvider) return;
+        const reads = ClientClauseScreen.safeReadsOf(result, `Invalid ${label}: not a safe read-only filter fragment — refusing under uncertainty`, label);
+        ClientClauseScreen.AssertEverySelectAccountedFor(result.ParsedSQL, dialect, reads, label);
         const allowed = ClientClauseScreen.BuildEntityBaseViewAllowList(entities);
         for (const relation of reads.Relations) {
             const entity = ClientClauseScreen.AssertRelationReadable(allowed, relation, label, user);
@@ -222,14 +192,7 @@ export class ClientClauseScreen {
         }
         ClientClauseScreen.AssertNoIdentifierAliasNames(sqlText, dialect, label);
         ClientClauseScreen.AssertNoForbiddenFunctionCalls(sqlText, dialect, label);
-        const parser = new SQLParser(sqlText, dialect);
-        if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
-            throw new Error(`Invalid ${label}: not a safe read-only statement — refusing under uncertainty`);
-        }
-        if (ClientClauseScreen.AstContainsWriteNode(parser.AST)) {
-            throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
-        }
-        const reads = ClientClauseScreen.CollectStatementReads(parser);
+        const reads = ClientClauseScreen.readOnlyStatementReads(sqlText, dialect, label);
         ClientClauseScreen.AssertEverySelectAccountedFor(sqlText, dialect, reads, label);
         const allowed = ClientClauseScreen.BuildEntityBaseViewAllowList(entities);
         for (const relation of reads.Relations) {
@@ -306,16 +269,14 @@ export class ClientClauseScreen {
         }
     }
 
-    /** True when a parsed AST contains a write or DDL node at any depth. */
+    /**
+     * True when a parsed AST contains a write or DDL node at any depth.
+     *
+     * @deprecated Use {@link StrictFragmentValidator.ValidateReadOnlyStatement} from
+     * `@memberjunction/sql-parser`, whose result reports `ContainsNestedWrite`.
+     */
     public static AstContainsWriteNode(node: unknown): boolean {
-        if (!node || typeof node !== 'object') return false;
-        if (Array.isArray(node)) return node.some((n) => ClientClauseScreen.AstContainsWriteNode(n));
-        const obj = node as Record<string, unknown>;
-        const type = obj.type;
-        if (typeof type === 'string' && ClientClauseScreen.WRITE_NODE_TYPES.has(type.toLowerCase())) {
-            return true;
-        }
-        return Object.values(obj).some((v) => ClientClauseScreen.AstContainsWriteNode(v));
+        return StrictFragmentValidator.ContainsWriteNode(node);
     }
 
     /** Removes the bracket, double-quote or backtick quoting around one identifier. */
@@ -458,14 +419,7 @@ export class ClientClauseScreen {
         label: string,
     ): void {
         ClientClauseScreen.AssertNoIdentifierAliasNames(sql, dialect, label);
-        const parser = new SQLParser(sql, dialect);
-        if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
-            throw new Error(`Invalid ${label}: not a safe read-only statement — refusing under uncertainty`);
-        }
-        if (ClientClauseScreen.AstContainsWriteNode(parser.AST)) {
-            throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
-        }
-        const reads = ClientClauseScreen.CollectStatementReads(parser);
+        const reads = ClientClauseScreen.readOnlyStatementReads(sql, dialect, label);
         ClientClauseScreen.AssertEverySelectAccountedFor(sql, dialect, reads, label);
         const allowed = ClientClauseScreen.BuildEntityBaseViewAllowList(entities);
         for (const relation of reads.Relations) {
@@ -476,33 +430,13 @@ export class ClientClauseScreen {
     }
 
     /**
-     * Every FROM item in a parsed statement, and the number of SELECT nodes. The walk visits every
-     * property of every node, so it finds a FROM list wherever the grammar puts one: a subquery in a
-     * CASE branch, HAVING, a window's ORDER BY or PARTITION BY, a function argument, IN, EXISTS, a
-     * set operation or a CTE body. Every FROM item is kept, even when its alias repeats. Names the
-     * fallback parse renamed are read back through {@link SQLParser.IdentifierAliases}, which holds
-     * only names the parser put in the tree. `skip` is a FROM item node to leave out (the screen's
-     * parse wrapper).
-     *
-     * Each FROM item records whether it reads a CTE in scope there
-     * ({@link StatementRelation.IsCTEReference}). A WITH covers its own SELECT, everything below it,
-     * and the following set-operation branches unless its SELECT is a parenthesized branch. A CTE
-     * body sees the CTEs before it, itself on SQL Server, and every CTE of a PostgreSQL WITH
-     * RECURSIVE list. Names match by the dialect's identifier rules ({@link cteNameRules}). The walk
-     * keeps a count of the CTEs of each name in scope as it goes, so its time is linear in the tree.
+     * Every FROM item in a parsed statement, and the number of SELECT nodes, from a walk of the
+     * whole parse tree with CTE scope ({@link StatementRelation.IsCTEReference}); see
+     * {@link StrictFragmentValidator.CollectStatementReads} in `@memberjunction/sql-parser`. `skip`
+     * is a FROM item node of `parser`'s own tree to leave out.
      */
     public static CollectStatementReads(parser: SQLParser, skip?: object): StatementReads {
-        const aliases = parser.IdentifierAliases;
-        const walk: StatementWalk = {
-            Reads: { Relations: [], SelectCount: 0 },
-            Visited: new WeakSet<object>(),
-            Aliases: aliases,
-            Names: ClientClauseScreen.cteNameRules(parser, aliases),
-            Skip: skip,
-            InScope: new Map<string, number>(),
-        };
-        ClientClauseScreen.visitNode(walk, parser.AST);
-        return walk.Reads;
+        return StrictFragmentValidator.CollectStatementReads(parser, skip);
     }
 
     /**
@@ -539,210 +473,25 @@ export class ClientClauseScreen {
         throw new Error(`Invalid ${label}: a subquery may read only entity base views, not ${source}`);
     }
 
-    /** Visits one node of the parse tree. */
-    private static visitNode(walk: StatementWalk, node: unknown): void {
-        if (!node || typeof node !== 'object' || walk.Visited.has(node)) return;
-        walk.Visited.add(node);
-        if (Array.isArray(node)) {
-            node.forEach((child) => ClientClauseScreen.visitNode(walk, child));
-            return;
-        }
-        const record = node as Record<string, unknown>;
-        if (record.type === 'select') {
-            ClientClauseScreen.visitSelect(walk, record);
-            return;
-        }
-        Object.values(record).forEach((child) => ClientClauseScreen.visitNode(walk, child));
+    /**
+     * Parses a whole statement strictly and returns what it reads; throws unless it is one plain
+     * read-only SELECT with no write or DDL at any depth.
+     */
+    private static readOnlyStatementReads(sql: string, dialect: SQLParserDialect, label: string): StatementReads {
+        const result = StrictFragmentValidator.ValidateReadOnlyStatement(sql, dialect, { CollectReads: true });
+        return ClientClauseScreen.safeReadsOf(result, `Invalid ${label}: not a safe read-only statement — refusing under uncertainty`, label);
     }
 
     /**
-     * Visits a SELECT node: counts it, adds its FROM items, and visits its CTE bodies and every
-     * other property with the CTE names each one can see. The CTEs of its WITH are in scope from
-     * their place in the list until the walk leaves the SELECT.
+     * The reads of a strict parse; throws `unsafe` unless it parsed as one plain read-only SELECT,
+     * and the nested-write refusal when a write or DDL sits inside it.
      */
-    private static visitSelect(walk: StatementWalk, select: Record<string, unknown>): void {
-        walk.Reads.SelectCount++;
-        const ctes: unknown[] = Array.isArray(select.with) ? select.with : [];
-        const declared = ctes.map((cte) => walk.Names.DeclaredName(ClientClauseScreen.cteNameNode(cte)));
-        ClientClauseScreen.enterScope(walk, declared);
-        ClientClauseScreen.addFromItems(walk, select.from);
-        ClientClauseScreen.leaveScope(walk, declared);
-        ClientClauseScreen.visitCTEBodies(walk, ctes, declared);
-        const ownBranchOnly = ctes.length > 0 && select.parentheses_symbol === true;
-        for (const [key, child] of Object.entries(select)) {
-            if (key === 'with') continue;
-            const outsideWith = key === '_next' && ownBranchOnly;
-            if (outsideWith) ClientClauseScreen.leaveScope(walk, declared);
-            ClientClauseScreen.visitNode(walk, child);
-            if (outsideWith) ClientClauseScreen.enterScope(walk, declared);
+    private static safeReadsOf(result: StrictValidationResult, unsafe: string, label: string): StatementReads {
+        if (result.Refusal === 'NestedWrite') {
+            throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
         }
-        ClientClauseScreen.leaveScope(walk, declared);
-    }
-
-    /**
-     * Visits the bodies of one WITH list, whose CTE names are `declared`. Body `i` sees the CTEs
-     * before it, itself too on SQL Server, and every CTE of a RECURSIVE list. Each CTE comes into
-     * scope once, at its place in the list, and all of them are in scope afterwards.
-     */
-    private static visitCTEBodies(walk: StatementWalk, ctes: readonly unknown[], declared: readonly (string | null)[]): void {
-        const recursive = ctes.some((cte) => ClientClauseScreen.isRecursiveCTE(cte));
-        let entered = 0;
-        ctes.forEach((cte, i) => {
-            const visible = recursive ? ctes.length : walk.Names.BodySeesItself ? i + 1 : i;
-            for (; entered < visible; entered++) ClientClauseScreen.countName(walk, declared[entered], 1);
-            ClientClauseScreen.visitNode(walk, cte);
-        });
-        for (; entered < ctes.length; entered++) ClientClauseScreen.countName(walk, declared[entered], 1);
-    }
-
-    /** Adds the relation each FROM item names, marking an unqualified reference to a CTE in scope. */
-    private static addFromItems(walk: StatementWalk, from: unknown): void {
-        const items: unknown[] = Array.isArray(from) ? from : from ? [from] : [];
-        for (const item of items) {
-            if (!item || typeof item !== 'object' || item === walk.Skip) continue;
-            const relation = ClientClauseScreen.relationOf(item as Record<string, unknown>, walk.Aliases);
-            if (!relation) continue;
-            const name = relation.TableName && !relation.SchemaName ? walk.Names.ReferenceName(relation.TableName) : null;
-            relation.IsCTEReference = name !== null && (walk.InScope.get(name) ?? 0) > 0;
-            walk.Reads.Relations.push(relation);
-        }
-    }
-
-    /** Brings each readable name among `names` into scope once more. */
-    private static enterScope(walk: StatementWalk, names: readonly (string | null)[]): void {
-        for (const name of names) ClientClauseScreen.countName(walk, name, 1);
-    }
-
-    /** Takes each readable name among `names` out of scope once. */
-    private static leaveScope(walk: StatementWalk, names: readonly (string | null)[]): void {
-        for (const name of names) ClientClauseScreen.countName(walk, name, -1);
-    }
-
-    /**
-     * Adds `delta` to the in-scope count of `name` when it is readable. A count that drops to zero
-     * stays in the map: in V8, each delete of a key leaves an entry that later lookups of that key
-     * step over until the map is rebuilt.
-     */
-    private static countName(walk: StatementWalk, name: string | null, delta: 1 | -1): void {
-        if (name) walk.InScope.set(name, (walk.InScope.get(name) ?? 0) + delta);
-    }
-
-    /** The name node of one item of a `with` list. */
-    private static cteNameNode(cte: unknown): unknown {
-        return cte && typeof cte === 'object' ? (cte as { name?: unknown }).name : undefined;
-    }
-
-    /** True for the item of a `with` list that carries RECURSIVE (the parser marks the first). */
-    private static isRecursiveCTE(cte: unknown): boolean {
-        return !!cte && typeof cte === 'object' && (cte as { recursive?: unknown }).recursive === true;
-    }
-
-    /**
-     * How the parser's dialect matches a FROM item to a CTE. SQL Server ignores case, and a CTE
-     * body reads its own CTE. PostgreSQL folds an unquoted name to lower case and matches a quoted
-     * one exactly ({@link postgresNameRules}). A dialect that quotes identifiers any other way
-     * matches no CTE.
-     */
-    private static cteNameRules(parser: SQLParser, aliases: ReadonlyMap<string, string> | null): CTENameRules {
-        const quote = parser.Dialect.QuoteIdentifier('x');
-        if (quote.startsWith('[')) {
-            return {
-                DeclaredName: (node) => ClientClauseScreen.asciiLower(ClientClauseScreen.identifierText(node, aliases)) || null,
-                ReferenceName: (text) => ClientClauseScreen.asciiLower(text) || null,
-                BodySeesItself: true,
-            };
-        }
-        if (quote.startsWith('"')) return ClientClauseScreen.postgresNameRules(parser, aliases);
-        return { DeclaredName: () => null, ReferenceName: () => null, BodySeesItself: false };
-    }
-
-    /**
-     * PostgreSQL's CTE name rules. A CTE name node says whether it was quoted. A FROM item's name
-     * does not, so its quoting comes from the SQL's tokens: a name with upper-case letters that the
-     * SQL writes only quoted is exact, one it writes only unquoted folds to lower case, and one it
-     * writes both ways, or not as a token at all, matches no CTE.
-     */
-    private static postgresNameRules(parser: SQLParser, aliases: ReadonlyMap<string, string> | null): CTENameRules {
-        const quoted = new Set<string>();
-        const bare = new Set<string>();
-        for (const token of LexSQL(parser.SQL, parser.Dialect)) {
-            if (token.Kind === 'word') bare.add(token.Text);
-            else if (token.Kind === 'identifier' && token.Text.startsWith('"')) quoted.add(token.Text.slice(1, -1).split('""').join('"'));
-        }
-        const referenceName = (text: string): string | null => {
-            const folded = ClientClauseScreen.asciiLower(text);
-            if (folded === text) return text || null;
-            if (quoted.has(text) && !bare.has(text)) return text;
-            if (bare.has(text) && !quoted.has(text)) return folded;
-            return null;
-        };
-        const declaredName = (node: unknown): string | null => {
-            const name = node && typeof node === 'object' ? (node as { type?: unknown; value?: unknown }) : null;
-            if (typeof name?.value === 'string' && name.type === 'double_quote_string') return name.value || null;
-            if (typeof name?.value === 'string' && name.type === 'default') return ClientClauseScreen.asciiLower(name.value) || null;
-            return referenceName(ClientClauseScreen.identifierText(node, aliases));
-        };
-        return { DeclaredName: declaredName, ReferenceName: referenceName, BodySeesItself: false };
-    }
-
-    /** `text` with ASCII upper-case letters in lower case: PostgreSQL's folding of an unquoted name. */
-    private static asciiLower(text: string): string {
-        return text.replace(/[A-Z]/g, (letter) => letter.toLowerCase());
-    }
-
-    /**
-     * The relation one FROM item names. A derived table and a VALUES list name none; the walk
-     * reaches any subquery inside them.
-     */
-    private static relationOf(item: Record<string, unknown>, aliases: ReadonlyMap<string, string> | null): StatementRelation | null {
-        const table = ClientClauseScreen.identifierText(item.table, aliases);
-        if (table) {
-            const database = ClientClauseScreen.identifierText(item.db, aliases);
-            const schema = ClientClauseScreen.identifierText(item.schema, aliases);
-            return { SchemaName: schema ? `${database}.${schema}` : database, TableName: table, FunctionName: '', IsCTEReference: false };
-        }
-        const expr = item.expr && typeof item.expr === 'object' ? (item.expr as { type?: unknown; ast?: unknown; name?: unknown }) : null;
-        if (expr?.ast || expr?.type === 'values') return null;
-        if (expr?.type === 'function') return ClientClauseScreen.functionRelation(expr.name, aliases);
-        return { SchemaName: '', TableName: '', FunctionName: '', IsCTEReference: false };
-    }
-
-    /** The relation a table function names. Leading name parts join the schema, so a qualified name never matches a built-in. */
-    private static functionRelation(name: unknown, aliases: ReadonlyMap<string, string> | null): StatementRelation {
-        if (typeof name === 'string') return { SchemaName: '', TableName: '', FunctionName: name, IsCTEReference: false };
-        const record = name && typeof name === 'object' ? (name as { name?: unknown; schema?: unknown }) : {};
-        const parts = Array.isArray(record.name) ? record.name.map((part) => ClientClauseScreen.identifierText(part, aliases)) : [];
-        const qualifiers = [ClientClauseScreen.identifierText(record.schema, aliases), ...parts.slice(0, -1)].filter(Boolean);
-        return { SchemaName: qualifiers.join('.'), TableName: '', FunctionName: parts[parts.length - 1] ?? '', IsCTEReference: false };
-    }
-
-    /**
-     * The text of an identifier node (a string, or the PostgreSQL grammar's `{ value }` node), with
-     * a name the fallback parse renamed read back from `aliases`; empty when unreadable.
-     */
-    private static identifierText(value: unknown, aliases: ReadonlyMap<string, string> | null): string {
-        let text = '';
-        if (typeof value === 'string') {
-            text = value;
-        } else if (value && typeof value === 'object') {
-            const node = value as { value?: unknown; expr?: unknown };
-            if (typeof node.value === 'string') text = node.value;
-            else if (node.expr) return ClientClauseScreen.identifierText(node.expr, aliases);
-        }
-        return ClientClauseScreen.StripIdentifierQuotes(aliases?.get(text) ?? text);
-    }
-
-    /** The FROM item of the screen's parse wrapper: the root statement's only FROM item, when it is `__mj_clause_screen`. */
-    private static wrapperFromItem(ast: unknown): object | undefined {
-        const root = Array.isArray(ast) ? ast[0] : ast;
-        const from = root && typeof root === 'object' ? (root as Record<string, unknown>).from : undefined;
-        if (!Array.isArray(from) || from.length !== 1 || !from[0] || typeof from[0] !== 'object') return undefined;
-        const item = from[0] as Record<string, unknown>;
-        const isWrapper =
-            ClientClauseScreen.identifierText(item.table, null).toLowerCase() === '__mj_clause_screen' &&
-            !ClientClauseScreen.identifierText(item.db, null) &&
-            !ClientClauseScreen.identifierText(item.schema, null);
-        return isWrapper ? item : undefined;
+        if (!result.IsValid || !result.Reads) throw new Error(unsafe);
+        return result.Reads;
     }
 
     /** The text variants of one clause; a platform-specific clause yields each of its variants. */

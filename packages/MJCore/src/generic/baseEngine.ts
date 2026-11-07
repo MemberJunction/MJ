@@ -6,7 +6,7 @@ import { buffer, debounceTime, filter } from "rxjs/operators";
 import { UserInfo } from "./securityInfo";
 import { RunView, RunViewParams } from "../views/runView";
 import { LogError, LogStatus, LogStatusEx, LogWarning } from "./logging";
-import { EntityInfo } from "./entityInfo";
+import { EntityFieldInfo, EntityInfo } from "./entityInfo";
 import { Metadata } from "./metadata";
 import { DatasetItemFilterType, DatasetResultType, IMetadataProvider, IRunViewProvider, ProviderType, RunViewDatabaseStatus, RunViewResult } from "./interfaces";
 import { BaseInfo } from "./baseInfo";
@@ -14,11 +14,188 @@ import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { CompositeKey, KeyValuePair } from "./compositeKey";
 import { BaseEngineRegistry } from "./baseEngineRegistry";
 import { IStartupSink } from "./RegisterForStartup";
-import { CacheChangedEvent, LocalCacheManager } from "./localCacheManager";
+import { CacheChangedEvent, CachePrimaryKeyValue, CacheRowDeltaPayload, CacheRowValue, LocalCacheManager } from "./localCacheManager";
 import { ProviderBase } from "./providerBase";
 import { DatabaseProviderBase } from "./databaseProviderBase";
-import { TransformSimpleObjectToEntityObject } from "./util";
+import { TransformSimpleObjectToEntityObject, CanonicalPrimaryKeyValue } from "./util";
 import { WellKnownUserSource } from "./wellKnownUserSource";
+
+/** The primary-key columns a key index is built for. */
+type PrimaryKeyColumn = Pick<EntityFieldInfo, 'Name' | 'IsUniqueIdentifier'>;
+
+/**
+ * Primary-key index of one cached array. `map` holds each key's first position, or is null when a
+ * row has a key value that cannot be turned into a string with the same equality as the scan.
+ * `length` and `last` are the array's length and last row when the index was last brought up to date.
+ */
+interface PrimaryKeyIndex {
+    map: Map<string, number> | null;
+    pks: PrimaryKeyColumn[];
+    /** The key columns the index was built for, from {@link primaryKeySignature}. */
+    signature: string;
+    /** True when two rows share a key; `map` then holds only the first position. */
+    duplicates: boolean;
+    length: number;
+    last: BaseEntity | undefined;
+}
+
+/** Key indexes by cached array. The index of a replaced array is collected with it. */
+const primaryKeyIndexes = new WeakMap<BaseEntity[], PrimaryKeyIndex>();
+
+/**
+ * One key column as a string with the same equality as {@link BaseEngine.findEntityIndexByPrimaryKeys}:
+ * `UUIDsEqual` for UUID columns, `===` otherwise. Returns undefined for a value it cannot represent.
+ */
+function primaryKeyPart(value: unknown, isUuid: boolean): string | undefined {
+    if (isUuid) {
+        if (value == null) return 'n';
+        return typeof value === 'string' ? 'u' + value.trim().toLowerCase() : undefined;
+    }
+    switch (typeof value) {
+        case 'string': return 's' + value;
+        case 'number': return Number.isNaN(value) ? undefined : 'd' + value;
+        case 'boolean': return 'b' + value;
+        case 'bigint': return 'g' + value;
+        case 'undefined': return 'U';
+        default: return value === null ? 'N' : undefined;
+    }
+}
+
+/** The index key of a row: its key columns in order, or undefined when a column cannot be represented. */
+function primaryKeyOfRow(row: BaseEntity | undefined, pks: PrimaryKeyColumn[]): string | undefined {
+    if (row == null) return undefined;
+    const record = row as unknown as Record<string, unknown>;
+    if (pks.length === 1) return primaryKeyPart(record[pks[0].Name], pks[0].IsUniqueIdentifier);
+    let key = '';
+    for (const pk of pks) {
+        const part = primaryKeyPart(record[pk.Name], pk.IsUniqueIdentifier);
+        if (part === undefined) return undefined;
+        key += part.length + ':' + part;
+    }
+    return key;
+}
+
+/** A string naming the key columns and their comparison, so an index is reused only for the same key. */
+function primaryKeySignature(pks: PrimaryKeyColumn[]): string {
+    return pks.map(pk => (pk.IsUniqueIdentifier ? 'u:' : 's:') + pk.Name).join('|');
+}
+
+/** Builds and stores the key index of an array. Returns null when the rows cannot be read. */
+function buildPrimaryKeyIndex(dataArray: BaseEntity[], pks: PrimaryKeyColumn[], signature: string): PrimaryKeyIndex | null {
+    try {
+        let map: Map<string, number> | null = new Map();
+        let duplicates = false;
+        for (let i = 0; i < dataArray.length; i++) {
+            const key = primaryKeyOfRow(dataArray[i], pks);
+            if (key === undefined) {
+                map = null;
+                break;
+            }
+            if (map.has(key)) duplicates = true;
+            else map.set(key, i);
+        }
+        const index: PrimaryKeyIndex = { map, pks, signature, duplicates, length: dataArray.length, last: dataArray[dataArray.length - 1] };
+        primaryKeyIndexes.set(dataArray, index);
+        return index;
+    }
+    catch {
+        primaryKeyIndexes.delete(dataArray);
+        return null;
+    }
+}
+
+/** True when the row at `pos` has the index key `key`. */
+function rowHasPrimaryKey(dataArray: BaseEntity[], pos: number, pks: PrimaryKeyColumn[], key: string): boolean {
+    try {
+        return pos < dataArray.length && primaryKeyOfRow(dataArray[pos], pks) === key;
+    }
+    catch {
+        return false;
+    }
+}
+
+/** Adds a row just appended to `dataArray` to its key index, when the index was current before the append; drops the index otherwise. */
+function primaryKeyIndexAppended(dataArray: BaseEntity[], row: BaseEntity): void {
+    const index = primaryKeyIndexes.get(dataArray);
+    if (!index) return;
+    try {
+        const n = dataArray.length;
+        if (index.length !== n - 1 || index.last !== dataArray[n - 2] || dataArray[n - 1] !== row) {
+            primaryKeyIndexes.delete(dataArray);
+            return;
+        }
+        if (index.map) {
+            const key = primaryKeyOfRow(row, index.pks);
+            if (key === undefined) {
+                primaryKeyIndexes.delete(dataArray);
+                return;
+            }
+            if (index.map.has(key)) index.duplicates = true;
+            else index.map.set(key, n - 1);
+        }
+        index.length = n;
+        index.last = row;
+    }
+    catch {
+        primaryKeyIndexes.delete(dataArray);
+    }
+}
+
+/** Keeps the key index of `dataArray` after a row was written in place at `pos`; drops it when the row's key is not indexed at `pos`. */
+function primaryKeyIndexReplaced(dataArray: BaseEntity[], pos: number, row: BaseEntity): void {
+    const index = primaryKeyIndexes.get(dataArray);
+    if (!index) return;
+    try {
+        const n = dataArray.length;
+        const current = index.length === n && (pos === n - 1 || index.last === dataArray[n - 1]);
+        if (!current || (index.map && index.map.get(primaryKeyOfRow(row, index.pks) ?? '') !== pos)) {
+            primaryKeyIndexes.delete(dataArray);
+            return;
+        }
+        if (pos === n - 1) index.last = row;
+    }
+    catch {
+        primaryKeyIndexes.delete(dataArray);
+    }
+}
+
+/**
+ * Updates the key index of `dataArray` after `removed` was spliced out at `pos`: removes its key and
+ * moves later positions down by one. Drops the index when it was not current before the splice,
+ * holds duplicate keys, or does not have `removed` at `pos`.
+ */
+function primaryKeyIndexRemoved(dataArray: BaseEntity[], pos: number, removed: BaseEntity): void {
+    const index = primaryKeyIndexes.get(dataArray);
+    if (!index) return;
+    try {
+        const n = dataArray.length;
+        const lastBefore = pos === n ? removed : dataArray[n - 1];
+        if (!index.map || index.duplicates || index.length !== n + 1 || index.last !== lastBefore) {
+            primaryKeyIndexes.delete(dataArray);
+            return;
+        }
+        const key = primaryKeyOfRow(removed, index.pks);
+        if (key === undefined || index.map.get(key) !== pos) {
+            primaryKeyIndexes.delete(dataArray);
+            return;
+        }
+        index.map.delete(key);
+        for (const [k, p] of index.map) {
+            if (p > pos) index.map.set(k, p - 1);
+        }
+        index.length = n;
+        index.last = dataArray[n - 1];
+    }
+    catch {
+        primaryKeyIndexes.delete(dataArray);
+    }
+}
+
+/** Drops the key index of an array; the next lookup rebuilds it. */
+function primaryKeyIndexDropped(dataArray: BaseEntity[]): void {
+    primaryKeyIndexes.delete(dataArray);
+}
+
 /**
  * Property configuration for the BaseEngine class to automatically load/set properties on the class.
  */
@@ -39,6 +216,16 @@ export class BaseEnginePropertyConfig extends BaseInfo {
      * The dataset name to load from the database, required if Type is 'dataset'
      */
     DatasetName?: string;
+    /**
+     * Optional list of constituent entity names for a `Type: 'dataset'` config (for example,
+     * the entities returned by `Template_Metadata` or `ResourceTypes`).
+     *
+     * When supplied, `BaseEngine.CheckPermissionsOrSkipAll` pre-checks `CanRead` on each
+     * constituent entity before firing the dataset request, and `LoadSingleDatasetConfig`
+     * can classify a failed dataset load as a permanent permission denial rather than a
+     * transient error.
+     */
+    Entities?: string[];
     /**
      * Optional, filters to apply to the data load, applies only when type is 'entity'. Use DatasetItemFilters for dataset filters.
      */
@@ -241,8 +428,9 @@ export interface EngineDataMapEntry {
     permissionDenied?: boolean;
     /**
      * True when a load of this config failed and the permission classifier said the user cannot
-     * read the entity, so the config was loaded empty. Cache events never fill it; `Config(true)`
-     * re-evaluates it.
+     * read the entity, or when the config was skipped because an entity the engine caches is not
+     * installed in metadata, so the config was loaded empty. Cache events never fill it;
+     * `Config(true)` re-evaluates it.
      */
     readDenied?: boolean;
 }
@@ -350,17 +538,27 @@ export class PermissionConstrainedError extends Error {
     }
 }
 
-/** A reload of one engine property started by a peer's cache change. */
+/**
+ * The reload of one engine property that a change made elsewhere asked for: a peer's cache change,
+ * or a remote-invalidate event that carried no row to apply.
+ */
 interface ExternalChangeReload {
     /** Another event arrived while this reload was running, so it must run once more. */
     Again: boolean;
-    /** Settles when the last requested reload has finished. */
+    /** True when the next reload must read past the cache, because an event that asked for it did. */
+    BypassCache: boolean;
+    /** Settles when the last requested reload has finished; rejects only when that one threw. */
     Done: Promise<void>;
 }
 
 export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartupSink {
     private _loaded: boolean = false;
     private _loadingSubject: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
+    /**
+     * The forced reload queued behind the load that is running, shared by every `Load(…, true)`
+     * call that arrives before it starts. Null when none is queued. See {@link Load}.
+     */
+    private _forcedReloadAfterCurrent: Promise<void> | null = null;
     private _contextUser: UserInfo;
     /**
      * True once {@link ResolveContextUser} has put this engine on the MJ system user. Makes the
@@ -422,19 +620,61 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * against overlapping full refreshes clobbering each other: when several full-refresh
      * RunViews for the same property are in flight at once (e.g. a burst of saves each
      * landing in its own debounce window because the round-trip exceeds the DebounceTime),
-     * only the latest-INITIATED refresh may commit its results. Without this, whichever
+     * an earlier-INITIATED refresh may never commit over a later one. Without this, whichever
      * RunView happens to RESOLVE last wins — which can be an earlier-initiated request that
      * read a staler snapshot, leaving the cache "one operation behind" until a full reload
-     * reconciles it. Keyed by config PropertyName. See {@link beginConfigRefresh}.
+     * reconciles it. Keyed by config PropertyName. See {@link beginConfigRefresh} and
+     * {@link mayCommitConfigRefresh}.
      */
     private _configRefreshGeneration: Map<string, number> = new Map();
 
     /**
-     * Reloads started by {@link OnExternalCacheChange}, keyed by config PropertyName. While one is
-     * running, further events for that property set `Again` instead of starting another, so a
-     * burst of peer events costs at most two reloads per property. See {@link reloadAfterExternalChange}.
+     * Per-property generation of the newest full refresh that has committed rows. A failed read
+     * commits none, so it never counts. A refresh that is no longer the latest started may still
+     * commit while nothing newer has, so a caller awaiting it never gets back rows older than its
+     * own read. See {@link mayCommitConfigRefresh}.
+     */
+    private _configCommittedGeneration: Map<string, number> = new Map();
+
+    /**
+     * Reloads started by {@link OnExternalCacheChange} and by the no-row fallback of
+     * {@link HandleRemoteInvalidateEvent}, keyed by config PropertyName. While one is running,
+     * further events for that property set `Again` instead of starting another, so a burst of
+     * events costs at most two reloads per property. See {@link reloadAfterExternalChange}.
      */
     private _externalChangeReloads: Map<string, ExternalChangeReload> = new Map();
+
+    /**
+     * Per-property count of in-flight full refreshes (`LoadSingleEntityConfig` or full `'set'`
+     * cache payload materialization). When positive, incoming `row_delta` events defer to a
+     * coalesced full reload rather than racing an in-progress snapshot replacement.
+     */
+    private _inFlightFullRefreshCount: Map<string, number> = new Map();
+
+    /**
+     * Per-property promise chain serializing `row_delta` applications so back-to-back row deltas
+     * for distinct rows apply in arrival order without dropping earlier mutations.
+     */
+    private _rowDeltaQueues: Map<string, Promise<void>> = new Map();
+
+    /**
+     * The least time, in milliseconds, between the end of one reload from
+     * {@link reloadAfterExternalChange} and the start of the next for the same property. A change
+     * that arrives after this long since the last reload reloads at once; one that arrives sooner
+     * (including while a reload is running) waits out the rest of it, and every change that arrives
+     * meanwhile shares that one reload.
+     *
+     * Without it, a steady stream of changes (a server writing rows of one entity a few times a
+     * second) keeps a property reloading back to back. Each full reload costs time proportional to
+     * the table, so the process spends most of its time reloading and the cost of the stream grows
+     * with the square of its length. With it, a property reloads at most once per this delay plus
+     * one reload's duration, and its data is never more than that far behind the last change.
+     * 0 restores back-to-back reloads.
+     */
+    public static ExternalChangeFollowUpDelayMs: number = 1000;
+
+    /** When the last reload from {@link reloadAfterExternalChange} ended, per config PropertyName (epoch ms). */
+    private _externalChangeReloadEndedAt: Map<string, number> = new Map();
 
     /**
      * Returns an Observable for a specific engine array property. Subscribers receive the
@@ -570,6 +810,16 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
+     * True when the named config property has finished loading with valid data (not failed and
+     * not skipped due to permission denial), even if other configs on the same engine are still
+     * loading.
+     */
+    public IsPropertyLoaded(propertyName: string): boolean {
+        const entry = this._dataMap.get(propertyName);
+        return entry?.loadedSuccessfully === true && !entry.readDenied && !entry.permissionDenied;
+    }
+
+    /**
      * List of entity names that were skipped due to permission denial.
      * Empty if not permission-constrained. Useful for logging/diagnostics.
      */
@@ -700,6 +950,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     /**
      * This method should be called by sub-classes to load up their specific metadata requirements. For more complex metadata
      * loading or for post-processing of metadata loading done here, overide the AdditionalLoading method to add your logic.
+     *
+     * When a load is already running, a call without `forceRefresh` waits for it and returns. A call
+     * with `forceRefresh` waits for it and then reads again, because the running load may have read
+     * before the caller's own writes. Forced calls that arrive while that reload is still queued share
+     * it, so a burst of `Config(true)` calls costs at most one extra read.
      * @param configs
      * @param contextUser
      * @returns
@@ -708,14 +963,14 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (this.ProviderToUse?.ProviderType === ProviderType.Database && !contextUser)
             throw new Error('For server-side use of all engine classes, you must provide the contextUser parameter')
         if (this._loadingSubject.value) {
-            return new Promise<void>((resolve) => {
-                const subscription = this._loadingSubject.subscribe((loading) => {
-                    if (!loading) {
-                        subscription.unsubscribe();
-                        resolve();
-                    }
-                });
+            if (!forceRefresh) {
+                return this.waitForCurrentLoad();
+            }
+            this._forcedReloadAfterCurrent ??= this.waitForCurrentLoad().then(() => {
+                this._forcedReloadAfterCurrent = null;
+                return this.Load(configs, provider, true, contextUser);
             });
+            return this._forcedReloadAfterCurrent;
         }
 
         if (!this._loaded || forceRefresh) {
@@ -782,6 +1037,18 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 TelemetryManager.Instance.EndEvent(eventId);
             }
         }
+    }
+
+    /** Resolves when the load that is running finishes. */
+    private waitForCurrentLoad(): Promise<void> {
+        return new Promise<void>((resolve) => {
+            const subscription = this._loadingSubject.subscribe((loading) => {
+                if (!loading) {
+                    subscription.unsubscribe();
+                    resolve();
+                }
+            });
+        });
     }
 
     /**
@@ -1098,9 +1365,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 return true; // No entity name, nothing to do
             }
 
-            const matchingConfigs = this._metadataConfigs.filter((config: BaseEnginePropertyConfig) => {
-                return config.AutoRefresh && config.EntityName && config.EntityName.trim().toLowerCase() === entityName;
-            });
+            const matchingConfigs = this.AutoRefreshConfigsForEntity(entityName);
 
             if (matchingConfigs.length === 0) {
                 return true;
@@ -1128,23 +1393,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 // Fall through to server fetch if direct delete failed
             }
 
-            // Fallback: re-fetch from server (missing data or apply failure). Bypass the cache
-            // for the same reason as the local-event path: this fetch runs BECAUSE a
-            // (cross-server) write signaled the cache stale, so reading back through it would
-            // re-sync the pre-write snapshot.
-            let refreshCount = 0;
+            // Fallback: re-fetch from the server (no row, or it could not be applied).
             for (const config of matchingConfigs) {
-                await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ true);
-                if (!this.configLoadedSuccessfully(config.PropertyName)) {
-                    // Same one-shot hazard as the debounced path: the invalidation event is
-                    // consumed, so a transient failure here needs a bounded retry too.
-                    this.scheduleEventRefreshRetry(config, 1);
-                }
-                refreshCount++;
-            }
-
-            if (refreshCount > 0) {
-                await this.AdditionalLoading(this._contextUser);
+                await this.reloadAfterRemoteInvalidate(config);
             }
 
             return true;
@@ -1153,6 +1404,41 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             LogError(e);
             return false;
         }
+    }
+
+    /**
+     * Reloads one config because a remote-invalidate event said it changed but carried no row to
+     * apply. A burst of such events shares reloads (see {@link reloadAfterExternalChange}), so a
+     * server that saves many rows of one entity costs this engine at most two reloads per burst
+     * instead of one per row, and the reload that runs last began after the last event arrived.
+     *
+     * The reload reads past the cache: it runs because a write elsewhere made the cached copy
+     * stale, and reading back through the cache would restore the pre-write snapshot. A transient
+     * failure gets the bounded retry, since the event that asked for this reload is consumed.
+     */
+    private async reloadAfterRemoteInvalidate(config: BaseEnginePropertyConfig): Promise<void> {
+        let succeeded: boolean;
+        try {
+            await this.reloadAfterExternalChange(config, /*bypassCache*/ true);
+            succeeded = this.configLoadedSuccessfully(config.PropertyName);
+        } catch (e: unknown) {
+            LogError(e);
+            succeeded = false;
+        }
+        if (!succeeded) {
+            this.scheduleEventRefreshRetry(config, 1);
+        }
+    }
+
+    /**
+     * The entity configs that refresh automatically when a record of `entityName` changes.
+     * Matching ignores case and surrounding whitespace.
+     */
+    protected AutoRefreshConfigsForEntity(entityName: string): BaseEnginePropertyConfig[] {
+        const name = entityName.trim().toLowerCase();
+        return this._metadataConfigs.filter((config: BaseEnginePropertyConfig) =>
+            config.AutoRefresh && config.EntityName && config.EntityName.trim().toLowerCase() === name
+        );
     }
 
     /**
@@ -1188,10 +1474,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
                 if (index >= 0) {
                     currentData[index] = entity;
+                    primaryKeyIndexReplaced(currentData, index, entity);
                     this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                     this.NotifyDataChange(config, currentData, 'update', entity);
                 } else {
                     currentData.push(entity);
+                    primaryKeyIndexAppended(currentData, entity);
                     this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                     this.NotifyDataChange(config, currentData, 'add', entity);
                 }
@@ -1236,6 +1524,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 if (index >= 0) {
                     const removed = currentData[index];
                     currentData.splice(index, 1);
+                    primaryKeyIndexRemoved(currentData, index, removed);
                     this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                     this.NotifyDataChange(config, currentData, 'delete', removed);
                     this.emitPropertyChange(config.PropertyName);
@@ -1545,6 +1834,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (!currentData) {
             return;
         }
+        if (changeType !== 'update') {
+            primaryKeyIndexDropped(currentData);
+        }
         this.NotifyDataChange(config, currentData, changeType, entity);
         this.emitPropertyChange(config.PropertyName);
     }
@@ -1741,11 +2033,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     if (indexByKey >= 0) {
                         // Already exists by key, treat as update
                         currentData[indexByKey] = cached;
+                        primaryKeyIndexReplaced(currentData, indexByKey, cached);
                         this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                         this.NotifyDataChange(config, currentData, 'update', cached);
                     } else {
                         // Add the new entity to the array
                         currentData.push(cached);
+                        primaryKeyIndexAppended(currentData, cached);
                         this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                         this.NotifyDataChange(config, currentData, 'add', cached);
                     }
@@ -1753,6 +2047,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     // Already in the array by reference (engine code pushed it manually after
                     // Save) — the array is current, but DataChange$ subscribers still need to
                     // hear about the change. Pass the in-array instance, not the clone.
+                    primaryKeyIndexDropped(currentData);
                     this.NotifyDataChange(config, currentData, 'add', entity);
                 }
             } else {
@@ -1763,12 +2058,14 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
                     if (index >= 0) {
                         currentData[index] = cached;
+                        primaryKeyIndexReplaced(currentData, index, cached);
                         this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                         this.NotifyDataChange(config, currentData, 'update', cached);
                     } else {
                         // Entity not found in array - this shouldn't happen normally,
                         // but if it does, add it (might have been created before we started listening)
                         currentData.push(cached);
+                        primaryKeyIndexAppended(currentData, cached);
                         this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                         this.NotifyDataChange(config, currentData, 'add', cached);
                     }
@@ -1785,7 +2082,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             const index = this.indexOfEntityByRefOrKey(currentData, entity, oldValues);
 
             if (index >= 0) {
+                const removed = currentData[index];
                 currentData.splice(index, 1);
+                primaryKeyIndexRemoved(currentData, index, removed);
                 this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                 this.NotifyDataChange(config, currentData, 'delete', entity);
             }
@@ -1819,7 +2118,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             if (!fresh) {
                 return null;
             }
-            await fresh.LoadFromData(source.GetAll());
+            if (source.EntityInfo?.IsParentType) {
+                await BaseEntity.CloneEntityWithISAChain(source, fresh, provider, this._contextUser);
+            } else {
+                await fresh.LoadFromData(source.GetAll());
+            }
             return fresh;
         }
         catch (e) {
@@ -1903,11 +2206,51 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * Finds an entity in the array by matching all primary key columns.
      * Supports composite primary keys by comparing all PrimaryKey fields from EntityInfo.
      *
+     * Uses a key index per array, built on first use. A hit is checked against the row at the
+     * indexed position, and the index is rebuilt when that check fails or when the array's length
+     * or last row differ from what the index was built for. A miss on a current index reads no row.
+     *
      * @param dataArray - The array of entities to search
      * @param targetEntity - The entity to find (using its primary key values)
      * @returns The index of the matching entity, or -1 if not found
      */
     protected findEntityIndexByPrimaryKeys(dataArray: BaseEntity[], targetEntity: BaseEntity): number {
+        const pks: PrimaryKeyColumn[] | undefined = targetEntity?.EntityInfo?.PrimaryKeys;
+        if (!pks || pks.length === 0 || !Array.isArray(dataArray)) {
+            return this.scanForPrimaryKeys(dataArray, targetEntity);
+        }
+        const key = primaryKeyOfRow(targetEntity, pks);
+        if (key === undefined) {
+            return this.scanForPrimaryKeys(dataArray, targetEntity);
+        }
+
+        const signature = primaryKeySignature(pks);
+        let index: PrimaryKeyIndex | null | undefined = primaryKeyIndexes.get(dataArray);
+        if (!index || index.signature !== signature || index.length !== dataArray.length || index.last !== dataArray[dataArray.length - 1]) {
+            index = buildPrimaryKeyIndex(dataArray, pks, signature);
+        }
+        for (let attempt = 0; attempt < 2; attempt++) {
+            if (!index || !index.map) {
+                return this.scanForPrimaryKeys(dataArray, targetEntity);
+            }
+            const pos = index.map.get(key);
+            if (pos === undefined) {
+                return -1;
+            }
+            if (rowHasPrimaryKey(dataArray, pos, pks, key)) {
+                return pos;
+            }
+            index = attempt === 0 ? buildPrimaryKeyIndex(dataArray, pks, signature) : null;
+        }
+        return this.scanForPrimaryKeys(dataArray, targetEntity);
+    }
+
+    /**
+     * Finds an entity by comparing primary key values row by row. Used for entities without
+     * PrimaryKeys metadata, when the key index cannot represent a key value, and when a hit fails
+     * its check again after a rebuild.
+     */
+    private scanForPrimaryKeys(dataArray: BaseEntity[], targetEntity: BaseEntity): number {
         const primaryKeys = targetEntity.EntityInfo.PrimaryKeys;
         if (!primaryKeys || primaryKeys.length === 0) {
             // Fallback to single PrimaryKey property if no PrimaryKeys defined
@@ -1937,7 +2280,6 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             });
         });
     }
-    
 
 
     /**
@@ -1963,18 +2305,17 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     protected async LoadConfigs(configs: Partial<BaseEnginePropertyConfig>[], contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         this._metadataConfigs = configs.map(c => this.UpgradeObjectToConfig(c));
 
-        // now, break up the configs into two chunks, datasets and views of entities so we can load all the views in a single network call via RunViews()
         const entityConfigs = this._metadataConfigs.filter(c => c.Type === 'entity');
-        const datasetConfigs = this._metadataConfigs.filter(c => c.Type === 'dataset');
         this.WarnAboutFieldSecuredEntities(entityConfigs);
 
-        // All-or-nothing permission check: if the user lacks read access on ANY
-        // entity config, skip ALL entity configs for this engine. Returns the
-        // original array unchanged when permissions pass, or an empty array when
-        // any entity is denied (marking the engine as permission-constrained).
-        const entityConfigsToLoad = this.CheckPermissionsOrSkipAll(entityConfigs, contextUser);
+        // All-or-nothing permission check across all configs (both entity configs and
+        // dataset configs that declare their constituent Entities). If the user lacks
+        // read access on ANY configured entity, skip ALL configs for this engine.
+        const configsToLoad = this.CheckPermissionsOrSkipAll(this._metadataConfigs, contextUser);
+        const entityConfigsToLoad = configsToLoad.filter(c => c.Type === 'entity');
+        const datasetConfigsToLoad = configsToLoad.filter(c => c.Type === 'dataset');
 
-        await Promise.all([...datasetConfigs.map(c => this.LoadSingleDatasetConfig(c, contextUser, bypassCache)),
+        await Promise.all([...datasetConfigsToLoad.map(c => this.LoadSingleDatasetConfig(c, contextUser, bypassCache)),
                            this.LoadMultipleEntityConfigs(entityConfigsToLoad, contextUser, bypassCache)]);
 
         // Register cross-server cache change callbacks for entity configs
@@ -2033,19 +2374,21 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const missingEntities = this.findMissingEntities(configs);
         if (missingEntities.length > 0) {
             LogStatusEx({
-                message: `${this.constructor.name}: Skipping ${configs.length} entity config(s) — entity metadata not installed for: ${missingEntities.join(', ')}`,
+                message: `${this.constructor.name}: Skipping ${configs.length} config(s) — entity metadata not installed for: ${missingEntities.join(', ')}`,
                 verboseOnly: true,
                 category: 'Cache',
             });
 
+            // Loaded (so EnsureLoaded doesn't retry-loop) but readDenied: the installed entities'
+            // configs were skipped too, and their [] is not their table. IsPropertyLoaded (and so
+            // BaseEngineRegistry.FindCachedEntity) must not serve it as one.
             for (const config of configs) {
-                if (config.AddToObject !== false) {
-                    (this as Record<string, unknown>)[config.PropertyName] = [];
-                }
+                this.initializeSkippedConfigProperty(config);
                 this._dataMap.set(config.PropertyName, {
-                    entityName: config.EntityName,
+                    ...(config.Type === 'dataset' ? { datasetName: config.DatasetName } : { entityName: config.EntityName }),
                     data: [],
                     loadedSuccessfully: true,
+                    readDenied: true,
                 });
             }
 
@@ -2060,18 +2403,16 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const deniedEntities = this.findUnreadableEntities(configs, user);
 
         if (deniedEntities.length > 0) {
-            LogWarning(`${this.constructor.name}: Skipping ${configs.length} entity config(s) — user ${user.Email} lacks read permission on: ${deniedEntities.join(', ')}`, 'Cache');
+            LogWarning(`${this.constructor.name}: Skipping ${configs.length} config(s) — user ${user.Email} lacks read permission on: ${deniedEntities.join(', ')}`, 'Cache');
 
-            // Mark all entity configs as successfully loaded with empty data.
+            // Mark all configs as successfully loaded with empty data.
             // This is not a failure — it's expected behavior for limited-permission users.
             // Marking as successful allows the engine to set _loaded = true and avoid
             // endless retry loops from EnsureLoaded().
             for (const config of configs) {
-                if (config.AddToObject !== false) {
-                    (this as Record<string, unknown>)[config.PropertyName] = [];
-                }
+                this.initializeSkippedConfigProperty(config);
                 this._dataMap.set(config.PropertyName, {
-                    entityName: config.EntityName,
+                    ...(config.Type === 'dataset' ? { datasetName: config.DatasetName } : { entityName: config.EntityName }),
                     data: [],
                     loadedSuccessfully: true,
                     permissionDenied: true,
@@ -2081,10 +2422,45 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             this._isPermissionConstrained = true;
             this._deniedEntityNames = deniedEntities;
 
-            return []; // Return empty — don't attempt any RunView calls
+            return []; // Return empty — don't attempt any RunView or dataset calls
         }
 
         return configs;
+    }
+
+    /**
+     * Initializes the target property on `this` when a config is skipped before loading.
+     * Entity configs receive `[]`; `single_property` dataset configs receive `{}` only when
+     * the subclass has not already initialized the property to a default container.
+     */
+    private initializeSkippedConfigProperty(config: BaseEnginePropertyConfig): void {
+        if (config.AddToObject === false) {
+            return;
+        }
+        if (config.Type === 'dataset') {
+            if (
+                config.DatasetResultHandling === 'single_property' &&
+                (this as Record<string, unknown>)[config.PropertyName] == null
+            ) {
+                (this as Record<string, unknown>)[config.PropertyName] = {};
+            }
+        } else {
+            (this as Record<string, unknown>)[config.PropertyName] = [];
+        }
+    }
+
+    /**
+     * Returns the entity name(s) governed by `config`: `Entities` (or `EntityName`) for
+     * dataset configs, and `EntityName` for entity configs.
+     */
+    private configEntityNames(config: BaseEnginePropertyConfig): string[] {
+        if (config.Type === 'dataset') {
+            if (config.Entities && config.Entities.length > 0) {
+                return config.Entities;
+            }
+            return config.EntityName ? [config.EntityName] : [];
+        }
+        return config.EntityName ? [config.EntityName] : [];
     }
 
     /**
@@ -2099,9 +2475,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         }
         const missing: string[] = [];
         for (const config of configs) {
-            if (!config.EntityName) continue;
-            if (!md.EntityByName(config.EntityName)) {
-                missing.push(config.EntityName);
+            for (const entityName of this.configEntityNames(config)) {
+                if (!md.EntityByName(entityName) && !missing.includes(entityName)) {
+                    missing.push(entityName);
+                }
             }
         }
         return missing;
@@ -2112,12 +2489,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const md = this.ProviderToUse;
         const denied: string[] = [];
         for (const config of configs) {
-            if (!config.EntityName) continue;
-            const entityInfo = md.EntityByName(config.EntityName);
-            if (!entityInfo) continue; // Entity not in metadata — let RunView handle it
-            const perms = entityInfo.GetUserPermisions(user);
-            if (!perms || !perms.CanRead) {
-                denied.push(config.EntityName);
+            for (const entityName of this.configEntityNames(config)) {
+                const entityInfo = md.EntityByName(entityName);
+                if (!entityInfo) continue; // Entity not in metadata — let RunView/dataset handle it
+                const perms = entityInfo.GetUserPermisions(user);
+                if ((!perms || !perms.CanRead) && !denied.includes(entityName)) {
+                    denied.push(entityName);
+                }
             }
         }
         return denied;
@@ -2155,6 +2533,31 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      */
     protected isLatestConfigRefresh(propertyName: string, generation: number): boolean {
         return this._configRefreshGeneration.get(propertyName) === generation;
+    }
+
+    /**
+     * True when a refresh holding `generation` may apply its result: it is the latest started, or
+     * its read succeeded and nothing newer has committed rows yet. A superseded refresh that
+     * commits first is overwritten when the newer one lands, so the property never goes
+     * backwards, and the superseded refresh's caller (a forced `Load`, `RefreshItem`) still
+     * returns with rows at least as new as its read. Dropping them instead would leave the
+     * property on its previous rows until the newer refresh landed, which can be after that
+     * caller has returned, or never when that refresh fails. A superseded refresh whose read
+     * failed applies nothing: the newer one owns the property's load state.
+     */
+    protected mayCommitConfigRefresh(propertyName: string, generation: number, succeeded: boolean): boolean {
+        return this.isLatestConfigRefresh(propertyName, generation)
+            || (succeeded && (this._configCommittedGeneration.get(propertyName) ?? 0) < generation);
+    }
+
+    /**
+     * Records that the refresh holding `generation` committed `propertyName`'s rows. Call it only
+     * for a successful read: a failed one leaves the held rows as they were.
+     */
+    protected markConfigRefreshCommitted(propertyName: string, generation: number): void {
+        if ((this._configCommittedGeneration.get(propertyName) ?? 0) < generation) {
+            this._configCommittedGeneration.set(propertyName, generation);
+        }
     }
 
     /**
@@ -2210,19 +2613,29 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         // UserInfoEngine's per-user '_UserApplications') apply out of initiation-order and the
         // cache ends up "one operation behind". See _configRefreshGeneration.
         const generation = this.beginConfigRefresh(config.PropertyName);
-        const p = this.RunViewProviderToUse;
-        const rv = new RunView(p);
-        const result = await rv.RunView(this.BuildRunViewParamsForConfig(config, bypassCache), contextUser);
+        this.incrementInFlightFullRefresh(config.PropertyName);
+        let result: RunViewResult;
+        try {
+            const p = this.RunViewProviderToUse;
+            const rv = new RunView(p);
+            result = await rv.RunView(this.BuildRunViewParamsForConfig(config, bypassCache), contextUser);
+        } finally {
+            this.decrementInFlightFullRefresh(config.PropertyName);
+        }
 
-        // A newer full refresh superseded us while we awaited — drop this (staler) snapshot
-        // rather than clobber the newer one. The newer refresh owns the assignment, the
-        // observer notification, and (on failure) the retry, so bailing here leaves no
-        // observer un-notified. The single-refresh path is unaffected: its generation is
-        // still the latest when its RunView returns.
-        if (!this.isLatestConfigRefresh(config.PropertyName, generation)) {
+        // A newer full refresh superseded us while we awaited. When it has already committed rows,
+        // or our read failed, drop this result rather than clobber the newer one: the newer
+        // refresh owns the assignment, the observer notification, and (on failure) the retry, so
+        // bailing here leaves no observer un-notified. When our read succeeded and the newer one
+        // hasn't committed yet, ours commits and the newer one overwrites it when it lands (see
+        // mayCommitConfigRefresh).
+        if (!this.mayCommitConfigRefresh(config.PropertyName, generation, result.Success)) {
             return;
         }
 
+        if (result.Success) {
+            this.markConfigRefreshCommitted(config.PropertyName, generation);
+        }
         this.HandleSingleViewResult(config, result, contextUser);
         if (!suppressEmit) {
             // A caller that rebuilds derived state afterwards emits itself, once, AFTER the
@@ -2324,6 +2737,41 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
+     * Returns true when a failed dataset load was caused by the current user lacking Read
+     * permission on one of the dataset's constituent entities — either per local metadata
+     * (`config.Entities` / `config.EntityName`) or per the server's dataset status message
+     * (`does not have read permissions on ...`).
+     */
+    protected IsDatasetReadDenied(
+        config: BaseEnginePropertyConfig,
+        result: DatasetResultType,
+        contextUser: UserInfo | undefined
+    ): boolean {
+        for (const entityName of this.configEntityNames(config)) {
+            if (!this.ContextUserCanReadConfigEntity(entityName, contextUser)) {
+                return true;
+            }
+        }
+        return typeof result.Status === 'string' && /does not have read permissions? on/i.test(result.Status);
+    }
+
+    /**
+     * Records a dataset config as successfully loaded in an empty state after a permanent
+     * permission denial, so `BaseEngine.Load` marks the engine loaded and does not loop on
+     * `EnsureLoaded()` / `Config()`.
+     */
+    protected MarkDatasetConfigEmptyLoaded(config: BaseEnginePropertyConfig): void {
+        this.initializeSkippedConfigProperty(config);
+        this._dataMap.set(config.PropertyName, {
+            datasetName: config.DatasetName,
+            data: [],
+            loadedSuccessfully: true,
+            readDenied: true,
+        });
+        this.NotifyDataChange(config, []);
+    }
+
+    /**
      * Handles the process of loading multiple entity configs in a single network call via RunViews()
      * @param configs
      * @param contextUser
@@ -2331,14 +2779,36 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      */
     protected async LoadMultipleEntityConfigs(configs: BaseEnginePropertyConfig[], contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         if (configs && configs.length > 0) {
-            const p = this.RunViewProviderToUse;
-            const rv = new RunView(p);
-            const viewConfigs = configs.map(c => this.BuildRunViewParamsForConfig(c, bypassCache));
-            const results = await rv.RunViews(viewConfigs, contextUser);
+            // Same protocol as LoadSingleEntityConfig, per property: claim a refresh generation and
+            // mark a full refresh in flight BEFORE the awaited RunViews. Without it a `row_delta`
+            // that arrives mid-flight is applied to the held array and then overwritten by this
+            // (pre-delta) snapshot when the batch lands; with it the delta path defers to a
+            // coalesced reload instead, and a newer per-property refresh supersedes our slot.
+            const generations = configs.map(c => this.beginConfigRefresh(c.PropertyName));
+            for (const c of configs) {
+                this.incrementInFlightFullRefresh(c.PropertyName);
+            }
+            let results: RunViewResult[];
+            try {
+                const p = this.RunViewProviderToUse;
+                const rv = new RunView(p);
+                const viewConfigs = configs.map(c => this.BuildRunViewParamsForConfig(c, bypassCache));
+                results = await rv.RunViews(viewConfigs, contextUser);
+            } finally {
+                for (const c of configs) {
+                    this.decrementInFlightFullRefresh(c.PropertyName);
+                }
+            }
 
             // Process results and record entity loads for redundancy detection
             const entityNames: string[] = [];
             for (let i = 0; i < configs.length; i++) {
+                if (!this.mayCommitConfigRefresh(configs[i].PropertyName, generations[i], results[i]?.Success === true)) {
+                    continue; // a newer refresh of this property owns it
+                }
+                if (results[i]?.Success === true) {
+                    this.markConfigRefreshCommitted(configs[i].PropertyName, generations[i]);
+                }
                 this.HandleSingleViewResult(configs[i], results[i], contextUser);
                 this.emitPropertyChange(configs[i].PropertyName);
                 if (configs[i].EntityName) {
@@ -2393,8 +2863,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
                     if (index >= 0) {
                         currentData[index] = cached;
+                        primaryKeyIndexReplaced(currentData, index, cached);
                     } else {
                         currentData.push(cached);
+                        primaryKeyIndexAppended(currentData, cached);
                     }
                 }
                 mutated = true;
@@ -2403,7 +2875,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 const oldValues = (event.payload as { OldValues?: Record<string, unknown> } | undefined)?.OldValues;
                 const index = this.indexOfEntityByRefOrKey(currentData, entity, oldValues);
                 if (index >= 0) {
+                    const removed = currentData[index];
                     currentData.splice(index, 1);
+                    primaryKeyIndexRemoved(currentData, index, removed);
                     mutated = true;
                     notifiedProperties.add(mapping.config.PropertyName);
                 }
@@ -2434,7 +2908,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         let result: DatasetResultType;
         if (bypassCache) {
             result = await p.GetDatasetByName(config.DatasetName, config.DatasetItemFilters, contextUser, undefined, true);
-            await p.CacheDataset(config.DatasetName, config.DatasetItemFilters, result);
+            if (result?.Success) {
+                await p.CacheDataset(config.DatasetName, config.DatasetItemFilters, result);
+            }
         } else {
             result = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters, contextUser);
         }
@@ -2450,6 +2926,14 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             return;
         }
         if (!result.Success) {
+            if (this.IsDatasetReadDenied(config, result, contextUser)) {
+                this.MarkDatasetConfigEmptyLoaded(config);
+                LogWarning(
+                    `BaseEngine: Dataset ${config.DatasetName} not readable by current role — loaded empty (restricted-role degradation).`,
+                    'Cache'
+                );
+                return;
+            }
             const errorMsg = result.Status || `Dataset "${config.DatasetName}" load returned Success=false`;
             LogError(`BaseEngine: Failed to load dataset ${config.DatasetName} into ${config.PropertyName}: ${errorMsg}`);
             this._dataMap.set(config.PropertyName, {
@@ -2608,18 +3092,25 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     // overlapping cache events (or an event racing a full reload) can resolve out
                     // of order and the stale result would be the one that assigns last.
                     const generation = this.beginConfigRefresh(config.PropertyName);
-                    // A burst of payloads for one slot usually arrives together. Let the rest of the
-                    // burst claim its generations first, so only the newest payload is materialized
-                    // instead of every one of them (receive side).
-                    await yieldToEventLoop();
-                    if (!this.isLatestConfigRefresh(config.PropertyName, generation)) {
-                        return;
+                    this.incrementInFlightFullRefresh(config.PropertyName);
+                    let rows: Array<BaseEntity> | Array<Record<string, unknown>> | null = null;
+                    try {
+                        // A burst of payloads for one slot usually arrives together. Let the rest of the
+                        // burst claim its generations first, so only the newest payload is materialized
+                        // instead of every one of them (receive side).
+                        await yieldToEventLoop();
+                        if (!this.isLatestConfigRefresh(config.PropertyName, generation)) {
+                            return;
+                        }
+                        rows = await this.materializeCacheEventRows(config, parsed.results);
+                    } finally {
+                        this.decrementInFlightFullRefresh(config.PropertyName);
                     }
-                    const rows = await this.materializeCacheEventRows(config, parsed.results);
                     if (!this.isLatestConfigRefresh(config.PropertyName, generation)) {
                         return; // superseded while materializing — the newer refresh owns the property
                     }
                     if (rows) {
+                        this.markConfigRefreshCommitted(config.PropertyName, generation);
                         this.HandleSingleViewResult(config, {
                             Success: true,
                             Results: rows,
@@ -2653,8 +3144,347 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 // turning into a database reload.
                 LogWarning(`BaseEngine.OnExternalCacheChange: payload for '${config.PropertyName}' could not be applied (${e instanceof Error ? e.message : String(e)}) — falling back to full reload`, 'Cache');
             }
+        } else if (event.Data && event.Action === 'row_delta') {
+            const outcome = await this.applyExternalRowDelta(config, event.Data);
+            if (outcome === 'applied' || outcome === 'superseded') {
+                return;
+            }
         }
         await this.reloadAfterExternalChange(config);
+    }
+
+    private incrementInFlightFullRefresh(propertyName: string): void {
+        this._inFlightFullRefreshCount.set(propertyName, (this._inFlightFullRefreshCount.get(propertyName) ?? 0) + 1);
+    }
+
+    private decrementInFlightFullRefresh(propertyName: string): void {
+        const next = (this._inFlightFullRefreshCount.get(propertyName) ?? 1) - 1;
+        if (next <= 0) {
+            this._inFlightFullRefreshCount.delete(propertyName);
+        } else {
+            this._inFlightFullRefreshCount.set(propertyName, next);
+        }
+    }
+
+    /**
+     * Applies a compact `row_delta` pub/sub event in $O(\Delta)$ without re-materializing
+     * untouched sibling rows. Falls back to `'reload'` whenever schema hash, ordering, or
+     * row-count invariants indicate the engine cannot prove local delta equivalence.
+     */
+    private async applyExternalRowDelta(
+        config: BaseEnginePropertyConfig,
+        rawDeltaJson: string
+    ): Promise<'applied' | 'superseded' | 'reload'> {
+        let delta: CacheRowDeltaPayload;
+        try {
+            delta = JSON.parse(rawDeltaJson) as CacheRowDeltaPayload;
+        } catch (e) {
+            LogWarning(`BaseEngine.OnExternalCacheChange: row_delta payload for '${config.PropertyName}' could not be parsed (${e instanceof Error ? e.message : String(e)}) — falling back to reload`, 'Cache');
+            return 'reload';
+        }
+
+        if (
+            !delta ||
+            !Array.isArray(delta.upsertedRows) ||
+            !Array.isArray(delta.deletedPrimaryKeys) ||
+            !Array.isArray(delta.primaryKeyFields) ||
+            delta.primaryKeyFields.length === 0 ||
+            typeof delta.rowCount !== 'number'
+        ) {
+            return 'reload';
+        }
+
+        if (this.payloadSchemaDiffers(config, delta.schemaHash)) {
+            LogStatusEx({ message: `BaseEngine.OnExternalCacheChange: row_delta for '${config.PropertyName}' was written under a different schema — reloading instead`, verboseOnly: true });
+            return 'reload';
+        }
+
+        // Ordered configs rely on database collation ordering; reload from the warm Redis slot (0 SQL).
+        if (config.OrderBy && delta.upsertedRows.length > 0) {
+            return 'reload';
+        }
+
+        let stepOutcome: 'applied' | 'superseded' | 'reload' = 'reload';
+        const priorQueue = this._rowDeltaQueues.get(config.PropertyName) ?? Promise.resolve();
+        const currentStep = priorQueue.then(async () => {
+            try {
+                stepOutcome = await this.applyExternalRowDeltaSerialized(config, delta);
+            } catch (e) {
+                LogWarning(`BaseEngine.OnExternalCacheChange: row_delta application for '${config.PropertyName}' failed (${e instanceof Error ? e.message : String(e)}) — falling back to reload`, 'Cache');
+                stepOutcome = 'reload';
+            }
+        });
+        const settled = currentStep.catch(() => undefined);
+        this._rowDeltaQueues.set(config.PropertyName, settled);
+        await currentStep;
+        if (this._rowDeltaQueues.get(config.PropertyName) === settled) {
+            this._rowDeltaQueues.delete(config.PropertyName);
+        }
+        return stepOutcome;
+    }
+
+    private async applyExternalRowDeltaSerialized(
+        config: BaseEnginePropertyConfig,
+        delta: CacheRowDeltaPayload
+    ): Promise<'applied' | 'superseded' | 'reload'> {
+        if ((this._inFlightFullRefreshCount.get(config.PropertyName) ?? 0) > 0) {
+            return 'reload';
+        }
+
+        const heldRows = this.getHeldRowsForDelta(config);
+        if (!heldRows) {
+            return 'reload';
+        }
+
+        const entityInfo = config.EntityName ? this.ProviderToUse?.EntityByName?.(config.EntityName) : undefined;
+        const pkFields = delta.primaryKeyFields;
+        const isUuidPk = pkFields.map(fieldName =>
+            Boolean(entityInfo?.FieldByName(fieldName)?.IsUniqueIdentifier)
+        );
+
+        const heldIndexByKey = this.indexHeldRowsForDelta(heldRows, pkFields, isUuidPk);
+        if (!heldIndexByKey) {
+            return 'reload';
+        }
+
+        const keyPlan = this.planRowDeltaKeys(delta, heldRows.length, heldIndexByKey, pkFields, isUuidPk);
+        if (!keyPlan) {
+            return 'reload';
+        }
+
+        // Echo / duplicate delta suppression: when no rows are added or removed and every
+        // upserted row's __mj_UpdatedAt matches the held row, skip materialization & emit churn.
+        if (
+            keyPlan.matchedDeleteKeys.size === 0 &&
+            keyPlan.netNewInserts === 0 &&
+            this.upsertsMatchHeldTimestamps(heldRows, heldIndexByKey, delta.upsertedRows, keyPlan.upsertKeys, entityInfo)
+        ) {
+            LogStatusEx({ message: `BaseEngine.OnExternalCacheChange: '${config.PropertyName}' already holds row_delta versions — skipped`, verboseOnly: true });
+            return 'applied';
+        }
+
+        const generationBefore = this._configRefreshGeneration.get(config.PropertyName) ?? 0;
+        const materializedUpserts =
+            delta.upsertedRows.length > 0
+                ? await this.materializeCacheEventRows(config, delta.upsertedRows)
+                : [];
+        if (materializedUpserts === null) {
+            return 'reload';
+        }
+        if (
+            (this._configRefreshGeneration.get(config.PropertyName) ?? 0) !== generationBefore ||
+            (this._inFlightFullRefreshCount.get(config.PropertyName) ?? 0) > 0
+        ) {
+            return 'superseded';
+        }
+
+        const nextRows = this.mergeMaterializedDeltaRows(
+            heldRows,
+            pkFields,
+            isUuidPk,
+            keyPlan.matchedDeleteKeys,
+            keyPlan.upsertKeys,
+            materializedUpserts as Array<BaseEntity | Record<string, CacheRowValue>>
+        );
+
+        this.HandleSingleViewResult(config, {
+            Success: true,
+            Results: nextRows,
+            RowCount: nextRows.length,
+            TotalRowCount: delta.totalRowCount ?? nextRows.length,
+            ExecutionTime: 0,
+            ErrorMessage: '',
+            UserViewRunID: '',
+        });
+        await this.RebuildDerivedState(this._contextUser);
+        this.emitPropertyChange(config.PropertyName);
+        return 'applied';
+    }
+
+    private indexHeldRowsForDelta(
+        heldRows: ReadonlyArray<BaseEntity | Record<string, CacheRowValue>>,
+        pkFields: string[],
+        isUuidPk: boolean[]
+    ): Map<string, number> | null {
+        const heldIndexByKey = new Map<string, number>();
+        for (let i = 0; i < heldRows.length; i++) {
+            const key = this.canonicalHeldRowPkKey(heldRows[i], pkFields, isUuidPk);
+            if (key === null) {
+                return null;
+            }
+            heldIndexByKey.set(key, i);
+        }
+        return heldIndexByKey.size === heldRows.length ? heldIndexByKey : null;
+    }
+
+    private planRowDeltaKeys(
+        delta: CacheRowDeltaPayload,
+        heldRowCount: number,
+        heldIndexByKey: Map<string, number>,
+        pkFields: string[],
+        isUuidPk: boolean[]
+    ): { matchedDeleteKeys: Set<string>; upsertKeys: string[]; netNewInserts: number } | null {
+        const matchedDeleteKeys = new Set<string>();
+        for (const delPk of delta.deletedPrimaryKeys) {
+            const key = this.canonicalPlainRecordPkKey(delPk, pkFields, isUuidPk);
+            if (key === null) {
+                return null;
+            }
+            if (heldIndexByKey.has(key)) {
+                matchedDeleteKeys.add(key);
+            }
+        }
+
+        const upsertKeys: string[] = [];
+        const seenUpsertKeys = new Set<string>();
+        let netNewInserts = 0;
+        for (const upRow of delta.upsertedRows) {
+            const key = this.canonicalPlainRecordPkKey(upRow, pkFields, isUuidPk);
+            if (key === null || seenUpsertKeys.has(key)) {
+                return null;
+            }
+            seenUpsertKeys.add(key);
+            upsertKeys.push(key);
+            if (!heldIndexByKey.has(key) || matchedDeleteKeys.has(key)) {
+                netNewInserts++;
+            }
+        }
+
+        // Strict cardinality verification: detects uninitialized state, missed pub/sub messages,
+        // or filtered-slot membership divergence and falls back to reading the warm cache slot.
+        const expectedNextLength = heldRowCount - matchedDeleteKeys.size + netNewInserts;
+        if (expectedNextLength !== delta.rowCount) {
+            return null;
+        }
+        return { matchedDeleteKeys, upsertKeys, netNewInserts };
+    }
+
+    private mergeMaterializedDeltaRows(
+        heldRows: ReadonlyArray<BaseEntity | Record<string, CacheRowValue>>,
+        pkFields: string[],
+        isUuidPk: boolean[],
+        matchedDeleteKeys: ReadonlySet<string>,
+        upsertKeys: ReadonlyArray<string>,
+        materializedUpserts: ReadonlyArray<BaseEntity | Record<string, CacheRowValue>>
+    ): Array<BaseEntity | Record<string, CacheRowValue>> {
+        const upsertByKey = new Map<string, BaseEntity | Record<string, CacheRowValue>>();
+        for (let i = 0; i < upsertKeys.length; i++) {
+            upsertByKey.set(upsertKeys[i], materializedUpserts[i]);
+        }
+
+        const consumedUpsertKeys = new Set<string>();
+        const nextRows: Array<BaseEntity | Record<string, CacheRowValue>> = [];
+        for (let i = 0; i < heldRows.length; i++) {
+            const existingRow = heldRows[i];
+            const key = this.canonicalHeldRowPkKey(existingRow, pkFields, isUuidPk)!;
+            if (upsertByKey.has(key)) {
+                nextRows.push(upsertByKey.get(key)!);
+                consumedUpsertKeys.add(key);
+            } else if (!matchedDeleteKeys.has(key)) {
+                nextRows.push(existingRow);
+            }
+        }
+        for (let i = 0; i < upsertKeys.length; i++) {
+            const key = upsertKeys[i];
+            if (!consumedUpsertKeys.has(key)) {
+                nextRows.push(upsertByKey.get(key)!);
+            }
+        }
+        return nextRows;
+    }
+
+    private getHeldRowsForDelta(
+        config: BaseEnginePropertyConfig
+    ): Array<BaseEntity | Record<string, CacheRowValue>> | null {
+        const entry = this._dataMap.get(config.PropertyName);
+        if (entry && entry.loadedSuccessfully === false) {
+            return null;
+        }
+        if (entry?.loadedSuccessfully && Array.isArray(entry.data)) {
+            return entry.data as Array<BaseEntity | Record<string, CacheRowValue>>;
+        }
+        const propVal = Reflect.get(this, config.PropertyName) as CacheRowValue;
+        if (Array.isArray(propVal) && (propVal.length > 0 || Boolean(entry))) {
+            return propVal as Array<BaseEntity | Record<string, CacheRowValue>>;
+        }
+        return null;
+    }
+
+    private readHeldRowField(row: BaseEntity | Record<string, CacheRowValue>, fieldName: string): CacheRowValue {
+        if (row instanceof BaseEntity) {
+            return row.Get(fieldName) as CacheRowValue;
+        }
+        if (fieldName in row) {
+            return row[fieldName];
+        }
+        const nestedData = row['data'];
+        if (typeof nestedData === 'object' && nestedData !== null && fieldName in nestedData) {
+            return (nestedData as Record<string, CacheRowValue>)[fieldName];
+        }
+        return undefined;
+    }
+
+    private canonicalHeldRowPkKey(
+        row: BaseEntity | Record<string, CacheRowValue>,
+        pkFields: string[],
+        isUuidPk: boolean[]
+    ): string | null {
+        const parts: string[] = [];
+        for (let i = 0; i < pkFields.length; i++) {
+            const val = this.readHeldRowField(row, pkFields[i]);
+            if (val === null || val === undefined) {
+                return null;
+            }
+            const str = String(val);
+            parts.push(CanonicalPrimaryKeyValue(str, isUuidPk[i]));
+        }
+        return parts.join('\u001f');
+    }
+
+    private canonicalPlainRecordPkKey(
+        record: Record<string, CacheRowValue | CachePrimaryKeyValue>,
+        pkFields: string[],
+        isUuidPk: boolean[]
+    ): string | null {
+        const parts: string[] = [];
+        for (let i = 0; i < pkFields.length; i++) {
+            const val = record[pkFields[i]];
+            if (val === null || val === undefined) {
+                return null;
+            }
+            const str = String(val);
+            parts.push(CanonicalPrimaryKeyValue(str, isUuidPk[i]));
+        }
+        return parts.join('\u001f');
+    }
+
+    private upsertsMatchHeldTimestamps(
+        heldRows: ReadonlyArray<BaseEntity | Record<string, CacheRowValue>>,
+        heldIndexByKey: Map<string, number>,
+        upsertedRows: ReadonlyArray<Record<string, CacheRowValue>>,
+        upsertKeys: ReadonlyArray<string>,
+        entityInfo: EntityInfo | undefined
+    ): boolean {
+        if (!entityInfo || !entityInfo.Fields.some(f => f.IsUpdatedAtField)) {
+            return false;
+        }
+        for (let i = 0; i < upsertedRows.length; i++) {
+            const heldIdx = heldIndexByKey.get(upsertKeys[i]);
+            if (heldIdx === undefined) {
+                return false;
+            }
+            const heldRaw = this.readHeldRowField(heldRows[heldIdx], EntityInfo.UpdatedAtFieldName);
+            const incomingRaw = upsertedRows[i][EntityInfo.UpdatedAtFieldName];
+            if (heldRaw == null || incomingRaw == null) {
+                return false;
+            }
+            const heldMs = heldRaw instanceof Date ? heldRaw.getTime() : new Date(String(heldRaw)).getTime();
+            const incomingMs = incomingRaw instanceof Date ? incomingRaw.getTime() : new Date(String(incomingRaw)).getTime();
+            if (Number.isNaN(heldMs) || Number.isNaN(incomingMs) || heldMs !== incomingMs) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -2671,38 +3501,80 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
-     * Reloads a config after a peer's cache change, coalescing overlapping requests: an event that
-     * arrives while a reload for the same property is running asks for one more reload after it
-     * instead of starting its own. Every caller's promise settles only after a reload that began
+     * Reloads a config after a change made elsewhere, coalescing overlapping requests: an event
+     * that arrives while a reload for the same property is running asks for one more reload after
+     * it instead of starting its own. Every caller's promise settles only after a reload that began
      * after its event, so no change is missed, but N events in a burst cost at most two reloads.
+     * Successive reloads of one property are at least {@link ExternalChangeFollowUpDelayMs} apart.
+     * Requests for different properties never share a reload.
+     *
+     * @param bypassCache - Read past the cache. When any request folded into a reload asks for
+     *   it, that reload bypasses the cache.
      */
-    private reloadAfterExternalChange(config: BaseEnginePropertyConfig): Promise<void> {
+    private reloadAfterExternalChange(config: BaseEnginePropertyConfig, bypassCache: boolean = false): Promise<void> {
         const running = this._externalChangeReloads.get(config.PropertyName);
         if (running) {
             running.Again = true;
+            running.BypassCache = running.BypassCache || bypassCache;
             return running.Done;
         }
-        const reload: ExternalChangeReload = { Again: false, Done: Promise.resolve() };
+        const reload: ExternalChangeReload = { Again: false, BypassCache: bypassCache, Done: Promise.resolve() };
         this._externalChangeReloads.set(config.PropertyName, reload);
         reload.Done = this.runExternalChangeReloads(config, reload);
         return reload.Done;
     }
 
-    /** Runs reloads for {@link reloadAfterExternalChange} until no further event asked for one. */
+    /**
+     * Runs reloads for {@link reloadAfterExternalChange} until no further event asked for one.
+     * A reload that throws does not end the loop while another is pending, so an event that
+     * arrived during a failed reload is still served; the error surfaces only when the last
+     * reload is the one that threw.
+     */
     private async runExternalChangeReloads(config: BaseEnginePropertyConfig, reload: ExternalChangeReload): Promise<void> {
         try {
+            let lastError: Error | null = null;
             do {
+                const wait = this.reloadSpacingRemainingMs(config.PropertyName);
+                if (wait > 0) {
+                    // Requests that arrive during the wait join the reload that follows it.
+                    await new Promise<void>(resolve => setTimeout(resolve, wait));
+                }
+                const bypassCache = reload.BypassCache;
                 reload.Again = false;
-                // The reload replaces the property, so the derived state has to be rebuilt too —
-                // and the reload must NOT emit on its own, or a subscriber wakes between the new
-                // rows and the rebuild and reads derived state still pointing at the instances
-                // this reload discarded.
-                await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ false, /*suppressEmit*/ true);
-                await this.RebuildDerivedState(this._contextUser);
-                this.emitPropertyChange(config.PropertyName);
+                reload.BypassCache = false;
+                lastError = await this.runOneExternalChangeReload(config, bypassCache);
+                this._externalChangeReloadEndedAt.set(config.PropertyName, Date.now());
+                if (lastError && reload.Again) {
+                    LogError(lastError);
+                }
             } while (reload.Again);
+            if (lastError) {
+                throw lastError;
+            }
         } finally {
             this._externalChangeReloads.delete(config.PropertyName);
+        }
+    }
+
+    /** How long the next reload of the property must still wait for {@link ExternalChangeFollowUpDelayMs}; 0 when it may start now. */
+    private reloadSpacingRemainingMs(propertyName: string): number {
+        const endedAt = this._externalChangeReloadEndedAt.get(propertyName);
+        return endedAt === undefined ? 0 : Math.max(0, endedAt + BaseEngine.ExternalChangeFollowUpDelayMs - Date.now());
+    }
+
+    /** One reload for {@link runExternalChangeReloads}. Returns the error it threw, or null. */
+    private async runOneExternalChangeReload(config: BaseEnginePropertyConfig, bypassCache: boolean): Promise<Error | null> {
+        try {
+            // The reload replaces the property, so the derived state has to be rebuilt too —
+            // and the reload must NOT emit on its own, or a subscriber wakes between the new
+            // rows and the rebuild and reads derived state still pointing at the instances
+            // this reload discarded.
+            await this.LoadSingleConfig(config, this._contextUser, bypassCache, /*suppressEmit*/ true);
+            await this.RebuildDerivedState(this._contextUser);
+            this.emitPropertyChange(config.PropertyName);
+            return null;
+        } catch (e: unknown) {
+            return e instanceof Error ? e : new Error(String(e));
         }
     }
 

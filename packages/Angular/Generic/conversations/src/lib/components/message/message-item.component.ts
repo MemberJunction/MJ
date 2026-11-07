@@ -37,6 +37,11 @@ import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { BadgeTextForAttachment } from '../../util/attachment-badge';
 import { EMPTY_FORK_CHIPS, ForkChipAriaLabel, ForkChipIcon, ForkChipOpenRequestOf, type ForkChipOpenRequest, type MessageForkChip } from '../../utils/conversation-forks';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import {
+  AgentAccentVar,
+  type MessageHandoffInfo,
+  type MessageHandedOffFromInfo,
+} from './agent-handoff-card.component';
 
 /** How a saved edit of a message is applied: as a new fork, in place with a rerun of its turn, or in place only. */
 export type MessageEditMode = 'Fork' | 'Resend' | 'Save';
@@ -206,6 +211,45 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   /** Emits true when this row's inline editor opens and false when it closes. */
   @Output() public EditingChanged = new EventEmitter<boolean>();
+
+  /** Outgoing agent handoff card metadata attached to this source AI message. */
+  @Input() public Handoff: MessageHandoffInfo | null = null;
+
+  /** Incoming agent handoff provenance attached to this target AI message. */
+  @Input() public HandedOffFrom: MessageHandedOffFromInfo | null = null;
+
+  /** CSS custom property reference for the target agent's accent color on a handed-off target message. */
+  public get TargetAccentVar(): string {
+    if (!this.HandedOffFrom) {
+      return 'var(--mj-brand-primary)';
+    }
+    return AgentAccentVar(this.message?.AgentID ?? this.HandedOffFrom.TargetAgent.ID);
+  }
+
+  /** CSS custom property reference for the source agent's accent color on a handed-off target message. */
+  public get HandedOffFromAccentVar(): string {
+    if (!this.HandedOffFrom) {
+      return 'var(--mj-brand-primary)';
+    }
+    return AgentAccentVar(this.HandedOffFrom.SourceAgent.ID);
+  }
+
+  /**
+   * True when this message is a handed-off target AI message that has not yet produced
+   * its first streamed token (still in its initial placeholder state).
+   */
+  public get IsHandedOffTargetJoining(): boolean {
+    if (!this.HandedOffFrom || !this.IsInProgressAIMessage) {
+      return false;
+    }
+    const raw = (this.message?.Message ?? '').trim();
+    return raw.length === 0 || raw === '⏳ Starting...';
+  }
+
+  /** True when this source message handed off to a target agent (and did not fail). */
+  public get IsSourceTransferred(): boolean {
+    return Boolean(this.Handoff) && this.Handoff?.Status !== 'Failed';
+  }
 
   /**
    * How a saved edit is applied: 'Fork' while the person may fork; with forking off, 'Resend' on the
@@ -509,6 +553,13 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * say which one, and the composer stops them all.
    */
   @Input() public InFlightCount = 0;
+
+  /**
+   * Whether inline markdown links in message text open in a new browser tab (`target="_blank"`).
+   * In-page fragment links (`#heading`) and `mailto:` / `tel:` / `sms:` links stay in the
+   * current tab. Default `true`.
+   */
+  @Input() public OpenLinksInNewTab: boolean = true;
   /** Host override for the AI message display name (white-label persona). Null = the agent record's name. */
   @Input() public AssistantDisplayName: string | null = null;
 
@@ -895,6 +946,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   private _cachedDisplayMessage: string = '';
   /** The raw Message the cached display text was computed from. */
   private _cachedRawText: string = '';
+  private _cachedHadHandoff: boolean = false;
 
   // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
   private mentionAutocomplete = MentionAutocompleteService.Instance;
@@ -1511,17 +1563,18 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    */
   private computeDisplayMessage(): string {
     const raw = this.displaySourceText();
+    const hadHandoff = Boolean(this.Handoff);
 
     // ngDoCheck calls this every pass; an unchanged Message is the same string object, so this
     // compare is a pointer check and nothing below runs until the text changes.
-    if (raw === this._cachedRawText && this._cachedDisplayMessage) {
+    if (raw === this._cachedRawText && hadHandoff === this._cachedHadHandoff && this._cachedDisplayMessage) {
       return this._cachedDisplayMessage;
     }
 
     let text = raw;
 
-    // For Sage, only show the delegation line (starts with emoji)
-    if (this.IsConversationManager && text) {
+    // For legacy Sage delegation (when no Handoff card is rendered), only show the delegation line (starts with emoji)
+    if (this.IsConversationManager && text && !this.Handoff) {
       const delegationMatch = text.match(/🤖.*Delegating to.*Agent.*/);
       if (delegationMatch) {
         text = delegationMatch[0];
@@ -1532,6 +1585,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     const transformed = this.transformMentionsToHTML(text);
 
     this._cachedRawText = raw;
+    this._cachedHadHandoff = hadHandoff;
     this._cachedDisplayMessage = transformed;
 
     return transformed;
@@ -2314,6 +2368,15 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       classes.push('fork-rail-inherited');
     } else if (this.ForkRail === 'Own') {
       classes.push('fork-rail-own');
+    }
+    if (this.Handoff) {
+      classes.push('handoff-source');
+      if (this.Handoff.Status !== 'Failed') {
+        classes.push('msg--handed', 'handoff-source-transferred');
+      }
+    }
+    if (this.HandedOffFrom) {
+      classes.push('target-block', 'handoff-target');
     }
     return classes.join(' ');
   }

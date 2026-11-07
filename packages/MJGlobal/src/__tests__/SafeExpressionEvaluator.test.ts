@@ -245,10 +245,12 @@ describe('SafeExpressionEvaluator', () => {
       expect(r.error).toBeDefined();
     });
 
-    it('should fail when referencing an unknown identifier not in context', () => {
+    it('should refuse an unknown identifier not in context before compiling', () => {
+      // Identifiers are allowlisted: a name that is not a context key could resolve to a host global.
       const r = evaluator.evaluate('missingVar > 1', { a: 1 });
       expect(r.success).toBe(false);
-      expect(r.error).toContain('Expression evaluation failed');
+      expect(r.error).toContain('forbidden construct');
+      expect(r.error).toContain('is not defined in the evaluation context');
     });
 
     it('should fail when the expression exceeds the 1000-character limit', () => {

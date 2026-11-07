@@ -135,6 +135,17 @@
                                 {{ ctx.TotalLinksCount }} {{ ctx.TotalLinksCount === 1 ? 'link' : 'links' }}
                             </span>
                         }
+                        @if (RecordConversations.length > 1) {
+                            <select
+                                class="chat-overlay-record-convo-select"
+                                aria-label="Switch AI conversation for this record"
+                                [value]="ConversationId ?? ''"
+                                (change)="OnSelectRecordConversationChange($event)">
+                                @for (rc of RecordConversations; track rc.ID) {
+                                    <option [value]="rc.ID">{{ rc.Name || 'Conversation' }}</option>
+                                }
+                            </select>
+                        }
                     </div>
                 </div>
             }
@@ -150,6 +161,8 @@
                     [pendingMessage]="PendingMessage"
                     [pendingAttachments]="PendingAttachments"
                     [pendingMessageConversationId]="PendingMessageConversationId"
+                    [linkedEntityId]="ActiveRecordEntityId"
+                    [linkedRecordId]="ActiveLinkedRecordId"
                     [overlayMode]="true"
                     [showExportButton]="false"
                     [showShareButton]="false"

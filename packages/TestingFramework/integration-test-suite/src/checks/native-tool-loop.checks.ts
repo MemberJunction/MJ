@@ -26,7 +26,8 @@
  *   NTL10 a failed Action's guidance rides inside its own is_error result;
  *   NTL11 a tool call the provider rejected comes back as a corrective retry naming the tools;
  *   NTL12 a tools-payload rejection retries once without tools, keeping the calls in the history as text;
- *   NTL13 older large tool-call arguments are compacted when the agent opts in.
+ *   NTL13 older large tool-call arguments are compacted when the agent opts in;
+ *   NTL14 a complete_task refused by FinalPayloadValidation does not apply its payload change.
  *
  * Self-cleaning: Setup creates the vendor, model, model-vendor row, prompts and agents (named
  * 'IT: NTL …', and removes any an interrupted earlier run left); Teardown purges every run and
@@ -54,6 +55,7 @@ const ACTION_AGENT = `${PREFIX}Action Agent`;
 const RELAXED_AGENT = `${PREFIX}Relaxed Agent`;
 const DOC_AGENT = `${PREFIX}Doc Agent`;
 const FINAL_TURN_AGENT = `${PREFIX}Final Turn Agent`;
+const VALIDATED_AGENT = `${PREFIX}Validated Agent`;
 const DOC_AGENT_DRIVER = 'ITNtlDocAgent';
 const ACTION_NAME = 'Calculate Expression';
 const ACTION_TOOL = 'calculate_expression';
@@ -123,6 +125,7 @@ async function setup(ctx: IntegrationCheckContext): Promise<void> {
     await CreateLoopAgent(ctx, f, { Name: RELAXED_AGENT, PromptID: actionPrompt, ActionNames: [ACTION_NAME], TypeConfiguration: { NativeControl: { RelaxedTurnShapes: true } } });
     await CreateLoopAgent(ctx, f, { Name: DOC_AGENT, PromptID: docPrompt, DriverClass: DOC_AGENT_DRIVER, TypeConfiguration: docControl });
     await CreateLoopAgent(ctx, f, { Name: FINAL_TURN_AGENT, PromptID: docPrompt, DriverClass: DOC_AGENT_DRIVER, TypeConfiguration: docControl, MaxIterationsPerRun: 2 });
+    await CreateLoopAgent(ctx, f, { Name: VALIDATED_AGENT, PromptID: actionPrompt, ActionNames: [ACTION_NAME], FinalPayloadValidation: { 'status:string': 'ready', 'count:number': 1 } });
     // The prompt runner renders through the template engine's cache, which holds the new templates
     // only after a refresh; the agent and model catalogs likewise.
     await TemplateEngineServer.Instance.Config(true, ctx.User, ctx.Provider);
@@ -444,6 +447,28 @@ export const NativeToolLoopChecks: NamedCheck[] = [
             AssertEqual(calls.length, 3, 'NTL13: three call turns in the history');
             Assert(calls[0].startsWith('[content omitted:'), `NTL13: the oldest argument is stubbed, got ${calls[0].slice(0, 60)}`);
             Assert(calls[1] === big(2) && calls[2] === big(3), 'NTL13: the two most recent are whole');
+        }
+    },
+    {
+        Id: 'native-tool-loop.NTL14',
+        Name: 'NTL14: a complete_task refused by FinalPayloadValidation does not apply its payload change, and its result says to send it again',
+        Fn: async (ctx) => {
+            const complete = (elements: Record<string, unknown>) =>
+                ToolCallTurn([{ name: 'complete_task', args: { message: 'Done.', payloadChangeRequest: { newElements: elements } } }]);
+            // The first completion lacks the count; the second sends only the count. Had the first
+            // change been kept, the second would pass. It is refused too, so the third sends both.
+            const o = await run(ctx, VALIDATED_AGENT, 'Record the status and the count, then finish.', [
+                complete({ status: 'ready' }), complete({ count: 2 }), complete({ status: 'ready', count: 2 })
+            ]);
+            assertCompleted(o, 'NTL14');
+            AssertEqual(o.Requests.length, 3, 'NTL14: two refused completions, then an accepted one');
+            const second = request(o, 1, 'NTL14');
+            assertValidHistory(second, 'NTL14');
+            const refused = answersTo(second, 'complete_task');
+            Assert(refused.length === 1 && refused[0].isError === true && (refused[0].content ?? '').includes('was NOT applied'),
+                `NTL14: the refused complete_task says its change was not applied, got ${JSON.stringify(refused)}`);
+            AssertEqual(o.FinalStep, 'Success', 'NTL14: the run ended on Success');
+            AssertEqual(JSON.stringify(o.Payload), JSON.stringify({ status: 'ready', count: 2 }), 'NTL14: only the accepted change is in the payload');
         }
     }
 ];

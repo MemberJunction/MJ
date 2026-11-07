@@ -42,6 +42,21 @@ export interface FieldSecuritySQLContext {
      * database), and `EXEC`/`CALL`. What such a relation reads cannot be checked.
      */
     RefuseUnknownRelations?: boolean;
+    /**
+     * For a saved query's rendered SQL: the character offsets of `*` tokens that a structural
+     * reading of the whole statement has shown reach the caller only as output columns (a plain
+     * `*` or `alias.*` select item of a block whose rows become the result unchanged in shape).
+     * Such a star is not refused as a whole-row read; the caller must instead drop the denied
+     * columns it brings from the result. Every other star is judged as usual.
+     */
+    ProjectionStarOffsets?: ReadonlySet<number>;
+    /**
+     * For a parameterized `ExtraFilter`: the normalized (leading-`@`-stripped) parameter names
+     * supplied in `RunViewParams.Parameters`. On PostgreSQL, `@` is the unary absolute-value
+     * operator (`@salary` evaluates `abs(salary)`), so an `@`-prefixed word is treated as a
+     * bound parameter placeholder only when its name is in this set.
+     */
+    ParameterNames?: ReadonlySet<string>;
 }
 
 /** A catalog name, folded, mapped to the entities whose base view or base table carries it. */
@@ -787,6 +802,7 @@ export class FieldSecuritySQLGate {
         for (let i = 0; i < analysis.Tokens.length; i++) {
             const token = analysis.Tokens[i];
             if (!FieldSecuritySQLGate.isName(token) || analysis.RelationDeclarations.has(i) || analysis.AliasDeclarations.has(i)) continue;
+            if (!FieldSecuritySQLGate.isSymbol(analysis.Tokens[i - 1], '.') && FieldSecuritySQLGate.isParameterToken(analysis, i)) continue;
             const candidates = FieldSecuritySQLGate.candidatesFor(analysis, i);
             const hit = candidates.find((d) => ReferenceMayNameField(token.Text, d.Name));
             if (hit) {
@@ -869,11 +885,15 @@ export class FieldSecuritySQLGate {
 
     /**
      * What a `*` at `i` reads: null for a multiplication, `COUNT(*)`, `EXISTS (SELECT *` whose body
-     * has no set operation or row-picking ORDER BY at its own depth, or `alias.*` whose alias binds
-     * only to entities the user is denied nothing on.
+     * has no set operation or row-picking ORDER BY at its own depth, `alias.*` whose alias binds
+     * only to entities the user is denied nothing on, or a projection star
+     * ({@link FieldSecuritySQLContext.ProjectionStarOffsets}).
      */
     private static starConstruct(analysis: SQLReadAnalysis, i: number): string | null {
         const tokens = analysis.Tokens;
+        if (analysis.Context.ProjectionStarOffsets?.has(tokens[i].Start)) {
+            return null; // a projection star: its denied columns are dropped from the result instead
+        }
         const prev = tokens[i - 1];
         if (FieldSecuritySQLGate.isSymbol(prev, '.')) {
             const qualifier = tokens[i - 2];
@@ -897,7 +917,7 @@ export class FieldSecuritySQLGate {
      */
     private static relationValueConstruct(analysis: SQLReadAnalysis, i: number): string | null {
         const token = analysis.Tokens[i];
-        if (!FieldSecuritySQLGate.isName(token) || !analysis.RestrictedQualifiers.has(FoldIdentifier(token.Text))) {
+        if (!FieldSecuritySQLGate.isName(token) || FieldSecuritySQLGate.isParameterToken(analysis, i) || !analysis.RestrictedQualifiers.has(FoldIdentifier(token.Text))) {
             return null;
         }
         const next = analysis.Tokens[i + 1];
@@ -908,6 +928,37 @@ export class FieldSecuritySQLGate {
             return null;
         }
         return `whole-row reference '${token.Text}'`;
+    }
+
+    /**
+     * True when the word token at `i` is a `@paramName` placeholder rather than a column or
+     * relation reference. On SQL Server `ScanSQLForScreening` lexes `@paramName` as a single word
+     * starting with `@` (always a T-SQL variable); on PostgreSQL `@` is the unary absolute-value
+     * operator (`@salary` evaluates `abs(salary)`), so an adjacent `'@'` symbol + word token is
+     * treated as a parameter placeholder only when `analysis.Context.ParameterNames` contains that
+     * parameter name, it is not bracketed as `[@name]`, and its surrounding characters match a
+     * standalone `@paramName` word token in `SqlTokens.Lex`.
+     */
+    private static isParameterToken(analysis: SQLReadAnalysis, i: number): boolean {
+        const tokens = analysis.Tokens;
+        const token = tokens[i];
+        if (!token || token.Kind !== 'word') return false;
+        if (token.Text.startsWith('@')) return true;
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(token.Text)) return false;
+        if (!analysis.Context.ParameterNames?.has(token.Text)) return false;
+        const prev = tokens[i - 1];
+        const prev2 = tokens[i - 2];
+        const next = tokens[i + 1];
+        if (!FieldSecuritySQLGate.isSymbol(prev, '@') || prev.End !== token.Start) return false;
+        // BindExtraFilterParameters skips `[@name]`, so it never becomes a bound parameter.
+        const bracketed = FieldSecuritySQLGate.isSymbol(prev2, '[') && prev2.End === prev.Start
+            && FieldSecuritySQLGate.isSymbol(next, ']') && token.End === next.Start;
+        if (bracketed || (FieldSecuritySQLGate.isSymbol(prev2, '@') && prev2.End === prev.Start)) return false;
+        const charBeforeAt = prev.Start > 0 ? analysis.SQL[prev.Start - 1] : '';
+        if (/[A-Za-z0-9_$\u0080-\uffff@#]/.test(charBeforeAt)) return false;
+        const charAfterWord = token.End < analysis.SQL.length ? analysis.SQL[token.End] : '';
+        if (/[A-Za-z0-9_$\u0080-\uffff@#]/.test(charAfterWord)) return false;
+        return true;
     }
 
     /** Whether a token can end the left operand of a multiplication. */

@@ -1,6 +1,7 @@
 import { Metadata, EntityInfo } from '@memberjunction/core';
 import { RecordData } from './sync-engine';
 import { METADATA_KEYWORDS, IsNonKeywordAtSymbol } from '../constants/metadata-keywords';
+import type { CollectionPromotionResolver } from './collection-promotion';
 
 /**
  * Represents a flattened record with its context and dependencies
@@ -115,6 +116,7 @@ export class RecordDependencyAnalyzer {
   private recordIdMap: Map<string, FlattenedRecord> = new Map();
   private entityInfoCache: Map<string, EntityInfo> = new Map();
   private recordCounter: number = 0;
+  private collectionPromotions: CollectionPromotionResolver | null = null;
 
   constructor() {
     this.metadata = new Metadata(); // global-provider-ok: metadata sync operates on the configured provider only
@@ -232,14 +234,21 @@ export class RecordDependencyAnalyzer {
    *
    * @param records The records from a metadata file
    * @param entityName The root entity name for these records
+   * @param collectionPromotions Optional prepared resolver: the `relatedEntities` groups it promotes
+   *   are left out of the flattened records, because push saves them in their parent's graph
    * @returns Analysis result with sorted records
    */
   public async analyzeFileRecords(
     records: RecordData[],
-    entityName: string
+    entityName: string,
+    collectionPromotions?: CollectionPromotionResolver
   ): Promise<DependencyAnalysisResult> {
     // Reset state for single-file analysis (backward compatible behavior)
     this.Reset();
+    // `relatedEntities` groups the resolver promotes are saved as collection items in their parent's
+    // graph, so they are not flattened into records of their own. The resolver must already be
+    // prepared for these records.
+    this.collectionPromotions = collectionPromotions ?? null;
 
     // Flatten records
     this.flattenRecords(records, entityName);
@@ -323,6 +332,9 @@ export class RecordDependencyAnalyzer {
       // Recursively flatten related entities
       if (record.relatedEntities) {
         for (const [relatedEntityName, relatedRecords] of Object.entries(record.relatedEntities)) {
+          if (this.collectionPromotions?.Resolve(entityName, relatedEntityName, relatedRecords)) {
+            continue; // saved as collection items in this record's own graph
+          }
           this.flattenRecords(
             relatedRecords,
             relatedEntityName,

@@ -4,6 +4,39 @@ import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
+import type { Scope } from '@babel/traverse';
+
+/** True when `member` is `<x>.name`, `<x>?.name` or `<x>['name']`. */
+function isPropertyNamed(member: t.Node | null | undefined, name: string): boolean {
+  if (!t.isMemberExpression(member) && !t.isOptionalMemberExpression(member)) return false;
+  const prop = member.property;
+  return member.computed ? t.isStringLiteral(prop) && prop.value === name : t.isIdentifier(prop) && prop.name === name;
+}
+
+/**
+ * True when `identifier` names the rq service: a bare `rq`, `const q = <x>.rq`, or
+ * `const { rq: q } = <x>`.
+ */
+function isBoundToRq(identifier: t.Identifier, scope: Scope): boolean {
+  if (identifier.name === 'rq') return true;
+  const declarator = scope.getBinding(identifier.name)?.path.node;
+  if (!t.isVariableDeclarator(declarator)) return false;
+  if (t.isIdentifier(declarator.id)) return isPropertyNamed(declarator.init, 'rq');
+  if (!t.isObjectPattern(declarator.id)) return false;
+  return declarator.id.properties.some((prop) =>
+    t.isObjectProperty(prop) &&
+    t.isIdentifier(prop.key) && prop.key.name === 'rq' &&
+    t.isIdentifier(prop.value) && prop.value.name === identifier.name
+  );
+}
+
+/** True when the callee is `RunQuery` on the rq service, however the service is reached. */
+function isRqRunQueryCallee(callee: t.Node, scope: Scope): boolean {
+  if (!isPropertyNamed(callee, 'RunQuery')) return false;
+  const service = (callee as t.MemberExpression | t.OptionalMemberExpression).object;
+  if (isPropertyNamed(service, 'rq')) return true;
+  return t.isIdentifier(service) && isBoundToRq(service, scope);
+}
 
 /**
  * Rule: required-queries-not-called
@@ -92,33 +125,18 @@ export class RequiredQueriesNotCalledRule extends BaseLintRule {
     // Track whether RunQuery is called anywhere in the root component's code
     let hasRunQueryCall = false;
 
+    // Any reference to the rq service counts: `utilities.rq`, `utilitiesRef.current.rq`, a
+    // destructured `rq`, or an alias such as `const u = utilitiesRef.current; u.rq`. Optional
+    // calls (`utilities?.rq?.RunQuery?.(...)`) count too.
+    const visitCall = (path: NodePath<t.CallExpression | t.OptionalCallExpression>) => {
+      if (isRqRunQueryCallee(path.node.callee, path.scope)) {
+        hasRunQueryCall = true;
+        path.stop();
+      }
+    };
     Traverse(ast, {
-      CallExpression(path: NodePath<t.CallExpression>) {
-        // Check for utilities.rq.RunQuery pattern
-        if (
-          t.isMemberExpression(path.node.callee) &&
-          t.isMemberExpression(path.node.callee.object) &&
-          t.isIdentifier(path.node.callee.object.object) &&
-          path.node.callee.object.object.name === 'utilities' &&
-          t.isIdentifier(path.node.callee.object.property) &&
-          path.node.callee.object.property.name === 'rq' &&
-          t.isIdentifier(path.node.callee.property) &&
-          path.node.callee.property.name === 'RunQuery'
-        ) {
-          hasRunQueryCall = true;
-        }
-
-        // Also check for destructured pattern: rq.RunQuery
-        if (
-          t.isMemberExpression(path.node.callee) &&
-          t.isIdentifier(path.node.callee.object) &&
-          path.node.callee.object.name === 'rq' &&
-          t.isIdentifier(path.node.callee.property) &&
-          path.node.callee.property.name === 'RunQuery'
-        ) {
-          hasRunQueryCall = true;
-        }
-      },
+      CallExpression(path: NodePath<t.CallExpression>) { visitCall(path); },
+      OptionalCallExpression(path: NodePath<t.OptionalCallExpression>) { visitCall(path); },
     });
 
     // If unclaimed queries exist but RunQuery is never called, that's a critical violation

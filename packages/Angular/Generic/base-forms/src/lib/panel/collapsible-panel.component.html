@@ -56,8 +56,32 @@
             {{ BadgeCount }}
           </span>
         }
+        <!-- Open anchored comments badge for this section + its fields -->
+        @if (SectionCommentCount > 0) {
+          <button
+            type="button"
+            class="mj-forms-panel-comment-badge"
+            [title]="SectionCommentTitle"
+            [attr.aria-label]="SectionCommentTitle"
+            (click)="OnOpenSectionComments($event)">
+            <i class="fa-regular fa-comment-dots" aria-hidden="true"></i>
+            <span>{{ SectionCommentCount }}</span>
+          </button>
+        }
       </h3>
     </div>
+
+    <!-- Section comment hover trigger (when 0 open comments) -->
+    @if (CanCommentOnSection && SectionCommentCount === 0) {
+      <button
+        type="button"
+        class="mj-forms-panel-comment-trigger"
+        [title]="'Comment on ' + (SectionName || SectionKey)"
+        [attr.aria-label]="'Comment on ' + (SectionName || SectionKey)"
+        (click)="OnOpenSectionComments($event)">
+        <i class="fa-regular fa-comment-dots" aria-hidden="true"></i>
+      </button>
+    }
 
     <!-- Inherited From badge (IS-A) -->
     @if (Variant === 'inherited' && InheritedFromEntity) {

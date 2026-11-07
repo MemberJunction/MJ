@@ -17,6 +17,7 @@ import {
   ExternalQueryResult,
   ExternalRow,
   ExternalFkRow,
+  SqlDialectKey,
 } from '@memberjunction/external-data-sources';
 // `@databricks/sql` is an OPTIONAL PEER dependency (CLAUDE.md rule #8, category 2): loaded via a dynamic
 // import() only when this driver is actually used, and declared `optional` in peerDependenciesMeta so a
@@ -405,9 +406,9 @@ export class DatabricksExternalDataSourceDriver extends BaseSqlExternalDataSourc
 
   // ---- dialect surface -----------------------------------------------------
 
-  /** Databricks/Spark SQL identifier quoting: backticks (like MySQL), doubling embedded backticks. */
-  protected quoteIdent(name: string): string {
-    return `\`${name.replace(/`/g, '``')}\``;
+  /** This source's SQL dialect: its writer quotes identifiers and its rules screen native SQL. */
+  protected sqlDialectKey(): SqlDialectKey {
+    return 'databricks';
   }
 
   /** Databricks paging: ANSI ORDER BY + LIMIT/OFFSET (`LIMIT ALL` when only an offset is given). */
@@ -431,15 +432,13 @@ export class DatabricksExternalDataSourceDriver extends BaseSqlExternalDataSourc
 
   /**
    * Neutralize `:name` named-parameter markers to a literal `1` for STRUCTURE analysis ONLY (the original
-   * SQL + named binds still execute). The ANSI/PostgreSQL screen grammar happens to accept `:name`, but we
-   * still neutralize as belt-and-suspenders against any grammar edge case, matching the base's hook intent.
+   * SQL + named binds still execute), as belt-and-suspenders against a grammar edge case in the Hive
+   * grammar the Databricks dialect is screened with.
    *
    * The `(?<!:)` negative lookbehind is important: it skips the SECOND colon of a Databricks `::` type cast
-   * (`col::int`), which the ANSI grammar parses fine — without it, `col::int` → `col:1` and the fail-closed
-   * screen would wrongly reject a legitimate cast. `:name` is only ever a bind marker in our usage (Spark
-   * SQL uses `.`/`[]` for member access), so this never turns a write into a read. (Casts to Databricks-only
-   * type names, e.g. `col::string`, are still rejected by the ANSI grammar regardless — use `CAST(... AS ...)`
-   * in native queries for those; that's an inherent limitation of the shared ANSI read-only screen.)
+   * (`col::int`) — without it, `col::int` → `col:1` and the fail-closed screen would wrongly reject a
+   * legitimate cast. `:name` is only ever a bind marker in our usage (Spark SQL uses `.`/`[]` for member
+   * access), so this never turns a write into a read.
    */
   protected normalizeForReadOnlyParse(sql: string): string {
     return sql.replace(/(?<!:):[A-Za-z_][A-Za-z0-9_]*/g, '1');
