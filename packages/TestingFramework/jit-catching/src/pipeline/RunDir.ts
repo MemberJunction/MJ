@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { AssessmentFileSchema, ExecutionFileSchema, GenerationFileSchema, type AssessmentFile, type ExecutionFile, type GenerationFile } from '../schemas';
 import type { RedactionCheck } from '../sandbox/Redaction';
@@ -39,4 +39,18 @@ export class RunDir {
         if (!existsSync(p)) throw new Error(`run ${this.RunID} has no ${name}`);
         return JSON.parse(readFileSync(p, 'utf8'));
     }
+}
+
+/**
+ * The base worktree path recorded in `generation.json`, after checking that it is the run's own
+ * `<run dir>/work/base` folder (same real path, an existing folder). Throws a one-line error otherwise,
+ * so a crafted file can never make a step mount, read or remove another host folder.
+ */
+export function CheckedBaseRootDir(dir: RunDir, recorded: string): string {
+    const expected = join(dir.Path, 'work', 'base');
+    const real = (p: string): string | null => { try { return statSync(p).isDirectory() ? realpathSync.native(p) : null; } catch { return null; } };
+    const want = real(expected); const got = real(recorded);
+    if (want === null) throw new Error(`run ${dir.RunID} has no base worktree at ${expected}`);
+    if (got !== want) throw new Error(`run ${dir.RunID}: recorded base worktree ${JSON.stringify(recorded)} is not ${expected}`);
+    return recorded;
 }

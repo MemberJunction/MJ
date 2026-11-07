@@ -13,7 +13,7 @@ import type { RedactionCheck } from '../sandbox/Redaction';
 import type { Settings } from '../settings';
 import type { ExecutionFile, GenerationFile } from '../schemas';
 import type { CandidateTest, Catch, CatchContext, PromotionCandidate } from '../types';
-import { RunDir } from './RunDir';
+import { CheckedBaseRootDir, RunDir } from './RunDir';
 import { DefaultRedaction } from './Deps';
 
 export interface AssessDeps {
@@ -37,6 +37,7 @@ export async function AssessStep(o: AssessOptions): Promise<{ Catches: Catch[]; 
     const dir = new RunDir(o.RepoRoot, o.RunID, redaction);
     const gen = dir.ReadGeneration(); const exec = dir.ReadExecution();
     if (exec.RunID !== gen.Run.ID) throw new Error(`execution.json is for run ${exec.RunID}, not ${gen.Run.ID}`);
+    CheckedBaseRootDir(dir, gen.BaseRootDir);
     const assessed: Catch[] = [];
     for (const t of exec.Tests) assessed.push(await assessTest(gen, exec, t, d));
     const catches = SelectReported(RankCatches(assessed), o.Settings.Thresholds.Label, 'Label');

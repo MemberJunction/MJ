@@ -3,7 +3,7 @@ import type { RedactionCheck } from '../sandbox/Redaction';
 import type { Settings } from '../settings';
 import type { ExecutionFile, GenerationFile } from '../schemas';
 import type { CandidateTest, ChangedLines, ExecutionResult, PreparedRevision, Verdict } from '../types';
-import { RunDir } from './RunDir';
+import { CheckedBaseRootDir, RunDir } from './RunDir';
 import { DefaultRedaction, DefaultRunTarget, type PipelineTarget } from './Deps';
 
 export interface ExecuteDeps {
@@ -26,9 +26,10 @@ export async function ExecuteStep(o: ExecuteOptions): Promise<void> {
     const dir = new RunDir(o.RepoRoot, o.RunID, redaction);
     const d = o.Deps ?? defaultDeps(o, dir, redaction);
     const gen = dir.ReadGeneration();
+    const baseRoot = CheckedBaseRootDir(dir, gen.BaseRootDir);
     const tests = gen.Tests.filter((t) => t.GenerationOutcome === 'Produced');
     if (tests.length === 0) { dir.WriteExecution(emptyExecution(gen)); process.stdout.write(`run ${o.RunID}: no produced tests to execute\n`); return; }
-    const base: PreparedRevision = { Ref: { Kind: 'Base', SHA: gen.Run.BaseSHA }, RootDir: gen.BaseRootDir };
+    const base: PreparedRevision = { Ref: { Kind: 'Base', SHA: gen.Run.BaseSHA }, RootDir: baseRoot };
     await d.EnsureImage?.();
     const head = await d.Target.Prepare({ Kind: 'Head', SHA: gen.Run.HeadSHA });
     try {

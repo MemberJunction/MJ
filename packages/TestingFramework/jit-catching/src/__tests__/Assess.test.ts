@@ -20,10 +20,10 @@ const SOURCE_C = `import { it, expect } from 'vitest';\nimport { Svc } from '../
 describe('AssessStep', () => {
   let root: string; let base: string; let storeDir: string; const redaction = new RedactionCheck([]);
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'jit-assess-')); base = join(root, 'base'); storeDir = join(root, 'store');
+    root = mkdtempSync(join(tmpdir(), 'jit-assess-')); storeDir = join(root, 'store');
+    const dir = new RunDir(root, RUN_ID, redaction); base = join(dir.Path, 'work', 'base');
     mkdirSync(join(base, PKG_DIR, 'src'), { recursive: true }); writeFileSync(join(base, PKG_DIR, 'src/svc.ts'), SVC);
     const tests = [candidate(ID_A, SOURCE_A), candidate(ID_B), candidate(ID_C, SOURCE_C)];
-    const dir = new RunDir(root, RUN_ID, redaction);
     dir.WriteGeneration(generation(base, tests));
     dir.WriteExecution({ RunID: RUN_ID, Tests: tests, Coverage: [{ CandidateTestID: ID_B, CoveredChangedLines: 4 }],
       Results: [...results(ID_A, 'Base', true), ...results(ID_A, 'Head', false), ...results(ID_B, 'Base', true), ...results(ID_B, 'Head', true), ...results(ID_C, 'Base', true), ...results(ID_C, 'Head', false)],
@@ -46,5 +46,17 @@ describe('AssessStep', () => {
     expect(out.Promotions).toEqual([{ CandidateTestID: ID_B, RunID: RUN_ID, NewlyCoveredLines: 4, State: 'Offered' }]);
     expect(await store.GetRun(RUN_ID)).toMatchObject({ Status: 'Assessed' });
     expect((await store.ListCatches(RUN_ID)).map((x) => x.CandidateTestID).sort()).toEqual([ID_A, ID_B, ID_C].sort());
+  });
+
+  it('refuses a BaseRootDir outside the run folder before judging or saving', async () => {
+    const outside = mkdtempSync(join(tmpdir(), 'jit-outside-'));
+    const dir = new RunDir(root, RUN_ID, redaction);
+    dir.WriteGeneration(generation(outside, [candidate(ID_A, SOURCE_A)]));
+    const judge = vi.fn(async (_c: CatchContext): Promise<PanelResult> => ({ TPProb: null, Buckets: [], Median: null }));
+    const store = new FileCatchStore(storeDir, redaction);
+    await expect(AssessStep({ RunID: RUN_ID, RepoRoot: root, Settings: DEFAULT_SETTINGS, StoreDir: storeDir,
+      Deps: { JudgePanel: { Judge: judge }, Rules: new RuleFilter(AllRules()), Store: store, Redaction: redaction } })).rejects.toThrow(/base worktree/);
+    expect(judge).not.toHaveBeenCalled();
+    expect(await store.GetRun(RUN_ID)).toBeNull();
   });
 });

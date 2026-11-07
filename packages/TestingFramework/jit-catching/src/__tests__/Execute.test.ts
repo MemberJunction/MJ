@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { existsSync, mkdtempSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ExecuteStep } from '../pipeline/Execute';
@@ -35,7 +35,8 @@ describe('ExecuteStep', () => {
   let root: string; let dir: RunDir; const redaction = new RedactionCheck([]);
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'jit-exec-')); dir = new RunDir(root, RUN_ID, redaction);
-    dir.WriteGeneration(generation('/work/base', [candidate(ID_A), candidate(ID_B), candidate('dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'x', 'Failed')]));
+    mkdirSync(join(dir.Path, 'work', 'base'), { recursive: true });
+    dir.WriteGeneration(generation(join(dir.Path, 'work', 'base'), [candidate(ID_A), candidate(ID_B), candidate('dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'x', 'Failed')]));
     vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
   });
 
@@ -59,5 +60,13 @@ describe('ExecuteStep', () => {
     await expect(ExecuteStep({ RunID: RUN_ID, RepoRoot: root, Settings: DEFAULT_SETTINGS, Deps: { Target, Redaction: redaction } })).rejects.toThrow(InfrastructureError);
     expect(Calls.Prepare).toHaveLength(1);
     expect(existsSync(join(dir.Path, 'execution.json'))).toBe(false);
+  });
+
+  it('refuses a BaseRootDir outside the run folder before any target call', async () => {
+    const outside = mkdtempSync(join(tmpdir(), 'jit-outside-'));
+    dir.WriteGeneration(generation(outside, [candidate(ID_A)]));
+    const { Target, Calls } = fakeTarget();
+    await expect(ExecuteStep({ RunID: RUN_ID, RepoRoot: root, Settings: DEFAULT_SETTINGS, Deps: { Target, Redaction: redaction } })).rejects.toThrow(/base worktree/);
+    expect(Calls).toEqual({ Prepare: [], Build: [], Write: [], Run: [], Coverage: [], Cleanup: [] });
   });
 });
