@@ -8,13 +8,17 @@ import {
     IsPcmAudioMimeType,
     ParseDurationToMs,
     RealtimeConnectionSetup,
+    RealtimeConversationMemory,
     RealtimeSessionResumption,
+    RenderRealtimeMemoryEntry,
+    RenderRealtimeMemorySeed,
     RealtimeToolBatchBarrier,
     RealtimeTrackDescriptor,
     ExtractToolSchedulingHint,
     REALTIME_RELAY_TIME_LIMIT_CLOSE_CODE,
     type RealtimeAvatarUnavailableReason,
     type RealtimeClientTransport,
+    type RealtimeMemoryEntry,
     type RealtimeResumeAttempt,
 } from '@memberjunction/ai';
 import {
@@ -247,6 +251,9 @@ export class GeminiPcmPlayback extends RealtimePcmPlayback {
  *   ({@link IsTurnOpen}). A connection is put to use only once Google confirms its setup
  *   (`setupComplete`): input that reaches it earlier is dropped. During a move, sends queue and
  *   the latest 2 s of mic audio are held; both go out on the new connection once it is ready.
+ * - **Conversation memory**: with an ephemeral token a resume often comes back empty, so the client
+ *   keeps a notebook of every final turn the model saw ({@link RealtimeConversationMemory}) and sends
+ *   it on the new connection before any input. See {@link seedConversation} and {@link ResumesFromSeed}.
  * - **Open-turn commit**: context notes ride as `turnComplete: false` client content, which
  *   tells the Live API MORE INPUT IS COMING — the server holds ALL generation (including the
  *   normally-automatic continuation after a tool response) until a `turnComplete: true`
@@ -294,6 +301,12 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      */
     private resumption: RealtimeSessionResumption | null = null;
     /**
+     * Every final turn the model saw, sent on each new connection ({@link seedConversation}). Entries
+     * are recorded when they go out on the wire or arrive final, never when queued: a send queued
+     * during a move would otherwise be in the seed and go out again after it.
+     */
+    private readonly memory = new RealtimeConversationMemory({ Log: RealtimeDiagLog });
+    /**
      * Whether input can go out: the connection in use has confirmed its setup (`setupComplete`) and
      * no move to a new connection is in progress. Google drops input that reaches a connection
      * before its setup completes, and a connection being replaced resumes from a handle issued
@@ -319,6 +332,16 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * the session that replaced it. `0` while no connection is in use.
      */
     private currentConnection = 0;
+
+    /**
+     * Whether a new connection gets its conversation from this client's notebook (a seed) as well as Google's handle.
+     * `true` here: with an ephemeral token the handle often restores an empty session. A driver whose handle does restore
+     * the session, and whose transport can't carry a seed, overrides it with `false`: it then keeps no notebook and sends
+     * no seed.
+     */
+    protected get ResumesFromSeed(): boolean {
+        return true;
+    }
 
     /** Returns the latest session resumption handle reported by the server, if any. */
     public get ResumptionHandle(): string | null {
@@ -392,16 +415,23 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      */
     private pendingToolCallNames = new Map<string, string>();
     /**
+     * The pending calls Google issued before the last reseed. The session now in use may not know their ids, so a
+     * result can't go out as a tool response: see {@link sendToolResultAsText}.
+     */
+    private callsFromBeforeReseed = new Set<string>();
+    /**
      * True while client content sent with `turnComplete: false` (context notes) has not yet
      * been committed. Per the Live API, an open client turn tells the server MORE INPUT IS
      * COMING — clientContent-driven generation (notably the normally-automatic continuation
      * after a tool response) holds until a `turnComplete: true` arrives. Set by
-     * {@link SendContextNote}; cleared by the empty-turn commit in
+     * {@link SendContextNote} and {@link seedConversation}; cleared by the empty-turn commit in
      * {@link sendToolResponseTurn} and on a model `turnComplete` (the generation consumed the
      * open content). Realtime-text triggers ({@link sendTriggeringUserTurn}) do NOT commit
      * client content and leave this flag untouched. Under `interactionStatus`, true IDLE ends the
      * interaction instead: it commits the turn only when a non-blocking tool response is waiting on
      * it ({@link toolResponseAwaitsCommit}), and otherwise treats the open content as consumed.
+     * {@link handleResumed} also clears it before a reseed: what was open on the old connection is not
+     * open on the new one.
      */
     private openClientTurn = false;
     /**
@@ -482,6 +512,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.firstVideoSendTimestamp = 0;
         this.lastVideoSendTimestamp = 0;
         this.videoFramesSent = 0;
+        this.memory.Clear();
         this.resetConnectionState();
         this.disposeAvatarOutput();
     }
@@ -682,6 +713,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.resumption = null;
         this.connectTarget = null;
         this.currentConnection = 0;
+        this.memory.Clear();
         this.resetConnectionState();
         this.clearRemoteMediaStream();
         this.firstVideoSendTimestamp = 0;
@@ -815,8 +847,12 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             return;
         }
         this.enqueueOrRun(() => {
-            this.session?.sendClientContent({ turns: [{ role: 'user', parts: [{ text }] }], turnComplete: false });
+            if (!this.session) {
+                return;
+            }
+            this.session.sendClientContent({ turns: [{ role: 'user', parts: [{ text }] }], turnComplete: false });
             this.openClientTurn = true;
+            this.record({ Kind: 'note', Text: text });
         });
     }
 
@@ -854,6 +890,9 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * response is followed by an empty-turn commit (`sendClientContent({ turnComplete: true })`)
      * — without it the server keeps waiting for more client input and NEVER starts the spoken
      * reply (observed live as the model staying silent after a delegated agent's result).
+     *
+     * A result for a call that predates the last reseed goes out as text instead, and like any text
+     * it waits for the turn in flight, on a non-blocking model too (see {@link sendToolResultAsText}).
      */
     public SendToolResult(callID: string, outputJson: string): void {
         if (!this.session) {
@@ -862,7 +901,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         const name = this.pendingToolCallNames.get(callID) ?? '';
         // Non-blocking results go out while the model talks; blocking ones wait for the turn in flight. Both wait while
         // the session moves to a new connection.
-        this.enqueueOrRun(() => this.sendToolResponseTurn(callID, name, outputJson), !this.isNonBlocking);
+        this.enqueueOrRun(() => this.sendToolResponseTurn(callID, name, outputJson), !this.isNonBlocking || this.callsFromBeforeReseed.has(callID));
     }
 
     /**
@@ -1198,7 +1237,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * Google confirms its setup, and closes the old one. Until then the old connection stays in
      * use, so what it still sends (the rest of a turn the deadline cut, its usage) is handled.
      * Mic capture and playout carry over untouched. Rejects when the connection can't be opened or
-     * its setup fails, so {@link RealtimeSessionResumption} can retry.
+     * its setup fails, so {@link RealtimeSessionResumption} can retry. The handle can restore an empty
+     * session, so the conversation goes out once the connection is in use ({@link handleResumed}).
      *
      * The resume reuses the session's ephemeral token. Google counts a resume as a new session, so
      * the server driver mints the token to open several connections until its `expireTime`
@@ -1311,9 +1351,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     /**
      * The session continues on a new connection, whose setup Google has confirmed. A turn cut off
      * by a drop or the deadline never completes there, so the turn state is reset (its partial
-     * transcripts are emitted as final). The mic audio held during the move goes out, then the
-     * sends queued behind it. An avatar's video plays out what arrived of that turn and holds its
-     * last frame.
+     * transcripts are emitted as final, which also records them). With {@link ResumesFromSeed} the
+     * conversation goes out next ({@link seedConversation}), so the model has it before any new input.
+     * Then the mic audio held during the move, then the sends queued behind it. An avatar's video
+     * plays out what arrived of that turn and holds its last frame.
      */
     private handleResumed(): void {
         this.avatarOutput?.Resumed();
@@ -1325,10 +1366,54 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.activeResponseKind = 'normal';
         this.clearSafetyBackstop();
         this.endTurn();
+        if (this.ResumesFromSeed && this.session) {
+            // What the old connection left open or owed: on a reseeded one a commit would start a reply nobody asked for.
+            this.toolResponseAwaitsCommit = false;
+            this.openClientTurn = false;
+            this.callsFromBeforeReseed = new Set(this.pendingToolCallNames.keys());
+            this.seedConversation(this.session);
+        }
         this.connectionReady = true;
         this.setState('listening');
         this.sendHeldMicAudio();
         this.flushQueuedSends();
+    }
+
+    /**
+     * Sends the notebook on a new connection as one silent history append: `turnComplete: false`, the
+     * same contract as {@link SendContextNote}, which starts no generation. It always sends the whole
+     * notebook within the cap, not what came since the last resume, because Google can restore an
+     * empty session on any resume; when it does restore the session the model sees the history twice,
+     * and the preamble covers that. A failed send is reported and the call goes on without the
+     * conversation: ending a call over a lost memory hand-off would be worse.
+     */
+    private seedConversation(session: GeminiLiveClientSession): void {
+        const seed = this.memory.Seed();
+        if (seed.Entries.length === 0) {
+            RealtimeDiagLog('[GeminiRealtimeClient] no conversation to seed');
+            return;
+        }
+        const turns: Content[] = RenderRealtimeMemorySeed(seed).map((turn) => ({
+            role: turn.Role,
+            parts: turn.Texts.map((text) => ({ text })),
+        }));
+        const counts = `chars ${seed.Chars}, dropped ${seed.DroppedEntries}`;
+        try {
+            session.sendClientContent({ turns, turnComplete: false });
+            this.openClientTurn = true;
+            RealtimeDiagLog(`[GeminiRealtimeClient] seeded ${seed.Entries.length} entries (${counts})`);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            this.emitError({ Message: `Gemini Live resumed without the conversation so far: ${message}`, Code: 'resume-seed-failed', Fatal: false });
+            RealtimeDiagLog(`[GeminiRealtimeClient] seed failed: ${message} (entries ${seed.Entries.length}, ${counts})`);
+        }
+    }
+
+    /** Adds to the notebook, when this driver keeps one ({@link ResumesFromSeed}). */
+    private record(entry: RealtimeMemoryEntry): void {
+        if (this.ResumesFromSeed) {
+            this.memory.Record(entry);
+        }
     }
 
     /** Every resume attempt failed: the session ends with a fatal error. */
@@ -1669,7 +1754,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             });
             // A pending call keeps its turn open until its result goes out (see IsTurnOpen).
             this.markTurnOpen();
-            this.emitToolCall({ CallID: callID, ToolName: toolName, ArgumentsJson: JSON.stringify(call.args ?? {}) });
+            const argumentsJson = JSON.stringify(call.args ?? {});
+            // Before the emit: a host may answer synchronously, and the result must follow its call.
+            this.record({ Kind: 'toolCall', Name: toolName, ArgumentsJson: argumentsJson });
+            this.emitToolCall({ CallID: callID, ToolName: toolName, ArgumentsJson: argumentsJson });
         }
     }
 
@@ -1751,15 +1839,19 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         const text = this.pendingUserText;
         this.pendingUserText = '';
         if (text.trim().length > 0) {
+            this.record({ Kind: 'user', Text: text });
             this.emitTranscript({ Role: 'User', Text: text, IsFinal: true, Kind: 'normal' });
         }
     }
 
-    /** Emits the accumulated assistant turn as final (if non-empty), tagged with its kind. */
+    /** Emits the accumulated assistant turn as final (if non-empty), tagged with its kind. Narration stays out of the notebook. */
     private finalizeAssistantTranscript(): void {
         const text = this.pendingAssistantText;
         this.pendingAssistantText = '';
         if (text.trim().length > 0) {
+            if (this.activeResponseKind === 'normal') {
+                this.record({ Kind: 'assistant', Text: text });
+            }
             this.emitTranscript({ Role: 'Assistant', Text: text, IsFinal: true, Kind: this.activeResponseKind });
         }
     }
@@ -1871,13 +1963,22 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * Sends a user turn that TRIGGERS generation (`turnComplete: true`), stamping the upcoming
      * turn's kind at send time and eagerly marking the model busy. `emitSpeaking` mirrors the
      * OpenAI driver: typed-text / tool-result replies reflect `'speaking'` immediately;
-     * narration waits for the first model output.
+     * narration waits for the first model output. A `normal` turn is recorded in the notebook; a
+     * narration trigger is not, because its reply is not either, so the pairs stay balanced.
      */
     private sendTriggeringUserTurn(text: string, kind: 'normal' | 'narration', emitSpeaking: boolean): void {
         const session = this.session;
         if (!session) {
             return;
         }
+        this.sendRealtimeTextTrigger(session, text, kind, emitSpeaking);
+        if (kind === 'normal') {
+            this.record({ Kind: 'user', Text: text });
+        }
+    }
+
+    /** Sends text that starts a model turn, and marks the turn started; see {@link sendTriggeringUserTurn}. */
+    private sendRealtimeTextTrigger(session: GeminiLiveClientSession, text: string, kind: 'normal' | 'narration', emitSpeaking: boolean): void {
         // REALTIME text, not clientContent: native-audio Live models only honor clientContent
         // for history seeding — a mid-call `turnComplete: true` user turn lands in history but
         // does NOT start generation (the model stays silent until the user's next spoken turn
@@ -1952,6 +2053,14 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.toolBatchBarrier.RecordResult(callID);
         const parsed = this.parseToolOutput(outputJson);
         const sched = this.resolveFunctionScheduling(parsed as Record<string, unknown>, name);
+        // After the line above, which strips the scheduling hint: the notebook holds what the model got.
+        const entry: RealtimeMemoryEntry = { Kind: 'toolResult', Name: name, OutputJson: JSON.stringify(parsed) };
+        if (this.callsFromBeforeReseed.delete(callID)) {
+            this.sendToolResultAsText(session, entry);
+            this.pendingToolCallNames.delete(callID);
+            this.endTurnIfToolResultsIn();
+            return;
+        }
         const functionResponse: FunctionResponse = {
             id: callID,
             name,
@@ -1962,6 +2071,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         session.sendToolResponse({
             functionResponses: [functionResponse],
         });
+        this.record(entry);
 
         if (this.isNonBlocking) {
             // The commit that releases this response's continuation waits for true IDLE (see above).
@@ -1978,6 +2088,18 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
 
         this.pendingToolCallNames.delete(callID);
         this.endTurnIfToolResultsIn();
+    }
+
+    /**
+     * Sends the result of a call from before the last reseed as a text turn. The new session may not know the call's id:
+     * if Google dropped the tool response, the commit behind it would start generation on a history where the tool
+     * never returned. The seed already reads `[called …]`, so the same text form completes the pair, and it starts the
+     * reply by itself, with no commit. It is recorded as the tool result it is, so a later seed does not double it. A
+     * scheduling hint can't apply: the text always starts a reply.
+     */
+    private sendToolResultAsText(session: GeminiLiveClientSession, entry: RealtimeMemoryEntry): void {
+        this.sendRealtimeTextTrigger(session, RenderRealtimeMemoryEntry(entry), 'normal', true);
+        this.record(entry);
     }
 
     /**
@@ -2036,6 +2158,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.toolResponseAwaitsCommit = false;
         this.queuedSends = [];
         this.pendingToolCallNames.clear();
+        this.callsFromBeforeReseed.clear();
         this.toolBatchBarrier.Clear();
         this.clearSafetyBackstop();
     }

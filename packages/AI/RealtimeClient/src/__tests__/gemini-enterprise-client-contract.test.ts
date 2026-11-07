@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 vi.mock('@google/genai', async () => vi.importActual<typeof import('@google/genai/web')>('@google/genai/web'));
 
 import { MJGlobal } from '@memberjunction/global';
-import type { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
+import { RealtimeConversationMemory, type ClientRealtimeSessionConfig, type JSONObject } from '@memberjunction/ai';
 import { BaseRealtimeClient, type RealtimeClientTranscript, type RealtimeClientUsage } from '../generic/baseRealtimeClient';
 import { GeminiRealtimeClient, type IGeminiAudioPlayback, type IGeminiMicCapture } from '../drivers/geminiRealtimeClient';
 import { GeminiEnterpriseRealtimeClient } from '../drivers/geminiEnterpriseRealtimeClient';
@@ -488,6 +488,85 @@ describe('GeminiEnterpriseRealtimeClient through the relay (web SDK, fake WebSoc
             expect([FakeMediaSource.Instances.length, source.Buffers.length, element.src, element.Loads, element.Paused]).toEqual([1, 1, url, 0, false]);
             expect(buffer.Removed).toEqual([]);
             expect(videos).toHaveLength(1);
+        });
+    });
+
+    // The relay forwards only client content whose turns are all `user`, so it would silently drop a seed. Vertex AI's
+    // handles do restore the session: here the handle stays the memory, as it always was.
+    describe('the handle is the memory: no seed', () => {
+        /** Connects, has Google issue `handle-1`, and collects what the client reports. */
+        async function connectWithHandle(): Promise<{ Client: EnterpriseHarness; Socket: FakeWebSocket; Transcripts: RealtimeClientTranscript[] }> {
+            const { Client, Socket } = await connect(enterprisePact());
+            const transcripts: RealtimeClientTranscript[] = [];
+            Client.OnTranscript((t) => transcripts.push(t));
+            Socket.Receive({ sessionResumptionUpdate: { newHandle: 'handle-1', resumable: true } });
+            await vi.waitFor(() => expect(Client.ResumptionHandle).toBe('handle-1'));
+            return { Client, Socket, Transcripts: transcripts };
+        }
+
+        it('a goAway mid-answer moves at the fresh handle after turnComplete, not at turnComplete', async () => {
+            const { Socket: first, Transcripts } = await connectWithHandle();
+            first.Receive({ serverContent: { outputTranscription: { text: 'One, two, three.' } } });
+            first.Receive({ goAway: { timeLeft: '50s' } });
+            first.Receive({ serverContent: { turnComplete: true } });
+            await vi.waitFor(() => expect(Transcripts.some((t) => t.IsFinal && t.Text === 'One, two, three.')).toBe(true));
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            expect(FakeWebSocket.Instances).toHaveLength(1);
+
+            first.Receive({ sessionResumptionUpdate: { newHandle: 'handle-2', resumable: true } });
+            const second = await nextSocket(2);
+            await openAndConfirm(second);
+            expect(setupOf(second)['sessionResumption']).toEqual({ handle: 'handle-2' });
+        });
+
+        it('sends no seed on the new connection: the first thing after the setup is the audio', async () => {
+            const { Client, Socket: first, Transcripts } = await connectWithHandle();
+            first.Receive({ serverContent: { inputTranscription: { text: 'hi' } } });
+            first.Receive({ serverContent: { outputTranscription: { text: 'Question 1' } } });
+            first.Receive({ serverContent: { turnComplete: true } });
+            await vi.waitFor(() => expect(Transcripts.some((t) => t.IsFinal && t.Text === 'Question 1')).toBe(true));
+            first.onclose?.(new CloseEvent('close', { code: 1006, reason: 'relay went away', wasClean: false }));
+
+            const second = await nextSocket(2);
+            await openAndConfirm(second);
+            await vi.waitFor(() => expect(first.Closed).toBe(true));
+            Client.OnPcmChunk?.('AAAA');
+            expect(second.Frames.map((frame) => Object.keys(frame)[0])).toEqual(['setup', 'realtimeInput']);
+        });
+
+        it('a tool result that crosses a resume still goes out as a tool response', async () => {
+            const { Client, Socket: first } = await connectWithHandle();
+            let toolCalls = 0;
+            Client.OnToolCall(() => toolCalls++);
+            first.Receive({ toolCall: { functionCalls: [{ id: 'c1', name: 'lookup_order', args: {} }] } });
+            await vi.waitFor(() => expect(toolCalls).toBe(1));
+            first.onclose?.(new CloseEvent('close', { code: 1006, reason: 'relay went away', wasClean: false }));
+
+            const second = await nextSocket(2);
+            await openAndConfirm(second);
+            await vi.waitFor(() => expect(first.Closed).toBe(true));
+            Client.SendToolResult('c1', '{"ok":true}');
+            expect(second.Frames.map((frame) => Object.keys(frame)[0])).toEqual(['setup', 'toolResponse']);
+        });
+
+        it('keeps no notebook', async () => {
+            const record = vi.spyOn(RealtimeConversationMemory.prototype, 'Record');
+            const { Client, Socket, Transcripts } = await connectWithHandle();
+            let toolCalls = 0;
+            Client.OnToolCall(() => toolCalls++);
+            Socket.Receive({ serverContent: { inputTranscription: { text: 'hi' } } });
+            Socket.Receive({ serverContent: { outputTranscription: { text: 'Question 1' } } });
+            Socket.Receive({ serverContent: { turnComplete: true } });
+            await vi.waitFor(() => expect(Transcripts.some((t) => t.IsFinal && t.Text === 'Question 1')).toBe(true));
+            Client.SendContextNote('a note');
+            Socket.Receive({ toolCall: { functionCalls: [{ id: 'c1', name: 'lookup_order', args: {} }] } });
+            await vi.waitFor(() => expect(toolCalls).toBe(1));
+            Client.SendToolResult('c1', '{"ok":true}');
+            Socket.Receive({ serverContent: { turnComplete: true } });
+            Client.SendText('typed');
+            expect(Socket.Frames.some((frame) => 'toolResponse' in frame)).toBe(true);
+            expect(record).not.toHaveBeenCalled();
+            record.mockRestore();
         });
     });
 });

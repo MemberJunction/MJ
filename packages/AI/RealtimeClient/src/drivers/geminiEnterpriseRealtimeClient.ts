@@ -36,6 +36,14 @@ export class GeminiEnterpriseRealtimeClient extends GeminiRealtimeClient {
     }
 
     /**
+     * The handle stays the memory here. The relay policy forwards only `clientContent` whose turns are all `user`, so it
+     * would drop a seed silently, and Vertex AI's handles do restore the session.
+     */
+    protected override get ResumesFromSeed(): boolean {
+        return false;
+    }
+
+    /**
      * Opens one Live connection through the relay; a resume opens another with the same URL and the new handle.
      *
      * The config states the response modalities: the web SDK fills in AUDIO when it has none, and the relay reads an
