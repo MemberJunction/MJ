@@ -4,8 +4,8 @@ import * as fs from 'fs';
 import path from 'path';
 
 import { SQLUtilityBase } from './sql';
-import type { SQLPassFailure } from './sqlPassFailures';
-import { CodeGenDatabaseProvider, BaseViewGenerationContext, CascadeDeleteContext, CodeGenConnection, PhasedExecutionResult, OrderAlternateBaseViewsTopologically } from './codeGenDatabaseProvider';
+import { DescribeSQLPassFailure, SQLObjectKeyFromDescription, type SQLPassFailure } from './sqlPassFailures';
+import { CodeGenDatabaseProvider, CRUDType, BaseViewGenerationContext, CascadeDeleteContext, CodeGenConnection, PhasedExecutionResult, OrderAlternateBaseViewsTopologically } from './codeGenDatabaseProvider';
 
 import { AutoIndexForeignKeys, AutoIndexSoftPrimaryKeys, configInfo, CustomSqlScripts, dbDatabase, mjCoreSchema, MAX_INDEX_NAME_LENGTH } from '../Config/config';
 import { EntityInCustomBaseViewRefreshScope, ShouldEmitCascadeForRelatedEntity } from './schema-filters';
@@ -309,6 +309,9 @@ export function EvaluateAlternateBaseViewParityAndSafety(
 export class SQLCodeGenBase {
     protected _sqlUtilityObject: SQLUtilityBase = MJGlobal.Instance.ClassFactory.CreateInstance<SQLUtilityBase>(SQLUtilityBase)!;
     public get SQLUtilityObject(): SQLUtilityBase {
+        // Execute through this generator's provider: the failures it records while executing
+        // files are read back from `_dbProvider` by the SQL pass, so the two must be one instance.
+        this._sqlUtilityObject.DBProvider = this._dbProvider;
         return this._sqlUtilityObject;
     }
 
@@ -412,6 +415,57 @@ export class SQLCodeGenBase {
      * ({@link logLayeredOuterViewRefresh}). STEP 2(f) does not log their refresh a second time.
      */
     protected layeredEntitiesWithInlineRefresh: Set<string> = new Set();
+
+    /**
+     * Records each failed batch the provider collected while executing SQL files (see
+     * `CodeGenDatabaseProvider.SQLObjectFailures`), tied to the entity whose base view or CRUD
+     * routine the batch names, or to no entity when it names none of them. Returns how many it
+     * recorded; 0 means the provider gave no object-level detail.
+     */
+    protected RecordSQLObjectFailures(step: string, entities: EntityInfo[]): number {
+        const failures = this._dbProvider.SQLObjectFailures;
+        if (failures.length === 0) return 0;
+        const ownerByObject = new Map<string, string>();
+        for (const e of entities) {
+            const names = [
+                e.BaseView,
+                e.GeneratedViewName,
+                this._dbProvider.getCRUDRoutineName(e, CRUDType.Create),
+                this._dbProvider.getCRUDRoutineName(e, CRUDType.Update),
+                this._dbProvider.getCRUDRoutineName(e, CRUDType.Delete),
+            ];
+            for (const name of names) {
+                if (name) ownerByObject.set(`${e.SchemaName}.${name}`.toLowerCase(), e.Name);
+            }
+        }
+        for (const f of failures) {
+            const key = SQLObjectKeyFromDescription(f.Object);
+            this.sqlPassFailures.push({
+                Step: step,
+                EntityName: key ? ownerByObject.get(key) ?? null : null,
+                Message: `${f.Object}: ${f.Message.substring(0, 400)}`,
+            });
+        }
+        return failures.length;
+    }
+
+    /**
+     * Executes the entity SQL files (STEP 2(e)) and, when a batch fails, records the failures for
+     * the SQL pass: one per failed object when the provider collected them, tied to its entity, or
+     * one step-level entry when the provider gave no detail. Object failures left on the provider
+     * by earlier steps (a failed before-sql script) are cleared first, so they are not reported
+     * here or tied to an entity.
+     */
+    protected async ExecuteEntitySQLFiles(files: string[], entities: EntityInfo[]): Promise<boolean> {
+        const step = 'Executing entity SQL files';
+        const utility = this.SQLUtilityObject;
+        this._dbProvider.ClearSQLObjectFailures();
+        const success = await utility.executeSQLFiles(files, configInfo?.verboseOutput ?? false);
+        if (!success && this.RecordSQLObjectFailures(step, entities) === 0) {
+            this.RecordSQLPassStepFailure(step, 'One or more entity SQL files had failed batches');
+        }
+        return success;
+    }
 
     public async ManageSQLScriptsAndExecution(pool: CodeGenConnection, entities: EntityInfo[], directory: string, currentUser: UserInfo): Promise<boolean> {
         try {
@@ -645,14 +699,14 @@ export class SQLCodeGenBase {
                 // Execute temp batch files in dependency order (matches CodeGen run log)
                 const tempFiles = TempBatchFile.getTempFilePaths();
                 LogIf(configInfo?.verboseOutput ?? false, `Executing ${tempFiles.length} temp batch file(s) in dependency order`);
-                executionSuccess = await this.SQLUtilityObject.executeSQLFiles(tempFiles, configInfo?.verboseOutput ?? false);
+                executionSuccess = await this.ExecuteEntitySQLFiles(tempFiles, includedEntities);
 
                 // Clean up temp files after execution
                 TempBatchFile.cleanup();
             } else {
                 // Fall back to combined files (for backward compatibility or if temp files weren't created)
                 LogIf(configInfo?.verboseOutput ?? false, `Executing ${allEntityFiles.length} combined file(s)`);
-                executionSuccess = await this.SQLUtilityObject.executeSQLFiles(allEntityFiles, configInfo?.verboseOutput ?? false);
+                executionSuccess = await this.ExecuteEntitySQLFiles(allEntityFiles, includedEntities);
             }
 
             // Initialize from entityGenSuccess so any per-batch failures from
@@ -660,7 +714,6 @@ export class SQLCodeGenBase {
             let overallSuccess = entityGenSuccess && beforeScriptsSucceeded;
             if (!executionSuccess) {
                 FailSpinner('Failed to execute entity SQL files');
-                this.RecordSQLPassStepFailure('Executing entity SQL files', 'One or more entity SQL files had failed batches');
                 TempBatchFile.cleanup(); // Cleanup on error
                 overallSuccess = false;
                 // Continue to manage entity fields metadata even after SQL execution failure.
@@ -1018,13 +1071,30 @@ export class SQLCodeGenBase {
         }
     }
 
+    /**
+     * Executes each entity's permissions files. An entity with a failure already recorded this pass
+     * (its view or a CRUD routine failed to create) is skipped with one warning naming that first
+     * failure: its GRANTs would only fail with `Cannot find the object`, burying the real cause.
+     * On SQL Server the entity SQL files already ran each object's GRANT next to its CREATE, so
+     * those GRANTs failed once there; the skip removes the second copy this step would add.
+     * The recorded failure already fails the run, so a skip does not fail this step.
+     */
     public async ApplyPermissions(pool: CodeGenConnection, directory: string, entities: EntityInfo[], batchSize: number = 5): Promise<boolean> {
         try {
             let bSuccess = true;
+            const firstFailureByEntity = new Map<string, SQLPassFailure>();
+            for (const f of this.sqlPassFailures) {
+                if (f.EntityName && !firstFailureByEntity.has(f.EntityName)) firstFailureByEntity.set(f.EntityName, f);
+            }
 
             for (let i = 0; i < entities.length; i += batchSize) {
                 const batch = entities.slice(i, i + batchSize);
                 const promises = batch.map(async (e) => {
+                    const firstFailure = firstFailureByEntity.get(e.Name);
+                    if (firstFailure) {
+                        LogWarning(`Skipping permissions for entity ${e.Name}: its objects failed earlier in this run. First failure: ${DescribeSQLPassFailure(firstFailure)}`);
+                        return true;
+                    }
                     // generate the file names for the entity
                     const files = this.GetEntityPermissionFileNames(e);
                     let innerSuccess: boolean = true;
