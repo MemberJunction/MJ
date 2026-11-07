@@ -271,6 +271,22 @@ Response:
 When `communicationProvider` is configured, the link is emailed and `rawToken` is
 omitted. Otherwise you get the raw link back to deliver out of band.
 
+### In-process callers: anonymous and resource-scoped invites
+
+Server-side code (a server extension or an Open App's server package) can call
+`MagicLinkService.CreateInvite` directly. Beyond the HTTP fields it accepts:
+
+| Field | Values | Rule |
+|---|---|---|
+| `IdentityMode` | `'email'` (default), `'anonymous'` | Anonymous invites take no `email`, and one with an email is refused. Every redemption resolves to the shared Anonymous principal. |
+| `Kind` | `'app-session'` (default), `'resource-share'` | `resource-share` requires both `ResourceTypeID` and `ResourceID`; other kinds refuse them. `anonymous-embed` is not minted by the service. |
+| `ResourceTypeID`, `ResourceID` | IDs | Written to the invite; the session carries the resource ID as its scope. |
+
+The issuer check (`Owner` or `magicLink.inviteIssuerRoleNames`), the grantable-role
+allow-list and the redirect check apply unchanged. Anonymous invites are never
+emailed: the caller gets `rawToken` and `redemptionUrl` and delivers the link. The
+`POST /magic-link/create` route does not take these fields.
+
 ---
 
 ## 6. Redeeming
@@ -314,6 +330,11 @@ On redemption (`MagicLinkService`):
   request authenticates.
 - **Existing email** → the role + app assignment are added idempotently; no
   duplicate user.
+- **Application access** → if the invite's application has **no** `Application
+  Roles` rows it is open to every user, and redemption leaves it that way: it never
+  writes the application's first row (doing so would make the app an allowlist of the
+  invited role and remove it from everyone else). If the application already has rows,
+  the invited role's row is added once.
 
 ---
 

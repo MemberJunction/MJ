@@ -17,7 +17,7 @@ import {
   type IMetadataProvider,
   type RoleInfo,
 } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import {
   type MJMagicLinkInviteEntity,
   type MJMagicLinkRedemptionEntity,
@@ -40,6 +40,7 @@ import { GenerateRawToken, GenerateSessionId, HashToken, EvaluateInvite, BuildSe
 import type { IServerExtensionMagicLinkService } from '@memberjunction/server-extensions-core';
 import type {
   CreateMagicLinkInviteParams,
+  MintableMagicLinkInviteKind,
   CreateMagicLinkInviteResult,
   ManageMagicLinkInviteResult,
   MagicLinkJWTClaims,
@@ -118,6 +119,77 @@ export function IsMagicLinkRedirectUrlAllowed(redirectUrl: string, allowedOrigin
   return false;
 }
 
+/** The invite columns {@link ValidateInviteShape} resolves from create parameters. */
+export interface InviteShape {
+  Ok: true;
+  Email: string | null;
+  IdentityMode: MJMagicLinkInviteEntity['IdentityMode'];
+  Kind: MJMagicLinkInviteEntity['Kind'];
+  ResourceTypeID: string | null;
+  ResourceID: string | null;
+}
+
+/** Why {@link ValidateInviteShape} refused a request. */
+export interface InviteShapeError {
+  Ok: false;
+  Error: string;
+}
+
+/** Kinds `CreateInvite` mints; anything else (including `anonymous-embed`) is refused. */
+const MINTABLE_KINDS: readonly MintableMagicLinkInviteKind[] = ['app-session', 'resource-share'];
+
+/**
+ * Checks the identity-mode, kind and resource fields of an invite request and resolves the column
+ * values to write. Pure: reads only `params`.
+ *
+ * - `email` mode (the default) requires an email; `anonymous` mode refuses one.
+ * - `resource-share` requires both `ResourceTypeID` and `ResourceID`; other kinds refuse them.
+ * - `anonymous-embed` is not minted here (its framing-domain and tier checks do not exist yet).
+ */
+export function ValidateInviteShape(params: CreateMagicLinkInviteParams): InviteShape | InviteShapeError {
+  const identityMode = params.IdentityMode ?? 'email';
+  if (identityMode !== 'email' && identityMode !== 'anonymous') {
+    return { Ok: false, Error: `IdentityMode '${String(identityMode)}' is not supported.` };
+  }
+  const email = params.email?.trim() ? params.email.trim() : null;
+  if (identityMode === 'email' && !email) {
+    return { Ok: false, Error: 'An email-mode invite requires an email address.' };
+  }
+  if (identityMode === 'anonymous' && email) {
+    return { Ok: false, Error: 'An anonymous invite must not carry an email address.' };
+  }
+
+  const kind = params.Kind ?? 'app-session';
+  if (!MINTABLE_KINDS.includes(kind)) {
+    return { Ok: false, Error: `Invite kind '${String(kind)}' cannot be minted through MagicLinkService.` };
+  }
+  const resourceTypeId = params.ResourceTypeID?.trim() ? params.ResourceTypeID.trim() : null;
+  const resourceId = params.ResourceID?.trim() ? params.ResourceID.trim() : null;
+  if (kind === 'resource-share' && (!resourceTypeId || !resourceId)) {
+    return { Ok: false, Error: "A 'resource-share' invite requires both ResourceTypeID and ResourceID." };
+  }
+  if (kind !== 'resource-share' && (resourceTypeId || resourceId)) {
+    return { Ok: false, Error: "ResourceTypeID and ResourceID are only valid on a 'resource-share' invite." };
+  }
+
+  return { Ok: true, Email: email, IdentityMode: identityMode, Kind: kind, ResourceTypeID: resourceTypeId, ResourceID: resourceId };
+}
+
+/**
+ * What redemption does about an application's role rows: `open` (no rows — grant nothing, the app
+ * stays open to everyone), `already-granted` (the role has a row), or `grant` (an allowlist that
+ * lacks the role — add it). Pure.
+ */
+export function DecideAppAccessGrant(
+  applicationRoles: ReadonlyArray<{ RoleID: string }>,
+  roleId: string,
+): 'open' | 'already-granted' | 'grant' {
+  if (applicationRoles.length === 0) {
+    return 'open';
+  }
+  return applicationRoles.some((r) => UUIDsEqual(r.RoleID, roleId)) ? 'already-granted' : 'grant';
+}
+
 /**
  * Magic-link service. One instance per server, constructed with the resolved
  * public URL and the validated config. Implements {@link IServerExtensionMagicLinkService}
@@ -189,6 +261,12 @@ export class MagicLinkService implements IServerExtensionMagicLinkService {
         return { success: false, error: `Application '${params.ApplicationId}' not found.` };
       }
 
+      const checked = ValidateInviteShape(params);
+      if ('Error' in checked) {
+        return { success: false, error: checked.Error };
+      }
+      const shape: InviteShape = checked;
+
       const rawToken = GenerateRawToken();
       const tokenHash = HashToken(rawToken);
       const expiresInHours = params.ExpiresInHours ?? this.config.defaultExpiresInHours;
@@ -197,7 +275,11 @@ export class MagicLinkService implements IServerExtensionMagicLinkService {
       const invite = await md.GetEntityObject<MJMagicLinkInviteEntity>(INVITE_ENTITY, creatingUser);
       invite.NewRecord();
       invite.TokenHash = tokenHash;
-      invite.Email = params.email;
+      invite.Email = shape.Email;
+      invite.IdentityMode = shape.IdentityMode;
+      invite.Kind = shape.Kind;
+      invite.ResourceTypeID = shape.ResourceTypeID;
+      invite.ResourceID = shape.ResourceID;
       invite.ApplicationID = params.ApplicationId;
       invite.RoleID = roleId;
       invite.ExpiresAt = expiresAt;
@@ -231,8 +313,9 @@ export class MagicLinkService implements IServerExtensionMagicLinkService {
       const redemptionUrl = this.buildRedemptionUrl(rawToken, redirectBindingToken);
 
       let emailSent = false;
-      if (params.SendEmail !== false && this.config.communicationProvider) {
-        emailSent = await this.sendInviteEmail(params.email, redemptionUrl, app.Name, creatingUser);
+      // An anonymous invite has no recipient; the caller delivers the returned link itself.
+      if (shape.Email && params.SendEmail !== false && this.config.communicationProvider) {
+        emailSent = await this.sendInviteEmail(shape.Email, redemptionUrl, app.Name, creatingUser);
       }
 
       return {
@@ -870,20 +953,38 @@ export class MagicLinkService implements IServerExtensionMagicLinkService {
     }
   }
 
-  /** Idempotently ensures the role has CanAccess to the application (Application Role). */
+  /**
+   * Ensures the invite's role can reach the application, without changing who else can.
+   *
+   * An application with no `MJ: Application Roles` rows is OPEN: every user reaches it. Writing
+   * its first row would turn it into an allowlist of that one role and revoke it from everyone
+   * else, so redemption never creates the first row; the invitee reaches an open application
+   * through open mode. An application that already has rows (an allowlist) gets the invited role
+   * added once, as before.
+   */
   private async ensureAppAccess(roleId: string, applicationId: string, contextUser: UserInfo): Promise<void> {
     try {
       const rv = new RunView();
-      const res = await rv.RunView(
+      const res = await rv.RunView<{ ID: string; RoleID: string }>(
         {
           EntityName: 'MJ: Application Roles',
-          ExtraFilter: `RoleID = '${roleId}' AND ApplicationID = '${applicationId}'`,
+          ExtraFilter: `ApplicationID = '${EscapeSQLString(applicationId)}'`,
+          Fields: ['ID', 'RoleID'],
           ResultType: 'simple',
         },
         contextUser,
       );
-      if (res.Success && (res.Results?.length ?? 0) > 0) {
-        return; // already granted
+      if (!res.Success) {
+        LogError(`[MagicLink] Could not read Application Roles for application ${applicationId}: ${res.ErrorMessage ?? 'unknown'}`);
+        return;
+      }
+      const decision = DecideAppAccessGrant(res.Results ?? [], roleId);
+      if (decision === 'open') {
+        LogStatus(`[MagicLink] Application ${applicationId} is open (no Application Roles); role ${roleId} reaches it without a grant.`);
+        return;
+      }
+      if (decision === 'already-granted') {
+        return;
       }
       const md = new Metadata(); // global-provider-ok: server-side magic-link provisioning; runs under the server's single default provider
       const appRole = await md.GetEntityObject<MJApplicationRoleEntity>('MJ: Application Roles', contextUser);
@@ -892,7 +993,9 @@ export class MagicLinkService implements IServerExtensionMagicLinkService {
       appRole.RoleID = roleId;
       appRole.CanAccess = true;
       appRole.CanAdmin = false;
-      if (!(await appRole.Save())) {
+      if (await appRole.Save()) {
+        LogStatus(`[MagicLink] Granted role ${roleId} access to allowlisted application ${applicationId}.`);
+      } else {
         LogError(`[MagicLink] Failed to grant app access: ${appRole.LatestResult?.CompleteMessage ?? 'unknown'}`);
       }
     } catch (e) {
