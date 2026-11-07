@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, JSONObject, RealtimeToolBatchBarrier } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, JSONObject, MapRealtimeUsageModalityDetail, RealtimeToolBatchBarrier } from '@memberjunction/ai';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
 import {
     BaseRealtimeClient,
@@ -641,10 +641,15 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         const duration = seconds !== undefined ? Math.max(OpenAILiveClient.PREBILL_DURATION_SECONDS, seconds) : this.totalDurationSeconds;
         this.totalDurationSeconds = duration;
 
+        // The per-modality split is per response, like the token totals; only the completed response carries it.
+        const inputDetails = MapRealtimeUsageModalityDetail(usage?.['input_token_details']);
+        const outputDetails = MapRealtimeUsageModalityDetail(usage?.['output_token_details']);
         this.emitUsage({
             InputTokens: typeof usage?.input_tokens === 'number' ? usage.input_tokens : 0,
             OutputTokens: typeof usage?.output_tokens === 'number' ? usage.output_tokens : 0,
             DurationSeconds: duration,
+            ...(inputDetails ? { InputTokenDetails: inputDetails } : {}),
+            ...(outputDetails ? { OutputTokenDetails: outputDetails } : {}),
             Raw: usage,
         });
     }
