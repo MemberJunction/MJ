@@ -442,7 +442,9 @@ function splitResourceUrl(raw: string): { path: string; query: Record<string, st
     const q = trimmed.indexOf('?');
     const path = q === -1 ? trimmed : trimmed.slice(0, q);
     const search = q === -1 ? '' : trimmed.slice(q + 1);
-    const query: Record<string, string> = {};
+    // Null prototype: query keys come from a URL, and a `__proto__` or `constructor` key must stay
+    // an ordinary own key instead of reaching Object.prototype members.
+    const query: Record<string, string> = Object.create(null);
     if (search.length > 0) {
         new URLSearchParams(search).forEach((value, key) => {
             query[key] = value;
