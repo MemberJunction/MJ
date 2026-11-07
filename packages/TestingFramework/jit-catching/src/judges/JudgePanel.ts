@@ -1,20 +1,15 @@
 import { GetConsensus } from '@memberjunction/rubrics';
 import { UNTRUSTED_OPEN, UNTRUSTED_CLOSE } from '../analyzer/ChangeAnalyzer';
 import { JUDGE_ERROR_PREFIX } from './SafeChat';
+import { NeutraliseMarkers } from '../sandbox/Redaction';
 import type { BaseCatchJudge } from '../contracts/BaseCatchJudge';
-import type { Bucket, CatchContext, JudgeBucket, JudgeScore } from '../types';
-
-const MARKER_RE = /<<<[^>]*>>>/g;
-const MARKER_PLACEHOLDER = '[marker removed]';
+import type { Bucket, CatchContext, JudgeBucket, JudgeScore, TokenUsage } from '../types';
 
 /** Score of each bucket: High 1, Medium 0, Low −1. */
 export const BUCKET_SCORE: Record<Bucket, number> = { High: 1, Medium: 0, Low: -1 };
 
-/** The panel's result for one weak catch. */
-export interface PanelResult { TPProb: number | null; Buckets: JudgeBucket[]; Median: Bucket | null; }
-
-/** Replaces every `<<<...>>>` marker in text, so the text cannot open or close an untrusted block. */
-function neutralise(text: string | null | undefined): string { return (text ?? '').replace(MARKER_RE, MARKER_PLACEHOLDER); }
+/** The panel's result for one weak catch. `Usage` lists the token usage each judge reported, in judge order. */
+export interface PanelResult { TPProb: number | null; Buckets: JudgeBucket[]; Median: Bucket | null; Usage: TokenUsage[]; }
 
 /**
  * §9.2 judge input for one weak catch. PR title, summary, test source and head failure go in one untrusted block;
@@ -26,17 +21,17 @@ export function BuildJudgeInput(c: CatchContext): string {
     return [
         `Intent: ${c.Analysis.IntentType}`,
         `Boosts that fired: ${c.Boosts.join(', ') || 'none'}`,
-        c.Test.RiskText ? `Risk: ${neutralise(c.Test.RiskText)}` : '',
-        c.Test.Mutant ? `Mutant (a deliberate bug that this test detects):\n${neutralise(c.Test.Mutant.Patch).slice(0, 3000)}` : '',
-        `Diff:\n${neutralise(diff).slice(0, 40_000)}`,
+        c.Test.RiskText ? `Risk: ${NeutraliseMarkers(c.Test.RiskText)}` : '',
+        c.Test.Mutant ? `Mutant (a deliberate bug that this test detects):\n${NeutraliseMarkers(c.Test.Mutant.Patch).slice(0, 3000)}` : '',
+        `Diff:\n${NeutraliseMarkers(diff).slice(0, 40_000)}`,
         [
             UNTRUSTED_OPEN,
-            `PR title: ${neutralise(c.Analysis.Title)}`,
-            `PR summary: ${neutralise(c.Analysis.Summary)}`,
-            `Test:\n${neutralise(c.Test.Source).slice(0, 12_000)}`,
-            `Failure on the PR: ${neutralise(h?.Message)}`,
-            `Expected: ${neutralise(h?.Expected)}`,
-            `Actual: ${neutralise(h?.Actual)}`,
+            `PR title: ${NeutraliseMarkers(c.Analysis.Title)}`,
+            `PR summary: ${NeutraliseMarkers(c.Analysis.Summary)}`,
+            `Test:\n${NeutraliseMarkers(c.Test.Source).slice(0, 12_000)}`,
+            `Failure on the PR: ${NeutraliseMarkers(h?.Message)}`,
+            `Expected: ${NeutraliseMarkers(h?.Expected)}`,
+            `Actual: ${NeutraliseMarkers(h?.Actual)}`,
             UNTRUSTED_CLOSE,
         ].join('\n'),
     ].filter(Boolean).join('\n\n');
@@ -71,6 +66,7 @@ export class JudgePanel {
         const tp = scores.find((s) => s.Judge === 'TpProb' && !s.Reason.startsWith(JUDGE_ERROR_PREFIX));
         const buckets: JudgeBucket[] = scores.flatMap((s) => (s.Bucket === null ? [] : [{ Model: s.Model, Bucket: s.Bucket, Reason: s.Reason }]));
         const median = buckets.length ? GetConsensus(buckets.map((b) => BUCKET_SCORE[b.Bucket]), 'Median').Overall : null;
-        return { TPProb: tp?.Score ?? null, Buckets: buckets, Median: median === null ? null : toBucket(median) };
+        const usage = scores.flatMap((s) => (s.Usage ? [s.Usage] : []));
+        return { TPProb: tp?.Score ?? null, Buckets: buckets, Median: median === null ? null : toBucket(median), Usage: usage };
     }
 }

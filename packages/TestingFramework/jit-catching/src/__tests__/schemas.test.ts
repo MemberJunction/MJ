@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { RunSchema, CandidateTestSchema, ExecutionResultSchema, CatchSchema, ExecutionFileSchema, JitTestPath, MutantEditSchema } from '../schemas';
+import { analysis } from './helpers/pipelineFixtures';
+import { RunSchema, ChangeAnalysisSchema, CandidateTestSchema, ExecutionResultSchema, CatchSchema, ExecutionFileSchema, JitTestPath, MutantEditSchema } from '../schemas';
 
 describe('record schemas', () => {
   it('accepts a complete Run and rejects a bad Trigger', () => {
@@ -7,6 +8,10 @@ describe('record schemas', () => {
       GeneratorModel: 'claude-haiku-5-5', TokensByModel: [], RunnerMinutes: 0, StartedAt: '2026-11-05T00:00:00.000Z', EndedAt: null };
     expect(RunSchema.parse(run)).toEqual(run);
     expect(() => RunSchema.parse({ ...run, Trigger: 'Comment' })).toThrow();
+  });
+  it('accepts more packages to test than three: Settings.Limits.PackagesPerPR is the limit', () => {
+    const a = { ...analysis(), PackagesToTest: ['@a/1', '@a/2', '@a/3', '@a/4'] };
+    expect(ChangeAnalysisSchema.parse(a).PackagesToTest).toHaveLength(4);
   });
   it('rejects a CandidateTest whose FilePath is outside __tests__/jit', () => {
     const t = { ID: 't1', RunID: 'r1', Package: '@memberjunction/core', Method: 'DodgyDiff', RiskID: null, RiskText: null, Mutant: null, MutantFailure: null,

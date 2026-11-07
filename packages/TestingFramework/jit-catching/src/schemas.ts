@@ -17,7 +17,7 @@ export const ChangedFileSchema = z.object({ Path: z.string(), Package: z.string(
 export const RiskSchema = z.object({ ID: z.string(), File: z.string(), Symbol: z.string(), WhatCouldBreak: z.string(), HowObserved: z.string() });
 export const ChangeAnalysisSchema = z.object({
     RunID: z.string(), IntentType: z.enum(['feature', 'fix', 'refactor', 'perf', 'dead_code_removal', 'logging', 'config', 'other']),
-    Summary: z.string(), Risks: z.array(RiskSchema), PackagesToTest: z.array(z.string()).max(3), ChangedFiles: z.array(ChangedFileSchema),
+    Summary: z.string(), Risks: z.array(RiskSchema), PackagesToTest: z.array(z.string()), ChangedFiles: z.array(ChangedFileSchema),
     CommitPrefix: z.string().nullable(), RiskScore: z.number(), Title: z.string(), Body: z.string(),
 });
 

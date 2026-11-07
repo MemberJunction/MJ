@@ -37,3 +37,6 @@ export function results(id: string, revision: ExecutionResult['Revision'], pass:
   return Array.from({ length: repeats }, (_, i) => ({ CandidateTestID: id, Revision: revision, RunIndex: i, Status: pass ? 'Pass' as const : 'Fail' as const,
     TestName: 't', Failure: pass ? null : FAILURE, DurationMs: 1 }));
 }
+
+/** An environment with a placeholder value for every key the pipeline steps need, and no Claude Code marker. */
+export const FULL_ENV: NodeJS.ProcessEnv = { ANTHROPIC_API_KEY: 'placeholder-anthropic', OPENAI_API_KEY: 'placeholder-openai', GEMINI_API_KEY: 'placeholder-gemini' };

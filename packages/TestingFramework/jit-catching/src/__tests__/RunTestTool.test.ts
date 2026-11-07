@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { RunTestTool } from '../generator/RunTestTool';
@@ -14,13 +14,14 @@ vi.mock('../target/VitestReport', async (importOriginal) => {
 afterEach(() => { parse.empty = false; });
 
 const ID = '11111111-1111-1111-1111-111111111111';
-function setup(stdout: string, stderr = '') {
+function setup(stdout: string, stderr = '', onRun: (root: string) => void = () => undefined) {
   const root = mkdtempSync(join(tmpdir(), 'jit-rt-')); mkdirSync(join(root, 'packages/MJCore/src/__tests__/jit'), { recursive: true });
   writeFileSync(join(root, 'packages/MJCore/src/a.ts'), 'export const f = () => 1;\n'); writeFileSync(join(root, 'packages/MJCore/package.json'), '{}');
   writeFileSync(join(root, `packages/MJCore/src/__tests__/jit/${ID}.jit.test.ts`), 'x');
+  mkdirSync(join(root, 'node_modules')); mkdirSync(join(root, 'packages/MJCore/node_modules'));
   const calls: SandboxRunOptions[] = [];
   const sandbox = new Sandbox(DEFAULT_SETTINGS.Sandbox, async () => ({ ExitCode: 0, TimedOut: false, Stdout: '', Stderr: '', DurationMs: 1 }));
-  vi.spyOn(sandbox, 'Run').mockImplementation(async (o) => { calls.push(o); return { ExitCode: 1, TimedOut: false, Stdout: stdout, Stderr: stderr, DurationMs: 2 }; });
+  vi.spyOn(sandbox, 'Run').mockImplementation(async (o) => { calls.push(o); onRun(root); return { ExitCode: 1, TimedOut: false, Stdout: stdout, Stderr: stderr, DurationMs: 2 }; });
   const tool = new RunTestTool({ Sandbox: sandbox, BaseRootDir: root, PackageRelDir: 'packages/MJCore', PackageName: '@memberjunction/core', ScratchRoot: mkdtempSync(join(tmpdir(), 'jit-sc-')), Settings: DEFAULT_SETTINGS });
   return { tool, calls, root };
 }
@@ -37,6 +38,21 @@ describe('RunTestTool', () => {
     expect(calls[0].Mounts.map((m) => [m.Container, m.Mode])).toEqual([['/work', 'ro'], ['/work/packages/MJCore/src/__tests__/jit', 'rw'], ['/jit-reporter', 'ro']]);
     expect(calls[0].Command.join(' ')).toContain('--reporter=/jit-reporter/jit-reporter.mjs');
     expect(Object.keys(calls[0].Env ?? {})).not.toContain('ANTHROPIC_API_KEY');
+  });
+  it('gives vite a writable .vite-temp folder on the base run and the mutant run', async () => {
+    const { tool, calls } = setup(failReport);
+    const file = `packages/MJCore/src/__tests__/jit/${ID}.jit.test.ts`;
+    await tool.Run({ File: file });
+    await tool.Run({ File: file, Mutant: { Edits: [{ File: 'packages/MJCore/src/a.ts', Find: '=> 1', Replace: '=> 2' }] } });
+    for (const c of calls) expect(c.Tmpfs).toContain('/work/packages/MJCore/node_modules/.vite-temp');
+  });
+  it('removes a symlink that the test planted in the jit folder after the run', async () => {
+    const outside = join(mkdtempSync(join(tmpdir(), 'jit-out-')), 'secret'); writeFileSync(outside, 'SECRET');
+    const { tool, root } = setup(passReport, '', (r) => symlinkSync(outside, join(r, 'packages/MJCore/src/__tests__/jit/helper.ts')));
+    const out = await tool.Run({ File: `packages/MJCore/src/__tests__/jit/${ID}.jit.test.ts` });
+    expect(out.Status).toBe('Pass');
+    expect(readdirSync(join(root, 'packages/MJCore/src/__tests__/jit'))).toEqual([`${ID}.jit.test.ts`]);
+    expect(readFileSync(outside, 'utf8')).toBe('SECRET');
   });
   it('refuses a file outside the jit folder', async () => {
     const { tool } = setup(passReport);
@@ -92,6 +108,12 @@ describe('RunTestTool', () => {
     writeFileSync(join(root, `${ID}.jit.test.ts`), 'x');
     const out = await tool.Run({ File: `packages/MJCore/src/__tests__/jit/${ID}.jit.test.ts` });
     expect(out.Ran).toBe(false); expect(calls).toHaveLength(0);
+  });
+  it('keeps the end of a long stderr in the RunnerError, where vitest prints the error', async () => {
+    parse.empty = true;
+    const { tool } = setup('', `${' RUN  v4.0.18 /work/packages/MJCore\n'.repeat(100)}Error: Cannot find module 'missing-dep'`);
+    const out = await tool.Run({ File: `packages/MJCore/src/__tests__/jit/${ID}.jit.test.ts` });
+    expect(out.Status).toBe('RunnerError'); expect(out.Error).toContain("Error: Cannot find module 'missing-dep'");
   });
   it('puts the stderr excerpt in Error for a RunnerError from the parser', async () => {
     const { tool } = setup('', 'boom-stderr');

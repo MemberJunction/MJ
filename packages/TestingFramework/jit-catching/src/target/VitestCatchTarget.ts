@@ -13,11 +13,18 @@ import { ParseJitReport, ParseVitestJson, RunnerErrorResult, type ReportMapping 
 import { JIT_REPORTER_ARG, JIT_REPORTER_MOUNT, WriteJitReporter } from './JitReporter';
 import { StripPatchInfo } from './LockfileStrip';
 import { RedactTail } from '../sandbox/Redaction';
+import { PurgeNonRegularEntries } from './JitFolder';
 
 const execFileAsync = promisify(execFile);
 /** Runs one trusted command on the host and returns its stdout. Injected so tests see the calls; the default is execFile. */
 export type HostRunner = (file: string, args: string[], cwd: string) => Promise<string>;
-const DEFAULT_HOST_RUNNER: HostRunner = async (file, args, cwd) => (await execFileAsync(file, args, { cwd, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, CI: '1' } })).stdout;
+/** The environment host pnpm runs with: `PATH`, `HOME`, `TMPDIR` when set, and `CI=1`. No key or token reaches it. */
+export function HostEnv(env: NodeJS.ProcessEnv = process.env): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const name of ['PATH', 'HOME', 'TMPDIR']) { const v = env[name]; if (v) out[name] = v; }
+    return { ...out, CI: '1' };
+}
+const DEFAULT_HOST_RUNNER: HostRunner = async (file, args, cwd) => (await execFileAsync(file, args, { cwd, maxBuffer: 64 * 1024 * 1024, env: HostEnv() })).stdout;
 /** `StoreDir` is the pnpm store for one run only: the sandbox install writes patched files into it, so no other run may use it. */
 export interface TargetOptions { Repo: GitRepo; Sandbox: Sandbox; Settings: Settings; WorkRoot: string; PackageMap: PackageMap; StoreDir: string; HostRunner?: HostRunner; }
 /** A revision could not be prepared (host fetch or sandbox install). The PR is an infrastructure failure, not a test result. */
@@ -68,33 +75,36 @@ export class VitestCatchTarget extends BaseCatchTarget {
      * `pnpm fetch` on the host, in a folder that holds only host-written files: the revision's lockfile, read from git
      * as a blob (never through the worktree, where it could be a symlink), with the patch information removed, a `package.json` whose `packageManager` pins the image's pnpm, and a
      * `pnpm-workspace.yaml` that adds the image's platforms. pnpm switches itself to the pinned version, so the
-     * store it writes has the layout the image reads. The version is checked first.
+     * store it writes has the layout the image reads. The version is checked first, in a separate folder that holds
+     * only the pinning `package.json`, so no pnpm command runs next to the lockfile before the fetch.
      */
     private async hostFetch(revision: RevisionRef): Promise<void> {
         const fetchDir = join(this.o.WorkRoot, `${revision.Kind.toLowerCase()}-fetch`);
+        const versionDir = join(this.o.WorkRoot, `${revision.Kind.toLowerCase()}-pnpm-version`);
         const pinned = this.o.Settings.Sandbox.PnpmVersion;
         const host = this.o.HostRunner ?? DEFAULT_HOST_RUNNER;
         const lock = await this.o.Repo.Show(revision.SHA, 'pnpm-lock.yaml').catch(() => null);
         if (lock === null) throw new InfrastructureError(`no pnpm-lock.yaml in ${revision.Kind} ${revision.SHA}`);
         try {
-            rmSync(fetchDir, { recursive: true, force: true }); mkdirSync(fetchDir, { recursive: true }); mkdirSync(this.o.StoreDir, { recursive: true });
+            const pin = JSON.stringify({ name: 'jit-fetch', private: true, packageManager: `pnpm@${pinned}` });
+            for (const d of [fetchDir, versionDir]) { rmSync(d, { recursive: true, force: true }); mkdirSync(d, { recursive: true }); writeFileSync(join(d, 'package.json'), pin); }
+            mkdirSync(this.o.StoreDir, { recursive: true });
             writeFileSync(join(fetchDir, 'pnpm-lock.yaml'), StripPatchInfo(lock));
-            writeFileSync(join(fetchDir, 'package.json'), JSON.stringify({ name: 'jit-fetch', private: true, packageManager: `pnpm@${pinned}` }));
             writeFileSync(join(fetchDir, 'pnpm-workspace.yaml'), FETCH_WORKSPACE_YAML);
         } catch (e) {
             throw new InfrastructureError(`could not write the fetch folder for ${revision.Kind}: ${(e as Error).message}`);
         }
-        await this.checkHostPnpm(host, fetchDir, pinned);
+        await this.checkHostPnpm(host, versionDir, pinned);
         try { await host('pnpm', ['fetch', '--store-dir', this.o.StoreDir], fetchDir); }
         catch (e) { throw new InfrastructureError(`host pnpm fetch failed on ${revision.Kind}: ${RedactTail((e as Error).message)}`); }
     }
 
-    /** Throws when the pnpm that runs in the fetch folder is not the pinned version; the version is the last non-empty output line. */
-    private async checkHostPnpm(host: HostRunner, fetchDir: string, pinned: string): Promise<void> {
+    /** Throws when the pnpm that runs in `versionDir` (pinned by its `package.json`) is not the pinned version; the version is the last non-empty output line. */
+    private async checkHostPnpm(host: HostRunner, versionDir: string, pinned: string): Promise<void> {
         let actual: string;
-        try { actual = (await host('pnpm', ['--version'], fetchDir)).split('\n').map((l) => l.trim()).filter((l) => l.length > 0).pop() ?? ''; }
+        try { actual = (await host('pnpm', ['--version'], versionDir)).split('\n').map((l) => l.trim()).filter((l) => l.length > 0).pop() ?? ''; }
         catch (e) { throw new InfrastructureError(`host pnpm --version failed: ${RedactTail((e as Error).message)}`); }
-        if (actual !== pinned) throw new InfrastructureError(`host pnpm is ${actual} in the fetch folder, but the sandbox image uses ${pinned}`);
+        if (actual !== pinned) throw new InfrastructureError(`host pnpm is ${actual} with the pin, but the sandbox image uses ${pinned}`);
     }
 
     /** `turbo run build --filter=<pkg>...` for the packages under test, inside the sandbox with the local cache only. */
@@ -180,7 +190,7 @@ export class VitestCatchTarget extends BaseCatchTarget {
     }
 
     private runVitest(revision: PreparedRevision, g: PackageGroup, cmd: string, timeoutMs: number): Promise<SandboxRunResult> {
-        return this.inSandbox(revision, 'ro', ['sh', '-c', cmd], timeoutMs, { TZ: 'UTC' }, viteTmpfs(g.Dir), [g.Dir]);
+        return this.inSandbox(revision, 'ro', ['sh', '-c', cmd], timeoutMs, { TZ: 'UTC' }, ViteTmpfs(g.Dir), [g.Dir]);
     }
 
     /** Per test: how many changed lines its run executed, from a v8 coverage report written inside the container. */
@@ -190,7 +200,7 @@ export class VitestCatchTarget extends BaseCatchTarget {
             for (const [i, t] of g.Tests.entries()) {
                 const report = `/tmp/cov-${t.ID}`;
                 const cmd = `cd ${sq(`${CONTAINER_ROOT}/${g.Dir}`)} && npx vitest run ${sq(g.Files[i])} --coverage.enabled --coverage.provider=v8 --coverage.reporter=json --coverage.reportsDirectory=${report} >/dev/null 2>&1; cat ${report}/coverage-final.json`;
-                const r = await this.inSandbox(revision, 'ro', ['sh', '-c', cmd], 10 * 60_000, { TZ: 'UTC' }, viteTmpfs(g.Dir), [g.Dir]);
+                const r = await this.inSandbox(revision, 'ro', ['sh', '-c', cmd], 10 * 60_000, { TZ: 'UTC' }, ViteTmpfs(g.Dir), [g.Dir]);
                 out.push({ CandidateTestID: t.ID, CoveredChangedLines: CountCoveredChangedLines(r.Stdout, changed, CONTAINER_ROOT) });
             }
         }
@@ -215,17 +225,20 @@ export class VitestCatchTarget extends BaseCatchTarget {
 
     /**
      * 'rw' is the prepare phase (install, rebuild, build) and also mounts the store. 'ro' is the test phase: the
-     * worktree read-only, the jit folder of each package under test read-write, and the reporter read-only.
+     * worktree read-only, the jit folder of each package under test read-write, and the reporter read-only. After an
+     * 'ro' run, every entry of those jit folders that is not a regular file is removed.
      */
-    private inSandbox(revision: PreparedRevision, mode: 'ro' | 'rw', command: string[], timeoutMs: number, env: Record<string, string> = {}, tmpfs: string[] = [], packageDirs: string[] = []): Promise<SandboxRunResult> {
+    private async inSandbox(revision: PreparedRevision, mode: 'ro' | 'rw', command: string[], timeoutMs: number, env: Record<string, string> = {}, tmpfs: string[] = [], packageDirs: string[] = []): Promise<SandboxRunResult> {
         const mounts: SandboxMount[] = [{ Host: revision.RootDir, Container: CONTAINER_ROOT, Mode: mode }];
+        const jitDirs = mode === 'ro' ? packageDirs.map((d) => SafeDir(revision.RootDir, `${d}/${JIT_SUBDIR}`, false)) : [];
         if (mode === 'rw') mounts.push({ Host: this.o.StoreDir, Container: CONTAINER_STORE, Mode: 'rw' });
         if (mode === 'ro') {
-            for (const d of packageDirs) mounts.push({ Host: SafeDir(revision.RootDir, `${d}/${JIT_SUBDIR}`, false), Container: `${CONTAINER_ROOT}/${d}/${JIT_SUBDIR}`, Mode: 'rw' });
+            packageDirs.forEach((d, i) => mounts.push({ Host: jitDirs[i], Container: `${CONTAINER_ROOT}/${d}/${JIT_SUBDIR}`, Mode: 'rw' }));
             mounts.push({ Host: this.reporterDir(), Container: JIT_REPORTER_MOUNT, Mode: 'ro' });
         }
-        for (const t of tmpfs) ensureMountPoint(revision.RootDir, t.slice(CONTAINER_ROOT.length + 1));
-        return this.sandbox.Run({ Mounts: mounts, Tmpfs: tmpfs, WorkDir: CONTAINER_ROOT, Command: command, TimeoutMs: timeoutMs, Env: { HOME: '/tmp', CI: '1', ...env } });
+        for (const t of tmpfs) EnsureMountPoint(revision.RootDir, t.slice(CONTAINER_ROOT.length + 1));
+        try { return await this.sandbox.Run({ Mounts: mounts, Tmpfs: tmpfs, WorkDir: CONTAINER_ROOT, Command: command, TimeoutMs: timeoutMs, Env: { HOME: '/tmp', CI: '1', ...env } }); }
+        finally { for (const j of jitDirs) PurgeNonRegularEntries(j); }
     }
     private reporterDir(): string { return (this.reporter ??= WriteJitReporter(mkdtempSync(join(tmpdir(), 'jit-reporter-')))); }
 }
@@ -270,17 +283,20 @@ function writeNoFollow(path: string, text: string): void {
 
 function lstatOrNull(path: string): Stats | null { try { return lstatSync(path); } catch { return null; } }
 
-/** Folders vite and vitest write to at run time; they get a tmpfs because the worktree is read-only in the test phase. */
-function viteTmpfs(dir: string): string[] {
-    return [`${CONTAINER_ROOT}/${dir}/node_modules/.vite`, `${CONTAINER_ROOT}/${dir}/node_modules/.vite-temp`, `${CONTAINER_ROOT}/node_modules/.vite`];
+/**
+ * Container folders vite and vitest write to at run time for the package at `pkgDir` (repo-relative). They get a
+ * tmpfs because the worktree is read-only in the test phase; vite writes the bundled config to `.vite-temp`.
+ */
+export function ViteTmpfs(pkgDir: string): string[] {
+    return [`${CONTAINER_ROOT}/${pkgDir}/node_modules/.vite`, `${CONTAINER_ROOT}/${pkgDir}/node_modules/.vite-temp`, `${CONTAINER_ROOT}/node_modules/.vite`];
 }
 
 /**
  * Creates a tmpfs mount point on the host, since Docker cannot create one inside a read-only mount. Every part
  * above the leaf (`packages/<dir>/node_modules`, `node_modules`) must already be a real folder, not a symlink;
- * only the leaf is created.
+ * only the leaf is created. Throws `UnsafePathError` otherwise.
  */
-function ensureMountPoint(root: string, rel: string): void {
+export function EnsureMountPoint(root: string, rel: string): void {
     const parent = rel.split('/').slice(0, -1).join('/');
     SafeDir(root, parent, false);
     SafeDir(root, rel, true);

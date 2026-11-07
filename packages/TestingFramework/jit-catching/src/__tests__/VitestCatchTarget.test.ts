@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CountCoveredChangedLines, InfrastructureError, VitestCatchTarget } from '../target/VitestCatchTarget';
+import { CountCoveredChangedLines, HostEnv, InfrastructureError, VitestCatchTarget } from '../target/VitestCatchTarget';
 import { Sandbox, type SandboxRunOptions } from '../sandbox/Sandbox';
 import { DEFAULT_SETTINGS } from '../settings';
 import type { CandidateTest } from '../types';
@@ -37,6 +37,13 @@ describe('VitestCatchTarget.Run', () => {
     expect(calls[0].Mounts.find((m) => m.Container === '/work')?.Mode).toBe('ro');
     expect(calls[0].Mounts.find((m) => m.Container === '/jit-reporter')?.Mode).toBe('ro');
     expect(results.map((r) => [r.RunIndex, r.Status])).toEqual([[0, 'Pass'], [1, 'Pass'], [2, 'Pass']]);
+  });
+  it('removes a symlink that a test planted in the jit folder after the run', async () => {
+    const root = jitRoot(); const outside = join(mkdtempSync(join(tmpdir(), 'jit-out-')), 'secret'); writeFileSync(outside, 'SECRET');
+    const { target, calls } = fakeTarget(() => { if (calls.length === 1) symlinkSync(outside, join(root, JIT, 'helper.ts')); return { Stdout: '', ExitCode: 1 }; });
+    await target.Run({ Ref: { Kind: 'Base', SHA: 'b' }, RootDir: root }, [test(ID1)], 1);
+    expect(readdirSync(join(root, JIT))).toEqual([]);
+    expect(readFileSync(outside, 'utf8')).toBe('SECRET');
   });
   it('runs a repeat once more with --reporter=json when the custom reporter printed no JIT_REPORT line', async () => {
     const json = { testResults: [{ name: `/work/packages/MJCore/src/__tests__/jit/${ID1}.jit.test.ts`, status: 'passed', assertionResults: [{ fullName: 't', status: 'passed', duration: 1, failureMessages: [] }] }] };
@@ -93,16 +100,22 @@ describe('VitestCatchTarget.Prepare', () => {
   }
   it('runs pnpm on the host only as `fetch`, in a folder holding just a lockfile copy without patch information, then installs offline in the sandbox with the worktree and the run store mounted rw', async () => {
     const host: { File: string; Args: string[]; Cwd: string; Files: string[]; Lock: string }[] = [];
-    const { target, calls, work } = prepWorld(async (File, Args, Cwd) => { host.push({ File, Args, Cwd, Files: readdirSync(Cwd).sort(), Lock: readFileSync(join(Cwd, 'pnpm-lock.yaml'), 'utf8') }); return Args[0] === '--version' ? '10.33.0\n' : ''; });
+    const { target, calls, work } = prepWorld(async (File, Args, Cwd) => { const Files = readdirSync(Cwd).sort(); host.push({ File, Args, Cwd, Files, Lock: Files.includes('pnpm-lock.yaml') ? readFileSync(join(Cwd, 'pnpm-lock.yaml'), 'utf8') : '' }); return Args[0] === '--version' ? '10.33.0\n' : ''; });
     await target.Prepare({ Kind: 'Head', SHA: 'h' });
     expect(host.map((h) => [h.File, ...h.Args])).toEqual([['pnpm', '--version'], ['pnpm', 'fetch', '--store-dir', join(work, 'store')]]);
-    expect(host[1].Cwd).not.toBe(join(work, 'head')); expect(host[1].Cwd).toBe(host[0].Cwd); expect(host[1].Files).toEqual(['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml']);
+    expect(host[1].Cwd).not.toBe(join(work, 'head')); expect(host[1].Files).toEqual(['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml']);
+    expect(host[0].Cwd).not.toBe(host[1].Cwd); expect(host[0].Files).toEqual(['package.json']);
+    expect(JSON.parse(readFileSync(join(host[0].Cwd, 'package.json'), 'utf8'))).toMatchObject({ packageManager: 'pnpm@10.33.0' });
     expect(readFileSync(join(host[1].Cwd, 'pnpm-workspace.yaml'), 'utf8')).toBe('supportedArchitectures:\n  os: [current, linux]\n  cpu: [current, x64, arm64]\n  libc: [current, glibc]\n');
     expect(JSON.parse(readFileSync(join(host[1].Cwd, 'package.json'), 'utf8'))).toEqual({ name: 'jit-fetch', private: true, packageManager: 'pnpm@10.33.0' });
     host.splice(0, 1);
     expect(host[0].Lock).not.toContain('patchedDependencies'); expect(host[0].Lock).not.toContain('patch_hash'); expect(host[0].Lock).toContain('version: 2.0.0-beta.3(graphql@16.12.0)');
     const install = calls[0]; expect(install.Command.join(' ')).toContain('pnpm install --offline --frozen-lockfile --ignore-scripts');
     expect(install.Mounts.find((m) => m.Container === '/work')?.Mode).toBe('rw'); expect(install.Mounts.find((m) => m.Container === '/pnpm-store')).toEqual({ Host: join(work, 'store'), Container: '/pnpm-store', Mode: 'rw' });
+  });
+  it('gives host pnpm only PATH, HOME, TMPDIR and CI, never a key', () => {
+    expect(HostEnv({ PATH: '/bin', HOME: '/h', TMPDIR: '/t', ANTHROPIC_API_KEY: 'k1', OPENAI_API_KEY: 'k2', GITHUB_TOKEN: 'k3', NPM_CONFIG_X: 'y' })).toEqual({ PATH: '/bin', HOME: '/h', TMPDIR: '/t', CI: '1' });
+    expect(HostEnv({ PATH: '/bin', HOME: '/h' })).toEqual({ PATH: '/bin', HOME: '/h', CI: '1' });
   });
   it('reads the lockfile from git (the blob), never from the worktree, where it could be a symlink', async () => {
     const locks: string[] = [];

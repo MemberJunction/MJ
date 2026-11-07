@@ -1,10 +1,13 @@
-import { existsSync, lstatSync, mkdirSync, realpathSync, rmSync } from 'node:fs';
+import { existsSync, lstatSync, realpathSync, rmSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import type { Sandbox, SandboxMount, SandboxRunResult } from '../sandbox/Sandbox';
 import type { FailureDetail, MutantEdit } from '../types';
 import type { Settings } from '../settings';
 import { ParseVitestOutput } from '../target/VitestReport';
 import { JIT_REPORTER_ARG, JIT_REPORTER_MOUNT, WriteJitReporter } from '../target/JitReporter';
+import { EnsureMountPoint, UnsafePathError, ViteTmpfs } from '../target/VitestCatchTarget';
+import { PurgeNonRegularEntries } from '../target/JitFolder';
+import { RedactTail } from '../sandbox/Redaction';
 import { ApplyMutantEdits, CopyPackageForMutant, ValidateMutantEdits } from './Mutant';
 
 export interface RunTestInput { File: string; Mutant?: { Edits: MutantEdit[] }; }
@@ -13,7 +16,6 @@ export interface RunTestToolOptions { Sandbox: Sandbox; BaseRootDir: string; Pac
 export interface LastMutantRecord { Edits: MutantEdit[]; Patch: string; Failure: FailureDetail | null; }
 
 const ROOT = '/work';
-const OUTPUT_EXCERPT_CHARS = 500;
 
 /** A mutant prepared on the host: the scratch package copy and the patch that produced it. */
 interface PreparedMutant { Scratch: string; Patch: string; }
@@ -35,7 +37,11 @@ export class RunTestTool {
         }
         let r: SandboxRunResult;
         try { r = await this.runInSandbox(input.File, mutant?.Scratch ?? null); }
-        finally { if (mutant) rmSync(dirname(mutant.Scratch), { recursive: true, force: true }); }
+        catch (e) { if (e instanceof UnsafePathError) return this.refuse(e.message); throw e; }
+        finally {
+            if (mutant) rmSync(dirname(mutant.Scratch), { recursive: true, force: true });
+            PurgeNonRegularEntries(join(this.o.BaseRootDir, this.jitDir()));
+        }
         const out = this.toOutput(r, input);
         if (input.Mutant && mutant) this.LastMutant = { Edits: input.Mutant.Edits, Patch: mutant.Patch, Failure: out.Status === 'Fail' ? out.Failure : null };
         return out;
@@ -81,7 +87,10 @@ export class RunTestTool {
         return null;
     }
 
-    /** Runs vitest on one file. The worktree is read-only; the jit folder and a mutant's package copy are writable. */
+    /**
+     * Runs vitest on one file. The worktree is read-only; the jit folder and a mutant's package copy are writable.
+     * `Run` removes every entry of the jit folder that is not a regular file after the run.
+     */
     private runInSandbox(file: string, scratch: string | null): Promise<SandboxRunResult> {
         const pkg = this.o.PackageRelDir; const jitDir = this.jitDir();
         const mounts: SandboxMount[] = [
@@ -90,26 +99,32 @@ export class RunTestTool {
             { Host: WriteJitReporter(join(this.o.ScratchRoot, 'jit-reporter')), Container: JIT_REPORTER_MOUNT, Mode: 'ro' },
         ];
         if (scratch) mounts.push({ Host: scratch, Container: `${ROOT}/${pkg}`, Mode: 'rw' });
-        this.ensureViteDirs(scratch);
+        const tmpfs = ViteTmpfs(pkg);
+        for (const t of tmpfs) this.ensureMountPoint(t, scratch);
         const s = this.o.Settings;
         return this.o.Sandbox.Run({
-            Mounts: mounts, Tmpfs: [`${ROOT}/${pkg}/node_modules/.vite`, `${ROOT}/node_modules/.vite`], WorkDir: `${ROOT}/${pkg}`,
+            Mounts: mounts, Tmpfs: tmpfs, WorkDir: `${ROOT}/${pkg}`,
             Command: ['npx', 'vitest', 'run', file.slice(pkg.length + 1), JIT_REPORTER_ARG, `--sequence.seed=${s.SequenceSeed}`, `--testTimeout=${s.TestTimeoutMs}`],
             TimeoutMs: s.TestTimeoutMs * 3 + 60_000, Env: { TZ: 'UTC', HOME: '/tmp', CI: '1' },
         });
     }
 
-    /** Creates the `node_modules/.vite` tmpfs mount points on the host: in the base root, and in the package dir (the scratch copy when present). */
-    private ensureViteDirs(scratch: string | null): void {
-        mkdirSync(join(this.o.BaseRootDir, 'node_modules/.vite'), { recursive: true });
-        mkdirSync(join(scratch ?? join(this.o.BaseRootDir, this.o.PackageRelDir), 'node_modules/.vite'), { recursive: true });
+    /**
+     * Creates the host mount point of one tmpfs container path: in the mutant's scratch copy when the path lies in
+     * the package and a scratch copy is mounted there, otherwise in the base worktree. Throws `UnsafePathError`
+     * when a folder above the leaf is missing or a symlink.
+     */
+    private ensureMountPoint(containerPath: string, scratch: string | null): void {
+        const pkgPrefix = `${ROOT}/${this.o.PackageRelDir}/`;
+        if (scratch && containerPath.startsWith(pkgPrefix)) EnsureMountPoint(scratch, containerPath.slice(pkgPrefix.length));
+        else EnsureMountPoint(this.o.BaseRootDir, containerPath.slice(ROOT.length + 1));
     }
 
-    /** Maps the sandbox result to the tool output. Every RunnerError carries an excerpt of stderr (or stdout when stderr is empty) in Error. */
+    /** Maps the sandbox result to the tool output. Every RunnerError carries the redacted tail of stderr (or stdout when stderr is empty) in Error. */
     private toOutput(r: SandboxRunResult, input: RunTestInput): RunTestOutput {
         if (r.TimedOut) return { Ran: true, Status: 'Timeout', TestName: null, Failure: null, DurationMs: r.DurationMs };
         const [res] = ParseVitestOutput(r.Stdout, { FilePathToTestID: { [input.File]: 'probe' }, Revision: input.Mutant ? 'Mutant' : 'Base', RunIndex: 0 });
-        const excerpt = (r.Stderr || r.Stdout).slice(0, OUTPUT_EXCERPT_CHARS);
+        const excerpt = RedactTail((r.Stderr || r.Stdout).trim());
         if (!res) return { Ran: true, Status: 'RunnerError', TestName: null, Failure: null, DurationMs: r.DurationMs, Error: excerpt };
         const out: RunTestOutput = { Ran: true, Status: res.Status, TestName: res.TestName, Failure: res.Failure, DurationMs: res.DurationMs };
         if (res.Status === 'RunnerError') out.Error = excerpt;

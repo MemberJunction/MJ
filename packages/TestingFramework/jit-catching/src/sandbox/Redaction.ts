@@ -61,3 +61,9 @@ export function RedactTail(text: string): string {
     const match = new RedactionCheck([]).Check(out);
     return match ? `[output withheld: ${match.Kind}]` : out;
 }
+
+const MARKER_RE = /<<<[^>]*>>>/g;
+const MARKER_PLACEHOLDER = '[marker removed]';
+
+/** Replaces every `<<<...>>>` marker in untrusted text with `[marker removed]`, so the text cannot open or close an untrusted block. */
+export function NeutraliseMarkers(text: string | null | undefined): string { return (text ?? '').replace(MARKER_RE, MARKER_PLACEHOLDER); }

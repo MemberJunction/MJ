@@ -13,7 +13,7 @@ import { RedactionCheck, SecretsFromEnvironment } from '../sandbox/Redaction';
 import { RunTestTool, type LastMutantRecord, type RunTestInput, type RunTestOutput, type RunTestToolOptions } from './RunTestTool';
 import { BuildSystemPrompt, BuildTaskPrompt, type PromptContext } from './prompts';
 import { AgentEnv, AssertApiKeySource, IsInside, ReadAllowed } from './AgentGuards';
-import { UsageCounter, type Price } from './UsageCounter';
+import { SessionError, UsageCounter, type Price } from './UsageCounter';
 
 export type AgentMessage =
     | { Type: 'result'; Usage: { InputTokens: number; OutputTokens: number; CacheReadTokens: number }; CostUSD: number; Turns: number; Subtype: string }
@@ -220,7 +220,8 @@ function resultUsage(msg: SDKResultMessage): { InputTokens: number; OutputTokens
 /**
  * The real runner: Claude Agent SDK with read/search tools, writes through write_test, run_test as an MCP tool.
  * Refuses to start inside a Claude Code session. Aborts with an error when the credential is not ANTHROPIC_API_KEY or a message arrives before
- * the init message; aborts quietly when the host token count passes the budget.
+ * the init message; aborts quietly when the host token count passes the budget. A session that fails after it started throws a
+ * `SessionError` carrying the host token count so far.
  */
 export async function* SdkRunner(prompt: string, system: string, o: AgentRunOptions): AsyncIterable<AgentMessage> {
     const home = mkdtempSync(join(tmpdir(), 'jit-agent-home-'));
@@ -248,9 +249,9 @@ export async function* SdkRunner(prompt: string, system: string, o: AgentRunOpti
             }
         } catch (e) {
             // After error_max_turns the SDK sends the result message and then throws; an abort also ends the iterator with a throw.
-            if (!sawResult && !abort.signal.aborted) throw e;
+            if (!sawResult && !abort.signal.aborted) throw new SessionError(e instanceof Error ? e.message : String(e), usage.ToUsage(o.Model, o.Price));
         }
-        if (fatal) throw fatal;
+        if (fatal) throw new SessionError(fatal.message, usage.ToUsage(o.Model, o.Price));
         // An aborted session has no result message: report the host count and an estimated cost.
         if (!sawResult) yield { Type: 'result', Usage: { InputTokens: usage.InputTokens, OutputTokens: usage.OutputTokens, CacheReadTokens: usage.CacheReadTokens }, CostUSD: usage.EstimateCostUSD(o.Price), Turns: usage.Turns, Subtype: 'aborted_token_budget' };
     } finally {

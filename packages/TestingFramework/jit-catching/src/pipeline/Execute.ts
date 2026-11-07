@@ -1,3 +1,4 @@
+import { UUIDsEqual } from '@memberjunction/global';
 import { AllRunsAgreeVerdict } from '../verdict/AllRunsAgreeVerdict';
 import type { RedactionCheck } from '../sandbox/Redaction';
 import type { Settings } from '../settings';
@@ -55,7 +56,7 @@ async function executeOn(target: PipelineTarget, gen: GenerationFile, tests: Can
 }
 
 function verdictOf(id: string, results: ExecutionResult[], typeErrors: TypeErrors): Verdict['Label'] {
-    const mine = results.filter((r) => r.CandidateTestID === id);
+    const mine = results.filter((r) => UUIDsEqual(r.CandidateTestID, id));
     return new AllRunsAgreeVerdict(typeErrors[id]).Classify(mine.filter((r) => r.Revision === 'Base'), mine.filter((r) => r.Revision === 'Head')).Label;
 }
 

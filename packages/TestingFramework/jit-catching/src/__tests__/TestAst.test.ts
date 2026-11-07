@@ -1,4 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import ts from 'typescript';
 import { TestAst } from '../rules/TestAst';
 
 const lib = `export class Svc { private secret = 1; protected hook() { return 2; } public Open() { return 3; } }
@@ -41,5 +45,20 @@ describe('TestAst helpers', () => {
     const ast = load(`import { describe, it, expect, beforeEach, vi } from 'vitest'; vi.mock('x', () => ({ a: 1 })); beforeEach(() => { const y = 1; }); it('t', () => { expect(JSON.stringify({a:1})).toBe('x'); });`);
     expect(ast.ExpectArguments()).toHaveLength(1);
     expect(ast.RangesOf('vi.mock')).toHaveLength(1); expect(ast.RangesOf('beforeEach')).toHaveLength(1);
+  });
+});
+
+describe('TestAst.Load on disk', () => {
+  it('never reads a symlink planted in the jit folder: the import resolves to nothing', () => {
+    const root = mkdtempSync(join(tmpdir(), 'jit-ast-')); const jit = join(root, 'packages/X/src/__tests__/jit'); mkdirSync(jit, { recursive: true });
+    const outside = join(mkdtempSync(join(tmpdir(), 'jit-out-')), 'credentials.ts'); writeFileSync(outside, 'export const leaked = 1;\n');
+    symlinkSync(outside, join(jit, 'helper.ts'));
+    const read = vi.spyOn(ts.sys, 'readFile');
+    try {
+      const ast = TestAst.Load(`import { leaked } from './helper'; it('x', () => { expect(leaked).toBe(1); });`, root, 'packages/X', 'packages/X/src/__tests__/jit/t.jit.test.ts');
+      expect(ast.ExpectArguments()).toHaveLength(1);
+      const reads = read.mock.calls.map((c) => c[0]);
+      expect(reads.filter((f) => f.includes('helper') || f.includes('credentials'))).toEqual([]);
+    } finally { read.mockRestore(); }
   });
 });
