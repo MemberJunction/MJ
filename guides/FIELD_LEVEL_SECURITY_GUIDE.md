@@ -272,6 +272,7 @@ denied set on an entity:
 | **Grids and view configuration** | Denied columns are not rendered, and the view-configuration panel does not offer them as columns. Your **saved column preferences are left intact** — a denial is reversible, so hiding a column never rewrites the preference that mentions it, and the column reappears when access is restored. Saved **sort** settings are dropped, because a denied field in `ORDER BY` is rejected outright rather than degrading. |
 | **Search, vectors and tags** | Restricted fields are left out of indexes when they are built, and search results are projected for each reader (§3.6). |
 | **Communications and templates** | A message is composed with the **sender's** permissions; a merge field the sender cannot read renders empty (§3.7). |
+| **Anchored record comments (`MJ: Conversations` / `MJ: Conversation Details`)** | Threads anchored to a denied field (`AnchorType === 'Field'`) or carrying a denied field in `AnchorMetadataObject.restrictedFields` are hidden from read, rollup counts, write access, and `@mention` notifications (`IsConversationHiddenByFieldSecurity`). On save, `MJConversationDetailEntityServer` runs a two-stage detector (deterministic field/label/value check + semantic LLM classifier) to refuse unauthorized probing of restricted fields and stamp referenced restricted field names into `AnchorMetadataObject.restrictedFields`. See the [Anchored Conversations & Record Commenting Guide](./ANCHORED_CONVERSATIONS_AND_RECORD_COMMENTS_GUIDE.md). |
 
 ### 2.3 An entity object's width follows its user
 

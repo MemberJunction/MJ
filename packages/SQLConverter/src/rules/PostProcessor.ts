@@ -8,6 +8,7 @@
 
 import { createHash } from 'node:crypto';
 import {
+  FindMatchingParen,
   TransformCodeOnly,
   UnquoteBuiltinFunctionCalls,
   ConvertObjectIdCalls,
@@ -293,12 +294,8 @@ export function PostProcess(sql: string): string {
     'CREATE $1 IF NOT EXISTS '
   );
 
-  // Remove SQL Server IF EXISTS(...) BEGIN ... END blocks (pre-flight checks).
-  // Only outside dollar-quoted regions, and the guard may not cross a `;`: the converter's own
-  // PL/pgSQL (`IF EXISTS (SELECT 1 FROM pg_proc …) THEN` inside a `DO $mj$` block) used to open a
-  // lazy match that ran on to the next T-SQL `) BEGIN … END` anywhere later in the file, deleting
-  // every statement between the two (issue #6097).
-  sql = stripTsqlIfExistsBlocks(sql);
+  // Remove SQL Server IF EXISTS(...) BEGIN ... END blocks (pre-flight checks)
+  sql = removeIfExistsPreflightBlocks(sql);
 
   // Fix GRANT statements missing semicolons (only at end of line, no semicolons already)
   sql = sql.replace(/^(GRANT\s+[^\n;]+[^\s;])$/gm, '$1;');
@@ -372,6 +369,31 @@ export function PostProcess(sql: string): string {
 /** @deprecated Use {@link PostProcess}. */
 export function postProcess(sql: string): string {
   return PostProcess(sql);
+}
+
+/**
+ * Replaces each T-SQL `IF EXISTS (…)` + `BEGIN … END` block with a marker comment.
+ *
+ * The condition is read to its own closing paren before `BEGIN` is looked for. A lazy regex
+ * cannot do that: from a PL/pgSQL `IF EXISTS (…) THEN`, which every converted metadata save
+ * contains, it ran on to the next `)` + `BEGIN` however far away and deleted everything
+ * between (issue #6337).
+ */
+function removeIfExistsPreflightBlocks(sql: string): string {
+  const ifExists = /\bIF\s+EXISTS\s*\(/gi;
+  const beginEnd = /\s*\n\s*BEGIN[\s\S]*?\bEND\s*;?/iy;
+  let output = '';
+  let copiedTo = 0;
+  for (let match = ifExists.exec(sql); match; match = ifExists.exec(sql)) {
+    const conditionEnd = FindMatchingParen(sql, ifExists.lastIndex - 1);
+    if (conditionEnd < 0) continue;
+    beginEnd.lastIndex = conditionEnd + 1;
+    if (!beginEnd.test(sql)) continue;
+    output += `${sql.slice(copiedTo, match.index)}-- SKIPPED: SQL Server IF EXISTS check`;
+    copiedTo = beginEnd.lastIndex;
+    ifExists.lastIndex = copiedTo;
+  }
+  return output + sql.slice(copiedTo);
 }
 
 /**
@@ -700,23 +722,6 @@ function reconnectCteDml(sql: string): string {
     sql = before + edit.replacement + after;
   }
   return sql;
-}
-
-/**
- * Replace each T-SQL `IF EXISTS (…)\nBEGIN … END` pre-flight block with a SKIPPED comment.
- * A match that starts inside, or reaches into, a dollar-quoted region is PostgreSQL the converter
- * wrote and is left alone; the guard itself stops at the first `;`.
- */
-function stripTsqlIfExistsBlocks(sql: string): string {
-  const regions = findDollarQuotedRegions(sql);
-  return sql.replace(
-    /IF\s+EXISTS\s*\([^;]*?\)\s*\n\s*BEGIN[\s\S]*?\bEND\s*;?/gi,
-    (match: string, offset: number) => {
-      const end = offset + match.length;
-      const overlapsDollarBlock = regions.some(r => offset < r.end && end > r.start);
-      return overlapsDollarBlock ? match : '-- SKIPPED: SQL Server IF EXISTS check';
-    },
-  );
 }
 
 /** Find all dollar-quoted regions ($$...$$ or $tag$...$tag$) */

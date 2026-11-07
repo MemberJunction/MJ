@@ -1,7 +1,7 @@
 import { Arg, Ctx, Field, InputType, Int, ObjectType, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { ResolverBase, type RunViewResultWithResolvedView } from './ResolverBase.js';
-import { LogError, LogStatus, EntityInfo, FieldSecurityError, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult, CompositeKey, ViewPropertyValues } from '@memberjunction/core';
+import { LogError, LogStatus, EntityInfo, FieldSecurityError, RunViewParameters, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult, CompositeKey, ViewPropertyValues } from '@memberjunction/core';
 import { GraphQLJSONObject } from 'graphql-type-json';
 
 import { ReplaceByteArraysWithBase64, UUIDsEqual } from '@memberjunction/global';
@@ -209,6 +209,13 @@ export class RunViewByIDInput {
   })
   IncludeBinaryFields?: boolean;
 
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true the provider does not run a count to populate TotalRowCount, which then comes back null. Ignored for ResultType count_only.',
+  })
+  SkipTotalRowCount?: boolean;
+
   @Field(() => String, {
     nullable: true,
     description:
@@ -222,6 +229,13 @@ export class RunViewByIDInput {
       "Optional values for the view's declared properties, keyed by property name ({ \"Chapter\": \"<id>\" }). A list is accepted only for a property whose operator is IN; null means no value. A name the view does not declare, a value of the wrong type, a value for a property that only the server may set, or a required property left without a value refuses the run with an error naming the property.",
   })
   Properties?: ViewPropertyValues;
+
+  @Field(() => GraphQLJSONObject, {
+    nullable: true,
+    description:
+      'Optional map of named parameter values referenced as @paramName in ExtraFilter. Values may be string, number, boolean, Date, null, or a non-empty array of scalars for IN (@list).',
+  })
+  Parameters?: RunViewParameters;
 }
 
 @InputType()
@@ -351,6 +365,13 @@ export class RunViewByNameInput {
   })
   IncludeBinaryFields?: boolean;
 
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true the provider does not run a count to populate TotalRowCount, which then comes back null. Ignored for ResultType count_only.',
+  })
+  SkipTotalRowCount?: boolean;
+
   @Field(() => String, {
     nullable: true,
     description:
@@ -364,6 +385,13 @@ export class RunViewByNameInput {
       "Optional values for the view's declared properties, keyed by property name ({ \"Chapter\": \"<id>\" }). A list is accepted only for a property whose operator is IN; null means no value. A name the view does not declare, a value of the wrong type, a value for a property that only the server may set, or a required property left without a value refuses the run with an error naming the property.",
   })
   Properties?: ViewPropertyValues;
+
+  @Field(() => GraphQLJSONObject, {
+    nullable: true,
+    description:
+      'Optional map of named parameter values referenced as @paramName in ExtraFilter. Values may be string, number, boolean, Date, null, or a non-empty array of scalars for IN (@list).',
+  })
+  Parameters?: RunViewParameters;
 }
 
 @InputType()
@@ -479,12 +507,26 @@ export class RunDynamicViewInput {
   })
   IncludeBinaryFields?: boolean;
 
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true the provider does not run a count to populate TotalRowCount, which then comes back null. Ignored for ResultType count_only.',
+  })
+  SkipTotalRowCount?: boolean;
+
   @Field(() => String, {
     nullable: true,
     description:
       'Optional registered Alternate Base View logical Name (from EntityAlternateBaseView.Name) for this entity. When set, routes the dynamic view read through the named alternate base view instead of the entity default BaseView.',
   })
   AlternateBaseView?: string;
+
+  @Field(() => GraphQLJSONObject, {
+    nullable: true,
+    description:
+      'Optional map of named parameter values referenced as @paramName in ExtraFilter. Values may be string, number, boolean, Date, null, or a non-empty array of scalars for IN (@list).',
+  })
+  Parameters?: RunViewParameters;
 }
 
 @InputType()
@@ -629,6 +671,13 @@ export class RunViewGenericInput {
   })
   IncludeBinaryFields?: boolean;
 
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true the provider does not run a count to populate TotalRowCount, which then comes back null. Ignored for ResultType count_only.',
+  })
+  SkipTotalRowCount?: boolean;
+
   @Field(() => String, {
     nullable: true,
     description:
@@ -642,6 +691,13 @@ export class RunViewGenericInput {
       "Optional values for the view's declared properties, keyed by property name ({ \"Chapter\": \"<id>\" }). A list is accepted only for a property whose operator is IN; null means no value. A name the view does not declare, a value of the wrong type, a value for a property that only the server may set, or a required property left without a value refuses the run with an error naming the property.",
   })
   Properties?: ViewPropertyValues;
+
+  @Field(() => GraphQLJSONObject, {
+    nullable: true,
+    description:
+      'Optional map of named parameter values referenced as @paramName in ExtraFilter. Values may be string, number, boolean, Date, null, or a non-empty array of scalars for IN (@list).',
+  })
+  Parameters?: RunViewParameters;
 }
 
 //****************************************************************************
@@ -974,6 +1030,7 @@ export class RunViewResolver extends ResolverBase {
         TotalRowCount: rawData?.TotalRowCount,
         ExecutionTime: rawData?.ExecutionTime,
         Success: rawData?.Success,
+        ErrorMessage: rawData?.ErrorMessage,
         AggregateResults: this.processAggregateResults(rawData?.AggregateResults),
         AggregateExecutionTime: rawData?.AggregateExecutionTime,
       };
@@ -1328,6 +1385,7 @@ export class RunViewResolver extends ResolverBase {
           DataSource: item.params.DataSource,
           AlternateBaseView: item.params.AlternateBaseView,
           IncludeBinaryFields: item.params.IncludeBinaryFields,
+          SkipTotalRowCount: item.params.SkipTotalRowCount,
           // BypassCache likewise — the input type (RunDynamicViewInput) has always declared it, and its
           // own description promises "the pre-check cache lookup is skipped". Dropping it here left the
           // provider free to answer a deliberate database read from the server cache.
@@ -1335,6 +1393,7 @@ export class RunViewResolver extends ResolverBase {
           AfterKey: item.params.AfterKey
             ? CompositeKey.FromKeyValuePairs(item.params.AfterKey.KeyValuePairs)
             : undefined,
+          Parameters: this.sanitizeRunViewParameters(item.params.Parameters),
           TimeZone: userPayload?.TimeZone,
         },
         cacheStatus: item.cacheStatus ? {
@@ -1346,66 +1405,84 @@ export class RunViewResolver extends ResolverBase {
 
       const response = await sqlProvider.RunViewsWithCacheCheck(coreParams, userPayload.userRecord);
 
-      // Transform results to include processed data rows
-      const transformedResults: RunViewWithCacheCheckResultOutput[] = response.results.map((result, index) => {
-        const inputItem = input[index];
-        const entity = inputItem.params.EntityName ? provider.EntityByName(inputItem.params.EntityName) : undefined;
-
-        // If we have differential data but no entity, that's a configuration error
-        if (result.status === 'differential' && result.differentialData && !entity) {
-          throw new Error(
-            `Entity '${inputItem.params.EntityName}' not found in provider metadata but server returned differential data. ` +
-            `This may indicate a metadata sync issue.`
-          );
+      // Transform results to include processed data rows (applying API encryption policy on copies)
+      const protectRawRows = async (
+        entity: EntityInfo,
+        rows: object[]
+      ): Promise<Record<string, string | number | boolean | Date | Uint8Array | null | undefined>[]> => {
+        type RawRow = Record<string, string | number | boolean | Date | Uint8Array | null | undefined>;
+        const typedRows = rows as RawRow[];
+        if (!typedRows.length || !entity.EncryptedFields.some((field) => !field.AllowDecryptInAPI)) {
+          return typedRows;
         }
+        const shallowCopies: RawRow[] = typedRows.map((row) => ({ ...row }));
+        await this.ArrayFilterEncryptedFieldsForAPI(entity.Name, shallowCopies, user, provider, 'Name');
+        return shallowCopies;
+      };
 
-        if (result.status === 'differential' && result.differentialData && entity) {
-          // Process differential data into GraphQL-compatible format
-          const processedUpdatedRows = this.processRawData(
-            result.differentialData.updatedRows as Record<string, unknown>[],
-            entity.ID,
-            entity
-          );
+      const transformedResults: RunViewWithCacheCheckResultOutput[] = await Promise.all(
+        response.results.map(async (result, index) => {
+          const inputItem = input[index];
+          const entity = inputItem.params.EntityName ? provider.EntityByName(inputItem.params.EntityName) : undefined;
+
+          // If we have differential data but no entity, that's a configuration error
+          if (result.status === 'differential' && result.differentialData && !entity) {
+            throw new Error(
+              `Entity '${inputItem.params.EntityName}' not found in provider metadata but server returned differential data. ` +
+              `This may indicate a metadata sync issue.`
+            );
+          }
+
+          if (result.status === 'differential' && result.differentialData && entity) {
+            // Apply API encryption filtering before serializing differential rows
+            const filteredUpdatedRows = await protectRawRows(entity, result.differentialData.updatedRows as object[]);
+            const processedUpdatedRows = this.processRawData(
+              filteredUpdatedRows,
+              entity.ID,
+              entity
+            );
+            return {
+              viewIndex: result.viewIndex,
+              status: result.status,
+              Results: undefined,
+              differentialData: {
+                updatedRows: processedUpdatedRows,
+                deletedRecordIDs: result.differentialData.deletedRecordIDs,
+              },
+              maxUpdatedAt: result.maxUpdatedAt,
+              rowCount: result.rowCount,
+              errorMessage: result.errorMessage,
+            };
+          }
+
+          if (result.status === 'stale' && result.results && entity) {
+            // Apply API encryption filtering before serializing full refresh rows
+            const filteredRows = await protectRawRows(entity, result.results as object[]);
+            const processedRows = this.processRawData(filteredRows, entity.ID, entity);
+            return {
+              viewIndex: result.viewIndex,
+              status: result.status,
+              Results: processedRows,
+              differentialData: undefined,
+              maxUpdatedAt: result.maxUpdatedAt,
+              rowCount: result.rowCount,
+              errorMessage: result.errorMessage,
+              // Same serializer the regular RunView path uses (value → JSON string).
+              aggregateResults: this.processAggregateResults(result.aggregateResults),
+            };
+          }
+
           return {
             viewIndex: result.viewIndex,
             status: result.status,
             Results: undefined,
-            differentialData: {
-              updatedRows: processedUpdatedRows,
-              deletedRecordIDs: result.differentialData.deletedRecordIDs,
-            },
-            maxUpdatedAt: result.maxUpdatedAt,
-            rowCount: result.rowCount,
-            errorMessage: result.errorMessage,
-          };
-        }
-
-        if (result.status === 'stale' && result.results && entity) {
-          // Process raw data into GraphQL-compatible format (full refresh)
-          const processedRows = this.processRawData(result.results as Record<string, unknown>[], entity.ID, entity);
-          return {
-            viewIndex: result.viewIndex,
-            status: result.status,
-            Results: processedRows,
             differentialData: undefined,
             maxUpdatedAt: result.maxUpdatedAt,
             rowCount: result.rowCount,
             errorMessage: result.errorMessage,
-            // Same serializer the regular RunView path uses (value → JSON string).
-            aggregateResults: this.processAggregateResults(result.aggregateResults),
           };
-        }
-
-        return {
-          viewIndex: result.viewIndex,
-          status: result.status,
-          Results: undefined,
-          differentialData: undefined,
-          maxUpdatedAt: result.maxUpdatedAt,
-          rowCount: result.rowCount,
-          errorMessage: result.errorMessage,
-        };
-      });
+        })
+      );
 
       return {
         success: response.success,

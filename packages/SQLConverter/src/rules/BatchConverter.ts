@@ -14,6 +14,7 @@ import { SubSplitCompoundBatch } from './SubSplitter.js';
 import { InlineScalarSelectVariables } from './ScalarVariableInliner.js';
 import { StripComments } from './ExpressionHelpers.js';
 import { PostProcess } from './PostProcessor.js';
+import { FindBracketIdentifiersInDollarBlocks } from './ExpressionHelpers.js';
 import { GetHeaderBuilder } from './DialectHeaderBuilder.js';
 import type {
   IConversionRule, ConversionContext, ConversionStats,
@@ -21,7 +22,7 @@ import type {
 } from './types.js';
 import {
   CreateConversionContext, CreateConversionStats, CreateOutputGroups, CONVERSION_GAP_MARKERS, GAP_MARKER_BATCH_ERROR,
-  GAP_MARKER_MISSING_SAVES, GAP_MARKER_SKIPPED_EXEC_BLOCK,
+  GAP_MARKER_MISSING_SAVES, GAP_MARKER_EXEC_SKIPPED,
 } from './types.js';
 
 /** Batch type groupings for ordered output */
@@ -253,7 +254,16 @@ function recordOutputGaps(output: string, stats: ConversionStats): void {
     stats.Gaps++;
     stats.GapBatches.push(line.trim().slice(0, 200));
   }
+  // A T-SQL bracket identifier left inside a dollar-quoted block carries no marker, but the
+  // line cannot run on PostgreSQL either (#6074)
+  for (const line of FindBracketIdentifiersInDollarBlocks(output)) {
+    stats.Gaps++;
+    stats.GapBatches.push(`${GAP_BRACKET_IN_DOLLAR_BLOCK} ${line}`.slice(0, 200));
+  }
 }
+
+/** The `GapBatches` prefix of a line that kept a T-SQL bracket identifier inside a dollar-quoted block. */
+const GAP_BRACKET_IN_DOLLAR_BLOCK = 'T-SQL bracket identifier left in a dollar-quoted block:';
 
 /** Replace Flyway placeholders with target schema */
 function preprocess(sql: string, schema: string): string {
@@ -309,7 +319,7 @@ function isBlankOrComment(line: string): boolean {
 }
 
 function countSkippedExecBlocks(output: string): number {
-  return output.split('\n').filter(line => line.startsWith(GAP_MARKER_SKIPPED_EXEC_BLOCK)).length;
+  return output.split('\n').filter(line => line.startsWith(GAP_MARKER_EXEC_SKIPPED)).length;
 }
 
 /** Split SQL on GO batch separators */

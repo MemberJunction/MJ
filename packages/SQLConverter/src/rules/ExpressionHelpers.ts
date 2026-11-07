@@ -1,8 +1,8 @@
 /**
  * Expression-level conversion helpers shared across multiple rules.
- * Ported from Python functions: convert_identifiers, convert_date_functions,
- * convert_charindex, convert_stuff, convert_string_concat, convert_iif,
- * convert_top_to_limit, etc.
+ * Started as a port of the Python converter (convert_identifiers, convert_date_functions,
+ * convert_charindex, convert_stuff, convert_string_concat, convert_iif, convert_top_to_limit,
+ * etc.); later helpers were written here directly and have no Python counterpart.
  */
 import { ResolveInlineType } from './TypeResolver.js';
 import { GAP_MARKER_NEEDS_HAND_AUTHORING } from './types.js';
@@ -192,6 +192,91 @@ export function EmitDropOverloadsBlock(funcName: string, schema: string = '__mj'
 /** @deprecated Use {@link EmitDropOverloadsBlock}. */
 export function emitDropOverloadsBlock(funcName: string, schema: string = '__mj'): string {
   return EmitDropOverloadsBlock(funcName, schema);
+}
+
+/**
+ * A T-SQL bracket identifier (`[ID]`, `[__mj]`, `[${mjSchema}]`) in code. The lookbehind skips
+ * PostgreSQL subscripts and array literals (`proargtypes[0]`, `ARRAY[...]`, `(x)[1]`), whose `[`
+ * follows a word character or a closing bracket, and the class needs a leading letter, so `[0]`
+ * and `[]` never match.
+ */
+const TSQL_BRACKET_IDENTIFIER = /(?<![\w\])"'.$])\[[A-Za-z_$][\w ${}:]*\]/g;
+
+/** Marks a match while scanning; never present in SQL text. */
+const BRACKET_MATCH_SENTINEL = '\u0000';
+
+/**
+ * The lines of each dollar-quoted block (`$$ … $$`, `$tag$ … $tag$`) that still hold a T-SQL
+ * bracket identifier in code, outside string literals and comments. Such a line cannot run on
+ * PostgreSQL, and the PostProcessor's bracket pass skips dollar-quoted blocks on purpose, so a
+ * rule that leaves one there produces a file that reports clean and fails on apply (#6074).
+ */
+export function FindBracketIdentifiersInDollarBlocks(sql: string): string[] {
+  const found: string[] = [];
+  for (const body of dollarQuotedBodies(sql)) {
+    found.push(...bracketIdentifierLines(body));
+  }
+  return found;
+}
+
+/**
+ * The bodies of the top-level dollar-quoted blocks in `sql`. A `$` inside a string literal or a
+ * comment outside a block does not open one, so `'$5'` or `'${x}'` in data is never paired with
+ * a later `$`.
+ */
+function dollarQuotedBodies(sql: string): string[] {
+  const bodies: string[] = [];
+  let i = 0;
+  while (i < sql.length) {
+    const next = skipNonCode(sql, i);
+    if (next !== i) {
+      i = next;
+      continue;
+    }
+    const tag = sql[i] === '$' ? /^\$(?:[A-Za-z_]\w*)?\$/.exec(sql.slice(i))?.[0] : undefined;
+    const end = tag ? sql.indexOf(tag, i + tag.length) : -1;
+    if (tag && end >= 0) {
+      bodies.push(sql.slice(i + tag.length, end));
+      i = end + tag.length;
+    } else {
+      i++;
+    }
+  }
+  return bodies;
+}
+
+/** The index just past the string literal or comment starting at `i`, or `i` when none starts there. */
+function skipNonCode(sql: string, i: number): number {
+  if (sql.startsWith('--', i)) {
+    const lineEnd = sql.indexOf('\n', i);
+    return lineEnd < 0 ? sql.length : lineEnd;
+  }
+  if (sql.startsWith('/*', i)) {
+    const close = sql.indexOf('*/', i + 2);
+    return close < 0 ? sql.length : close + 2;
+  }
+  if (sql[i] === "'") {
+    let j = i + 1;
+    while (j < sql.length) {
+      if (sql[j] === "'" && sql[j + 1] === "'") {
+        j += 2;
+      } else if (sql[j] === "'") {
+        return j + 1;
+      } else {
+        j++;
+      }
+    }
+    return sql.length;
+  }
+  return i;
+}
+
+function bracketIdentifierLines(body: string): string[] {
+  const marked = TransformCodeOnly(body, (code) => code.replace(TSQL_BRACKET_IDENTIFIER, (match) => BRACKET_MATCH_SENTINEL + match));
+  return marked
+    .split('\n')
+    .filter((line) => line.includes(BRACKET_MATCH_SENTINEL))
+    .map((line) => line.split(BRACKET_MATCH_SENTINEL).join('').trim());
 }
 
 /** Convert [schema].[name] bracket identifiers to schema."name" double-quote format.
@@ -603,7 +688,7 @@ export function ConvertIIF(sql: string): string {
     const parenStart = sql.indexOf('(', startPos);
     if (parenStart < 0) break;
 
-    const parenEnd = findMatchingParen(sql, parenStart);
+    const parenEnd = FindMatchingParen(sql, parenStart);
     if (parenEnd < 0) break;
 
     const argsStr = sql.slice(parenStart + 1, parenEnd);
@@ -631,7 +716,7 @@ export function convertIIF(sql: string): string {
 }
 
 /** Find the position of the matching closing parenthesis, respecting nesting and string literals */
-function findMatchingParen(sql: string, openPos: number): number {
+export function FindMatchingParen(sql: string, openPos: number): number {
   let depth = 0;
   let inSingleQuote = false;
 
@@ -843,7 +928,7 @@ export function ConvertTryConvert(sql: string): string {
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(masked)) !== null) {
     const openIdx = match.index + match[0].length - 1;
-    const close = findMatchingParen(masked, openIdx);
+    const close = FindMatchingParen(masked, openIdx);
     if (close < 0) break;
     const args = splitTopLevelCommas(sql.slice(openIdx + 1, close)).map((a) => a.trim());
     const target = (args[0] ?? '').toUpperCase().replace(/\s+/g, '');
@@ -895,14 +980,14 @@ function cteListReadsItself(masked: string, from: number): boolean {
     const name = head[1];
     pos += head[0].length;
     if (masked[pos] === '(') {
-      const colsEnd = findMatchingParen(masked, pos);
+      const colsEnd = FindMatchingParen(masked, pos);
       if (colsEnd < 0) return false;
       pos = colsEnd + 1;
     }
     const as = masked.slice(pos).match(/^\s*AS\s*\(/i);
     if (!as) return false;
     const open = pos + as[0].length - 1;
-    const close = findMatchingParen(masked, open);
+    const close = FindMatchingParen(masked, open);
     if (close < 0) return false;
     const body = masked.slice(open + 1, close);
     if (new RegExp(`\\b(?:FROM|JOIN)\\s+"?${EscapeRegExp(name)}"?(?![\\w"])`, 'i').test(body)) return true;
@@ -1577,7 +1662,8 @@ function likePatternToRegex(pattern: string): string | null {
       body += pattern.slice(i, close + 1);
       i = close;
     } else if (ch === '%') {
-      body += '.*';
+      // `%%` matches what `%` does; one `.*` keeps the anchor trimming below working.
+      if (!body.endsWith('.*')) body += '.*';
     } else if (ch === '_') {
       body += '.';
     } else {
@@ -1641,9 +1727,10 @@ export function RoutineSchema(sql: string): string | null {
  * Before this, every Open App CRUD procedure and trigger fell through to "SKIPPED" and the
  * converted migration installed tables and views but no routines (issue #5364 item 8).
  *
- * Returns null when the routine also names the literal core schema (`__mj.X`): the rename back
- * could not tell its own references from core's, so the caller must not convert it this way.
- * Placeholder references (`${mjSchema}.X`) are unaffected and stay distinct.
+ * Returns null when the routine also names the literal core schema (`__mj.X`) anywhere outside
+ * comments, string literals included (a RAISERROR message that mentions `__mj.` counts): the
+ * rename back could not tell its own references from core's, so the caller must not convert it
+ * this way. Placeholder references (`${mjSchema}.X`) are unaffected and stay distinct.
  */
 export function ConvertInRoutineSchema(sql: string, convert: (coreSchemaSql: string) => string): string | null {
   const schema = RoutineSchema(sql);
@@ -1652,7 +1739,7 @@ export function ConvertInRoutineSchema(sql: string, convert: (coreSchemaSql: str
   if (/(?:\[__mj\]|"__mj"|(?<![\w$])__mj)\s*\./i.test(code)) return null;
 
   const own = new RegExp(`(?:\\[${EscapeRegExp(schema)}\\]|"${EscapeRegExp(schema)}"|(?<![\\w$])${EscapeRegExp(schema)})(\\s*\\.)`, 'gi');
-  const aliased = TransformCodeOnly(sql, (c) => c.replace(own, `${CORE_SCHEMA}$1`));
+  const aliased = TransformCodeOnly(sql, (c) => c.replace(own, (_m, dot: string) => `${CORE_SCHEMA}${dot}`));
   const converted = convert(aliased);
   return TransformCodeOnly(converted, (c) => c.replace(/(?<![\w$"])__mj(\s*\.)/g, (_m, dot: string) => `${schema}${dot}`))
     .replace(/'__mj'::regnamespace/g, () => `'${schema}'::regnamespace`);

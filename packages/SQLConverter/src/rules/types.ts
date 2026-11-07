@@ -136,19 +136,15 @@ export const GAP_MARKER_UNPARSED = '-- Could not parse';
 /** BatchConverter: a batch whose conversion threw; the error text stands in for the SQL. */
 export const GAP_MARKER_BATCH_ERROR = '-- ERROR converting batch';
 
+/** ExecBlockRule: a metadata save it could not convert; the block stands in as comments. */
+export const GAP_MARKER_EXEC_SKIPPED = '-- SKIPPED: EXEC block';
+
 /**
  * ProcedureToFunctionRule / TriggerRule: a routine in an Open App schema that is not CodeGen
  * output (a hand-written trigger or procedure). The whole source is written as comments under
  * this marker so a person can author the PostgreSQL version (issue #5364 items 7 and 8).
  */
 export const GAP_MARKER_NEEDS_HAND_AUTHORING = '-- NEEDS HAND AUTHORING';
-
-/**
- * ExecBlockRule: a DECLARE/SET/EXEC block (an mj-sync save) the rule could not convert. The
- * source is written below it as comments, so the save is missing from the converted file
- * (issue #6097).
- */
-export const GAP_MARKER_SKIPPED_EXEC_BLOCK = '-- SKIPPED: EXEC block';
 
 /**
  * BatchConverter: the output holds fewer converted saves than the mj-sync log's `-- Save …`
@@ -169,7 +165,7 @@ export const CONVERSION_GAP_MARKERS = [
   GAP_MARKER_UNPARSED,
   GAP_MARKER_BATCH_ERROR,
   GAP_MARKER_NEEDS_HAND_AUTHORING,
-  GAP_MARKER_SKIPPED_EXEC_BLOCK,
+  GAP_MARKER_EXEC_SKIPPED,
   GAP_MARKER_MISSING_SAVES,
 ] as const;
 

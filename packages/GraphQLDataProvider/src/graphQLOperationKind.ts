@@ -78,6 +78,86 @@ export function FirstGraphQLOperationKind(document: string | null | undefined): 
     return null;
 }
 
+/**
+ * Extracts a concise operation name from a GraphQL document without full AST parsing.
+ * Returns the named operation's identifier (e.g., `RunMJUsersViewByName`), or for
+ * anonymous operations `{ ... }` returns the first top-level selection field name,
+ * falling back to `'Anonymous'`.
+ */
+export function ExtractGraphQLOperationName(document: string | null | undefined): string {
+    if (!document) {
+        return 'Anonymous';
+    }
+    let depth = 0;
+    let inFragment = false;
+    let sawOperationKeyword = false;
+    let i = 0;
+    const n = document.length;
+    while (i < n) {
+        const c = document[i];
+        if (c === '#') {
+            while (i < n && document[i] !== '\n' && document[i] !== '\r') i++;
+            continue;
+        }
+        if (c === '"') {
+            i = skipString(document, i);
+            continue;
+        }
+        if (c === '{' || c === '(' || c === '[') {
+            if (c === '{' && depth === 0 && !inFragment) {
+                // Anonymous operation or unnamed query `{ FieldName ... }` — find first field name inside `{`
+                let j = i + 1;
+                while (j < n) {
+                    const ch = document[j];
+                    if (ch === '#') {
+                        while (j < n && document[j] !== '\n' && document[j] !== '\r') j++;
+                        continue;
+                    }
+                    if (isNameStart(ch)) {
+                        const fStart = j;
+                        while (j < n && isNameContinue(document[j])) j++;
+                        return document.slice(fStart, j) || 'Anonymous';
+                    }
+                    if (ch === '}' || ch === '{') break;
+                    j++;
+                }
+                return 'Anonymous';
+            }
+            depth++;
+            i++;
+            continue;
+        }
+        if (c === '}' || c === ')' || c === ']') {
+            depth = Math.max(0, depth - 1);
+            if (c === '}' && depth === 0) {
+                inFragment = false;
+            }
+            i++;
+            continue;
+        }
+        if (depth === 0 && isNameStart(c)) {
+            const start = i;
+            while (i < n && isNameContinue(document[i])) i++;
+            const word = document.slice(start, i);
+            if (!inFragment) {
+                if (sawOperationKeyword) {
+                    return word;
+                }
+                if (word === 'query' || word === 'mutation' || word === 'subscription') {
+                    sawOperationKeyword = true;
+                    continue;
+                }
+                if (word === 'fragment') {
+                    inFragment = true;
+                }
+            }
+            continue;
+        }
+        i++;
+    }
+    return 'Anonymous';
+}
+
 function skipString(document: string, start: number): number {
     const n = document.length;
     if (document.startsWith('"""', start)) {

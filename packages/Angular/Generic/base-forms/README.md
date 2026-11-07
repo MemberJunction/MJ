@@ -31,6 +31,7 @@ per-surface code and no regeneration.
 | **Record links & hover cards** | `MjRecordLinksComponent` (`<mj-record-links>`), `MjRecordPreviewPopoverComponent` (`<mj-record-preview-popover>`), `MjRecordPreviewDirective` (`[mjRecordPreview]`) | Bidirectional record links drawer (outbound FKs, inbound related entities, polymorphic links) with pin-aware pre-warming and Sage `LinksSummary` context; hover preview cards on read-mode FK links. See [Forms Architecture §7f](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md#7f-bidirectional-record-links-mj-record-links--hover-preview-cards-mj-record-preview-popover). |
 | **Time-travel version preview** | `MjRecordFormContainerComponent` (`ActiveVersionPreview`, `OnPreviewVersionSelected`, `OnStepVersionPreview`, `OnExitVersionPreview`), `FormSlotCoordinator.VersionPreviewChanged$` | Rehydrates historical `FullRecordJSON` + `ChangesJSON` snapshots directly inside the form with a top Time-Travel Scrubber Bar and changed-field jump chips. See [Forms Architecture §7g](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md#7g-in-form-time-travel-version-preview--record-changes-activity-sparkline). |
 | **New-record defaults** | `BaseFormComponent.NewRecordValues` / `NewRecordValuesForJoinFields` | Related grids copy every join field onto the child. Explorer persists them as `/record/:entity/new?NewRecordValues=...`. |
+| **Duplicate check at entry** | `DuplicateEntryCheckController`, `DuplicateEntryCheckSession`, `BaseFormComponent.CheckDuplicateEntry` | Flags existing records that may duplicate a new record while it is being typed. See [Duplicate check at entry](#duplicate-check-at-entry). |
 
 ## Quick start
 
@@ -240,9 +241,46 @@ export class CustomPersonPreviewPopoverComponent extends MjRecordPreviewPopoverC
 }
 ```
 
+## Duplicate check at entry
+
+While a user fills in a **new, unsaved** record, every form built on `BaseFormComponent` asks the server
+whether existing records look like the same thing, and shows a dismissible notice above the form:
+**"This may duplicate:"** followed by the matches' names, each opening the existing record in a new
+tab. It only flags — it never blocks a save, and saving clears the notice.
+
+- **Turning it on** is server-side configuration, not a form setting: the entity needs an Active
+  entity document with `EnableLLMReasoning` on and `ReasoningMode` = `Decision` or
+  `DecisionThenPrompt`. Otherwise the server answers `NotConfigured` and the form stops asking about
+  that entity for the rest of the session (`DuplicateEntryCheckSession`); `NotAuthorized` does the same.
+- **When it runs**: `DUPLICATE_ENTRY_CHECK_DEBOUNCE_MS` (600 ms) after the last field edit, only for a
+  user who can read the entity, one check at a time. Edits made meanwhile are checked once, on the
+  latest values, after the answer or after `DUPLICATE_ENTRY_CHECK_IN_FLIGHT_LIMIT_MS` (3 s).
+- **Budget**: an answer later than `DUPLICATE_ENTRY_CHECK_BUDGET_MS` (1.5 s), or one that newer edits
+  have overtaken, is dropped.
+- **What is sent**: every field except primary keys and `__mj_*` columns, non-empty scalar values only,
+  text cut to `DUPLICATE_ENTRY_CHECK_MAX_FIELD_TEXT_LENGTH` (500) characters
+  (`DuplicateEntryCheckValues`).
+- **The call**: `BaseFormComponent.CheckDuplicateEntry` sends `GraphQLAIClient.CheckDuplicateEntry`
+  (the `CheckDuplicateEntry` mutation). Override it in a form subclass to change how the check is made;
+  a provider that is not a GraphQL provider answers `NotConfigured`.
+
+How the server finds and judges the candidates is in the
+[Duplicate Management Guide](../../../../guides/DUPLICATE_MANAGEMENT_GUIDE.md#7-the-entry-time-duplicate-check).
+
+## Anchored Record Comments (`<mj-record-comments>`)
+
+Every saved record form automatically provides threaded conversations (`MJ: Conversations` + `MJ: Conversation Details`) anchored at the **Record**, **Field**, **Section**, **Group (Left-Nav Tab)**, or **Contribution** level:
+
+- **Form Toolbar Action (`RecordCommentsToolbarAction`, key `'comments'`)**: Displays the total open comment count across the record and toggles the slide-over Record Comments Drawer.
+- **Field-Level Trigger & Badge (`<mj-form-field>`)**: Shows an inline comment count badge on fields with active threads (or a hover trigger to start a thread), capturing a `quotedValue` snapshot of the field's value at the time of commenting. Fields with open comments are never collapsed away as empty in read mode.
+- **Section & Left-Nav Rail Rollup (`<mj-collapsible-panel>`, `<mj-record-form-container>`, `FormSectionIndicators`)**: Open field and section comments roll up into section header chips and left-nav group badges. Clicking any anchor chip in the drawer or popover expands the target group/section, scrolls the field into view, and pulses it.
+- **RLS & FLS Security + `@Mention` Notifications**: Enforces Row-Level Security and Field-Level Security (including write-time restricted-field classification and `AnchorMetadataObject.restrictedFields` stamping) and dispatches `MJ: User Notifications` on `@mention` only to users permitted to read both the record and the anchored/referenced fields.
+
 ## Related docs
 
 - **Architecture (read first):** [/guides/FORMS_ARCHITECTURE_GUIDE.md](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md)
+- **Duplicate detection, the entry-time check and merging:** [/guides/DUPLICATE_MANAGEMENT_GUIDE.md](../../../../guides/DUPLICATE_MANAGEMENT_GUIDE.md)
+- **Anchored Conversations & Record Commenting:** [/guides/ANCHORED_CONVERSATIONS_AND_RECORD_COMMENTS_GUIDE.md](../../../../guides/ANCHORED_CONVERSATIONS_AND_RECORD_COMMENTS_GUIDE.md)
 - **Inject custom sections into a form:** [PANELS.md](./PANELS.md)
 - **Form chrome (rail / More / inclusion):** [Forms Architecture §7d](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md#7d-form-chrome--accordion-left-nav-and-more)
 - **Pluggable toolbar actions & Record Links:** [Forms Architecture §7e–§7g](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md#7e-pluggable-form-toolbar-actions-baseformtoolbaraction--registerformtoolbaraction)

@@ -23,8 +23,12 @@ import {
     RealtimeSessionOwnershipError,
 } from '../realtimeSessions/ownedRealtimeSession.js';
 
-/** The `CloseReason` values a client may stamp on its own session; `Janitor` and `Shutdown` are the server's. */
-const CLIENT_CLOSE_REASONS: readonly SessionCloseReason[] = ['Explicit', 'Error'];
+/**
+ * The `CloseReason` values a client may stamp on its own session; `Idle`, `Janitor` and `Shutdown` are the server's.
+ * `TimeLimit` is a claim: the browser's deadline alarm fired, and {@link SessionManager.CloseSession} verifies it
+ * against the session's stored deadline, recording `Explicit` instead when the deadline is not near.
+ */
+const CLIENT_CLOSE_REASONS: readonly SessionCloseReason[] = ['Explicit', 'Error', 'TimeLimit'];
 
 /** Reads the mutation's optional `closeReason`: absent means `Explicit`; a server-only or unknown value is refused. */
 function ParseClientCloseReason(closeReason: string | null | undefined): SessionCloseReason {

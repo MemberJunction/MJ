@@ -12,6 +12,7 @@ import {
   BakeApplyError,
   SelectBakeableEntities,
   DiffFieldDefaults,
+  SplitMigration,
 } from '@memberjunction/sql-converter';
 import type {
   BatchConverterConfig,
@@ -157,6 +158,45 @@ export function decideLegacyConvertExit(args: {
   return DecideLegacyConvertExit(args);
 }
 
+/** A CodeGen CRUD procedure definition, e.g. `CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateX]`. */
+const CODEGEN_CRUD_PROCEDURE = /\bCREATE\s+(?:OR\s+ALTER\s+)?PROC(?:EDURE)?\s+(?:\S*\.)?\[?(sp(?:Create|Update|Delete)\w+)\]?/gi;
+
+/**
+ * Names of the CodeGen CRUD procedures (`spCreate*`, `spUpdate*`, `spDelete*`) in a migration's
+ * CodeGen block, in file order. Hand-written procedures above the block are not included.
+ */
+export function FindCodeGenProcedures(sql: string): string[] {
+  const block = SplitMigration(sql).codeGenBlock;
+  return [...new Set([...block.matchAll(CODEGEN_CRUD_PROCEDURE)].map((m) => m[1]))];
+}
+
+/** The CodeGen CRUD procedures found in one source migration. */
+export interface CodeGenProcedureFile {
+  File: string;
+  Procedures: string[];
+}
+
+/**
+ * The warning for a legacy (non---split) run over migrations that contain CodeGen CRUD procedures,
+ * or null when none do. Pure — no I/O.
+ *
+ * The legacy path transpiles these procedures from T-SQL. A transpiled procedure that calls another
+ * (a spDelete cascade calling spUpdate) can install cleanly and still fail when it runs.
+ * `--split --bake-codegen` writes them with native PostgreSQL CodeGen instead.
+ */
+export function BuildLegacyCodeGenWarning(files: CodeGenProcedureFile[]): string | null {
+  const withProcedures = files.filter((f) => f.Procedures.length > 0);
+  if (withProcedures.length === 0) return null;
+  const list = withProcedures.map((f) => `  ${f.File} (${f.Procedures.length} procedure(s))`).join('\n');
+  return (
+    `${withProcedures.length} migration(s) contain CodeGen CRUD procedures, which the legacy path transpiles from T-SQL:\n` +
+    `${list}\n` +
+    'A transpiled procedure that calls another (for example a spDelete cascade) can install cleanly and fail ' +
+    'only when it runs. Convert schema migrations with --split --bake-codegen so that CodeGen writes these ' +
+    'procedures natively for PostgreSQL.'
+  );
+}
+
 /**
  * CLI command to discover and convert T-SQL migrations to PostgreSQL.
  *
@@ -172,7 +212,8 @@ export function decideLegacyConvertExit(args: {
  *   Requires Python 3 with sqlglot (`pip install sqlglot`; set MJ_SQLGLOT_PYTHON if
  *   not `python3` on PATH).
  * - default (legacy): the regex-based BatchConverter rule pipeline, which converts
- *   everything including appended CodeGen output. Retained for compatibility.
+ *   everything including appended CodeGen output. Retained for compatibility. Warns
+ *   when a migration contains CodeGen CRUD procedures.
  *
  * Usage:
  *   mj migrate convert --split                       # Standard split-and-regenerate conversion
@@ -297,6 +338,7 @@ export default class MigrateConvert extends Command {
     for (const m of unconverted) {
       this.log(`  ${m.SourceFile} → ${m.OutputFile}`);
     }
+    this.warnOnCodeGenProcedures(sourceDir, unconverted);
 
     if (flags['dry-run']) {
       this.log('\nDry run — no files written.');
@@ -793,6 +835,17 @@ export default class MigrateConvert extends Command {
     if (warnings.length === 0) return;
     this.logToStderr(`\n  ⚠ ${warnings.length} warning(s) to finish by hand (the run is not failed):`);
     for (const w of warnings) this.logToStderr(`    ${w}`);
+  }
+
+  /** Warn when the legacy path is about to transpile CodeGen CRUD procedures. */
+  private warnOnCodeGenProcedures(sourceDir: string, migrations: Array<{ SourceFile: string }>): void {
+    const warning = BuildLegacyCodeGenWarning(
+      migrations.map((m) => ({
+        File: m.SourceFile,
+        Procedures: FindCodeGenProcedures(fs.readFileSync(path.join(sourceDir, m.SourceFile), 'utf8')),
+      })),
+    );
+    if (warning) this.warn(warning);
   }
 
   /** Print the split-and-regenerate run summary and the mandatory next steps. */

@@ -101,6 +101,13 @@ export abstract class BaseEmbedStage extends BasePipelineStage {
                 outcomes.push({ Key: record.Identity.Key, Outcome: Outcome.Fatal(route.Error) });
                 continue;
             }
+            if (route.Infrastructure.vectorDB.IsReadOnly) {
+                outcomes.push({
+                    Key: record.Identity.Key,
+                    Outcome: Outcome.Skipped(`vector index '${route.Infrastructure.indexName}' is read-only; no vector written`),
+                });
+                continue;
+            }
             if (context.IsTest) {
                 outcomes.push({ Key: record.Identity.Key, Outcome: Outcome.Complete() });
                 continue;

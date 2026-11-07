@@ -58,6 +58,9 @@ vi.mock('@memberjunction/ai-core-plus', async (importOriginal) => ({
     AIPromptParams: class {},
 }));
 
+// The resolver reads its conversation-browser settings from the server config; off, as by default.
+vi.mock('../config.js', () => ({ configInfo: { realtime: { conversationBrowser: { enabled: false } } } }));
+
 import { RemoteBrowserActionResolver } from '../resolvers/RemoteBrowserActionResolver.js';
 import type { AppContext } from '../types.js';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';

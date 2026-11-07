@@ -4,8 +4,9 @@ import { DeclareDmlBlockRule } from '../rules/DeclareDmlBlockRule.js';
 import { GetRulesForDialects } from '../rules/TSQLToPostgresRules.js';
 import { ClassifyBatch } from '../rules/StatementClassifier.js';
 import {
-  CreateConversionContext, CONVERSION_GAP_MARKERS, GAP_MARKER_SKIPPED_EXEC_BLOCK, GAP_MARKER_MISSING_SAVES,
+  CreateConversionContext, CONVERSION_GAP_MARKERS, GAP_MARKER_EXEC_SKIPPED, GAP_MARKER_MISSING_SAVES, type IConversionRule,
 } from '../rules/types.js';
+import { FindBracketIdentifiersInDollarBlocks } from '../rules/ExpressionHelpers.js';
 
 /**
  * Regression cover for MJ issue #3857: `mj migrate convert` (legacy path) wrote output
@@ -110,7 +111,7 @@ describe('Metadata_Sync save accounting (issue #6097)', () => {
       'EXEC [__mj].spUpdateAIVendor @ID = @ID_e5, @Name = @Undeclared_e5',
     ].join('\n');
     const result = convertSQL(sql);
-    expect(result.OutputSQL).toContain(GAP_MARKER_SKIPPED_EXEC_BLOCK);
+    expect(result.OutputSQL).toContain(GAP_MARKER_EXEC_SKIPPED);
     expect(result.Stats.Gaps).toBe(1);
     expect(result.OutputSQL).not.toContain(GAP_MARKER_MISSING_SAVES);
   });
@@ -241,5 +242,132 @@ describe('issue #5649 — sp_refreshview is a warning on the legacy path', () =>
       "sp_refreshview '__mj.vwEntities' has no PostgreSQL equivalent; rebuild the view with CREATE OR REPLACE VIEW so it carries the new columns",
     ]);
     expect(result.OutputSQL).toContain("-- WARNING: sp_refreshview '__mj.vwEntities'");
+  });
+});
+
+/**
+ * #6074: a T-SQL bracket identifier left inside a dollar-quoted block has no gap marker, and the
+ * PostProcessor's bracket pass skips those blocks, so the file reported 0 gaps and failed on apply.
+ */
+describe('bracket identifiers left in a dollar-quoted block', () => {
+  it('finds a bracket identifier in code inside the block, and only there', () => {
+    const sql = [
+      'SELECT [Outside] FROM x;',
+      'DO $mj$',
+      'BEGIN',
+      "  p_ID := (SELECT [ID] FROM [__mj].[Entity] WHERE \"Name\" = '[not code]');",
+      '  -- [a comment]',
+      "  IF p.proargtypes[0] = 'jsonb'::regtype AND v = ANY(ARRAY['a']) AND (f(x))[1] = 1 THEN NULL; END IF;",
+      'END $mj$;',
+    ].join('\n');
+
+    expect(FindBracketIdentifiersInDollarBlocks(sql)).toEqual([`p_ID := (SELECT [ID] FROM [__mj].[Entity] WHERE "Name" = '[not code]');`]);
+  });
+
+  it('does not take a $ in string data or a comment for the start of a block', () => {
+    const sql = [
+      "INSERT INTO t (a, b) VALUES ('pay $USD$ [categories] now', 'then $USD$ again');",
+      '-- a $tag$ in a comment',
+      "INSERT INTO t (a) VALUES ('[title] $tag$');",
+    ].join('\n');
+
+    expect(FindBracketIdentifiersInDollarBlocks(sql)).toEqual([]);
+  });
+
+  it('counts each such line as a gap of the converted file, whichever rule left it', () => {
+    // A rule that emits a bracket inside its DO block, as ExecBlockRule did before #6074
+    const leaky: IConversionRule = {
+      Name: 'LeakyRule',
+      SourceDialect: 'tsql',
+      TargetDialect: 'postgres',
+      AppliesTo: [ClassifyBatch(CLEAN_BLOCK)],
+      Priority: 0,
+      BypassSqlglot: true,
+      PostProcess: () => 'DO $mj$\nBEGIN\n  PERFORM (SELECT [ID] FROM [__mj].[Widget]);\nEND $mj$;',
+    };
+    const result = ConvertFile({
+      Source: CLEAN_BLOCK,
+      SourceIsFile: false,
+      Rules: [leaky],
+      Schema: '__mj',
+      SourceDialect: 'tsql',
+      TargetDialect: 'postgres',
+      IncludeHeader: false,
+      EnablePostProcess: true,
+    });
+
+    expect(result.Stats.Gaps).toBe(1);
+    expect(result.Stats.GapBatches[0]).toContain('T-SQL bracket identifier left in a dollar-quoted block:');
+  });
+
+  it('converts a metadata-sync SET subquery cleanly, with no brackets and no gaps', () => {
+    const result = convertSQL([
+      'DECLARE @ID_ab12 UNIQUEIDENTIFIER,',
+      '  @Name_ab12 NVARCHAR(MAX)',
+      'SET',
+      "  @ID_ab12 = (SELECT [ID] FROM [${flyway:defaultSchema}].[Widget] WHERE LOWER([Name]) = LOWER(N'Widgets'))",
+      'SET',
+      "  @Name_ab12 = N'x' EXEC [${flyway:defaultSchema}].spUpdateWidget @ID = @ID_ab12,",
+      '  @Name = @Name_ab12',
+    ].join('\n'));
+
+    expect(result.Stats.Gaps).toBe(0);
+    expect(result.OutputSQL).toContain(`p_ID_ab12 := (SELECT "ID" FROM __mj."Widget" WHERE LOWER("Name") = LOWER('Widgets'));`);
+  });
+});
+
+/**
+ * #6337: a Metadata_Sync whose last save was followed by the session footer converted to almost
+ * nothing and reported 0 errors and 0 gaps. Two sessions, as DEPLOYMENT.md Step 3 produces, each
+ * ending with the logger's footer in the same GO batch as its last save.
+ */
+describe('Metadata_Sync session footers (#6337)', () => {
+  const save = (suffix: string, guard = `[ID] = @ID_${suffix}`): string => [
+    `DECLARE @ID_${suffix} UNIQUEIDENTIFIER,`,
+    `@Name_${suffix} NVARCHAR(50)`,
+    'SET',
+    `  @ID_${suffix} = '5F935B01-EC5F-4409-AADC-8063A94936D6'`,
+    'SET',
+    `  @Name_${suffix} = N'Widget' IF NOT EXISTS (`,
+    `    SELECT 1 FROM [\${flyway:defaultSchema}].[Widget] WHERE ${guard}`,
+    '  )',
+    'BEGIN',
+    `EXEC [\${flyway:defaultSchema}].spCreateWidget @ID = @ID_${suffix},`,
+    `  @Name = @Name_${suffix}`,
+    'END ELSE',
+    'BEGIN',
+    `EXEC [\${flyway:defaultSchema}].spUpdateWidget @ID = @ID_${suffix},`,
+    `  @Name = @Name_${suffix}`,
+    'END;',
+  ].join('\n');
+  const footer = '\n\n-- End of SQL Logging Session\n-- Session ID: abc\n-- Total Statements: 2\n';
+  const performs = (sql: string): number => (sql.match(/\bPERFORM\b/g) ?? []).length;
+
+  it('keeps every save of a two-session file', () => {
+    const result = convertSQL([save('a1'), save('a2') + footer, save('b1'), save('b2') + footer].join('\n\n'));
+    // Each save calls the create or the update, each through its JSONB and typed forms.
+    expect(performs(result.OutputSQL)).toBe(16);
+    expect(result.Stats.Gaps).toBe(0);
+    expect(result.OutputSQL).not.toContain('SKIPPED');
+  });
+
+  it('keeps every save of a single session ending in a create-or-update', () => {
+    const result = convertSQL(save('a1') + '\n\n' + save('a2') + footer);
+    expect(performs(result.OutputSQL)).toBe(8);
+    expect(result.Stats.Gaps).toBe(0);
+  });
+
+  it('does not count a block comment between saves as a gap', () => {
+    const result = convertSQL(`/*****\n* BEGIN METADATA SYNC\n*****/\n\n${save('a1')}\n\n${save('a2')}`);
+    expect(result.Stats.Gaps).toBe(0);
+    expect(performs(result.OutputSQL)).toBe(8);
+  });
+
+  it('counts a save it could not convert as a gap and keeps the saves around it', () => {
+    const unconvertible = save('a2', '[ID] = @ID_a2 OR [Name] = @Name_a2');
+    const result = convertSQL([save('a1'), unconvertible, save('a3')].join('\n\n'));
+    expect(result.Stats.Gaps).toBe(1);
+    expect(result.Stats.GapBatches.join('\n')).toContain('-- SKIPPED: EXEC block');
+    expect(performs(result.OutputSQL)).toBe(8);
   });
 });

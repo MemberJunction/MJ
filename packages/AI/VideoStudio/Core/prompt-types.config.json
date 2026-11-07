@@ -1,0 +1,19 @@
+[
+  {
+    "src": "video-generation-spec.ts",
+    "supplementary": null
+  },
+  {
+    "src": "archetype-types.ts",
+    "supplementary": null
+  },
+  {
+    "src": "composition-runtime.ts",
+    "supplementary": null
+  },
+  {
+    "src": "chart-kit-types.ts",
+    "supplementary": null
+  }
+]
+

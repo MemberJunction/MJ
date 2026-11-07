@@ -568,3 +568,50 @@ describe('DropAppSchema — PostgreSQL CASCADE vs SQL Server object-drop', () =>
         expect(lastSql).not.toContain('CASCADE');
     });
 });
+
+describe('ValidateSchemaName — configured MJ core schema (#4559)', () => {
+    it('refuses the configured core schema as reserved by MemberJunction, case-insensitively', () => {
+        for (const name of ['acme_core', 'ACME_CORE', 'Acme_Core']) {
+            const result = ValidateSchemaName(name, { CoreSchema: 'acme_core' });
+            expect(result.Success, name).toBe(false);
+            expect(result.Rule).toBe('ReservedByMJ');
+            expect(result.ErrorMessage).toMatch(/reserved by MemberJunction/);
+            expect(result.OverriddenBy).toBeUndefined();
+        }
+    });
+
+    it('no flag unblocks the configured core schema', () => {
+        const result = ValidateSchemaName('acme_core', { CoreSchema: 'acme_core', allowDoubleUnderscore: true });
+        expect(result.Success).toBe(false);
+        expect(result.Rule).toBe('ReservedByMJ');
+    });
+
+    it('still refuses __mj and __mj_UDT when a custom core schema is configured', () => {
+        for (const name of ['__mj', '__mj_UDT']) {
+            const result = ValidateSchemaName(name, { CoreSchema: 'acme_core' });
+            expect(result.Success, name).toBe(false);
+            expect(result.Rule).toBe('ReservedByMJ');
+        }
+    });
+
+    it('reserves only what the migrations create: no <core>_UDT sibling', () => {
+        expect(ValidateSchemaName('acme_core_UDT', { CoreSchema: 'acme_core' }).Success).toBe(true);
+    });
+
+    it('leaves the name claimable when no core schema is configured', () => {
+        expect(ValidateSchemaName('acme_core').Success).toBe(true);
+        expect(ValidateSchemaName('acme_core', { CoreSchema: undefined }).Success).toBe(true);
+    });
+
+    it('CreateAppSchema and DropAppSchema refuse the configured core schema without touching the database', async () => {
+        const created = makeMockProvider([], 'sqlserver');
+        const createResult = await CreateAppSchema('acme_core', created.provider, { CoreSchema: 'acme_core' });
+        expect(createResult.Success).toBe(false);
+        expect(created.executeSql).not.toHaveBeenCalled();
+
+        const dropped = makeMockProvider([], 'sqlserver');
+        const dropResult = await DropAppSchema('acme_core', dropped.provider, { CoreSchema: 'acme_core' });
+        expect(dropResult.Success).toBe(false);
+        expect(dropped.executeSql).not.toHaveBeenCalled();
+    });
+});

@@ -1,0 +1,32 @@
+{
+  "kind": "lifecycle",
+  "title": "What happens if I don't pay my dues on time?",
+  "lanes": [
+    { "id": "main", "label": "Membership" },
+    { "id": "waiting", "label": "Grace period", "role": "waiting" },
+    { "id": "terminal", "label": "After lapsing", "role": "terminal" }
+  ],
+  "nodes": [
+    { "id": "active", "lane": "main", "kind": "start", "step": "01", "label": "Active", "sublabel": "dues paid", "detail": "Member is in good standing with full access to benefits, journals, and member rates." },
+    { "id": "due", "lane": "main", "kind": "state", "step": "02", "label": "Renewal due", "sublabel": "invoice Nov 1", "detail": "Annual renewal invoice is sent November 1 and due by December 31." },
+    { "id": "renewed", "lane": "main", "kind": "success", "step": "03", "label": "Renewed", "sublabel": "another year", "detail": "Dues paid on time or during the grace period; membership continues uninterrupted." },
+    { "id": "grace", "lane": "waiting", "kind": "waiting", "label": "Grace period", "sublabel": "60 days, benefits kept", "detail": "From January 1 through March 1, all member benefits remain active with no late fee." },
+    { "id": "lapsed", "lane": "terminal", "kind": "error", "label": "Lapsed", "sublabel": "benefits paused", "detail": "After 60 days unpaid, member benefits pause until dues and a $25 reinstatement fee are paid." },
+    { "id": "reinstated", "lane": "terminal", "kind": "success", "label": "Reinstated", "sublabel": "dues plus $25 fee", "detail": "Paying overdue dues plus the $25 fee restores active status and preserves join-date tenure." },
+    { "id": "removed", "lane": "terminal", "kind": "error", "label": "Removed", "sublabel": "after 12 months", "detail": "Accounts unpaid for 12 months leave the active roster and require a new application." }
+  ],
+  "edges": [
+    { "id": "t1", "from": "active", "to": "due", "label": "Nov 1" },
+    { "id": "t2", "from": "due", "to": "renewed", "label": "paid by Dec 31" },
+    { "id": "t3", "from": "due", "to": "grace", "label": "unpaid Jan 1", "role": "error" },
+    { "id": "t4", "from": "grace", "to": "renewed", "label": "paid in grace" },
+    { "id": "t5", "from": "grace", "to": "lapsed", "label": "60 days pass", "role": "error" },
+    { "id": "t6", "from": "lapsed", "to": "reinstated", "label": "pays dues + $25" },
+    { "id": "t7", "from": "lapsed", "to": "removed", "label": "12 months unpaid", "role": "error" }
+  ],
+  "mainPath": ["active", "due", "renewed"],
+  "cards": [
+    { "id": "grace-rule", "tone": "success", "title": "Paying late within 60 days", "body": "Members keep every benefit for 60 days after January 1 with no late fee.", "nodes": ["due", "grace", "renewed"] },
+    { "id": "lapse-rule", "tone": "error", "title": "After 60 days", "body": "Benefits pause until dues and a $25 fee are paid; after 12 months the record is removed.", "nodes": ["grace", "lapsed", "reinstated", "removed"] }
+  ]
+}
