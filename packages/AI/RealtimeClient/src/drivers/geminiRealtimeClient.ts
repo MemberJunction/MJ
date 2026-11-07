@@ -509,8 +509,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private resetForConnect(micStream: MediaStream, cameraStream?: MediaStream): void {
         this.micStream = micStream;
         this.cameraStream = cameraStream ?? null;
-        this.clearSafetyBackstop();
-        this.toolBatchBarrier.Clear();
+        // A call can end with no Disconnect (a fatal close), so its unfinished words and pending tool calls are still here.
+        this.resetResponseState();
         this.firstVideoSendTimestamp = 0;
         this.lastVideoSendTimestamp = 0;
         this.videoFramesSent = 0;
@@ -2158,7 +2158,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         }
     }
 
-    /** Resets the per-session response state machine (used on Disconnect). */
+    /** Resets the per-session response state machine (used on Connect and Disconnect). */
     private resetResponseState(): void {
         this.pendingAssistantText = '';
         this.pendingUserText = '';

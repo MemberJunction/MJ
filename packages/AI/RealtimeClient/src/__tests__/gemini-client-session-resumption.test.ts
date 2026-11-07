@@ -876,6 +876,47 @@ describe('GeminiRealtimeClient session resumption', () => {
             expect(client.Connections[2].Session.ClientContents).toEqual([]);
         });
 
+        describe('a new Connect after a call that ended mid-turn', () => {
+            it('does not seed the earlier call\'s unfinished words', async () => {
+                client.EmitOn(0, HEARD('earlier user words'));
+                client.EmitOn(0, SAID('earlier model words'));
+                await client.Connect(sessionConfig(), new FakeMediaStream([new FakeTrack()]));
+                client.EmitOn(1, RESUMABLE('h2'));
+                client.CloseOn(1, 1011);
+                await vi.advanceTimersByTimeAsync(0);
+                expect(client.Connections[2].Session.ClientContents).toEqual([]);
+            });
+
+            it('does not put the earlier call\'s words in the new call\'s transcript', async () => {
+                client.EmitOn(0, HEARD('Where is order 42?'));
+                client.EmitOn(0, TOOL_CALL('call-1'));
+                await client.Connect(sessionConfig(), new FakeMediaStream([new FakeTrack()]));
+                client.EmitOn(1, HEARD('Hi'));
+                client.EmitOn(1, SAID('Hello'));
+                client.EmitOn(1, TURN_COMPLETE);
+                expect(emitted.transcripts.filter((t) => t.Role === 'User' && t.IsFinal).map((t) => t.Text)).toEqual(['Hi']);
+            });
+
+            it('does not let the earlier call\'s pending tool call hold the new call\'s turn open', async () => {
+                client.EmitOn(0, TOOL_CALL('call-1'));
+                await client.Connect(sessionConfig(), new FakeMediaStream([new FakeTrack()]));
+                client.EmitOn(1, HEARD('Hi'));
+                client.EmitOn(1, SAID('Hello'));
+                client.EmitOn(1, TURN_COMPLETE);
+                expect(client.IsTurnOpen).toBe(false);
+            });
+
+            it('does not treat the earlier call\'s pending tool call as one from before a reseed', async () => {
+                client.EmitOn(0, TOOL_CALL('call-1'));
+                await client.Connect(sessionConfig(), new FakeMediaStream([new FakeTrack()]));
+                client.EmitOn(1, RESUMABLE('h2'));
+                client.CloseOn(1, 1011);
+                await vi.advanceTimersByTimeAsync(0);
+                client.SendToolResult('call-1', '{"ok":true}');
+                expect(client.Connections[2].Session.RealtimeInputs).toEqual([]);
+            });
+        });
+
         describe('diagnostics', () => {
             let logged: string[];
 
