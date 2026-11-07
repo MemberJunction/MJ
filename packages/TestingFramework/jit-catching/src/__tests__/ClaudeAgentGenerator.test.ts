@@ -7,18 +7,18 @@ import { DEFAULT_SETTINGS } from '../settings';
 import type { GenerationRequest } from '../types';
 
 /** SDK messages the mocked `query` yields, and what it does after them. */
-const sdk = vi.hoisted(() => ({ messages: [] as object[], after: 'end' as 'end' | 'throw' | 'wait-abort', calls: 0 }));
+const sdk = vi.hoisted(() => ({ messages: [] as object[], after: 'end' as 'end' | 'throw' | 'wait-abort', calls: 0, options: null as null | { canUseTool: (name: string, input: Record<string, unknown>, o: { signal: AbortSignal }) => Promise<{ behavior: string }> } }));
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   tool: (name: string) => ({ name }),
   createSdkMcpServer: () => ({ type: 'sdk', name: 'jit' }),
   query: ({ options }: { options: { abortController: AbortController } }) => (async function* () {
-    sdk.calls++;
+    sdk.calls++; sdk.options = options as never;
     for (const m of sdk.messages) { if (options.abortController.signal.aborted) throw new Error('aborted'); yield m; }
     if (sdk.after === 'throw') throw new Error('Claude Code process exited with code 1');
     if (sdk.after === 'wait-abort' && options.abortController.signal.aborted) throw new Error('aborted');
   })(),
 }));
-afterEach(() => { sdk.messages = []; sdk.after = 'end'; sdk.calls = 0; vi.unstubAllEnvs(); });
+afterEach(() => { sdk.messages = []; sdk.after = 'end'; sdk.calls = 0; sdk.options = null; vi.unstubAllEnvs(); });
 
 function world() {
   const root = mkdtempSync(join(tmpdir(), 'jit-gen-')); mkdirSync(join(root, 'packages/MJCore/src/__tests__/jit'), { recursive: true }); writeFileSync(join(root, 'packages/MJCore/package.json'), '{"name":"@memberjunction/core"}');
@@ -116,6 +116,21 @@ describe('ClaudeAgentGenerator candidates', () => {
   });
 });
 
+describe('ClaudeAgentGenerator proof of the content that ran', () => {
+  it('does not credit a run to a source written while that run was in progress', async () => {
+    const root = world(); const f = `${JIT}/`;
+    const gen: ClaudeAgentGenerator = new ClaudeAgentGenerator({ Sandbox: {} as never, ScratchRoot: root, Settings: DEFAULT_SETTINGS, PackageMap: { Get: () => ({ Name: '@memberjunction/core', Dir: 'packages/MJCore', HasVitest: true, HasTests: true }) } as never, TranscriptDir: join(root, 'transcripts'),
+      Runner: async function* (_p, _s, o) {
+        const file = `${f}${gen.AllocatedIDs[0]}.jit.test.ts`;
+        await o.Hooks.WriteFile(file, 'v1'); await Promise.all([o.Hooks.RunTest(file), o.Hooks.WriteFile(file, 'v2 never run')]);
+        yield { Type: 'result', Usage: { InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0 }, CostUSD: 0, Turns: 1, Subtype: 'success' };
+      },
+      RunTestFactory: () => ({ Run: async () => { await new Promise((res) => setTimeout(res, 20)); return { Ran: true, Status: 'Pass', TestName: null, Failure: null, DurationMs: 20 }; }, LastMutant: null }) as never });
+    const r = await gen.Generate(req(root));
+    expect(r.Tests).toHaveLength(1); expect(r.Tests[0].Source).toBe('v2 never run'); expect(r.Tests[0].GenerationOutcome).toBe('Failed'); expect(r.Tests[0].FailureReason).toMatch(/never proved/);
+  });
+});
+
 describe('ClaudeAgentGenerator transcript', () => {
   it('redacts the transcript before writing it under TranscriptDir', async () => {
     const root = world(); const fakeKey = `sk-ant-${'a'.repeat(30)}`;
@@ -145,6 +160,27 @@ describe('SdkRunner', () => {
     const result = out.find((m) => m.Type === 'result');
     expect(result).toMatchObject({ Subtype: 'aborted_token_budget', Turns: 2, Usage: { InputTokens: 1200, OutputTokens: 2, CacheReadTokens: 0 } });
     expect(result && result.Type === 'result' ? result.CostUSD : -1).toBeCloseTo((1200 * 1 + 2 * 5) / 1_000_000, 9);
+  });
+  it('refuses a session whose messages arrive before the init message', async () => {
+    env(); sdk.messages = [assistant('m1', 5), { type: 'result', subtype: 'success', total_cost_usd: 0.1, num_turns: 1, usage: { input_tokens: 5, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, modelUsage: {} }];
+    await expect(collect(SdkRunner('p', 's', runOptions()))).rejects.toThrow(/init/);
+  });
+  it('sums the result totals over every model in modelUsage', async () => {
+    env();
+    sdk.messages = [init('ANTHROPIC_API_KEY'), assistant('m1', 5), { type: 'result', subtype: 'success', total_cost_usd: 0.2, num_turns: 2, usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+      modelUsage: { a: { inputTokens: 10, outputTokens: 4, cacheReadInputTokens: 100, cacheCreationInputTokens: 20, webSearchRequests: 0, costUSD: 0.1, contextWindow: 1, maxOutputTokens: 1 }, b: { inputTokens: 3, outputTokens: 2, cacheReadInputTokens: 7, cacheCreationInputTokens: 1, webSearchRequests: 0, costUSD: 0.1, contextWindow: 1, maxOutputTokens: 1 } } }];
+    const out = await collect(SdkRunner('p', 's', runOptions()));
+    expect(out.find((m) => m.Type === 'result')).toMatchObject({ Usage: { InputTokens: 34, OutputTokens: 6, CacheReadTokens: 107 }, CostUSD: 0.2 });
+  });
+  it('gives the SDK a canUseTool that allows write_test and reads inside the worktree only', async () => {
+    env(); const root = mkdtempSync(join(tmpdir(), 'jit-cut-')); writeFileSync(join(root, 'a.ts'), 'x');
+    sdk.messages = [init('ANTHROPIC_API_KEY')];
+    await collect(SdkRunner('p', 's', { ...runOptions(), Cwd: root }));
+    const can = sdk.options!.canUseTool; const o = { signal: new AbortController().signal };
+    expect((await can('mcp__jit__write_test', { File: 'x', Source: 'y' }, o)).behavior).toBe('allow');
+    expect((await can('Read', { file_path: join(root, 'a.ts') }, o)).behavior).toBe('allow');
+    expect((await can('Read', { file_path: '/etc/passwd' }, o)).behavior).toBe('deny');
+    expect((await can('Bash', { command: 'ls' }, o)).behavior).toBe('deny');
   });
   it('keeps the result message when the SDK throws after error_max_turns', async () => {
     env(); sdk.after = 'throw';

@@ -132,13 +132,17 @@ function readOnDisk(s: Session, id: string): string | null {
     return lstatSync(abs, { throwIfNoEntry: false })?.isFile() ? readFileSync(abs, 'utf8') : null;
 }
 
-/** The run_test tool: runs the file and records a base pass or a killed mutant for the source written through write_test. */
+/**
+ * The run_test tool: runs the file and records a base pass or a killed mutant for the source written through write_test.
+ * The result counts only when the same write is still current after the run and the disk still holds the source that was there before it.
+ */
 async function runTest(s: Session, file: string, mutant?: { Edits: MutantEdit[] }): Promise<RunTestOutput> {
     const input: RunTestInput = mutant ? { File: file, Mutant: mutant } : { File: file };
+    const id = s.IDs.find((x) => file === jitFile(s, x)); const rec = id ? s.Files.get(id) : undefined;
+    const ranSource = id && rec && readOnDisk(s, id) === rec.Source ? rec.Source : null;
     const out = await s.Tool.Run(input);
     s.Transcript.push(`RUN ${file}${mutant ? ' +mutant' : ''} → ${out.Status}${out.Error ? ` (${out.Error})` : ''}`);
-    const id = s.IDs.find((x) => file === jitFile(s, x)); const rec = id ? s.Files.get(id) : undefined;
-    if (!id || !rec || !out.Ran || readOnDisk(s, id) !== rec.Source) return out;
+    if (!id || !rec || ranSource === null || !out.Ran || s.Files.get(id) !== rec || readOnDisk(s, id) !== ranSource) return out;
     if (!mutant) rec.Base = out.Status === 'Pass';
     else if (out.Status === 'Fail' && s.Tool.LastMutant) rec.Mutant = s.Tool.LastMutant;
     return out;
@@ -217,18 +221,22 @@ function resultUsage(msg: SDKResultMessage): { InputTokens: number; OutputTokens
 
 /**
  * The real runner: Claude Agent SDK with read/search tools, writes through write_test, run_test as an MCP tool.
- * Refuses to start inside a Claude Code session, aborts when the credential is not ANTHROPIC_API_KEY or the host token count passes the budget.
+ * Refuses to start inside a Claude Code session. Aborts with an error when the credential is not ANTHROPIC_API_KEY or a message arrives before
+ * the init message; aborts quietly when the host token count passes the budget.
  */
 export async function* SdkRunner(prompt: string, system: string, o: AgentRunOptions): AsyncIterable<AgentMessage> {
     const home = mkdtempSync(join(tmpdir(), 'jit-agent-home-'));
     try {
         const env = AgentEnv(process.env, home);
         const abort = new AbortController(); const usage = new UsageCounter();
-        let sawResult = false; let fatal: Error | null = null;
+        let sawResult = false; let sawInit = false; let fatal: Error | null = null;
         try {
             for await (const msg of query({ prompt, options: BuildSdkOptions(o, { System: system, McpServer: jitServer(o.Hooks), Abort: abort, CanUseTool: readGuard(o.Cwd), Env: env }) })) {
                 if (msg.type === 'system' && msg.subtype === 'init') {
-                    try { AssertApiKeySource(msg.apiKeySource); } catch (e) { fatal = e as Error; abort.abort(); break; }
+                    try { AssertApiKeySource(msg.apiKeySource); sawInit = true; } catch (e) { fatal = e as Error; abort.abort(); break; }
+                }
+                if ((msg.type === 'assistant' || msg.type === 'result') && !sawInit) {
+                    fatal = new Error(`agent sent a ${msg.type} message before the init message, so its credential was not checked`); abort.abort(); break;
                 }
                 if (msg.type === 'assistant') {
                     usage.Add(msg.message.id, msg.message.usage);

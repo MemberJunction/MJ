@@ -41,6 +41,12 @@ describe('ReadAllowed', () => {
     expect(ReadAllowed('Glob', { pattern: '../**/*.env' }, root)).toBe(false);
     expect(ReadAllowed('Bash', { command: 'ls' }, root)).toBe(false);
   });
+  it('rejects a parent segment hidden inside braces', () => {
+    const { root } = tree();
+    expect(ReadAllowed('Glob', { pattern: '{..,src}/**' }, root)).toBe(false);
+    expect(ReadAllowed('Grep', { pattern: 'x', glob: '{..,a}/**' }, root)).toBe(false);
+    expect(ReadAllowed('Glob', { pattern: 'src/**/*.ts' }, root)).toBe(true);
+  });
   it('applies the Glob pattern rules to the glob filter of Grep', () => {
     const { root } = tree();
     expect(ReadAllowed('Grep', { pattern: 'x', glob: '*.ts' }, root)).toBe(true);

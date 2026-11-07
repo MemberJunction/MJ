@@ -30,9 +30,12 @@ export function IsInside(root: string, target: string): boolean {
 
 const READ_PATH_KEY: Record<string, string> = { Read: 'file_path', Grep: 'path', Glob: 'path' };
 
-/** True when a glob pattern cannot name files outside the folder it searches. */
+/** A `..` segment bounded by a path separator, a brace-group delimiter or the string ends. */
+const PARENT_SEGMENT = /(^|[\\/{,])\.\.($|[\\/},])/;
+
+/** True when a glob pattern cannot name files outside the folder it searches, also through brace alternatives. */
 function safeGlob(pattern: unknown): boolean {
-    return typeof pattern === 'string' && !isAbsolute(pattern) && !pattern.startsWith('~') && !pattern.split(/[\\/]/).includes('..');
+    return typeof pattern === 'string' && !isAbsolute(pattern) && !pattern.startsWith('~') && !PARENT_SEGMENT.test(pattern);
 }
 
 /**
