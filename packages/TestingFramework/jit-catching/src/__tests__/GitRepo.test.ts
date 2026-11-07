@@ -48,4 +48,10 @@ describe('GitRepo', () => {
     expect(await repo.ChangedPaths(second, third)).toEqual(['packages/X/src/café.ts', 'packages/X/src/sp ace.ts']);
     expect(AddedLinesByFile(ParseUnifiedDiff(await repo.Diff(second, third)))).toEqual({ 'packages/X/src/café.ts': [1], 'packages/X/src/sp ace.ts': [1] });
   });
+  it('Subject returns the trimmed subject line of a commit through the runner', async () => {
+    const calls: { args: string[]; cwd: string }[] = [];
+    const fake = new GitRepo('/repo', async (args, cwd) => { calls.push({ args, cwd }); return '  fix(core): keep the cache per user  \n'; });
+    expect(await fake.Subject('abc1234')).toBe('fix(core): keep the cache per user');
+    expect(calls).toEqual([{ args: ['-c', 'core.quotePath=false', 'log', '-1', '--format=%s', 'abc1234'], cwd: '/repo' }]);
+  });
 });
