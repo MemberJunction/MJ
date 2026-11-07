@@ -1,6 +1,7 @@
 import {
   IsWhiteboardFontFamily,
   IsWhiteboardFontWeight,
+  IsWhiteboardHexColor,
   WHITEBOARD_DEFAULTS,
   WhiteboardAuthor,
   WhiteboardBounds,
@@ -248,6 +249,15 @@ function fontWeightOf(item: WhiteboardStickyItem | WhiteboardTextItem): Whiteboa
   return IsWhiteboardFontWeight(item.FontWeight) ? item.FontWeight : null;
 }
 
+/**
+ * The item's color when it is a hex color ({@link IsWhiteboardHexColor}), else `null`. Color is the one
+ * free-text style value the export writes, into an inline `style` and SVG paint attributes, and
+ * escaping alone leaves `red;background:url(...)` intact; a hex color cannot carry a declaration.
+ */
+function colorOf(item: WhiteboardTextItem | WhiteboardInkItem): string | null {
+  return typeof item.Color === 'string' && IsWhiteboardHexColor(item.Color) ? item.Color : null;
+}
+
 /** The literal font stack for the item's family key (sans for a missing or unknown key). */
 function fontStackOf(item: WhiteboardStickyItem | WhiteboardTextItem): string {
   return FONT_STACKS[IsWhiteboardFontFamily(item.FontFamily) ? item.FontFamily : 'sans'];
@@ -304,7 +314,8 @@ function shapeHtml(item: WhiteboardShapeItem, ox: number, oy: number, agentName:
 }
 
 function textHtml(item: WhiteboardTextItem, ox: number, oy: number, agentName: string): string {
-  const color = item.Color ? `color:${escapeHtml(item.Color)};` : '';
+  const hex = colorOf(item);
+  const color = hex ? `color:${hex};` : '';
   // explicit wrap width wins; otherwise wrap at the on-board default max width
   const width = item.W ? `width:${n(item.W)}px;` : 'max-width:380px;';
   const style = `left:${n(item.X - ox)}px;top:${n(item.Y - oy)}px;${width}${color}${textStyleCss(item)}`;
@@ -352,7 +363,7 @@ function inkChipHtml(item: WhiteboardInkItem, state: WhiteboardState, ox: number
 
 function inkSvg(item: WhiteboardInkItem, ox: number, oy: number): string {
   const points = item.Points.map((p) => `${n(p.X - ox)},${n(p.Y - oy)}`).join(' ');
-  return `<polyline points="${points}" fill="none" stroke="${escapeHtml(item.Color)}" stroke-width="${n(item.StrokeWidth)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  return `<polyline points="${points}" fill="none" stroke="${colorOf(item) ?? PALETTE.TextPrimary}" stroke-width="${n(item.StrokeWidth)}" stroke-linecap="round" stroke-linejoin="round"/>`;
 }
 
 function connectorSvg(item: WhiteboardConnectorItem, state: WhiteboardState, ox: number, oy: number): string {
@@ -559,7 +570,7 @@ function boxItemSvg(item: WhiteboardItem, state: WhiteboardState, ox: number, oy
       const fs = item.FontSize ?? 12;
       const font = fontStackOf(item);
       const weight = fontWeightOf(item) ?? 400;
-      const color = item.Color ? escapeHtml(item.Color) : PALETTE.TextPrimary;
+      const color = colorOf(item) ?? PALETTE.TextPrimary;
       return `<text x="${n(item.X - ox)}" y="${n(item.Y - oy + fs)}" font-size="${n(fs)}" font-family="${font}" font-weight="${weight}" fill="${color}">${svgLine(item.Text)}</text>`;
     }
     case 'image': {
