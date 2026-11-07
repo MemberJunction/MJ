@@ -18,11 +18,30 @@ export interface RealtimeSessionResumptionOptions {
     /**
      * Opens a replacement connection that resumes the session from `handle`, and makes it the
      * driver's current connection. Resolves once the new connection is in use; rejects on failure.
+     * `handle` is `null` only when {@link RequiresHandle} is `false` and the provider issued none:
+     * the driver then opens a fresh connection and the session's memory comes from elsewhere.
      */
-    Reconnect: (handle: string, attempt: RealtimeResumeAttempt) => Promise<void>;
+    Reconnect: (handle: string | null, attempt: RealtimeResumeAttempt) => Promise<void>;
     /**
-     * Every attempt failed. The driver surfaces its usual fatal error here; the helper never
-     * reconnects again after this.
+     * Move at a turn boundary instead of at a provider-marked resumable handle. Use it when the
+     * driver reseeds the new connection from its own notebook of the conversation (a seed), so the
+     * handle is not the memory and the provider's `resumable` flag says nothing about what is lost.
+     * Then {@link RealtimeSessionResumption.ConnectionEnding} moves at once if no turn is open,
+     * and {@link RealtimeSessionResumption.TurnEnded} moves when an ending was announced. A
+     * `resumable: false` update does not delay the move. Defaults to `false`.
+     */
+    ResumableAtTurnEnd?: boolean;
+    /**
+     * Whether a reconnect needs a handle. `false` lets a reconnect run with no handle and calls
+     * {@link Reconnect} with `null`; use it when the provider issues one handle only, at setup, or
+     * restores empty sessions, and the driver's seed carries the conversation. Defaults to `true`:
+     * with no handle {@link RealtimeSessionResumption.ConnectionLost} returns `false`. With `false`,
+     * rapid reconnects are capped: see {@link REALTIME_RESUMPTION_MAX_RAPID_RECONNECTS}.
+     */
+    RequiresHandle?: boolean;
+    /**
+     * Every attempt failed, or rapid reconnects hit their cap. The driver surfaces its usual fatal
+     * error here; the helper never reconnects again after this.
      */
     OnReconnectFailed: (error: Error) => void;
     /** A reconnect started. Drivers report this as `'connecting'` so hosts can show "reconnecting". */
@@ -70,6 +89,20 @@ export const REALTIME_RESUMPTION_DEADLINE_MARGIN_MS = 10000;
  */
 export const REALTIME_RESUMPTION_MIN_DEADLINE_MARGIN_MS = 1500;
 
+/**
+ * How many rapid reconnects a {@link RealtimeSessionResumptionOptions.RequiresHandle} `false` session gets before it
+ * stops. A connection whose setup the provider confirms and then closes abnormally each time counts as a successful
+ * reconnect every time, so the attempt limit never applies and it would otherwise reconnect forever: this mode has no
+ * handle to gate it and, on a server using an API key, no token budget.
+ */
+export const REALTIME_RESUMPTION_MAX_RAPID_RECONNECTS = 5;
+
+/**
+ * A reconnect is rapid when it starts within this time after the last successful one; one started later resets the
+ * count. Well below the planned-move cadence of 540 s, so healthy moves never count.
+ */
+export const REALTIME_RESUMPTION_RAPID_RECONNECT_WINDOW_MS = 30000;
+
 /** The share of the notice kept as the margin; the rest is the time a turn in progress has to finish. */
 const DEADLINE_MARGIN_SHARE_OF_NOTICE = 1 / 3;
 
@@ -108,8 +141,17 @@ export function ParseDurationToMs(duration: string | undefined): number | undefi
  *
  * Attempts follow {@link RealtimeSessionResumptionOptions.RetryDelaysMs}, each limited by
  * {@link RealtimeSessionResumptionOptions.AttemptTimeoutMs}. When every attempt fails it calls
- * `OnReconnectFailed` once and stops. With no handle (resumption disabled, or no update received
- * yet) {@link ConnectionLost} returns `false` and the driver keeps its usual fatal path.
+ * `OnReconnectFailed` once and stops. By default, with no handle (resumption disabled, or no update
+ * received yet) {@link ConnectionLost} returns `false` and the driver keeps its usual fatal path.
+ *
+ * Two opt-in modes serve a driver that reseeds each new connection from its own record of the
+ * conversation (a seed). There the seed, not the handle, is the memory:
+ * - {@link RealtimeSessionResumptionOptions.ResumableAtTurnEnd} moves at a turn boundary and
+ *   ignores the provider's `resumable` flag. `_resumableNow` plays no part in that mode.
+ * - {@link RealtimeSessionResumptionOptions.RequiresHandle} `false` lets every reconnect run
+ *   without a handle and pass `null` to `Reconnect`. More than
+ *   {@link REALTIME_RESUMPTION_MAX_RAPID_RECONNECTS} rapid reconnects in a row stop the session.
+ * With both at their defaults the behaviour is the one described above.
  */
 export class RealtimeSessionResumption {
     private _handle: string | null = null;
@@ -117,8 +159,13 @@ export class RealtimeSessionResumption {
     private _resumableNow = false;
     private _turnOpen = false;
     private _endingAnnounced = false;
+    private readonly requiresHandle: boolean;
     private _reconnecting = false;
     private _exhausted = false;
+    /** When the last reconnect succeeded; `null` before the first. */
+    private _lastReconnectedAt: number | null = null;
+    /** Reconnects in a row that started within the window after the one before. */
+    private _rapidReconnects = 0;
     private _disposed = false;
     private _deadlineTimer: ReturnType<typeof setTimeout> | null = null;
     private _retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -127,11 +174,21 @@ export class RealtimeSessionResumption {
 
     constructor(options: RealtimeSessionResumptionOptions) {
         this.options = options;
+        this.requiresHandle = options.RequiresHandle ?? true;
     }
 
     /** The latest handle the provider issued, or `null` before the first update. */
     public get Handle(): string | null {
         return this._handle;
+    }
+
+    /**
+     * Whether a reconnect has what it needs: a handle, or
+     * {@link RealtimeSessionResumptionOptions.RequiresHandle} `false`. A driver reads it to tell a
+     * connection problem it can recover from from one that ends the session.
+     */
+    public get CanReconnect(): boolean {
+        return !this.requiresHandle || this._handle !== null;
     }
 
     /** Whether a reconnect is in progress. */
@@ -146,10 +203,19 @@ export class RealtimeSessionResumption {
      * arrives while a turn is in progress is kept as that fallback too: resuming from it would cut
      * the turn, so it is not a point to move at.
      *
+     * In {@link RealtimeSessionResumptionOptions.ResumableAtTurnEnd} mode the handle is only stored:
+     * the seed is the memory, so `resumable` and the turn state never gate or start a move here.
+     *
      * @param handle The new handle, when the provider sent one.
      * @param resumable Whether the session can be resumed from this point without losing data.
      */
     public RecordHandle(handle: string | null | undefined, resumable: boolean): void {
+        if (this.options.ResumableAtTurnEnd) {
+            if (handle) {
+                this._handle = handle;
+            }
+            return;
+        }
         if (!resumable) {
             this._resumableNow = false;
             return;
@@ -179,15 +245,26 @@ export class RealtimeSessionResumption {
      * The turn ended (its `turnComplete`, with no tool call pending). A planned move now happens at
      * the next resumable handle, which the provider issues after the turn (Vertex AI: 20-70 ms
      * after `turnComplete`), so the new connection resumes with the finished turn.
+     *
+     * In {@link RealtimeSessionResumptionOptions.ResumableAtTurnEnd} mode the turn end is itself the
+     * point to move: when an ending was announced and no reconnect runs, the move starts here. A
+     * `TurnEnded` while a move runs, or after one finished (the announcement is then cleared), does
+     * nothing.
      */
     public TurnEnded(): void {
         this._turnOpen = false;
+        if (this.options.ResumableAtTurnEnd && this._endingAnnounced) {
+            this.startReconnect('connection-ending');
+        }
     }
 
     /**
      * The provider announced the current connection ends in `timeLeftMs`. The helper moves at once
      * when the latest handle is a resumable point (issued after the last turn ended, with no turn
-     * since); otherwise it waits for one, until the deadline.
+     * since); otherwise it waits for one, until the deadline. In
+     * {@link RealtimeSessionResumptionOptions.ResumableAtTurnEnd} mode it moves at once when no turn
+     * is open, and otherwise waits for {@link TurnEnded}, until the deadline. Either way a move
+     * needs a handle unless {@link RealtimeSessionResumptionOptions.RequiresHandle} is `false`.
      *
      * @param timeLeftMs Time until the provider closes the connection; `undefined` when not given.
      */
@@ -196,7 +273,8 @@ export class RealtimeSessionResumption {
             return;
         }
         this._endingAnnounced = true;
-        if (this._resumableNow && this._handle) {
+        const atMovePoint = this.options.ResumableAtTurnEnd ? !this._turnOpen : this._resumableNow;
+        if (atMovePoint && this.CanReconnect) {
             this.startReconnect('connection-ending');
             return;
         }
@@ -207,11 +285,15 @@ export class RealtimeSessionResumption {
      * The connection closed without the consumer asking.
      *
      * @returns `true` when a reconnect started (or was already running), so the driver reports
-     *          "reconnecting" rather than an error; `false` when there is no handle to resume
-     *          from, so the driver keeps its fatal path.
+     *          "reconnecting" rather than an error; `false` when the session is disposed or out of
+     *          attempts, or there is no handle to resume from while
+     *          {@link RealtimeSessionResumptionOptions.RequiresHandle} is `true`, so the driver
+     *          keeps its fatal path. With `RequiresHandle` `false` a lost connection reconnects
+     *          (with `null` when no handle was issued). Hitting the rapid-reconnect cap also returns
+     *          `true`: `OnReconnectFailed` has reported it, and a driver error on top would be a second one.
      */
     public ConnectionLost(): boolean {
-        if (this._disposed || this._exhausted || !this._handle) {
+        if (this._disposed || this._exhausted || !this.CanReconnect) {
             return false;
         }
         if (!this._reconnecting) {
@@ -231,7 +313,11 @@ export class RealtimeSessionResumption {
     }
 
     private startReconnect(reason: RealtimeReconnectReason): void {
-        if (this._reconnecting || this._disposed || this._exhausted || !this._handle) {
+        if (this._reconnecting || this._disposed || this._exhausted || !this.CanReconnect) {
+            return;
+        }
+        if (this.countRapidReconnect() > REALTIME_RESUMPTION_MAX_RAPID_RECONNECTS) {
+            this.stopAtRapidReconnectCap();
             return;
         }
         this._reconnecting = true;
@@ -239,6 +325,27 @@ export class RealtimeSessionResumption {
         this.options.Log?.(`[RealtimeSessionResumption] reconnecting (${reason})`);
         this.options.OnReconnecting?.(reason);
         this.scheduleAttempt(0);
+    }
+
+    /** Counts a reconnect that is starting, when it is rapid, and returns the count. Only a session with no handle gate has a cap. */
+    private countRapidReconnect(): number {
+        if (this.requiresHandle) {
+            return 0;
+        }
+        const last = this._lastReconnectedAt;
+        const isRapid = last !== null && Date.now() - last <= REALTIME_RESUMPTION_RAPID_RECONNECT_WINDOW_MS;
+        this._rapidReconnects = isRapid ? this._rapidReconnects + 1 : 0;
+        return this._rapidReconnects;
+    }
+
+    private stopAtRapidReconnectCap(): void {
+        const message =
+            `gave up after ${REALTIME_RESUMPTION_MAX_RAPID_RECONNECTS} reconnects, each within ` +
+            `${REALTIME_RESUMPTION_RAPID_RECONNECT_WINDOW_MS / 1000} s of the last: the connection keeps closing right after it opens`;
+        this.options.Log?.(`[RealtimeSessionResumption] ${message}`);
+        this.clearDeadline();
+        this._exhausted = true;
+        this.options.OnReconnectFailed(new Error(message));
     }
 
     private scheduleAttempt(index: number): void {
@@ -249,7 +356,7 @@ export class RealtimeSessionResumption {
     }
 
     private async attempt(index: number): Promise<void> {
-        if (this._disposed || !this._handle) {
+        if (this._disposed || !this.CanReconnect) {
             return;
         }
         const attempt = { Abandoned: false };
@@ -289,6 +396,7 @@ export class RealtimeSessionResumption {
 
     private onAttemptSucceeded(): void {
         this._reconnecting = false;
+        this._lastReconnectedAt = Date.now();
         this._endingAnnounced = false;
         // The new connection has not reported a resumable point yet, and a turn the move cut off
         // never completes there.

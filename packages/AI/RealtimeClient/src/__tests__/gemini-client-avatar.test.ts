@@ -603,7 +603,7 @@ describe('GeminiRealtimeClient avatar playout', () => {
             await connectAvatar({}, client);
             emitParts(client, videoPart(AvatarInitSegment()));
             emit(client, { interrupted: true });
-            await client.Resume();
+            await client.Drop(); // a goAway now waits for the turn after an interruption (MJ#6403); a drop does not
 
             emitParts(client, videoPart(AvatarFragment()));
             expect(client.Playout.Appended).toHaveLength(2);

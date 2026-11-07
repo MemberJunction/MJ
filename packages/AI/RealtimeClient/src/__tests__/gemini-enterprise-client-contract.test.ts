@@ -9,7 +9,7 @@ vi.mock('@google/genai', async () => vi.importActual<typeof import('@google/gena
 
 import { MJGlobal } from '@memberjunction/global';
 import type { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
-import { BaseRealtimeClient, type RealtimeClientTranscript, type RealtimeClientUsage } from '../generic/baseRealtimeClient';
+import { BaseRealtimeClient, type RealtimeClientError, type RealtimeClientTranscript, type RealtimeClientUsage } from '../generic/baseRealtimeClient';
 import { GeminiRealtimeClient, type IGeminiAudioPlayback, type IGeminiMicCapture } from '../drivers/geminiRealtimeClient';
 import { GeminiEnterpriseRealtimeClient } from '../drivers/geminiEnterpriseRealtimeClient';
 import { GEMINI_AVATAR_MP4_TYPE, VideoPlayout, type IAvatarVideoPlayout, type VideoPlayoutOptions } from '../media/videoPlayout';
@@ -488,6 +488,125 @@ describe('GeminiEnterpriseRealtimeClient through the relay (web SDK, fake WebSoc
             expect([FakeMediaSource.Instances.length, source.Buffers.length, element.src, element.Loads, element.Paused]).toEqual([1, 1, url, 0, false]);
             expect(buffer.Removed).toEqual([]);
             expect(videos).toHaveLength(1);
+        });
+    });
+
+    // The relay forwards only all-`user` client content and refuses a fresh session after the first connection, and
+    // Vertex AI's handles do restore: here the handle is the memory, so a move waits for a handle issued after the turn.
+    describe('the handle is the memory: no seed, no move without a fresh handle', () => {
+        const SETTLE_MS = 20;
+        const settled = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
+
+        /** Connects, has Google issue `handle-1`, and collects what the client reports. */
+        async function connectWithHandle(): Promise<{ Client: EnterpriseHarness; Socket: FakeWebSocket; Transcripts: RealtimeClientTranscript[] }> {
+            const { Client, Socket } = await connect(enterprisePact());
+            const transcripts: RealtimeClientTranscript[] = [];
+            Client.OnTranscript((t) => transcripts.push(t));
+            Socket.Receive({ sessionResumptionUpdate: { newHandle: 'handle-1', resumable: true } });
+            await vi.waitFor(() => expect(Client.ResumptionHandle).toBe('handle-1'));
+            return { Client, Socket, Transcripts: transcripts };
+        }
+
+        it('a goAway mid-answer moves at the fresh handle after turnComplete, not at turnComplete', async () => {
+            const { Socket: first, Transcripts } = await connectWithHandle();
+            first.Receive({ serverContent: { outputTranscription: { text: 'One, two, three.' } } });
+            first.Receive({ goAway: { timeLeft: '50s' } });
+            first.Receive({ serverContent: { turnComplete: true } });
+            await vi.waitFor(() => expect(Transcripts.some((t) => t.IsFinal && t.Text === 'One, two, three.')).toBe(true));
+            await settled();
+            expect(FakeWebSocket.Instances).toHaveLength(1);
+
+            first.Receive({ sessionResumptionUpdate: { newHandle: 'handle-2', resumable: true } });
+            const second = await nextSocket(2);
+            await openAndConfirm(second);
+            expect(setupOf(second)['sessionResumption']).toEqual({ handle: 'handle-2' });
+        });
+
+        it('an interrupted turn still ends at its turnComplete for the move: the next fresh handle moves (MJ#6403 pin)', async () => {
+            const { Socket: first, Transcripts } = await connectWithHandle();
+            first.Receive({ serverContent: { outputTranscription: { text: 'One, two,' } } });
+            first.Receive({ goAway: { timeLeft: '50s' } });
+            first.Receive({ serverContent: { interrupted: true } });
+            first.Receive({ serverContent: { turnComplete: true } });
+            await vi.waitFor(() => expect(Transcripts.some((t) => t.IsFinal && t.Text === 'One, two,')).toBe(true));
+            first.Receive({ sessionResumptionUpdate: { newHandle: 'handle-2', resumable: true } });
+            const second = await nextSocket(2);
+            await openAndConfirm(second);
+            expect(setupOf(second)['sessionResumption']).toEqual({ handle: 'handle-2' });
+        });
+
+        it('sends no seed on the new connection: the first thing after the setup is the audio', async () => {
+            const { Client, Socket: first, Transcripts } = await connectWithHandle();
+            first.Receive({ serverContent: { inputTranscription: { text: 'hi' } } });
+            first.Receive({ serverContent: { outputTranscription: { text: 'Question 1' } } });
+            first.Receive({ serverContent: { turnComplete: true } });
+            await vi.waitFor(() => expect(Transcripts.some((t) => t.IsFinal && t.Text === 'Question 1')).toBe(true));
+            first.Receive({ sessionResumptionUpdate: { newHandle: 'handle-2', resumable: true } });
+            first.onclose?.(new CloseEvent('close', { code: 1006, reason: 'relay went away', wasClean: false }));
+
+            const second = await nextSocket(2);
+            await openAndConfirm(second);
+            await vi.waitFor(() => expect(first.Closed).toBe(true));
+            Client.OnPcmChunk?.('AAAA');
+            expect(second.Frames.map((frame) => Object.keys(frame)[0])).toEqual(['setup', 'realtimeInput']);
+        });
+
+        it('a no-handle abnormal close is fatal at once, with no second connection', async () => {
+            const { Client, Socket } = await connect(enterprisePact());
+            const errors: RealtimeClientError[] = [];
+            Client.OnError((e) => errors.push(e));
+            Socket.onclose?.(new CloseEvent('close', { code: 1011, reason: 'upstream closed', wasClean: false }));
+            expect(errors).toEqual([{ Message: 'Gemini Live connection closed (1011): upstream closed', Fatal: true }]);
+            await settled();
+            expect(FakeWebSocket.Instances).toHaveLength(1);
+        });
+
+        it('a no-handle transport error is fatal at once', async () => {
+            const { Client, Socket } = await connect(enterprisePact());
+            const errors: RealtimeClientError[] = [];
+            Client.OnError((e) => errors.push(e));
+            Socket.onerror?.(new Event('error'));
+            expect(errors).toHaveLength(1);
+            expect(errors[0].Message).toContain('Gemini Live transport error');
+            expect(errors[0].Fatal).toBe(true);
+        });
+
+        it('with a handle, a transport error is only logged, and the close that follows resumes', async () => {
+            const { Client, Socket: first } = await connectWithHandle();
+            const errors: RealtimeClientError[] = [];
+            Client.OnError((e) => errors.push(e));
+            first.onerror?.(new Event('error'));
+            expect(errors).toEqual([]);
+            first.onclose?.(new CloseEvent('close', { code: 1006, reason: 'relay went away', wasClean: false }));
+            const second = await nextSocket(2);
+            await openAndConfirm(second);
+            expect(setupOf(second)['sessionResumption']).toEqual({ handle: 'handle-1' });
+            expect(errors).toEqual([]);
+        });
+
+        it('a tool result that crosses a resume still goes out as a tool response', async () => {
+            const { Client, Socket: first } = await connectWithHandle();
+            let toolCalls = 0;
+            Client.OnToolCall(() => toolCalls++);
+            first.Receive({ toolCall: { functionCalls: [{ id: 'c1', name: 'lookup_order', args: {} }] } });
+            await vi.waitFor(() => expect(toolCalls).toBe(1));
+            first.onclose?.(new CloseEvent('close', { code: 1006, reason: 'relay went away', wasClean: false }));
+
+            const second = await nextSocket(2);
+            await openAndConfirm(second);
+            await vi.waitFor(() => expect(first.Closed).toBe(true));
+            Client.SendToolResult('c1', '{"ok":true}');
+            expect(second.Frames.map((frame) => Object.keys(frame)[0])).toEqual(['setup', 'toolResponse']);
+        });
+
+        it("keeps the transcript's order: a tool call does not finalize the user's words early", async () => {
+            const { Client, Socket, Transcripts } = await connectWithHandle();
+            let toolCalls = 0;
+            Client.OnToolCall(() => toolCalls++);
+            Socket.Receive({ serverContent: { inputTranscription: { text: 'where is my order' } } });
+            Socket.Receive({ toolCall: { functionCalls: [{ id: 'c1', name: 'lookup_order', args: {} }] } });
+            await vi.waitFor(() => expect(toolCalls).toBe(1));
+            expect(Transcripts.filter((t) => t.Role === 'User' && t.IsFinal)).toEqual([]);
         });
     });
 });

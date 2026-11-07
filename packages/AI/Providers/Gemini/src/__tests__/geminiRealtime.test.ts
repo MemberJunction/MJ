@@ -143,7 +143,8 @@ describe('GeminiRealtime client-direct (CreateClientSession)', () => {
         // 10-minute new-session window "new_session_expire_time deadline exceeded"). So the token must open new
         // sessions until it expires, and allow at least one connection per 10 minutes of the cap the mint reports.
         expect(mintConfig?.newSessionExpireTime).toBe(mintConfig?.expireTime);
-        expect(mintConfig?.uses).toBeGreaterThanOrEqual(Math.ceil(1800 / 600));
+        // A planned move at 540 s (lifetime minus the 60 s margin) means one connection per 540 s of the cap, plus the margin.
+        expect(mintConfig?.uses).toBe(Math.ceil(1800 / 540) + 3);
 
         const constraints = mintConfig?.liveConnectConstraints;
         expect(constraints?.model).toBe('gemini-live-2.5-flash-preview');
@@ -173,6 +174,13 @@ describe('GeminiRealtime client-direct (CreateClientSession)', () => {
         expect(cfg.ExpiresAt).toBe(mintConfig.expireTime);
         expect(mintConfig.uses).toBeLessThan(6);
         expect(mintConfig.uses).toBeGreaterThanOrEqual(2);
+    });
+
+    it('tells the browser the connection lifetime and budgets one token use per planned move', async () => {
+        const driver = new ClientDirectTestable('k');
+        const cfg = await driver.CreateClientSession(makeParams({ MaxSessionSeconds: 1800 }));
+        expect(cfg.SessionConfig['connectionLifetimeSeconds']).toBe(600);
+        expect(driver.MintParams?.config?.uses).toBe(Math.ceil(1800 / 540) + 3); // 7
     });
 
     it('carries the same model + config in SessionConfig for the client to pass at connect', async () => {
@@ -1323,7 +1331,8 @@ describe('C9: connect fails fast when the socket closes during setup', () => {
         const session = await driver.StartSession(makeParams());
         const errors: string[] = [];
         session.OnError((e) => errors.push(e.Message));
-        callbacks!.onclose({ code: 1011, reason: 'server restart' });
+        // A clean close: with no handle it ends the session. An abnormal one would resume instead.
+        callbacks!.onclose({ code: 1000, reason: 'server restart' });
         expect(errors.length).toBe(1);
     });
 });
@@ -2072,5 +2081,12 @@ describe("live avatars: the mint says whether the avatar shows, and why not", ()
         expect(enterprise.SupportsAvatarOutput('gemini-3.1-flash-live-preview')).toBe(false);
         expect(developer.SupportsAvatarOutput('gemini-3.8-live')).toBe(false);
         expect(developer.SupportsAvatarOutput('gemini-3.1-flash-live-preview')).toBe(false);
+    });
+});
+
+describe('connectionLifetimeSeconds in the pact', () => {
+    it('is left out on Gemini Enterprise, which relies on the goAway Vertex sends', async () => {
+        const cfg = await new EnterpriseClientDirect('k').CreateClientSession(makeParams({ Model: 'gemini-3.8-live' }));
+        expect(cfg.SessionConfig['connectionLifetimeSeconds']).toBeUndefined();
     });
 });

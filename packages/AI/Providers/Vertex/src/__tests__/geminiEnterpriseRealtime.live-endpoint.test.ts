@@ -104,6 +104,13 @@ describe("GeminiEnterpriseRealtime: the Live socket's host and API version from 
         expect(openFresh(minted).UpstreamUrl).toBe(`wss://${LIVE_HOST}/ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent`);
     });
 
+    // Vertex announces the end of a connection with goAway and its handle restores the session, so the browser must not
+    // schedule a move of its own: the field's absence from the pact is what keeps the planned move off (MJ#6403).
+    it('leaves connectionLifetimeSeconds out of the pact, so the browser plans no move of its own', async () => {
+        const minted = await new TestEnterprise(environmentKey).CreateClientSession(makeParams());
+        expect(Object.keys(minted.SessionConfig)).not.toContain('connectionLifetimeSeconds');
+    });
+
     it('mints the bearer token for that socket, and keeps the model path on the key\'s project and location', async () => {
         const driver = new TestEnterprise(environmentKey);
         const grant = openFresh(await driver.CreateClientSession(makeParams()));
