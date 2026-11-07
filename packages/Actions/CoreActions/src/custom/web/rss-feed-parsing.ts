@@ -130,6 +130,74 @@ export function stripHtml(text: string): string {
     return StripHtml(text);
 }
 
+/** Where a closing tag sits: `Start` is its `<`, `End` is just past its `>`. */
+interface TagSpan {
+    Start: number;
+    End: number;
+}
+
+function isXmlSpace(c: string): boolean {
+    return /\s/.test(c);
+}
+
+/** The first `</name>` (whitespace allowed before the `>`) at or after `from`, or null. */
+function findClosingTag(xml: string, name: string, from: number): TagSpan | null {
+    const marker = `</${name}`;
+    let at = xml.indexOf(marker, from);
+    while (at !== -1) {
+        let i = at + marker.length;
+        while (i < xml.length && isXmlSpace(xml[i])) i++;
+        if (xml[i] === '>') return { Start: at, End: i + 1 };
+        at = xml.indexOf(marker, i);
+    }
+    return null;
+}
+
+const FEED_BLOCK_NAMES = ['item', 'entry'] as const;
+
+/**
+ * The inner text of every `<item>` and `<entry>` block, in document order. The opening tag is the
+ * name followed by `>` or by whitespace and attributes; the block ends at the first matching
+ * closing tag. Same result as `/<(item|entry)(?:\s[^>]*)?>([\s\S]*?)<\/\1\s*>/g`, scanned by
+ * index: that regex rescans to the end of the document for every unclosed `<item>`, so a hostile
+ * feed made of them takes quadratic time (CodeQL js/polynomial-redos). The next `>` and each name's
+ * next closing tag are remembered across openings, so no stretch is searched twice.
+ */
+function feedBlockBodies(xml: string): string[] {
+    const bodies: string[] = [];
+    const closes = new Map<string, TagSpan | null>();
+    let nextGt = -1;
+    let lt = xml.indexOf('<');
+    while (lt !== -1) {
+        const name = FEED_BLOCK_NAMES.find((n) => xml.startsWith(n, lt + 1));
+        let contentStart = -1;
+        if (name) {
+            const afterName = lt + 1 + name.length;
+            if (xml[afterName] === '>') {
+                contentStart = afterName + 1;
+            } else if (afterName < xml.length && isXmlSpace(xml[afterName])) {
+                if (nextGt < afterName) nextGt = xml.indexOf('>', afterName);
+                if (nextGt === -1) break; // no opening tag after this one can be closed either
+                contentStart = nextGt + 1;
+            }
+        }
+        if (name && contentStart !== -1) {
+            let close = closes.get(name);
+            if (close === undefined || (close !== null && close.Start < contentStart)) {
+                close = findClosingTag(xml, name, contentStart);
+                closes.set(name, close);
+            }
+            if (close) {
+                bodies.push(xml.slice(contentStart, close.Start));
+                lt = xml.indexOf('<', close.End);
+                continue;
+            }
+        }
+        lt = xml.indexOf('<', lt + 1);
+    }
+    return bodies;
+}
+
 /**
  * Parse a feed document into articles. Handles RSS 2.0 (`<item>`) and Atom
  * (`<entry>`); a document containing both has both read, since some publishers
@@ -142,11 +210,8 @@ export function stripHtml(text: string): string {
  */
 export function ParseFeedArticles(xml: string, feedName: string): FeedArticle[] {
     const articles: FeedArticle[] = [];
-    const blockPattern = /<(item|entry)(?:\s[^>]*)?>([\s\S]*?)<\/\1\s*>/g;
-    let match: RegExpExecArray | null;
 
-    while ((match = blockPattern.exec(xml)) !== null) {
-        const itemXml = match[2];
+    for (const itemXml of feedBlockBodies(xml)) {
 
         const title = StripHtml(extractTag(itemXml, 'title'));
         if (!title) continue;
@@ -199,8 +264,21 @@ export function parseFeedArticles(xml: string, feedName: string): FeedArticle[] 
 
 /** Some feeds carry the canonical URL as a permalink `<guid>` and no `<link>`. */
 function extractPermalinkGuid(xml: string): string {
-    const match = xml.match(/<guid[^>]*isPermaLink\s*=\s*["']true["'][^>]*>([\s\S]*?)<\/guid\s*>/);
-    return decodeEntities(match?.[1]?.trim() ?? '');
+    // The first `<guid …>` whose attributes say isPermaLink="true", through the next `</guid>`. By
+    // index rather than one regex, which rescans to the end for every unclosed `<guid`
+    // (CodeQL js/polynomial-redos). Openings that share one `>` share the attribute text, so only the
+    // first is tried.
+    let open = xml.indexOf('<guid');
+    while (open !== -1) {
+        const tagEnd = xml.indexOf('>', open + '<guid'.length);
+        if (tagEnd === -1) break;
+        if (/isPermaLink\s*=\s*["']true["']/.test(xml.slice(open + '<guid'.length, tagEnd))) {
+            const close = findClosingTag(xml, 'guid', tagEnd + 1);
+            return close ? decodeEntities(xml.slice(tagEnd + 1, close.Start).trim()) : '';
+        }
+        open = xml.indexOf('<guid', tagEnd + 1);
+    }
+    return '';
 }
 
 /** A feed date as ISO 8601, or null when it is missing or unparseable. */

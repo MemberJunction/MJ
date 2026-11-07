@@ -551,3 +551,35 @@ describe('ReadRSSFeedAction', () => {
         expect(output(params, 'TotalFetched')).toBe(0);
     });
 });
+
+describe('parseFeedArticles — block and guid scanning', () => {
+    it.each([
+        ['<item><title>A</title></item>', ['A']],
+        ['<item\n  rdf:about="x"><title>B</title></item >', ['B']],
+        ['<items><title>No</title></items>', []],
+        ['<item/><item><title>C</title></item>', ['C']],
+        ['<item><title>D</title><item><title>E</title></item>', ['D']],
+        ['<entry><title>F</title></entry><item><title>G</title></item>', ['F', 'G']],
+        ['<item><title>Unclosed</title>', []],
+    ])('reads the blocks in %j', (xml, titles) => {
+        expect(ParseFeedArticles(xml, 'F').map(a => a.title)).toEqual(titles);
+    });
+
+    it.each([
+        ['<guid isPermaLink="true">https://x/a</guid>', 'https://x/a'],
+        ["<guid foo='1' isPermaLink = 'true' >  https://x/b  </guid >", 'https://x/b'],
+        ['<guid isPermaLink="false">opaque</guid><guid isPermaLink="true">https://x/c</guid>', 'https://x/c'],
+        ['<guid isPermaLink="true">https://x/unclosed', ''],
+    ])('reads the permalink guid in %j', (guidXml, link) => {
+        expect(ParseFeedArticles(`<item><title>T</title>${guidXml}</item>`, 'F')[0].link).toBe(link);
+    });
+
+    it('reads a feed of 100k unclosed item and guid openings in linear time', () => {
+        const started = Date.now();
+        expect(ParseFeedArticles('<item>a'.repeat(30_000), 'F')).toEqual([]);
+        expect(ParseFeedArticles('<item\t'.repeat(30_000), 'F')).toEqual([]);
+        expect(ParseFeedArticles(`<item><title>T</title>${'<guid isPermaLink="true"'.repeat(5_000)}</item>`, 'F')[0].link).toBe('');
+        expect(ParseFeedArticles(`<item><title>T</title>${'<guid'.repeat(50_000)}</item>`, 'F')[0].link).toBe('');
+        expect(Date.now() - started).toBeLessThan(2500);
+    });
+});
