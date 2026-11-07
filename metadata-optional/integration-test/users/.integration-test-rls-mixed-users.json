@@ -1,0 +1,38 @@
+[
+  {
+    "fields": {
+      "Name": "Integration Test RLS Mixed User",
+      "FirstName": "Integration Test",
+      "LastName": "RLS Mixed User",
+      "Email": "it-rls-mixed@integration.test",
+      "Type": "User",
+      "IsActive": true,
+      "LinkedRecordType": "None"
+    },
+    "relatedEntities": {
+      "MJ: User Roles": [
+        {
+          "fields": {
+            "UserID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Integration Test: RLS Mixed Filtered"
+          },
+          "primaryKey": {
+            "ID": "B7B8CFA2-1422-4600-80DE-4B5B247547C5"
+          }
+        },
+        {
+          "fields": {
+            "UserID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Integration Test: RLS Mixed Unfiltered"
+          },
+          "primaryKey": {
+            "ID": "161A611B-99DA-4554-8AFF-5A54B4AC14A9"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "5097F2B2-D6BB-472C-8684-F3FEDF85CF25"
+    }
+  }
+]
