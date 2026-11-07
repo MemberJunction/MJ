@@ -1,8 +1,8 @@
 /**
  * Expression-level conversion helpers shared across multiple rules.
- * Ported from Python functions: convert_identifiers, convert_date_functions,
- * convert_charindex, convert_stuff, convert_string_concat, convert_iif,
- * convert_top_to_limit, etc.
+ * Started as a port of the Python converter (convert_identifiers, convert_date_functions,
+ * convert_charindex, convert_stuff, convert_string_concat, convert_iif, convert_top_to_limit,
+ * etc.); later helpers were written here directly and have no Python counterpart.
  */
 import { ResolveInlineType } from './TypeResolver.js';
 import { GAP_MARKER_NEEDS_HAND_AUTHORING } from './types.js';
@@ -1536,7 +1536,8 @@ function likePatternToRegex(pattern: string): string | null {
       body += pattern.slice(i, close + 1);
       i = close;
     } else if (ch === '%') {
-      body += '.*';
+      // `%%` matches what `%` does; one `.*` keeps the anchor trimming below working.
+      if (!body.endsWith('.*')) body += '.*';
     } else if (ch === '_') {
       body += '.';
     } else {
@@ -1600,9 +1601,10 @@ export function RoutineSchema(sql: string): string | null {
  * Before this, every Open App CRUD procedure and trigger fell through to "SKIPPED" and the
  * converted migration installed tables and views but no routines (issue #5364 item 8).
  *
- * Returns null when the routine also names the literal core schema (`__mj.X`): the rename back
- * could not tell its own references from core's, so the caller must not convert it this way.
- * Placeholder references (`${mjSchema}.X`) are unaffected and stay distinct.
+ * Returns null when the routine also names the literal core schema (`__mj.X`) anywhere outside
+ * comments, string literals included (a RAISERROR message that mentions `__mj.` counts): the
+ * rename back could not tell its own references from core's, so the caller must not convert it
+ * this way. Placeholder references (`${mjSchema}.X`) are unaffected and stay distinct.
  */
 export function ConvertInRoutineSchema(sql: string, convert: (coreSchemaSql: string) => string): string | null {
   const schema = RoutineSchema(sql);
@@ -1611,7 +1613,7 @@ export function ConvertInRoutineSchema(sql: string, convert: (coreSchemaSql: str
   if (/(?:\[__mj\]|"__mj"|(?<![\w$])__mj)\s*\./i.test(code)) return null;
 
   const own = new RegExp(`(?:\\[${EscapeRegExp(schema)}\\]|"${EscapeRegExp(schema)}"|(?<![\\w$])${EscapeRegExp(schema)})(\\s*\\.)`, 'gi');
-  const aliased = TransformCodeOnly(sql, (c) => c.replace(own, `${CORE_SCHEMA}$1`));
+  const aliased = TransformCodeOnly(sql, (c) => c.replace(own, (_m, dot: string) => `${CORE_SCHEMA}${dot}`));
   const converted = convert(aliased);
   return TransformCodeOnly(converted, (c) => c.replace(/(?<![\w$"])__mj(\s*\.)/g, (_m, dot: string) => `${schema}${dot}`))
     .replace(/'__mj'::regnamespace/g, () => `'${schema}'::regnamespace`);

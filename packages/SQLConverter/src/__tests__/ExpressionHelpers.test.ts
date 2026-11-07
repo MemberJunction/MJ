@@ -936,6 +936,10 @@ describe('ConvertLikeCharacterClasses', () => {
     expect(ConvertLikeCharacterClasses(`"Code" LIKE 'GL.[0-9]'`)).toBe(`"Code" ~ '^GL\\.[0-9]$'`);
   });
 
+  it('collapses a run of % into one wildcard so the anchors still trim', () => {
+    expect(ConvertLikeCharacterClasses(`"Code" NOT LIKE '%%[^A-Z]%%'`)).toBe(`"Code" !~ '[^A-Z]'`);
+  });
+
   it('leaves LIKE patterns without a class, and LIKE ... ESCAPE, unchanged', () => {
     expect(ConvertLikeCharacterClasses(`"Name" LIKE 'Acme%'`)).toBe(`"Name" LIKE 'Acme%'`);
     expect(ConvertLikeCharacterClasses(`"Name" LIKE '%![x]%' ESCAPE '!'`)).toBe(`"Name" LIKE '%![x]%' ESCAPE '!'`);

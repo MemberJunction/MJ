@@ -26,6 +26,14 @@ describe('InlineScalarSelectVariables (issue #5364 item 4)', () => {
     expect(out).toContain("IF NOT EXISTS (SELECT 1 WHERE (SELECT ID FROM __mj.Entity WHERE Name = 'Widgets') IS NULL)\nBEGIN");
   });
 
+  it('keeps a statement on the DECLARE\'s line out of the inlining note comment', () => {
+    const batch = ['EXEC __mj.spRefresh;', `${declare} INSERT INTO __mj.EntityField (EntityID) VALUES (@EntityID);`].join('\n');
+    const out = InlineScalarSelectVariables(batch);
+    const insertLine = out.split('\n').find((l) => l.includes('INSERT INTO'));
+    expect(insertLine).toBeDefined();
+    expect(insertLine?.trimStart().startsWith('--')).toBe(false);
+  });
+
   it('leaves string literals that mention the variable alone', () => {
     const batch = ['EXEC __mj.spRefresh;', declare, "PRINT 'set @EntityID first'; SELECT @EntityID;"].join('\n');
     expect(InlineScalarSelectVariables(batch)).toContain("'set @EntityID first'");

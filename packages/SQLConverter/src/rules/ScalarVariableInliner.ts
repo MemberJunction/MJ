@@ -184,7 +184,8 @@ export function InlineScalarSelectVariables(batch: string): string {
     }
 
     const rewritten = replaceVariable(rewriteNullGuards(later, name, select), name, `(${select})`);
-    const note = `-- @${name} (T-SQL batch variable) is inlined below as its SELECT`;
+    // The trailing newline keeps a statement that shared the DECLARE's line out of the comment.
+    const note = `-- @${name} (T-SQL batch variable) is inlined below as its SELECT\n`;
     result = result.slice(0, m.index) + note + rewritten;
     searchFrom = m.index + note.length;
   }
