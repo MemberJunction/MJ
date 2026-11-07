@@ -1296,10 +1296,13 @@ export class SQLServerDataProvider
         if (sSQL.length > 0) sSQL += ' UNION ALL ';
 
         const sourceObject = this.resolveDependencySourceObject(entity, [f.Name, f.EntityIDFieldName]);
+        // The record id column is usually nvarchar: an N'' literal keeps non-ASCII ids matching
+        // and lets the comparison seek the column's index (#5664).
+        const p = f.UnicodePrefix;
         const recordIDPredicate =
           bareValue && bareValue !== targetRecordID
-            ? `[${f.Name}] IN ('${targetRecordID}', '${bareValue}')`
-            : `[${f.Name}] = '${targetRecordID}'`;
+            ? `[${f.Name}] IN (${p}'${targetRecordID}', ${p}'${bareValue}')`
+            : `[${f.Name}] = ${p}'${targetRecordID}'`;
 
         // there is a layer of indirection here because each ROW in each of the entity records for this entity/field combination could point to a DIFFERENT
         // entity. We find out which entity it is pointed to via the EntityIDFieldName in the field definition, so we have to filter the rows in the entity
@@ -1381,7 +1384,7 @@ export class SQLServerDataProvider
     if (!relFieldName || relFieldName === 'id' || relFieldName === entity.FirstPrimaryKey?.Name?.trim().toLowerCase()) { // first-pk-ok: a foreign key targets a single column; default FK target is the first primary key
       // simple link to first primary key, most common scenario for linkages
       // Key values arrive from remote callers — render through the shared sanitizer.
-      return SQLServerDataProvider.RenderKeyValueLiteral(CompositeKey.GetValueByIndex(0), entity.FirstPrimaryKey.NeedsQuotes, entity.FirstPrimaryKey.Name, entity.Name); // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
+      return SQLServerDataProvider.RenderKeyValueLiteral(CompositeKey.GetValueByIndex(0), entity.FirstPrimaryKey.NeedsQuotes, entity.FirstPrimaryKey.Name, entity.Name, entity.FirstPrimaryKey.UnicodePrefix); // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
     } else {
       // The FK points at a non-key column of `entity`, so resolve that column for THE record being
       // checked. The record is identified by its full key — every PK column, not just the first —
@@ -1403,7 +1406,7 @@ export class SQLServerDataProvider
         const value = byName ? byName.Value : compositeKey.GetValueByIndex(index);
         // Key values arrive from remote callers — render through the shared sanitizer so a
         // crafted value cannot break out of the literal (or, unquoted, splice in SQL text).
-        return `${pk.Name}=${SQLServerDataProvider.RenderKeyValueLiteral(value, pk.NeedsQuotes, pk.Name, entity.Name)}`;
+        return `${pk.Name}=${SQLServerDataProvider.RenderKeyValueLiteral(value, pk.NeedsQuotes, pk.Name, entity.Name, pk.UnicodePrefix)}`;
       })
       .join(' AND ');
   }
@@ -1412,10 +1415,14 @@ export class SQLServerDataProvider
    * Renders a primary-key value as a safe SQL literal. Quoted (string/date) values are
    * escaped with {@link EscapeSQLString}; unquoted (numeric) values are validated to be a
    * plain number, since anything else spliced in bare would execute as SQL text.
+   *
+   * `unicodePrefix` is the key column's {@link EntityFieldInfo.UnicodePrefix} (`N` for
+   * nchar/nvarchar/ntext): without it a non-ASCII key is narrowed to the code page and misses
+   * its row, and the comparison cannot seek the column's index (#5664).
    */
-  protected static RenderKeyValueLiteral(value: unknown, needsQuotes: boolean, fieldName: string, entityName: string): string {
+  protected static RenderKeyValueLiteral(value: unknown, needsQuotes: boolean, fieldName: string, entityName: string, unicodePrefix: string = ''): string {
     if (needsQuotes) {
-      return `'${EscapeSQLString(String(value))}'`;
+      return `${unicodePrefix}'${EscapeSQLString(String(value))}'`;
     }
     const raw = String(value);
     if (!/^-?\d+(\.\d+)?$/.test(raw)) {
@@ -3381,6 +3388,7 @@ export class SQLServerDataProvider
     const schema = entityInfo.SchemaName || '__mj';
     const view = entityInfo.BaseView;
     const pkName = entityInfo.FirstPrimaryKey.Name; // first-pk-ok: IS-A sibling shares the parent's single-column key; safePKValue is that one value
+    const pkPrefix = entityInfo.FirstPrimaryKey.UnicodePrefix; // first-pk-ok: same single-column key; N'' for an nvarchar key (#5664)
     const safeEntityName = entityInfo.Name.replace(/'/g, "''");
 
     const recordID = entityInfo.PrimaryKeys
@@ -3395,7 +3403,7 @@ export class SQLServerDataProvider
 
     return `
 DECLARE ${varName} NVARCHAR(MAX) = (
-    SELECT * FROM [${schema}].[${view}] WHERE [${pkName}] = '${safePKValue}'
+    SELECT * FROM [${schema}].[${view}] WHERE [${pkName}] = ${pkPrefix}'${safePKValue}'
     FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
 );
 IF ${varName} IS NOT NULL

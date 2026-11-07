@@ -38,6 +38,7 @@ import {
     DescribeStatementFailure,
     SummarizeSqlParameters,
     FormatSqlParameterTypesForError,
+    MapTSQLCastTypesForPostgreSQL,
 } from '@memberjunction/generic-database-provider';
 import type { DatabasePoolStats, DescribeStatementResult } from '@memberjunction/generic-database-provider';
 import {
@@ -62,6 +63,14 @@ const pgDialect = new PostgreSQLDialect();
  */
 function escapeRegExp(literal: string): string {
     return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * `code` without a T-SQL `N` string prefix at its end: `x = N` (the code before `'abc'`) becomes
+ * `x = `. Only a standalone `N`/`n` counts; the end of a name such as `ColumnN` is left alone.
+ */
+function StripTrailingUnicodePrefix(code: string): string {
+    return /(^|[^\w$"])[Nn]$/.test(code) ? code.slice(0, -1) : code;
 }
 
 /**
@@ -820,6 +829,11 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      * keyword, producing `syntax error at or near "ESCAPE"`). PostgreSQL's default
      * backslash-escape behavior in LIKE makes the explicit ESCAPE clause unnecessary,
      * so we emit plain quoted literals with no `N` prefix and no `ESCAPE`.
+     *
+     * PostgreSQL compares text case-sensitively, unlike SQL Server's default collation, so
+     * both sides are lowercased: the column through {@link buildUserSearchColumnExpression},
+     * the term with `LOWER('…')` (issue #5833). A `LOWER(col) varchar_pattern_ops` expression
+     * index keeps Exact and BeginsWith index-seekable.
      */
     protected override buildPerFieldSearchPredicate(field: EntityFieldInfo, escapedTerm: string, rawSafeTerm: string): string {
         if (field.UserSearchParamFormatAPI && field.UserSearchParamFormatAPI.length > 0) {
@@ -831,15 +845,35 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         const pred = (field.UserSearchPredicateAPI ?? 'Contains').trim();
         switch (pred) {
             case 'Exact':
-                return ` = '${rawSafeTerm}'`;
+                return ` = LOWER('${rawSafeTerm}')`;
             case 'BeginsWith':
-                return ` LIKE '${escapedTerm}%'`;
+                return ` LIKE LOWER('${escapedTerm}%')`;
             case 'EndsWith':
-                return ` LIKE '%${escapedTerm}'`;
+                return ` LIKE LOWER('%${escapedTerm}')`;
             case 'Contains':
             default:
-                return ` LIKE '%${escapedTerm}%'`;
+                return ` LIKE LOWER('%${escapedTerm}%')`;
         }
+    }
+
+    /**
+     * `LOWER("Col")` for a text field searched by the built-in predicates, so user search is
+     * case-insensitive as on SQL Server (issue #5833). A field with a
+     * `UserSearchParamFormatAPI` keeps the plain column: its format is the caller's own SQL.
+     */
+    protected override buildUserSearchColumnExpression(field: EntityFieldInfo): string {
+        const column = this.QuoteIdentifier(field.Name);
+        if (field.UserSearchParamFormatAPI && field.UserSearchParamFormatAPI.length > 0) return column;
+        return this.isTextSearchableType(field) ? `LOWER(${column})` : column;
+    }
+
+    /**
+     * No `N` prefix on PostgreSQL. Metadata reports a text key as `nvarchar` here too, but `N'…'` is
+     * `bpchar` on PostgreSQL: a varchar key compared to it is cast to bpchar, so its index is not
+     * used and trailing spaces stop counting.
+     */
+    protected override KeyLiteralUnicodePrefix(_field: EntityFieldInfo): string {
+        return '';
     }
 
     /**
@@ -850,6 +884,8 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      * filters across the codebase (engines, dashboards, agents) use SQL
      * Server's bit-as-integer convention. Without this, PG rejects the
      * comparison with `operator does not exist: boolean = integer`.
+     * The identifier pass also drops T-SQL `N'…'` prefixes and maps
+     * `CAST(… AS uniqueidentifier)` to `uuid` (see {@link quoteIdentifiersInSQL}).
      */
     protected override TransformExternalSQLClause(clause: string, entityInfo: EntityInfo): string {
         if (!clause || clause.length === 0) return clause;
@@ -1395,15 +1431,23 @@ SELECT * FROM delete_result`;
         const n = sql.length;
         let codeBuf = '';
 
+        // Code (never literal text) also gets the T-SQL type a client clause casts to mapped to
+        // PostgreSQL's (`CAST(RecordID AS uniqueidentifier)` → `AS uuid`): metadata reports a
+        // PostgreSQL uuid column as `uniqueidentifier`, a type PostgreSQL does not have.
         const flushCode = () => {
             if (codeBuf.length === 0) return;
-            out += this.quoteFieldNamesInToken(codeBuf, fieldNames);
+            out += this.quoteFieldNamesInToken(MapTSQLCastTypesForPostgreSQL(codeBuf), fieldNames);
             codeBuf = '';
         };
 
         while (i < n) {
             const ch = sql[i];
             if (ch === "'") {
+                // A T-SQL `N'…'` prefix is dropped. On PostgreSQL `N'…'` is `bpchar`, so a varchar
+                // key compared to it is cast to bpchar: the key's index is not used and trailing
+                // spaces stop counting. Client-built key filters (`CompositeKey.ToWhereClause`,
+                // SearchEntity's id filter) add the prefix for SQL Server's nvarchar keys.
+                codeBuf = StripTrailingUnicodePrefix(codeBuf);
                 // Flush any pending code before opening the literal.
                 flushCode();
                 let j = i + 1;

@@ -1,5 +1,6 @@
 import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, EntityAlternateBaseViewInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
+import { createHash } from 'crypto';
 import { DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 import { TrimTrailingStatementTerminators } from '../Misc/sql_text';
 
@@ -711,12 +712,15 @@ export abstract class CodeGenDatabaseProvider {
         const verified = this.verifiedJoinColumnNames(entity);
         const indexes: string[] = [];
         const skipped: string[] = [];
+        const usedNames = new Set<string>();
         for (const f of entity.Fields.filter((f) => this.isIndexableForeignKey(f, verified))) {
             const reason = this.ForeignKeyIndexSkipReason(f);
             if (reason) {
                 skipped.push(`--   ${f.Name} (${f.Type}): ${reason}`);
             } else {
-                indexes.push(this.formatIndexStatement(entity, f, this.foreignKeyIndexName(entity, f)));
+                const indexName = this.distinctForeignKeyIndexName(entity, f, usedNames);
+                usedNames.add(indexName.toLowerCase());
+                indexes.push(this.formatIndexStatement(entity, f, indexName));
             }
         }
         if (skipped.length > 0) {
@@ -1007,6 +1011,23 @@ export abstract class CodeGenDatabaseProvider {
         const name = `${this.indexPrefix()}${this.tableToken(entity)}_${this.columnToken(f)}`;
         const max = this.maxIdentifierLength();
         return name.length > max ? name.substring(0, max) : name;
+    }
+
+    /**
+     * {@link foreignKeyIndexName}, unless truncation made it equal to a name already used for
+     * another column of the same entity. Then the truncated name's tail is replaced with `_` plus
+     * the first 8 hex characters of a SHA-1 of the untruncated name. Without this, the create-if-absent
+     * form skips the second index silently (two FK columns on one long table name can truncate to the
+     * same 63 characters on PostgreSQL). Only the colliding name changes, so every index that exists
+     * today keeps its name.
+     */
+    protected distinctForeignKeyIndexName(entity: EntityInfo, f: EntityFieldInfo, usedNames: ReadonlySet<string>): string {
+        const name = this.foreignKeyIndexName(entity, f);
+        if (!usedNames.has(name.toLowerCase())) return name;
+        const full = `${this.indexPrefix()}${this.tableToken(entity)}_${this.columnToken(f)}`;
+        const hash = createHash('sha1').update(full).digest('hex').substring(0, 8);
+        const keep = Math.max(0, Math.min(full.length, this.maxIdentifierLength() - hash.length - 1));
+        return `${full.substring(0, keep)}_${hash}`;
     }
 
     /**
@@ -2058,8 +2079,11 @@ export abstract class CodeGenDatabaseProvider {
      *   Phase 2 = CRUD function DDL — ONLY runs if phase 1 succeeded.
      *   Phase 3 = full-text search DDL (ftsSQL) — runs after the view phase
      *             because the search function's result type is the base view.
-     *   Phase 4 = view permissions (viewPermSQL) — runs only if the earlier
-     *             phases succeeded.
+     *   Phase 4 = index DDL (indexStatements) — foreign-key and soft-PK indexes,
+     *             one statement at a time. A failed index is reported as phase
+     *             `indexes` but does not stop the permissions phase.
+     *   Phase 5 = view permissions (viewPermSQL) — runs only if the earlier
+     *             phases (other than indexes) succeeded.
      * The `success`/`phase` pair in the result identifies exactly where things
      * fell over so the caller doesn't have to bisect.
      */
@@ -2077,6 +2101,10 @@ export abstract class CodeGenDatabaseProvider {
          *  AFTER the view phase — the search function `RETURNS SETOF <baseview>`,
          *  so it cannot be created against a missing or stale view. */
         ftsSQL: string;
+        /** Automatic index DDL (foreign-key and soft-PK `CREATE INDEX` statements), one
+         *  statement per element, as written to the entity's index file. Empty when the
+         *  entity gets no automatic indexes. */
+        indexStatements: ReadonlyArray<string>;
         viewPermSQL: string;
         willRegenerate?: Set<string>;
     }): Promise<PhasedExecutionResult>;
@@ -2343,7 +2371,7 @@ export interface PhasedExecutionResult {
     /** Which phase failed. Null when `success` is true. `fulltext-generate`
      *  is the caller-side failure to GENERATE the full-text DDL, as distinct
      *  from `fulltext`, the provider's failure to EXECUTE it. */
-    phase: 'tvf' | 'view' | 'functions' | 'fulltext-generate' | 'fulltext' | 'permissions' | null;
+    phase: 'tvf' | 'view' | 'functions' | 'fulltext-generate' | 'fulltext' | 'indexes' | 'permissions' | null;
     /** Underlying error when `success` is false. */
     error?: Error;
 }

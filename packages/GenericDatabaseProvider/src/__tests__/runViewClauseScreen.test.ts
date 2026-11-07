@@ -291,7 +291,7 @@ describe('RunViewCore — a view object\'s ID is spliced only when it is a GUID'
         const { result, sql } = await run({ ...savedView({ WhereClause: '' }), ExcludeDataFromAllPriorViewRuns: true });
 
         expect(result.Success).toBe(true);
-        expect(sql[0]).toContain('UserViewID=3f1f6b9e-0000-4000-8000-0000000000f1)');
+        expect(sql[0]).toContain("[UserViewID]='3f1f6b9e-0000-4000-8000-0000000000f1')");
     });
 });
 

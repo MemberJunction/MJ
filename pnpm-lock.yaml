@@ -12777,6 +12777,9 @@ importers:
       '@memberjunction/sql-converter':
         specifier: 6.2.0
         version: link:../SQLConverter
+      '@memberjunction/sql-dialect':
+        specifier: 6.2.0
+        version: link:../SQLDialect
       '@memberjunction/sqlglot-ts':
         specifier: 6.2.0
         version: link:../SQLGlotTS

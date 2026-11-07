@@ -89,7 +89,7 @@ vi.mock('@memberjunction/core-entities', () => ({
 vi.mock('@memberjunction/ai-vectors', () => ({
     VectorBase: class VectorBase {
         _runView = { RunView: mockRunViewFn, RunViews: vi.fn() };
-        _metadata = { GetEntityObject: mockGetEntityObject, EntityByID: vi.fn() };
+        _metadata = { GetEntityObject: mockGetEntityObject, EntityByID: vi.fn(), ConfigData: { MJCoreSchemaName: 'mj_core' } };
         _currentUser: Record<string, unknown> = { ID: 'user-1' };
 
         get Metadata() { return this._metadata; }
@@ -274,7 +274,16 @@ describe('DuplicateRecordDetector — primary keys of any shape', () => {
             vi.mocked(detector.Metadata.EntityByID).mockReturnValue(INDIVIDUALS);
             mockRunViewFn.mockResolvedValueOnce({ Success: true, Results: [] });
             await detector.recordsByList('list-1', INDIVIDUALS.ID);
-            expect(lastRunViewParams().ExtraFilter).toBe("individual_id IN (SELECT RecordID FROM __mj.vwListDetails WHERE ListID = 'list-1')");
+            expect(lastRunViewParams().ExtraFilter).toBe("individual_id IN (SELECT RecordID FROM mj_core.vwListDetails WHERE ListID='list-1')");
+        });
+
+        it('reads List Details from the configured core schema and casts RecordID to the key type', async () => {
+            const uuidKeyed = { ...INDIVIDUALS, PrimaryKeys: [{ Name: 'ID', Type: 'uniqueidentifier' }] } as unknown as EntityInfo;
+            vi.mocked(detector.Metadata.EntityByID).mockReturnValue(uuidKeyed);
+            mockRunViewFn.mockResolvedValueOnce({ Success: true, Results: [] });
+            await detector.recordsByList("list'1", INDIVIDUALS.ID);
+            expect(lastRunViewParams().ExtraFilter).toBe("ID IN (SELECT CAST(RecordID AS uniqueidentifier) FROM mj_core.vwListDetails WHERE ListID='list''1')");
+            expect(String(lastRunViewParams().ExtraFilter)).not.toContain('__mj');
         });
 
         it('rebuilds each composite key from the list segments and loads by whole key', async () => {

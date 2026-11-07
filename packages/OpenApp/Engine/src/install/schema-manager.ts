@@ -268,14 +268,20 @@ export async function SchemaExists(
  * must not fail on it) and a {@link SchemaOperationResult.Warning} names the consequence and the
  * remedy.
  *
- * **PostgreSQL is untouched**: it has no ownership chaining through schemas — a view checks its
- * base tables' privileges as the VIEW's owner, not the schema's — so the owner of the schema
- * changes nothing there.
+ * **PostgreSQL: the schema is also created owned by the core schema's owner**, for a different
+ * reason. PostgreSQL has no ownership chaining through schemas (a view checks its base tables'
+ * privileges as the VIEW's owner), but CodeGen runs as the core schema's owner and must own the
+ * app schema to create and replace its generated views and functions; a schema owned by the
+ * installing login fails CodeGen with "must be owner of schema" (#5640). When the installing login
+ * may act as the owner role ({@link POSTGRESQL_CAN_ACT_AS_OWNER_SQL}; true for the owner itself and
+ * for superusers) the schema is created `AUTHORIZATION <owner>`; otherwise it is created
+ * plain and a {@link SchemaOperationResult.Warning} names the `ALTER SCHEMA … OWNER TO` /
+ * `REASSIGN OWNED` remedy. Ownership of the objects the app's migrations create is unchanged.
  *
  * @param schemaName - The schema name to create
  * @param provider - MJ database provider
  * @param options - Validation overrides and the core schema; see {@link CreateAppSchemaOptions}
- * @returns Operation result; `Warning` set when the SQL Server owner could not be assigned
+ * @returns Operation result; `Warning` set when the core schema's owner could not be assigned
  */
 export async function CreateAppSchema(
   schemaName: string,
@@ -302,12 +308,15 @@ export async function CreateAppSchema(
 
   const quotedSchema = provider.Dialect.QuoteIdentifier(canonical);
   try {
+    const coreSchema = options.CoreSchema ?? '__mj';
+    if (provider.Dialect.PlatformKey === 'postgresql') {
+      return await CreatePostgreSQLAppSchema(schemaName, quotedSchema, coreSchema, provider);
+    }
     if (provider.Dialect.PlatformKey !== 'sqlserver') {
       await provider.ExecuteSQL(`CREATE SCHEMA ${quotedSchema}`);
       return { Success: true };
     }
 
-    const coreSchema = options.CoreSchema ?? '__mj';
     const owner = await ResolveCoreSchemaOwner(coreSchema, provider);
     if ('Reason' in owner) {
       await provider.ExecuteSQL(`CREATE SCHEMA ${quotedSchema}`);
@@ -328,6 +337,101 @@ export async function CreateAppSchema(
       ErrorMessage: `Failed to create schema '${schemaName}': ${message}`
     };
   }
+}
+
+/**
+ * PostgreSQL branch of {@link CreateAppSchema}: creates the schema owned by the core schema's
+ * owner when the installing login may assign it, else plain with a Warning.
+ *
+ * `CREATE SCHEMA … AUTHORIZATION <role>` requires the executing role to be able to act as `<role>`,
+ * which {@link ResolvePostgreSQLCoreSchemaOwner} asks with `pg_has_role` before creating anything
+ * ({@link POSTGRESQL_CAN_ACT_AS_OWNER_SQL}), so a permission gap never surfaces as a failed CREATE.
+ */
+async function CreatePostgreSQLAppSchema(
+  schemaName: string,
+  quotedSchema: string,
+  coreSchema: string,
+  provider: DatabaseProviderBase
+): Promise<SchemaOperationResult> {
+  const owner = await ResolvePostgreSQLCoreSchemaOwner(provider.Dialect.CanonicalSchemaName(coreSchema), provider);
+  if ('Reason' in owner) {
+    await provider.ExecuteSQL(`CREATE SCHEMA ${quotedSchema}`);
+    return { Success: true, Warning: BuildPostgreSQLOwnerFallbackWarning(schemaName, quotedSchema, coreSchema, owner) };
+  }
+  await provider.ExecuteSQL(
+    `CREATE SCHEMA ${quotedSchema} AUTHORIZATION ${provider.Dialect.QuoteIdentifier(owner.OwnerName)}`
+  );
+  return { Success: true };
+}
+
+/**
+ * True when the executing role can create a schema `AUTHORIZATION` the core schema's owner and then
+ * create objects in it. `'MEMBER'` is not enough: on PostgreSQL 16 and later a membership can carry
+ * `ADMIN` alone (the default for a `CREATEROLE` login that created the role), and `CREATE SCHEMA …
+ * AUTHORIZATION` then fails with "must be able to SET ROLE". So the check needs `'USAGE'` (the
+ * owner's privileges are inherited, which the app's migrations need to create objects in the
+ * schema) and, from 16 on, `'SET'` (which `AUTHORIZATION` needs). `'SET'` is an error before 16,
+ * where `'USAGE'` alone decides, so the CASE asks for it only on 16 and later.
+ */
+const POSTGRESQL_CAN_ACT_AS_OWNER_SQL =
+  `pg_has_role(current_user, n.nspowner, 'USAGE') AND ` +
+  `CASE WHEN current_setting('server_version_num')::int >= 160000 ` +
+  `THEN pg_has_role(current_user, n.nspowner, 'SET') ELSE TRUE END`;
+
+/**
+ * PostgreSQL only. Reads who owns `coreSchema` (already canonical) and whether the executing role
+ * may act as that role ({@link POSTGRESQL_CAN_ACT_AS_OWNER_SQL}). No row means the core schema is
+ * missing or invisible.
+ */
+async function ResolvePostgreSQLCoreSchemaOwner(
+  coreSchema: string,
+  provider: DatabaseProviderBase
+): Promise<CoreSchemaOwner> {
+  const rows = await provider.ExecuteSQL<{ OwnerName: string | null; IsMember: boolean | null }>(
+    `SELECT pg_get_userbyid(n.nspowner) AS "OwnerName", ` +
+    `(${POSTGRESQL_CAN_ACT_AS_OWNER_SQL}) AS "IsMember" ` +
+    `FROM pg_namespace n WHERE n.nspname = '${EscapeSQLString(coreSchema)}'`
+  );
+  const row = rows[0];
+  if (!row?.OwnerName) {
+    return { CanAssign: false, Reason: 'CoreSchemaNotFound' };
+  }
+  if (row.IsMember === true) {
+    return { CanAssign: true, OwnerName: row.OwnerName };
+  }
+  return { CanAssign: false, Reason: 'MissingPermission', OwnerName: row.OwnerName };
+}
+
+/** The operator-facing Warning for the PostgreSQL installer-owned fallback, per cause. */
+function BuildPostgreSQLOwnerFallbackWarning(
+  schemaName: string,
+  quotedSchema: string,
+  coreSchema: string,
+  owner: Extract<CoreSchemaOwner, { CanAssign: false }>
+): string {
+  const consequence =
+    `CodeGen runs as the owner of '${coreSchema}' and cannot create or replace objects in a schema it does not own ` +
+    `("must be owner of schema"). `;
+  if (owner.Reason === 'CoreSchemaNotFound') {
+    return (
+      `Schema '${schemaName}' was created owned by the installing login because core schema '${coreSchema}' ` +
+      `was not found or is not visible to the installing login, so its owner could not be determined. ` +
+      consequence +
+      `Remedy: check that the configured MJ core schema ('${coreSchema}') is correct, then run ` +
+      `ALTER SCHEMA ${quotedSchema} OWNER TO <owner of ${coreSchema}> as a superuser or the schema's owner, ` +
+      `or see the Open App README section "Schema ownership on PostgreSQL".`
+    );
+  }
+  const quotedOwner = `"${owner.OwnerName.replace(/"/g, '""')}"`;
+  return (
+    `Schema '${schemaName}' was created owned by the installing login, not '${owner.OwnerName}' ` +
+    `(the owner of core schema '${coreSchema}'), because the installing login cannot act as '${owner.OwnerName}' (it needs a membership with INHERIT and, on PostgreSQL 16 and later, SET). ` +
+    consequence +
+    `Remedy: as a superuser, run ALTER SCHEMA ${quotedSchema} OWNER TO ${quotedOwner}; and, for the objects the ` +
+    `app's migrations created, REASSIGN OWNED BY <installing login> TO ${quotedOwner} (this moves every object that ` +
+    `login owns in the database, so run it only if the login is used for installs alone), or install as a member of ` +
+    `'${owner.OwnerName}' — see the Open App README section "Schema ownership on PostgreSQL".`
+  );
 }
 
 /**

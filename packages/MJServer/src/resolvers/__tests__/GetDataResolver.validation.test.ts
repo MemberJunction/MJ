@@ -7,9 +7,8 @@ import { SQLExpressionValidator } from '@memberjunction/global';
 
 const { executedSQL } = vi.hoisted(() => ({ executedSQL: [] as string[] }));
 
-// GetData's server bootstrap, provider, auth and driver imports are replaced so the resolver runs
-// offline. The fake driver records every text it is asked to run.
-vi.mock('../../index.js', () => ({ GetDbType: () => 'sqlserver' }));
+// GetData's provider and auth imports are replaced so the resolver runs offline. The fake
+// read-only provider records every text it is asked to run.
 vi.mock('@memberjunction/generic-database-provider', () => ({
   QueryCompositionEngine: class {
     HasCompositionTokens(): boolean {
@@ -17,23 +16,21 @@ vi.mock('@memberjunction/generic-database-provider', () => ({
     }
   },
 }));
-vi.mock('../../util.js', () => ({ GetReadOnlyDataSource: () => ({}), GetReadOnlyProvider: () => null }));
-vi.mock('../../auth/index.js', () => ({ GetSystemUser: async () => ({}) }));
-vi.mock('mssql', () => ({
-  default: {
-    Request: class {
-      async query(text: string): Promise<{ recordset: Array<Record<string, unknown>> }> {
-        executedSQL.push(text);
-        return { recordset: [] };
-      }
+vi.mock('../../util.js', () => ({
+  GetReadOnlyProvider: () => ({
+    PlatformKey: 'sqlserver',
+    ExecuteSQL: async (text: string): Promise<Array<Record<string, unknown>>> => {
+      executedSQL.push(text);
+      return [];
     },
-  },
+  }),
 }));
+vi.mock('../../auth/index.js', () => ({ GetSystemUser: async () => ({}) }));
 
 import { GetDataResolver, GetDataInputType, GetDataOutputType, RegisterAccessToken } from '../GetDataResolver.js';
 import type { AppContext } from '../../types.js';
 
-const CONTEXT = { dataSources: [] } as unknown as AppContext;
+const CONTEXT = { dataSources: [], providers: [] } as unknown as AppContext;
 
 let tokenSeq = 0;
 
