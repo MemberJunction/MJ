@@ -319,6 +319,18 @@ describe('SQLServerDialect', () => {
         });
     });
 
+    describe('ResolveAbstractType string widths', () => {
+        const str = (maxLength?: number) => dialect.ResolveAbstractType({ type: 'string', maxLength });
+
+        it('stays NVARCHAR(n) up to 4000 and falls back to NVARCHAR(MAX) above it, however wide', () => {
+            expect(str(4000)).toBe('NVARCHAR(4000)');
+            expect(str(4001)).toBe('NVARCHAR(MAX)');
+            expect(str(10485761)).toBe('NVARCHAR(MAX)');
+            expect(str(2147483946)).toBe('NVARCHAR(MAX)');
+            expect(str(undefined)).toBe('NVARCHAR(255)');
+        });
+    });
+
     describe('SchemaIntrospectionQueries', () => {
         it('should return all query templates', () => {
             const queries = dialect.SchemaIntrospectionQueries();
