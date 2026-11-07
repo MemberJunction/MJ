@@ -49,7 +49,13 @@ export const PromotionCandidateSchema = z.object({ CandidateTestID: z.string(), 
 export const CoverageResultSchema = z.object({ CandidateTestID: z.string(), CoveredChangedLines: z.number().int().nonnegative() });
 
 // ---- files passed between jobs (§5.4) ----
-export const GenerationFileSchema = z.object({ Run: RunSchema, Analysis: ChangeAnalysisSchema, Tests: z.array(CandidateTestSchema) });
-export const ExecutionFileSchema = z.object({ RunID: z.string(), Tests: z.array(CandidateTestSchema), Results: z.array(ExecutionResultSchema), Coverage: z.array(CoverageResultSchema) })
+/** `BaseRootDir` is the base worktree the generate step prepared and kept; execute and assess reuse it. */
+export const GenerationFileSchema = z.object({ Run: RunSchema, Analysis: ChangeAnalysisSchema, Tests: z.array(CandidateTestSchema), BaseRootDir: z.string().min(1) });
+/** `TypeErrors` maps each test ID to its type-check errors on base and head (null when it compiles). */
+export const ExecutionFileSchema = z.object({ RunID: z.string(), Tests: z.array(CandidateTestSchema), Results: z.array(ExecutionResultSchema), Coverage: z.array(CoverageResultSchema),
+    TypeErrors: z.record(z.string(), z.object({ Base: z.string().nullable(), Head: z.string().nullable() })) })
     .refine((f) => { const ids = new Set(f.Tests.map((t) => t.ID)); return f.Results.every((r) => ids.has(r.CandidateTestID)); }, { error: 'every result must name a test in Tests' });
 export const AssessmentFileSchema = z.object({ RunID: z.string(), Catches: z.array(CatchSchema), Promotions: z.array(PromotionCandidateSchema) });
+export type GenerationFile = z.infer<typeof GenerationFileSchema>;
+export type ExecutionFile = z.infer<typeof ExecutionFileSchema>;
+export type AssessmentFile = z.infer<typeof AssessmentFileSchema>;

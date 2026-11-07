@@ -21,7 +21,7 @@ describe('record schemas', () => {
     expect(() => ExecutionResultSchema.parse({ ...base, Status: 'Pass', Failure: { Assertion: null, Expected: null, Actual: null, Message: 'm', StackExcerpt: null, ErrorName: null } })).toThrow();
   });
   it('ExecutionFileSchema rejects a result that names an unknown test', () => {
-    expect(() => ExecutionFileSchema.parse({ RunID: 'r1', Tests: [], Results: [{ CandidateTestID: 'ghost', Revision: 'Base', RunIndex: 0, Status: 'Pass', Failure: null, TestName: null, DurationMs: 1 }], Coverage: [] })).toThrow();
+    expect(() => ExecutionFileSchema.parse({ RunID: 'r1', Tests: [], Results: [{ CandidateTestID: 'ghost', Revision: 'Base', RunIndex: 0, Status: 'Pass', Failure: null, TestName: null, DurationMs: 1 }], Coverage: [], TypeErrors: {} })).toThrow(/unknown test|name a test/);
   });
   it('Catch keeps Median null until judged', () => {
     const c = { ID: 'c1', RunID: 'r1', CandidateTestID: 't1', Verdict: { Label: 'WeakCatch', Timeout: false, Reason: '' }, DroppedByRule: null, Boosts: [], TPProb: null, JudgeBuckets: [], Median: null, Rank: null, Reported: false, CommentID: null };

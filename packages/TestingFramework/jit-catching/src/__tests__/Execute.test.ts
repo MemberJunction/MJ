@@ -1,0 +1,63 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { existsSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { ExecuteStep } from '../pipeline/Execute';
+import { RunDir } from '../pipeline/RunDir';
+import type { PipelineTarget } from '../pipeline/Deps';
+import { RedactionCheck } from '../sandbox/Redaction';
+import { InfrastructureError } from '../target/VitestCatchTarget';
+import { DEFAULT_SETTINGS } from '../settings';
+import type { CandidateTest, ChangedLines, PreparedRevision, RevisionRef } from '../types';
+import { candidate, generation, HEAD_SHA, ID_A, ID_B, PKG, results, RUN_ID } from './helpers/pipelineFixtures';
+
+interface Calls { Prepare: RevisionRef[]; Build: { Kind: string; Packages: string[] }[]; Write: string[]; Run: { Kind: string; IDs: string[]; Repeats: number }[]; Coverage: string[][]; Cleanup: string[] }
+
+/** A target that records every call: A passes on base and fails on head, B passes on both, nothing has type errors. */
+function fakeTarget(prepareError?: Error): { Target: PipelineTarget; Calls: Calls } {
+  const calls: Calls = { Prepare: [], Build: [], Write: [], Run: [], Coverage: [], Cleanup: [] };
+  const target: PipelineTarget = {
+    Prepare: async (r: RevisionRef): Promise<PreparedRevision> => { calls.Prepare.push(r); if (prepareError) throw prepareError; return { Ref: r, RootDir: '/work/head' }; },
+    BuildPackages: async (r: PreparedRevision, p: string[]) => { calls.Build.push({ Kind: r.Ref.Kind, Packages: p }); },
+    WriteTests: async (r: PreparedRevision) => { calls.Write.push(r.Ref.Kind); },
+    TypeCheck: async (_r: PreparedRevision, t: CandidateTest[]) => new Map(t.map((x) => [x.ID, null])),
+    Run: async (r: PreparedRevision, t: CandidateTest[], repeats: number) => {
+      calls.Run.push({ Kind: r.Ref.Kind, IDs: t.map((x) => x.ID), Repeats: repeats });
+      return t.flatMap((x) => results(x.ID, r.Ref.Kind, !(r.Ref.Kind === 'Head' && x.ID === ID_A), repeats));
+    },
+    Coverage: async (_r: PreparedRevision, t: CandidateTest[], _c: ChangedLines) => { calls.Coverage.push(t.map((x) => x.ID)); return t.map((x) => ({ CandidateTestID: x.ID, CoveredChangedLines: 4 })); },
+    Cleanup: async (r: PreparedRevision) => { calls.Cleanup.push(r.RootDir); },
+  };
+  return { Target: target, Calls: calls };
+}
+
+describe('ExecuteStep', () => {
+  let root: string; let dir: RunDir; const redaction = new RedactionCheck([]);
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'jit-exec-')); dir = new RunDir(root, RUN_ID, redaction);
+    dir.WriteGeneration(generation('/work/base', [candidate(ID_A), candidate(ID_B), candidate('dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'x', 'Failed')]));
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+  });
+
+  it('prepares head, runs produced tests on both revisions and writes execution.json', async () => {
+    const { Target, Calls } = fakeTarget();
+    await ExecuteStep({ RunID: RUN_ID, RepoRoot: root, Settings: DEFAULT_SETTINGS, Deps: { Target, Redaction: redaction } });
+    expect(Calls.Prepare).toEqual([{ Kind: 'Head', SHA: HEAD_SHA }]);
+    expect(Calls.Build).toEqual([{ Kind: 'Head', Packages: [PKG] }]);
+    expect(Calls.Write).toEqual(['Base', 'Head']);
+    expect(Calls.Run).toEqual([{ Kind: 'Base', IDs: [ID_A, ID_B], Repeats: 3 }, { Kind: 'Head', IDs: [ID_A, ID_B], Repeats: 3 }]);
+    expect(Calls.Coverage).toEqual([[ID_B]]);
+    expect(Calls.Cleanup).toEqual(['/work/head']);
+    const f = dir.ReadExecution();
+    expect(f.Results).toHaveLength(12);
+    expect(f.Coverage).toEqual([{ CandidateTestID: ID_B, CoveredChangedLines: 4 }]);
+    expect(f.TypeErrors[ID_A]).toEqual({ Base: null, Head: null });
+  });
+
+  it('an InfrastructureError from Prepare ends the step once and writes no execution.json', async () => {
+    const { Target, Calls } = fakeTarget(new InfrastructureError('install failed on Head: offline'));
+    await expect(ExecuteStep({ RunID: RUN_ID, RepoRoot: root, Settings: DEFAULT_SETTINGS, Deps: { Target, Redaction: redaction } })).rejects.toThrow(InfrastructureError);
+    expect(Calls.Prepare).toHaveLength(1);
+    expect(existsSync(join(dir.Path, 'execution.json'))).toBe(false);
+  });
+});
