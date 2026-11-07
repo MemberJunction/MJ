@@ -725,11 +725,19 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
         return out;
     }
 
-    /** Where a bracketed or double-quoted identifier or a comment starting at `i` ends; `i` when none starts there. */
+    /**
+     * Where a bracketed or double-quoted identifier or a comment starting at `i` ends; `i` when none
+     * starts there. Inside an identifier a doubled closing character (`]]`, `""`) is an escaped
+     * character of the name, not its end.
+     */
     private static endOfNonLiteralSpan(text: string, i: number): number {
         const ch = text[i];
         if (ch === '[' || ch === '"') {
-            const close = text.indexOf(ch === '[' ? ']' : '"', i + 1);
+            const closeChar = ch === '[' ? ']' : '"';
+            let close = text.indexOf(closeChar, i + 1);
+            while (close >= 0 && text[close + 1] === closeChar) {
+                close = text.indexOf(closeChar, close + 2);
+            }
             return close < 0 ? text.length : close + 1;
         }
         if (ch === '-' && text[i + 1] === '-') {

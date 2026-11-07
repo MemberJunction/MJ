@@ -96,6 +96,16 @@ describe('RowLevelSecurityFilterInfo.MarkupFilterParameterized', () => {
         expect(binder.Values).toHaveLength(1);
     });
 
+    it('treats a doubled closing character as part of an identifier, not its end', () => {
+        const binder = new TestBinder();
+        const user = new UserInfo(null, { ID: 'u' });
+
+        const text = buildFilter(`[Col]]'{{UserID}}'] = 1 AND "A""'{{UserID}}'" = 2 AND OwnerID = '{{UserID}}'`).MarkupFilterParameterized(user, binder);
+
+        expect(text).toBe(`[Col]]'u'] = 1 AND "A""'u'" = 2 AND OwnerID = @rls0`);
+        expect(binder.Values).toHaveLength(1);
+    });
+
     it('keeps the value literal when the binder refuses it', () => {
         const binder = new TestBinder((value) => value.length > 3);
         const text = buildFilter("Name = '{{UserName}}'").MarkupFilterParameterized(new UserInfo(null, { ID: 'u', Name: 'Longer' }), binder);
