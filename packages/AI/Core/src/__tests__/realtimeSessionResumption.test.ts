@@ -6,6 +6,7 @@ import {
     REALTIME_RESUMPTION_MIN_DEADLINE_MARGIN_MS,
     type RealtimeReconnectReason,
     type RealtimeResumeAttempt,
+    type RealtimeSessionResumptionOptions,
 } from '../generic/realtimeSessionResumption';
 
 describe('ParseDurationToMs', () => {
@@ -24,14 +25,14 @@ describe('ParseDurationToMs', () => {
 
 /** Records every callback the helper makes; `Reconnect` succeeds unless told to fail. */
 class Harness {
-    public Reconnects: string[] = [];
+    public Reconnects: (string | null)[] = [];
     public Reconnecting: RealtimeReconnectReason[] = [];
     public Reconnected = 0;
     public Failures: Error[] = [];
     public FailNext = 0;
     public Resumption: RealtimeSessionResumption;
 
-    constructor(retryDelaysMs?: readonly number[]) {
+    constructor(retryDelaysMs?: readonly number[], modes: Pick<RealtimeSessionResumptionOptions, 'ResumableAtTurnEnd' | 'RequiresHandle'> = {}) {
         this.Resumption = new RealtimeSessionResumption({
             Reconnect: async (handle) => {
                 this.Reconnects.push(handle);
@@ -44,6 +45,7 @@ class Harness {
             OnReconnecting: (reason) => this.Reconnecting.push(reason),
             OnReconnected: () => this.Reconnected++,
             RetryDelaysMs: retryDelaysMs,
+            ...modes,
         });
     }
 }
@@ -400,6 +402,109 @@ describe('RealtimeSessionResumption', () => {
             await vi.advanceTimersByTimeAsync(60000);
             expect(h.Reconnects).toEqual([]);
             expect(h.Resumption.ConnectionLost()).toBe(false);
+        });
+    });
+
+    describe('ResumableAtTurnEnd', () => {
+        const TURN_END_MODE = { ResumableAtTurnEnd: true };
+
+        it('moves at once on ConnectionEnding when no turn is open, with the stored handle', async () => {
+            const h = new Harness(undefined, TURN_END_MODE);
+            h.Resumption.RecordHandle('h1', true);
+            h.Resumption.TurnStarted();
+            h.Resumption.TurnEnded();
+            h.Resumption.ConnectionEnding(60000);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(h.Reconnects).toEqual(['h1']);
+        });
+
+        it('waits for TurnEnded when a turn is open, then moves', async () => {
+            const h = new Harness(undefined, TURN_END_MODE);
+            h.Resumption.RecordHandle('h1', true);
+            h.Resumption.TurnStarted();
+            h.Resumption.ConnectionEnding(60000);
+            await vi.advanceTimersByTimeAsync(1000);
+            expect(h.Reconnects).toEqual([]);
+            h.Resumption.TurnEnded();
+            await vi.advanceTimersByTimeAsync(0);
+            expect(h.Reconnects).toEqual(['h1']);
+            expect(h.Reconnecting).toEqual(['connection-ending']);
+        });
+
+        it('moves at the deadline when the turn never ends', async () => {
+            const h = new Harness(undefined, TURN_END_MODE);
+            h.Resumption.RecordHandle('h1', true);
+            h.Resumption.TurnStarted();
+            h.Resumption.ConnectionEnding(60000);
+            await vi.advanceTimersByTimeAsync(60000 - REALTIME_RESUMPTION_DEADLINE_MARGIN_MS + 1); // the deadline's zero-delay attempt runs on the next tick
+            expect(h.Reconnects).toEqual(['h1']);
+            expect(h.Reconnecting).toEqual(['connection-ending']);
+        });
+
+        it('does not move at TurnEnded when no ending was announced', async () => {
+            const h = new Harness(undefined, TURN_END_MODE);
+            h.Resumption.RecordHandle('h1', true);
+            h.Resumption.TurnStarted();
+            h.Resumption.TurnEnded();
+            await vi.advanceTimersByTimeAsync(60000);
+            expect(h.Reconnects).toEqual([]);
+        });
+
+        it('does not let resumable: false gate the move', async () => {
+            const h = new Harness(undefined, TURN_END_MODE);
+            h.Resumption.RecordHandle('h1', true);
+            h.Resumption.RecordHandle(undefined, false);
+            h.Resumption.ConnectionEnding(60000);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(h.Reconnects).toEqual(['h1']);
+        });
+
+        it('TurnEnded while the reconnect runs does not start a second one', async () => {
+            const h = new Harness(undefined, TURN_END_MODE);
+            h.Resumption.RecordHandle('h1', true);
+            h.Resumption.TurnStarted();
+            h.Resumption.ConnectionEnding(60000);
+            h.Resumption.TurnEnded();
+            h.Resumption.TurnStarted();
+            h.Resumption.TurnEnded(); // the first move is still in flight
+            await vi.advanceTimersByTimeAsync(0);
+            expect(h.Reconnects).toEqual(['h1']);
+        });
+
+        it('TurnEnded after a finished move does not start another', async () => {
+            const h = new Harness(undefined, TURN_END_MODE);
+            h.Resumption.RecordHandle('h1', true);
+            h.Resumption.ConnectionEnding(60000);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(h.Reconnected).toBe(1);
+            h.Resumption.TurnStarted();
+            h.Resumption.TurnEnded();
+            await vi.advanceTimersByTimeAsync(60000);
+            expect(h.Reconnects).toEqual(['h1']);
+        });
+    });
+
+    describe('RequiresHandle: false', () => {
+        it('ConnectionLost reconnects without a handle and passes null', async () => {
+            const h = new Harness(undefined, { RequiresHandle: false });
+            expect(h.Resumption.ConnectionLost()).toBe(true);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(h.Reconnects).toEqual([null]);
+            expect(h.Reconnecting).toEqual(['connection-lost']);
+            expect(h.Reconnected).toBe(1);
+        });
+
+        it('ConnectionEnding without a handle also moves', async () => {
+            const h = new Harness(undefined, { ResumableAtTurnEnd: true, RequiresHandle: false });
+            h.Resumption.ConnectionEnding(60000);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(h.Reconnects).toEqual([null]);
+        });
+
+        it('default mode still refuses without a handle', () => {
+            const h = new Harness();
+            expect(h.Resumption.ConnectionLost()).toBe(false);
+            expect(h.Reconnects).toEqual([]);
         });
     });
 });

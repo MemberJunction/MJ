@@ -1805,10 +1805,11 @@ class GeminiRealtimeSession implements IRealtimeSession {
      * use, so what it still sends (the rest of a turn the deadline cut, its usage) is handled.
      * Rejects when the connection can't be opened or its setup fails, so
      * {@link RealtimeSessionResumption} can retry. A connection that opens after the attempt was
-     * abandoned (timeout, or {@link Close}) is closed instead of used.
+     * abandoned (timeout, or {@link Close}) is closed instead of used. A `null` handle opens a
+     * connection with no handle, for a driver that reseeds the conversation itself.
      */
-    private async resume(handle: string, attempt: RealtimeResumeAttempt): Promise<void> {
-        const opened = await this.openConnection(handle);
+    private async resume(handle: string | null, attempt: RealtimeResumeAttempt): Promise<void> {
+        const opened = await this.openConnection(handle ?? undefined);
         await GeminiRealtimeSession.awaitSetup(opened);
         if (attempt.Abandoned || this.closedByConsumer) {
             GeminiRealtimeSession.closeQuietly(opened.Live);
