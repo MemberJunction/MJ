@@ -275,16 +275,16 @@ describe('GeminiEnterpriseRealtimeClient through the relay (web SDK, fake WebSoc
             await openAndConfirm(second);
             await resumed.Disconnect();
 
-            // A session whose connection fails before Google issued a handle: a fatal error to the host.
+            // A session the relay ends at its time limit: a fatal error to the host.
             const failed = new EnterpriseHarness();
             const failedOutput = captureOutput(failed);
             const { Socket: third } = await connect(enterprisePact(), failed);
-            third.onclose?.(new CloseEvent('close', { code: 1011, reason: 'upstream closed', wasClean: false }));
+            third.onclose?.(new CloseEvent('close', { code: 4000, reason: 'Call time limit reached', wasClean: true }));
             await failed.Disconnect();
 
             const lines = [...resumedOutput(), ...failedOutput()];
             expect(lines.some((line) => line.includes('Transport closed'))).toBe(true); // the client did report
-            expect(lines.some((line) => line.includes('connection closed (1011)'))).toBe(true);
+            expect(lines.some((line) => line.includes('reached its time limit (4000)'))).toBe(true);
             expect(lines.filter((line) => line.includes(TICKET))).toEqual([]);
             vi.unstubAllEnvs();
         });

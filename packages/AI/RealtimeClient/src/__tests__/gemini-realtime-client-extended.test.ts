@@ -5,7 +5,7 @@
  * transcript accumulation edges, and lifecycle (mic chunks after disconnect, idempotent
  * Disconnect, transport close/error interplay).
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ClientRealtimeSessionConfig } from '@memberjunction/ai';
 import type { LiveServerMessage } from '@google/genai';
 import {
@@ -382,23 +382,30 @@ describe('GeminiRealtimeClient (extended)', () => {
             expect(states[states.length - 1]).toBe('closed');
         });
 
-        it('should NOT emit closed when disconnecting after a fatal transport error', async () => {
+        it('should NOT emit closed when disconnecting after a fatal error', async () => {
             await connect(client);
             const { states } = collect(client);
-            const errorEvent = Object.assign(new Event('error'), { message: 'dropped' }) as ErrorEvent;
-            client.LastConnectArgs?.OnError(errorEvent);
+            client.LastConnectArgs?.OnClose(new CloseEvent('close', { code: 4000, reason: 'Call time limit reached' }));
             expect(states[states.length - 1]).toBe('error');
 
             await client.Disconnect();
             expect(states.filter((s) => s === 'closed')).toEqual([]);
         });
 
-        it('should fall back to an unknown transport-error message when the event carries none', async () => {
-            await connect(client);
-            const { errors } = collect(client);
-            const errorEvent = Object.assign(new Event('error'), { message: '' }) as ErrorEvent;
-            client.LastConnectArgs?.OnError(errorEvent);
-            expect(errors).toEqual([{ Message: 'Gemini Live transport error: unknown', Fatal: true }]);
+        it('should log an unknown transport error when the event carries no message', async () => {
+            vi.stubEnv('MJ_VERBOSE', 'true');
+            const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+            try {
+                await connect(client);
+                const { errors } = collect(client);
+                const errorEvent = Object.assign(new Event('error'), { message: '' }) as ErrorEvent;
+                client.LastConnectArgs?.OnError(errorEvent);
+                expect(log).toHaveBeenCalledWith('[GeminiRealtimeClient] Transport error: unknown');
+                expect(errors).toEqual([]);
+            } finally {
+                log.mockRestore();
+                vi.unstubAllEnvs();
+            }
         });
 
         it('should emit closed only once across duplicate socket-close callbacks', async () => {

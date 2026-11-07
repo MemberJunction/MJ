@@ -314,11 +314,20 @@ export class FakeGeminiSession implements GeminiLiveClientSession {
     public ClientContents: Array<{ turns?: Content[]; turnComplete?: boolean }> = [];
     public ToolResponses: Array<{ functionResponses: FunctionResponse[] }> = [];
     public Closed = false;
+    /** Thrown by the next and every later `sendClientContent` while set. */
+    public ThrowOnClientContent: Error | null = null;
+    /** Realtime input and client content across their two arrays, in the order they were sent. */
+    public Calls: Array<'clientContent' | 'realtimeInput'> = [];
 
     public sendRealtimeInput(params: { audio?: GeminiBlob; text?: string; media?: GeminiBlob; video?: GeminiBlob }): void {
+        this.Calls.push('realtimeInput');
         this.RealtimeInputs.push(params);
     }
     public sendClientContent(params: { turns?: Content[]; turnComplete?: boolean }): void {
+        if (this.ThrowOnClientContent) {
+            throw this.ThrowOnClientContent;
+        }
+        this.Calls.push('clientContent');
         this.ClientContents.push(params);
     }
     public sendToolResponse(params: { functionResponses: FunctionResponse[] }): void {

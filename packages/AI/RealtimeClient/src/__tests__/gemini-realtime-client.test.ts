@@ -782,18 +782,21 @@ describe('GeminiRealtimeClient', () => {
             expect(client.IsAudioPlaying).toBe(false);
         });
 
-        it('should report a fatal error state on transport errors and not emit closed afterwards', async () => {
+        it('should only log a transport error, and leave the session to the close that follows it', async () => {
             const { errors, states } = collect(client);
             await connect(client);
 
             // Node's test env has no ErrorEvent constructor; build a structural stand-in.
             const errorEvent = Object.assign(new Event('error'), { message: 'socket dropped' }) as ErrorEvent;
             client.LastConnectArgs?.OnError(errorEvent);
-            expect(errors).toEqual([{ Message: 'Gemini Live transport error: socket dropped', Fatal: true }]);
-            expect(states[states.length - 1]).toBe('error');
+            expect(errors).toEqual([]);
+            expect(states[states.length - 1]).toBe('listening');
 
-            client.LastConnectArgs?.OnClose(new CloseEvent('close'));
-            expect(states[states.length - 1]).toBe('error');
+            client.LastConnectArgs?.OnClose(new CloseEvent('close', { code: 1006 }));
+            expect(states[states.length - 1]).toBe('connecting');
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            expect(errors).toEqual([]);
+            expect(states[states.length - 1]).toBe('listening');
         });
 
         it('should report closed when the socket closes outside of an error', async () => {
@@ -803,19 +806,15 @@ describe('GeminiRealtimeClient', () => {
             expect(states[states.length - 1]).toBe('closed');
         });
 
-        it('should emit fatal error when the socket closes abnormally with error code', async () => {
+        it('should resume instead of ending the call when the socket closes abnormally after its setup, with no handle', async () => {
             const { states, errors } = collect(client);
             await connect(client);
-            client.LastConnectArgs?.OnClose(
-                new CloseEvent('close', { code: 1007, reason: 'Thinking level must be specified for this model.' })
-            );
-            expect(states[states.length - 1]).toBe('error');
-            expect(errors).toEqual([
-                {
-                    Message: 'Gemini Live connection closed (1007): Thinking level must be specified for this model.',
-                    Fatal: true,
-                },
-            ]);
+            client.LastConnectArgs?.OnClose(new CloseEvent('close', { code: 1011, reason: 'The service is currently unavailable' }));
+            expect(states[states.length - 1]).toBe('connecting');
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            expect(client.ConnectCount).toBe(2);
+            expect(errors).toEqual([]);
+            expect(states[states.length - 1]).toBe('listening');
         });
 
         it("ends the call with a time-limit error, without resuming, when the relay closes at the session's time limit", async () => {
@@ -828,7 +827,7 @@ describe('GeminiRealtimeClient', () => {
             expect(client.ConnectCount).toBe(1);
         });
 
-        it('should still emit the fatal error on an abnormal close when there is no global process (browser)', async () => {
+        it('should still emit the fatal error of a close when there is no global process (browser)', async () => {
             const { states, errors } = collect(client);
             await connect(client);
             // A browser has no `process`. The close handler's diagnostics used to read process.env
@@ -837,11 +836,11 @@ describe('GeminiRealtimeClient', () => {
             Reflect.deleteProperty(globalThis, 'process');
             try {
                 expect(typeof globalThis.process).toBe('undefined');
-                client.LastConnectArgs?.OnClose(new CloseEvent('close', { code: 1011, reason: 'Internal error' }));
+                client.LastConnectArgs?.OnClose(new CloseEvent('close', { code: 4000, reason: 'Call time limit reached' }));
             } finally {
                 globalThis.process = nodeProcess;
             }
-            expect(errors).toEqual([{ Message: 'Gemini Live connection closed (1011): Internal error', Fatal: true }]);
+            expect(errors).toEqual([{ Message: 'Gemini Live session reached its time limit (4000): Call time limit reached', Code: 'time-limit', Fatal: true }]);
             expect(states[states.length - 1]).toBe('error');
         });
 

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
     RealtimeConversationMemory,
+    RenderRealtimeMemorySeed,
     REALTIME_MEMORY_MAX_SEED_CHARS,
     REALTIME_MEMORY_MAX_ENTRY_CHARS,
     REALTIME_MEMORY_TRUNCATED_TAIL,
@@ -92,5 +93,47 @@ describe('RealtimeConversationMemory', () => {
         m.Record({ Kind: 'user', Text: 'x'.repeat(REALTIME_MEMORY_MAX_ENTRY_CHARS + 1) });
         const e = m.Seed().Entries[0];
         expect(e.Kind === 'user' && e.Text.length).toBe(REALTIME_MEMORY_MAX_ENTRY_CHARS + REALTIME_MEMORY_TRUNCATED_TAIL.length);
+    });
+});
+
+describe('RenderRealtimeMemorySeed', () => {
+    const PREAMBLE =
+        '[Connection resumed. Transcript so far, for continuity. Continue exactly where the conversation left off. ' +
+        'Do not greet again and do not restart. If you already remember this conversation, this is the same one.]';
+
+    it('puts the preamble first and merges it with a leading user entry', () => {
+        const turns = RenderRealtimeMemorySeed({ Entries: [{ Kind: 'user', Text: 'hi' }], DroppedEntries: 0, Chars: 2 });
+        expect(turns).toEqual([{ Role: 'user', Texts: [PREAMBLE, 'hi'] }]);
+    });
+
+    it('states how many entries were dropped', () => {
+        const turns = RenderRealtimeMemorySeed({ Entries: [{ Kind: 'assistant', Text: 'Question 9' }], DroppedEntries: 7, Chars: 10 });
+        expect(turns[0].Role).toBe('user');
+        expect(turns[0].Texts).toEqual([
+            '[Connection resumed. Transcript so far, for continuity; 7 earlier entries omitted. Continue exactly where the conversation left off. ' +
+                'Do not greet again and do not restart. If you already remember this conversation, this is the same one.]',
+        ]);
+        expect(turns[1]).toEqual({ Role: 'model', Texts: ['Question 9'] });
+    });
+
+    it('renders each kind under its role and merges only adjacent same-role entries', () => {
+        const turns = RenderRealtimeMemorySeed({
+            Entries: [
+                { Kind: 'assistant', Text: 'Question 1' },
+                { Kind: 'toolCall', Name: 'lookup_order', ArgumentsJson: '{"id":1}' },
+                { Kind: 'toolResult', Name: 'lookup_order', OutputJson: '{"ok":true}' },
+                { Kind: 'note', Text: 'a note' },
+                { Kind: 'user', Text: 'an answer' },
+                { Kind: 'assistant', Text: 'Question 2' },
+            ],
+            DroppedEntries: 0,
+            Chars: 0,
+        });
+        expect(turns).toEqual([
+            { Role: 'user', Texts: [PREAMBLE] },
+            { Role: 'model', Texts: ['Question 1', '[called lookup_order {"id":1}]'] },
+            { Role: 'user', Texts: ['[lookup_order returned {"ok":true}]', 'a note', 'an answer'] },
+            { Role: 'model', Texts: ['Question 2'] },
+        ]);
     });
 });
