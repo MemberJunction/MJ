@@ -14,9 +14,9 @@ export type RealtimeMemoryEntry =
     | { Kind: 'toolResult'; Name: string; OutputJson: string };
 
 export interface RealtimeConversationMemoryOptions {
-    /** Cap on total seed characters. Default `REALTIME_MEMORY_MAX_SEED_CHARS`. */
+    /** Cap on total seed characters, measured as rendered: see {@link RealtimeMemorySeed.Chars}. Default `REALTIME_MEMORY_MAX_SEED_CHARS`. */
     MaxSeedChars?: number;
-    /** Cap on one entry's payload. Default `REALTIME_MEMORY_MAX_ENTRY_CHARS`. */
+    /** Cap on one entry's raw payload, before any escaping. Default `REALTIME_MEMORY_MAX_ENTRY_CHARS`. */
     MaxEntryChars?: number;
     /** Receives one line when `Record` truncates an entry. Never carries content. */
     Log?: (message: string) => void;
@@ -28,7 +28,7 @@ export interface RealtimeMemorySeed {
     readonly Entries: readonly RealtimeMemoryEntry[];
     /** Older entries left out to respect `MaxSeedChars`. */
     readonly DroppedEntries: number;
-    /** Total characters of `Entries`. */
+    /** Total characters of `Entries`, with each tool payload measured as rendered (escaped), and no labels or preamble. */
     readonly Chars: number;
 }
 
@@ -97,9 +97,9 @@ export class RealtimeConversationMemory {
 function entryChars(entry: RealtimeMemoryEntry): number {
     switch (entry.Kind) {
         case 'toolCall':
-            return entry.Name.length + entry.ArgumentsJson.length;
+            return entry.Name.length + escapeBracketsInStrings(entry.ArgumentsJson).length;
         case 'toolResult':
-            return entry.Name.length + entry.OutputJson.length;
+            return entry.Name.length + escapeBracketsInStrings(entry.OutputJson).length;
         default:
             return entry.Text.length;
     }
@@ -149,9 +149,32 @@ export function RenderRealtimeMemoryEntry(entry: RealtimeMemoryEntry): string {
 
 /**
  * Writes square brackets in a tool payload's JSON strings as JSON escapes, so text a tool returns can neither close the
- * bracketed label it sits in nor forge one. Structure stays readable, valid JSON; a producer controls string values, not it.
- * The pattern also takes the unterminated string truncation can leave at the end.
+ * bracketed label it sits in nor forge one. Structural brackets stay, so the payload stays readable, valid JSON: they
+ * balance in valid JSON, and a hostile key stays quoted, so what remains cannot read as the label's end. The label is
+ * defence in depth only: the role boundary is already lost in a text seed.
+ *
+ * A linear scan, since a crossing tool result renders its whole payload: a regular expression overflows the stack on a
+ * single string of about 8 MB. A string truncation left unterminated runs to the end of the payload.
  */
 function escapeBracketsInStrings(json: string): string {
-    return json.replace(/"(?:[^"\\]|\\.)*(?:"|$)/g, (literal) => literal.replace(/\[/g, '\\u005b').replace(/\]/g, '\\u005d'));
+    let escaped = '';
+    let copiedUpTo = 0;
+    let inString = false;
+    let afterBackslash = false;
+    for (let i = 0; i < json.length; i++) {
+        const char = json[i];
+        if (!inString) {
+            inString = char === '"';
+        } else if (afterBackslash) {
+            afterBackslash = false;
+        } else if (char === '\\') {
+            afterBackslash = true;
+        } else if (char === '"') {
+            inString = false;
+        } else if (char === '[' || char === ']') {
+            escaped += json.slice(copiedUpTo, i) + (char === '[' ? '\\u005b' : '\\u005d');
+            copiedUpTo = i + 1;
+        }
+    }
+    return escaped + json.slice(copiedUpTo);
 }
