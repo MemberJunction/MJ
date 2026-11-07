@@ -1,0 +1,345 @@
+<mj-page-layout>
+    <mj-page-header
+        Title="Approvals &amp; Wakes"
+        Subtitle="Decide on your Chief of Staff's requests and manage its wake routines"
+        Icon="fa-solid fa-bell-concierge">
+
+        <ng-container meta>
+            @if (Metrics.PendingApprovalCount > 0) {
+                <mj-stat-badge
+                    Icon="fa-solid fa-bell-concierge"
+                    [Count]="Metrics.PendingApprovalCount"
+                    Label="pending approvals"
+                    Variant="warning">
+                </mj-stat-badge>
+            } @else {
+                <mj-stat-badge
+                    Icon="fa-solid fa-circle-check"
+                    [Count]="0"
+                    Label="pending approvals"
+                    Variant="success">
+                </mj-stat-badge>
+            }
+            <mj-stat-badge
+                Icon="fa-solid fa-clock-rotate-left"
+                [Count]="Metrics.ActiveWakeRoutineCount"
+                Label="active wakes"
+                Variant="info">
+            </mj-stat-badge>
+        </ng-container>
+
+        <ng-container toolbar>
+            <mj-page-search
+                Placeholder="Filter requests or routines..."
+                [Value]="SearchText"
+                (ValueChange)="OnSearchChange($event)">
+            </mj-page-search>
+            <mj-refresh-button
+                [Loading]="IsLoading"
+                [ShowLabel]="true"
+                (Clicked)="LoadChiefOfStaffData()">
+            </mj-refresh-button>
+        </ng-container>
+    </mj-page-header>
+
+    <mj-page-body>
+        @if (FeedbackBanner) {
+            <div class="cos-banner"
+                 [class.cos-banner--success]="FeedbackBanner.Type === 'success'"
+                 [class.cos-banner--error]="FeedbackBanner.Type === 'error'"
+                 role="status">
+                <div class="cos-banner__content">
+                    <i class="fa-solid"
+                       [class.fa-circle-check]="FeedbackBanner.Type === 'success'"
+                       [class.fa-circle-exclamation]="FeedbackBanner.Type === 'error'"></i>
+                    <span>{{ FeedbackBanner.Message }}</span>
+                </div>
+                <button mjButton variant="flat" size="sm" (click)="DismissBanner()" aria-label="Dismiss notification">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        }
+
+        @if (IsLoading) {
+            <div class="cos-loading">
+                <mj-loading text="Loading approvals and wakes..."></mj-loading>
+            </div>
+        } @else {
+            <div class="cos-overview-columns">
+                <!-- Left Column: Pending & Resolved Agent Requests -->
+                <section class="cos-panel">
+                    <div class="cos-panel__header">
+                        <div>
+                            <h3 class="cos-panel__title">
+                                <i class="fa-solid fa-bell-concierge"></i> Pending Agent Approvals ({{ PendingRequests.length }})
+                            </h3>
+                            <p class="cos-panel__subtitle">
+                                Approve or reject escalations from your Chief of Staff
+                            </p>
+                        </div>
+                    </div>
+
+                    @if (PendingRequests.length === 0) {
+                        <mj-empty-state Size="compact" Variant="success" Icon="fa-solid fa-circle-check" Message="Inbox Zero — no pending requests awaiting your decision." />
+                    } @else {
+                        <div class="cos-stack">
+                            @for (req of PendingRequests; track req.ID) {
+                                <div class="cos-request-card" (click)="OpenRequestDetail(req)">
+                                    <div class="cos-request-card__top">
+                                        <div class="cos-request-card__badges">
+                                            <span class="cos-priority-tag {{ GetPriorityTierClass(req.Priority) }}">
+                                                {{ GetPriorityTierLabel(req.Priority) }} ({{ req.Priority }})
+                                            </span>
+                                            @if (req.RequestType) {
+                                                <span class="cos-meta-badge"><i class="fa-solid fa-tag"></i> {{ req.RequestType }}</span>
+                                            }
+                                            <span class="cos-status-chip cos-status-chip--requested">
+                                                {{ req.Status }}
+                                            </span>
+                                            @if (IsRequestExpired(req)) {
+                                                <span class="cos-status-chip cos-status-chip--disabled">
+                                                    Expired
+                                                </span>
+                                            }
+                                        </div>
+                                        <span class="cos-timestamp">
+                                            {{ req.RequestedAt | date:'short' }}
+                                        </span>
+                                    </div>
+                                    <p class="cos-request-card__text">{{ req.Request }}</p>
+                                    <div class="cos-request-card__actions">
+                                        <button mjButton variant="primary" size="sm"
+                                                [disabled]="BusyRequestID === req.ID"
+                                                (click)="QuickRespondToRequest(req, 'Approved', $event)">
+                                            <i class="fa-solid fa-check"></i> Approve
+                                        </button>
+                                        <button mjButton variant="danger" size="sm"
+                                                [disabled]="BusyRequestID === req.ID"
+                                                (click)="QuickRespondToRequest(req, 'Rejected', $event)">
+                                            <i class="fa-solid fa-xmark"></i> Reject
+                                        </button>
+                                        <button mjButton variant="outline" size="sm"
+                                                (click)="OpenRequestDetail(req); $event.stopPropagation()">
+                                            <i class="fa-solid fa-expand"></i> Full Details / Comment
+                                        </button>
+                                    </div>
+                                    @let openDraft = EmailDraftFor(req);
+                                    @if (openDraft) {
+                                        <div class="cos-email-draft" (click)="$event.stopPropagation()">
+                                            <mj-accordion-panel [Bare]="true" Size="sm">
+                                                <ng-template mjAccordionTitle><i class="fa-solid fa-envelope"></i> Email draft to {{ openDraft.To }}</ng-template>
+                                                <ng-template mjAccordionActions>
+                                                    <button mjButton variant="outline" size="sm"
+                                                            title="Copy To, Subject and body as plain text for your mail client"
+                                                            (click)="CopyEmailDraft(req, $event)">
+                                                        <i class="fa-regular fa-copy"></i> Copy
+                                                    </button>
+                                                </ng-template>
+                                                <ng-template mjAccordionBody>
+                                                    <div class="cos-email-draft__meta">
+                                                        <div><strong>To:</strong> {{ openDraft.To }}</div>
+                                                        @if (openDraft.CC.length > 0) {
+                                                            <div><strong>CC:</strong> {{ openDraft.CC.join(', ') }}</div>
+                                                        }
+                                                        @if (openDraft.From) {
+                                                            <div><strong>From:</strong> {{ openDraft.From }}</div>
+                                                        }
+                                                        <div><strong>Subject:</strong> {{ openDraft.Subject }}</div>
+                                                    </div>
+                                                    <pre class="cos-email-draft__body">{{ openDraft.Body }}</pre>
+                                                </ng-template>
+                                            </mj-accordion-panel>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    @if (RecentResolvedRequests.length > 0) {
+                        <div class="cos-resolved-section">
+                            <h4 class="cos-resolved-section__title">Recent Resolved Decisions</h4>
+                            <div class="cos-stack">
+                                @for (req of RecentResolvedRequests; track req.ID) {
+                                    <div class="cos-resolved-row" (click)="OpenRequestDetail(req)">
+                                        <div class="cos-resolved-row__main">
+                                            <span class="cos-status-chip cos-status-chip--{{ req.Status.toLowerCase() }}">
+                                                {{ req.Status }}
+                                            </span>
+                                            <span class="cos-resolved-row__text">{{ req.Request }}</span>
+                                        </div>
+                                        <span class="cos-timestamp">
+                                            {{ (req.RespondedAt || req.RequestedAt) | date:'shortDate' }}
+                                        </span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </section>
+
+                <!-- Right Column: Autonomous Wake Routines -->
+                <section class="cos-panel">
+                    <div class="cos-panel__header">
+                        <div>
+                            <h3 class="cos-panel__title">
+                                <i class="fa-solid fa-clock-rotate-left"></i> Autonomous Wake Routines ({{ FilteredRoutines.length }})
+                            </h3>
+                            <p class="cos-panel__subtitle">
+                                Scheduled AgentWake routines in MJ: User Routines
+                            </p>
+                        </div>
+                    </div>
+
+                    @if (FiredRoutineCount > 0) {
+                        <div class="cos-routines-toggle">
+                            <mj-filter-chip Label="Show fired" Icon="fa-solid fa-clock-rotate-left"
+                                            [Count]="FiredRoutineCount" [Active]="ShowFiredRoutines"
+                                            (Clicked)="ToggleShowFiredRoutines()" />
+                        </div>
+                    }
+
+                    @if (FilteredRoutines.length === 0) {
+                        <mj-empty-state Size="compact" Icon="fa-regular fa-clock" Message="No AgentWake routines found for your Chief of Staff." />
+                    } @else {
+                        <div class="cos-stack">
+                            @for (routine of FilteredRoutines; track routine.ID) {
+                                <div class="cos-routine-card" [class.cos-routine-card--fired]="IsSpentRoutine(routine)">
+                                    <div class="cos-routine-card__header">
+                                        <div>
+                                            <div class="cos-routine-card__title-row">
+                                                <h4 class="cos-routine-card__name">{{ routine.Name }}</h4>
+                                                <span class="cos-status-chip cos-status-chip--{{ RoutineStatusLabel(routine).toLowerCase() }}"
+                                                      [title]="IsSpentRoutine(routine) ? 'A one-time wake that has run. It will not fire again.' : ''">
+                                                    {{ RoutineStatusLabel(routine) }}
+                                                </span>
+                                                <span class="cos-meta-badge">
+                                                    {{ routine.ScheduleMode }}
+                                                </span>
+                                            </div>
+                                            @if (routine.Description) {
+                                                <p class="cos-routine-card__desc">{{ routine.Description }}</p>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    <div class="cos-routine-card__schedule">
+                                        @if (IsSpentRoutine(routine)) {
+                                            <div>
+                                                <strong>Fired:</strong> {{ routine.LastRunAt | date:'medium' }}
+                                                <span class="cos-routine-card__fired-note">one-time wake, will not fire again</span>
+                                            </div>
+                                        } @else {
+                                            <div>
+                                                <strong>Next Wake:</strong>
+                                                @if (routine.NextRunAt) {
+                                                    {{ routine.NextRunAt | date:'medium' }}
+                                                } @else {
+                                                    Not scheduled
+                                                }
+                                            </div>
+                                        }
+                                        @if (routine.CronExpression) {
+                                            <div>
+                                                <strong>Cron:</strong> <code>{{ routine.CronExpression }}</code>
+                                                @if (routine.Timezone) {
+                                                    <span>({{ routine.Timezone }})</span>
+                                                }
+                                            </div>
+                                        }
+                                        @if (routine.LastRunAt) {
+                                            <div>
+                                                <strong>Last Run:</strong> {{ routine.LastRunAt | date:'short' }}
+                                                @if (routine.LastRunStatus) {
+                                                    <span class="cos-meta-badge">{{ routine.LastRunStatus }}</span>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+
+                                    <div class="cos-routine-card__actions">
+                                        <button mjButton variant="primary" size="sm"
+                                                [disabled]="!CanOpenBriefing(routine)"
+                                                [title]="CanOpenBriefing(routine) ? 'Read this routine\'s briefings here' : 'No briefing yet: the routine has not run'"
+                                                (click)="OpenBriefingReader(routine, $event)">
+                                            <i class="fa-solid fa-book-open"></i> Read Briefing
+                                        </button>
+                                        <button mjButton variant="outline" size="sm"
+                                                [disabled]="!CanOpenBriefing(routine)"
+                                                title="Open this routine's conversation in the Chat app"
+                                                (click)="OpenRoutineBriefing(routine, $event)">
+                                            <i class="fa-solid fa-comments"></i> Open in Chat
+                                        </button>
+                                        <button mjButton variant="outline" size="sm"
+                                                [disabled]="BusyRoutineID === routine.ID"
+                                                title="Run this wake now. Its scheduled time is not changed."
+                                                (click)="TriggerWakeNow(routine, $event)">
+                                            <i class="fa-solid fa-bolt"></i> Wake Now
+                                        </button>
+                                        @if (!IsSpentRoutine(routine)) {
+                                            <button mjButton variant="outline" size="sm"
+                                                    [disabled]="BusyRoutineID === routine.ID"
+                                                    (click)="ToggleRoutineStatus(routine, $event)">
+                                                @if (routine.Status === 'Active') {
+                                                    <i class="fa-solid fa-pause"></i> Pause
+                                                } @else {
+                                                    <i class="fa-solid fa-play"></i> Resume
+                                                }
+                                            </button>
+                                        }
+                                        <button mjButton variant="flat" size="sm"
+                                                (click)="OpenRoutineEntityRecord(routine.ID, $event)">
+                                            <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Record
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </section>
+            </div>
+        }
+    </mj-page-body>
+
+    <!-- Briefing reader: a wake routine's conversation, read without leaving the page. -->
+    <mj-slide-panel
+        Mode="slide"
+        [Title]="BriefingRoutine?.Name ?? 'Briefings'"
+        [Visible]="IsBriefingReaderOpen"
+        [Resizable]="true"
+        [WidthPx]="760"
+        (Closed)="CloseBriefingReader()">
+        @if (IsBriefingReaderOpen) {
+            <div class="cos-briefing-reader">
+                <mj-conversation-chat-area
+                    [Provider]="Provider"
+                    [EnvironmentId]="BriefingEnvironmentId"
+                    [CurrentUser]="ProviderToUse.CurrentUser"
+                    [Conversation]="BriefingConversation"
+                    [ConversationId]="BriefingConversationId"
+                    [IsNewConversation]="false"
+                    [SuppressNewConversationEmptyState]="true"
+                    [AllowMentions]="false"
+                    [OverlayMode]="false"
+                    [ShowExportButton]="false"
+                    [ShowShareButton]="false"
+                    [ShowArtifactIndicator]="false"
+                    [ShowAgentPicker]="false"
+                    [ShowAgentModePicker]="false"
+                    [ReadOnly]="true"
+                    ReadOnlyMessage="Briefings are written by the wake routine. To change what it checks or when, ask your Chief of Staff in chat or use the Routines app."
+                    ApplicationScope="Application"
+                    [ApplicationId]="BriefingApplicationId">
+                </mj-conversation-chat-area>
+            </div>
+        }
+    </mj-slide-panel>
+</mj-page-layout>
+
+@if (ShowRequestDialog && SelectedRequest) {
+    <mj-agent-request-dialog
+        [Visible]="ShowRequestDialog"
+        [Request]="SelectedRequest"
+        (Close)="OnRequestDialogClose($event)">
+    </mj-agent-request-dialog>
+}

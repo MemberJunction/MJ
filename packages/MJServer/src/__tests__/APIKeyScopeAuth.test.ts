@@ -155,18 +155,14 @@ describe('CheckAPIKeyScope', () => {
             expect(result).toEqual({ Allowed: false, Checked: true, Reason: 'API key not found' });
         });
 
-        it('KNOWN GAP: the apiKeyId is interpolated verbatim into the RunView ExtraFilter', async () => {
-            // The apiKeyId originates server-side (context.userPayload.apiKeyId, set only
-            // after key validation), so the trust boundary is upstream — but this layer
-            // performs no escaping of its own. Pinned so that if the call site ever
-            // starts accepting client-supplied IDs, this assertion is the reminder.
+        it('escapes single quotes in apiKeyId before interpolating into the RunView ExtraFilter', async () => {
             const hostile = "abc' OR '1'='1";
             keyLookup = { Success: true, Results: [] };
 
             await CheckAPIKeyScope(hostile, 'view:run', makeUser(), { throwOnDenied: false });
 
             expect(capturedRunViewParams[0].EntityName).toBe('MJ: API Keys');
-            expect(capturedRunViewParams[0].ExtraFilter).toBe(`ID='abc' OR '1'='1'`);
+            expect(capturedRunViewParams[0].ExtraFilter).toBe(`ID='abc'' OR ''1''=''1'`);
         });
     });
 
@@ -206,7 +202,7 @@ describe('CheckAPIKeyScope', () => {
             expect(result).toEqual({ Allowed: false, Checked: true, Reason: 'Application is not active: MJAPI' });
         });
 
-        it('KNOWN GAP: the applicationName option is interpolated verbatim into the application filter', async () => {
+        it('escapes single quotes in applicationName before interpolating into the application filter', async () => {
             appLookup = { Success: true, Results: [] };
             const hostile = "MJAPI' OR Name<>'";
 
@@ -216,7 +212,7 @@ describe('CheckAPIKeyScope', () => {
             });
 
             expect(capturedRunViewParams[1].EntityName).toBe('MJ: API Applications');
-            expect(capturedRunViewParams[1].ExtraFilter).toBe(`Name='MJAPI' OR Name<>''`);
+            expect(capturedRunViewParams[1].ExtraFilter).toBe(`Name='MJAPI'' OR Name<>'''`);
         });
     });
 

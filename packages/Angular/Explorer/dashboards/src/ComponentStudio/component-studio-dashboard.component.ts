@@ -1110,6 +1110,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
           ExtraFilter: `ArtifactID = '${artifact.ID}'`,
           OrderBy: 'VersionNumber DESC',
           MaxRows: 1,
+          SkipTotalRowCount: true,
           ResultType: 'entity_object'
         });
 

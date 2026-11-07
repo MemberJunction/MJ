@@ -491,18 +491,32 @@ export class SQLLogging {
             { schema: MjCoreSchema(), placeholder: '${flyway:defaultSchema}' }
         ];
 
-        // Apply each schema-to-placeholder mapping in order
-        for (const mapping of schemaPlaceholders) {
-            // Negative lookahead to avoid matching schema_CreatedAt, schema_UpdatedAt, etc.
-            const regex: RegExp = new RegExp(`${this.escapeRegex(mapping.schema)}(?!(_(\\w+)At))`, 'g');
-            const beforeCount = (data.match(regex) || []).length;
-            data = data.replace(regex, mapping.placeholder);
-            logStatus(`   >>> Replaced ${beforeCount} instances of ${mapping.schema} with ${mapping.placeholder}`);
-        }
+        data = this.ApplySchemaPlaceholders(data, schemaPlaceholders);
 
         fs.writeFileSync(`${this.SQLLoggingFilePath}`, data);
         logStatus(`   >>> Flyway Migration File Completed`);
      }
+
+    /**
+     * Replaces each mapping's schema name with its placeholder, in order, wherever the schema name
+     * stands alone as a whole name (`[__mj].`, `__mj.`, `'sys,__mj,dbo'`).
+     *
+     * A schema name that is only part of a longer name is left alone: the `__mj_` system columns
+     * (`__mj_CreatedAt`, `__mj_Latitude_BillToAddressID`), view aliases such as `__mj_rgc`, and
+     * Open App schemas such as `__mj_BizAppsCommon`, whose names are fixed in the app's manifest and
+     * do not follow the core schema. Replacing inside those names makes them resolve correctly only
+     * on a host whose core schema is `__mj`.
+     */
+    public static ApplySchemaPlaceholders(sql: string, mappings: NonNullable<SQLOutputConfig['schemaPlaceholders']>): string {
+        let data = sql;
+        for (const mapping of mappings) {
+            const regex = new RegExp(`(?<!\\w)${this.escapeRegex(mapping.schema)}(?!\\w)`, 'g');
+            const count = (data.match(regex) || []).length;
+            data = data.replace(regex, () => mapping.placeholder);
+            logStatus(`   >>> Replaced ${count} instances of ${mapping.schema} with ${mapping.placeholder}`);
+        }
+        return data;
+    }
 
      /**
       * Escapes special regex characters in a string

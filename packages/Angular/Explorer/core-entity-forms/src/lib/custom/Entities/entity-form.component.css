@@ -81,7 +81,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: white;
+    color: var(--mj-brand-on-primary);
     font-size: 20px;
     flex-shrink: 0;
 }
@@ -204,6 +204,10 @@
 }
 
 /* Navigation Rail - Minimalist Icon-First Design */
+.phone-section-picker {
+    display: none;
+}
+
 .nav-rail {
     width: var(--nav-rail-width);
     background: var(--bg-primary);
@@ -256,7 +260,7 @@
     height: 18px;
     padding: 0 5px;
     background: var(--accent-color);
-    color: white;
+    color: var(--mj-brand-on-primary);
     font-size: 10px;
     font-weight: 600;
     border-radius: 9999px;
@@ -390,7 +394,7 @@
 
 .toggle-btn.active {
     background: var(--accent-color);
-    color: white;
+    color: var(--mj-brand-on-primary);
 }
 
 /* Depth Selector */
@@ -436,7 +440,7 @@
 
 .depth-btn.active {
     background: var(--accent-color);
-    color: white;
+    color: var(--mj-brand-on-primary);
 }
 
 /* Header Controls (view mode + expand/collapse) */
@@ -594,7 +598,7 @@
 .list-row:hover .seq-num,
 .list-row.selected .seq-num {
     background: var(--accent-color);
-    color: white;
+    color: var(--mj-brand-on-primary);
 }
 
 .col-name {
@@ -702,12 +706,12 @@
 
 .flag-badge.fk {
     background: var(--mj-brand-primary);
-    color: white;
+    color: var(--mj-brand-on-primary);
 }
 
 .flag-badge.encrypted {
     background: var(--mj-brand-primary);
-    color: white;
+    color: var(--mj-brand-on-primary);
 }
 
 .col-desc {
@@ -1287,7 +1291,7 @@
 
 .field-chip.outgoing:hover {
     background: var(--mj-brand-primary);
-    color: white;
+    color: var(--mj-brand-on-primary);
 }
 
 .field-chip.incoming {
@@ -1298,7 +1302,7 @@
 
 .field-chip.incoming:hover {
     background: var(--mj-status-success);
-    color: white;
+    color: var(--mj-text-inverse);
 }
 
 .field-chip .bundle-icon {
@@ -1375,7 +1379,7 @@
     height: 20px;
     border-radius: var(--radius-sm);
     background: var(--warning-color);
-    color: white;
+    color: var(--mj-text-inverse);
     font-size: 10px;
     font-weight: 600;
     display: flex;
@@ -1486,7 +1490,7 @@
     gap: 8px;
     padding: 24px 32px;
     background: var(--accent-color);
-    color: white;
+    color: var(--mj-brand-on-primary);
     border-radius: var(--radius-lg);
     font-weight: 600;
 }
@@ -2066,7 +2070,7 @@
 
 .isa-node.current {
     background: var(--mj-brand-primary);
-    color: white;
+    color: var(--mj-brand-on-primary);
 }
 
 .isa-node.parent {
@@ -2560,4 +2564,52 @@
   margin: var(--mj-space-2) 0 0;
   font-size: var(--mj-text-xs);
   color: var(--mj-status-error);
+}
+
+/* Phone (375px): the header stacks, the stat tiles wrap two per row, and the icon rail
+   becomes one section-picker button above the canvas (same pattern as the standard form). */
+@media (max-width: 768px) {
+    .explorer-body {
+        flex-direction: column;
+    }
+
+    .nav-rail {
+        display: none;
+    }
+
+    .phone-section-picker {
+        display: block;
+        flex-shrink: 0;
+        padding: 4px 8px;
+        border-bottom: 1px solid var(--border-color);
+        background: var(--bg-primary);
+    }
+
+    .explorer-header {
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 12px 16px;
+    }
+
+    .entity-identity {
+        flex-basis: 100%;
+    }
+
+    .entity-subtitle {
+        flex-wrap: wrap;
+    }
+
+    .entity-description {
+        flex-basis: 100%;
+        white-space: normal;
+    }
+
+    .header-stats {
+        flex-basis: 100%;
+        flex-wrap: wrap;
+    }
+
+    .stat-item {
+        flex: 1 1 40%;
+    }
 }

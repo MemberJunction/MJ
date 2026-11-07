@@ -39,6 +39,8 @@ const h = vi.hoisted(() => {
         promptModels: [] as Array<{ PromptID: string; ModelID: string; Priority: number; Status: string; ConfigurationID: string | null }>,
         /** What each tag was saved with: [tag ID, EmbeddingModelID]. */
         persisted: [] as Array<[string, string | null]>,
+        /** AIEngine.DefaultLocalEmbeddingModel; null = no local embedding model. */
+        defaultLocal: null as FakeModel | null,
     };
 
     const embedCalls: EmbeddingRunParams[] = [];
@@ -72,7 +74,10 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     return { ...actual, BaseSingleton: FreshSingleton };
 });
 
-vi.mock('@memberjunction/core', () => ({
+vi.mock('@memberjunction/core', async () => ({
+    // The real SharedLoad, so Config's load sharing runs as it does in production. Imported from its
+    // own module: the whole of @memberjunction/core would load the @memberjunction/global mocked here.
+    SharedLoad: (await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core/dist/generic/sharedLoad.js')).SharedLoad,
     UserInfo: class {},
     LogError: vi.fn(),
     LogStatus: vi.fn(),
@@ -155,6 +160,7 @@ vi.mock('@memberjunction/aiengine', () => ({
             get PromptModels() { return h.state.promptModels; },
             get Models() { return h.state.models; },
             get ModelVendors() { return h.state.modelVendors; },
+            get DefaultLocalEmbeddingModel() { return h.state.defaultLocal; },
         },
     },
 }));
@@ -228,6 +234,7 @@ describe('TagEngine uses one embedding model for tags, queries and new tags', ()
         h.findNearest.mockReset();
         h.removeVector.mockClear();
         h.state.persisted = [];
+        h.state.defaultLocal = null;
         h.state.tags = [makeTag('tag-1', 'Machine Learning'), makeTag('tag-2', 'Deep Learning')];
         engine = new TagEngine();
     });
@@ -244,6 +251,24 @@ describe('TagEngine uses one embedding model for tags, queries and new tags', ()
         ]);
         expect(modelIDs).toEqual([PROMPT_MODEL_ID, PROMPT_MODEL_ID, PROMPT_MODEL_ID]);
         expect(h.embedCalls.every(c => c.PromptID === TAG_PROMPT_ID)).toBe(true);
+    });
+
+    it('follows the default local embedding model over the prompt\'s, so it matches what a tag save writes', async () => {
+        loadCatalog(true);
+        h.state.defaultLocal = h.state.models.find(m => m.ID === SMALLEST_MODEL_ID) ?? null;
+
+        const modelIDs = await exerciseAllThreeEmbeddingPaths(engine);
+
+        expect(modelIDs).toEqual([SMALLEST_MODEL_ID, SMALLEST_MODEL_ID, SMALLEST_MODEL_ID]);
+        expect(h.state.persisted.map(([, modelID]) => modelID)).toEqual([SMALLEST_MODEL_ID, SMALLEST_MODEL_ID]);
+    });
+
+    it('embeds the text being resolved as a query, and tags as documents', async () => {
+        loadCatalog(true);
+
+        await exerciseAllThreeEmbeddingPaths(engine);
+
+        expect(h.embedCalls.map(c => c.InputType)).toEqual([undefined, 'query', undefined]);
     });
 
     it('persists the prompt model\'s ID as EmbeddingModelID', async () => {

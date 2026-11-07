@@ -188,13 +188,33 @@ The grid uses a cancelable event pattern. Before events can be canceled by setti
 
 | Event | Args Type | Description |
 |-------|-----------|-------------|
-| `newButtonClick` | `void` | Add/New button clicked |
-| `refreshButtonClick` | `void` | Refresh button clicked |
-| `deleteButtonClick` | `BaseEntity[]` | Delete button clicked |
-| `exportButtonClick` | `void` | Export button clicked |
-| `compareButtonClick` | `BaseEntity[]` | Compare button clicked |
-| `mergeButtonClick` | `BaseEntity[]` | Merge button clicked |
-| `addToListButtonClick` | `BaseEntity[]` | Add to List clicked |
+| `NewButtonClick` | `void` | Add/New button clicked |
+| `RefreshButtonClick` | `void` | Refresh button clicked |
+| `DeleteButtonClick` | `Record<string, unknown>[]` | Delete button clicked |
+| `ExportButtonClick` | `void` | Export button clicked |
+| `CompareButtonClick` | `Record<string, unknown>[]` | Compare button clicked |
+| `MergeButtonClick` | `Record<string, unknown>[]` | Merge button clicked (emitted only with two or more rows selected) |
+| `AddToListButtonClick` | `Record<string, unknown>[]` | Add to List clicked |
+| `DuplicateSearchButtonClick` | `Record<string, unknown>[]` | Find Duplicates clicked |
+| `MergeRecordsRequested` | `{ entityInfo: EntityInfo; records: Record<string, unknown>[] }` | Emitted with `MergeButtonClick`; handle it to show a merge UI |
+| `DuplicateSearchRequested` | `{ entityInfo: EntityInfo; records: Record<string, unknown>[] }` | Emitted with `DuplicateSearchButtonClick` |
+
+#### Merging records from the grid
+
+`mj-entity-data-grid` only raises the merge request; it has no merge UI of its own. Its **Merge**
+button appears when `ShowMergeButton` is `true` and is enabled with two or more rows selected.
+
+The grid **view type** (`GridViewRendererComponent`, used by `mj-entity-viewer`) handles the request
+itself: it shows **Merge** only when the entity has `AllowRecordMerge = true` and the user can both
+update and delete its records, requires exactly two selected rows, refuses IS-A subtype records, loads
+the field comparison from the server (`RecordComparison.Compare`), and opens
+[`mj-record-merge-panel`](../record-merge/README.md) in a dialog where the user picks which record to
+keep and which values survive. On confirm it calls `MergeRecords` on its provider.
+
+The **Find Duplicates** button (`ShowDuplicateSearchButton`) only emits `DuplicateSearchRequested`;
+nothing in MJ handles it yet. See the
+[Duplicate Management Guide](../../../../guides/DUPLICATE_MANAGEMENT_GUIDE.md) for detection and
+merging end to end.
 
 ### GridToolbarConfig
 

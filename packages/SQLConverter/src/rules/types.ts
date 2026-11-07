@@ -134,6 +134,9 @@ export const GAP_MARKER_UNPARSED = '-- Could not parse';
 /** BatchConverter: a batch whose conversion threw; the error text stands in for the SQL. */
 export const GAP_MARKER_BATCH_ERROR = '-- ERROR converting batch';
 
+/** ExecBlockRule: a metadata save it could not convert; the block stands in as comments. */
+export const GAP_MARKER_EXEC_SKIPPED = '-- SKIPPED: EXEC block';
+
 /**
  * ProcedureToFunctionRule / TriggerRule: a routine in an Open App schema that is not CodeGen
  * output (a hand-written trigger or procedure). The whole source is written as comments under
@@ -154,6 +157,7 @@ export const CONVERSION_GAP_MARKERS = [
   GAP_MARKER_UNPARSED,
   GAP_MARKER_BATCH_ERROR,
   GAP_MARKER_NEEDS_HAND_AUTHORING,
+  GAP_MARKER_EXEC_SKIPPED,
 ] as const;
 
 /** Conversion statistics tracking */

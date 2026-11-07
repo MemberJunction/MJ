@@ -142,6 +142,17 @@ describe('IsBalancedSQLFragment', () => {
             expect(reasonFor(fragment, pg)).toMatch(/dollar/);
         });
 
+        it('accepts only the exact positional parameter placeholders listed in AllowedParameterPlaceholders', () => {
+            const allowed = { AllowedParameterPlaceholders: new Set(['$1', '$2']) };
+            expect(IsBalancedSQLFragment('"Name" = $1 AND "ID" IN ($1, $2)', pg, allowed)).toEqual({
+                IsBalanced: true,
+                Reason: null,
+            });
+            expect(IsBalancedSQLFragment('"Name" = $3', pg, allowed).Reason).toMatch(/dollar/);
+            expect(IsBalancedSQLFragment('"Name" = $$x$$', pg, allowed).Reason).toMatch(/dollar/);
+            expect(IsBalancedSQLFragment('"Name" = $1$', pg, allowed).Reason).toMatch(/dollar/);
+        });
+
         it.each(["Name = E'x'\n'y'", "Name = E'x' 'y'", "Name = E'x' -- note\n'y'"])(
             'refuses an escape string followed by another string literal: %j',
             (fragment) => {

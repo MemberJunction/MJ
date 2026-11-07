@@ -1,7 +1,0 @@
----
-"@memberjunction/ai-agents": minor
----
-
-Loop agents can opt in to a payload change check with the `payloadFeedbackCheck` prompt param (off by default, and declared in the Loop agent type's params schema): when the payload analyzer flags one of the agent's own changes, one typed decision call asks whether each change was intended, and the changes judged unintended are listed on the agent's next turn so it can confirm them or put them back. Nothing is reverted automatically. A step that ends the run is not checked, the call is bounded at 30 seconds, and when it fails or times out every change is accepted. The call's prompt run is linked to its `Payload change check` step, so the run's cost and token totals count it.
-
-`PayloadFeedbackManager.QueryAgent` (and the deprecated `queryAgent`) now asks typed decisions instead of the `Payload Change Feedback Query` prompt, whose metadata is removed. **Its second parameter changed type**: it was a `Record<string, unknown>` conversation context that it never read, and is now a `PayloadFeedbackContext` (the agent's reasoning and message for the step, the reasoning for the change, the agent ID and a cancellation signal). A caller that passed a conversation record should pass those fields instead. The constructor takes an optional `AgentDecisionService`, and `LastDecisionResult` exposes the last call's result so a caller can link its prompt run.

@@ -619,7 +619,7 @@ describe('WatchService — save path', () => {
 
     const hash = GenericDatabaseProvider.SaveCallVariableHash('__mj', 'Widget', ['w-1']);
     expect(sqlLog.options?.TransformStatement?.(`SET @Code_${hash} = 'w-1'`)).toBe(
-      `SET @Code_${hash} = (SELECT [ID] FROM [__mj].[Widget] WHERE [Name] = N'Old')`
+      `SET @Code_${hash} = (SELECT [ID] FROM [__mj].[Widget] WHERE LOWER([Name]) = LOWER(N'Old'))`
     );
     await result.stop();
     expect(service['lookupSqlLog']).toBeNull();

@@ -1,9 +1,9 @@
 /**
  * Shared types for the `mj dev workspace` generator.
  *
- * The generator creates the four ephemeral files that join sibling repo checkouts
+ * The generator creates the three ephemeral files that join sibling repo checkouts
  * into a single pnpm workspace at their common parent directory:
- * `pnpm-workspace.yaml`, `.npmrc`, `package.json`, `turbo.json`.
+ * `pnpm-workspace.yaml`, `.npmrc`, `package.json`.
  *
  * The generated contents reproduce the manual setup this command replaces: every
  * value was proven by joining these repos by hand before it was automated.
@@ -209,6 +209,8 @@ export interface ResolvedLockEntry {
    * workspace-linked, so they are not pin authority.
    */
   Dependents?: string[];
+  /** For DIRECT entries only: the importer that declares it, repo-relative (`.` = the repo root). */
+  Importer?: string;
 }
 
 /** A lockfile entry the pin derivation dropped — always carried to output, never silent. */
@@ -282,8 +284,6 @@ export interface CandidateRepo {
   AppGlobs?: string[];
   /** The member's committed lockfile data, an unsupported-format marker, or null when the repo commits none. */
   Lockfile: MemberLockfile | UnsupportedLockfile | null;
-  /** Raw contents of the repo's root `turbo.json`, or null when absent. */
-  TurboJson: string | null;
   /**
    * Why the member's `mj-app.json` could not be parsed, or null when it parsed (or is absent).
    *
@@ -411,13 +411,6 @@ export interface RootPackageJsonResult {
   Report: ParentManifestReport;
 }
 
-/** Result of picking the parent `turbo.json`. */
-export interface TurboJsonResult {
-  Content: string;
-  /** Member repo the file was copied from, or 'generator fallback'. */
-  Source: string;
-}
-
 /** One generated file, by name relative to the parent directory. */
 export interface GeneratedFile {
   Name: string;
@@ -442,6 +435,24 @@ export interface WorkspaceSentinel {
   files: string[];  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** Member repo directory names the workspace was generated for, sorted. */
   members: string[];  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  /**
+   * Entries the generator added to app shells' `angular.json` prebundle exclude lists (#3875).
+   * `clean` removes exactly these. Absent in sentinels written before the generator managed the list.
+   */
+  prebundleExcludes?: PrebundleExcludeRecord[];  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+}
+
+/**
+ * One `angular.json` project whose `serve.options.prebundle.exclude` list the generator added
+ * entries to. Lowercase keys: part of the sentinel's on-disk shape.
+ */
+export interface PrebundleExcludeRecord {
+  /** Path of the `angular.json`, relative to the workspace parent, `/`-separated (e.g. `MJ/packages/MJExplorer/angular.json`). */
+  file: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  /** Key under the file's `projects` object. */
+  project: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  /** The globs the generator added, e.g. `@mj-biz-apps/*`. */
+  entries: string[];  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
 
 /** Outcome of reading the sentinel: ours, not there, or there but not ours. */
