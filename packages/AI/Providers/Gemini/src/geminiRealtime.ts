@@ -121,7 +121,14 @@ const MAX_HELD_INPUT_AUDIO_BYTES = 16000 * 2 * 2;
  */
 const GEMINI_LIVE_CONNECTION_SECONDS = 600;
 
-/** Extra connections a token allows beyond one per {@link GEMINI_LIVE_CONNECTION_SECONDS}: resumes after a dropped network or a `goAway`. */
+/**
+ * How long before {@link GEMINI_LIVE_CONNECTION_SECONDS} the browser driver moves the session to a new connection on its
+ * own. The driver holds its own copy, `REALTIME_PLANNED_MOVE_MARGIN_MS` in `@memberjunction/ai-realtime-client`, because
+ * the client must not import this package: keep the two equal. Here it sizes the token's uses, one per planned move.
+ */
+const GEMINI_PLANNED_MOVE_MARGIN_SECONDS = 60;
+
+/** Extra connections a token allows beyond one per planned move: resumes after a dropped network or a `goAway`. */
 const GEMINI_CLIENT_TOKEN_RESUME_MARGIN = 3;
 
 /** Slack past the session cap before the token dies, so the browser's own deadline alarm ends the call first. */
@@ -363,7 +370,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
      *
      * Expiry: the token opens connections (the first, and each resume, which Gemini counts as a new
      * session) until the session cap plus {@link GEMINI_CLIENT_TOKEN_CAP_SKEW_SECONDS} (at most
-     * {@link GEMINI_CLIENT_TOKEN_EXPIRY_MS}), one per {@link GEMINI_LIVE_CONNECTION_SECONDS} of the cap plus
+     * {@link GEMINI_CLIENT_TOKEN_EXPIRY_MS}), one per {@link GEMINI_LIVE_CONNECTION_SECONDS} minus {@link GEMINI_PLANNED_MOVE_MARGIN_SECONDS} of the cap plus
      * {@link GEMINI_CLIENT_TOKEN_RESUME_MARGIN}; the session's ability to send messages dies with it.
      *
      * @param params Session configuration (model, system prompt, tools, config bag).
@@ -376,7 +383,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
         // and opens only enough connections for that cap: a leaked token cannot outlast the host's deadline.
         const capSeconds = maxSessionSeconds ?? GEMINI_CLIENT_TOKEN_EXPIRY_MS / 1000;
         const lifetimeMs = Math.min(GEMINI_CLIENT_TOKEN_EXPIRY_MS, (capSeconds + GEMINI_CLIENT_TOKEN_CAP_SKEW_SECONDS) * 1000);
-        const uses = Math.ceil(capSeconds / GEMINI_LIVE_CONNECTION_SECONDS) + GEMINI_CLIENT_TOKEN_RESUME_MARGIN;
+        const uses = Math.ceil(capSeconds / (GEMINI_LIVE_CONNECTION_SECONDS - GEMINI_PLANNED_MOVE_MARGIN_SECONDS)) + GEMINI_CLIENT_TOKEN_RESUME_MARGIN;
         const now = Date.now();
         const expireTime = new Date(now + lifetimeMs).toISOString();
         const token = await this.mintAuthToken({
@@ -409,7 +416,13 @@ export class GeminiRealtime extends BaseRealtimeModel {
             ExpiresAt: expireTime,
             // The browser passes the full config to live.connect; the token lock above makes its
             // values authoritative even if a client tampers.
-            SessionConfig: this.SessionPactFor(params.Model, config),
+            SessionConfig: {
+                ...this.SessionPactFor(params.Model, config),
+                // Google closes the socket at this age without warning, so the browser plans its move before it. Only the
+                // Developer API: Gemini Enterprise relies on Vertex's goAway and keeps its handle as the memory, and its
+                // own CreateClientSession (the relay) never adds the field.
+                ...(this.Endpoint === 'developer' ? { connectionLifetimeSeconds: GEMINI_LIVE_CONNECTION_SECONDS } : {}),
+            },
             ...(avatarStatus ? { AvatarStatus: avatarStatus } : {}),
             MaxSessionSeconds: maxSessionSeconds,
         };

@@ -1064,4 +1064,189 @@ describe('GeminiRealtimeClient session resumption', () => {
             expect(errors).toEqual([]);
         });
     });
+    describe('planned move before the connection lifetime', () => {
+        /** A closed exchange, so no turn is open and the notebook has something to seed. */
+        const closeOneExchange = (c: MultiConnectionClient, index = 0): void => {
+            c.EmitOn(index, RESUMABLE('h1'));
+            c.EmitOn(index, HEARD('hi'));
+            c.EmitOn(index, SAID('Q1'));
+            c.EmitOn(index, TURN_COMPLETE);
+        };
+        /**
+         * Moves the clock, then 1 ms more: a move that starts when the clock runs out schedules its first attempt with a
+         * zero delay, which the fake clock runs on its next tick, not within the call that fired the timer.
+         */
+        const advance = async (ms: number): Promise<void> => {
+            await vi.advanceTimersByTimeAsync(ms);
+            await vi.advanceTimersByTimeAsync(1);
+        };
+        const seedOf = (c: MultiConnectionClient, index: number): string => JSON.stringify(c.Connections[index].Session.ClientContents[0]);
+
+        it('moves at lifetime minus the margin, at a turn boundary, with the seed', async () => {
+            const c = await connectAnother({ connectionLifetimeSeconds: 600 });
+            closeOneExchange(c);
+            c.EmitOn(0, SAID('Half')); // a turn is open at 540 s
+            await advance(540_000);
+            expect(c.Connections).toHaveLength(1); // waits for the turn to end
+            c.EmitOn(0, TURN_COMPLETE);
+            await advance(0);
+            expect(c.Connections).toHaveLength(2);
+            expect(c.Connections[1].Session.ClientContents[0].turnComplete).toBe(false);
+            expect(seedOf(c, 1)).toContain('Q1');
+        });
+
+        it('does not move a second before the margin', async () => {
+            const c = await connectAnother({ connectionLifetimeSeconds: 600 });
+            closeOneExchange(c);
+            await vi.advanceTimersByTimeAsync(539_999);
+            expect(c.Connections).toHaveLength(1);
+            await advance(1);
+            expect(c.Connections).toHaveLength(2);
+        });
+
+        it('moves at once when no turn is open at 540 s', async () => {
+            const c = await connectAnother({ connectionLifetimeSeconds: 600 });
+            closeOneExchange(c);
+            await advance(540_000);
+
+            expect(c.Connections).toHaveLength(2);
+            expect(c.Connections[0].Session.Closed).toBe(true);
+            expect(c.Connections[1].Session.ClientContents[0].turnComplete).toBe(false);
+        });
+
+        it('moves at the deadline when a turn runs through the whole minute', async () => {
+            const c = await connectAnother({ connectionLifetimeSeconds: 600 });
+            closeOneExchange(c);
+            c.EmitOn(0, SAID('long'));
+            await advance(540_000 + 50_000);
+            expect(c.Connections).toHaveLength(2);
+            expect(seedOf(c, 1)).toContain('long');
+        });
+
+        it('arms again on the new connection (a 27-minute call moves three times, each with a seed)', async () => {
+            const c = await connectAnother({ connectionLifetimeSeconds: 600 });
+            closeOneExchange(c);
+            await advance(540_000);
+            expect(c.Connections).toHaveLength(2);
+            await advance(540_000);
+            expect(c.Connections).toHaveLength(3);
+            await advance(540_000);
+            expect(c.Connections).toHaveLength(4);
+            for (const index of [1, 2, 3]) {
+                expect(c.Connections[index].Session.ClientContents[0].turnComplete).toBe(false);
+                expect(seedOf(c, index)).toContain('Q1');
+            }
+            await advance(539_000);
+            expect(c.Connections).toHaveLength(4);
+        });
+
+        it('restarts the clock when another resume replaced the connection, so the lifetime counts from the new one', async () => {
+            const c = await connectAnother({ connectionLifetimeSeconds: 600 });
+            closeOneExchange(c);
+            await advance(300_000);
+            c.CloseOn(0, 1011);
+            await advance(0);
+            expect(c.Connections).toHaveLength(2);
+            await advance(539_000); // 839 s in: the first clock would have fired at 540 s
+            expect(c.Connections).toHaveLength(2);
+            await advance(1_000);
+            expect(c.Connections).toHaveLength(3);
+        });
+
+        it('does not move when the pact carries no lifetime', async () => {
+            const c = await connectAnother();
+            closeOneExchange(c);
+            await advance(700_000);
+            expect(c.Connections).toHaveLength(1);
+        });
+
+        it.each([
+            ['zero', 0],
+            ['negative', -5],
+            ['not a number', '600'],
+            ['not finite', Number.POSITIVE_INFINITY],
+        ])('does not move when the lifetime is %s', async (_label, lifetime) => {
+            const c = await connectAnother({ connectionLifetimeSeconds: lifetime as number });
+            closeOneExchange(c);
+            await advance(700_000);
+            expect(c.Connections).toHaveLength(1);
+        });
+
+        it('no move after Disconnect', async () => {
+            const c = await connectAnother({ connectionLifetimeSeconds: 600 });
+            closeOneExchange(c);
+            await advance(100_000);
+            await c.Disconnect();
+            expect(vi.getTimerCount()).toBe(0); // the clock is cleared, not just ignored when it fires
+            await advance(600_000);
+            expect(c.Connections).toHaveLength(1);
+        });
+
+        it('no move after a resume failure ended the session', async () => {
+            const c = await connectAnother({ connectionLifetimeSeconds: 600 });
+            const seen = collect(c);
+            closeOneExchange(c);
+            await advance(100_000);
+            c.FailConnects = 1_000;
+            c.CloseOn(0, 1011);
+            await advance(200_000); // every attempt fails; the session ends well before 540 s
+            expect(seen.errors.some((error) => error.Fatal === true)).toBe(true);
+            expect(vi.getTimerCount()).toBe(0); // the clock of the lost connection is cleared, not just ignored when it fires
+            const attemptsLeft = c.FailConnects;
+            await advance(600_000);
+            expect(c.FailConnects).toBe(attemptsLeft);
+            expect(c.Connections).toHaveLength(1);
+        });
+
+        it('a new Connect on the same client does not carry the earlier lifetime over', async () => {
+            const c = await connectAnother({ connectionLifetimeSeconds: 600 });
+            await advance(100_000);
+            await c.Connect(sessionConfig(), new FakeMediaStream([new FakeTrack()]));
+            expect(c.Connections).toHaveLength(2);
+            await advance(700_000);
+            expect(c.Connections).toHaveLength(2);
+        });
+
+        it('a new Connect replaces the earlier timer: the old clock does not fire on the new session', async () => {
+            const c = await connectAnother({ connectionLifetimeSeconds: 600 });
+            await advance(300_000);
+            await c.Connect(sessionConfig({ connectionLifetimeSeconds: 600 }), new FakeMediaStream([new FakeTrack()]));
+            expect(c.Connections).toHaveLength(2);
+            await advance(300_000); // 600 s from the first connect, 300 s from the second
+            expect(c.Connections).toHaveLength(2);
+        });
+
+        describe('diagnostics', () => {
+            let logged: string[];
+
+            beforeEach(() => {
+                vi.stubEnv('MJ_VERBOSE', 'true');
+                logged = [];
+                vi.spyOn(console, 'log').mockImplementation((line: string) => {
+                    logged.push(line);
+                });
+            });
+
+            afterEach(() => {
+                vi.unstubAllEnvs();
+                vi.restoreAllMocks();
+            });
+
+            it('logs when it arms, once per connection', async () => {
+                const c = await connectAnother({ connectionLifetimeSeconds: 600 });
+                expect(logged.filter((line) => line === '[GeminiRealtimeClient] planned move armed at 540s')).toHaveLength(1);
+                await advance(540_000);
+                expect(c.Connections).toHaveLength(2);
+                expect(logged.filter((line) => line === '[GeminiRealtimeClient] planned move armed at 540s')).toHaveLength(2);
+            });
+
+            it.each([60, 30])('a lifetime of %i s (not past the margin) arms nothing and says so', async (lifetime) => {
+                const c = await connectAnother({ connectionLifetimeSeconds: lifetime });
+                await advance(700_000);
+                expect(c.Connections).toHaveLength(1);
+                expect(logged.some((line) => line.includes('no planned move') && line.includes(`${lifetime}s`))).toBe(true);
+                expect(logged.filter((line) => line.includes('planned move armed'))).toEqual([]);
+            });
+        });
+    });
 });
