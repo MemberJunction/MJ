@@ -8,8 +8,9 @@ import type { PackageMap } from '../analyzer/PackageMap';
 import type { BaseTestGenerator } from '../contracts/BaseTestGenerator';
 import type { RedactionCheck } from '../sandbox/Redaction';
 import type { Settings } from '../settings';
-import type { ChangeAnalysis, GenerationRequest, Run, TokenUsage, Trigger } from '../types';
-import { NewRunID } from '../ids';
+import type { ChangeAnalysis, GenerationRequest, GenerationResult, Run, TokenUsage, Trigger } from '../types';
+import { NewID, NewRunID } from '../ids';
+import { RedactTail } from '../target/VitestCatchTarget';
 import { RunDir } from './RunDir';
 import { RunWithConcurrency } from './concurrency';
 import { DefaultRedaction, DefaultRunTarget, type PipelineTarget } from './Deps';
@@ -49,7 +50,7 @@ export async function GenerateStep(o: GenerateOptions): Promise<{ RunID: string 
     const analysis = await t.Analyzer.Analyze(run, await pullRequestText(d, pr, HeadSHA));
     await t.Target.BuildPackages(base, analysis.PackagesToTest);
     const requests = buildRequests(run, analysis, base.RootDir, o.Settings, t.PackageMap);
-    const results = await RunWithConcurrency(requests, o.Settings.Limits.ParallelSessions, (r) => t.Generator.Generate(r));
+    const results = await RunWithConcurrency(requests, o.Settings.Limits.ParallelSessions, (r) => generateOrFail(t, r));
     const tests = results.flatMap((r) => r.Tests);
     run.TokensByModel = SumTokens(results.map((r) => r.Tokens)); run.EndedAt = new Date().toISOString();
     dir.WriteGeneration({ Run: run, Analysis: analysis, Tests: tests, BaseRootDir: base.RootDir });
@@ -85,6 +86,23 @@ function buildRequests(run: Run, analysis: ChangeAnalysis, baseRoot: string, set
         for (const risk of risks) requests.push({ ...common, Method: 'IntentAware', Risk: risk });
     }
     return requests;
+}
+
+/**
+ * Runs one generation session. A session that throws becomes one failed test for its request, with the redacted
+ * first line of the error as reason and zero tokens, so the other sessions still finish.
+ */
+async function generateOrFail(t: GenerateTools, r: GenerationRequest): Promise<GenerationResult> {
+    try { return await t.Generator.Generate(r); }
+    catch (e) {
+        const message = (e instanceof Error ? e.message : String(e)).split('\n')[0].trim();
+        const dir = t.PackageMap.Get(r.Package)?.Dir; const id = NewID();
+        if (!dir) throw e;
+        const tokens: TokenUsage = { Model: r.Model, InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 };
+        return { Tokens: tokens, TranscriptPath: null, Tests: [{ ID: id, RunID: r.Run.ID, Package: r.Package, Method: r.Method, RiskID: r.Risk?.ID ?? null,
+            RiskText: r.Risk ? `${r.Risk.WhatCouldBreak} (${r.Risk.Symbol})` : null, Mutant: null, MutantFailure: null, FilePath: `${dir}/src/__tests__/jit/${id}.jit.test.ts`,
+            Source: '', GenerationOutcome: 'Failed', FailureReason: `generation session failed: ${RedactTail(message)}`, Tokens: tokens, TranscriptURL: null }] };
+    }
 }
 
 /** Token usage summed per model, in first-seen order. */

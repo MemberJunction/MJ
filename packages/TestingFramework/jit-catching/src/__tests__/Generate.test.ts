@@ -42,4 +42,29 @@ describe('GenerateStep', () => {
     expect(g.Run.TokensByModel).toEqual([{ Model: 'm', InputTokens: 6, OutputTokens: 3, CacheReadTokens: 0, CostUSD: 1.5 }]);
     expect(g.Tests.map((t) => t.ID)).toEqual([ID_A]);
   });
+
+  it('records a session that throws as one failed test and still writes generation.json', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'jit-gen-')); const redaction = new RedactionCheck([]);
+    const a: ChangeAnalysis = { ...analysis(), Risks: [{ ID: 'R1', File: `${PKG_DIR}/src/svc.ts`, Symbol: 'Open', WhatCouldBreak: 'x', HowObserved: 'y' }] };
+    const info = { Name: PKG, Dir: PKG_DIR, HasVitest: true, HasTests: true };
+    const tools: GenerateTools = {
+      EnsureImage: async () => undefined,
+      Target: { Prepare: async (r: RevisionRef): Promise<PreparedRevision> => ({ Ref: r, RootDir: '/work/base' }), BuildPackages: async () => undefined },
+      Analyzer: { Analyze: async () => a },
+      Generator: { Generate: async (r: GenerationRequest): Promise<GenerationResult> => {
+        if (r.Method === 'IntentAware') throw new Error('agent crashed\n  at stack');
+        return { Tests: [candidate(ID_A)], Tokens: { Model: 'm', InputTokens: 2, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 0.5 }, TranscriptPath: null };
+      } },
+      PackageMap: { Get: () => info, PackageForPath: () => info },
+    };
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const { RunID } = await GenerateStep({ PR: null, BaseSHA: BASE_SHA, HeadSHA: HEAD_SHA, Trigger: 'Local', RepoRoot: root, Settings: DEFAULT_SETTINGS,
+      Deps: { GitHub: { GetPullRequest: vi.fn() }, Repo: { Fetch: async () => undefined, MergeBase: vi.fn(), Subject: async () => 's' }, Redaction: redaction, ForRun: () => tools } });
+    const g = new RunDir(root, RunID, redaction).ReadGeneration();
+    expect(g.Tests).toHaveLength(2);
+    expect(g.Tests[0].ID).toBe(ID_A);
+    expect(g.Tests[1]).toMatchObject({ Package: PKG, Method: 'IntentAware', RiskID: 'R1', GenerationOutcome: 'Failed', FailureReason: 'generation session failed: agent crashed', Source: '',
+      Tokens: { Model: DEFAULT_SETTINGS.GeneratorModel, InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 } });
+    expect(g.Tests[1].FilePath).toBe(`${PKG_DIR}/src/__tests__/jit/${g.Tests[1].ID}.jit.test.ts`);
+  });
 });
