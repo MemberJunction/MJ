@@ -225,7 +225,33 @@
     {
       "name": "headerStyle",
       "type": "HeaderStyle",
-      "description": "Optional header row colors: { background, color, borderColor }. Each field is optional; an unset field keeps the theme's header, and borderColor draws a 2px border under the header row. Example: headerStyle={{ background: '#1F3A5F', color: '#FFFFFF', borderColor: '#0F2440' }}.",
+      "description": "Optional header row colors: { background, color, borderColor }. Each field is optional; an unset field keeps the theme's header, and borderColor draws a 2px border under the header row. To apply the organization's table-header branding, pass the brand tokens: headerStyle={{ background: brand.tableHeaderBackground, color: brand.tableHeaderText, borderColor: brand.tableHeaderBorder }}.",
+      "required": false,
+      "constraints": [
+        {
+          "type": "brand-tokens",
+          "config": {
+            "tokens": {
+              "background": "tableHeaderBackground",
+              "color": "tableHeaderText",
+              "borderColor": "tableHeaderBorder"
+            }
+          },
+          "description": "Each field reads its brand token, so the organization's table-header branding and the user's styling requests reach the header row"
+        }
+      ]
+    },
+    {
+      "name": "exportable",
+      "type": "boolean",
+      "description": "Shows the built-in export icon (CSV and Excel) beside the search box, or over the table's top-right corner on hover when filtering is off. The file holds every row the user's text filter leaves, in the user's current sort, across all pages, with the displayed columns and raw (typed) values. Set false only when the grid is not a dataset the user would want as a file. Never wrap DataGrid in ExportableData.",
+      "required": false,
+      "defaultValue": true
+    },
+    {
+      "name": "exportLabel",
+      "type": "string",
+      "description": "Name of the grid in the export menu and the file name (`<exportLabel>_<YYYY-MM-DD>.csv`). Defaults to entityName, then 'Data'. Set it when the entity name is not what the user calls the table, or to tell two grids of the same entity apart.",
       "required": false
     }
   ],
@@ -293,7 +319,14 @@
       "globalVariable": "antd"
     }
   ],
-  "dependencies": [],
+  "dependencies": [
+    {
+      "name": "ExportableData",
+      "namespace": "Generic/UI/Export",
+      "location": "registry",
+      "description": "Built-in export: renders the export icon and writes the CSV, Excel and PNG files"
+    }
+  ],
   "code": "@file:../../code/generic/data-grid.js",
-  "exampleUsage": "// Row click handler - access the clicked record via e.record\nconst handleRowClick = (e) => {\n  // e.record contains the full row data object\n  // e.cancel can be set to true to prevent default OpenEntityRecord behavior\n  const row = e.record;\n  console.log('Clicked:', row.Name, row.ID);\n  \n  // To open a specific entity record:\n  if (callbacks?.OpenEntityRecord) {\n    callbacks.OpenEntityRecord('Products', [{ FieldName: 'ID', Value: row.ID }]);\n  }\n  \n  // To prevent default behavior (when entityName + entityPrimaryKeys are set):\n  e.cancel = true;\n};\n\n// Simple column configuration (backward compatible)\n<DataGrid\n  entityName=\"Products\"\n  data={products}\n  columns={['Name', 'SKU', 'Price', 'Category', 'InStock']}\n  onRowClick={handleRowClick}\n/>\n\n// Advanced column configuration with custom rendering\n<DataGrid\n  entityName=\"Products\"\n  data={products}\n  columns={[\n    { field: 'Name', header: 'Product Name', width: '200px' },\n    { \n      field: 'Price',\n      header: 'Unit Price',\n      render: (value) => (\n        <span style={{ fontWeight: 'bold', color: '#059669' }}>\n          {value >= 1000 ? `$${(value/1000).toFixed(1)}K` : `$${value}`}\n        </span>\n      ),\n      width: '120px',\n      sortable: true\n    },\n    {\n      field: 'InStock',\n      header: 'Availability',\n      render: (value) => (\n        <span style={{ \n          padding: '2px 8px',\n          borderRadius: '12px',\n          backgroundColor: value ? '#D1FAE5' : '#FEE2E2',\n          color: value ? '#065F46' : '#991B1B'\n        }}>\n          {value ? 'In Stock' : 'Out of Stock'}\n        </span>\n      ),\n      width: '130px',\n      sortable: false\n    },\n    'Category'  // Simple string still works\n  ]}\n  sorting={true}\n  paging={true}\n  pageSize={20}\n  filtering={true}\n  filterFields={['Name', 'SKU', 'Category']}\n  selectionMode=\"none\"\n  onRowClick={handleRowClick}\n  onSelectionChanged={handleSelection}\n  onPageChanged={handlePageChange}\n  onSortChanged={handleSortChange}\n  onFilterChanged={handleFilterChange}\n/>"
+  "exampleUsage": "// Row click handler - access the clicked record via e.record\nconst handleRowClick = (e) => {\n  // e.record contains the full row data object\n  // e.cancel can be set to true to prevent default OpenEntityRecord behavior\n  const row = e.record;\n  console.log('Clicked:', row.Name, row.ID);\n  \n  // To open a specific entity record:\n  if (callbacks?.OpenEntityRecord) {\n    callbacks.OpenEntityRecord('Products', [{ FieldName: 'ID', Value: row.ID }]);\n  }\n  \n  // To prevent default behavior (when entityName + entityPrimaryKeys are set):\n  e.cancel = true;\n};\n\n// Simple column configuration (backward compatible)\n<DataGrid\n  entityName=\"Products\"\n  data={products}\n  columns={['Name', 'SKU', 'Price', 'Category', 'InStock']}\n  onRowClick={handleRowClick}\n/>\n\n// Advanced column configuration with custom rendering\n<DataGrid\n  entityName=\"Products\"\n  data={products}\n  columns={[\n    { field: 'Name', header: 'Product Name', width: '200px' },\n    { \n      field: 'Price',\n      header: 'Unit Price',\n      render: (value) => (\n        <span style={{ fontWeight: 'bold', color: '#059669' }}>\n          {value >= 1000 ? `$${(value/1000).toFixed(1)}K` : `$${value}`}\n        </span>\n      ),\n      width: '120px',\n      sortable: true\n    },\n    {\n      field: 'InStock',\n      header: 'Availability',\n      render: (value) => (\n        <span style={{ \n          padding: '2px 8px',\n          borderRadius: '12px',\n          backgroundColor: value ? '#D1FAE5' : '#FEE2E2',\n          color: value ? '#065F46' : '#991B1B'\n        }}>\n          {value ? 'In Stock' : 'Out of Stock'}\n        </span>\n      ),\n      width: '130px',\n      sortable: false\n    },\n    'Category'  // Simple string still works\n  ]}\n  sorting={true}\n  paging={true}\n  pageSize={20}\n  filtering={true}\n  filterFields={['Name', 'SKU', 'Category']}\n  selectionMode=\"none\"\n  onRowClick={handleRowClick}\n  onSelectionChanged={handleSelection}\n  onPageChanged={handlePageChange}\n  onSortChanged={handleSortChange}\n  onFilterChanged={handleFilterChange}\n/>\n\n// Export is built in: the icon writes every row the filter leaves, in the user's sort, across all pages.\n// Never wrap DataGrid in ExportableData. Name the file when the entity name is not what the user calls it:\n<DataGrid entityName=\"Invoices\" data={overdue} columns={['InvoiceNumber', 'DueDate', 'Balance']} exportLabel=\"Overdue Invoices\" />\n\n// Not a dataset the user would download (a layout or picker list): turn the export off\n<DataGrid data={steps} columns={['Step', 'Owner']} exportable={false} />"
 }
