@@ -22,7 +22,6 @@ class TestSQLServerProvider extends DatabaseProviderBase {
     protected GenerateDeleteSQL(): DeleteSQLResult { return { fullSQL: '' }; }
     protected BuildRecordChangeSQL(): { sql: string; parameters?: unknown[] } | null { return null; }
     protected BuildSiblingRecordChangeSQL(): string { return ''; }
-    async ExecuteSQL<T>(): Promise<Array<T>> { return []; }
     async BeginTransaction(): Promise<void> {}
     async CommitTransaction(): Promise<void> {}
     async RollbackTransaction(): Promise<void> {}
@@ -43,6 +42,11 @@ class TestSQLServerProvider extends DatabaseProviderBase {
     // RLS test hooks
     public checkRecordRLSResult = true;
     public checkCreateRLSResult = true;
+    public checkUpdatePostImageResult = true;
+    public postImageChecks = 0;
+    public saveRows: Record<string, unknown>[] = [];
+    /** Order in which the save pipeline reached the before-save hook and the post-image check. */
+    public saveSteps: string[] = [];
 
     protected override async CheckRecordRLS(
         entity: BaseEntity,
@@ -58,6 +62,21 @@ class TestSQLServerProvider extends DatabaseProviderBase {
     ): Promise<boolean> {
         return this.checkCreateRLSResult;
     }
+
+    protected override async CheckUpdateRLSPostImage(
+        entity: BaseEntity,
+        user: UserInfo
+    ): Promise<boolean> {
+        this.postImageChecks++;
+        this.saveSteps.push('postImageCheck');
+        return this.checkUpdatePostImageResult;
+    }
+
+    protected override async OnBeforeSaveExecute(): Promise<void> {
+        this.saveSteps.push('beforeSaveHook');
+    }
+
+    override async ExecuteSQL<T>(): Promise<Array<T>> { return this.saveRows as unknown as Array<T>; }
 }
 
 class TestPostgreSQLProvider extends DatabaseProviderBase {
@@ -261,9 +280,56 @@ describe('DatabaseProviderBase', () => {
             ).rejects.toThrow('Record not found or access denied');
         });
 
+        it('refuses an update whose new values would move the row out of the user\'s scope', async () => {
+            sqlServer.checkUpdatePostImageResult = false;
+            const entity = createMockEntity(true);
+
+            await expect(
+                sqlServer.Save(entity, mockUser, new EntitySaveOptions())
+            ).rejects.toThrow('outside your permitted row scope');
+            expect(sqlServer.postImageChecks).toBe(1);
+        });
+
+        it('saves an update whose new values stay in the user\'s scope', async () => {
+            sqlServer.saveRows = [{ ID: 'test-id' }];
+            const entity = createMockEntity(true);
+
+            const result = await sqlServer.Save(entity, mockUser, new EntitySaveOptions());
+            expect(result).toEqual({ ID: 'test-id' });
+            expect(sqlServer.postImageChecks).toBe(1);
+        });
+
+        it('does not run the post-image check for a new record', async () => {
+            sqlServer.saveRows = [{ ID: 'test-id' }];
+            const entity = createMockEntity(false);
+
+            await sqlServer.Save(entity, mockUser, new EntitySaveOptions());
+            expect(sqlServer.postImageChecks).toBe(0);
+        });
+
+        it('runs the post-image check after the before-save hooks, which can change the values written', async () => {
+            sqlServer.saveRows = [{ ID: 'test-id' }];
+            const entity = createMockEntity(true);
+
+            await sqlServer.Save(entity, mockUser, new EntitySaveOptions());
+            expect(sqlServer.saveSteps).toEqual(['beforeSaveHook', 'postImageCheck']);
+        });
+
+        it('does not run the post-image check for a replayed update', async () => {
+            sqlServer.checkRecordRLSResult = false;
+            sqlServer.checkUpdatePostImageResult = false;
+            const entity = createMockEntity(true);
+            const options = new EntitySaveOptions();
+            options.ReplayOnly = true;
+
+            await sqlServer.Save(entity, mockUser, options);
+            expect(sqlServer.postImageChecks).toBe(0);
+        });
+
         it('does not check RLS when in replay mode', async () => {
             sqlServer.checkCreateRLSResult = false;
             sqlServer.checkRecordRLSResult = false;
+            sqlServer.checkUpdatePostImageResult = false;
             const entity = createMockEntity(false);
             const options = new EntitySaveOptions();
             options.ReplayOnly = true;
