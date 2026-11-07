@@ -29,6 +29,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { RecordOpenedEvent } from '@memberjunction/ng-entity-viewer';
 import { MJEntityFormComponent } from '../../generated/Entities/MJEntity/mjentity.form.component';
+import { SectionPickerItem, IsPhoneViewport, WatchPhoneViewport } from '@memberjunction/ng-ui-components';
 
 export type ExplorerSection =
     | 'overview'
@@ -539,12 +540,33 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
     private get _metadata() { return this.ProviderToUse; }
     override async ngOnInit(): Promise<void> {
         await super.ngOnInit();
+        this.ApplyPhoneDefaults(IsPhoneViewport());
+        this.stopPhoneWatch = WatchPhoneViewport(() => this.SyncPhoneViewport());
         this.setupStateManagement();
         this.loadExplorerData();
     }
 
+    /**
+     * Phone-width defaults, applied at init and whenever the breakpoint is crossed into phone width: Relations opens as the list, since the ERD is a
+     * desktop experience (pan, zoom, depth) that a 375px canvas cannot carry. The user can still
+     * switch to the diagram from the section header.
+     */
+    public ApplyPhoneDefaults(isPhone: boolean): void {
+        if (isPhone) this.RelationshipViewMode = 'list';
+    }
+
+    /** Stops following the breakpoint; set at init, called from ngOnDestroy. */
+    private stopPhoneWatch: () => void = () => undefined;
+
+    /** Re-reads the breakpoint and re-applies the phone defaults (rotation, resize). */
+    public SyncPhoneViewport(): void {
+        this.ApplyPhoneDefaults(IsPhoneViewport());
+        this.cdr.markForCheck();
+    }
+
     ngOnDestroy(): void {
         super.ngOnDestroy();
+        this.stopPhoneWatch();
         this.destroy$.next();
         this.destroy$.complete();
     }
@@ -984,6 +1006,17 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
     }
 
     // === Public Methods ===
+
+    /** The rail's items as `mj-section-picker` items: same order, the badge as the count. */
+    public get SectionPickerItems(): SectionPickerItem[] {
+        return this.NavItems.map((item) => ({ Key: item.id, Title: item.label, Icon: item.icon, Count: item.badge ?? null }));
+    }
+
+    /** A pick from the phone section sheet; a key that names no rail item is ignored. */
+    public OnSectionPicked(key: string): void {
+        const item = this.NavItems.find((i) => i.id === key);
+        if (item) this.SetActiveSection(item.id);
+    }
 
     public SetActiveSection(section: ExplorerSection): void {
         this.ActiveSection = section;
