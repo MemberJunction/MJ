@@ -36,7 +36,7 @@ vi.mock('@memberjunction/ai', async () => {
     // let this test restate that rule and drift from reality, which is exactly how the xAI
     // top-level-usage bug survived: the sibling xAI test asserted against a hand-written
     // OpenAI-shaped frame and passed while real Grok sessions recorded nothing.
-    const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');
+    const { ResolveResponseDoneUsage, MapRealtimeUsageModalityDetail } = await import('../../../../Core/src/generic/realtimeUsage');
     // NormalizeTurnDetectionSettings is the single shared normalizer — run the real one so tests cannot drift from it.
     // turnDetectionSettings.ts is dependency-free BY DESIGN and must stay so: it is loaded from source here, under mocks.
     const { NormalizeTurnDetectionSettings } = await import('../../../../Core/src/generic/turnDetectionSettings');
@@ -45,7 +45,7 @@ vi.mock('@memberjunction/ai', async () => {
     // Same body as the real RealtimeDriverFactsOf (baseRealtime.ts). The real module cannot be imported here: it pulls in
     // @memberjunction/global, which these suites mock. The mocked BaseRealtimeModel has no static, so only drivers declaring their own resolve.
     const RealtimeDriverFactsOf = (driver: object): object => (driver.constructor as { DriverFacts: object }).DriverFacts;
-    return { BaseModel, BaseRealtimeModel, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, NormalizeTurnDetectionSettings, RealtimeDroppedInputReporter, RealtimeDriverFactsOf };
+    return { BaseModel, BaseRealtimeModel, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, MapRealtimeUsageModalityDetail, NormalizeTurnDetectionSettings, RealtimeDroppedInputReporter, RealtimeDriverFactsOf };
 });
 
 // Mock the SDK WebSocket so importing the driver never touches the network. The driver's
@@ -61,7 +61,7 @@ vi.mock('openai', () => ({
     }),
 }));
 
-import { OpenAIRealtime, OpenAIRealtimeSession, IOpenAIRealtimeConnection, MapEffortLevelToOpenAIRealtime, OPENAI_REALTIME_PROFILE, MapUsageModalityDetail, MapNormalizedTurnDetection, ExtractRealtimeFeatures } from '../models/openAIRealtime';
+import { OpenAIRealtime, OpenAIRealtimeSession, IOpenAIRealtimeConnection, MapEffortLevelToOpenAIRealtime, OPENAI_REALTIME_PROFILE, MapNormalizedTurnDetection, ExtractRealtimeFeatures } from '../models/openAIRealtime';
 import type { OpenAIRealtimeError } from 'openai/realtime/index';
 import type { RealtimeServerEvent, RealtimeClientEvent } from 'openai/resources/realtime/realtime';
 import type { ClientSecretCreateParams, ClientSecretCreateResponse } from 'openai/resources/realtime/client-secrets';
@@ -1454,7 +1454,7 @@ describe('C2: per-modality usage detail mapping', () => {
                 usage: {
                     input_tokens: 100,
                     output_tokens: 50,
-                    input_token_details: { text_tokens: 20, audio_tokens: 70, cached_tokens: 10 },
+                    input_token_details: { text_tokens: 20, audio_tokens: 70, cached_tokens: 10, cached_tokens_details: { audio_tokens: 7, text_tokens: 3 } },
                     output_token_details: { text_tokens: 10, audio_tokens: 40 },
                 },
             },
@@ -1462,7 +1462,7 @@ describe('C2: per-modality usage detail mapping', () => {
         expect(usage[0]).toEqual({
             InputTokens: 100,
             OutputTokens: 50,
-            InputTokenDetails: { TextTokens: 20, AudioTokens: 70, CachedTokens: 10 },
+            InputTokenDetails: { TextTokens: 20, AudioTokens: 70, CachedTokens: 10, CachedAudioTokens: 7 },
             OutputTokenDetails: { TextTokens: 10, AudioTokens: 40 },
         });
     });
@@ -1474,13 +1474,6 @@ describe('C2: per-modality usage detail mapping', () => {
         driver.Fake.Fire({ type: 'response.done', response: { usage: { input_tokens: 7, output_tokens: 3 } } } as unknown as RealtimeServerEvent);
         expect(usage[0]).toEqual({ InputTokens: 7, OutputTokens: 3 });
         expect(usage[0].InputTokenDetails).toBeUndefined();
-    });
-
-    it('MapUsageModalityDetail: partial blocks map only the present fields; empty blocks map to undefined', () => {
-        expect(MapUsageModalityDetail({ audio_tokens: 5 })).toEqual({ AudioTokens: 5 });
-        expect(MapUsageModalityDetail({ image_tokens: 2, cached_tokens: 0 })).toEqual({ ImageTokens: 2, CachedTokens: 0 });
-        expect(MapUsageModalityDetail({})).toBeUndefined();
-        expect(MapUsageModalityDetail(undefined)).toBeUndefined();
     });
 });
 
