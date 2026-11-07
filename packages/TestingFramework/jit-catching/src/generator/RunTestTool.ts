@@ -6,6 +6,7 @@ import type { Settings } from '../settings';
 import { ParseVitestOutput } from '../target/VitestReport';
 import { JIT_REPORTER_ARG, JIT_REPORTER_MOUNT, WriteJitReporter } from '../target/JitReporter';
 import { EnsureMountPoint, UnsafePathError, ViteTmpfs } from '../target/VitestCatchTarget';
+import { PurgeNonRegularEntries } from '../target/JitFolder';
 import { ApplyMutantEdits, CopyPackageForMutant, ValidateMutantEdits } from './Mutant';
 
 export interface RunTestInput { File: string; Mutant?: { Edits: MutantEdit[] }; }
@@ -37,7 +38,10 @@ export class RunTestTool {
         let r: SandboxRunResult;
         try { r = await this.runInSandbox(input.File, mutant?.Scratch ?? null); }
         catch (e) { if (e instanceof UnsafePathError) return this.refuse(e.message); throw e; }
-        finally { if (mutant) rmSync(dirname(mutant.Scratch), { recursive: true, force: true }); }
+        finally {
+            if (mutant) rmSync(dirname(mutant.Scratch), { recursive: true, force: true });
+            PurgeNonRegularEntries(join(this.o.BaseRootDir, this.jitDir()));
+        }
         const out = this.toOutput(r, input);
         if (input.Mutant && mutant) this.LastMutant = { Edits: input.Mutant.Edits, Patch: mutant.Patch, Failure: out.Status === 'Fail' ? out.Failure : null };
         return out;
@@ -83,7 +87,10 @@ export class RunTestTool {
         return null;
     }
 
-    /** Runs vitest on one file. The worktree is read-only; the jit folder and a mutant's package copy are writable. */
+    /**
+     * Runs vitest on one file. The worktree is read-only; the jit folder and a mutant's package copy are writable.
+     * `Run` removes every entry of the jit folder that is not a regular file after the run.
+     */
     private runInSandbox(file: string, scratch: string | null): Promise<SandboxRunResult> {
         const pkg = this.o.PackageRelDir; const jitDir = this.jitDir();
         const mounts: SandboxMount[] = [

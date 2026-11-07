@@ -1,6 +1,6 @@
 import ts from 'typescript';
-import { existsSync } from 'node:fs';
-import { join, dirname, basename } from 'node:path';
+import { existsSync, lstatSync } from 'node:fs';
+import { join, dirname, basename, resolve, sep } from 'node:path';
 
 const COMPILER_OPTIONS: ts.CompilerOptions = { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022, moduleResolution: ts.ModuleResolutionKind.Bundler, strict: true, experimentalDecorators: true, esModuleInterop: true, skipLibCheck: true, noEmit: true, allowJs: false };
 const LIB_DIR = dirname(ts.getDefaultLibFilePath(COMPILER_OPTIONS));
@@ -16,15 +16,20 @@ export type MemberVisibility = 'public' | 'private' | 'protected' | 'none';
 export class TestAst {
     private constructor(public readonly SourceFile: ts.SourceFile, public readonly Checker: ts.TypeChecker, private readonly program: ts.Program) {}
 
-    /** Builds the program. `extraFiles` maps absolute paths to in-memory sources that take precedence over disk. */
+    /**
+     * Builds the program. `extraFiles` maps absolute paths to in-memory sources that take precedence over disk.
+     * From disk the host reads only regular files (by `lstat`) and nothing in the test's own folder (the jit folder,
+     * which sandboxed tests can write), so a planted symlink or FIFO there resolves to nothing.
+     */
     public static Load(testSource: string, baseRootDir: string, packageRelDir: string, testFilePath: string, extraFiles: Record<string, string> = {}): TestAst {
         const testAbs = join(baseRootDir, testFilePath);
         const files: Record<string, string> = { ...extraFiles, [testAbs]: testSource };
         const tsconfigPath = join(baseRootDir, packageRelDir, 'tsconfig.json');
         const options = existsSync(tsconfigPath) ? ts.parseJsonConfigFileContent(ts.readConfigFile(tsconfigPath, ts.sys.readFile).config, ts.sys, dirname(tsconfigPath)).options : COMPILER_OPTIONS;
         const host = ts.createCompilerHost({ ...options, noEmit: true });
-        const readFile = host.readFile; host.readFile = (f) => files[f] ?? readFile(f);
-        const fileExists = host.fileExists; host.fileExists = (f) => f in files || fileExists(f);
+        const readable = TestAst.diskFilter(dirname(testAbs));
+        const readFile = host.readFile; host.readFile = (f) => (f in files ? files[f] : readable(f) ? readFile(f) : undefined);
+        const fileExists = host.fileExists; host.fileExists = (f) => f in files || (readable(f) && fileExists(f));
         const memoryDirs = new Set(Object.keys(files).flatMap((f) => TestAst.ancestors(f)));
         const directoryExists = host.directoryExists?.bind(host);
         host.directoryExists = (d) => memoryDirs.has(d) || (directoryExists ? directoryExists(d) : ts.sys.directoryExists(d));
@@ -42,6 +47,17 @@ export class TestAst {
         const sourceFile = program.getSourceFile(testAbs);
         if (!sourceFile) throw new Error(`TestAst: test file not in program: ${testAbs}`);
         return new TestAst(sourceFile, program.getTypeChecker(), program);
+    }
+
+    /** A check for disk paths the host may read: outside `jitDir`, and a regular file when it exists. */
+    private static diskFilter(jitDir: string): (file: string) => boolean {
+        const jitPrefix = resolve(jitDir) + sep;
+        return (file) => {
+            const abs = resolve(file);
+            if (abs.startsWith(jitPrefix)) return false;
+            const st = lstatSync(abs, { throwIfNoEntry: false });
+            return !st || st.isFile();
+        };
     }
 
     /** True for a `lib.*.d.ts` file in the TypeScript package's library folder. */

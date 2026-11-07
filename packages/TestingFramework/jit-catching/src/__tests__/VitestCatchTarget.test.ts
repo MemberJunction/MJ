@@ -38,6 +38,13 @@ describe('VitestCatchTarget.Run', () => {
     expect(calls[0].Mounts.find((m) => m.Container === '/jit-reporter')?.Mode).toBe('ro');
     expect(results.map((r) => [r.RunIndex, r.Status])).toEqual([[0, 'Pass'], [1, 'Pass'], [2, 'Pass']]);
   });
+  it('removes a symlink that a test planted in the jit folder after the run', async () => {
+    const root = jitRoot(); const outside = join(mkdtempSync(join(tmpdir(), 'jit-out-')), 'secret'); writeFileSync(outside, 'SECRET');
+    const { target, calls } = fakeTarget(() => { if (calls.length === 1) symlinkSync(outside, join(root, JIT, 'helper.ts')); return { Stdout: '', ExitCode: 1 }; });
+    await target.Run({ Ref: { Kind: 'Base', SHA: 'b' }, RootDir: root }, [test(ID1)], 1);
+    expect(readdirSync(join(root, JIT))).toEqual([]);
+    expect(readFileSync(outside, 'utf8')).toBe('SECRET');
+  });
   it('runs a repeat once more with --reporter=json when the custom reporter printed no JIT_REPORT line', async () => {
     const json = { testResults: [{ name: `/work/packages/MJCore/src/__tests__/jit/${ID1}.jit.test.ts`, status: 'passed', assertionResults: [{ fullName: 't', status: 'passed', duration: 1, failureMessages: [] }] }] };
     const { target, calls } = fakeTarget((o) => ({ Stdout: o.Command.join(' ').includes('--reporter=json') ? JSON.stringify(json) : 'Error: Failed to load custom Reporter', ExitCode: 1 }));

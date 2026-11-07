@@ -13,6 +13,7 @@ import { ParseJitReport, ParseVitestJson, RunnerErrorResult, type ReportMapping 
 import { JIT_REPORTER_ARG, JIT_REPORTER_MOUNT, WriteJitReporter } from './JitReporter';
 import { StripPatchInfo } from './LockfileStrip';
 import { RedactTail } from '../sandbox/Redaction';
+import { PurgeNonRegularEntries } from './JitFolder';
 
 const execFileAsync = promisify(execFile);
 /** Runs one trusted command on the host and returns its stdout. Injected so tests see the calls; the default is execFile. */
@@ -215,17 +216,20 @@ export class VitestCatchTarget extends BaseCatchTarget {
 
     /**
      * 'rw' is the prepare phase (install, rebuild, build) and also mounts the store. 'ro' is the test phase: the
-     * worktree read-only, the jit folder of each package under test read-write, and the reporter read-only.
+     * worktree read-only, the jit folder of each package under test read-write, and the reporter read-only. After an
+     * 'ro' run, every entry of those jit folders that is not a regular file is removed.
      */
-    private inSandbox(revision: PreparedRevision, mode: 'ro' | 'rw', command: string[], timeoutMs: number, env: Record<string, string> = {}, tmpfs: string[] = [], packageDirs: string[] = []): Promise<SandboxRunResult> {
+    private async inSandbox(revision: PreparedRevision, mode: 'ro' | 'rw', command: string[], timeoutMs: number, env: Record<string, string> = {}, tmpfs: string[] = [], packageDirs: string[] = []): Promise<SandboxRunResult> {
         const mounts: SandboxMount[] = [{ Host: revision.RootDir, Container: CONTAINER_ROOT, Mode: mode }];
+        const jitDirs = mode === 'ro' ? packageDirs.map((d) => SafeDir(revision.RootDir, `${d}/${JIT_SUBDIR}`, false)) : [];
         if (mode === 'rw') mounts.push({ Host: this.o.StoreDir, Container: CONTAINER_STORE, Mode: 'rw' });
         if (mode === 'ro') {
-            for (const d of packageDirs) mounts.push({ Host: SafeDir(revision.RootDir, `${d}/${JIT_SUBDIR}`, false), Container: `${CONTAINER_ROOT}/${d}/${JIT_SUBDIR}`, Mode: 'rw' });
+            packageDirs.forEach((d, i) => mounts.push({ Host: jitDirs[i], Container: `${CONTAINER_ROOT}/${d}/${JIT_SUBDIR}`, Mode: 'rw' }));
             mounts.push({ Host: this.reporterDir(), Container: JIT_REPORTER_MOUNT, Mode: 'ro' });
         }
         for (const t of tmpfs) EnsureMountPoint(revision.RootDir, t.slice(CONTAINER_ROOT.length + 1));
-        return this.sandbox.Run({ Mounts: mounts, Tmpfs: tmpfs, WorkDir: CONTAINER_ROOT, Command: command, TimeoutMs: timeoutMs, Env: { HOME: '/tmp', CI: '1', ...env } });
+        try { return await this.sandbox.Run({ Mounts: mounts, Tmpfs: tmpfs, WorkDir: CONTAINER_ROOT, Command: command, TimeoutMs: timeoutMs, Env: { HOME: '/tmp', CI: '1', ...env } }); }
+        finally { for (const j of jitDirs) PurgeNonRegularEntries(j); }
     }
     private reporterDir(): string { return (this.reporter ??= WriteJitReporter(mkdtempSync(join(tmpdir(), 'jit-reporter-')))); }
 }
