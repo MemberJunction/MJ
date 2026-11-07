@@ -197,6 +197,10 @@ resumable handle* (never, on this API — see §3.5 for the mode that makes "tur
   deadline (notice minus a 10 s margin → ~590 s, mid-turn if a turn runs the whole minute; the
   cut-off partial is finalized into the seed, so that case degrades to today's hiccup, not to
   amnesia). The timer is cleared on every connection swap and on `Disconnect`.
+- An interrupted turn is not a move point: on `interrupted` the participant is speaking, so the drivers tell
+  the helper the turn is still open, and the cut-off turn's `turnComplete` does not end it; the move waits
+  for the end of the turn that follows, or the deadline (live run: `interrupted` 539.9 s, `turnComplete`
+  540.0 s, move 540.2 s, 3 s of speech lost). Seed mode only; the host-visible `IsTurnOpen` is unchanged.
 - Google's 1011 at 600 s stays the fallback (`ConnectionLost()` path, unchanged), which also seeds.
 - Why 60 s: the helper's deadline margin is 1/3 of the notice (clamped 1.5–10 s); a one-minute
   notice gives a quiet moment in any interview turn cadence seen in production (≤ 40 s per turn)

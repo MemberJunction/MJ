@@ -1475,6 +1475,14 @@ class GeminiRealtimeSession implements IRealtimeSession {
     /** See {@link IsTurnOpen}. */
     private turnOpen = false;
 
+    /**
+     * Seed mode only: the last `interrupted` cut a turn off, and that turn's `turnComplete` must not tell
+     * {@link resumption} the turn is over. At `interrupted` the participant is speaking; the model's turn closes at
+     * once, so a planned move would start under their words and lose them (live run, MJ#6403: `interrupted` and
+     * `turnComplete` at 539.9 s and 540.0 s, a move at 540.2 s, 3 s of speech in no transcript). The helper's turn
+     * stays open to the end of the turn that follows; its own deadline bounds the wait. {@link IsTurnOpen} ignores this.
+     */
+    private interruptedTurnHoldsMove = false;
     /** A turn's `turnComplete` came while a tool call was pending: the turn ends once the last pending call's result goes out. */
     private turnEndAwaitsToolResults = false;
 
@@ -1895,6 +1903,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
         this.avatarOutput?.Resumed();
         this.recordWordsSoFar();
         this.replyIsNarration = false;
+        this.interruptedTurnHoldsMove = false; // the move is under way: the new connection starts clean
         this.endTurn();
         if (this.resumesFromSeed && this.live) {
             // A turn the old connection left open: on a reseeded one its commit would start a reply nobody asked for.
@@ -2339,6 +2348,10 @@ class GeminiRealtimeSession implements IRealtimeSession {
     private endTurn(): void {
         this.turnOpen = false;
         this.turnEndAwaitsToolResults = false;
+        if (this.interruptedTurnHoldsMove) {
+            this.interruptedTurnHoldsMove = false; // this was the cut-off turn: the move waits for the next one
+            return;
+        }
         this.resumption?.TurnEnded();
     }
 
@@ -2354,6 +2367,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
         this.heldAudioBytes = 0;
         this.turnOpen = false;
         this.turnEndAwaitsToolResults = false;
+        this.interruptedTurnHoldsMove = false;
         this.live?.close();
         this.live = null;
         this.avatarOutput?.Close(); // reports the avatar seconds generated and not yet reported, while the handler is set
@@ -2402,6 +2416,10 @@ class GeminiRealtimeSession implements IRealtimeSession {
             this.avatarOutput?.Interrupted(); // before the parts of this message: the turn's late media is dropped
             this.interruptionHandler?.();
             this.completeTurn();
+            if (this.resumesFromSeed) {
+                this.interruptedTurnHoldsMove = true;
+                this.resumption?.TurnStarted();
+            }
         }
         if (content.modelTurn) {
             // First model output of a turn marks generation in flight (Gemini emits no explicit

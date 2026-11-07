@@ -337,6 +337,14 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private heldMicAudioChars = 0;
     /** See {@link IsTurnOpen}. */
     private turnOpen = false;
+    /**
+     * Seed mode only: the last `interrupted` cut a turn off, and that turn's `turnComplete` must not tell
+     * {@link resumption} the turn is over. At `interrupted` the participant is speaking; the model's turn closes at
+     * once, so a planned move would start under their words and lose them (live run, MJ#6403: `interrupted` and
+     * `turnComplete` at 539.9 s and 540.0 s, a move at 540.2 s, 3 s of speech in no transcript). The helper's turn
+     * stays open to the end of the turn that follows; its own deadline bounds the wait. {@link IsTurnOpen} ignores this.
+     */
+    private interruptedTurnHoldsMove = false;
     /** A turn's `turnComplete` came while a tool call was pending: the turn ends once the last pending call's result goes out. */
     private turnEndAwaitsToolResults = false;
     /** Model, config and token of the current connection; a resume reuses them with the new handle. */
@@ -542,6 +550,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.heldMicAudioChars = 0;
         this.turnOpen = false;
         this.turnEndAwaitsToolResults = false;
+        this.interruptedTurnHoldsMove = false;
     }
 
     /**
@@ -1446,6 +1455,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.interactionInProgress = false;
         this.activeResponseKind = 'normal';
         this.clearSafetyBackstop();
+        this.interruptedTurnHoldsMove = false; // the move is under way: the new connection starts clean
         this.endTurn();
         if (this.ResumesFromSeed && this.session) {
             // What the old connection left open or owed: on a reseeded one a commit would start a reply nobody asked for.
@@ -1689,6 +1699,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.finalizeThoughtTranscript();
         this.emitInterruption();
         this.setState('listening');
+        if (this.ResumesFromSeed) {
+            this.interruptedTurnHoldsMove = true;
+            this.resumption?.TurnStarted();
+        }
     }
 
     /**
@@ -2002,6 +2016,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private endTurn(): void {
         this.turnOpen = false;
         this.turnEndAwaitsToolResults = false;
+        if (this.interruptedTurnHoldsMove) {
+            this.interruptedTurnHoldsMove = false; // this was the cut-off turn: the move waits for the next one
+            return;
+        }
         this.resumption?.TurnEnded();
     }
 

@@ -522,6 +522,19 @@ describe('GeminiEnterpriseRealtimeClient through the relay (web SDK, fake WebSoc
             expect(setupOf(second)['sessionResumption']).toEqual({ handle: 'handle-2' });
         });
 
+        it('an interrupted turn still ends at its turnComplete for the move: the next fresh handle moves (MJ#6403 pin)', async () => {
+            const { Socket: first, Transcripts } = await connectWithHandle();
+            first.Receive({ serverContent: { outputTranscription: { text: 'One, two,' } } });
+            first.Receive({ goAway: { timeLeft: '50s' } });
+            first.Receive({ serverContent: { interrupted: true } });
+            first.Receive({ serverContent: { turnComplete: true } });
+            await vi.waitFor(() => expect(Transcripts.some((t) => t.IsFinal && t.Text === 'One, two,')).toBe(true));
+            first.Receive({ sessionResumptionUpdate: { newHandle: 'handle-2', resumable: true } });
+            const second = await nextSocket(2);
+            await openAndConfirm(second);
+            expect(setupOf(second)['sessionResumption']).toEqual({ handle: 'handle-2' });
+        });
+
         it('sends no seed on the new connection: the first thing after the setup is the audio', async () => {
             const { Client, Socket: first, Transcripts } = await connectWithHandle();
             first.Receive({ serverContent: { inputTranscription: { text: 'hi' } } });
