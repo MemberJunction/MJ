@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CompositeKey, EntityFieldInfo, EntityInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, UserInfo } from '@memberjunction/core';
 import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
 
 type KeyLiterals = {
@@ -52,5 +52,84 @@ describe('GenericDatabaseProvider primary key literals', () => {
         expect(whereFor(numericKey, 7)).toBe('[ID]=7');
         expect(whereFor(textKey, "a'b")).toBe("[Code]='a''b'");
         expect(() => whereFor(numericKey, 'abc')).toThrow('Invalid non-numeric value');
+    });
+});
+
+describe('GenericDatabaseProvider Load key', () => {
+    type Loader = {
+        Load(entity: BaseEntity, key: CompositeKey, relationships: string[] | null, user: UserInfo | null): Promise<Record<string, unknown> | null>;
+        QuoteIdentifier(name: string): string;
+        QuoteSchemaAndView(schema: string, view: string): string;
+        ExecuteSQL(sql: string): Promise<Record<string, unknown>[]>;
+    };
+
+    /** Loads through a stand-in provider and returns the SQL it ran. */
+    async function load(value: unknown): Promise<string[]> {
+        const statements: string[] = [];
+        const loader = Object.create(GenericDatabaseProvider.prototype) as Loader;
+        loader.QuoteIdentifier = (name: string) => `[${name}]`;
+        loader.QuoteSchemaAndView = (schema: string, view: string) => `[${schema}].[${view}]`;
+        loader.ExecuteSQL = async (sql: string) => {
+            statements.push(sql);
+            return [];
+        };
+        Object.assign(loader, {
+            PostProcessRows: async () => [],
+            buildFieldSecuritySelectList: () => '*',
+        });
+        const entity = { EntityInfo: { Name: 'Widgets', SchemaName: 'dbo', BaseView: 'vwWidgets', PrimaryKeys: [numericKey] } } as unknown as BaseEntity;
+        const key = { KeyValuePairs: [{ FieldName: 'ID', Value: value }] } as CompositeKey;
+        await loader.Load(entity, key, null, null);
+        return statements;
+    }
+
+    it('selects by a numeric key', async () => {
+        expect(await load(5)).toEqual(['SELECT * FROM [dbo].[vwWidgets] WHERE [ID]=5']);
+    });
+
+    it('refuses a non-numeric value before any SQL runs', async () => {
+        await expect(load('5 x')).rejects.toThrow('Invalid non-numeric value provided for numeric key field ID on entity Widgets');
+    });
+
+    it('escapes a quote in a text primary key when loading relationships', async () => {
+        const statements: string[] = [];
+        const loader = Object.create(GenericDatabaseProvider.prototype) as Loader;
+        loader.QuoteIdentifier = (name: string) => `[${name}]`;
+        loader.QuoteSchemaAndView = (schema: string, view: string) => `[${schema}].[${view}]`;
+        loader.ExecuteSQL = async (sql: string) => {
+            statements.push(sql);
+            return [{ Code: "O'Brien" }];
+        };
+        Object.assign(loader, {
+            PostProcessRows: async (rows: Record<string, unknown>[]) => rows,
+            TrimFixedWidthValues: (_info: EntityInfo, row: Record<string, unknown>) => row,
+            buildFieldSecuritySelectList: () => '*',
+            EntityByName: () => ({ Name: 'Parts', SchemaName: 'dbo' }),
+        });
+        const entity = {
+            FirstPrimaryKey: textKey,
+            EntityInfo: {
+                Name: 'Widgets',
+                SchemaName: 'dbo',
+                BaseView: 'vwWidgets',
+                PrimaryKeys: [textKey],
+                FirstPrimaryKey: textKey,
+                Fields: [textKey],
+                RelatedEntities: [
+                    {
+                        RelatedEntity: 'Parts',
+                        Type: 'One to Many',
+                        RelatedEntityBaseView: 'vwParts',
+                        RelatedEntityJoinField: 'WidgetCode',
+                    },
+                ],
+            },
+        } as unknown as BaseEntity;
+        const key = { KeyValuePairs: [{ FieldName: 'Code', Value: "O'Brien" }] } as CompositeKey;
+        await loader.Load(entity, key, ['Parts'], null);
+        expect(statements).toEqual([
+            "SELECT * FROM [dbo].[vwWidgets] WHERE [Code]='O''Brien'",
+            "SELECT * FROM [dbo].[vwParts] WHERE [WidgetCode] = 'O''Brien'",
+        ]);
     });
 });
