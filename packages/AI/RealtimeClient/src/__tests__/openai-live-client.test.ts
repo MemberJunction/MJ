@@ -769,6 +769,39 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         expect(lastUsage.InputTokens).toBe(100);
         expect(lastUsage.OutputTokens).toBe(50);
         expect(lastUsage.DurationSeconds).toBe(15);
+        expect(lastUsage.InputTokenDetails).toBeUndefined();
+        expect(lastUsage.OutputTokenDetails).toBeUndefined();
+    });
+
+    it('carries the per-modality split of a completed response, leaving the totals unchanged', async () => {
+        await client.Connect(makeConfig(), micStream);
+        client.Channel.Open();
+
+        const usages: RealtimeClientUsage[] = [];
+        client.OnUsage((u) => usages.push(u));
+
+        client.Channel.EmitServer({
+            type: 'response.event',
+            event: {
+                type: 'response.completed',
+                usage: {
+                    input_tokens: 100,
+                    output_tokens: 50,
+                    seconds: 20,
+                    input_token_details: { text_tokens: 30, audio_tokens: 70, cached_tokens: 5 },
+                    output_token_details: { text_tokens: 10, audio_tokens: 40 },
+                },
+            },
+        });
+
+        const lastUsage = usages[usages.length - 1];
+        expect(lastUsage).toMatchObject({
+            InputTokens: 100,
+            OutputTokens: 50,
+            DurationSeconds: 20,
+            InputTokenDetails: { TextTokens: 30, AudioTokens: 70, CachedTokens: 5 },
+            OutputTokenDetails: { TextTokens: 10, AudioTokens: 40 },
+        });
     });
 
     it('surfaces errors and disconnects cleanly', async () => {

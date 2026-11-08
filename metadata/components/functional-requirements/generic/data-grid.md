@@ -104,6 +104,17 @@ Fires `selectionChanged` event with full selected record objects.
 - Horizontal scrolling enabled
 - Per-column `width` override in ColumnDef
 
+### Export (built in)
+`exportable={true}` (default):
+- An export icon (via the registry `ExportableData` component) beside the search box at its 32px height (`placement="toolbar"`), or over the table's top-right corner on hover when `filtering` is off (`placement="overlay"`). Subtle until hovered or focused; always visible on touch devices.
+- The file starts with the record's primary key columns (from `entityPrimaryKeys`, else entity metadata), so a row can be found again, joined or re-imported. A key is added only when the rows carry it and the table does not already show it; GUIDs stay text.
+- Menu: **CSV** and **Excel**. Files are named `<exportLabel or entityName or 'Data'>_<YYYY-MM-DD>.<ext>`.
+- Rows: every row the user's text filter leaves, across all pages, in the sort the user applied (the same comparator as the column sorter, descending reversed). Without a sort, the order of `data`.
+- Columns: the displayed columns in order, headed by their displayed titles. Values are the raw row values, not the rendered cells; custom `render` output is not exported.
+- Column types: from entity metadata when `entityName` is known (money → currency, date/time → date, bit → boolean, int/decimal/numeric/float → number, value lists and everything else → text); otherwise from the values (numbers, booleans, Date or ISO date strings, else text).
+- `exportable={false}` renders no export icon and no wrapper.
+- Callers must NOT wrap DataGrid in `ExportableData`; that would give the grid two icons.
+
 ## Visual States
 
 ### Loading

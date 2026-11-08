@@ -6,7 +6,7 @@
  * clause when nothing is configured, NULL retention untouched unless someone explicitly asked, and
  * a per-run ceiling that reports having hit it rather than looking finished.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/global')>();
@@ -20,7 +20,7 @@ import {
     type ActionLogRetentionJobConfiguration,
 } from '../drivers/ActionLogRetentionScheduledJobDriver';
 import type { MJActionExecutionLogEntity, MJScheduledJobEntity } from '@memberjunction/core-entities';
-import type { UserInfo } from '@memberjunction/core';
+import { RunView, type RunViewParams, type RunViewResult, type UserInfo } from '@memberjunction/core';
 
 const NOW = new Date('2026-08-08T12:00:00.000Z');
 const USER = { ID: 'user-1' } as UserInfo;
@@ -87,6 +87,28 @@ describe('buildExpiredFilter', () => {
     it('ignores a nonsensical default rather than deleting on a zero lifetime', async () => {
         expect(await new TestDriver([]).BuildFilter({ DefaultRetentionDays: 0 })).toBeNull();
         expect(await new TestDriver([]).BuildFilter({ DefaultRetentionDays: -1 })).toBeNull();
+    });
+});
+
+/** A driver whose filter is fixed, so the expired-log read itself can be checked. */
+class ReadDriver extends ActionLogRetentionScheduledJobDriver {
+    protected override async buildExpiredFilter(): Promise<string | null> { return "StartedAt < '2026-08-01'"; }
+    public Read(): Promise<MJActionExecutionLogEntity[]> { return this.findExpiredLogs({}, 10, USER); }
+}
+
+describe('findExpiredLogs', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('bypasses the cache, since the per-run cutoff would mint a key per run', async () => {
+        const empty: RunViewResult = {
+            Success: true, Results: [], TotalRowCount: 0, RowCount: 0, ExecutionTime: 0, UserViewRunID: '', ErrorMessage: '',
+        };
+        const runView = vi.spyOn(RunView.prototype, 'RunView').mockResolvedValue(empty);
+        await new ReadDriver().Read();
+        expect(runView).toHaveBeenCalledTimes(1);
+        expect((runView.mock.calls[0][0] as RunViewParams).BypassCache).toBe(true);
     });
 });
 
