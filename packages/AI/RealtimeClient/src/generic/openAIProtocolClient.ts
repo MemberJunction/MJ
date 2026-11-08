@@ -674,6 +674,7 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
             case 'response.created': {
                 this.responseActive = true;
                 this.confirmedResponseActive = true; // a real response is now in flight
+                this.reconnectController.TurnStarted();
                 this.onResponseStarted();
                 // Only a LOCALLY-initiated create (counter-tracked) can be our narration. A VAD /
                 // unsolicited response.created arrives with the counter already at 0 — it must NOT
@@ -721,6 +722,8 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
                 this.flushPendingResultResponse();
                 if (this.currentState === 'speaking') {
                     this.setState('listening');
+                } else if (!this.responseActive) {
+                    this.reconnectController.TurnEnded();
                 }
                 break;
             case 'error':

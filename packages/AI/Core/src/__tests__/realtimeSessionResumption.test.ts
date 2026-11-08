@@ -334,6 +334,39 @@ describe('RealtimeReconnectController', () => {
             await vi.advanceTimersByTimeAsync(0);
             expect(h.Reconnects).toEqual([null]);
         });
+
+        it('preserves awaitingPostToolTurn when a non-blocking ToolResultSent(true) arrives while the pre-tool turn is still open (#30)', async () => {
+            const h = new Harness();
+            h.TrustsNative = false;
+            h.RequiresPostTurn = false;
+            h.Resumption.ArmDurationTimers(60, 10);
+
+            // Model is speaking (turn open) when the soft window is entered
+            h.Idle = false;
+            h.Resumption.TurnStarted();
+            await vi.advanceTimersByTimeAsync(42_000);
+            expect(h.Reconnects).toEqual([]);
+
+            // Non-blocking tool result is sent while the model's pre-tool turn is still open
+            h.Resumption.ToolResultSent(true);
+
+            // The pre-tool turn ends; the controller must STILL wait for the post-tool reply turn
+            h.Idle = true;
+            h.Resumption.TurnEnded();
+            await vi.advanceTimersByTimeAsync(500);
+            expect(h.Reconnects).toEqual([]);
+
+            // Now the post-tool reply turn starts and ends -> reconnect fires
+            h.Idle = false;
+            h.Resumption.TurnStarted();
+            await vi.advanceTimersByTimeAsync(200);
+            expect(h.Reconnects).toEqual([]);
+
+            h.Idle = true;
+            h.Resumption.TurnEnded();
+            await vi.advanceTimersByTimeAsync(0);
+            expect(h.Reconnects).toEqual([null]);
+        });
     });
 
     describe('ArmDurationTimers mid-connection re-arming (#26)', () => {

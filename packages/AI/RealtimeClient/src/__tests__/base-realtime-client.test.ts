@@ -423,6 +423,55 @@ describe('BaseRealtimeClient', () => {
             expect(client.ReconnectContexts[0].Reason).toBe('duration-expiry');
             await client.Disconnect();
         });
+
+        it('keeps waiting for the post-tool turn when a non-blocking tool result is sent while the model is still speaking (#30)', async () => {
+            vi.useFakeTimers();
+            const client = new StubRealtimeClient();
+            client.ApplySessionConfigTiming({
+                Provider: 'test',
+                Model: 'test-model',
+                EphemeralToken: 'tok-1',
+                ExpiresAt: new Date(Date.now() + 600_000).toISOString(),
+                TrustNativeResumption: false,
+                SessionConfig: {
+                    connectionMaxSeconds: 100,
+                    reconnectBufferSeconds: 10,
+                },
+            });
+            client.ArmConnectionDurationTimer();
+
+            // Model starts speaking and emits a non-blocking tool call
+            client.Busy = true;
+            client.EmitState('speaking');
+            client.EmitToolCall({ CallID: 'nb-1', ToolName: 'lookup_fast', ArgumentsJson: '{}' });
+
+            // Advance into the soft window (80s) while still speaking
+            await vi.advanceTimersByTimeAsync(80_000);
+            expect(client.ReconnectContexts).toHaveLength(0);
+
+            // Tool result is sent while the model is still speaking
+            client.SendToolResult('nb-1', '{"ok":true}');
+
+            // The pre-tool speaking turn finishes -> state transitions to listening.
+            // Because the tool result was sent during that turn, the client must wait for the post-tool turn!
+            client.Busy = false;
+            client.EmitState('listening');
+            await vi.advanceTimersByTimeAsync(100);
+            expect(client.ReconnectContexts).toHaveLength(0);
+
+            // Now the model's post-tool reply turn starts and finishes -> reconnect fires
+            client.Busy = true;
+            client.EmitState('speaking');
+            await vi.advanceTimersByTimeAsync(100);
+            expect(client.ReconnectContexts).toHaveLength(0);
+
+            client.Busy = false;
+            client.EmitState('listening');
+            await vi.advanceTimersByTimeAsync(10);
+            expect(client.ReconnectContexts).toHaveLength(1);
+            expect(client.ReconnectContexts[0].Reason).toBe('duration-expiry');
+            await client.Disconnect();
+        });
     });
 });
 

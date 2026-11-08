@@ -485,7 +485,7 @@ describe('GeminiRealtime server-bridged session resumption', () => {
             });
         });
 
-        it('restores the 600s ceiling when ClearVideoLimit or a video-ended context note arrives, and resets videoStreamActive on reconnect', async () => {
+        it('restores the 600s ceiling when ClearVideoLimit is called, and resets videoStreamActive on reconnect', async () => {
             await start({
                 Model: 'gemini-3.1-flash-live-preview',
                 Config: {
@@ -497,8 +497,8 @@ describe('GeminiRealtime server-bridged session resumption', () => {
             });
             const first = driver.Connections.length - 1;
             session.SendInput({ Data: new Uint8Array([0xff, 0xd8]).buffer, Kind: 'video', MimeType: 'image/jpeg' });
-            // Stopping video via the bridge's context note clears the 120s cap back to 600s
-            session.SendContextNote?.('[You can no longer see: Screen share]');
+            // Stopping video via the bridge's ClearVideoLimit clears the 120s cap back to 600s
+            session.ClearVideoLimit?.();
 
             await vi.advanceTimersByTimeAsync(120_000);
             expect(driver.Connections).toHaveLength(first + 1);

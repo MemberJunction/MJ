@@ -1253,6 +1253,7 @@ export abstract class BaseRealtimeClient {
     }
 
     private wasSpeaking = false;
+    private toolResultSentWhileSpeaking = false;
 
     /**
      * Initiates an in-place reconnect with bounded retries (`REALTIME_RESUMPTION_RETRY_DELAYS_MS`),
@@ -1373,7 +1374,11 @@ export abstract class BaseRealtimeClient {
             });
         }
         if (this.inFlightToolCallIds.size === 0) {
-            this.reconnectController.ToolResultSent(!this.isToolResultSilent(outputJson));
+            const expectsReply = !this.isToolResultSilent(outputJson);
+            if (this.wasSpeaking) {
+                this.toolResultSentWhileSpeaking = expectsReply;
+            }
+            this.reconnectController.ToolResultSent(expectsReply);
         } else {
             this.reconnectController.NotifyIdleStateChanged();
         }
@@ -1391,7 +1396,7 @@ export abstract class BaseRealtimeClient {
     protected emitTranscript(transcript: RealtimeClientTranscript): void {
         if (transcript.IsFinal && transcript.Kind === 'normal' && !transcript.IsThought && transcript.Text.trim().length > 0) {
             this.conversationMemory.Record({
-                Kind: transcript.Role === 'User' ? 'User' === transcript.Role ? 'user' : 'assistant' : 'assistant',
+                Kind: transcript.Role === 'User' ? 'user' : 'assistant',
                 Text: transcript.Text,
                 ReplacesPrevious: transcript.ReplacesPrevious,
             });
@@ -1416,14 +1421,17 @@ export abstract class BaseRealtimeClient {
     protected emitStateChange(state: RealtimeClientState): void {
         if (state === 'closed' || state === 'error') {
             this.wasSpeaking = false;
+            this.toolResultSentWhileSpeaking = false;
             this.DisposeReconnectTimers();
             this.inFlightToolCallIds.clear();
             this.recordedToolCallIds.clear();
             this.toolCallNamesById.clear();
         } else if (state === 'connecting') {
             this.wasSpeaking = false;
+            this.toolResultSentWhileSpeaking = false;
         } else if (state === 'speaking') {
             this.wasSpeaking = true;
+            this.toolResultSentWhileSpeaking = false;
             this.reconnectController.TurnStarted();
         } else if (
             state === 'listening' &&
@@ -1435,12 +1443,10 @@ export abstract class BaseRealtimeClient {
         }
         this.stateChangeHandler?.(state);
         if (state === 'listening') {
-            if (this.wasSpeaking) {
-                this.wasSpeaking = false;
-                this.reconnectController.TurnEnded();
-            } else {
-                this.reconnectController.NotifyIdleStateChanged();
-            }
+            const keepPostToolTurnWait = this.wasSpeaking && this.toolResultSentWhileSpeaking;
+            this.wasSpeaking = false;
+            this.toolResultSentWhileSpeaking = false;
+            this.reconnectController.TurnEnded(keepPostToolTurnWait);
         }
     }
 

@@ -157,6 +157,7 @@ interface GeminiParsedSessionConfig {
     supportsInboundVideo?: boolean;
     maxInboundVideoRate?: number;
     maxInboundVideoStreams?: number;
+    contextWindowCompression?: boolean;
     uncompressedVideoConnectionMaxSeconds?: number;
     requestedTracks?: readonly RealtimeTrackDescriptor[];
     /** The avatar the server granted this session, or `null` when it granted none. */
@@ -293,12 +294,15 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     /**
      * Applies the 120 s uncompressed-video connection cap only when inbound video is active,
      * at least one frame has been sent on the current connection/stream (`videoCapActive`), AND
-     * `contextWindowCompression` is absent on the connect config (sliding-window compression lifts
-     * the 2-minute audio+video limit).
+     * `this.uncompressedVideoConnectionSeconds` is defined (`undefined` when sliding-window
+     * compression is enabled in the session pact or connect config).
      */
     protected override get RuntimeCallDurationSeconds(): number | undefined {
-        const hasContextCompression = Boolean(this.connectTarget?.Config?.contextWindowCompression);
-        if (!hasContextCompression && this.IsTrackEstablished('video', 'inbound') && this.videoCapActive) {
+        if (
+            this.uncompressedVideoConnectionSeconds !== undefined &&
+            this.IsTrackEstablished('video', 'inbound') &&
+            this.videoCapActive
+        ) {
             return this.uncompressedVideoConnectionSeconds;
         }
         return undefined;
@@ -500,10 +504,17 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.idleSignal = session.idleSignal;
         this.supportsScheduling = session.supportsScheduling;
         this.supportsBlocking = session.supportsBlocking;
-        const hasContextCompression = Boolean(session.liveConfig.contextWindowCompression);
-        this.uncompressedVideoConnectionSeconds =
-            session.uncompressedVideoConnectionMaxSeconds ??
-            (hasContextCompression ? undefined : GeminiRealtimeClient.GEMINI_LIVE_UNCOMPRESSED_VIDEO_CONNECTION_SECONDS);
+        const hasContextCompression =
+            session.contextWindowCompression ??
+            (session.uncompressedVideoConnectionMaxSeconds === 0
+                ? true
+                : Boolean(session.liveConfig.contextWindowCompression));
+        const rawUncompressedVideoSec = session.uncompressedVideoConnectionMaxSeconds;
+        this.uncompressedVideoConnectionSeconds = hasContextCompression
+            ? undefined
+            : rawUncompressedVideoSec !== undefined && rawUncompressedVideoSec > 0
+              ? rawUncompressedVideoSec
+              : GeminiRealtimeClient.GEMINI_LIVE_UNCOMPRESSED_VIDEO_CONNECTION_SECONDS;
         this.negotiateSessionTracks(session);
         const playback = this.createPlayback();
         this.playback = playback;
@@ -824,7 +835,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         const wasVideoCapInactive = !this.videoCapActive;
         this.videoCapActive = true;
         this.videoFramesSent++;
-        if (wasVideoCapInactive) {
+        if (wasVideoCapInactive && this.uncompressedVideoConnectionSeconds !== undefined) {
             // Re-arm connection duration timer under the 120s uncompressed video cap.
             this.ArmConnectionDurationTimer();
         }
@@ -1088,13 +1099,18 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             typeof rawMaxStreams === 'number' && Number.isInteger(rawMaxStreams) && rawMaxStreams >= 0 ? rawMaxStreams : undefined;
         const rawUncompressedVideoSec = sessionConfig['uncompressedVideoConnectionMaxSeconds'];
         const uncompressedVideoConnectionMaxSeconds =
-            typeof rawUncompressedVideoSec === 'number' && Number.isInteger(rawUncompressedVideoSec) && rawUncompressedVideoSec > 0
+            typeof rawUncompressedVideoSec === 'number' && Number.isInteger(rawUncompressedVideoSec) && rawUncompressedVideoSec >= 0
                 ? rawUncompressedVideoSec
+                : undefined;
+        const contextWindowCompression =
+            typeof sessionConfig['contextWindowCompression'] === 'boolean'
+                ? sessionConfig['contextWindowCompression']
                 : undefined;
         return {
             model, liveConfig, idleSignal, supportsScheduling, supportsBlocking, supportsInboundVideo, maxInboundVideoRate,
             maxInboundVideoStreams,
             uncompressedVideoConnectionMaxSeconds,
+            contextWindowCompression,
             requestedTracks: GeminiRealtimeClient.readRequestedTracks(sessionConfig[REQUESTED_TRACKS_SESSION_KEY]),
             avatar: GeminiRealtimeClient.readAvatarGrant(sessionConfig['avatar']),
         };
@@ -1189,13 +1205,14 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
 
     /**
      * Whether an unexpected close or `goAway` can be recovered via `TriggerReconnect` / `NotifyConnectionEnding`:
-     * either native resumption has a recorded handle, or history seeding is active (`TrustsNativeResumption === false`).
+     * either native resumption has a recorded handle, or history seeding is active (`TrustsNativeResumption === false`
+     * or `hasResumedOnce === true`).
      */
     private canRecoverConnection(allowEmptySeed = false): boolean {
         if (this.ResumptionHandle !== null) {
             return true;
         }
-        if (this.TrustsNativeResumption) {
+        if (this.TrustsNativeResumption && !this.hasResumedOnce) {
             return false;
         }
         return allowEmptySeed || this.hasResumedOnce || this.conversationMemory.Seed().Entries.length > 0;

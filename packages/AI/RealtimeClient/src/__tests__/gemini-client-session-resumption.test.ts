@@ -820,6 +820,82 @@ describe('GeminiRealtimeClient session resumption', () => {
                 )
             ).toBe(true);
         });
+
+        it('honors top-level contextWindowCompression: true in Vertex relay pacts where config is stripped to responseModalities (#25)', async () => {
+            const vertexRelayClient = new MultiConnectionClient();
+            await vertexRelayClient.Connect(
+                {
+                    Provider: 'GeminiEnterpriseRealtime',
+                    Model: 'gemini-3.8-live',
+                    EphemeralToken: '',
+                    ExpiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+                    Transport: 'relay',
+                    RelayUrl: 'wss://relay.example/realtime-proxy?ticket=vertex-1',
+                    TrustNativeResumption: true,
+                    SessionConfig: {
+                        model: 'gemini-3.8-live',
+                        // Stripped Vertex browserConfig — no contextWindowCompression inside config!
+                        config: { responseModalities: ['AUDIO'] },
+                        contextWindowCompression: true,
+                        supportsInboundVideo: true,
+                        maxInboundVideoRate: 1,
+                        connectionMaxSeconds: 600,
+                        reconnectBufferSeconds: 30,
+                        requestedTracks: [
+                            { Modality: 'audio', Direction: 'inbound' },
+                            { Modality: 'audio', Direction: 'outbound' },
+                            { Modality: 'video', Direction: 'inbound', Encoding: 'image/jpeg', Rate: 1 },
+                        ],
+                    },
+                },
+                new FakeMediaStream([new FakeTrack()])
+            );
+
+            expect(vertexRelayClient.CallDurationSeconds).toBe(600);
+            expect(vertexRelayClient.SendVideoFrame('AAAA', 'image/jpeg')).toBe(true);
+            // Because contextWindowCompression: true was in the pact, the 120s uncompressed video cap must NOT engage
+            expect(vertexRelayClient.CallDurationSeconds).toBe(600);
+
+            // Advancing past 120s must not trigger a duration-expiry reconnect
+            await vi.advanceTimersByTimeAsync(150_000);
+            expect(vertexRelayClient.Connections).toHaveLength(1);
+        });
+
+        it('allows a second seed recovery on an unexpected close after a TrustsNativeResumption session already fell back to seeding once (Nit 3)', async () => {
+            const entClient = new MultiConnectionClient();
+            const entEmitted = collect(entClient);
+            await entClient.Connect(
+                {
+                    ...makeGeminiConfig({
+                        model: 'gemini-3.8-live',
+                        config: { responseModalities: ['AUDIO'], sessionResumption: {} },
+                    }),
+                    TrustNativeResumption: true,
+                },
+                new FakeMediaStream([new FakeTrack()])
+            );
+
+            entClient.EmitOn(0, RESUMABLE('vertex-h1'));
+            entClient.EmitOn(0, HEARD('First question'));
+            entClient.EmitOn(0, SAID('First answer'));
+            entClient.EmitOn(0, TURN_COMPLETE);
+
+            // Attempt 1 (native handle) fails, so Attempt 2 recovers via seed (hasResumedOnce = true, ResumptionHandle = null)
+            entClient.FailConnects = 1;
+            const firstReconnect = entClient.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(2000);
+            expect(await firstReconnect).toBe(true);
+            expect(entClient.Connections).toHaveLength(2);
+            expect(entClient.ResumptionHandle).toBeNull();
+
+            // Before Connection 2 emits a new resumption handle, it drops unexpectedly (1006).
+            // Because hasResumedOnce is true, canRecoverConnection() must allow a second seed recovery!
+            entClient.CloseOn(1, 1006, 'unexpected drop before new handle');
+            await vi.advanceTimersByTimeAsync(2000);
+            expect(entClient.Connections).toHaveLength(3);
+            expect(entEmitted.errors).toEqual([]);
+            expect(entEmitted.states.at(-1)).toBe('listening');
+        });
     });
 });
 

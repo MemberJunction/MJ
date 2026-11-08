@@ -169,6 +169,7 @@ export class RealtimeReconnectController {
     private _resumableNow = false;
     private _turnOpen = false;
     private _awaitingPostToolTurn = false;
+    private _toolResultSentDuringOpenTurn = false;
     private _endingAnnounced = false;
     private _inSoftWindow = false;
     private _reconnecting = false;
@@ -227,6 +228,7 @@ export class RealtimeReconnectController {
             this._handle = handle.trim();
             if (trustsNative) {
                 this._awaitingPostToolTurn = false;
+                this._toolResultSentDuringOpenTurn = false;
             }
             this._resumableNow = !this._turnOpen && !this._awaitingPostToolTurn;
         }
@@ -246,12 +248,15 @@ export class RealtimeReconnectController {
         this._turnOpen = true;
         this._resumableNow = false;
         this._awaitingPostToolTurn = false;
+        this._toolResultSentDuringOpenTurn = false;
     }
 
     /** Marks a turn as ended and triggers any queued soft-window or `ConnectionEnding` move when ready. */
     public TurnEnded(keepPostToolTurnWait = false): void {
         this._turnOpen = false;
-        if (!keepPostToolTurnWait) {
+        const preserveWait = keepPostToolTurnWait || this._toolResultSentDuringOpenTurn;
+        this._toolResultSentDuringOpenTurn = false;
+        if (!preserveWait) {
             this._awaitingPostToolTurn = false;
         }
         this.NotifyIdleStateChanged();
@@ -268,9 +273,11 @@ export class RealtimeReconnectController {
         this._resumableNow = false;
         if (expectsReply) {
             this._awaitingPostToolTurn = true;
+            this._toolResultSentDuringOpenTurn = this._turnOpen;
             return;
         }
         this._awaitingPostToolTurn = false;
+        this._toolResultSentDuringOpenTurn = false;
         this.NotifyIdleStateChanged();
     }
 
@@ -494,6 +501,7 @@ export class RealtimeReconnectController {
         this._inSoftWindow = false;
         this._turnOpen = false;
         this._awaitingPostToolTurn = false;
+        this._toolResultSentDuringOpenTurn = false;
         this._resumableNow = false;
         this._handle = null;
         this._connectionOpenedAtMs = null;
@@ -592,6 +600,7 @@ export class RealtimeReconnectController {
                 this._resumableNow = false;
                 this._turnOpen = false;
                 this._awaitingPostToolTurn = false;
+                this._toolResultSentDuringOpenTurn = false;
                 this._connectionOpenedAtMs = Date.now();
                 this.options.OnReconnected?.(canUseNative);
                 return true;

@@ -1054,4 +1054,30 @@ describe('xAIRealtime edge coverage (shared-driver surface)', () => {
             throw new Error('expected realtime session.update from Reconfigure');
         }
     });
+
+    it('sends resumption: { enabled: true } in session.update on the socket unless ZeroDataRetention is true, while omitting it from the REST client_secrets mint (#12)', async () => {
+        await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' });
+        const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+        if (update?.type === 'session.update' && update.session.type === 'realtime') {
+            const session = update.session as Record<string, unknown>;
+            expect(session['resumption']).toEqual({ enabled: true });
+        } else {
+            throw new Error('expected realtime session.update');
+        }
+
+        const zdrDriver = new TestablexAIRealtime('test-key');
+        await zdrDriver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys', ZeroDataRetention: true });
+        const zdrUpdate = zdrDriver.Fake.Sent.find((e) => e.type === 'session.update');
+        if (zdrUpdate?.type === 'session.update' && zdrUpdate.session.type === 'realtime') {
+            const session = zdrUpdate.session as Record<string, unknown>;
+            expect(session['resumption']).toBeUndefined();
+        } else {
+            throw new Error('expected realtime session.update for ZDR');
+        }
+
+        const cd = new ClientDirectTestablexAI('k');
+        await cd.CreateClientSession({ Model: 'grok-voice', SystemPrompt: 'sys' });
+        const mintSession = cd.LastSecretParams?.session as Record<string, unknown> | undefined;
+        expect(mintSession?.['resumption']).toBeUndefined();
+    });
 });

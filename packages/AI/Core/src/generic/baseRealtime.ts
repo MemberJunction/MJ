@@ -560,9 +560,7 @@ export abstract class BaseRealtimeSession implements IRealtimeSession {
     }
 
     /** Emits a session error to the consumer's registered `OnError` handler(s). */
-    protected emitSessionError(_error: RealtimeSessionError): void {
-        // Overridden by concrete session subclasses to dispatch to their registered error handler(s).
-    }
+    protected abstract emitSessionError(error: RealtimeSessionError): void;
 
     /** Cancels all reconnect and duration timers and abandons any in-flight attempt when closed by the consumer. */
     protected DisposeReconnectTimers(): void {

@@ -493,8 +493,11 @@ export class GeminiRealtime extends BaseRealtimeModel {
                 // The browser's source arbiter maps live sources onto this many streams.
                 maxInboundVideoStreams: ResolveGeminiMaxInboundVideoStreams(profile),
                 ...(GeminiRealtime.hasContextWindowCompression(config)
-                    ? {}
-                    : { uncompressedVideoConnectionMaxSeconds: GEMINI_LIVE_UNCOMPRESSED_VIDEO_CONNECTION_SECONDS }),
+                    ? { contextWindowCompression: true }
+                    : {
+                          contextWindowCompression: false,
+                          uncompressedVideoConnectionMaxSeconds: GEMINI_LIVE_UNCOMPRESSED_VIDEO_CONNECTION_SECONDS,
+                      }),
                 ...this.AvatarPactFor(config, profile),
             })
         ) as JSONObject;
@@ -2128,9 +2131,6 @@ class GeminiRealtimeSession extends BaseRealtimeSession {
      * @param text The context note to append to the conversation.
      */
     public SendContextNote(text: string): void {
-        if (text.startsWith('[You can no longer see: ')) {
-            this.ClearVideoLimit();
-        }
         this.conversationMemory.Record({
             Kind: 'note',
             Text: text,

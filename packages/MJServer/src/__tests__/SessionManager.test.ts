@@ -150,6 +150,7 @@ function mockSessionRunRecords(runIDs: string[], promptRunID?: string): void {
 beforeEach(() => {
     hasPermissionMock.mockReset();
     finalizeCoAgentRunMock.mockClear();
+    mintSnapshotDeleteMock.mockClear();
     hostSessionStartedMock.mockReset();
     hostSessionStartedMock.mockResolvedValue(undefined);
     hostSessionClosedMock.mockReset();
@@ -541,6 +542,7 @@ describe('SessionManager.CloseSession', () => {
 
         expect(ok).toBe(true);
         expect(session.CloseReason).toBe('Explicit');
+        expect(mintSnapshotDeleteMock).toHaveBeenCalledWith('session-default');
     });
 
     it.each(['Janitor', 'Shutdown', 'Error', 'Explicit'] as const)(

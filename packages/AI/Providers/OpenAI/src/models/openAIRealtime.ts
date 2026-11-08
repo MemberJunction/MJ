@@ -1979,6 +1979,9 @@ export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealt
         // Opts into USER input transcription (as CreateClientSession does) so user-role transcripts flow
         // server-bridged too; see BuildSessionPayload for how the audio block and raw override merge.
         const session = BuildSessionPayload(this.profile, features, systemPrompt);
+        if (this.profile.supportsNativeResumption && !this.zeroDataRetention) {
+            session.resumption = { enabled: true };
+        }
         if (tools && tools.length > 0) {
             session.tools = this.mapTools(tools);
         }
