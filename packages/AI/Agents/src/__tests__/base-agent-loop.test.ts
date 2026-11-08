@@ -3574,6 +3574,92 @@ describe('BaseAgent.Execute — agent-local tools: write, a failing edit, a succ
         expect(runner.Calls).toHaveLength(1);
         expect((result.payload as DocPayload).doc).toBe('Hello');
     });
+
+    describe('the agent-tool circuit breaker', () => {
+        /** `edit_doc` that always fails and counts how often it really ran. */
+        function failingEdit(usesCircuitBreaker?: boolean): { tool: AgentToolDefinition; runs: () => number } {
+            let count = 0;
+            const tool: AgentToolDefinition = {
+                Name: 'edit_doc', Description: 'Call this to replace one passage.', InputSchema: { type: 'object', properties: {} },
+                Execute: async (args) => {
+                    count++;
+                    return { Content: `old_string not found: '${String(args.old_string)}'`, IsError: true };
+                },
+                UsesCircuitBreaker: usesCircuitBreaker
+            };
+            return { tool, runs: () => count };
+        }
+
+        function agentWith(tool: AgentToolDefinition, calls: Array<Record<string, unknown>>): { agent: HarnessAgent } {
+            class BreakerAgent extends HarnessAgent {
+                protected override GetAgentTools(): AgentToolDefinition[] {
+                    return [tool];
+                }
+            }
+            const agent = new BreakerAgent();
+            (agent as unknown as AgentInternals)._promptRunner = new ScriptedPromptRunner([
+                ...calls.map((args, i) => () => llmToolCall(`call_${i}`, 'edit_doc', args)),
+                () => llmEnvelope(successEnvelope()),
+            ]);
+            return { agent };
+        }
+
+        it('refuses a third call with arguments that already failed twice, without running the tool', async () => {
+            const edit = failingEdit();
+            const same = { old_string: 'Goodbye', new_string: 'Hi' };
+            const { agent } = agentWith(edit.tool, [same, same, same]);
+            const params = makeParams();
+
+            await agent.Execute(params);
+
+            expect(edit.runs()).toBe(2);
+            const third = answerTo(params.conversationMessages as AgentChatMessage[], 'call_2');
+            expect(third[0].isError).toBe(true);
+            expect(third[0].content).toContain('already failed 2 times with these exact arguments');
+            expect(harness.steps.filter((s) => s.StepType === 'Tool').map((s) => s.Success)).toEqual([false, false, false]);
+        });
+
+        it('disables the tool for the run after five consecutive failures with different arguments', async () => {
+            const edit = failingEdit();
+            const calls = [1, 2, 3, 4, 5, 6].map((n) => ({ old_string: `miss ${n}`, new_string: 'x' }));
+            const { agent } = agentWith(edit.tool, calls);
+            const params = makeParams();
+
+            await agent.Execute(params);
+
+            expect(edit.runs()).toBe(5);
+            expect(answerTo(params.conversationMessages as AgentChatMessage[], 'call_5')[0].content).toContain('disabled for this run after 5 consecutive failures');
+        });
+
+        it('starts over after a success', async () => {
+            let count = 0;
+            const tool: AgentToolDefinition = {
+                Name: 'edit_doc', Description: 'Call this to replace one passage.', InputSchema: { type: 'object', properties: {} },
+                Execute: async (args) => {
+                    count++;
+                    return args.old_string === 'ok'
+                        ? { Content: 'Edit applied.', IsError: false }
+                        : { Content: 'old_string not found', IsError: true };
+                }
+            };
+            const bad = { old_string: 'Goodbye', new_string: 'Hi' };
+            const { agent } = agentWith(tool, [bad, bad, { old_string: 'ok', new_string: 'Hi' }, bad]);
+
+            await agent.Execute(makeParams());
+
+            expect(count).toBe(4);
+        });
+
+        it('leaves a tool alone when it opts out with UsesCircuitBreaker: false', async () => {
+            const edit = failingEdit(false);
+            const same = { old_string: 'Goodbye', new_string: 'Hi' };
+            const { agent } = agentWith(edit.tool, [same, same, same]);
+
+            await agent.Execute(makeParams());
+
+            expect(edit.runs()).toBe(3);
+        });
+    });
 });
 
 describe('BaseAgent.Execute — native-only control plane: framework capabilities as tools', () => {

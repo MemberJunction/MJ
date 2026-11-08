@@ -55,6 +55,13 @@ export interface AgentToolDefinition<P = object> {
     InputSchema: Record<string, unknown>;
     /** Runs the call. A thrown error is reported to the model as an error result. */
     Execute(args: Record<string, unknown>, context: AgentToolContext<P>): Promise<AgentToolResult<P>>;
+    /**
+     * Set false to exempt this tool from the run's agent-tool circuit breaker, for a tool whose
+     * error result is an expected answer the model should be free to ask again (a validation check
+     * that keeps failing until the work is right). Defaults to true: a tool that fails twice with
+     * the same arguments, or five times in a row, is refused without running.
+     */
+    UsesCircuitBreaker?: boolean;
 }
 
 /**
