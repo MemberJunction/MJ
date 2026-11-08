@@ -987,6 +987,18 @@ describe('AsOfFeatureAssembler — a windowed aggregate over hard-deleted child 
       ]);
     });
   }
+  it('loads the child history once per field over every child read, so coverage counts each child record once', async () => {
+    // e3 was deleted before every decision: it stands for no unit row, but it is still one of the child records read.
+    const e3 = { ID: 'e3', PersonID: 'P1', EventDate: '2021-01-01' };
+    const out = await new AsOfFeatureAssembler().Assemble(input([count], { Rows: owners, Tables: data, Changes: history([
+      rc('ec-3', 'e3', 'Create', '2021-01-01T00:00:00Z', e3), rc('ed-3', 'e3', 'Delete', '2022-06-01T00:00:00Z', e3),
+    ]) }));
+    expect(out.Status).toBe('assembled');
+    if (out.Status !== 'assembled') return;
+    expect(out.Rows.map((r) => [r.RowID, r.Values[0]])).toEqual([['y1', 2], ['y2', 1]]);
+    const once = expect.objectContaining({ historyStart: '2022-03-01T00:00:00.000Z', continuity: expect.objectContaining({ recordsReplayed: 3, recordsMismatched: 0 }) });
+    expect(out.Coverage.filter((c) => c.entity === 'Events').map((c) => [c.field, c])).toEqual([['PersonID', once], ['EventDate', once]]);
+  });
   for (const lastType of ['Update', 'Snapshot'] as const) {
     it(`counts a child whose final Delete shares its instant with its last ${lastType}, deleted after the decision day, as it stood (either ID order)`, async () => {
       for (const [lastId, deleteId] of [['aa', 'zz'], ['zz', 'aa']]) {

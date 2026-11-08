@@ -46,8 +46,10 @@
  *
  * Coverage: every Record Changes history the assembly reads (replayed fields and the stable-value rule) is reported in
  * the result's `Coverage`, one entry per entity and field. A history is loaded once per assembly for one entity, field
- * list and key set, however many features read it; two loads of one field (other keys, another join, a child entity)
- * merge: no history start wins, else the later start, and the continuity counts add.
+ * list and key set, however many features read it (a windowed aggregate loads its child entity's history over every
+ * child row it read, present and hard-deleted, judged or not, so each child record is counted once); two loads of one
+ * field (other keys, another join, a child entity) merge: no history start wins, else the later start, and the
+ * continuity counts add.
  *
  * Record creation: a record created after a row's decision day did not exist then, so its value reads as missing
  * (version `created-after-decision`), never the stored value and never as uncovered. When creation is known: on an
@@ -734,9 +736,12 @@ export class AsOfFeatureAssembler {
    * incarnation's value from the Delete row that ended it, see `currentValueReader`). Creation follows the one creation
    * rule, so a record whose history starts with a Snapshot after the decision day but whose `__mj_CreatedAt`
    * (`storedCreatedAt`, null when the entity does not list it) is after it too did not exist then, and is not uncovered.
+   * The history is loaded over `historyKeys` (by default the reads' keys); a caller that reads other records of the
+   * entity too passes the whole key set, so the entity's history is loaded, and its coverage recorded, once.
    */
   private async assertStableCurrentValue(
     entity: AssemblyEntityInfo, field: string, reads: readonly StableRead[], storedCreatedAt: (key: string) => CellValue, input: AsOfAssemblyInput, state: AssemblyState,
+    historyKeys: readonly string[] = reads.map((r) => r.Key),
   ): Promise<StableValues> {
     const info = entity.Fields.find((f) => f.Name === field);
     if (!info) throw new AssemblyRefused({ kind: 'unresolved-column', entity: entity.Name, field });
@@ -749,7 +754,7 @@ export class AsOfFeatureAssembler {
       if (pastRows === 0) return unread;
       throw new AssemblyRefused({ kind: 'decision-date-before-change-history', entity: entity.Name, field, historyStart: null, rowsAffected: pastRows });
     }
-    const history = await AsOfFeatureAssembler.loadHistory(entity, reads.map((r) => r.Key), [field], input, state);
+    const history = await AsOfFeatureAssembler.loadHistory(entity, historyKeys, [field], input, state);
     const onDayOrLater = AsOfFeatureAssembler.asOfInstant(input.AssembledAt).getTime();
     // Under exclude-and-count a history that does not reach a past decision day excludes its rows, as a replayed field does.
     const uncoveredVerdict: StableOutcome = input.Unit.history.onUncoveredRow === 'refuse' ? 'uncovered' : 'excluded';
@@ -999,8 +1004,10 @@ export class AsOfFeatureAssembler {
    * at a unit row's decision instant makes that row uncovered for that field, since the child's owner on that day cannot
    * be trusted; rows decided at instants where every child row is stable are read. A hard-deleted child (`deletedAt`,
    * by lower-cased key) stands for the unit rows decided while it stood (its Delete at or after their as-of instant),
-   * judged on its Delete row as its stored value; after its Delete it is absent and judged for no row. Returns, per unit
-   * row, the first such field's marker, else null.
+   * judged on its Delete row as its stored value; after its Delete it is absent and judged for no row. Each field's
+   * history is loaded over every child key read (`keys`), judged or not, so the aggregate's own load of the owner key
+   * is the same load and coverage counts each child record once. Returns, per unit row, the first such field's
+   * marker, else null.
    */
   private async assertStableChildRows(
     child: AssemblyEntityInfo, source: WindowedAggregateSource, keys: readonly string[], deletedAt: ReadonlyMap<string, Date>, storedCreatedAt: (key: string) => CellValue,
@@ -1009,7 +1016,7 @@ export class AsOfFeatureAssembler {
     const reads = AsOfFeatureAssembler.childReads(keys, deletedAt, input.Rows);
     const excludedByField: { readonly Instants: ReadonlySet<number>; readonly Marker: Uncovered }[] = [];
     for (const field of AsOfFeatureAssembler.childStableFields(source)) {
-      const stable = await this.assertStableCurrentValue(child, field, reads, storedCreatedAt, input, state);
+      const stable = await this.assertStableCurrentValue(child, field, reads, storedCreatedAt, input, state, keys);
       if (stable.ExcludedInstants.size > 0) excludedByField.push({ Instants: stable.ExcludedInstants, Marker: { Uncovered: true, Entity: child.Name, Field: field, HistoryStart: stable.HistoryStart } });
     }
     return (row) => {
