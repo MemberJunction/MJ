@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="An objective comparison of MemberJunction's ORM layer (BaseEntity, RunView, RunQuery, BaseEngine) with Entity Framework Core 11: philosophy, querying, concurrency, caching, security and performance.">
+<meta property="og:title" content="MemberJunction and Entity Framework Core 11: an ORM comparison">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<title>MemberJunction vs. Entity Framework Core 11: the ORM layer, compared</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+<style>
+/* Layout: two ledgers side by side. A sticky contents rail on the left, a ~42rem reading column,
+   and tables, figures and the scorecard that break wider. MJ is teal; EF is violet; verdicts amber. */
+:root {
+  --paper: #f5f7fa;
+  --surface: #ffffff;
+  --ink: #15213a;
+  --muted: #56627a;
+  --rule: #dbe0e8;
+  --teal: #2a857f;
+  --teal-soft: #e3f2f0;
+  --violet: #6a4fb3;
+  --violet-soft: #eeeaf8;
+  --amber: #c97a1c;
+  --amber-soft: #fbf0e1;
+  --chip: #e9eef5;
+  --panel: #15213a;
+  --panel-ink: #e8edf5;
+  --panel-muted: #a8b4c8;
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --measure: 42rem;
+  --wide: 62rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0d1320; --surface: #141c2c; --ink: #e5eaf3; --muted: #9ba7bc; --rule: #26314a;
+    --teal: #5ec4bc; --teal-soft: #13312f; --violet: #a993ec; --violet-soft: #251d3d;
+    --amber: #f0a64c; --amber-soft: #3a2a14; --chip: #1c2638;
+    --panel: #060a12; --panel-ink: #e5eaf3; --panel-muted: #94a1b8;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 18px/1.65 var(--font-body); -webkit-font-smoothing: antialiased; }
+a { color: var(--teal); text-underline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: 0.86em; background: var(--chip); padding: 0.08em 0.35em; border-radius: 4px; }
+pre { font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.55; background: var(--panel); color: var(--panel-ink); padding: 1rem 1.15rem; border-radius: 10px; overflow-x: auto; }
+pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+.page { max-width: 80rem; margin: 0 auto; padding: 0 1.25rem 5rem; }
+
+/* Hero */
+.hero { padding: 4.5rem 0 2.5rem; border-bottom: 1px solid var(--rule); display: grid; gap: 2rem; grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+.eyebrow { font: 600 0.78rem/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0 0 1.2rem; }
+.eyebrow b { color: var(--teal); }
+h1 { font: 800 clamp(2.3rem, 5vw, 3.9rem)/1.02 var(--font-display); letter-spacing: -0.02em; margin: 0 0 1rem; max-width: 20ch; }
+h1 .vs { color: var(--muted); font-weight: 500; }
+.tagline { font: italic 1.35rem/1.4 var(--font-body); color: var(--muted); margin: 0 0 1.4rem; }
+.intro { max-width: var(--measure); margin: 0; }
+.legend { display: flex; flex-direction: column; gap: 0.5rem; font: 500 0.82rem/1.2 var(--font-mono); }
+.legend span { display: inline-flex; align-items: center; gap: 0.5rem; }
+.sw { width: 0.9rem; height: 0.9rem; border-radius: 3px; display: inline-block; }
+.sw-mj { background: var(--teal); } .sw-ef { background: var(--violet); } .sw-v { background: var(--amber); }
+
+/* Body grid */
+.body { display: grid; grid-template-columns: 13rem minmax(0, 1fr); gap: 3rem; padding-top: 2.5rem; }
+.rail { position: sticky; top: 1.5rem; align-self: start; font: 500 0.82rem/1.3 var(--font-display); }
+.rail-k { font: 600 0.7rem/1 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin: 0 0 0.8rem; }
+.rail ol { list-style: none; margin: 0; padding: 0; border-left: 2px solid var(--rule); }
+.rail a { display: flex; gap: 0.6rem; padding: 0.32rem 0 0.32rem 0.8rem; margin-left: -2px; border-left: 2px solid transparent; color: var(--muted); text-decoration: none; }
+.rail a:hover, .rail a.active { color: var(--ink); border-left-color: var(--teal); }
+.rail-num { font-family: var(--font-mono); color: var(--teal); min-width: 1.4rem; }
+main { min-width: 0; }
+.chapter { margin: 0 0 3.8rem; scroll-margin-top: 1.5rem; }
+.chapter > * { max-width: var(--measure); }
+.chapter > .wide, .chapter > .table-wrap, .chapter > figure { max-width: var(--wide); }
+h2 { font: 700 1.85rem/1.15 var(--font-display); letter-spacing: -0.01em; margin: 0 0 1rem; display: flex; gap: 0.8rem; align-items: baseline; }
+.ch-num { font: 500 0.95rem/1 var(--font-mono); color: var(--teal); }
+h3 { font: 700 1.15rem/1.3 var(--font-display); margin: 1.8rem 0 0.5rem; }
+p { margin: 0 0 1rem; }
+ul { margin: 0 0 1rem; padding-left: 1.2rem; }
+li { margin: 0.25rem 0; }
+.pull { font: italic 1.25rem/1.45 var(--font-body); border-left: 3px solid var(--amber); padding: 0.2rem 0 0.2rem 1.1rem; margin: 1.6rem 0; color: var(--ink); }
+
+/* Tables */
+.table-wrap { overflow-x: auto; margin: 1.4rem 0 1.6rem; border: 1px solid var(--rule); border-radius: 12px; background: var(--surface); }
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; line-height: 1.45; }
+th, td { text-align: left; vertical-align: top; padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--rule); }
+tr:last-child td { border-bottom: none; }
+thead th { font: 600 0.74rem/1.2 var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); background: var(--chip); }
+th.mj, td.mj { border-left: 3px solid var(--teal); }
+th.ef, td.ef { border-left: 3px solid var(--violet); }
+td.k { font: 600 0.88rem/1.35 var(--font-display); width: 11rem; }
+.tag { display: inline-block; font: 600 0.68rem/1 var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; padding: 0.28rem 0.45rem; border-radius: 4px; white-space: nowrap; }
+.t-mj { background: var(--teal-soft); color: var(--teal); }
+.t-ef { background: var(--violet-soft); color: var(--violet); }
+.t-dep { background: var(--amber-soft); color: var(--amber); }
+.t-gap { background: var(--chip); color: var(--muted); }
+
+/* Figures */
+figure { margin: 1.8rem 0 2rem; background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; padding: 1.2rem 1.2rem 0.9rem; }
+figure svg { width: 100%; height: auto; display: block; }
+figcaption { font: 0.82rem/1.45 var(--font-display); color: var(--muted); margin-top: 0.7rem; }
+svg text { font-family: var(--font-display); fill: var(--ink); }
+svg .mono { font-family: var(--font-mono); }
+svg .muted { fill: var(--muted); }
+svg .box { fill: var(--surface); stroke: var(--rule); stroke-width: 1.5; }
+svg .box-mj { fill: var(--teal-soft); stroke: var(--teal); stroke-width: 1.5; }
+svg .box-ef { fill: var(--violet-soft); stroke: var(--violet); stroke-width: 1.5; }
+svg .box-v { fill: var(--amber-soft); stroke: var(--amber); stroke-width: 1.5; }
+svg .ln { stroke: var(--muted); stroke-width: 1.6; fill: none; }
+svg .ln-mj { stroke: var(--teal); stroke-width: 2; fill: none; }
+svg .ln-ef { stroke: var(--violet); stroke-width: 2; fill: none; }
+svg .ln-dash { stroke-dasharray: 5 4; }
+svg .lane-mj { fill: var(--teal); } svg .lane-ef { fill: var(--violet); }
+
+/* Cards */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem; margin: 1.4rem 0 1.8rem; max-width: var(--wide); }
+.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 1rem 1.1rem; font-size: 0.93rem; line-height: 1.5; }
+.card h4 { font: 700 1rem/1.25 var(--font-display); margin: 0 0 0.45rem; }
+.card.mj { border-top: 4px solid var(--teal); } .card.ef { border-top: 4px solid var(--violet); } .card.v { border-top: 4px solid var(--amber); }
+.card p:last-child, .card ul:last-child { margin-bottom: 0; }
+
+footer { border-top: 1px solid var(--rule); padding-top: 1.5rem; margin-top: 2rem; font: 0.85rem/1.55 var(--font-display); color: var(--muted); }
+footer ol { padding-left: 1.2rem; }
+
+@media (max-width: 900px) {
+  .hero { grid-template-columns: 1fr; padding-top: 3rem; }
+  .body { grid-template-columns: 1fr; gap: 0; }
+  .rail { display: none; }
+  body { font-size: 17px; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="hero">
+    <div>
+      <p class="eyebrow"><b>MemberJunction</b> · Framework comparison · November 2026</p>
+      <h1>MemberJunction <span class="vs">and</span> Entity Framework&nbsp;Core&nbsp;11</h1>
+      <p class="tagline">Two good ORMs built on opposite philosophies.</p>
+      <p class="intro">Entity Framework Core is the most widely used ORM in .NET. Its eleventh major version ships with .NET 11 on November 10, 2026. MemberJunction's ORM layer (<code>BaseEntity</code>, <code>RunView</code>, <code>RunQuery</code> and <code>BaseEngine</code>) solves the same problem from the other direction. This page compares the two fairly: where each one is better, where MJ has gaps and what is planned for them, and an honest assessment of performance.</p>
+    </div>
+    <div class="legend" aria-label="Legend">
+      <span><i class="sw sw-mj"></i>MemberJunction</span>
+      <span><i class="sw sw-ef"></i>EF Core 11</span>
+      <span><i class="sw sw-v"></i>Verdict / depends</span>
+    </div>
+  </header>
+
+  <div class="body">
+    <nav class="rail" aria-label="Contents">
+      <p class="rail-k">Contents</p>
+      <ol>
+        <li><a href="#glance"><span class="rail-num">01</span>At a glance</a></li>
+        <li><a href="#truth"><span class="rail-num">02</span>Where truth lives</a></li>
+        <li><a href="#objects"><span class="rail-num">03</span>The object model</a></li>
+        <li><a href="#querying"><span class="rail-num">04</span>Querying</a></li>
+        <li><a href="#writes"><span class="rail-num">05</span>Writes &amp; transactions</a></li>
+        <li><a href="#concurrency"><span class="rail-num">06</span>Concurrency</a></li>
+        <li><a href="#inheritance"><span class="rail-num">07</span>Inheritance</a></li>
+        <li><a href="#security"><span class="rail-num">08</span>Security</a></li>
+        <li><a href="#caching"><span class="rail-num">09</span>Caching</a></li>
+        <li><a href="#wire"><span class="rail-num">10</span>Across the wire</a></li>
+        <li><a href="#ai"><span class="rail-num">11</span>AI &amp; search</a></li>
+        <li><a href="#performance"><span class="rail-num">12</span>Performance</a></li>
+        <li><a href="#roadmap"><span class="rail-num">13</span>Gaps &amp; roadmap</a></li>
+        <li><a href="#choosing"><span class="rail-num">14</span>Choosing</a></li>
+      </ol>
+    </nav>
+
+    <main>
+<section class="chapter" id="glance"><h2><span class="ch-num">01</span>At a glance</h2>
+<p>The two aren't the same kind of thing, and that's the first thing to understand. EF Core is a <strong>data-access library</strong>: it maps C# classes to tables, translates LINQ to SQL and tracks changes. You build everything above it (API, authorization, caching, client) yourself. MJ's ORM is the <strong>foundation of a full-stack platform</strong>: the same entity object runs in the browser and on the server, and the API, security, audit and caching are generated or built in. A fair comparison has to keep both of those facts in view.</p>
+<div class="table-wrap"><table>
+<thead><tr><th></th><th class="mj">MemberJunction</th><th class="ef">EF Core 11</th></tr></thead>
+<tbody>
+<tr><td class="k">Source of truth</td><td class="mj">Database schema → CodeGen → metadata stored as data</td><td class="ef">C# model classes (code-first) or a scaffolded model</td></tr>
+<tr><td class="k">Pattern</td><td class="mj">Active record: <code>entity.Save()</code></td><td class="ef">Unit of work: <code>context.SaveChanges()</code></td></tr>
+<tr><td class="k">Query API</td><td class="mj"><code>RunView</code> (filters, views), <code>RunQuery</code> (MJ Query Language)</td><td class="ef">LINQ translated to SQL</td></tr>
+<tr><td class="k">Runs where</td><td class="mj">Browser and server, same object, same behavior</td><td class="ef">The .NET process that holds the connection</td></tr>
+<tr><td class="k">Language / DBs</td><td class="mj">TypeScript; SQL Server, PostgreSQL (plus external sources for reads)</td><td class="ef">C#; SQL Server, PostgreSQL, SQLite, Cosmos DB, MySQL, Oracle and more</td></tr>
+<tr><td class="k">Concurrency</td><td class="mj">Field-level conflict detection over the wire</td><td class="ef">Opt-in concurrency tokens (rowversion), whole-row</td></tr>
+<tr><td class="k">Security</td><td class="mj">Entity permissions, row-level and field-level security, built in</td><td class="ef">Global query filters; authorization is yours</td></tr>
+<tr><td class="k">Audit</td><td class="mj">Record Changes (built-in version history)</td><td class="ef">Interceptors; you build it</td></tr>
+<tr><td class="k">Caching</td><td class="mj">Three tiers, event-driven invalidation, cross-server pub/sub</td><td class="ef">None for data (third-party second-level cache)</td></tr>
+<tr><td class="k">Maturity</td><td class="mj">Younger, smaller ecosystem</td><td class="ef">A decade of hardening, huge ecosystem</td></tr>
+</tbody></table></div>
+</section>
+
+<section class="chapter" id="truth"><h2><span class="ch-num">02</span>Where the truth lives</h2>
+<p>In <strong>EF Core</strong>, the model is C# code. You write classes, configure them with attributes or the fluent API, and EF builds an in-memory model when the app starts. That model can be precompiled for faster startup. Migrations are generated by diffing the model against a snapshot. EF 11 makes that loop shorter: <code>dotnet ef database update --add</code> creates and applies a migration in one step, and the model snapshot now records the latest migration ID, so two branches with diverging migrations produce a merge conflict instead of a silent mismatch.</p>
+<p>In <strong>MemberJunction</strong>, the database is the starting point. You write SQL migrations; CodeGen reads the schema and writes it as <em>metadata rows</em> (Entities, Entity Fields, Entity Relationships). From that metadata it generates the typed TypeScript entity classes, Zod schemas, base views, CRUD stored procedures, the GraphQL API and the forms.</p>
+<figure>
+<svg viewBox="0 0 900 300" role="img" aria-label="EF Core flows from C# classes to database; MJ flows from database schema to metadata to generated code, with agents reading metadata">
+  <rect x="0" y="18" width="8" height="96" rx="3" class="lane-ef"/>
+  <text x="22" y="40" font-weight="700" font-size="15">EF Core</text>
+  <rect x="22" y="56" width="170" height="52" rx="10" class="box-ef"/><text x="107" y="87" text-anchor="middle" font-size="14">C# entity classes</text>
+  <rect x="242" y="56" width="170" height="52" rx="10" class="box-ef"/><text x="327" y="80" text-anchor="middle" font-size="14">In-memory model</text><text x="327" y="98" text-anchor="middle" font-size="11" class="muted mono">built at startup</text>
+  <rect x="462" y="56" width="170" height="52" rx="10" class="box-ef"/><text x="547" y="80" text-anchor="middle" font-size="14">Migrations</text><text x="547" y="98" text-anchor="middle" font-size="11" class="muted mono">model diff</text>
+  <rect x="682" y="56" width="170" height="52" rx="10" class="box"/><text x="767" y="87" text-anchor="middle" font-size="14">Database</text>
+  <path d="M192 82 H238" class="ln-ef" marker-end="url(#a-ef)"/><path d="M412 82 H458" class="ln-ef" marker-end="url(#a-ef)"/><path d="M632 82 H678" class="ln-ef" marker-end="url(#a-ef)"/>
+
+  <rect x="0" y="150" width="8" height="140" rx="3" class="lane-mj"/>
+  <text x="22" y="172" font-weight="700" font-size="15">MemberJunction</text>
+  <rect x="22" y="190" width="170" height="52" rx="10" class="box"/><text x="107" y="214" text-anchor="middle" font-size="14">Database schema</text><text x="107" y="232" text-anchor="middle" font-size="11" class="muted mono">SQL migrations</text>
+  <rect x="242" y="190" width="170" height="52" rx="10" class="box-mj"/><text x="327" y="221" text-anchor="middle" font-size="14">CodeGen</text>
+  <rect x="462" y="190" width="170" height="52" rx="10" class="box-mj"/><text x="547" y="214" text-anchor="middle" font-size="14">Metadata as data</text><text x="547" y="232" text-anchor="middle" font-size="11" class="muted mono">queryable at runtime</text>
+  <rect x="682" y="160" width="170" height="40" rx="10" class="box-mj"/><text x="767" y="185" text-anchor="middle" font-size="13">Typed classes · Zod</text>
+  <rect x="682" y="206" width="170" height="40" rx="10" class="box-mj"/><text x="767" y="231" text-anchor="middle" font-size="13">GraphQL · sprocs · views</text>
+  <rect x="682" y="252" width="170" height="40" rx="10" class="box-v"/><text x="767" y="277" text-anchor="middle" font-size="13">Agents · the Canon</text>
+  <path d="M192 216 H238" class="ln-mj" marker-end="url(#a-mj)"/><path d="M412 216 H458" class="ln-mj" marker-end="url(#a-mj)"/>
+  <path d="M632 216 C655 216 655 180 678 180" class="ln-mj" marker-end="url(#a-mj)"/>
+  <path d="M632 216 H678" class="ln-mj" marker-end="url(#a-mj)"/>
+  <path d="M632 216 C655 216 655 272 678 272" class="ln-mj ln-dash" marker-end="url(#a-mj)"/>
+  <defs>
+    <marker id="a-ef" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="var(--violet)"/></marker>
+    <marker id="a-mj" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="var(--teal)"/></marker>
+  </defs>
+</svg>
+<figcaption>EF's model lives in compiled code. MJ's model lives in the database as data, so agents and tools can query it, document it and reason about it at runtime.</figcaption>
+</figure>
+<p class="pull">This is the decision that explains most of the other differences. A model stored as data can be read by an AI agent at runtime. A model compiled into code can't.</p>
+<p>The trade-off is real in both directions. Code-first gives C# developers refactoring tools, compile-time checking of the model and a model that changes together with the code. Schema-first fits organizations whose database outlives any one application (common for associations and nonprofits) and lets MJ work against databases it didn't create. It also lets MJ's agents and its semantic layer (the Canon) treat the data model as something they can read and reason about.</p>
+</section>
+
+<section class="chapter" id="objects"><h2><span class="ch-num">03</span>The object model</h2>
+<div class="cards">
+<div class="card ef"><h4>EF: plain objects plus a context</h4><p>Entities are plain C# objects that know nothing about the database. A <code>DbContext</code> does the work: its change tracker snapshots each loaded entity, its identity map guarantees one instance per row per context, and <code>SaveChanges()</code> computes the difference and writes it as a single unit of work. Context lifetime is the main design decision: usually one per request, pooled.</p></div>
+<div class="card mj"><h4>MJ: objects that carry their own state</h4><p>Each <code>BaseEntity</code> holds its own fields, old values, dirty state, validation and lifecycle events, and you call <code>Load()</code>, <code>Save()</code> and <code>Delete()</code> on the object. There's no context to manage. Rows are hydrated lazily: a record loaded from a cache is near-instant until you touch a field that needs the full machinery. <code>BaseEngine</code> caches act as a long-lived, process-wide set of instances for reference data.</p></div>
+</div>
+<p>EF's model is cleaner for large write batches where everything should succeed or fail together. MJ's is simpler to use in UI code and agent code, where one record is loaded, edited and saved, and it's the reason the same object can work over the network (§10). Behavior also lives in different places. EF keeps rules in services, which is the usual "domain model" style. MJ puts them on the entity: generated value-list checks, <code>Validate()</code>, <code>ValidateAsync()</code> for checks that span records, and server-side subclasses registered with <code>@RegisterClass</code>. EF Core doesn't validate data annotations on save; MJ validates every save.</p>
+</section>
+
+<section class="chapter" id="querying"><h2><span class="ch-num">04</span>Querying</h2>
+<p><strong>LINQ is EF's strongest feature.</strong> C# expression trees let EF translate ordinary, type-checked C# into SQL, and EF 11 continues to improve that translation: a new <code>FullJoin</code> operator, <code>MaxBy</code>/<code>MinBy</code>, better <code>GroupBy</code> translation, redundant joins removed from split queries (one reported scenario got 29% faster), and no-op <code>CAST</code>s stripped so indexes stay usable.</p>
+<p><strong>MJ chose not to build a LINQ equivalent.</strong> TypeScript has no expression trees, and imitating LINQ with a query builder would give up the property MJ cares about most: queries that can be stored as data, reviewed, versioned and written by agents. MJ has three query surfaces instead:</p>
+<ul>
+<li><strong><code>RunView</code></strong> runs against an entity's generated base view, with <code>ExtraFilter</code>, <code>OrderBy</code>, field projection, keyset paging, aggregates and a choice of result shape (plain rows for speed, full entity objects for editing). A structured, typed <code>Filter</code> based on MJ's portable <code>CompositeFilter</code> JSON is planned (§13).</li>
+<li><strong><code>RunQuery</code></strong> runs stored queries written in <strong>MJ Query Language</strong>: SQL in one dialect plus an allow-listed set of template tags for parameters, conditions, loops and composition. Each query is parsed and checked when it is saved. Parameter types are inferred, every value must go through an escaping filter, and <code>{{query:"Path/Name(Arg=…)"}}</code> includes another approved query as a CTE, with arguments passed explicitly like a function call. Queries carry doc comments, and branch variants are analyzed so that every possible output column is known.</li>
+<li><strong>Approved queries become ground truth.</strong> Queries users approve join the Canon, and agents reuse them as building blocks instead of writing new SQL. Typed, generated wrappers for these queries are planned (§13).</li>
+</ul>
+<div class="table-wrap"><table>
+<thead><tr><th></th><th class="mj">MemberJunction</th><th class="ef">EF Core 11</th></tr></thead>
+<tbody>
+<tr><td class="k">Compile-time safety</td><td class="mj">Entity fields typed; filter strings are not (typed filters and query wrappers planned)</td><td class="ef">Full: LINQ is checked by the C# compiler</td></tr>
+<tr><td class="k">Composition</td><td class="mj">Query-to-query composition of stored queries, with parameter contracts and cycle detection</td><td class="ef"><code>IQueryable</code> composition in code</td></tr>
+<tr><td class="k">Queries as data</td><td class="mj">Yes: stored, versioned, approved, reused by agents</td><td class="ef">No: queries live in compiled code</td></tr>
+<tr><td class="k">Raw SQL escape hatch</td><td class="mj">Read-only ad-hoc SQL, validated and run on a read-only connection</td><td class="ef"><code>FromSql</code>, <code>SqlQuery</code></td></tr>
+<tr><td class="k">Dialects</td><td class="mj">SQL Server, PostgreSQL; MJQ also covers MySQL, Oracle, Snowflake, Databricks</td><td class="ef">Per provider, via LINQ translation</td></tr>
+</tbody></table></div>
+</section>
+
+<section class="chapter" id="writes"><h2><span class="ch-num">05</span>Writes, transactions &amp; entity graphs</h2>
+<p><strong>EF</strong> generates parameterized <code>INSERT</code>/<code>UPDATE</code>/<code>DELETE</code> statements that include only the modified columns, batches them into few round trips, and wraps each <code>SaveChanges()</code> in a transaction. For set-based work, <code>ExecuteUpdate</code>/<code>ExecuteDelete</code> skip the change tracker entirely.</p>
+<p><strong>MJ</strong> writes through generated stored procedures (<code>spCreate*</code>, <code>spUpdate*</code>, <code>spDelete*</code>). A DBA can replace any of them, and each returns the saved row through the base view, so calculated and joined fields come back immediately. Every write can be recorded in Record Changes, MJ's built-in version history. There are three mechanisms for doing several things at once, each with a defined job:</p>
+<div class="table-wrap"><table>
+<thead><tr><th></th><th>Provider transactions</th><th>Transaction groups</th><th>Entity graphs</th></tr></thead>
+<tbody>
+<tr><td class="k">Is</td><td>An ambient SQL transaction; nested calls join it with savepoints</td><td>A batch of unrelated records sent in one round trip</td><td>A parent plus its declared related records, saved as one unit</td></tr>
+<tr><td class="k">Where</td><td>Server</td><td>Client or server</td><td>Client or server</td></tr>
+<tr><td class="k">Read your writes</td><td>Yes</td><td>No (deferred to <code>Submit()</code>)</td><td>Yes</td></tr>
+<tr><td class="k">EF analogue</td><td><code>BeginTransaction</code></td><td><code>SaveChanges</code> batching</td><td>Aggregate save of a graph</td></tr>
+</tbody></table></div>
+<p>EF has the advantage for bulk write throughput. MJ's per-record procedure, re-read and audit row cost more per write, but they produce the audit trail, refreshed calculated fields and cache invalidation that an EF application would have to build itself.</p>
+</section>
+
+<section class="chapter" id="concurrency"><h2><span class="ch-num">06</span>Concurrency</h2>
+<p>Both handle concurrent edits, with different defaults and at different levels of detail. In the scenarios below, user A loads a record, user B then changes some of it, and A saves.</p>
+<div class="table-wrap wide"><table>
+<thead><tr><th>Scenario</th><th class="ef">EF default</th><th class="ef">EF + rowversion token</th><th class="mj">MJ over the wire</th></tr></thead>
+<tbody>
+<tr><td class="k">B changed <em>Email</em>; A saves <em>Title</em></td><td class="ef">Both kept (only modified columns are written)</td><td class="ef"><span class="tag t-gap">Rejected</span> A's save fails, though the edits don't overlap</td><td class="mj">Both kept. The server merges from the stored row</td></tr>
+<tr><td class="k">Both changed <em>Title</em> to different values</td><td class="ef"><span class="tag t-gap">Lost update</span> last writer wins silently</td><td class="ef">Rejected with <code>DbUpdateConcurrencyException</code></td><td class="mj">Rejected with <code>CONCURRENT_MODIFICATION_CONFLICT</code>, naming the fields</td></tr>
+<tr><td class="k">Both set <em>Title</em> to the same value</td><td class="ef">Fine</td><td class="ef">Rejected</td><td class="mj">Accepted (identical writes converge)</td></tr>
+<tr><td class="k">Setup</td><td class="ef">None</td><td class="ef">A token column per entity</td><td class="mj">None; on by default</td></tr>
+</tbody></table></div>
+<p>How MJ does it: the client sends only the changed fields plus their <code>OldValues___</code>. The server loads the stored row and compares each changed field's old value, new value and current database value. It rejects a save only when a field the client changed was also changed in the database to something different. The comparison handles JSON key order and date precision.</p>
+<p class="pull">Field-level conflict detection, on by default, is stronger than what EF gives you out of the box.</p>
+<p><strong>The gap:</strong> today that check runs in the API layer. Code that saves directly on the server (agents, actions, scheduled jobs) skips it and writes every loaded column. An agent that holds a record while it thinks can overwrite concurrent edits to columns it never touched. Moving the check down into the data provider, and having every update send only the changed fields, is the first item on the roadmap (§13).</p>
+</section>
+
+<section class="chapter" id="inheritance"><h2><span class="ch-num">07</span>Inheritance</h2>
+<p><strong>EF</strong> offers three strategies: table-per-hierarchy (the default: one table and a discriminator column), table-per-type and table-per-concrete-type. EF 11 extends complex types and JSON columns to TPT and TPC.</p>
+<p><strong>MJ's IS-A</strong> is table-per-type with a shared primary key, plus several things EF doesn't do. One object spans the whole chain: you set <code>webinar.Name</code>, <code>webinar.StartTime</code> and <code>webinar.RecordingURL</code> on a single instance, and <code>Save()</code> writes Product, Meeting and Webinar in one transaction. Subtypes can be <strong>overlapping</strong>, so one Person can be both a Member and a Speaker, which EF can't express because each row maps to exactly one CLR type. MJ also enforces disjoint subtypes when you want them, resolves the subtype when a record loads and protects parent rows from deletion while subtypes exist.</p>
+</section>
+
+<section class="chapter" id="security"><h2><span class="ch-num">08</span>Security</h2>
+<div class="cards">
+<div class="card ef"><h4>EF</h4><p>Global query filters (soft-delete, multi-tenancy). Everything else, including who may read which rows and fields and who may update what, is application code in services and controllers.</p></div>
+<div class="card mj"><h4>MJ</h4><p>Entity permissions, row-level security and field-level security, enforced in the ORM itself, with every entity operation running as the user who invoked it. A field the user can't read is never even loaded into the object. Values a client sends for fields it could never read are rejected. Agents act on behalf of a user and inherit that user's scope.</p></div>
+</div>
+<p>For a business application this is the largest difference in day-to-day work. With EF, authorization is something you design and build. With MJ, it comes from metadata.</p>
+</section>
+
+<section class="chapter" id="caching"><h2><span class="ch-num">09</span>Caching</h2>
+<p><strong>EF Core has no built-in data cache.</strong> It caches query <em>translations</em> and offers compiled queries and compiled models, but every query still goes to the database. The usual add-on is the third-party EFCoreSecondLevelCacheInterceptor, which invalidates by table when it sees a write. Its documentation notes that bulk <code>ExecuteUpdate</code>/<code>ExecuteDelete</code> bypass the interceptors, so they don't invalidate. Client-side caching is a separate layer you build.</p>
+<p><strong>MJ's cache is part of the ORM</strong> and is kept current by events:</p>
+<figure>
+<svg viewBox="0 0 900 270" role="img" aria-label="MJ three-tier cache: browser L1 engines and L2 IndexedDB, a lightweight freshness check to server L3 cache, Redis pub/sub between servers, and database">
+  <rect x="10" y="20" width="260" height="230" rx="14" class="box"/>
+  <text x="30" y="46" font-weight="700" font-size="14">Browser</text>
+  <rect x="30" y="62" width="220" height="62" rx="10" class="box-mj"/><text x="140" y="88" text-anchor="middle" font-size="14">L1 · BaseEngine arrays</text><text x="140" y="108" text-anchor="middle" font-size="11" class="muted mono">instant, reactive (RxJS)</text>
+  <rect x="30" y="140" width="220" height="62" rx="10" class="box-mj"/><text x="140" y="166" text-anchor="middle" font-size="14">L2 · IndexedDB</text><text x="140" y="186" text-anchor="middle" font-size="11" class="muted mono">survives page refresh</text>
+  <text x="140" y="232" text-anchor="middle" font-size="11" class="muted mono">validates before trusting</text>
+
+  <rect x="330" y="20" width="250" height="230" rx="14" class="box"/>
+  <text x="350" y="46" font-weight="700" font-size="14">MJAPI servers</text>
+  <rect x="350" y="62" width="210" height="62" rx="10" class="box-mj"/><text x="455" y="88" text-anchor="middle" font-size="14">L3 · server cache</text><text x="455" y="108" text-anchor="middle" font-size="11" class="muted mono">Redis or in-memory</text>
+  <rect x="350" y="140" width="210" height="62" rx="10" class="box-v"/><text x="455" y="166" text-anchor="middle" font-size="14">Save / delete events</text><text x="455" y="186" text-anchor="middle" font-size="11" class="muted mono">upsert in place, differential</text>
+  <text x="455" y="232" text-anchor="middle" font-size="11" class="muted mono">trusts cache completely</text>
+
+  <rect x="640" y="62" width="120" height="62" rx="10" class="box"/><text x="700" y="98" text-anchor="middle" font-size="14">Database</text>
+  <rect x="640" y="150" width="120" height="52" rx="10" class="box-v"/><text x="700" y="181" text-anchor="middle" font-size="14">Redis pub/sub</text>
+  <rect x="790" y="150" width="100" height="52" rx="10" class="box"/><text x="840" y="174" text-anchor="middle" font-size="12">Other</text><text x="840" y="190" text-anchor="middle" font-size="12">servers</text>
+
+  <path d="M250 93 H346" class="ln-mj" marker-end="url(#b-mj)"/><text x="298" y="84" text-anchor="middle" font-size="10" class="muted mono">fingerprint</text>
+  <path d="M346 108 H254" class="ln-mj ln-dash" marker-end="url(#b-mj)"/><text x="298" y="124" text-anchor="middle" font-size="10" class="muted mono">fresh? / delta</text>
+  <path d="M560 93 H636" class="ln" marker-end="url(#b-g)"/><text x="598" y="84" text-anchor="middle" font-size="10" class="muted mono">on miss</text>
+  <path d="M560 176 H636" class="ln" marker-end="url(#b-g)"/>
+  <path d="M760 176 H786" class="ln" marker-end="url(#b-g)"/>
+  <path d="M346 171 C300 171 300 171 254 171" class="ln-mj ln-dash" marker-end="url(#b-mj)"/><text x="298" y="164" text-anchor="middle" font-size="10" class="muted mono">push</text>
+  <defs>
+    <marker id="b-mj" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="var(--teal)"/></marker>
+    <marker id="b-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="var(--muted)"/></marker>
+  </defs>
+</svg>
+<figcaption>On a cache hit the server makes zero database queries, because every write through <code>BaseEntity</code> updates the cache in place and Redis passes the change to the other servers. The browser checks freshness with a fingerprint (latest update time and row count) and receives only what changed.</figcaption>
+</figure>
+<p>There is a caveat. The server can trust its cache completely only because writes go through <code>BaseEntity</code>. Writes from outside MJ (another application, hand-run SQL) need MJ's external change detection to invalidate the cache. EF's approach of querying the database every time has no such dependency.</p>
+</section>
+
+<section class="chapter" id="wire"><h2><span class="ch-num">10</span>One object model across the wire</h2>
+<p>An EF entity lives inside the .NET process that holds the database connection. To use the data in a browser you write an API, DTOs and a client model, then keep the three in sync.</p>
+<p>An MJ entity is the same class everywhere. In the browser, <code>BaseEntity</code> talks to the server through <code>GraphQLDataProvider</code>; on the server, it talks to the database through the SQL Server or PostgreSQL provider. Validation, dirty tracking, related-record collections, IS-A chains and events behave the same in both places, and a composite save from the browser travels as one call. EF has no equivalent of this, because it was never designed to run on the client.</p>
+</section>
+
+<section class="chapter" id="ai"><h2><span class="ch-num">11</span>AI &amp; search: converging from different sides</h2>
+<p>EF 11 adds SQL Server 2025 vector search to LINQ: <code>VectorSearch()</code> with DiskANN vector indexes created through migrations (experimental in SQL Server, so the APIs may change), vector columns left out of <code>SELECT</code>s unless asked for, full-text catalogs and indexes in the model, and hybrid search that combines full-text and vector results with reciprocal rank fusion through <code>FullJoin</code>.</p>
+<p>MJ has had entity embeddings, vector search and reciprocal rank fusion for a while. The difference is what sits above them: agents, prompts, the Canon of approved queries and documentation, and model-agnostic orchestration. EF ends at the data-access layer. MJ continues up to an AI layer that reads the same metadata the ORM runs on.</p>
+</section>
+
+<section class="chapter" id="performance"><h2><span class="ch-num">12</span>Performance: a hypothesis, not yet a benchmark</h2>
+<p>We think MJ delivers better <em>full-stack</em> performance for the applications it's built for, because of its caching. We haven't measured it yet, so the scorecard below is reasoning, labeled as such. A reproducible benchmark is planned (§13), and its results will replace this section.</p>
+<div class="table-wrap wide"><table>
+<thead><tr><th>Workload</th><th>Expected edge</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td class="k">Repeated reads of reference data</td><td><span class="tag t-mj">MJ, by a lot</span></td><td>Served from cache with zero database queries on the server, and often with no round trip in the browser. EF goes to the database every time unless you add a cache.</td></tr>
+<tr><td class="k">Revisiting list views</td><td><span class="tag t-mj">MJ</span></td><td>A fingerprint check confirms the cache is fresh without resending rows, and changes arrive as differences.</td></tr>
+<tr><td class="k">Many servers, many browsers, mostly reads</td><td><span class="tag t-mj">MJ</span></td><td>Redis pub/sub keeps every server and connected browser current. In an EF stack that's infrastructure you build.</td></tr>
+<tr><td class="k">First read of a large result</td><td><span class="tag t-ef">EF</span></td><td>.NET's no-tracking materialization is very fast. MJ adds a Node process, GraphQL JSON and object hydration (narrowed by plain-row results and lazy hydration).</td></tr>
+<tr><td class="k">Single-record save latency</td><td><span class="tag t-ef">EF</span></td><td>EF runs one <code>UPDATE</code> of the changed columns. MJ adds a conflict read, a stored procedure that returns the full row, an audit row and cache invalidation. That's more work, but every part of it does something useful.</td></tr>
+<tr><td class="k">Bulk writes</td><td><span class="tag t-ef">EF, by a lot</span></td><td>Statement batching and set-based <code>ExecuteUpdate</code>/<code>ExecuteDelete</code>, compared with MJ's per-record procedure calls (transaction groups reduce round trips but not the work per record).</td></tr>
+<tr><td class="k">Cold start</td><td><span class="tag t-dep">Depends</span></td><td>EF can ship a precompiled model. MJ loads metadata and warms its engines, which costs time at startup and saves it on every request after.</td></tr>
+</tbody></table></div>
+<p class="pull">The typical association application reads data far more often than it writes it. MJ should win there on user-perceived latency and database load, mostly by skipping work entirely. On bulk loads, ETL-style jobs and cold scans of large results, EF should win.</p>
+<p>A fair benchmark compares like with like: MJ against ASP.NET Core with EF Core 11, a hand-built API and a typical client cache. It should run on the same database and schema, with an EF setup that a .NET specialist has reviewed and tuned (pooled contexts, compiled queries, no-tracking reads, with and without a second-level cache).</p>
+</section>
+
+<section class="chapter" id="roadmap"><h2><span class="ch-num">13</span>Where EF is ahead, and what MJ is doing about it</h2>
+<p>EF is ahead in maturity, provider breadth, bulk writes and compile-time-checked queries. MJ deliberately skips the last of those (no LINQ), but this comparison found three gaps worth closing. They're written up as an implementation plan in the repository: <a href="https://github.com/MemberJunction/MJ/blob/next/plans/orm-improvements-ef-comparison.md"><code>plans/orm-improvements-ef-comparison.md</code></a>.</p>
+<div class="cards">
+<div class="card mj"><h4>1 · Concurrency checks for every save</h4><p>Move the field-level conflict check from the API layer into the data provider, so server-side saves by agents, actions and jobs get it too. Every update sends only changed columns. The current row is read under an update lock inside the save's transaction, which closes the race. Rollout starts in log-only mode.</p></div>
+<div class="card mj"><h4>2 · Structured filters in <code>RunView</code></h4><p>Accept <code>CompositeFilter</code> JSON, compiled to <em>parameterized</em> SQL and type-checked through a generic <code>FilterOf&lt;T&gt;()</code> builder. The same filter runs against engine caches in memory and keeps cached results current when records change.</p></div>
+<div class="card mj"><h4>3 · Typed query wrappers</h4><p>CodeGen emits typed parameter and row interfaces for approved, reusable queries, using the types the MJ Query Language parser already infers. The wrappers call <code>RunQuery</code>, so they work in the browser and on the server, and a signature check catches queries that changed after code generation.</p></div>
+</div>
+</section>
+
+<section class="chapter" id="choosing"><h2><span class="ch-num">14</span>Choosing</h2>
+<div class="cards">
+<div class="card ef"><h4>Choose EF Core when…</h4><ul><li>Your team and stack are .NET.</li><li>You want compile-time-checked queries and code-first modeling.</li><li>The workload is write-heavy, bulk or ETL-like.</li><li>You need a provider MJ doesn't support (SQLite, Cosmos DB, MySQL, Oracle) for reads and writes.</li><li>You're building the API, authorization and client layers yourself anyway.</li></ul></div>
+<div class="card mj"><h4>Choose MemberJunction when…</h4><ul><li>You want one object model from the browser to the database.</li><li>Security, audit and caching should come from metadata rather than be built per app.</li><li>The database outlives the application, or you're working against one you didn't design.</li><li>AI agents need to read, query and reason over the data model at runtime.</li><li>The workload is a business application that reads far more than it writes.</li></ul></div>
+</div>
+<p>They also work together: a .NET service can use EF for a write-heavy pipeline against tables that MJ also manages, reads and secures for everyone else. In that case, use MJ's external change detection so its caches see the writes EF makes.</p>
+</section>
+
+<footer>
+<p><strong>Sources.</strong> EF Core facts are as of EF Core 11's release with .NET 11 (November 2026). MJ facts are from the MemberJunction repository on the same date.</p>
+<ol>
+<li><a href="https://learn.microsoft.com/en-us/ef/core/what-is-new/ef-core-11.0/whatsnew">What's New in EF Core 11 — Microsoft Learn</a></li>
+<li><a href="https://dotnet.microsoft.com/platform/support/policy/dotnet-core">.NET and .NET Core support policy</a></li>
+<li><a href="https://dotnet.microsoft.com/en-us/conf/2026/agenda/BRK032">.NET Conf 2026 — EF Core 11: Vector Search, Smarter LINQ, and a Friendlier dotnet ef</a></li>
+<li><a href="https://github.com/VahidN/EFCoreSecondLevelCacheInterceptor">EFCoreSecondLevelCacheInterceptor (third-party EF data cache)</a></li>
+<li>MemberJunction guides: <a href="https://github.com/MemberJunction/MJ/blob/next/guides/MJ_QUERY_LANGUAGE.md">MJ Query Language</a>, <a href="https://github.com/MemberJunction/MJ/blob/next/guides/TRANSACTIONS_AND_BATCHING_GUIDE.md">Transactions &amp; Batching</a>, <a href="https://github.com/MemberJunction/MJ/blob/next/guides/CACHING_AND_PUBSUB_GUIDE.md">Caching &amp; Pub/Sub</a>, <a href="https://github.com/MemberJunction/MJ/blob/next/guides/FRAMEWORK_COMPARISON.md">Framework Comparison</a></li>
+</ol>
+<p>Found something unfair to either side? Open an issue or PR against <code>docs-site/public/mj-vs-ef-core/index.html</code>.</p>
+</footer>
+    </main>
+  </div>
+</div>
+<script>
+// Highlight the contents-rail entry for the section in view.
+(function () {
+  var links = document.querySelectorAll('.rail a');
+  if (!('IntersectionObserver' in window) || links.length === 0) return;
+  var byId = {};
+  links.forEach(function (a) { byId[a.getAttribute('href').slice(1)] = a; });
+  var obs = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (e.isIntersecting) {
+        links.forEach(function (a) { a.classList.remove('active'); });
+        var a = byId[e.target.id]; if (a) a.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  document.querySelectorAll('.chapter').forEach(function (s) { obs.observe(s); });
+})();
+</script>
+</body>
+</html>
