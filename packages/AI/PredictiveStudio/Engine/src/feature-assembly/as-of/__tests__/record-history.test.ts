@@ -104,6 +104,29 @@ describe('BuildEntityHistory — rows at one instant', () => {
       expect(h.CreatedAt('P1')).toEqual(new Date(t));
     }
   });
+  /** Every input order of `rows`. */
+  const permutations = (rows: readonly RecordChangeRow[]): RecordChangeRow[][] =>
+    rows.length <= 1 ? [[...rows]] : rows.flatMap((r, i) => permutations([...rows.slice(0, i), ...rows.slice(i + 1)]).map((rest) => [r, ...rest]));
+  it('orders a Delete before a Create at an instant the record continues after, so a re-creation later hard-deleted replays its second incarnation, whatever the IDs and input order', () => {
+    const mid = '2021-07-01T00:00:00Z';
+    for (const [d, c] of [['aa', 'zz'], ['zz', 'aa']]) {
+      const rows = [
+        rc('c0', 'P1', 'Create', '2020-01-01T00:00:00Z', { Status: 'Active' }),
+        rc(d, 'P1', 'Delete', mid, { Status: 'Active' }),
+        rc(c, 'P1', 'Create', mid, { Status: 'Lapsed' }),
+        rc('d9', 'P1', 'Delete', '2024-01-01T00:00:00Z', { Status: 'Lapsed' }),
+      ];
+      for (const order of permutations(rows)) {
+        const h = RecordHistory.BuildEntityHistory(PEOPLE, order, new Map(), ['Status'], policy, now);
+        expect(h.ValueAt('P1', 'Status', new Date('2023-06-01T00:00:00Z'))).toMatchObject({ Status: 'value', Value: 'Lapsed', ChangeID: c });
+        expect(h.Coverage.continuity).toMatchObject({ recordsReplayed: 1, recordsMismatched: 0 });
+        expect(h.DeletedRecordAt('P1', new Date('2023-06-01T00:00:00Z'))).toMatchObject({ Status: 'held', ChangeID: 'd9' });
+        expect(h.ValueAt('P1', 'Status', new Date('2024-06-01T00:00:00Z'))).toEqual({ Status: 'uncovered', Reason: 'deleted' });
+        expect(h.DeletedRecordAt('P1', new Date('2024-06-01T00:00:00Z'))).toMatchObject({ Status: 'deleted', ChangeID: 'd9' });
+        expect([...RecordHistory.KeysDeletedByHistory(order)]).toEqual(['p1']);
+      }
+    }
+  });
 });
 
 /** The fields of a saved Record Change the snapshot writer sets. */

@@ -1028,6 +1028,24 @@ describe('AsOfFeatureAssembler — a windowed aggregate over hard-deleted child 
       }
     });
   }
+  it('counts a child deleted and re-created at one instant, then hard-deleted later, as standing between the two (either ID order)', async () => {
+    const three: AssemblyRowRef[] = [...owners.slice(0, 1),
+      { RowID: 'y2', EntityKey: 'P1', DecisionDate: new Date('2023-06-01T00:00:00Z'), Period: null },
+      { RowID: 'y3', EntityKey: 'P1', DecisionDate: new Date('2024-06-01T00:00:00Z'), Period: null }];
+    for (const [deleteId, createId] of [['aa', 'zz'], ['zz', 'aa']]) {
+      const midInstant = { Events: [
+        rc('ec-1', 'e1', 'Create', '2021-09-01T00:00:00Z', e1),
+        rc('ec-2', 'e2', 'Create', '2022-03-01T00:00:00Z', e2),
+        rc(deleteId, 'e2', 'Delete', '2023-01-01T00:00:00Z', e2),
+        rc(createId, 'e2', 'Create', '2023-01-01T00:00:00Z', e2),
+        rc('ed-2', 'e2', 'Delete', '2024-01-01T00:00:00Z', e2),
+      ] };
+      for (const onUncoveredRow of ['refuse', 'exclude-and-count'] as const) {
+        const out = await new AsOfFeatureAssembler().Assemble(input([count], { Rows: three, Tables: { ...data, Years: [...data.Years, { ID: 'y3', PersonID: 'P1' }] }, Changes: midInstant, Unit: { ...unit, history: { onUncoveredRow, externalSourceRows: 'ineligible' } } }));
+        expect(out.Status === 'assembled' ? [out.Rows.map((r) => [r.RowID, r.Values[0]]), out.UncoveredRowsExcluded] : out).toEqual([[['y1', 2], ['y2', 2], ['y3', 1]], []]);
+      }
+    }
+  });
   for (const ownerNow of ['P1', 'P9']) {
     it(`counts a child deleted and re-created after the decision day as the incarnation that stood then, from the Delete row that ended it (re-created under ${ownerNow})`, async () => {
       // e2 stood from March 2022 dated 2022-03-01, was deleted in January 2023 and re-created in February dated 2025-01-01.
