@@ -183,6 +183,13 @@ describe('RunViewRecordHistoryReader', () => {
       const h = RecordHistory.BuildEntityHistory(PEOPLE, [rc('u1', 'P1', 'Update', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' }, ['Status']), rc('d1', 'P1', 'Delete', '2025-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' })], new Map(), ['Status'], policy, now);
       expect(h.Coverage.historyStart).toBeNull();
     });
+    it('leaves the history start null when a requested hard-deleted key is unanchored beside an anchored key with a current row', () => {
+      const anchored = rc('c1', 'A', 'Create', '2020-01-01T00:00:00Z', { ID: 'A', Status: 'Active' });
+      const unanchored = [rc('u2', 'B', 'Update', '2021-01-01T00:00:00Z', { ID: 'B', Status: 'Active' }, ['Status']), rc('d2', 'B', 'Delete', '2025-01-01T00:00:00Z', { ID: 'B', Status: 'Active' })];
+      const h = RecordHistory.BuildEntityHistory(PEOPLE, [anchored, ...unanchored], new Map([['a', { ID: 'A', Status: 'Active' }]]), ['Status'], policy, now);
+      expect(h.DeletedRecordAt('B', now)).toMatchObject({ Status: 'deleted', ChangeID: 'd2' });
+      expect(h.Coverage.historyStart).toBeNull();
+    });
     it('dates creation only from a history whose first row is the Create: a re-created record keeps its first creation, and a Delete-first history has none', () => {
       const recreated = [rc('c1', 'P1', 'Create', '2019-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' }), rc('d1', 'P1', 'Delete', '2020-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' }), rc('c2', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' })];
       expect(RecordHistory.BuildEntityHistory(PEOPLE, recreated, new Map([['p1', { ID: 'P1', Status: 'Lapsed' }]]), ['Status'], policy, now).CreatedAt('P1')).toEqual(new Date('2019-01-01T00:00:00Z'));
