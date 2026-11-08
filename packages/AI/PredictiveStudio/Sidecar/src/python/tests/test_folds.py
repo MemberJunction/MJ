@@ -3,6 +3,8 @@ stratified folds keep the class balance, and the unstratified and grouped assign
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
 import numpy.typing as npt
 import pytest
@@ -157,3 +159,21 @@ def test_blocked_time_reproduces_the_reference_grouped_time_blocked_folds() -> N
         ref = _reference_blocked(periods, keys, 5, seed, gap)
         assert all(np.array_equal(a, m.train) and np.array_equal(b, m.valid) for (a, b), m in zip(ref, mine))
         assert all(m.repeat == 0 for m in mine)
+
+
+def test_fold_leakage_matrix_names_which_builders_keep_a_group_together() -> None:
+    """Executes every fold builder over one panel (10 households x periods 0 and 5 x 2 rows each) and records which
+    ones let a group's rows fall on both sides of a fold. Core's `inner-validation-grouping-matrix.test.ts` refuses, on
+    a grouped unit, exactly the builders this test shows leaking (stratified; blocked-time without a key)."""
+    groups = [f"h{h}" for h in range(10) for _ in (0, 5) for _ in range(2)]
+    periods = np.array([p for _ in range(10) for p in (0, 5) for _ in range(2)], dtype=np.int64)
+    y = np.array([i % 2 for i in range(len(groups))], dtype=np.int64)
+    matrix: list[tuple[str, Callable[[], list[F.Fold]], bool]] = [
+        ("repeated_stratified", lambda: F.repeated_stratified(y, 5, 1, 42, stratify=True), True),
+        ("grouped", lambda: F.grouped(groups, 5, 1, 42), False),
+        ("blocked_time without groups", lambda: F.blocked_time(periods, None, 5, 1, 42), True),
+        ("blocked_time with groups", lambda: F.blocked_time(periods, groups, 5, 1, 42), False),
+    ]
+    for name, build, leaks_expected in matrix:
+        leaked = any({groups[i] for i in f.train} & {groups[i] for i in f.valid} for f in build())
+        assert leaked == leaks_expected, f"{name}: leaked={leaked}, expected {leaks_expected}"
