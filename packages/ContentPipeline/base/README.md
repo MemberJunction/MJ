@@ -86,6 +86,10 @@ future Record Set Processing → Work Queue bridge is an adapter, not a change t
   by key and chosen by the extractor cascade.
 - **Classifiers** (`tag/BaseContentClassifier.ts`): turn extracted text and an active taxonomy into tag
   observations and summary proposals, registered by key (`ManagedPrompt` by default).
+- **Graph overlay & concept synthesis** (`graph/`):
+  - `GraphOverlay.types.ts` — `ContentSourceGraphOverlayConfig`, `ResolvedGraphOverlayConfig`, `ResolveGraphOverlayConfig`, `GraphTypeDescriptor` (`MJ: Graph Types` with `IsCanon` & `Rank`), `GraphConceptTypeDescriptor` (`MJ: Graph Concept Types` with `Rank`), `DefaultConceptTypeRanks`, `GetConceptTypeRank`, `AuthorityTierPrecedence`, `GetAuthorityTierRank`, `SemanticGraphType`, `GraphConceptType`, `ConceptTaxonomyMode`, and `GraphGroundingMode`.
+  - `ConceptSeedClustering.ts` — deterministic pre-clustering (`ClusterContentIntoConceptSeeds`, `ExtractLeafTopicFromHeading`, `ScoreConceptNameSimilarity`, `InferConceptTypeFromSignals`) that groups segmented chunks, heading breadcrumbs, and tags across one or more `Content Sources` by topic and `AuthorityTier`, resolves ranked `GraphConceptType` IDs (`Policy` [10], `Metric` [20], `Process` [30], `Role` [40], `Domain` [50], `Term` [60]), aligns with `SchemaGroundingTarget`s (`MJ: Entities`, `MJ: Queries`, `MJ: Entity Alternate Base Views`, `MJ: AI Skills`, `MJ: Actions`), and flags numeric/currency threshold conflicts before invoking a synthesizer.
+  - `BaseConceptSynthesizer.ts` — pluggable synthesizer contract (`SynthesizeCluster(request)`) producing `SynthesizedGraphConcept`s and `SynthesizedGraphEdge`s (`SourcedFrom`, `Mentions`, `Broader Than`, `Describes`, `Defines`, `Measures`, `Implements`, `Contradicts`). See the **[Canon-First Methodology & Semantic Graphs Guide](../../../guides/CANON_AND_SEMANTIC_GRAPHS_GUIDE.md)**.
 - **Detection helpers** (`extract/`): byte signatures and file-type resolution over rules loaded from
   `MJ: Content File Types`, plus the fail-closed object-key template for durable copies.
 - **Tuning** (`PipelineTuning`): operational knobs a run may set under `Options.Tuning`.

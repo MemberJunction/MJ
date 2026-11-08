@@ -1352,11 +1352,15 @@ export class GraphQLAIClient {
     public async RunAutotagPipeline(options?: {
         contentSourceIDs?: string[];
         forceReprocess?: boolean;
+        pipelineRunID?: string;
     }): Promise<AutotagPipelineResult> {
         try {
+            const includeRunID = Boolean(options?.pipelineRunID);
+            const runIDVar = includeRunID ? ', $pipelineRunID: String' : '';
+            const runIDArg = includeRunID ? ', pipelineRunID: $pipelineRunID' : '';
             const mutation = gql`
-                mutation RunAutotagPipeline($contentSourceIDs: [String!], $forceReprocess: Boolean) {
-                    RunAutotagPipeline(contentSourceIDs: $contentSourceIDs, forceReprocess: $forceReprocess) {
+                mutation RunAutotagPipeline($contentSourceIDs: [String!], $forceReprocess: Boolean${runIDVar}) {
+                    RunAutotagPipeline(contentSourceIDs: $contentSourceIDs, forceReprocess: $forceReprocess${runIDArg}) {
                         Success
                         Status
                         ErrorMessage
@@ -1371,6 +1375,9 @@ export class GraphQLAIClient {
             }
             if (options?.forceReprocess) {
                 variables['forceReprocess'] = true;
+            }
+            if (options?.pipelineRunID) {
+                variables['pipelineRunID'] = options.pipelineRunID;
             }
 
             const result = await this._dataProvider.ExecuteGQL(mutation, variables);
@@ -1509,6 +1516,40 @@ export class GraphQLAIClient {
             const e = error as Error;
             LogError('GraphQLAIClient.RejectTagSuggestion failed', undefined, e);
             return { Success: false, ErrorMessage: e.message || 'Unknown error' };
+        }
+    }
+
+    /**
+     * Merge one or more source tags into a surviving tag via TagGovernanceEngine.MergeTags.
+     * Re-points ContentItemTag and TaggedItem rows, re-parents direct child tags,
+     * carries synonyms, marks source tags Status = 'Merged', and writes audit logs.
+     */
+    public async MergeTags(params: {
+        sourceTagIDs: string[];
+        survivingTagID: string;
+    }): Promise<MergeTagsResult> {
+        try {
+            const mutation = gql`
+                mutation MergeTags($sourceTagIDs: [String!]!, $survivingTagID: String!) {
+                    MergeTags(sourceTagIDs: $sourceTagIDs, survivingTagID: $survivingTagID) {
+                        Success
+                        ItemsMoved
+                        TaggedItemsMoved
+                        ErrorMessage
+                    }
+                }
+            `;
+            const variables: Record<string, unknown> = {
+                sourceTagIDs: params.sourceTagIDs,
+                survivingTagID: params.survivingTagID,
+            };
+            const result = await this._dataProvider.ExecuteGQL(mutation, variables);
+            if (!result?.MergeTags) throw new Error('Invalid response from server');
+            return result.MergeTags as MergeTagsResult;
+        } catch (error: unknown) {
+            const e = error as Error;
+            LogError('GraphQLAIClient.MergeTags failed', undefined, e);
+            return { Success: false, ItemsMoved: 0, TaggedItemsMoved: 0, ErrorMessage: e.message || 'Unknown error' };
         }
     }
 
@@ -1831,6 +1872,14 @@ export interface PromoteSuggestionResult {
 /** Result from RejectTagSuggestion. */
 export interface RejectSuggestionResult {
     Success: boolean;
+    ErrorMessage?: string;
+}
+
+/** Result from MergeTags. */
+export interface MergeTagsResult {
+    Success: boolean;
+    ItemsMoved: number;
+    TaggedItemsMoved: number;
     ErrorMessage?: string;
 }
 

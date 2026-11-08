@@ -299,7 +299,7 @@ Full 25-test suite: approximately **$10-12** per run. Parallel execution (4 work
 ### Regression Troubleshooting
 
 **"Loading workspace..." hangs after login**
-1. Check MJAPI healthcheck: `curl http://localhost:14000/healthcheck`
+1. Check MJAPI healthcheck: `curl http://localhost:14000/healthcheck` (a `503` with a `phase` means it is still starting; `/healthcheck/live` answers `200` as soon as the port is bound)
 2. Check nginx proxy: `curl -X POST http://localhost:4200/api/ -H 'Content-Type: application/json' -d '{"query":"{ __schema { queryType { name } } }"}'` (should return 401)
 3. Verify `GRAPHQL_URI` is absolute (`http://localhost:4200/api/`, not `/api/`)
 4. Check nginx config: `docker exec <explorer> cat /etc/nginx/conf.d/default.conf`

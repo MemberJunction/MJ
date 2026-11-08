@@ -328,6 +328,12 @@ report a working filter as a failure to gate.
 > prevent. If you have `ActionFilter` rows configured, actions that were firing despite them will
 > stop — which is what the rows always asked for.
 
+**Two authoring surfaces write these rows for you.** A workflow's `EntityEvent` trigger
+(`WorkflowSpec.triggers[].filter`) and a Record Process's `OnChangeFilter` both compile to an
+`ActionFilter` bound through `EntityActionFilter`, in this same language. See "Triggers: when a
+workflow runs" in the [Workflows and Task Graphs Guide](../../../guides/WORKFLOW_AND_TASK_GRAPH_GUIDE.md)
+and §7 of the [Record Set Processing Guide](../../../guides/RECORD_SET_PROCESSING_GUIDE.md).
+
 ### Durable dispatch — `After*` work that survives a restart
 
 `After*` entity actions are dispatched fire-and-forget so a user's save is not held open by work that

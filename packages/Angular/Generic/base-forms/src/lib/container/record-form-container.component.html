@@ -19,6 +19,8 @@
   [DirtyFieldNames]="EffectiveDirtyFieldNames"
   [ListCount]="ListCount"
   [TagCount]="TagCount"
+  [CommentsOpen]="ShowRecordComments"
+  [CommentCount]="CommentCount"
   [LinksOpen]="ShowRecordLinks"
   [LinkCount]="LinkCount"
   [ConflictCount]="ConflictCount"
@@ -40,6 +42,7 @@
   [ChromeLayout]="ChromeLayout"
   [Variants]="EffectiveVariants"
   [CurrentVariantID]="EffectiveCurrentVariantID"
+  [FormModeSwitch]="EffectiveFormModeSwitch"
   [RegisteredItems]="EffectiveRegisteredToolbarItems"
   [ItemOverrides]="EffectiveToolbarItemOverrides"
   [FormComponent]="fc"
@@ -69,6 +72,7 @@
   (ResetSectionOrderRequested)="OnResetSectionOrder()"
   (ManageSectionsRequested)="OnManageSections()"
   (TagsPanelToggled)="OnTagsPanelToggled()"
+  (CommentsRequest)="OnToggleRecordComments()"
   (LinksRequest)="OnToggleRecordLinks()"
   (AttachmentsPanelToggled)="OnAttachmentsPanelToggled()"
   (AskAIRequested)="OnAskAIRequested()"
@@ -229,12 +233,51 @@
          [class.mj-forms-layout--more]="IsChromeMoreActive">
       @if (ShowChromeRail) {
         <nav class="mj-forms-chrome-rail"
-             [class.is-collapsed]="ChromeRailCollapsed"
+             [class.is-collapsed]="!IsPhoneRail && ChromeRailCollapsed"
              [class.is-resizing]="RailResizing"
-             [style.width.px]="ChromeRailCollapsed ? null : ChromeRailWidthPx"
-             [attr.aria-expanded]="!ChromeRailCollapsed"
+             [style.width.px]="IsPhoneRail || ChromeRailCollapsed ? null : ChromeRailWidthPx"
+             [attr.aria-expanded]="IsPhoneRail ? null : !ChromeRailCollapsed"
              aria-label="Form sections">
-          @if (ChromeRailCollapsed) {
+          @if (IsPhoneRail) {
+            <button type="button"
+                    class="mj-forms-section-picker"
+                    aria-haspopup="dialog"
+                    [attr.aria-expanded]="SectionSheetOpen"
+                    [attr.aria-label]="SectionPickerLabel"
+                    (click)="OpenSectionSheet()">
+              <i [class]="ChromeActiveIcon" aria-hidden="true"></i>
+              <span class="mj-forms-section-picker-title">{{ ChromeActiveTitle }}</span>
+              @if (ChromeActiveGroup; as activeGroup) {
+                @let activeIndicators = ChromeGroupIndicators(activeGroup);
+                @if (activeIndicators.DirtyCount > 0) {
+                  <span class="mj-forms-chrome-rail-dirty"
+                        role="img"
+                        [title]="RailDirtyTitle(activeIndicators.DirtyCount, activeGroup.Title)"
+                        [attr.aria-label]="RailDirtyTitle(activeIndicators.DirtyCount, activeGroup.Title)"></span>
+                }
+                @if (activeIndicators.ErrorCount > 0) {
+                  <span class="mj-forms-chrome-rail-error"
+                        role="img"
+                        [title]="RailErrorTitle(activeIndicators.ErrorCount, activeGroup.Title)"
+                        [attr.aria-label]="RailErrorTitle(activeIndicators.ErrorCount, activeGroup.Title)">
+                    <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>{{ activeIndicators.ErrorCount }}
+                  </span>
+                } @else if (activeIndicators.WarningCount > 0) {
+                  <span class="mj-forms-chrome-rail-warning"
+                        role="img"
+                        [title]="RailWarningTitle(activeIndicators.WarningCount, activeGroup.Title)"
+                        [attr.aria-label]="RailWarningTitle(activeIndicators.WarningCount, activeGroup.Title)">
+                    <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>{{ activeIndicators.WarningCount }}
+                  </span>
+                }
+                @let activeRowCount = ChromeGroupRowCount(activeGroup);
+                @if (activeRowCount != null && activeRowCount > 0) {
+                  <span class="mj-forms-chrome-rail-count">{{ activeRowCount }}</span>
+                }
+              }
+              <i class="fa-solid fa-chevron-down mj-forms-section-picker-chevron" aria-hidden="true"></i>
+            </button>
+          } @else if (ChromeRailCollapsed) {
             <button type="button"
                     class="mj-forms-chrome-rail-spine"
                     (click)="OnChromeRailExpand()"
@@ -261,6 +304,14 @@
                       role="img"
                       [title]="RailDirtyTitle(formIndicators.DirtyCount, 'this record')"
                       [attr.aria-label]="RailDirtyTitle(formIndicators.DirtyCount, 'this record')"></span>
+              }
+              @if ((formIndicators.CommentCount ?? 0) > 0) {
+                <span class="mj-forms-chrome-rail-comments is-spine"
+                      role="img"
+                      [title]="RailCommentTitle(formIndicators.CommentCount!, 'this record')"
+                      [attr.aria-label]="RailCommentTitle(formIndicators.CommentCount!, 'this record')">
+                  <i class="fa-regular fa-comment-dots" aria-hidden="true"></i>{{ formIndicators.CommentCount }}
+                </span>
               }
             </button>
           } @else {
@@ -350,6 +401,14 @@
               @if (rowCount != null && rowCount > 0) {
                 <span class="mj-forms-chrome-rail-count">{{ rowCount }}</span>
               }
+              @if ((groupIndicators.CommentCount ?? 0) > 0) {
+                <span class="mj-forms-chrome-rail-comments"
+                      role="img"
+                      [title]="RailCommentTitle(groupIndicators.CommentCount!, group.Title)"
+                      [attr.aria-label]="RailCommentTitle(groupIndicators.CommentCount!, group.Title)">
+                  <i class="fa-regular fa-comment-dots" aria-hidden="true"></i>{{ groupIndicators.CommentCount }}
+                </span>
+              }
             </div>
           }
           @if (ChromeMoreFolder; as more) {
@@ -391,6 +450,14 @@
                 @let moreRowCount = ChromeMoreRowCount;
                 @if (moreRowCount != null && moreRowCount > 0) {
                   <span class="mj-forms-chrome-rail-count" title="Rows across the sections in More">{{ moreRowCount }}</span>
+                }
+                @if ((moreIndicators.CommentCount ?? 0) > 0) {
+                  <span class="mj-forms-chrome-rail-comments"
+                        role="img"
+                        [title]="RailCommentTitle(moreIndicators.CommentCount!, more.Title)"
+                        [attr.aria-label]="RailCommentTitle(moreIndicators.CommentCount!, more.Title)">
+                    <i class="fa-regular fa-comment-dots" aria-hidden="true"></i>{{ moreIndicators.CommentCount }}
+                  </span>
                 }
               }
               <i class="fa-solid mj-forms-chrome-rail-more-toggle"
@@ -454,6 +521,14 @@
                   @if (childCount != null && childCount > 0) {
                     <span class="mj-forms-chrome-rail-count">{{ childCount }}</span>
                   }
+                  @if ((childIndicators.CommentCount ?? 0) > 0) {
+                    <span class="mj-forms-chrome-rail-comments"
+                          role="img"
+                          [title]="RailCommentTitle(childIndicators.CommentCount!, child.Title)"
+                          [attr.aria-label]="RailCommentTitle(childIndicators.CommentCount!, child.Title)">
+                      <i class="fa-regular fa-comment-dots" aria-hidden="true"></i>{{ childIndicators.CommentCount }}
+                    </span>
+                  }
                 </div>
               }
               </div>
@@ -478,6 +553,66 @@
           </div>
           }
         </nav>
+        @if (IsPhoneRail) {
+          <!-- Phone: all sections (first-class then More children) in one vertical, searchable sheet. -->
+          <mj-bottom-sheet [Visible]="SectionSheetOpen"
+                           (VisibleChange)="OnSectionSheetVisibleChange($event)"
+                           Title="Sections">
+            <div class="mj-forms-section-sheet">
+              <input type="text"
+                     class="mj-input mj-forms-section-sheet-search"
+                     [value]="EffectiveSearchFilter"
+                     (input)="OnSectionSheetSearch($event)"
+                     placeholder="Search sections..."
+                     aria-label="Search sections">
+              <div class="mj-forms-section-sheet-list" role="list">
+                @for (group of ChromeFirstClassGroups; track group.Key) {
+                  <ng-container *ngTemplateOutlet="sectionSheetRow; context: { $implicit: group }"></ng-container>
+                }
+                @if (ChromeMoreFolder; as more) {
+                  <div class="mj-forms-section-sheet-heading">{{ more.Title }}</div>
+                  @for (child of ChromeMoreItems; track child.Key) {
+                    <ng-container *ngTemplateOutlet="sectionSheetRow; context: { $implicit: child }"></ng-container>
+                  }
+                }
+                @if (ChromeFirstClassGroups.length === 0 && ChromeMoreItems.length === 0) {
+                  <div class="mj-forms-section-sheet-empty">No sections match.</div>
+                }
+              </div>
+            </div>
+            <ng-template #sectionSheetRow let-group>
+              @let sheetIndicators = ChromeGroupIndicators(group);
+              <button type="button"
+                      class="mj-forms-section-sheet-item"
+                      role="listitem"
+                      [class.is-active]="ChromeActiveGroupKey === group.Key"
+                      [attr.aria-current]="ChromeActiveGroupKey === group.Key ? 'page' : null"
+                      (click)="OnSectionSheetSelect(group.Key)">
+                <i [class]="group.Icon" aria-hidden="true"></i>
+                <span class="mj-forms-section-sheet-label">{{ group.Title }}</span>
+                @if (sheetIndicators.DirtyCount > 0) {
+                  <span class="mj-forms-chrome-rail-dirty" role="img"
+                        [attr.aria-label]="RailDirtyTitle(sheetIndicators.DirtyCount, group.Title)"></span>
+                }
+                @if (sheetIndicators.ErrorCount > 0) {
+                  <span class="mj-forms-chrome-rail-error" role="img"
+                        [attr.aria-label]="RailErrorTitle(sheetIndicators.ErrorCount, group.Title)">
+                    <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>{{ sheetIndicators.ErrorCount }}
+                  </span>
+                } @else if (sheetIndicators.WarningCount > 0) {
+                  <span class="mj-forms-chrome-rail-warning" role="img"
+                        [attr.aria-label]="RailWarningTitle(sheetIndicators.WarningCount, group.Title)">
+                    <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>{{ sheetIndicators.WarningCount }}
+                  </span>
+                }
+                @let sheetCount = ChromeGroupRowCount(group);
+                @if (sheetCount != null && sheetCount > 0) {
+                  <span class="mj-forms-chrome-rail-count">{{ sheetCount }}</span>
+                }
+              </button>
+            </ng-template>
+          </mj-bottom-sheet>
+        }
       }
       <!-- All panels in a single flex container — CSS order drives sequencing -->
       <div class="mj-forms-all-panels">
@@ -670,3 +805,29 @@
   (FormChosen)="OnPanelManagerFormChosen($event)"
   (Closed)="OnPanelManagerClosed()">
 </mj-panel-manager>
+
+<!-- ============================================
+     ANCHORED RECORD COMMENTS (drawer + inline field/section popover)
+     ============================================ -->
+@if (ShowRecordComments && EffectiveRecord && EffectiveRecord.IsSaved) {
+  <mj-record-comments
+    [Provider]="Provider"
+    [Record]="EffectiveRecord"
+    [Mode]="'drawer'"
+    [IsOpen]="ShowRecordComments"
+    [WidthPx]="CommentsPanelWidth"
+    (Close)="OnRecordCommentsClosed()"
+    (CommentCountChange)="OnCommentCountChanged($event)"
+    (WidthChanged)="OnCommentsPanelWidthChanged($event)"
+    (Navigate)="OnNavigate($event)">
+  </mj-record-comments>
+}
+
+@if (CommentsCoordinator.ActivePopoverTarget && EffectiveRecord && EffectiveRecord.IsSaved) {
+  <mj-record-comments
+    [Provider]="Provider"
+    [Record]="EffectiveRecord"
+    [Mode]="'popover'"
+    (Navigate)="OnNavigate($event)">
+  </mj-record-comments>
+}

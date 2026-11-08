@@ -671,7 +671,8 @@
             "PayloadUpstreamPaths": [
               "synthesis.*",
               "report.*",
-              "visualizations.*"
+              "visualizations.*",
+              "video.*"
             ],
             "AgentTypePromptParams": {
               "enableTaskGraphs": true
@@ -783,6 +784,34 @@
               {
                 "fields": {
                   "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Render Architecture Diagram",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4C039923-81FB-47A3-97DC-9A163AD4D2DF"
+                },
+                "sync": {
+                  "lastModified": "2026-11-03T23:46:20.718Z",
+                  "checksum": "7b4f27bb809afa8549520d0548bc15ea3e3093e002de368ca7bd8d9b53940d7e"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Get Architecture Diagram Reference",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "A5825063-5B35-40B2-95A3-C64F402BAB1E"
+                },
+                "sync": {
+                  "lastModified": "2026-11-03T23:46:20.732Z",
+                  "checksum": "74ab806d6f221bda9360443ca3a310f4fd2c30ebcfe84a8f9f5b86967b98f0d4"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
                   "ActionID": "@lookup:MJ: Actions.Name=Generate Image",
                   "Status": "Active"
                 },
@@ -864,8 +893,8 @@
             "ID": "B0753715-8CE2-4218-B021-6F19E5B4F6F7"
           },
           "sync": {
-            "lastModified": "2026-08-07T23:58:28.449Z",
-            "checksum": "9b18921ec5ff2811e2901d114fa199d8a850f7908d6a9e0ea8bf9278ab7fa3f6"
+            "lastModified": "2026-11-01T22:54:14.888Z",
+            "checksum": "0a804f01fe3916f38b568f5a6d100d43df47a8e9a27b2bf7ff1d90bc1dd43e5b"
           }
         }
       ],

@@ -1,4 +1,4 @@
-import { AggregateExpression, CompositeKey, DatabaseProviderBase, UserInfo, ViewPropertyValues } from '@memberjunction/core';
+import { AggregateExpression, CompositeKey, DatabaseProviderBase, RunViewParameters, UserInfo, ViewPropertyValues } from '@memberjunction/core';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { GraphQLSchema } from 'graphql';
 import sql from 'mssql';
@@ -159,6 +159,11 @@ export type RunViewGenericParams = {
    */
   includeBinaryFields?: boolean;
   /**
+   * When true, no count runs to populate `TotalRowCount`, which comes back undefined.
+   * Propagated to `RunViewParams.SkipTotalRowCount`.
+   */
+  skipTotalRowCount?: boolean;
+  /**
    * Optional registered Alternate Base View logical Name (from `EntityAlternateBaseView.Name`)
    * for this entity. Propagated to `RunViewParams.AlternateBaseView`.
    */
@@ -168,6 +173,11 @@ export type RunViewGenericParams = {
    * There is deliberately no server-properties field: those are set only by server code.
    */
   properties?: ViewPropertyValues;
+  /**
+   * Named parameter values referenced as `@paramName` in `ExtraFilter`.
+   * Propagated to `RunViewParams.Parameters`.
+   */
+  parameters?: RunViewParameters;
 };
 
 

@@ -26,7 +26,7 @@ vi.mock('../bootstrap', () => ({
     serverProcessAlreadyClaimed: () => mockServerClaimed()
 }));
 
-import { IntegrationTestDriver } from '../IntegrationTestDriver';
+import { IntegrationTestDriver, BUDGET_EXHAUSTED_SKIP_PREFIX } from '../IntegrationTestDriver';
 import { IntegrationCheckRegistry } from '../check-registry';
 import { SkipCheck, TestRunner } from '../test-runner';
 import type { DriverExecutionContext, IOracle } from '@memberjunction/testing-engine';
@@ -245,6 +245,52 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         expect(['Failed', 'Timeout']).toContain(result.status);
     });
 
+    it('a check the run budget never started is a skip "not run: budget exhausted", never a failure (#3393)', async () => {
+        const reg = IntegrationCheckRegistry.Instance;
+        reg.Register({ Id: 'unitbudget.A', Name: 'budgetA', Fn: () => new Promise<void>(() => { /* never resolves */ }) });
+        reg.Register({ Id: 'unitbudget.B', Name: 'budgetB', Fn: async () => { /* pass */ } });
+        const result = await new IntegrationTestDriver().Execute(makeContext({ checks: [{ type: 'unitbudget' }] }, 40));
+        expect(result.oracleResults.map(o => o.oracleType)).toEqual(['unitbudget.A', 'unitbudget.B']);
+        // A started and hung: that stays a failure (C6).
+        expect(result.oracleResults[0].passed).toBe(false);
+        const notRun = result.oracleResults[1];
+        expect(notRun.message).toContain(BUDGET_EXHAUSTED_SKIP_PREFIX);
+        expect(notRun.message).toContain("'unitbudget.B'");
+        const details = notRun.details as Record<string, unknown>;
+        expect(details.Skipped).toBe(true);
+        // Lost coverage: not allowed, so the suite's skip gate still fails the run.
+        expect(details.SkipAllowed).toBe(false);
+        expect(result.failedChecks).toBe(1);
+        expect(result.skippedChecks).toBe(1);
+    });
+
+    it('a budget skip is not allowed even for a check on the skip allowlist', async () => {
+        const reg = IntegrationCheckRegistry.Instance;
+        reg.Register({ Id: 'unitbudgetallow.A', Name: 'budgetAllowA', Fn: () => new Promise<void>(() => { /* never resolves */ }) });
+        reg.Register({ Id: 'unitbudgetallow.B', Name: 'budgetAllowB', Fn: async () => SkipCheck('no vendor key') });
+        reg.AllowSkip({ CheckId: 'unitbudgetallow.B', Gate: 'credentials', Reason: 'needs a vendor key' });
+        const result = await new IntegrationTestDriver().Execute(makeContext({ checks: [{ type: 'unitbudgetallow' }] }, 40));
+        const notRun = result.oracleResults.find(o => o.oracleType === 'unitbudgetallow.B');
+        expect(notRun?.message).toContain(BUDGET_EXHAUSTED_SKIP_PREFIX);
+        expect((notRun?.details as Record<string, unknown>).SkipAllowed).toBe(false);
+    });
+
+    it('every check of a bundle the loop never reached after the budget ran out is a budget skip', async () => {
+        const reg = IntegrationCheckRegistry.Instance;
+        reg.Register({ Id: 'unitbudgethang.A', Name: 'budgetHangA', Fn: () => new Promise<void>(() => { /* never resolves */ }) });
+        reg.Register({ Id: 'unitbudgetlater.A', Name: 'laterA', Fn: async () => { /* pass */ } });
+        reg.Register({ Id: 'unitbudgetlater.B', Name: 'laterB', Fn: async () => { /* pass */ } });
+        const result = await new IntegrationTestDriver().Execute(
+            makeContext({ checks: [{ type: 'unitbudgethang' }, { type: 'unitbudgetlater' }] }, 40));
+        const later = result.oracleResults.filter(o => o.oracleType.startsWith('unitbudgetlater.'));
+        expect(later.map(o => o.oracleType)).toEqual(['unitbudgetlater.A', 'unitbudgetlater.B']);
+        for (const o of later) {
+            expect(o.message).toContain(BUDGET_EXHAUSTED_SKIP_PREFIX);
+            expect((o.details as Record<string, unknown>).Skipped).toBe(true);
+        }
+        expect(result.skippedChecks).toBe(2);
+    });
+
     it('a lifecycle Setup failure still runs Teardown (R4 guaranteed cleanup) and fails the bundle, never re-throws', async () => {
         const reg = IntegrationCheckRegistry.Instance;
         let teardownRan = false;
@@ -274,5 +320,54 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         const result = await driver.Execute(makeContext({ checks: [{ type: 'unitlifecycle' }] }));
         expect(result.status).toBe('Passed');
         expect(order).toEqual(['setup', 'check', 'teardown']);
+    });
+
+    it('a gated RequiresMutation skip is marked allowed with the mutation gate', async () => {
+        const result = await new IntegrationTestDriver().Execute(makeContext({ checks: [{ type: 'unitmut' }] }));
+        const details = result.oracleResults.find(o => o.oracleType === 'unitmut.M')?.details as Record<string, unknown>;
+        expect(details.SkipAllowed).toBe(true);
+        expect(details.SkipGate).toBe('mutation');
+    });
+
+    it('a run-time SkipCheck is unexpected unless the check is on the allowlist', async () => {
+        const reg = IntegrationCheckRegistry.Instance;
+        reg.Register({ Id: 'unitallow.S', Name: 'allowS', Fn: async () => SkipCheck('no key for the vendor') });
+        reg.AllowSkip({ CheckId: 'unitallow.S', Gate: 'credentials', Reason: 'needs a vendor key' });
+        const driver = new IntegrationTestDriver();
+
+        const notListed = await driver.Execute(makeContext({ checks: [{ type: 'unitskip' }] }));
+        const notListedDetails = notListed.oracleResults.find(o => o.oracleType === 'unitskip.S')?.details as Record<string, unknown>;
+        expect(notListedDetails.SkipAllowed).toBe(false);
+
+        const listed = await driver.Execute(makeContext({ checks: [{ type: 'unitallow' }] }));
+        const listedDetails = listed.oracleResults.find(o => o.oracleType === 'unitallow.S')?.details as Record<string, unknown>;
+        expect(listedDetails.SkipAllowed).toBe(true);
+        expect(listedDetails.SkipGate).toBe('credentials');
+        expect(listedDetails.SkipAllowReason).toBe('needs a vendor key');
+    });
+
+    it('a whole-test tier gate is an allowed skip; an explicit requiresEnv gate is not', async () => {
+        const driver = new IntegrationTestDriver();
+        const tier = await driver.Execute(makeContext({ tier: 'mutation', checks: [{ type: 'unitpass' }] }));
+        expect((tier.oracleResults[0].details as Record<string, unknown>).SkipAllowed).toBe(true);
+
+        delete process.env.UNIT_GATE;
+        const parked = await driver.Execute(makeContext({ checks: [{ type: 'unitpass' }], requiresEnv: 'UNIT_GATE' }));
+        expect((parked.oracleResults[0].details as Record<string, unknown>).SkipAllowed).toBe(false);
+    });
+
+    it('a requiresEnv-parked Test is allowed when every selected bundle has a bundle-level entry', async () => {
+        const reg = IntegrationCheckRegistry.Instance;
+        reg.Register({ Id: 'unitparked.A', Name: 'parkedA', Fn: async () => { /* pass */ } });
+        reg.AllowSkip({ CheckId: 'unitparked', Gate: 'pending-ruling', Reason: 'parked until a provider is provisioned' });
+        delete process.env.UNIT_PARK_GATE;
+        const driver = new IntegrationTestDriver();
+        const parked = await driver.Execute(makeContext({ checks: [{ type: 'unitparked' }], requiresEnv: 'UNIT_PARK_GATE' }));
+        const details = parked.oracleResults[0].details as Record<string, unknown>;
+        expect(details.SkipAllowed).toBe(true);
+        expect(details.SkipGate).toBe('pending-ruling');
+
+        const mixed = await driver.Execute(makeContext({ checks: [{ type: 'unitparked' }, { type: 'unitpass' }], requiresEnv: 'UNIT_PARK_GATE' }));
+        expect((mixed.oracleResults[0].details as Record<string, unknown>).SkipAllowed).toBe(false);
     });
 });

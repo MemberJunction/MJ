@@ -1,5 +1,236 @@
 # @memberjunction/ai-provider-bundle
 
+## 6.2.0
+
+### Minor Changes
+
+- a50948e: AI model & vendor metadata refresh (weekly research run, 2026-09-28). The busiest launch week of the quarter: four frontier models shipped inside 36 hours.
+  - Adds **Claude Opus 5.5** (`claude-opus-5-5`, released 2026-09-22) on Anthropic, Amazon Bedrock and OpenRouter, with cost rows at $4/$20 per 1M and a $0.20 cache read. Anthropic's new recommended default: 20% below the $5/$25 Opus tier, 1M context, 128K output, default effort `medium`. The 0.05x cache-read multiplier is new to this file — Anthropic now publishes three different ratios. No Bedrock cost row: sources conflict between $4/$20 parity and $2.20/$11.
+  - Adds **Grok 4.7** (`grok-4.7`, released 2026-09-21) on x.ai and OpenRouter at $2/$6 per 1M with $0.50 cache read — unchanged from Grok 4.6. Built on a new, larger base model: AA Coding Agent Index 56 vs 47, Terminal-Bench 4.0 33% vs 18%, hallucination rate 29% vs 34%. Ends a five-week run of slipped release dates. `MaxOutputTokens` is deliberately held at 128,000: xAI publishes no cap and the 450,000 figure on third-party cards is unofficial.
+  - Adds **GPT-6 Sol** (`gpt-6-sol`) and **GPT-6 Luna** (`gpt-6-luna`), both released 2026-09-22, on OpenAI, Azure, Amazon Bedrock and OpenRouter. Sol at $2/$10 and Luna at $0.10/$0.50 — each exactly half its GPT-5.6 predecessor. Sol's benchmarks are mixed rather than uniformly better (it regresses against GPT-5.6 Sol on DeepSWE and OSWorld 2.0), which its PowerRank of 25 reflects. Neither carries an Azure cost row; Microsoft's rate card for the tier could not be confirmed.
+  - Adds the **Xiaomi** vendor plus **MiMo V2.6 Pro** and **MiMo V2.6 Flash** (released 2026-09-22, MIT-licensed, omnimodal), reached through OpenRouter at $0.435/$0.87 and $0.14/$0.28 per 1M. Model Developer attribution only — no Xiaomi driver class exists, so no first-party route is wired.
+  - Records the **GLM-5.3-FlashX** OpenRouter rate at $0.37/$1.25 with a $0.09 cache read, closing the follow-up the 2026-09-21 run left open, and replaces the now-false comment on its Z.AI row.
+  - Adds **GLM-5.3-Flash** on three more hosts: a Fireworks.ai cost row ($0.15/$0.50, $0.03 cache) for the route that previously had none, with its context corrected to 1,048,576; and two new inference vendors, **DeepInfra** ($0.075/$0.25, a 50% promo off its $0.15/$0.50 list rate) and **SiliconFlow** ($0.15/$0.50, $0.03 cache). Each vendor gets its own OpenAI-compatible driver (`DeepInfraLLM` in `@memberjunction/ai-deepinfra`, `SiliconFlowLLM` in `@memberjunction/ai-siliconflow`). Each driver also sends the output cap as `max_tokens`, the only cap parameter those two providers document.
+
+  No cost row was expired and no vendor route was deprecated — every price movement this week arrived as a new model rather than a re-rate. Anthropic's relabelling of Opus 5 and the 4.x tier as "legacy (still available)" is explicitly **not** treated as a deprecation. `gpt-6-luna-pro` is deliberately not a separate record: it is `gpt-6-luna` with `reasoning.mode=pro`, the same request-parameter-vs-model-id problem as Claude fast mode.
+
+- 10c2311: Add the Clef and Kev decision models and two drivers to reach them. `CloudflareDecision`, in the new `@memberjunction/ai-cloudflare` package, calls Cloudflare's Clef and Clef-flash on Workers AI (`@cf/cloudflare/clef`, `@cf/cloudflare/clef-flash`); its account ID comes from a `<accountId>:<apiToken>` key, a credential's `accountId`, or `CLOUDFLARE_ACCOUNT_ID`, and `CLOUDFLARE_WORKERS_AI_BASE_URL` or a credential's `endpoint` routes it through an AI Gateway. `SystemOneDecision`, in the new `@memberjunction/ai-systemone` package, calls any server with a `/v1/systemone` route (Kev's own server, llama.cpp's `llama-server`, TypeSafe), with the endpoint from an `API Key with Endpoint` credential or `SYSTEMONE_BASE_URL` and an optional bearer token. The System One wire mapping that Jev, Kev and Clef share moves out of `OpenRouterDecision` into a new `BaseSystemOneDecision` in `@memberjunction/ai`; `OpenRouterDecision` keeps its behaviour, statics and constructor, except that a key resolved from an AI Credential binding now sends the credential's `apiKey` as the bearer token instead of the credential's JSON, and a key that starts with `{` but is not valid JSON now fails before any request instead of being sent whole as the token. Metadata adds the `Cloudflare` and `System One Endpoint` vendors, the `Clef` and `Clef-flash` models, and `Kev-0.8B`, `Kev-4B`, `Kev-9B` and `Kev-27B` (Kev-4B also on OpenRouter, as `jaredpalmer/kev-4b-20260924`), with their limits and prices. The `Default Decision` prompt's bindings are unchanged. The one change in default behaviour: as active `Decision` models, the new models join the power-matched fallback candidates of any Decision prompt that does not require specific models, after its bound models, and only when their credentials resolve. `Default Decision` fails over across models (its `FailoverStrategy` is the column default, `SameModelDifferentVendor`, which `AIDecisionRunner` treats as the whole candidate list), so a call reaches one of them when every credentialed candidate ahead of it (Jev, when its key is set, and `LLM Decision`) has failed with an error that allows failover. Kev-4B on OpenRouter resolves with the OpenRouter key Jev already uses. A missing account ID, token or endpoint, or an API key that starts with `{` but is not valid JSON (a legacy `AI_VENDOR_API_KEY__*` value or runtime `apiKeys` entry; bound AI Credentials always arrive as valid JSON), fails a call before any request with a `NoCredentials` error that allows failover, so a misconfigured fallback does not stop the failover loop and a malformed key's text is never sent as a token.
+
+  `BaseModelRunner` in `@memberjunction/ai-prompts` now finds a `ModelVendor` credential binding on any Active row of a model on a vendor, Inference Provider rows first, both when it checks whether a candidate has a credential and when it resolves one. It used to read only the first Active row, so for any model with both a Model Developer row and an Inference Provider row on one vendor (Clef and Clef-flash on Cloudflare, and many existing models, such as Claude 4.5 Opus on Anthropic, Grok 4 on x.ai, Gemini 3 Flash on Google and the OpenAI embedding models), a credential bound to the Inference Provider row was found only when that row happened to load first, which depends on the rows' keys. A binding on another model's row still does not apply. The fix applies to every runner built on `BaseModelRunner` (prompts and agents, embeddings, rerankers, image and media generation, and decisions), not only to decisions.
+
+- 8b90b41: One `NormalizeTurnDetectionSettings` in `@memberjunction/ai` now validates turn-detection blocks for the cascade and every driver, so `Coverage` survives every config layer. Each realtime driver declares `SupportedTurnSettings` in its `DriverFacts` (mirrored on session `Capabilities`): the normalized fields it maps, each `exact` or `approximate`. Gemini (and Vertex Gemini Enterprise) map `SilenceDurationMs`, `Eagerness` (low/high → end-of-speech sensitivity; auto leaves Google's default) and `Threshold` onto `automaticActivityDetection`; `Threshold` is approximate (below 0.5 → high start sensitivity, 0.5 and above → low), and in meeting mode (`disabled: true`) none of them is sent, because Gemini Live refuses those fields next to `disabled` (close 1007). xAI maps `Eagerness` onto end-of-turn silence (1200/700/400 ms) unless any layer sets `SilenceDurationMs`; a request that sets any turn field without a `Mode` is now sent as `serverVad` with those values instead of xAI's default block, and xAI now waits for `session.created` before sending its start config (sent earlier, it was dropped on the still-connecting socket). On OpenAI and Eleven Realtime, `Eagerness` applies only with `Mode: 'semanticVad'`. ElevenLabs Agents still maps only `Eagerness`, and `ELEVENLABS_SUPPORTED_TURN_SETTINGS` is unchanged. The `AIConfiguration` JSON type's turn-detection field docs state these rules.
+
+### Patch Changes
+
+- 6b0de38: Every realtime driver now declares static `DriverFacts` (such as `ProviderMaxSessionSeconds`), readable before a session exists. A minted `ClientRealtimeSessionConfig` carries `MaxSessionSeconds`, the effective session cap: the smaller of the driver's provider cap and the host's cap, positive integers only. `PrepareClientSession` passes it through unchanged. The MJAPI relay uses the same cap rule (one shared implementation), so a fractional or invalid cap counts as unset. ElevenLabs Agents sends its native max duration only when the host set a cap, and reports `MaxSessionSeconds` only then (without a host cap the agent keeps its own setting, 600 s on a new agent, which the driver does not know); Eleven Realtime reports the same clamped value it puts on the wire. Gemini client-direct sessions now reach their 30-minute cap: Gemini ends a Live connection after about 10 minutes and counts the browser's resume as a new session, so the minted token now opens one connection per 10 minutes of the session cap plus 3 for resumes, until the cap plus 60 s (at most 6 connections and 30 minutes); it was single-use with a 10-minute window, so the first resume was refused and the call ended at about 10 minutes. A shorter host cap gives a shorter-lived token, so the browser's credential never outlasts the session's deadline.
+- Updated dependencies [ddcd666]
+- Updated dependencies [54f6563]
+- Updated dependencies [79279f2]
+- Updated dependencies [a50948e]
+- Updated dependencies [293c316]
+- Updated dependencies [35012c0]
+- Updated dependencies [155aa45]
+- Updated dependencies [4412e85]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1da00cb]
+- Updated dependencies [0dbd455]
+- Updated dependencies [961d529]
+- Updated dependencies [10c2311]
+- Updated dependencies [8f370b3]
+- Updated dependencies [ed77dd7]
+- Updated dependencies [1090caa]
+- Updated dependencies [b5c11d3]
+- Updated dependencies [c4645bc]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [1419678]
+- Updated dependencies [af6f892]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [69e19c5]
+- Updated dependencies [d665a6e]
+- Updated dependencies [55184f1]
+- Updated dependencies [7316ac3]
+- Updated dependencies [91be34f]
+- Updated dependencies [f5e317c]
+- Updated dependencies [6055792]
+- Updated dependencies [e5675dc]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [a1eaf42]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [111a5f3]
+- Updated dependencies [4c682c1]
+- Updated dependencies [7e86ce0]
+- Updated dependencies [0b7aed4]
+- Updated dependencies [c6d1232]
+- Updated dependencies [584fc44]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [1d43161]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [542795b]
+- Updated dependencies [95e5dd9]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [0b406e8]
+- Updated dependencies [1141164]
+- Updated dependencies [230cdad]
+- Updated dependencies [f34cbef]
+- Updated dependencies [ecc5658]
+- Updated dependencies [8bac4d6]
+- Updated dependencies [575bfae]
+- Updated dependencies [d6fd68d]
+- Updated dependencies [cc9fa3c]
+- Updated dependencies [c018cb9]
+- Updated dependencies [80905a1]
+- Updated dependencies [7dc604e]
+- Updated dependencies [6e43622]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [ce758af]
+- Updated dependencies [2cd8411]
+- Updated dependencies [5a3de97]
+- Updated dependencies [8704df6]
+- Updated dependencies [5345e3d]
+- Updated dependencies [22c9074]
+- Updated dependencies [6b0de38]
+- Updated dependencies [279b93e]
+- Updated dependencies [5dc3752]
+- Updated dependencies [5e21f50]
+- Updated dependencies [72dd65c]
+- Updated dependencies [8b90b41]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [e293b68]
+- Updated dependencies [72e082b]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [e962151]
+- Updated dependencies [d2e89fe]
+- Updated dependencies [8a9d203]
+- Updated dependencies [b0b2cc9]
+- Updated dependencies [fc3da91]
+- Updated dependencies [04fec10]
+  - @memberjunction/ai-elevenlabs@6.2.0
+  - @memberjunction/ai-openai@6.2.0
+  - @memberjunction/ai-anthropic@6.2.0
+  - @memberjunction/ai-groq@6.2.0
+  - @memberjunction/ai-heygen@6.2.0
+  - @memberjunction/ai-deepinfra@6.2.0
+  - @memberjunction/ai-siliconflow@6.2.0
+  - @memberjunction/ai-gemini@6.2.0
+  - @memberjunction/ai-vertex@6.2.0
+  - @memberjunction/ai-openrouter@6.2.0
+  - @memberjunction/ai-cloudflare@6.2.0
+  - @memberjunction/ai-systemone@6.2.0
+  - @memberjunction/ai-cohere@6.2.0
+  - @memberjunction/ai-vectors-pinecone@6.2.0
+  - @memberjunction/ai-local-embeddings@6.2.0
+  - @memberjunction/ai-ollama@6.2.0
+  - @memberjunction/ai-recommendations-rex@6.2.0
+  - @memberjunction/ai-bedrock@6.2.0
+  - @memberjunction/ai-cerebras@6.2.0
+  - @memberjunction/ai-inception@6.2.0
+  - @memberjunction/ai-xai@6.2.0
+  - @memberjunction/ai-blackforestlabs@6.2.0
+  - @memberjunction/ai-lmstudio@6.2.0
+  - @memberjunction/ai-azure@6.2.0
+  - @memberjunction/ai-betty-bot@6.2.0
+  - @memberjunction/ai-fireworks@6.2.0
+  - @memberjunction/ai-mistral@6.2.0
+  - @memberjunction/ai-assemblyai@6.2.0
+  - @memberjunction/ai-inworld@6.2.0
+  - @memberjunction/ai-llamacpp@6.2.0
+  - @memberjunction/ai-minimax@6.2.0
+  - @memberjunction/ai-zhipu@6.2.0
+
+## 6.2.0-edge.8
+
+### Patch Changes
+
+- @memberjunction/ai-recommendations-rex@6.2.0-edge.8
+- @memberjunction/ai-vectors-pinecone@6.2.0-edge.8
+- @memberjunction/ai-anthropic@6.2.0-edge.8
+- @memberjunction/ai-assemblyai@6.2.0-edge.8
+- @memberjunction/ai-azure@6.2.0-edge.8
+- @memberjunction/ai-bedrock@6.2.0-edge.8
+- @memberjunction/ai-betty-bot@6.2.0-edge.8
+- @memberjunction/ai-blackforestlabs@6.2.0-edge.8
+- @memberjunction/ai-cerebras@6.2.0-edge.8
+- @memberjunction/ai-cloudflare@6.2.0-edge.8
+- @memberjunction/ai-cohere@6.2.0-edge.8
+- @memberjunction/ai-deepinfra@6.2.0-edge.8
+- @memberjunction/ai-elevenlabs@6.2.0-edge.8
+- @memberjunction/ai-fireworks@6.2.0-edge.8
+- @memberjunction/ai-gemini@6.2.0-edge.8
+- @memberjunction/ai-groq@6.2.0-edge.8
+- @memberjunction/ai-heygen@6.2.0-edge.8
+- @memberjunction/ai-inception@6.2.0-edge.8
+- @memberjunction/ai-inworld@6.2.0-edge.8
+- @memberjunction/ai-lmstudio@6.2.0-edge.8
+- @memberjunction/ai-llamacpp@6.2.0-edge.8
+- @memberjunction/ai-local-embeddings@6.2.0-edge.8
+- @memberjunction/ai-minimax@6.2.0-edge.8
+- @memberjunction/ai-mistral@6.2.0-edge.8
+- @memberjunction/ai-ollama@6.2.0-edge.8
+- @memberjunction/ai-openai@6.2.0-edge.8
+- @memberjunction/ai-openrouter@6.2.0-edge.8
+- @memberjunction/ai-siliconflow@6.2.0-edge.8
+- @memberjunction/ai-systemone@6.2.0-edge.8
+- @memberjunction/ai-vertex@6.2.0-edge.8
+- @memberjunction/ai-zhipu@6.2.0-edge.8
+- @memberjunction/ai-xai@6.2.0-edge.8
+
+## 6.2.0-edge.7
+
+### Minor Changes
+
+- 8b90b41: One `NormalizeTurnDetectionSettings` in `@memberjunction/ai` now validates turn-detection blocks for the cascade and every driver, so `Coverage` survives every config layer. Each realtime driver declares `SupportedTurnSettings` in its `DriverFacts` (mirrored on session `Capabilities`): the normalized fields it maps, each `exact` or `approximate`. Gemini (and Vertex Gemini Enterprise) map `SilenceDurationMs`, `Eagerness` (low/high → end-of-speech sensitivity; auto leaves Google's default) and `Threshold` onto `automaticActivityDetection`; `Threshold` is approximate (below 0.5 → high start sensitivity, 0.5 and above → low), and in meeting mode (`disabled: true`) none of them is sent, because Gemini Live refuses those fields next to `disabled` (close 1007). xAI maps `Eagerness` onto end-of-turn silence (1200/700/400 ms) unless any layer sets `SilenceDurationMs`; a request that sets any turn field without a `Mode` is now sent as `serverVad` with those values instead of xAI's default block, and xAI now waits for `session.created` before sending its start config (sent earlier, it was dropped on the still-connecting socket). On OpenAI and Eleven Realtime, `Eagerness` applies only with `Mode: 'semanticVad'`. ElevenLabs Agents still maps only `Eagerness`, and `ELEVENLABS_SUPPORTED_TURN_SETTINGS` is unchanged. The `AIConfiguration` JSON type's turn-detection field docs state these rules.
+
+### Patch Changes
+
+- 6b0de38: Every realtime driver now declares static `DriverFacts` (such as `ProviderMaxSessionSeconds`), readable before a session exists. A minted `ClientRealtimeSessionConfig` carries `MaxSessionSeconds`, the effective session cap: the smaller of the driver's provider cap and the host's cap, positive integers only. `PrepareClientSession` passes it through unchanged. The MJAPI relay uses the same cap rule (one shared implementation), so a fractional or invalid cap counts as unset. ElevenLabs Agents sends its native max duration only when the host set a cap, and reports `MaxSessionSeconds` only then (without a host cap the agent keeps its own setting, 600 s on a new agent, which the driver does not know); Eleven Realtime reports the same clamped value it puts on the wire. Gemini client-direct sessions now reach their 30-minute cap: Gemini ends a Live connection after about 10 minutes and counts the browser's resume as a new session, so the minted token now opens one connection per 10 minutes of the session cap plus 3 for resumes, until the cap plus 60 s (at most 6 connections and 30 minutes); it was single-use with a 10-minute window, so the first resume was refused and the call ended at about 10 minutes. A shorter host cap gives a shorter-lived token, so the browser's credential never outlasts the session's deadline.
+- Updated dependencies [54f6563]
+- Updated dependencies [8f370b3]
+- Updated dependencies [0b7aed4]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [0b406e8]
+- Updated dependencies [f34cbef]
+- Updated dependencies [c018cb9]
+- Updated dependencies [6e43622]
+- Updated dependencies [6b0de38]
+- Updated dependencies [8b90b41]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [d2e89fe]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/ai-openai@6.2.0-edge.7
+  - @memberjunction/ai-anthropic@6.2.0-edge.7
+  - @memberjunction/ai-cohere@6.2.0-edge.7
+  - @memberjunction/ai-gemini@6.2.0-edge.7
+  - @memberjunction/ai-local-embeddings@6.2.0-edge.7
+  - @memberjunction/ai-bedrock@6.2.0-edge.7
+  - @memberjunction/ai-xai@6.2.0-edge.7
+  - @memberjunction/ai-vectors-pinecone@6.2.0-edge.7
+  - @memberjunction/ai-vertex@6.2.0-edge.7
+  - @memberjunction/ai-elevenlabs@6.2.0-edge.7
+  - @memberjunction/ai-assemblyai@6.2.0-edge.7
+  - @memberjunction/ai-inworld@6.2.0-edge.7
+  - @memberjunction/ai-blackforestlabs@6.2.0-edge.7
+  - @memberjunction/ai-deepinfra@6.2.0-edge.7
+  - @memberjunction/ai-inception@6.2.0-edge.7
+  - @memberjunction/ai-llamacpp@6.2.0-edge.7
+  - @memberjunction/ai-minimax@6.2.0-edge.7
+  - @memberjunction/ai-openrouter@6.2.0-edge.7
+  - @memberjunction/ai-siliconflow@6.2.0-edge.7
+  - @memberjunction/ai-zhipu@6.2.0-edge.7
+  - @memberjunction/ai-azure@6.2.0-edge.7
+  - @memberjunction/ai-betty-bot@6.2.0-edge.7
+  - @memberjunction/ai-cerebras@6.2.0-edge.7
+  - @memberjunction/ai-cloudflare@6.2.0-edge.7
+  - @memberjunction/ai-fireworks@6.2.0-edge.7
+  - @memberjunction/ai-groq@6.2.0-edge.7
+  - @memberjunction/ai-heygen@6.2.0-edge.7
+  - @memberjunction/ai-lmstudio@6.2.0-edge.7
+  - @memberjunction/ai-mistral@6.2.0-edge.7
+  - @memberjunction/ai-ollama@6.2.0-edge.7
+  - @memberjunction/ai-recommendations-rex@6.2.0-edge.7
+  - @memberjunction/ai-systemone@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Patch Changes

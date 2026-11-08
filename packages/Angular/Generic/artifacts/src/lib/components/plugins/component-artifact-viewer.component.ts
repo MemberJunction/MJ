@@ -1,7 +1,7 @@
 import { Component, ViewChild, AfterViewInit, OnInit, OnChanges, SimpleChanges, Output, EventEmitter, ChangeDetectorRef } from '@angular/core';
 import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab } from '../base-artifact-viewer.component';
-import { MJReactComponent, AngularAdapterService } from '@memberjunction/ng-react';
+import { MJReactComponent, AngularAdapterService, PdfOrientation } from '@memberjunction/ng-react';
 import { BuildComponentCompleteCode, ComponentSpec } from '@memberjunction/interactive-component-types';
 import {
   isFormRole, IsFormPanelRole, getDeclaredFormEntityName, GetDeclaredFormContribution, StripJoinFieldBrackets,
@@ -600,6 +600,19 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     this.ShowFeedbackPanel = !this.ShowFeedbackPanel;
   }
 
+  /**
+   * Component artifacts export as a PDF once the component has rendered on the default path.
+   * Form-role components (record pickers, apply flows) are left out.
+   */
+  public override get SupportsPDFExport(): boolean {
+    return !!this.ReactComponent && !!this.ResolvedComponentSpec;
+  }
+
+  /** Download the rendered component as a PDF. Called from the artifact viewer header button. */
+  public override async ExportPDF(orientation: PdfOrientation = 'portrait'): Promise<void> {
+    await this.ReactComponent?.CapturePDF(orientation);
+  }
+
   // ════════════════════════════════════════════════════════════════════
   // FORM-AWARE BRANCH
   //
@@ -723,6 +736,7 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
       const result = await rv.RunView<BaseEntity>({
         EntityName: entity.Name,
         MaxRows: 1,
+        SkipTotalRowCount: true,
         OrderBy: orderBy,
         ResultType: 'entity_object',
       }, this.ProviderToUse.CurrentUser);
@@ -939,6 +953,7 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
         Fields: ['Specification'],
         OrderBy: 'VersionSequence DESC',
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'simple',
       });
       if (result.Success && result.Results?.length > 0 && result.Results[0].Specification) {

@@ -13,7 +13,7 @@ import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
 import { ManageMetadataBase } from './Database/manage-metadata';
 import { ApplyIncludeSchemaScope } from './Database/schema-scope';
 import { PartitionEntitiesByOutputDirectory } from './Config/schema-output';
-import { OutputDir, Commands, configInfo, GetSettingValue, DbPlatform, GetExternalEntitySchemas, InitializeConfig, CommandInfo, ApplyInProcessAdvancedGenerationPolicy, IN_PROCESS_ADVANCED_GENERATION_ENV } from './Config/config';
+import { OutputDir, Commands, configInfo, GetSettingValue, DbPlatform, GetExternalEntitySchemas, InitializeConfig, CommandInfo, ApplyInProcessAdvancedGenerationPolicy, IN_PROCESS_ADVANCED_GENERATION_ENV, FindUnknownAdvancedGenerationFeatures, KNOWN_ADVANCED_GENERATION_FEATURES } from './Config/config';
 import { ResolveDirtySchemasForEmit, SchemaKey, SchemaEmitOptions } from './Misc/schema-emit';
 import { EmitStats } from './Misc/emit-stats';
 import { logError, logStatus, LogWarning, StartSpinner, UpdateSpinner, SucceedSpinner, FailSpinner, WarnSpinner } from './Misc/status_logging';
@@ -31,6 +31,7 @@ import { SQLLogging } from './Misc/sql_logging';
 import { CodeGenConnection, CodeGenDatabaseProvider, DataSourceResult as ProviderDataSourceResult, ResolveCodeGenDatabaseProvider } from './Database/codeGenDatabaseProvider';
 import { SystemIntegrityBase } from './Misc/system_integrity';
 import { ReconcileFieldLevelSecurity } from './Database/reconcileFieldLevelSecurity';
+import { RunQueryRebindPass } from './Database/queryRebindPass';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { UserInfo } from '@memberjunction/core';
@@ -275,12 +276,15 @@ export class RunCodeGenBase {
       const { provider, connection: conn, currentUser } = dataSource;
       const startTime = new Date();
       ManageMetadataBase.clearFieldTracking();
+      ManageMetadataBase.ClearFieldShapeChanges();
       const reporter = CodeGenReporter.Instance;
       reporter.startRun();
       reporter.mark('platform', DbPlatform());
       reporter.mark('skipDB', skipDatabaseGeneration || GetSettingValue('skip_database_generation', false));
       let pipelineSuccess = true;
       this.commandFailures = [];
+      // Saved queries the re-bind pass could not refresh. Warnings only: never a step failure.
+      let queryRebindWarnings: readonly string[] = [];
 
      try {
       const md = await reporter.phase('loadMetadata', async () => {
@@ -294,6 +298,9 @@ export class RunCodeGenBase {
           StartSpinner('Initializing AI Engine for advanced generation...');
           await AIEngine.Instance.Config(false, currentUser);
           SucceedSpinner('AI Engine initialized');
+          for (const name of FindUnknownAdvancedGenerationFeatures(configInfo.advancedGeneration.features)) {
+            LogWarning(`advancedGeneration.features: CodeGen does not read a feature named '${name}', so it has no effect. Known features: ${KNOWN_ADVANCED_GENERATION_FEATURES.join(', ')}.`);
+          }
         }
         return m;
       });
@@ -396,6 +403,18 @@ export class RunCodeGenBase {
           }
         } else {
           WarnSpinner('SQL output directory NOT found in config file, skipping...');
+        }
+
+        // Saved queries that read an entity whose columns changed shape in this run are re-bound
+        // once the field sync (both passes) is complete; their SQL is never edited. The pass never
+        // fails the run (nor does the metadata refresh it needs): what it could not refresh comes
+        // back as warnings, repeated beside the final summary.
+        const shapeChanges = ManageMetadataBase.FieldShapeChangedEntities;
+        if (sqlGenerationSucceeded && shapeChanges.IDs.length + shapeChanges.Names.length > 0) {
+          const rebind = await reporter.phase('queryRebind', () =>
+            RunQueryRebindPass(provider, currentUser, () => this.refreshMetadataAfterManageMetadata(provider)),
+          );
+          queryRebindWarnings = rebind.Warnings;
         }
 
         // ── Post-run CRUD validator ─────────────────────────────────────────
@@ -688,6 +707,7 @@ export class RunCodeGenBase {
         this.commandFailures.push({ context: 'PIPELINE', message: 'CodeGen pipeline reported a failure — see the log output above for detail.' });
       }
       pipelineSuccess = this.commandFailures.length === 0;
+      if (queryRebindWarnings.length > 0) WarnSpinner(queryRebindWarnings.join('\n'));
       if (pipelineSuccess) {
         SucceedSpinner(`MJ CodeGen complete — ${md.Entities.length} entities in ${totalSeconds.toFixed(2)}s`);
         logStatus('MJ CodeGen Complete! ' + md.Entities.length + ' entities processed in ' + totalSeconds + 's @ ' + endTime.toLocaleString());

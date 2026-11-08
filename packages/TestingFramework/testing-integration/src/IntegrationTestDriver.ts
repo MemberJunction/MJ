@@ -44,14 +44,40 @@ import {
 } from './bootstrap';
 import { BootstrapIntegrationClient } from './bootstrap-client';
 import type { InstrumentedLocalStorageProvider } from './instrumented-cache';
-import type { IntegrationCheckContext, RlsFixture } from './check';
+import type { IntegrationCheckContext, NamedCheck, RlsFixture } from './check';
 import { IntegrationCheckRegistry } from './check-registry';
 import { IntegrationTestConfig, IntegrationCheckSelectionConfig } from './types';
 import { IntegrationTier, TIER_ENV_GATE, IsTierEnabled } from './tiers';
 import { IsCheckSkip, TestOutcome, WriteOutcomesFile } from './test-runner';
 import { DiscoverRlsFixture } from './rls-fixture';
+import { INTEGRATION_TARGET_TYPE, AllowedSkipGate, SkippedCheckDetails } from './skip-gate';
 
-const TARGET_TYPE = 'Integration Check Bundle';
+const TARGET_TYPE = INTEGRATION_TARGET_TYPE;
+
+/** Why a skip is acceptable, stamped on the skipped check's result. */
+interface SkipAllowance {
+    Gate: AllowedSkipGate;
+    Reason: string;
+}
+
+/** Allowance for a check the driver gated out because it is RequiresMutation. */
+const MUTATION_GATE_ALLOWANCE: SkipAllowance = {
+    Gate: 'mutation',
+    Reason: 'RequiresMutation: runs only with RUN_MUTATION_TESTS=1 or selector runMutationTests (the PR lane leaves it unset on purpose)'
+};
+
+/** Allowance for a check the driver gated out because it is RequiresLiveModel. */
+const LIVE_MODEL_GATE_ALLOWANCE: SkipAllowance = {
+    Gate: 'credentials',
+    Reason: 'RequiresLiveModel: real model calls need model credentials, which the deterministic lane does not have (RUN_AGENT_TESTS=0)'
+};
+/**
+ * Reason stamped on a check the run budget never started. Recorded as a skip (it verified nothing,
+ * but it did not fail either) and never allowed: a starved check is lost coverage, so the suite's
+ * skip gate still fails the run, while the summary reads "not run" instead of a check failure.
+ */
+export const BUDGET_EXHAUSTED_SKIP_PREFIX = 'not run: budget exhausted';
+
 /** Bundles that run against the GraphQL client transport (everything else: SQL server). */
 const CLIENT_BUNDLES = new Set(['client-cache', 'rls-isolation-client', 'remote-op-wire-progress', 'fls-enforcement-client']);
 /** Bundles that need the discovered two-user RLS fixture threaded into the context. */
@@ -135,7 +161,14 @@ export class IntegrationTestDriver extends BaseTestDriver {
             const gateVar = explicitGate ?? TIER_ENV_GATE[tier];
             const note = `Skipped: ${gateVar} not set (tier '${tier}')`;
             this.logToTestRun(context, 'warn', note);
-            return this.buildSkipResult(context, startTime, note);
+            // The tier's own gate is an allowed skip. An explicit `requiresEnv` parks a test for some
+            // other reason: allowed only when every bundle it selects has a bundle-level allowlist
+            // entry, otherwise the skip gate reports it as unexpected.
+            const allowance = explicitGate ? this.parkedTestAllowance(config)
+                : tier === 'mutation' ? MUTATION_GATE_ALLOWANCE
+                : tier === 'live-model' ? LIVE_MODEL_GATE_ALLOWANCE
+                : undefined;
+            return this.buildSkipResult(context, startTime, note, allowance);
         }
 
         const selectors = Array.isArray(config.checks) ? config.checks : [];
@@ -173,7 +206,9 @@ export class IntegrationTestDriver extends BaseTestDriver {
             // 4) Run each selected bundle's checks IN ORDER against ONE shared context.
             for (const sel of selectors) {
                 if (timedOut) {
-                    break;
+                    // Bundles the loop never reached: each registered check is a budget skip.
+                    this.recordBudgetSkips(context, IntegrationCheckRegistry.Instance.GetBundle(sel.type), new Set(), oracleResults, outcomes);
+                    continue;
                 }
                 await this.runBundle(context, checkCtx, sel.type, sel.config, oracleResults, outcomes, () => timedOut, deadline);
             }
@@ -205,6 +240,20 @@ export class IntegrationTestDriver extends BaseTestDriver {
 
         // 5b) Assemble the DriverExecutionResult (counts mirror AgentEvalDriver).
         return this.buildResult(context, startTime, oracleResults, timedOut);
+    }
+
+    /**
+     * The allowance for a Test parked by an explicit `requiresEnv` gate: the bundle-level allowlist
+     * entry when every selected bundle has one (the first one's gate and reason), else undefined.
+     */
+    private parkedTestAllowance(config: IntegrationTestConfig): SkipAllowance | undefined {
+        const bundles = Array.isArray(config.checks) ? config.checks.map(c => c.type) : [];
+        const entries = bundles.map(b => IntegrationCheckRegistry.Instance.GetAllowedSkip(b));
+        const first = entries[0];
+        if (!first || entries.some(e => e === undefined)) {
+            return undefined;
+        }
+        return { Gate: first.Gate, Reason: first.Reason };
     }
 
     /**
@@ -262,9 +311,16 @@ export class IntegrationTestDriver extends BaseTestDriver {
         // IDs as they go). A Setup failure short-circuits the bundle with one failing 'fixtures'
         // oracle and skips the checks — but never re-throws and never leaves the fixture orphaned.
         const lifecycle = IntegrationCheckRegistry.Instance.GetLifecycle(bundleType);
+        // This bundle's slice of the shared result arrays: the context and arrays are reused across
+        // bundles, so "every outcome skipped" and "which checks reported" are judged on this slice.
+        const firstOutcome = outcomes.length;
+        const firstOracle = oracleResults.length;
+        let setupFailed = false;
         try {
             if (lifecycle) {
+                setupFailed = true;
                 await lifecycle.Setup(checkCtx);
+                setupFailed = false;
             }
             for (const check of bundle) {
                 if (isTimedOut()) {
@@ -272,12 +328,14 @@ export class IntegrationTestDriver extends BaseTestDriver {
                 }
                 if (check.RequiresMutation && !mutationEnabled) {
                     this.recordSkippedCheck(context, oracleResults, outcomes, check.Id, check.Name,
-                        `SKIPPED: mutation-gated (set RUN_MUTATION_TESTS=1 or selector runMutationTests to execute)`);
+                        `SKIPPED: mutation-gated (set RUN_MUTATION_TESTS=1 or selector runMutationTests to execute)`,
+                        MUTATION_GATE_ALLOWANCE);
                     continue;
                 }
                 if (check.RequiresLiveModel && !liveModelEnabled) {
                     this.recordSkippedCheck(context, oracleResults, outcomes, check.Id, check.Name,
-                        `SKIPPED: live-model-gated (RUN_AGENT_TESTS disabled)`);
+                        `SKIPPED: live-model-gated (RUN_AGENT_TESTS disabled)`,
+                        LIVE_MODEL_GATE_ALLOWANCE);
                     continue;
                 }
                 await this.runCheck(context, checkCtx, check.Id, check.Name, check.Fn, oracleResults, outcomes, deadline);
@@ -295,9 +353,10 @@ export class IntegrationTestDriver extends BaseTestDriver {
             // skip). This bundle-level warning fires only when EVERY recorded outcome is a skip, so an
             // all-gated bundle is impossible to miss in the log — no extra outcome is pushed, which
             // would double-count the per-check skips.
-            if (bundle.length > 0 && outcomes.length > 0 && outcomes.every(o => o.Skipped)) {
+            const bundleOutcomes = outcomes.slice(firstOutcome);
+            if (bundle.length > 0 && bundleOutcomes.length > 0 && bundleOutcomes.every(o => o.Skipped)) {
                 this.logToTestRun(context, 'warn',
-                    `${bundleType}: all ${outcomes.length} check(s) were skipped — nothing ran. ` +
+                    `${bundleType}: all ${bundleOutcomes.length} check(s) were skipped — nothing ran. ` +
                     `Each skip's reason is logged above: a gate (RUN_MUTATION_TESTS=1 or the live-model ` +
                     `gate) or a fixture that could not be set up. This bundle ` +
                     `verified NOTHING on this run.`);
@@ -319,6 +378,59 @@ export class IntegrationTestDriver extends BaseTestDriver {
                 }
             }
         }
+
+        // A failed Setup already reported one failing 'fixtures' result for the whole bundle.
+        if (!setupFailed) {
+            const reported = new Set(oracleResults.slice(firstOracle).map(r => r.oracleType));
+            if (isTimedOut()) {
+                this.recordBudgetSkips(context, bundle, reported, oracleResults, outcomes);
+            } else {
+                this.recordUnexecutedChecks(context, bundle, reported, oracleResults, outcomes, 'the bundle loop never reached it');
+            }
+        }
+    }
+
+    /**
+     * Fail every registered check of a bundle that produced no result. A registered check that
+     * never ran verified nothing, and before this it left no trace at all: the run simply had one
+     * result fewer. Reported per check, so the summary names exactly what did not run.
+     */
+    private recordUnexecutedChecks(
+        context: DriverExecutionContext,
+        bundle: readonly NamedCheck[],
+        reported: ReadonlySet<string>,
+        oracleResults: OracleResult[],
+        outcomes: TestOutcome[],
+        why: string
+    ): void {
+        for (const check of bundle) {
+            if (reported.has(check.Id)) {
+                continue;
+            }
+            const message = `registered check '${check.Id}' never executed: ${why}`;
+            oracleResults.push({ oracleType: check.Id, passed: false, score: 0, message, details: { DurationMs: 0, NotExecuted: true } });
+            outcomes.push({ Name: check.Name, Passed: false, DurationMs: 0, Error: message });
+            this.logToTestRun(context, 'error', `✗ ${message}`);
+        }
+    }
+
+    /**
+     * Record every check of a bundle that has no result yet as a budget skip: the run budget ran
+     * out before it started. Not allowed, even for a check on the allowlist — the allowance covers
+     * the check's own gate, not a starved run.
+     */
+    private recordBudgetSkips(
+        context: DriverExecutionContext,
+        bundle: readonly NamedCheck[],
+        reported: ReadonlySet<string>,
+        oracleResults: OracleResult[],
+        outcomes: TestOutcome[]
+    ): void {
+        for (const check of bundle) {
+            if (!reported.has(check.Id)) {
+                this.recordSkippedCheck(context, oracleResults, outcomes, check.Id, check.Name, budgetSkipReason(check.Id), undefined);
+            }
+        }
     }
 
     /**
@@ -333,12 +445,8 @@ export class IntegrationTestDriver extends BaseTestDriver {
         id: string,
         fn: (ctx: IntegrationCheckContext) => Promise<void>,
         checkCtx: IntegrationCheckContext,
-        deadline: number
+        remaining: number
     ): Promise<void> {
-        const remaining = deadline - Date.now();
-        if (remaining <= 0) {
-            throw new Error(`integration run budget exhausted before check '${id}' started`);
-        }
         let timer: ReturnType<typeof setTimeout> | undefined;
         const timeout = new Promise<never>((_, reject) => {
             timer = setTimeout(
@@ -360,6 +468,10 @@ export class IntegrationTestDriver extends BaseTestDriver {
      * carries `details.Skipped: true` (the marker buildResult uses to keep skips out of
      * the executed pass/fail counts) with `passed: true` so legacy consumers that only
      * read the boolean never mistake a skip for a failure.
+     *
+     * `allowance` says whether the skip is acceptable (`details.SkipAllowed`): a declared tier
+     * gate, a check on the registry's skip allowlist, or undefined when it is not. The suite
+     * fails the run on any skip without one (see skip-gate.ts).
      */
     private recordSkippedCheck(
         context: DriverExecutionContext,
@@ -367,11 +479,19 @@ export class IntegrationTestDriver extends BaseTestDriver {
         outcomes: TestOutcome[],
         id: string,
         name: string,
-        reason: string
+        reason: string,
+        allowance: SkipAllowance | undefined
     ): void {
-        oracleResults.push({ oracleType: id, passed: true, score: 0, message: reason, details: { DurationMs: 0, Skipped: true } });
+        const details: SkippedCheckDetails = {
+            DurationMs: 0,
+            Skipped: true,
+            SkipAllowed: allowance !== undefined,
+            ...(allowance ? { SkipGate: allowance.Gate, SkipAllowReason: allowance.Reason } : {})
+        };
+        oracleResults.push({ oracleType: id, passed: true, score: 0, message: reason, details });
         outcomes.push({ Name: name, Passed: true, DurationMs: 0, Skipped: true });
-        this.logToTestRun(context, 'warn', `− ${id}: ${reason}`);
+        this.logToTestRun(context, 'warn',
+            `− ${id}: ${reason}${allowance ? ` [allowed: ${allowance.Gate}]` : ' [NOT on the skip allowlist]'}`);
     }
 
     /** Run one check in try/catch and append one OracleResult + one TestOutcome. */
@@ -386,8 +506,13 @@ export class IntegrationTestDriver extends BaseTestDriver {
         deadline: number
     ): Promise<void> {
         const checkStart = Date.now();
+        const remaining = deadline - checkStart;
+        if (remaining <= 0) {
+            this.recordSkippedCheck(context, oracleResults, outcomes, id, name, budgetSkipReason(id), undefined);
+            return;
+        }
         try {
-            await this.runWithDeadline(id, fn, checkCtx, deadline);
+            await this.runWithDeadline(id, fn, checkCtx, remaining);
             const durationMs = Date.now() - checkStart;
             oracleResults.push({
                 oracleType: id,
@@ -400,7 +525,8 @@ export class IntegrationTestDriver extends BaseTestDriver {
             this.logToTestRun(context, 'info', `✓ ${id}`);
         } catch (checkErr) {
             if (IsCheckSkip(checkErr)) {
-                this.recordSkippedCheck(context, oracleResults, outcomes, id, name, `SKIPPED: ${checkErr.message}`);
+                this.recordSkippedCheck(context, oracleResults, outcomes, id, name, `SKIPPED: ${checkErr.message}`,
+                    IntegrationCheckRegistry.Instance.GetAllowedSkip(id));
                 return;
             }
             const durationMs = Date.now() - checkStart;
@@ -535,13 +661,19 @@ export class IntegrationTestDriver extends BaseTestDriver {
      * visible in TestRun.ResultDetails; its passed:true means "the gate itself worked",
      * while details.Skipped keeps it out of the executed counts.
      */
-    private buildSkipResult(context: DriverExecutionContext, startTime: number, note: string): DriverExecutionResult {
+    private buildSkipResult(context: DriverExecutionContext, startTime: number, note: string, allowance?: SkipAllowance): DriverExecutionResult {
+        const details: SkippedCheckDetails = {
+            DurationMs: 0,
+            Skipped: true,
+            SkipAllowed: allowance !== undefined,
+            ...(allowance ? { SkipGate: allowance.Gate, SkipAllowReason: allowance.Reason } : {})
+        };
         return {
             targetType: TARGET_TYPE,
             targetLogId: context.testRun.ID,
             status: 'Skipped',
             score: 0,
-            oracleResults: [{ oracleType: 'gate', passed: true, score: 0, message: note, details: { DurationMs: 0, Skipped: true } }],
+            oracleResults: [{ oracleType: 'gate', passed: true, score: 0, message: note, details }],
             passedChecks: 0,
             failedChecks: 0,
             totalChecks: 0,
@@ -566,4 +698,9 @@ export class IntegrationTestDriver extends BaseTestDriver {
             errorMessage: message
         };
     }
+}
+
+/** Skip message for a check the run budget never started. */
+function budgetSkipReason(checkId: string): string {
+    return `${BUDGET_EXHAUSTED_SKIP_PREFIX}: the integration run budget ran out before check '${checkId}' started`;
 }

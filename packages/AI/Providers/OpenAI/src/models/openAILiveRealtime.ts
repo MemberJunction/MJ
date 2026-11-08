@@ -4,6 +4,8 @@ import {
     BaseRealtimeModel,
     RealtimeDiagLog,
     RealtimeDroppedInputReporter,
+    RealtimeDriverFactsOf,
+    type RealtimeDriverFacts,
     IRealtimeSession,
     RealtimeSessionCapabilities,
     RealtimeSessionParams,
@@ -21,9 +23,11 @@ import {
     REALTIME_SDP_EXCHANGE_PATH,
     ResolveRealtimeProxyBaseHttpUrl,
     RealtimeToolBatchBarrier,
+    MapRealtimeUsageModalityDetail,
+    ReadRealtimeTurnDetection,
+    DescribeUnappliedTurnDetection,
     type RealtimeInputFrame,
 } from '@memberjunction/ai';
-import { MapUsageModalityDetail } from './openAIRealtime.js';
 
 /**
  * Default backend reasoning/planning model used by OpenAI Live when in `responses` delegation mode
@@ -41,6 +45,23 @@ export interface ILiveWebSocketLike {
     addEventListener(type: 'close', listener: (event: { code?: number; reason?: string }) => void): void;
     send(data: string): void;
     close(code?: number, reason?: string): void;
+}
+
+/**
+ * Describes the normalized `turnDetection` settings a GPT-Live session cannot apply. Its `session.start` frame (see
+ * {@link LiveClientEvent}) carries model, instructions, audio format, voice, parallel tool calls and delegation, and
+ * no turn-detection block, so every requested setting is left to the model's own turn-taking.
+ *
+ * @param config The session's config bag.
+ * @returns The launch warning, or `undefined` when nothing was requested.
+ */
+export function DescribeOpenAILiveTurnDetection(config: Record<string, unknown> | undefined): string | undefined {
+    const requested = ReadRealtimeTurnDetection(config?.['turnDetection']);
+    if (!requested) {
+        return undefined;
+    }
+    return DescribeUnappliedTurnDetection('OpenAILiveRealtime', requested, ['Mode', 'Eagerness', 'Threshold', 'SilenceDurationMs', 'Coverage'],
+        'the GPT-Live session.start frame has no turn-detection settings, so the model\'s own turn-taking applies');
 }
 
 /** Wire client events for OpenAI Live Realtime API. */
@@ -218,7 +239,12 @@ export class OpenAILiveSession implements IRealtimeSession {
     private _interruptionHandlers: Array<() => void> = [];
     private _closeHandlers: Array<() => void> = [];
 
-    constructor(socket: ILiveWebSocketLike, params: RealtimeSessionParams, options: OpenAILiveSessionOptions = {}) {
+    constructor(
+        socket: ILiveWebSocketLike,
+        params: RealtimeSessionParams,
+        options: OpenAILiveSessionOptions = {},
+        driverFacts: Readonly<RealtimeDriverFacts> = OpenAILiveRealtime.DriverFacts,
+    ) {
         this._socket = socket;
         this._params = params;
         this._options = options;
@@ -230,6 +256,7 @@ export class OpenAILiveSession implements IRealtimeSession {
         this.AudioFormat = { Codec: codec, SampleRate: rate };
 
         this.Capabilities = {
+            ...driverFacts,
             CanReconfigureTurnMode: false,
             SupportedReasoningPlanes: ['local', 'remote'],
             CanReconfigureDelegationMode: false,
@@ -322,6 +349,10 @@ export class OpenAILiveSession implements IRealtimeSession {
     }
 
     private sendSessionStart(): void {
+        const turnDetectionWarning = DescribeOpenAILiveTurnDetection(this._params.Config as Record<string, unknown> | undefined);
+        if (turnDetectionWarning) {
+            console.warn(turnDetectionWarning);
+        }
         const compiledInstructions = this.buildInitialInstructions();
         const wireAudioFormat = this.resolveWireAudioFormat();
         const plane = this._options.reasoningPlane ?? 'local';
@@ -627,8 +658,8 @@ export class OpenAILiveSession implements IRealtimeSession {
                             InputTokens: resp.usage.input_tokens ?? 0,
                             OutputTokens: resp.usage.output_tokens ?? 0,
                             DurationSeconds: this._lastReportedSeconds,
-                            InputTokenDetails: MapUsageModalityDetail(resp.usage.input_token_details),
-                            OutputTokenDetails: MapUsageModalityDetail(resp.usage.output_token_details),
+                            InputTokenDetails: MapRealtimeUsageModalityDetail(resp.usage.input_token_details),
+                            OutputTokenDetails: MapRealtimeUsageModalityDetail(resp.usage.output_token_details),
                         };
                         for (const handler of this._usageHandlers) {
                             handler(u);
@@ -919,6 +950,9 @@ export class OpenAILiveSession implements IRealtimeSession {
  */
 @RegisterClass(BaseRealtimeModel, 'OpenAILiveRealtime')
 export class OpenAILiveRealtime extends BaseRealtimeModel {
+    /** GPT-Live's session ceiling is not documented in-repo, so it stays unknown. */
+    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = {};
+
     public static override readonly SupportsDynamicToolSet = true;
 
     private _endpoint: string;
@@ -1026,7 +1060,7 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
             backchannelPolicy: typeof config?.['backchannelPolicy'] === 'string' ? config['backchannelPolicy'] : undefined,
         };
 
-        const session = new OpenAILiveSession(socket, params, options);
+        const session = new OpenAILiveSession(socket, params, options, RealtimeDriverFactsOf(this));
         await session.WaitForStarted();
         return session;
     }
@@ -1107,6 +1141,10 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
             | undefined;
 
         const plane = reasoningConfig?.Plane ?? 'local';
+        const turnDetectionWarning = DescribeOpenAILiveTurnDetection(config);
+        if (turnDetectionWarning) {
+            console.warn(turnDetectionWarning);
+        }
         const mappedTools = params.Tools?.map((t) => ({
             type: 'function' as const,
             name: t.Name,
@@ -1208,6 +1246,7 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
             EphemeralToken: brokerUrl,
             ExpiresAt: ticket.ExpiresAt,
             SessionConfig: sessionPayload as JSONObject,
+            MaxSessionSeconds: this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds),
         };
     }
 

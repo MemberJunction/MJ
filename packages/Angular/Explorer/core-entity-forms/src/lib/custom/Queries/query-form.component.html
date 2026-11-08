@@ -19,10 +19,10 @@
       }
 
       <!-- Header Section -->
-      <div class="query-header" [class.content-saving]="IsSaving">
+      <div class="query-header phone-hero" [class.content-saving]="IsSaving" [class.hero-view]="!EditMode" [class.hero-compact]="!EditMode && !HeroDetailsOpen">
         <div class="query-header-content">
           <!-- Top Row: Name and Run Button -->
-          <div class="query-header-top">
+          <div class="query-header-top phone-hero-top">
             <!-- Left: Query Name -->
             <div class="query-name-section">
               <i class="fa-solid fa-database query-title-icon"></i>
@@ -33,18 +33,19 @@
                   placeholder="Enter query name..." />
               } @else {
                 <h4 class="query-name-display">{{ record.Name || 'Untitled Query' }}</h4>
+              <span class="status-pill phone-hero-only" [style.background]="getStatusBadgeColor()">{{ record.Status || 'Unknown' }}</span>
               }
             </div>
 
             <!-- Right: Action Buttons -->
-            <div class="query-header-actions">
+            <div class="query-header-actions phone-hero-actions">
               @if (record.ID) {
                 <button mjButton
                   variant="primary"
                   [disabled]="EditMode || !record.SQL || record.SQL.trim().length === 0"
                   (click)="runQuery()"
                   title="Run Query"
-                  class="run-query-btn">
+                  class="run-query-btn phone-hero-run">
                   <i class="fa-solid fa-play"></i> Run
                 </button>
               }
@@ -52,7 +53,7 @@
           </div>
 
           <!-- Second Row: Category and Status -->
-          <div class="query-meta-row">
+          <div class="query-meta-row phone-hero-detail">
             <!-- Category -->
             <div class="query-meta-item">
               <label class="meta-label">Category</label>
@@ -84,7 +85,7 @@
             </div>
 
             <!-- Status -->
-            <div class="query-meta-item">
+            <div class="query-meta-item phone-hero-hide">
               <label class="meta-label">Status</label>
               @if (EditMode) {
                 <mj-dropdown
@@ -104,11 +105,30 @@
                 </span>
               }
             </div>
+
+            <!-- Metadata extraction status -->
+            @if (record.IsSaved) {
+              <div class="query-meta-item">
+                <label class="meta-label">Metadata</label>
+                <div class="meta-dropdown-row">
+                  <span class="extraction-badge" [class]="'extraction-badge ' + ExtractionStatusClass"
+                    [title]="'Last metadata extraction: ' + ExtractionStatusLabel">
+                    {{ ExtractionStatusLabel }}
+                  </span>
+                  @if (CanRefreshMetadata) {
+                    <button mjButton Variant="outline" Size="sm" type="button" class="refresh-metadata-btn"
+                      (click)="OpenRefreshDialog()" title="Re-derive the fields, parameters and entities from the SQL and the database server">
+                      <i class="fa-solid fa-rotate"></i> Refresh metadata
+                    </button>
+                  }
+                </div>
+              </div>
+            }
           </div>
 
           <!-- Third Row: Description -->
           @if (EditMode || record.Description) {
-            <div class="query-description-row">
+            <div class="query-description-row phone-hero-detail">
               @if (EditMode) {
                 <textarea class="mj-input query-description-input"
                   [(ngModel)]="record.Description"
@@ -122,6 +142,12 @@
             </div>
           }
         </div>
+        @if (!EditMode && HeroSummary) {
+          <button type="button" class="phone-hero-summary" [attr.aria-expanded]="HeroDetailsOpen" (click)="ToggleHeroDetails()">
+            <span class="phone-hero-summary-text">{{ HeroSummary }}</span>
+            <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+          </button>
+        }
       </div>
 
       <!-- Status Warning Banner for Non-Approved Queries -->
@@ -135,9 +161,11 @@
 
       <!-- Main Content Area with Expansion Panels -->
       <div class="query-content" [class.content-saving]="IsSaving">
+        <!-- Phone: one section at a time behind a picker; desktop keeps the accordions -->
+        <mj-accordion-sections [Enabled]="Phone.IsPhone" [ActiveKey]="Phone.Section" (ActiveKeyChange)="Phone.Pick($event)">
 
         <!-- SQL Query Panel -->
-        <mj-accordion-panel
+        <mj-accordion-panel SectionKey="sql" SectionTitle="SQL" SectionIcon="fa-solid fa-code"
           [(Expanded)]="sqlPanelExpanded"
           class="query-panel">
           <ng-template mjAccordionTitle>
@@ -166,6 +194,14 @@
           </div>
 
           <div class="sql-panel-content">
+            @if (SaveDiagnostics.length > 0 || SaveDiagnosticsHeadline) {
+              <mj-query-diagnostics class="save-diagnostics"
+                [Headline]="SaveDiagnosticsHeadline"
+                [Diagnostics]="SaveDiagnostics"
+                Severity="error"
+                [LocationsClickable]="true"
+                (LocationClick)="OnDiagnosticLocationClick($event)" />
+            }
             <!-- Code Editor -->
             <mj-code-editor #sqlEditor
               (change)="onSQLChange($event)"
@@ -173,6 +209,15 @@
               [language]="'sql'"
               class="sql-editor">
             </mj-code-editor>
+
+            @if (SaveDiagnostics.length === 0 && ExtractionDiagnostics.length > 0) {
+              <mj-query-diagnostics class="extraction-diagnostics"
+                [Headline]="'Last metadata extraction: ' + ExtractionStatusLabel"
+                [Diagnostics]="ExtractionDiagnostics"
+                [Severity]="ExtractionSeverity"
+                [LocationsClickable]="true"
+                (LocationClick)="OnDiagnosticLocationClick($event)" />
+            }
 
             <!-- SQL Filters Help (Below Editor) -->
             @if (showFiltersHelp) {
@@ -199,7 +244,7 @@
 
         <!-- Technical Description Panel -->
         @if (record.TechnicalDescription || EditMode) {
-          <mj-accordion-panel
+          <mj-accordion-panel SectionKey="description" SectionTitle="Technical Description" SectionIcon="fa-solid fa-book"
             [(Expanded)]="technicalDescriptionPanelExpanded"
             class="query-panel">
             <ng-template mjAccordionTitle>
@@ -250,8 +295,8 @@
         }
 
         <!-- Parameters Panel -->
-        @if (record.IsSaved) {
-          <mj-accordion-panel
+        @if (record.IsSaved || EditMode) {
+          <mj-accordion-panel SectionKey="parameters" SectionTitle="Parameters" SectionIcon="fa-solid fa-sliders"
             [(Expanded)]="parametersPanelExpanded"
             class="query-panel">
             <ng-template mjAccordionTitle>
@@ -273,7 +318,7 @@
                 @if (queryParameters.length === 0) {
                   <mj-empty-state Icon="fa-solid fa-sliders"
                     Title="No Parameters Defined"
-                    Message="Add parameters to make your query dynamic and reusable."
+                    Message="Parameters are found in the SQL when you save. Add one here to describe it before it is used."
                     [ActionText]="EditMode ? 'Add First Parameter' : ''"
                     ActionIcon="fa-solid fa-plus"
                     (Action)="addParameter()" />
@@ -285,49 +330,11 @@
                       </button>
                     </div>
                   }
-                  <div class="card-grid">
-                    @for (param of queryParameters; track param.ID || $index) {
-                      <div class="item-card" [class.required]="param.IsRequired" (click)="editParameter(param)">
-                        <div class="item-card-header">
-                          <div class="item-name">
-                            <i class="fa-solid fa-at item-name-icon param-icon"></i>
-                            {{ param.Name }}
-                          </div>
-                          <div class="item-badges">
-                            @if (param.IsRequired) {
-                              <span class="item-badge required">Required</span>
-                            }
-                          </div>
-                        </div>
-                        <div class="item-card-body">
-                          @if (param.Description) {
-                            <div class="item-description">{{ param.Description }}</div>
-                          }
-                          <div class="item-meta">
-                            <span class="meta-tag">
-                              <strong>Type:</strong> {{ param.Type || 'Text' }}
-                            </span>
-                            @if (param.DefaultValue) {
-                              <span class="meta-tag">
-                                <strong>Default:</strong>
-                                <code class="meta-code">{{ param.DefaultValue }}</code>
-                              </span>
-                            }
-                          </div>
-                        </div>
-                        @if (EditMode) {
-                          <div class="item-actions" (click)="$event.stopPropagation()">
-                            <button type="button" class="item-action-btn" (click)="editParameter(param)" title="Edit parameter">
-                              <i class="fa-solid fa-pen"></i>
-                            </button>
-                            <button type="button" class="item-action-btn delete" (click)="deleteParameter(param)" title="Delete parameter">
-                              <i class="fa-solid fa-trash"></i>
-                            </button>
-                          </div>
-                        }
-                      </div>
-                    }
-                  </div>
+                  <mj-query-parameters-grid
+                    [Parameters]="queryParameters"
+                    [EditMode]="EditMode"
+                    (Remove)="deleteParameter($event)"
+                    (Changed)="OnChildRowChanged()" />
                 }
               }
             </div>
@@ -335,8 +342,8 @@
         }
 
         <!-- Query Fields Panel -->
-        @if (record.IsSaved) {
-          <mj-accordion-panel
+        @if (record.IsSaved || EditMode) {
+          <mj-accordion-panel SectionKey="fields" SectionTitle="Fields" SectionIcon="fa-solid fa-table"
             [(Expanded)]="fieldsPanelExpanded"
             class="query-panel">
             <ng-template mjAccordionTitle>
@@ -358,7 +365,7 @@
                 @if (queryFields.length === 0) {
                   <mj-empty-state Icon="fa-solid fa-table"
                     Title="No Fields Defined"
-                    Message="Define output fields for your query results."
+                    Message="Output fields are described by the database server when you save. Add one here to annotate it."
                     [ActionText]="EditMode ? 'Add First Field' : ''"
                     ActionIcon="fa-solid fa-plus"
                     (Action)="addField()" />
@@ -370,41 +377,12 @@
                       </button>
                     </div>
                   }
-                  <div class="card-grid">
-                    @for (field of queryFields; track field.ID) {
-                      <div class="item-card">
-                        <div class="item-card-header">
-                          <div class="item-name">
-                            <i class="fa-solid fa-columns item-name-icon field-icon"></i>
-                            {{ field.Name }}
-                          </div>
-                          <div class="item-badges">
-                            <span class="item-badge type">{{ field.SQLBaseType }}</span>
-                            @if (field.Sequence) {
-                              <span class="item-badge sequence">#{{ field.Sequence }}</span>
-                            }
-                          </div>
-                        </div>
-                        <div class="item-card-body">
-                          @if (field.Description) {
-                            <div class="item-description">{{ field.Description }}</div>
-                          }
-                          <div class="item-meta">
-                            <span class="meta-tag">
-                              <i class="fa-solid fa-code"></i> {{ field.SQLFullType || field.SQLBaseType }}
-                            </span>
-                          </div>
-                        </div>
-                        @if (EditMode) {
-                          <div class="item-card-actions">
-                            <button type="button" class="item-action-btn delete" (click)="deleteField(field)" title="Delete field">
-                              <i class="fa-solid fa-trash"></i>
-                            </button>
-                          </div>
-                        }
-                      </div>
-                    }
-                  </div>
+                  <mj-query-fields-grid
+                    [Fields]="queryFields"
+                    [EditMode]="EditMode"
+                    (Remove)="deleteField($event)"
+                    (OpenSourceField)="OnOpenSourceField($event)"
+                    (Changed)="OnChildRowChanged()" />
                 }
               }
             </div>
@@ -413,7 +391,7 @@
 
         <!-- Dependent Queries Panel -->
         @if (record.IsSaved && DependentQueries.length > 0) {
-          <mj-accordion-panel
+          <mj-accordion-panel SectionKey="dependents" SectionTitle="Dependent Queries" SectionIcon="fa-solid fa-arrow-left"
             [(Expanded)]="dependentsPanelExpanded"
             class="query-panel">
             <ng-template mjAccordionTitle>
@@ -466,8 +444,8 @@
         }
 
         <!-- Query Entities Panel -->
-        @if (record.IsSaved) {
-          <mj-accordion-panel
+        @if (record.IsSaved || EditMode) {
+          <mj-accordion-panel SectionKey="entities" SectionTitle="Entities" SectionIcon="fa-solid fa-database"
             [(Expanded)]="entitiesPanelExpanded"
             class="query-panel">
             <ng-template mjAccordionTitle>
@@ -502,7 +480,7 @@
                     </div>
                   }
                   <div class="card-grid">
-                    @for (entity of queryEntities; track entity.ID) {
+                    @for (entity of queryEntities; track entity.ID || $index) {
                       <div class="item-card">
                         <div class="item-card-header">
                           <div class="item-name">
@@ -513,7 +491,7 @@
                             <div class="entity-dropdown-wrapper">
                               <mj-dropdown
                                 [(ngModel)]="entity.EntityID"
-                                [name]="'entity_' + entity.ID"
+                                [name]="'entity_' + (entity.ID || $index)"
                                 [Data]="getEntityOptions()"
                                 TextField="text"
                                 ValueField="id"
@@ -530,6 +508,11 @@
                               <span class="meta-tag">
                                 <i class="fa-solid fa-database"></i> Data Source
                               </span>
+                              @if (entity.DetectionMethod) {
+                                <span class="meta-tag" title="How this entity link was detected">
+                                  <strong>Detected by:</strong> {{ entity.DetectionMethod }}
+                                </span>
+                              }
                             </div>
                           </div>
                         }
@@ -550,7 +533,7 @@
         }
 
         <!-- Details Panel -->
-        <mj-accordion-panel
+        <mj-accordion-panel SectionKey="details" SectionTitle="Details" SectionIcon="fa-solid fa-info-circle"
           [(Expanded)]="detailsPanelExpanded"
           class="query-panel">
           <ng-template mjAccordionTitle>
@@ -688,7 +671,7 @@
 
         <!-- Permissions Panel -->
         @if (record.IsSaved) {
-          <mj-accordion-panel
+          <mj-accordion-panel SectionKey="permissions" SectionTitle="Permissions" SectionIcon="fa-solid fa-shield-alt"
             [(Expanded)]="permissionsPanelExpanded"
             class="query-panel">
             <ng-template mjAccordionTitle>
@@ -737,10 +720,21 @@
             </div>
           </mj-accordion-panel>
         }
+        </mj-accordion-sections>
 
       </div>
     </form>
 </mj-record-form-container>
+
+<!-- Refresh metadata: always a dry run first unless the user turned that off -->
+<mj-query-refresh-dialog
+  [Visible]="ShowRefreshDialog"
+  [Scope]="RefreshScope"
+  [ScopeLabel]="RefreshScopeLabel"
+  [AllowSkipDryRun]="true"
+  [Provider]="ProviderToUse"
+  (Closed)="OnRefreshDialogClosed()"
+  (Applied)="OnRefreshApplied($event)" />
 
 <!-- Query Run Dialog -->
 <mj-query-run-dialog

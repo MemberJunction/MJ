@@ -1,5 +1,573 @@
 # @memberjunction/ai-cli
 
+## 6.2.0
+
+### Minor Changes
+
+- 281724a: Round 2 Citizen Agent Builder feedback fixes and local development JWT auth provider (`local`):
+  - **Local Development Mock/Test JWT Auth (`local`)**: Added `LocalDevProvider` in `@memberjunction/auth-providers`, `/auth/dev-login` and `/auth/dev-users` endpoints in `@memberjunction/server` backed by `MagicLinkKeyManager` RS256 signing, `MJLocalDevProvider` in `@memberjunction/ng-auth-services`, and `AuthProvider: "local"` support in `@memberjunction/installer`. Enforced strict security guards: server startup refuses to boot if `MJ_DEV_AUTH_ENABLED=true` when `NODE_ENV=production`, and `/auth/dev-login` / `/auth/dev-users` reject any non-localhost request (`X-Forwarded-For`, `Forwarded`, `X-Real-IP`, `CF-Connecting-IP`, `Sec-Fetch-Site: cross-site`, `Host`, `Origin`, `Referer`, and socket remote address).
+  - **Single-Tarball OpenApp Archive Download**: Updated `GitHubClient` in `@memberjunction/open-app-engine` to download and extract `.sql` migrations from a single repository `.tar.gz` archive stream (`downloadTarballArchive`) instead of per-directory and per-file Contents/Blob API calls, avoiding anonymous GitHub API rate limits and large-file truncation.
+  - **Flow Agent & CLI Execution Fixes**: Enabled in-process `inRun` execution for Flow agents when no `AgentStepNode` task handler is registered, populated `userMessage` and `payload` in Flow prompt step context, supported multiple starting steps and join deferral, added `--prompt-file` (`-f`) to `mj ai agents run`, and wired `ClientClauseScreen` entity-view authorization for ad-hoc queries in `@memberjunction/ai-cli`.
+  - **Query Action Output & Truncation**: Updated `RunStoredQueryAction` and `RunAdhocQueryAction` in `@memberjunction/core-actions` to populate structured `Results`, `RowCount`, and `TotalRowCount` output parameters, raised default `ColumnMaxLength` to `500`, and appended `...[truncated]` when values are truncated.
+  - **Citizen Builder Template & Turbo Pass-Through**: Updated `citizen-builder` starter template to default to `Loop` agents, bind Docker host ports to `127.0.0.1`, pass `AI_VENDOR_API_KEY__*` and `MJ_*` through `turbo.json`, auto-select free host ports and unique `COMPOSE_PROJECT_NAME` in `mj agent init`, and added `AI_TURBO_ENV_PASSTHROUGH` doctor check in `@memberjunction/installer`.
+
+### Patch Changes
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [3b0e8db]
+- Updated dependencies [0d81c53]
+- Updated dependencies [abf8778]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [622f166]
+- Updated dependencies [68bb7e4]
+- Updated dependencies [ca853fc]
+- Updated dependencies [f555162]
+- Updated dependencies [54f6563]
+- Updated dependencies [043f418]
+- Updated dependencies [1419ba7]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [96d6ec2]
+- Updated dependencies [fd780a9]
+- Updated dependencies [305c429]
+- Updated dependencies [a709bb6]
+- Updated dependencies [39b35f1]
+- Updated dependencies [d17de94]
+- Updated dependencies [7ada797]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [3fbda62]
+- Updated dependencies [eaa9455]
+- Updated dependencies [ff00d60]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [a50948e]
+- Updated dependencies [2552b1e]
+- Updated dependencies [25bb295]
+- Updated dependencies [432cb73]
+- Updated dependencies [3080e83]
+- Updated dependencies [4c6a28b]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [6c36fb6]
+- Updated dependencies [293c316]
+- Updated dependencies [b518dfa]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [52b9fd5]
+- Updated dependencies [cc36de5]
+- Updated dependencies [9cb815b]
+- Updated dependencies [709de1a]
+- Updated dependencies [35012c0]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [37891d3]
+- Updated dependencies [155aa45]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [15a4333]
+- Updated dependencies [d2db108]
+- Updated dependencies [48f77ea]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [1da00cb]
+- Updated dependencies [d43d86e]
+- Updated dependencies [666c4e6]
+- Updated dependencies [b699a37]
+- Updated dependencies [bd0ee83]
+- Updated dependencies [fd2a410]
+- Updated dependencies [0dbd455]
+- Updated dependencies [a3539d2]
+- Updated dependencies [dde482c]
+- Updated dependencies [e8b240f]
+- Updated dependencies [db39145]
+- Updated dependencies [41274aa]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [91cba84]
+- Updated dependencies [b14c72f]
+- Updated dependencies [cc41d33]
+- Updated dependencies [281724a]
+- Updated dependencies [a6a4656]
+- Updated dependencies [c671f85]
+- Updated dependencies [49f26d9]
+- Updated dependencies [660ef45]
+- Updated dependencies [961d529]
+- Updated dependencies [5e4205c]
+- Updated dependencies [10c2311]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [d26183d]
+- Updated dependencies [8f370b3]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [7be1684]
+- Updated dependencies [db50c6b]
+- Updated dependencies [afc1e0e]
+- Updated dependencies [21f9e15]
+- Updated dependencies [1090caa]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [f2248d5]
+- Updated dependencies [81aea34]
+- Updated dependencies [7384dd6]
+- Updated dependencies [6849b00]
+- Updated dependencies [67f6c85]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [5465489]
+- Updated dependencies [3bace5a]
+- Updated dependencies [88e6902]
+- Updated dependencies [b1a656b]
+- Updated dependencies [953086f]
+- Updated dependencies [a9344ad]
+- Updated dependencies [e8e6cd6]
+- Updated dependencies [142d524]
+- Updated dependencies [bb3028a]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [672b4c6]
+- Updated dependencies [f3c6161]
+- Updated dependencies [0e5ad68]
+- Updated dependencies [35ffb95]
+- Updated dependencies [5148534]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [c261eb8]
+- Updated dependencies [59e32e0]
+- Updated dependencies [50ba290]
+- Updated dependencies [ffb3c0f]
+- Updated dependencies [d122a41]
+- Updated dependencies [0a7c255]
+- Updated dependencies [0adaf76]
+- Updated dependencies [0ff7523]
+- Updated dependencies [0ff7523]
+- Updated dependencies [3023468]
+- Updated dependencies [520bd09]
+- Updated dependencies [520bd09]
+- Updated dependencies [32fedd8]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [fcf8e1c]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [307da67]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [aaf74ca]
+- Updated dependencies [a65dfb8]
+- Updated dependencies [7110019]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [f65fec7]
+- Updated dependencies [513e608]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [b03a928]
+- Updated dependencies [9b5b489]
+- Updated dependencies [cb205de]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [0d61b53]
+- Updated dependencies [0ab85d7]
+- Updated dependencies [9d1eb6a]
+- Updated dependencies [0c634ba]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [432fe69]
+- Updated dependencies [56d7614]
+- Updated dependencies [223669e]
+- Updated dependencies [683f652]
+- Updated dependencies [26c0178]
+- Updated dependencies [e3db74f]
+- Updated dependencies [594f2e0]
+- Updated dependencies [914e6ff]
+- Updated dependencies [4889fb2]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [b2441c3]
+- Updated dependencies [69e19c5]
+- Updated dependencies [d665a6e]
+- Updated dependencies [7316ac3]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [4c682c1]
+- Updated dependencies [f325baa]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [0fb3649]
+- Updated dependencies [131f3c4]
+- Updated dependencies [896334a]
+- Updated dependencies [861cbf0]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [705ab4e]
+- Updated dependencies [a7da50b]
+- Updated dependencies [0f04590]
+- Updated dependencies [0c68021]
+- Updated dependencies [5fed75a]
+- Updated dependencies [e51ce8a]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [bc0503a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [1d43161]
+- Updated dependencies [bbca6b6]
+- Updated dependencies [f3fa01e]
+- Updated dependencies [0a75bb2]
+- Updated dependencies [f26084f]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [b09fe34]
+- Updated dependencies [542795b]
+- Updated dependencies [95e5dd9]
+- Updated dependencies [3276daa]
+- Updated dependencies [0a27507]
+- Updated dependencies [db39145]
+- Updated dependencies [f48dffc]
+- Updated dependencies [41c2c08]
+- Updated dependencies [a0db1fb]
+- Updated dependencies [96c44bf]
+- Updated dependencies [630bb88]
+- Updated dependencies [e69634e]
+- Updated dependencies [7110019]
+- Updated dependencies [f2a4171]
+- Updated dependencies [e482249]
+- Updated dependencies [37e2f6b]
+- Updated dependencies [6779eed]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [fcc3f03]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [0b406e8]
+- Updated dependencies [1141164]
+- Updated dependencies [44faf83]
+- Updated dependencies [230cdad]
+- Updated dependencies [17cc774]
+- Updated dependencies [dae1d31]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [10ba687]
+- Updated dependencies [f34cbef]
+- Updated dependencies [ecc5658]
+- Updated dependencies [8bac4d6]
+- Updated dependencies [575bfae]
+- Updated dependencies [c018cb9]
+- Updated dependencies [80905a1]
+- Updated dependencies [d0cea53]
+- Updated dependencies [4c97994]
+- Updated dependencies [397ae9a]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [35d3c95]
+- Updated dependencies [cf6aee6]
+- Updated dependencies [7e72c86]
+- Updated dependencies [dbc3462]
+- Updated dependencies [b545842]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [a17a228]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [ce758af]
+- Updated dependencies [db1528d]
+- Updated dependencies [a9614be]
+- Updated dependencies [89a5b59]
+- Updated dependencies [2cd8411]
+- Updated dependencies [8ec184d]
+- Updated dependencies [5a3de97]
+- Updated dependencies [0d0ba18]
+- Updated dependencies [b6fcb30]
+- Updated dependencies [f73e192]
+- Updated dependencies [7177e09]
+- Updated dependencies [8704df6]
+- Updated dependencies [5345e3d]
+- Updated dependencies [1ea4085]
+- Updated dependencies [975948b]
+- Updated dependencies [22c9074]
+- Updated dependencies [88b85fc]
+- Updated dependencies [24ddecc]
+- Updated dependencies [45359c6]
+- Updated dependencies [d7e95b9]
+- Updated dependencies [373b180]
+- Updated dependencies [6b0de38]
+- Updated dependencies [aee2d53]
+- Updated dependencies [279b93e]
+- Updated dependencies [5dc3752]
+- Updated dependencies [8420f36]
+- Updated dependencies [8ed4049]
+- Updated dependencies [6c8798b]
+- Updated dependencies [f0c78c3]
+- Updated dependencies [5e21f50]
+- Updated dependencies [72dd65c]
+- Updated dependencies [8b90b41]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [d0df5a1]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [02bb563]
+- Updated dependencies [104125c]
+- Updated dependencies [7e57b48]
+- Updated dependencies [e78341e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [d296edd]
+- Updated dependencies [66fd011]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [509d2aa]
+- Updated dependencies [68f5c01]
+- Updated dependencies [a66f4b0]
+- Updated dependencies [196160a]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [5513c2a]
+- Updated dependencies [90829e3]
+- Updated dependencies [1d29837]
+- Updated dependencies [14e2a3a]
+- Updated dependencies [006a5e7]
+- Updated dependencies [ba61c0b]
+- Updated dependencies [5986939]
+- Updated dependencies [200e634]
+- Updated dependencies [801036d]
+- Updated dependencies [7408dbb]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [808c8c8]
+- Updated dependencies [8c120db]
+- Updated dependencies [351ba9f]
+- Updated dependencies [57096ab]
+- Updated dependencies [bea2386]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [bb33c77]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [aac148b]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [f2f6f4b]
+- Updated dependencies [a28ce42]
+- Updated dependencies [17a4137]
+- Updated dependencies [bc0e36f]
+- Updated dependencies [e1942c7]
+- Updated dependencies [b4afc13]
+- Updated dependencies [2ca8690]
+- Updated dependencies [74d44e1]
+- Updated dependencies [c7d1170]
+- Updated dependencies [79d4f27]
+- Updated dependencies [b2a9ba1]
+- Updated dependencies [539dfe3]
+- Updated dependencies [7e57b48]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [d2cb42e]
+- Updated dependencies [cbddadb]
+- Updated dependencies [60bd774]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [ac18db8]
+- Updated dependencies [35da130]
+- Updated dependencies [c4645bc]
+- Updated dependencies [72e082b]
+- Updated dependencies [5b41d48]
+- Updated dependencies [bdea87a]
+- Updated dependencies [4b9542c]
+- Updated dependencies [28c92e0]
+- Updated dependencies [5f707d1]
+- Updated dependencies [091e7ea]
+- Updated dependencies [369e229]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [3d633ed]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [aca4317]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [3204a32]
+- Updated dependencies [4840fff]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [3cb20c0]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [e962151]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [718b01c]
+- Updated dependencies [b653746]
+- Updated dependencies [7b543fb]
+- Updated dependencies [57fea6a]
+- Updated dependencies [374b1a4]
+- Updated dependencies [2c590b0]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [ced8414]
+- Updated dependencies [8389c99]
+- Updated dependencies [2854a2e]
+- Updated dependencies [03c085c]
+- Updated dependencies [28df136]
+- Updated dependencies [d2ccfef]
+- Updated dependencies [6b487b8]
+- Updated dependencies [b0b2cc9]
+- Updated dependencies [dc38250]
+- Updated dependencies [666c4e6]
+- Updated dependencies [c4993f3]
+- Updated dependencies [fc3da91]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/generic-database-provider@6.2.0
+  - @memberjunction/sqlserver-dataprovider@6.2.0
+  - @memberjunction/core-entities@6.2.0
+  - @memberjunction/ai-agents@6.2.0
+  - @memberjunction/ai-prompts@6.2.0
+  - @memberjunction/ai@6.2.0
+  - @memberjunction/core-actions@6.2.0
+  - @memberjunction/ai-core-plus@6.2.0
+  - @memberjunction/actions@6.2.0
+  - @memberjunction/ai-openai@6.2.0
+  - @memberjunction/ai-anthropic@6.2.0
+  - @memberjunction/core-entities-server@6.2.0
+  - @memberjunction/core@6.2.0
+  - @memberjunction/ai-groq@6.2.0
+  - @memberjunction/ai-betty@6.2.0
+  - @memberjunction/dynamic-packages@6.2.0
+  - @memberjunction/ai-cerebras@6.2.0
+  - @memberjunction/ai-betty-bot@6.2.0
+  - @memberjunction/ai-mistral@6.2.0
+
+## 6.2.0-edge.8
+
+### Patch Changes
+
+- Updated dependencies [6c36fb6]
+- Updated dependencies [9cb815b]
+- Updated dependencies [d2db108]
+- Updated dependencies [c671f85]
+- Updated dependencies [6849b00]
+- Updated dependencies [59e32e0]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [e69634e]
+- Updated dependencies [db1528d]
+- Updated dependencies [373b180]
+- Updated dependencies [539dfe3]
+- Updated dependencies [ac18db8]
+  - @memberjunction/core@6.2.0-edge.8
+  - @memberjunction/core-entities@6.2.0-edge.8
+  - @memberjunction/core-entities-server@6.2.0-edge.8
+  - @memberjunction/generic-database-provider@6.2.0-edge.8
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.8
+  - @memberjunction/actions@6.2.0-edge.8
+  - @memberjunction/core-actions@6.2.0-edge.8
+  - @memberjunction/ai-core-plus@6.2.0-edge.8
+  - @memberjunction/ai-agents@6.2.0-edge.8
+  - @memberjunction/ai-prompts@6.2.0-edge.8
+  - @memberjunction/ai@6.2.0-edge.8
+  - @memberjunction/ai-anthropic@6.2.0-edge.8
+  - @memberjunction/ai-betty@6.2.0-edge.8
+  - @memberjunction/ai-betty-bot@6.2.0-edge.8
+  - @memberjunction/ai-cerebras@6.2.0-edge.8
+  - @memberjunction/ai-groq@6.2.0-edge.8
+  - @memberjunction/ai-mistral@6.2.0-edge.8
+  - @memberjunction/ai-openai@6.2.0-edge.8
+  - @memberjunction/dynamic-packages@6.2.0-edge.8
+
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [54f6563]
+- Updated dependencies [1419ba7]
+- Updated dependencies [305c429]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [e8b240f]
+- Updated dependencies [91cba84]
+- Updated dependencies [a6a4656]
+- Updated dependencies [8f370b3]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [3bace5a]
+- Updated dependencies [b1a656b]
+- Updated dependencies [953086f]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [0fb3649]
+- Updated dependencies [896334a]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [bc0503a]
+- Updated dependencies [bbca6b6]
+- Updated dependencies [6779eed]
+- Updated dependencies [0b406e8]
+- Updated dependencies [f34cbef]
+- Updated dependencies [c018cb9]
+- Updated dependencies [397ae9a]
+- Updated dependencies [cf6aee6]
+- Updated dependencies [89a5b59]
+- Updated dependencies [d7e95b9]
+- Updated dependencies [6b0de38]
+- Updated dependencies [8b90b41]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+- Updated dependencies [7b543fb]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/ai-agents@6.2.0-edge.7
+  - @memberjunction/core-actions@6.2.0-edge.7
+  - @memberjunction/actions@6.2.0-edge.7
+  - @memberjunction/ai-openai@6.2.0-edge.7
+  - @memberjunction/ai-anthropic@6.2.0-edge.7
+  - @memberjunction/ai-core-plus@6.2.0-edge.7
+  - @memberjunction/core-entities-server@6.2.0-edge.7
+  - @memberjunction/ai@6.2.0-edge.7
+  - @memberjunction/core-entities@6.2.0-edge.7
+  - @memberjunction/generic-database-provider@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+  - @memberjunction/ai-prompts@6.2.0-edge.7
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.7
+  - @memberjunction/ai-betty@6.2.0-edge.7
+  - @memberjunction/ai-betty-bot@6.2.0-edge.7
+  - @memberjunction/ai-cerebras@6.2.0-edge.7
+  - @memberjunction/ai-groq@6.2.0-edge.7
+  - @memberjunction/ai-mistral@6.2.0-edge.7
+  - @memberjunction/dynamic-packages@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Minor Changes

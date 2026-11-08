@@ -152,11 +152,22 @@ export type RealtimeTurnCoverage = 'audioActivityOnly' | 'audioActivityAndAllVid
 export interface RealtimeTurnDetectionSettings {
     /** The normalized mode; absent = `'default'`. */
     Mode?: RealtimeTurnDetectionMode;
-    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    /**
+     * The cross-driver patient (`low`) / normal (`auto`) / eager (`high`) turn-taking dial; ignored without a mapping.
+     * OpenAI and Eleven Realtime: semantic-VAD `eagerness`, applied only with `Mode: 'semanticVad'`. xAI: an end-of-turn
+     * silence ladder. Gemini: end-of-speech sensitivity. ElevenLabs Agents: turn eagerness.
+     */
     Eagerness?: 'low' | 'auto' | 'high';
-    /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+    /**
+     * Server-VAD activation threshold (0–1); ignored without a mapping. Approximate on Gemini (two levels:
+     * < 0.5 → high start sensitivity, >= 0.5 → low).
+     */
     Threshold?: number;
-    /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+    /**
+     * Server-VAD trailing-silence duration in ms; ignored without a mapping. Setting it (in any layer,
+     * including the model-vendor catalog) turns the eagerness ladder off for drivers without a native
+     * eagerness knob (xAI).
+     */
     SilenceDurationMs?: number;
     /**
      * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
@@ -279,10 +290,11 @@ export interface RealtimeUnitPrice {
 }
 
 /**
- * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
- * their own; the cost rows stay the authority for token prices. A price belongs to the host that
- * charges it, so set this on the model-vendor row: a price on the model or the model type would
- * reach every vendor that serves the model.
+ * Prices for realtime usage that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own: avatar video, and audio tokens, which providers bill at a different rate from the
+ * text tokens a cost row prices. The cost rows stay the authority for every other token price. A
+ * price belongs to the host that charges it, so set this on the model-vendor row: a price on the
+ * model or the model type would reach every vendor that serves the model.
  */
 export interface RealtimePricingSettings {
     /**
@@ -296,6 +308,22 @@ export interface RealtimePricingSettings {
      * at 6,192 tokens per second.
      */
     AvatarVideoOutput?: RealtimeUnitPrice | null;
+    /**
+     * The price of audio input tokens, charged on a line of its own instead of at the cost row's
+     * input rate. Realtime providers bill audio tokens at a different rate from text tokens (GPT
+     * Realtime: several times the text rate), and a cost row holds one input rate. `'Per 1M Tokens'`
+     * only; any other unit is not applied. Cached audio input tokens are priced at the cost row's cache-read rate, not here. Without this
+     * price, audio input tokens are priced at the cost row's input rate and the run's default cost
+     * line is marked as blended.
+     */
+    AudioInput?: RealtimeUnitPrice | null;
+    /**
+     * The price of audio output tokens, charged on a line of its own instead of at the cost row's
+     * output rate. `'Per 1M Tokens'` only; any other unit is not applied. Without this price, audio
+     * output tokens are priced at the cost row's output rate and the run's default cost line is
+     * marked as blended.
+     */
+    AudioOutput?: RealtimeUnitPrice | null;
 }
 
 /** Realtime (speech-to-speech) knobs. */

@@ -5,6 +5,7 @@ import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testin
 // file sees the complete registry (the explicit imports below cover only the hand-pinned
 // table's bundles — the barrel covers all of them).
 import '../index';
+import { SKIP_ALLOWLIST } from '../skip-allowlist';
 import { ServerCacheChecks } from '../checks/server-cache.checks';
 import { CacheImmutabilityChecks } from '../checks/cache-immutability.checks';
 import { ClientCacheChecks } from '../checks/client-cache.checks';
@@ -19,6 +20,7 @@ import { FieldRulesBulkUpdateChecks } from '../checks/field-rules-bulk-update.ch
 import { RemoteOperationsChecks } from '../checks/remote-operations.checks';
 import { AiSkillsChecks } from '../checks/ai-skills.checks';
 import { ApiKeysChecks } from '../checks/api-keys.checks';
+import { DiagnosticsChecks } from '../checks/diagnostics.checks';
 import { PredictiveStudioChecks } from '../checks/predictive-studio.checks';
 import { RemoteOpWireProgressChecks } from '../checks/remote-op-wire-progress.checks';
 import { PromptRunnerChecks } from '../checks/prompt-runner.checks';
@@ -36,6 +38,7 @@ import { AgentPromptCancellationChecks } from '../checks/agent-prompt-cancellati
 import { ListsChecks } from '../checks/lists.checks';
 import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
 import { UserRoutinesChecks } from '../checks/user-routines.checks';
+import { ChiefOfStaffChecks } from '../checks/chief-of-staff.checks';
 import { WorkQueueRuntimeChecks } from '../checks/work-queue-runtime.checks';
 import { AgentLoopLiveChecks } from '../checks/agent-loop-live.checks';
 import { ShippedAgentsLiveChecks } from '../checks/shipped-agents-live.checks';
@@ -87,6 +90,29 @@ import { PerformanceBenchmarkChecks } from '../checks/performance-benchmark.chec
 import { SearchOriginGateChecks } from '../checks/search-origin-gate.checks';
 import { SearchProviderTrustChecks } from '../checks/search-provider-trust.checks';
 import { SearchScopeBoundChecks } from '../checks/search-scope-bound.checks';
+import { QueryExtractionChecks } from '../checks/query-extraction.checks';
+import { QueryRefreshChecks } from '../checks/query-refresh.checks';
+import { MetadataSyncQueriesChecks } from '../checks/metadata-sync-queries.checks';
+import { QueryApiLifecycleChecks } from '../checks/query-api-lifecycle.checks';
+import { QuerySecurityChecks } from '../checks/query-security.checks';
+import { SqlPipeMatrixChecks, SqlPipeMatrixCrossChecks } from '../checks/sqlpipe-matrix.checks';
+import { SqlPipeMatrixClientChecks } from '../checks/sqlpipe-matrix-client.checks';
+import { CiphertextCacheChecks } from '../checks/ciphertext-cache.checks';
+import { ConcurrencyConflictClientChecks } from '../checks/concurrency-conflict-client.checks';
+import { EntityStatusFanoutClientChecks } from '../checks/entity-status-fanout-client.checks';
+import { EncryptedReadClientChecks } from '../checks/encrypted-read-client.checks';
+import { SqlPipeExtractionFixtureChecks } from '../checks/sqlpipe-extraction-fixtures.checks';
+import { AgentExecutionPrimitivesChecks } from '../checks/agent-execution-primitives.checks';
+import { AgentExecutionPrimitivesLiveChecks } from '../checks/agent-execution-primitives-live.checks';
+import { AgentConsultChecks } from '../checks/agent-consult.checks';
+import { AgentHandoffChecks } from '../checks/agent-handoff.checks';
+import { VideoDataSnapshotChecks } from '../checks/video-data-snapshot.checks';
+import { VideoGenerationCostChecks } from '../checks/video-generation-cost.checks';
+import { VideoStudioHandoffChecks } from '../checks/video-studio-handoff.checks';
+import { VideoStudioProductionChecks } from '../checks/video-studio-production.checks';
+import { VideoStudioLiveSmokeChecks } from '../checks/video-studio-live-smoke.checks';
+import { SemanticGraphChecks } from '../checks/semantic-graph.checks';
+import { RunViewFeatureChecks } from '../checks/runview-features.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -136,13 +162,13 @@ describe('IntegrationCheckRegistry', () => {
 
 describe('migrated bundles (coverage-loss guard)', () => {
     const bundles: Array<[string, NamedCheck[], number]> = [
-        ['server-cache', ServerCacheChecks, 32],
+        ['server-cache', ServerCacheChecks, 35],
         ['cache-immutability', CacheImmutabilityChecks, 15], // F1-F15 freeze-on-write runtime contract (IT81); F13/F14 cover review findings C1/C2, F15 covers M3 (dataset key collision)
-        ['client-cache', ClientCacheChecks, 14],
+        ['client-cache', ClientCacheChecks, 26],
         ['runquery-cache', RunQueryCacheChecks, 21], // Q11 (B46 category collision) + Q12 (B45 hit-vs-miss permission parity) added 2026-07-20; Q13–Q21 (query definition changes) added 2026-10-14
-        // RLS1–RLS10 (rls-isolation.checks.ts) + KF1–KF6 (keyrowfilter.checks.ts, API-key row filters)
+        // RLS1–RLS14 (rls-isolation.checks.ts) + KF1–KF6 (keyrowfilter.checks.ts, API-key row filters)
         // + RF1–RF3 (rolerowfilter.checks.ts, role filter edits) share one bundle
-        ['rls-isolation', [...RlsIsolationChecks, ...KeyRowFilterChecks, ...RoleRowFilterChecks], 19],
+        ['rls-isolation', [...RlsIsolationChecks, ...KeyRowFilterChecks, ...RoleRowFilterChecks], 22],
         ['rls-isolation-client', RlsIsolationClientChecks, 1],
         ['record-process', RecordProcessChecks, 12],
         ['record-process-facade', RecordProcessFacadeChecks, 2],
@@ -151,19 +177,21 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['remote-operations', RemoteOperationsChecks, 7],
         ['ai-skills', AiSkillsChecks, 21],
         ['api-keys', ApiKeysChecks, 3],
+        ['diagnostics', DiagnosticsChecks, 4], // DIAG1-DIAG4 session capture, bundle assembly, encrypted intake (IT163)
         ['predictive-studio', PredictiveStudioChecks, 5],
         ['remote-op-wire-progress', RemoteOpWireProgressChecks, 1],
         ['prompt-runner', PromptRunnerChecks, 1],
         ['ai-vendor-effort', AiVendorEffortChecks, 2],
         ['native-tool-calling-live', NativeToolCallingLiveChecks, 4],
-        ['native-tool-loop', NativeToolLoopChecks, 13],
+        ['native-tool-loop', NativeToolLoopChecks, 14],
         ['native-tool-loop-live', NativeToolLoopLiveChecks, 3],
         ['concurrent', ConcurrentChecks, 2],
         ['agent-runner', AgentRunnerChecks, 1],
         ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3],
         ['lists', ListsChecks, 3],
         ['open-app-teardown', OpenAppTeardownChecks, 2],
-        ['user-routines', UserRoutinesChecks, 16],
+        ['user-routines', UserRoutinesChecks, 18],
+        ['chief-of-staff', ChiefOfStaffChecks, 8], // COS1-COS8 ownership guards, run-now, policy cache, email approval-before-transport (IT157)
         ['work-queue-runtime', WorkQueueRuntimeChecks, 19], // WR1-WR19 host, RunOnce, partitions, cancel, operators, sweeper, REST (IT105)
         ['conversation-compaction', ConversationCompactionChecks, 23], // CC1-CC23
         ['trailing-runtime-state', TrailingRuntimeStateChecks, 6], // TRS1-TRS6
@@ -195,7 +223,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['materialized-read', MaterializedReadChecks, 3], // MR1-MR2 served-from-snapshot proof + MR3 delete-path FK cleanup (IT79)
         ['materialized-entity-read', MaterializedEntityReadChecks, 2], // EMR1-EMR2 entity base-view RunView redirect (IT78)
         ['form-contributions', FormContributionsChecks, 17], // FC1-FC17 metadata form contributions: schema, actions, clamp, kill switch, scoping, section claims, component guard (IT104)
-        ['scoped-anon-elevation', ScopedAnonElevationChecks, 6], // SA1-SA6 scoped-anonymous elevation permission contract (IT68)
+        ['scoped-anon-elevation', ScopedAnonElevationChecks, 7], // SA1-SA6 scoped-anonymous elevation permission contract + SA7 magic-link single-use consume (IT68)
         ['entity-graph', EntityGraphChecks, 11], // EG1-EG8 related-record collection graph saves (IT72)
         ['entity-embedded', EntityEmbeddedChecks, 6], // EE1-EE6 owner-held embedded records
         ['entity-graph-client', EntityGraphClientChecks, 9], // EGC1-EGC9 graph saves over the GraphQL wire (IT73)
@@ -212,20 +240,44 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-enforcement', FlsEnforcementChecks, 24], // FLS1-FLS24 field-level security against a live DB (IT90); FLS22/FLS23 cover the Record Changes payload projection, FLS24 record names, FLS21 measures metadata-refresh cost
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
-        ['fls-closeout', FlsCloseoutChecks, 19], // CO1-CO19 FLS close-out, server tier: object width, the clause gate, datasets, Record Changes by ViewID and full-width snapshots of restricted saves, config guards (CO14-CO16 mutation-gated), agent data sources, search projection (IT133)
+        ['fls-closeout', FlsCloseoutChecks, 20], // CO1-CO20 FLS close-out, server tier: object width, the clause gate, datasets, Record Changes by ViewID and full-width snapshots of restricted saves, config guards (CO14-CO16 mutation-gated), agent data sources, search projection, anchored record comments (IT133)
         ['fls-closeout-client', FlsCloseoutClientChecks, 9], // CW1-CW9 FLS close-out over the wire: client-input rejection (GraphQL, transaction groups, REST), transport projection, wire filter gate (IT134)
         ['fls-closeout-pending', FlsCloseoutPendingChecks, 7], // PC1-PC3 cache segmentation + PQ1-PQ4 RunQuery FLS (IT135)
         ['self-avatar-client', SelfAvatarClientChecks, 6], // AV1-AV6 self-service avatar mutation over the wire via per-user API keys (IT106)
         ['view-properties-client', ViewPropertiesClientChecks, 5], // VP1-VP5 User View properties over the wire: values, locked refusal, token default, RLS on top, cache keying (IT136)
         ['calendar-event-links', CalendarEventLinksChecks, 2], // CL1 UI role over GraphQL reads but cannot create; CL2 links, sync with a moved time and an RSVP, resync on a refused token, cancel (IT127)
         ['conversation-authorship-client', ConversationAuthorshipClientChecks, 12], // CA1-CA12 who a conversation message is from, owner + Edit grantee over the wire via per-user API keys; CA7-CA10 are the bypasses: forged OldValues___, transaction variables, role casing, moving a message; CA11-CA12 only the server writes agent replies (IT115)
-        ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
+        ['metadata-sync-push', MetadataSyncPushChecks, 12], // MSP1-MSP12 sync push atomicity, in-transaction metadata reload, one row-level security filter, and declared folder overrides, mutation tier (IT94)
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
         ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT101)
         ['performance-benchmark', PerformanceBenchmarkChecks, 14], // PB1-PB14 MJ primitives microbenchmarks + Sage/Query Builder/Research Agent deterministic and live runs + SaveReturnMode datestamps_only & Phase 2 regression guards (IT128)
         ['search-origin-gate', SearchOriginGateChecks, 4], // SOG1-SOG4 the search origin-record gate against the live views (IT116)
         ['search-provider-trust', SearchProviderTrustChecks, 2], // SPT1 external-index hits verified, SPT2 unresolvable scope refused (IT118)
         ['search-scope-bound', SearchScopeBoundChecks, 3], // SSB1-SSB3 a scoped search is bounded by its scope's rows (IT123)
+        ['agent-consult', AgentConsultChecks, 1], // AC1 deterministic sub-agent consult, escalation, request resume, open-consult reload, and resumeRunId chain (IT153)
+        ['agent-handoff', AgentHandoffChecks, 6], // AH1-AH6 top-level peer-to-peer handoff, FollowHandoffs, preset precedence, continuity, refusals, and non-handoff host guard (IT125)
+        ['video-data-snapshot', VideoDataSnapshotChecks, 3], // VDS1-VDS3 CaptureDataSnapshot + LoadDataSnapshotValues RLS and permission enforcement per contextUser (IT154)
+        ['video-generation-cost', VideoGenerationCostChecks, 2], // VGC1-VGC2 AIVideoRunner.RunGenerateVideo server-calculated Per Second cost and driver-reported cost preservation (IT155)
+        ['video-studio-handoff', VideoStudioHandoffChecks, 3], // VSH1-VSH3 top-level transfer to shipped Video Studio agent, preset resolution (Standard/High), and conversation continuity (IT150)
+        ['video-studio-production', VideoStudioProductionChecks, 5], // VSP1-VSP5 end-to-end Video Studio production pipeline with fakes (IT151)
+        ['video-studio-live-smoke', VideoStudioLiveSmokeChecks, 1], // VSLS1 live Draft 15s Social Short smoke test (IT152)
+        ['query-extraction', QueryExtractionChecks, 15], // QE1-QE15 exact fields, entities, parameters, doc comments and dependencies a query save extracts, both platforms (IT138)
+        ['query-refresh', QueryRefreshChecks, 16], // QR1-QR16 refresh and re-bind against a fixture schema the checks alter, dry run, order, drift, nullability, field deletes, authorization (IT139)
+        ['metadata-sync-queries', MetadataSyncQueriesChecks, 10], // MSQ1-MSQ10 declared query children through PushService, re-push, pull and shipped-tree no-ops (IT140)
+        ['query-api-lifecycle', QueryApiLifecycleChecks, 12], // QAL1-QAL12 create / edit / refresh through GraphQL, every column of every child row (IT141)
+        ['query-security', QuerySecurityChecks, 10], // QS1-QS10 write gate, forbidden functions, injection into shipped queries, EDS screen, FLS on queries (IT142)
+        ['sqlpipe-matrix', SqlPipeMatrixChecks, 2], // SPM1 all pairs over every scenario dimension, SPM5 extraction properties (IT143)
+        ['sqlpipe-extraction-fixtures', SqlPipeExtractionFixtureChecks, 40], // EF01-EF40 hand-written expected metadata per fixture query, both platforms (IT144)
+        ['sqlpipe-matrix-client', SqlPipeMatrixClientChecks, 2], // SPC1-SPC2 the scenario matrix over GraphQL (IT145)
+        ['sqlpipe-matrix-cross', SqlPipeMatrixCrossChecks, 4], // SPM2-SPM4 full cross products, SPM5 extraction properties (IT146)
+        ['agent-execution-primitives', AgentExecutionPrimitivesChecks, 6], // AEP1-AEP6 native tool-calling JSON bridge, multi-step loop steps[], durable TaskGraph settlement, Flow graduation round-trip (IT147)
+        ['agent-execution-primitives-live', AgentExecutionPrimitivesLiveChecks, 4], // AEPL1-AEPL4 live native-tool-calling providers running Pipeline, multi-step ForEach, and durable Tasks (IT148)
+        ['concurrency-conflict-client', ConcurrencyConflictClientChecks, 5], // CC1-CC5 optimistic concurrency across two GraphQL sessions (IT158)
+        ['entity-status-fanout-client', EntityStatusFanoutClientChecks, 3], // SF1-SF3 entity save pushes reach every session of the user (IT159)
+        ['encrypted-read-client', EncryptedReadClientChecks, 4], // ER1-ER4 encrypted field plaintext over GraphQL, miss and hit (IT160)
+        ['ciphertext-cache', CiphertextCacheChecks, 5], // CT0-CT4 ciphertext at rest in the RunViewCache, plaintext to the caller (IT161)
+        ['semantic-graph', SemanticGraphChecks, 7], // SG1-SG7 Semantic Graph substrate, Content Pipeline GraphStage overlay, and Executable Canon DAG similarity & telemetry (IT162)
+        ['runview-features', RunViewFeatureChecks, 12], // RVF1-RVF12 RunView cross-feature edges and RunViewParams.Parameters wire binding (IT32)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -250,9 +302,9 @@ describe('migrated bundles (coverage-loss guard)', () => {
         });
     }
 
-    it('server-cache marks exactly S17/S23/S24/S29/S30/S31b as RequiresMutation', () => {
+    it('server-cache marks exactly S17/S23/S24/S29/S30/S31b/S34 as RequiresMutation', () => {
         const mutating = ServerCacheChecks.filter(c => c.RequiresMutation).map(c => c.Id);
-        expect(mutating.sort()).toEqual(['server-cache.S17', 'server-cache.S23', 'server-cache.S24', 'server-cache.S29', 'server-cache.S30', 'server-cache.S31b']);
+        expect(mutating.sort()).toEqual(['server-cache.S17', 'server-cache.S23', 'server-cache.S24', 'server-cache.S29', 'server-cache.S30', 'server-cache.S31b', 'server-cache.S34']);
     });
 
     it('client-cache marks exactly C10 and C14 as RequiresMutation', () => {
@@ -277,8 +329,12 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-artifact-tools': 9,
         'agent-carry-forward': 6,
         'agent-compaction-e2e': 3,
+        'agent-consult': 1,
         'agent-decisions-switch': 9,
+        'agent-execution-primitives': 6,
+        'agent-execution-primitives-live': 4,
         'agent-external-harness': 7,
+        'agent-handoff': 6,
         'agent-loop-live': 7,
         'agent-loop-standin': 14,
         'agent-memory-guards': 5,
@@ -302,36 +358,42 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'alternate-base-views': 6,
         'api-keys': 3,
         'app-behavioral': 3,
-        'app-wiring': 10,
+        'app-wiring': 11,
         'auth-validation': 7,
         'binary-fields': 6,
         'cache-architecture': 11,
         'cache-gauntlet': 8,
         'cache-immutability': 15,
         'calendar-event-links': 2,
+        'chief-of-staff': 8,
+        'ciphertext-cache': 5,
         'class-resolution': 5,
-        'client-cache': 14,
+        'client-cache': 26,
         'cloudflare-clef': 6,
         'codegen-determinism': 6,
         'communication': 5,
+        'concurrency-conflict-client': 5,
         'concurrent': 2,
         'content-pipeline': 15,
         'content-vectorization': 10,
         'conversation-authorship-client': 12,
         'conversation-compaction': 23,
         'dataset-cache': 4,
+        'diagnostics': 4,
+        'encrypted-read-client': 4,
         'entity-actions': 8,
         'entity-embedded': 6,
         'entity-graph': 11,
         'entity-graph-client': 9,
         'entity-server-invariants': 9,
+        'entity-status-fanout-client': 3,
         'entity-writes': 13,
         'feature-pipeline-core': 9,
         'feature-value-only': 5,
         'field-rules-bulk-update': 3,
         'fls-closeout-client': 9,
         'fls-closeout-pending': 7,
-        'fls-closeout': 19,
+        'fls-closeout': 20,
         'fls-enforcement': 24,
         'fls-enforcement-client': 6,
         'fls-lifecycle': 9,
@@ -350,9 +412,10 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'materialized-read': 3,
         'metadata-consistency': 7,
         'metadata-sync': 9,
-        'metadata-sync-push': 10,
+        'metadata-sync-push': 12,
+        'metadata-sync-queries': 10,
         'native-tool-calling-live': 4,
-        'native-tool-loop': 13,
+        'native-tool-loop': 14,
         'native-tool-loop-live': 3,
         'nested-transactions': 11,
         'open-app-teardown': 2,
@@ -375,7 +438,11 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ps-gate-w4-s2-1': 1,
         'ps-gate-w7-s4-2': 1,
         'ps-truth-datasets': 68,
+        'query-api-lifecycle': 12,
         'query-approvals': 5,
+        'query-extraction': 15,
+        'query-refresh': 16,
+        'query-security': 10,
         'queue': 7,
         'realtime-deterministic': 20,
         'realtime-session-guard': 2,
@@ -386,29 +453,34 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'remote-op-ai-authoring': 3,
         'remote-op-wire-progress': 1,
         'remote-operations': 7,
-        'rls-isolation': 19,
+        'rls-isolation': 22,
         'rls-isolation-client': 1,
         'role-elevation': 6,
         'rubrics': 15,
         'runquery-cache': 21,
         'runquery-catalog': 6,
-        'runquery-features': 16,
+        'runquery-features': 17,
         'runquery-params': 10,
         'runquery-rendering': 13,
         'runquery-rendering-client': 10,
-        'runview-features': 6,
+        'runview-features': 12,
         'runview-matrix': 19,
         'scheduled-jobs': 2,
         'scheduling-concurrency': 3,
         'scope-enforcement': 5,
-        'scoped-anon-elevation': 6,
+        'scoped-anon-elevation': 7,
         'search': 8,
         'search-origin-gate': 4,
         'search-provider-trust': 2,
         'search-scope-bound': 3,
         'self-avatar-client': 6,
-        'server-cache': 32,
+        'semantic-graph': 7,
+        'server-cache': 35,
         'shipped-agents-live': 4,
+        'sqlpipe-extraction-fixtures': 40,
+        'sqlpipe-matrix': 2,
+        'sqlpipe-matrix-client': 2,
+        'sqlpipe-matrix-cross': 4,
         'startup-mode': 3,
         'storage': 9,
         'subq-mercury-decisions': 8,
@@ -421,7 +493,12 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'transaction-groups': 6,
         'transaction-groups-batched': 5,
         'user-elevation': 4,
-        'user-routines': 16,
+        'user-routines': 18,
+        'video-data-snapshot': 3,
+        'video-generation-cost': 2,
+        'video-studio-handoff': 3,
+        'video-studio-live-smoke': 1,
+        'video-studio-production': 5,
         'view-execution': 12,
         'view-properties-client': 5,
         'view-security': 4,
@@ -450,7 +527,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(154);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(179);
     });
 });
 
@@ -510,8 +587,18 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'cache-gauntlet.CG7',
         'cache-gauntlet.CG8',
         'cache-immutability.F12',
+        'ciphertext-cache.CT0',
+        'ciphertext-cache.CT1',
+        'ciphertext-cache.CT2',
+        'ciphertext-cache.CT3',
+        'ciphertext-cache.CT4',
         'client-cache.C10',
         'client-cache.C14',
+        'concurrency-conflict-client.CC1',
+        'concurrency-conflict-client.CC2',
+        'concurrency-conflict-client.CC3',
+        'concurrency-conflict-client.CC4',
+        'concurrency-conflict-client.CC5',
         'content-pipeline.CP1',
         'content-pipeline.CP10',
         'content-pipeline.CP11',
@@ -549,6 +636,10 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'conversation-authorship-client.CA7',
         'conversation-authorship-client.CA8',
         'conversation-authorship-client.CA9',
+        'encrypted-read-client.ER1',
+        'encrypted-read-client.ER2',
+        'encrypted-read-client.ER3',
+        'encrypted-read-client.ER4',
         'entity-actions.EA1',
         'entity-actions.EA2',
         'entity-actions.EA3',
@@ -582,6 +673,9 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'entity-server-invariants.ESI3',
         'entity-server-invariants.ESI4',
         'entity-server-invariants.ESI9',
+        'entity-status-fanout-client.SF1',
+        'entity-status-fanout-client.SF2',
+        'entity-status-fanout-client.SF3',
         'entity-writes.EW1',
         'entity-writes.EW10',
         'entity-writes.EW11',
@@ -655,6 +749,8 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'livekit-room.LKR1',
         'metadata-sync-push.MSP1',
         'metadata-sync-push.MSP10',
+        'metadata-sync-push.MSP11',
+        'metadata-sync-push.MSP12',
         'metadata-sync-push.MSP2',
         'metadata-sync-push.MSP3',
         'metadata-sync-push.MSP4',
@@ -783,18 +879,21 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'rubrics.R8',
         'rubrics.R9',
         'rubrics.W1',
+        'scoped-anon-elevation.SA7',
         'self-avatar-client.AV1',
         'self-avatar-client.AV2',
         'self-avatar-client.AV3',
         'self-avatar-client.AV4',
         'self-avatar-client.AV5',
         'self-avatar-client.AV6',
+        'semantic-graph.SG4',
         'server-cache.S17',
         'server-cache.S23',
         'server-cache.S24',
         'server-cache.S29',
         'server-cache.S30',
         'server-cache.S31b',
+        'server-cache.S34',
         'task-graph-execution.TX1',
         'task-graph-execution.TX10',
         'task-graph-execution.TX11',
@@ -862,6 +961,10 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'agent-carry-forward.CF6',
         'agent-compaction-e2e.CE2',
         'agent-compaction-e2e.CE9',
+        'agent-execution-primitives-live.AEPL1',
+        'agent-execution-primitives-live.AEPL2',
+        'agent-execution-primitives-live.AEPL3',
+        'agent-execution-primitives-live.AEPL4',
         'agent-loop-live.AL1',
         'agent-loop-live.AL2',
         'agent-loop-live.AL3',
@@ -916,6 +1019,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'shipped-agents-live.SA2',
         'shipped-agents-live.SA3',
         'shipped-agents-live.SA4',
+        'video-studio-live-smoke.VSLS1',
     ];
 
     it('the mutation-gated (RequiresMutation) set is exactly the pinned snapshot', () => {
@@ -926,5 +1030,17 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
     it('the live-model-gated (RequiresLiveModel) set is exactly the pinned snapshot', () => {
         const actual = collectGated('RequiresLiveModel');
         expect(actual, `Live-model-gated set drifted (a check newly self-skips or un-gated). Paste over EXPECTED_LIVE_MODEL_GATED if deliberate:\n${pasteReady(actual)}`).toEqual(EXPECTED_LIVE_MODEL_GATED);
+    });
+});
+
+describe('skip allowlist', () => {
+    it('every allowlist entry names a registered check and gives a reason', () => {
+        const reg = IntegrationCheckRegistry.Instance;
+        const entries = reg.GetAllowedSkips();
+        expect(entries.length).toBe(SKIP_ALLOWLIST.length);
+        const bundles = new Set(reg.GetBundleNames());
+        const stale = entries.filter(e => !reg.Get(e.CheckId) && !bundles.has(e.CheckId)).map(e => e.CheckId);
+        expect(stale, `Allowlist entries for checks that are not registered: ${stale.join(', ')}`).toEqual([]);
+        expect(entries.filter(e => e.Reason.trim().length < 20).map(e => e.CheckId)).toEqual([]);
     });
 });

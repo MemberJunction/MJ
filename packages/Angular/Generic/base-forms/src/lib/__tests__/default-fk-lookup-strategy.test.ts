@@ -6,7 +6,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { EntityInfo, type EntityFieldInfo, type IMetadataProvider, type RunViewParams } from '@memberjunction/core';
 import { DefaultFKLookupStrategy, CombineFilters } from '../field/default-fk-lookup-strategy';
-import type { FKLookupContext } from '../field/fk-lookup-strategy';
+import { FKLookupFailedError, type FKLookupContext } from '../field/fk-lookup-strategy';
 
 const PARTY_FIELDS = [
   { ID: 'P1', Name: 'ID', Type: 'uniqueidentifier', AllowsNull: false, IsPrimaryKey: true },
@@ -231,7 +231,7 @@ describe('DefaultFKLookupStrategy', () => {
     expect(provider.runViewCalls[0].ExtraFilter).toContain(`[Name] LIKE 'sum%'`);
   });
 
-  it('returns no rows rather than throwing when the search API is unavailable and the view fails', async () => {
+  it('falls back past an unavailable search API, but reports a failed view rather than returning no rows', async () => {
     const provider = {
       SearchEntity: vi.fn(async () => {
         throw new Error('no search resolver');
@@ -239,7 +239,18 @@ describe('DefaultFKLookupStrategy', () => {
       RunView: vi.fn(async () => ({ Success: false, Results: [], RowCount: 0, TotalRowCount: 0, ErrorMessage: 'boom' })),
     } as unknown as IMetadataProvider;
 
-    const groups = await new DefaultFKLookupStrategy().Lookup(context({ Query: 'sum', Options: HYBRID }, provider));
-    expect(groups[0].Rows).toEqual([]);
+    // No rows would render as "No matches" for a record that may exist; the field turns this
+    // error into its error row with Retry instead.
+    await expect(
+      new DefaultFKLookupStrategy().Lookup(context({ Query: 'sum', Options: HYBRID }, provider))
+    ).rejects.toBeInstanceOf(FKLookupFailedError);
+  });
+
+  it('reports a failed browse view, so an empty list always means nothing matched', async () => {
+    const provider = {
+      RunView: vi.fn(async () => ({ Success: false, Results: [], RowCount: 0, TotalRowCount: 0, ErrorMessage: 'boom' })),
+    } as unknown as IMetadataProvider;
+
+    await expect(new DefaultFKLookupStrategy().Lookup(context({ Query: '' }, provider))).rejects.toThrow(/browse failed: boom/);
   });
 });
