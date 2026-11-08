@@ -133,7 +133,7 @@ export class MyCustomViewerComponent extends BaseArtifactViewerComponent {
 |--------|---------------|-------------|
 | `JsonArtifactViewerComponent` | JSON | Formatted JSON with syntax highlighting |
 | `CodeArtifactViewerComponent` | Code | Code editor with language detection |
-| `MarkdownArtifactViewerComponent` | Markdown | Rendered markdown content |
+| `MarkdownArtifactViewerComponent` | Markdown Document | Collaborative MJ Docs editor & viewer with TOC outline rail, `/` slash menu, live MJ blocks (`EntityView`, `SavedQuery`, `DashboardPart`, `InteractiveComponent`), inline OLE `Artifact` / `Whiteboard` blocks, Suggest mode, anchored `DocBlock` comments with `@mention`, version diffing, and `.md`/`.docx`/`.pdf` import/export |
 | `HtmlArtifactViewerComponent` | HTML | Sandboxed HTML rendering |
 | `SvgArtifactViewerComponent` | SVG | SVG image rendering |
 | `AudioArtifactViewerComponent` | Audio | Audio playback via `mj-media-player` (transport, waveform scrubber, playback speed) |

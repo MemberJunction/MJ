@@ -119,6 +119,21 @@ export abstract class BaseArtifactViewerPluginComponent extends BaseAngularCompo
   @Input() VisibleVersionNumbers: ReadonlyArray<number> | null = null;
 
   /**
+   * Emitted when an inline-editable plugin (such as `MarkdownArtifactViewerComponent` or
+   * `WhiteboardArtifactViewerComponent` in OLE canvas mode) commits updated serialized
+   * content that should be persisted as a new `MJ: Artifact Versions` record.
+   */
+  public ContentCommitted = new EventEmitter<string>();
+
+  /**
+   * Whether this plugin supports inline editing when `[readonly]="false"` ("MS OLE" inline mode, § 3.4.1).
+   * Subclasses that support inline editing override this getter to return `true`.
+   */
+  public get SupportsInlineEdit(): boolean {
+    return false;
+  }
+
+  /**
    * Whether this plugin is showing an "elevated" display (e.g., extracted markdown/HTML)
    * vs raw content. When true and content type is JSON, the wrapper will show a JSON tab.
    *

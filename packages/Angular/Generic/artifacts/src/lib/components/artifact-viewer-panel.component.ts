@@ -1293,7 +1293,44 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     if (tabs.length > 0) {
       this.ActiveTab = tabs[0].toLowerCase();
     }
+    if (this.PluginViewer?.ContentCommitted) {
+      this.PluginViewer.ContentCommitted.pipe(takeUntil(this.destroy$)).subscribe((newContent: string) => {
+        void this.OnPluginContentCommitted(newContent);
+      });
+    }
     this.cdr.detectChanges(); // zone.js 0.15: plugin loaded via async callback, force CD
+  }
+
+  /**
+   * Persists a new `MJArtifactVersionEntity` when an inline-editable viewer plugin
+   * emits `ContentCommitted`.
+   */
+  public async OnPluginContentCommitted(serializedContent: string): Promise<void> {
+    if (!this.Artifact || !this.CurrentUser || this.canEdit === false) {
+      return;
+    }
+    try {
+      const md = this.ProviderToUse;
+      const nextVersionNum =
+        this.AllVersions.reduce((max, v) => Math.max(max, v.VersionNumber || 0), 0) + 1;
+      const newVer = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', this.CurrentUser);
+      newVer.NewRecord();
+      newVer.ArtifactID = this.Artifact.ID;
+      newVer.UserID = this.CurrentUser.ID;
+      newVer.VersionNumber = nextVersionNum;
+      newVer.Name = this.artifactVersion?.Name || this.Artifact.Name;
+      newVer.Content = serializedContent;
+      const saved = await newVer.Save();
+      if (saved) {
+        this.artifactVersion = newVer;
+        this.SelectedVersionNumber = nextVersionNum;
+        this.AllVersions = [newVer, ...this.AllVersions];
+        this.JsonContent = this.formatJSON(serializedContent);
+        this.cdr.detectChanges();
+      }
+    } catch (err) {
+      LogError(err);
+    }
   }
 
   /** @deprecated Use {@link OnPluginLoaded}. */

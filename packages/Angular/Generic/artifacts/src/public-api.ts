@@ -11,6 +11,8 @@ export * from './lib/services/artifact-file.service';
 export * from './lib/services/analyze-artifact.service';
 export * from './lib/services/interactive-form-apply.service';
 export * from './lib/services/artifact-preview-resolver.service';
+export * from './lib/services/document-collaboration.service';
+export * from './lib/services/document-import-export.service';
 
 // Interfaces
 export * from './lib/interfaces/artifact-viewer-plugin.interface';

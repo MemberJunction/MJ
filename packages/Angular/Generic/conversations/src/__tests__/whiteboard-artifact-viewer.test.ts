@@ -118,4 +118,32 @@ describe('WhiteboardArtifactViewerComponent — plugin contract', () => {
     viewer.artifactVersion = fakeVersion(buildBoardJson());
     expect(viewer.GetCurrentStateSnapshot()?.title).toBe('Whiteboard');
   });
+
+  it('declares SupportsInlineEdit = true and provides an interactive EditableBoardState when readonly is false', () => {
+    const viewer = new WhiteboardArtifactViewerComponent();
+    viewer.readonly = false;
+    viewer.artifactVersion = fakeVersion('');
+
+    expect(viewer.SupportsInlineEdit).toBe(true);
+    expect(viewer.hasDisplayContent).toBe(true);
+    expect(viewer.EditableBoardState).toBeInstanceOf(WhiteboardState);
+  });
+
+  it('emits ContentCommitted with serialized WhiteboardState.ToJSON() when OnCommitInlineChanges() is called in inline OLE mode', () => {
+    const viewer = new WhiteboardArtifactViewerComponent();
+    viewer.readonly = false;
+    viewer.artifactVersion = fakeVersion(buildBoardJson(), 'Architecture Board');
+
+    const committedPayloads: string[] = [];
+    viewer.ContentCommitted.subscribe((json: string) => committedPayloads.push(json));
+
+    viewer.EditableBoardState.AddItem({ Kind: 'sticky', X: 220, Y: 140, Text: 'Inline OLE edit' }, 'user');
+    viewer.OnCommitInlineChanges();
+
+    expect(committedPayloads).toHaveLength(1);
+    const rehydrated = ParseBoardStateJson(committedPayloads[0]);
+    expect(rehydrated?.ElementCount).toBe(3);
+
+    viewer.ngOnDestroy();
+  });
 });

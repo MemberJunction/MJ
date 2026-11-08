@@ -4,6 +4,7 @@ import type {
     MJConversationEntity,
     MJConversationEntity_IConversationAnchorMetadata
 } from '../generated/entity_subclasses';
+import { ArtifactPermissionEngine } from './ArtifactPermissionDelegate';
 
 /**
  * Union of allowed `AnchorType` values on `MJ: Conversations`, derived directly
@@ -304,6 +305,20 @@ export async function UserCanReadLinkedRecord(
                 Reason: 'You do not have access to the linked record.',
                 EntityInfo: entityInfo
             };
+        }
+        if (entityInfo.Name.trim().toLowerCase() === 'mj: artifacts') {
+            const artifactPerm = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+                provider,
+                linkedRecordId,
+                user
+            );
+            if (!artifactPerm.CanRead) {
+                return {
+                    Allowed: false,
+                    Reason: artifactPerm.Reason || 'You do not have permission to view this artifact.',
+                    EntityInfo: entityInfo
+                };
+            }
         }
         return { Allowed: true, Reason: null, EntityInfo: entityInfo };
     } catch (error) {
