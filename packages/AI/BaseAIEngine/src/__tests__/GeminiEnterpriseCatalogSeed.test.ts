@@ -380,9 +380,9 @@ describe('Gemini 3.8 Live on Vertex AI — the turn coverage a session asks for'
         expect(realtimeOn(GOOGLE).TurnDetection?.Coverage).toBe('audioActivityAndAllVideo');
     });
 
-    it('trusts native session resumption on Vertex AI while Google disables it for v1alpha ephemeral token constraints', () => {
+    it('trusts native session resumption on Vertex AI while Google leaves it unset for topology-aware resolution', () => {
         expect(realtimeOn(VERTEX).TrustNativeResumption).toBe(true);
-        expect(realtimeOn(GOOGLE).TrustNativeResumption).toBe(false);
+        expect(realtimeOn(GOOGLE).TrustNativeResumption).toBeUndefined();
     });
 
     it("differs from Google's Realtime configuration only in the coverage, the avatar video price, and native resumption trust", () => {
