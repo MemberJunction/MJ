@@ -4130,7 +4130,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                         continue;
                     }
 
-                    const pkField = entity.FirstPrimaryKey;
+                    const pkField = entityInfo.FirstPrimaryKey;
                     const pkLiteral = this.RenderPrimaryKeyLiteral(pkField, ret[pkField.Name], entityInfo.Name);
                     let relSql: string;
 

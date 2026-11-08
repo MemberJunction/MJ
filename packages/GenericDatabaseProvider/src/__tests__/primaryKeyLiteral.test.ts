@@ -103,11 +103,11 @@ describe('GenericDatabaseProvider Load key', () => {
                 name === 'WidgetParts' ? ({ Name: 'WidgetParts', SchemaName: 'dbo', BaseView: 'vwWidgetParts' } as EntityInfo) : undefined,
         });
         const entity = {
-            FirstPrimaryKey: textKey,
             EntityInfo: {
                 Name: 'Widgets',
                 SchemaName: 'dbo',
                 BaseView: 'vwWidgets',
+                FirstPrimaryKey: textKey,
                 PrimaryKeys: [textKey],
                 Fields: [textKey],
                 RelatedEntities: [
