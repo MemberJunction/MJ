@@ -16,20 +16,25 @@ import { EmitStats } from './emit-stats';
  * @returns true when the file was created or rewritten
  */
 export function WriteFileIfChanged(filePath: string, newContent: string): boolean {
-  const dir = path.dirname(filePath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  if (fs.existsSync(filePath)) {
-    const existing = fs.readFileSync(filePath, 'utf-8');
-    if (existing === newContent) {
-      EmitStats.RecordFileWrite(false);
-      return false;
-    }
+  // Read directly rather than checking existence first, so nothing can change between the check and the read.
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  if (readIfExists(filePath) === newContent) {
+    EmitStats.RecordFileWrite(false);
+    return false;
   }
   fs.writeFileSync(filePath, newContent);
   EmitStats.RecordFileWrite(true);
   return true;
+}
+
+/** The file's contents, or `undefined` when it does not exist. */
+function readIfExists(filePath: string): string | undefined {
+  try {
+    return fs.readFileSync(filePath, 'utf-8');
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw e;
+  }
 }
 
 /** @deprecated Use {@link WriteFileIfChanged}. */
