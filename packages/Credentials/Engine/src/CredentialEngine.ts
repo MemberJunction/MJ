@@ -1132,6 +1132,22 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     private _credentialWriteChains: Map<string, Promise<void>> = new Map();
 
     /**
+     * Minimum time, in ms, between two `LastUsedAt` (or two `LastValidatedAt`) saves of one
+     * credential from this process. 0 saves on every use.
+     *
+     * Each touch is a full-row save, so it costs a Record Change and an audit-visible write, and
+     * while it runs it can revert a change another process commits to the same row (a
+     * write-all-columns `spUpdate`, issue #4339). Credentials are read on hot paths — a server
+     * resolving an API key per request — so touching on every read multiplies both. The
+     * timestamps are informational; a minute of staleness is the trade, the same one
+     * `APIKeyEngine` makes for API keys.
+     */
+    public TimestampTouchIntervalMs = 60_000;
+
+    /** When this process last started a touch, keyed `credentialId|column` (lower-cased). */
+    private _lastTimestampTouchAt: Map<string, number> = new Map();
+
+    /**
      * Serializes writes to a single credential row within this process.
      *
      * Why: BaseEntity.Save() writes every updatable column from the entity's
@@ -1153,7 +1169,8 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
      *
      * And two separate processes can still clobber each other's columns regardless —
      * that is a property of MJ's write-all-columns spUpdate semantics affecting every
-     * entity, tracked by the sparse-update work in issue #2552.
+     * entity, tracked in issue #4339. {@link TimestampTouchIntervalMs} keeps the
+     * timestamp touches, the most frequent of those writes, rare.
      *
      * The returned promise settles with the operation's own outcome; a rejected
      * operation does not break the chain for subsequent writers.
@@ -1178,47 +1195,75 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     }
 
     /**
-     * Updates the LastUsedAt timestamp on a credential.
+     * Updates the LastUsedAt timestamp on a credential, at most once per
+     * {@link TimestampTouchIntervalMs}.
      */
     private async updateLastUsedAt(credentialId: string, contextUser: UserInfo): Promise<void> {
-        await this.enqueueCredentialWrite(credentialId, () =>
-            this.touchCredentialTimestamp(credentialId, 'LastUsedAt', contextUser));
+        await this.touchThrottled(credentialId, 'LastUsedAt', contextUser);
     }
 
     /**
-     * Updates the LastValidatedAt timestamp on a credential.
+     * Updates the LastValidatedAt timestamp on a credential, at most once per
+     * {@link TimestampTouchIntervalMs}.
      */
     private async updateLastValidatedAt(credentialId: string, contextUser: UserInfo): Promise<void> {
-        await this.enqueueCredentialWrite(credentialId, () =>
-            this.touchCredentialTimestamp(credentialId, 'LastValidatedAt', contextUser));
+        await this.touchThrottled(credentialId, 'LastValidatedAt', contextUser);
+    }
+
+    /**
+     * Runs a timestamp touch unless this process started one for the same credential and column
+     * within {@link TimestampTouchIntervalMs}. The slot is claimed before the save, so a burst of
+     * concurrent reads schedules one touch; a touch that does not save gives the slot back so the
+     * next read retries.
+     */
+    private async touchThrottled(credentialId: string, column: 'LastUsedAt' | 'LastValidatedAt', contextUser: UserInfo): Promise<void> {
+        const key = `${credentialId.trim().toLowerCase()}|${column}`;
+        const now = Date.now();
+        const last = this._lastTimestampTouchAt.get(key);
+        if (this.TimestampTouchIntervalMs > 0 && last !== undefined && now - last < this.TimestampTouchIntervalMs) {
+            return;
+        }
+        this._lastTimestampTouchAt.set(key, now);
+        const saved = await this.enqueueCredentialWrite(credentialId, () =>
+            this.touchCredentialTimestamp(credentialId, column, contextUser));
+        if (!saved && this._lastTimestampTouchAt.get(key) === now) {
+            this._lastTimestampTouchAt.delete(key);
+        }
     }
 
     /**
      * Sets a timestamp column via a normal entity save. Must only run inside
      * {@link enqueueCredentialWrite} — unserialized, the full-row save this
      * performs is exactly the stale-snapshot clobber described there.
+     *
+     * @returns true when the timestamp was saved or the row no longer exists; false when the save failed
      */
     private async touchCredentialTimestamp(
         credentialId: string,
         column: 'LastUsedAt' | 'LastValidatedAt',
         contextUser: UserInfo
-    ): Promise<void> {
+    ): Promise<boolean> {
         try {
             const md = this.ProviderToUse;
             const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
             const loaded = await credEntity.Load(credentialId);
             if (!loaded) {
-                return; // Row deleted since the read that triggered this touch — nothing to do
+                return true; // Row deleted since the read that triggered this touch — nothing to do
             }
             if (column === 'LastUsedAt') {
                 credEntity.LastUsedAt = new Date();
             } else {
                 credEntity.LastValidatedAt = new Date();
             }
-            await credEntity.Save();
+            const saved = await credEntity.Save();
+            if (!saved) {
+                LogError(`CredentialEngine: ${column} save failed for credential ${credentialId}: ${credEntity.LatestResult?.CompleteMessage ?? 'no result message'}`);
+            }
+            return saved;
         } catch (e) {
             // Non-fatal - just log
             LogError(e);
+            return false;
         }
     }
 
