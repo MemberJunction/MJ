@@ -14,6 +14,8 @@
 "@memberjunction/ng-conversations": minor
 "@memberjunction/server": minor
 "@memberjunction/realtime-runtime": minor
+"@memberjunction/core-entities": minor
+"@memberjunction/ai-bridge-zoom": patch
 ---
 
 Generic long-call reconnects, token refresh, and conversation continuity across all realtime voice/video providers (#6460):
