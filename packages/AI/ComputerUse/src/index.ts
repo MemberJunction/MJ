@@ -22,6 +22,14 @@ export * from './browser/HeadlessBrowserEngine.js';
 export * from './browser/NavigationGuard.js';
 export * from './browser/selector-resolution.js';
 export * from './browser/connect-endpoint.js';
+export {
+    INTERACTIVITYPROBE,
+    INTERACTIVITY_PROBE,
+    MapRawToInteractiveElement,
+    ProbeDomInteractiveElements,
+    ResolveDomSelector,
+    type RawInteractiveElement,
+} from './browser-probe/index.js';
 
 // ─── Auth Exports ──────────────────────────────────────────
 export * from './auth/AuthHandler.js';

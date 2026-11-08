@@ -6960,6 +6960,49 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@opentelemetry/api@1.10.0)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/Angular/Generic/browser-extension:
+    dependencies:
+      '@angular/common':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      '@angular/core':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@memberjunction/ai-core-plus':
+        specifier: 6.2.0
+        version: link:../../../AI/CorePlus
+      '@memberjunction/browser-extension-core':
+        specifier: 6.2.0
+        version: link:../../../BrowserExtension/Core
+      '@memberjunction/core':
+        specifier: 6.2.0
+        version: link:../../../MJCore
+      '@memberjunction/global':
+        specifier: 6.2.0
+        version: link:../../../MJGlobal
+      '@memberjunction/ng-base-types':
+        specifier: 6.2.0
+        version: link:../base-types
+      rxjs:
+        specifier: ^7.8.2
+        version: 7.8.2
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+    devDependencies:
+      '@angular/compiler':
+        specifier: 21.2.22
+        version: 21.2.22
+      '@angular/compiler-cli':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
+      '@memberjunction/ng-test-utils':
+        specifier: 6.2.0
+        version: link:../test-utils
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@opentelemetry/api@1.10.0)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/Angular/Generic/charts:
     dependencies:
       '@angular/cdk':
@@ -10597,6 +10640,114 @@ importers:
       tsc-alias:
         specifier: ^1.8.15
         version: 1.8.16
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@opentelemetry/api@1.10.0)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/BrowserExtension/Builder:
+    dependencies:
+      '@memberjunction/browser-extension-core':
+        specifier: 6.2.0
+        version: link:../Core
+      '@memberjunction/browser-extension-host':
+        specifier: 6.2.0
+        version: link:../Host
+      '@memberjunction/theme-engine':
+        specifier: 6.2.0
+        version: link:../../ThemeEngine
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+      zod:
+        specifier: ^3.25.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.11
+        version: 24.10.11
+      playwright:
+        specifier: ^1.51.0
+        version: 1.58.1
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@opentelemetry/api@1.10.0)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/BrowserExtension/Core:
+    dependencies:
+      '@memberjunction/ai':
+        specifier: 6.2.0
+        version: link:../../AI/Core
+      '@memberjunction/ai-core-plus':
+        specifier: 6.2.0
+        version: link:../../AI/CorePlus
+      '@memberjunction/ai-realtime-client':
+        specifier: 6.2.0
+        version: link:../../AI/RealtimeClient
+      '@memberjunction/computer-use':
+        specifier: 6.2.0
+        version: link:../../AI/ComputerUse
+      '@memberjunction/core':
+        specifier: 6.2.0
+        version: link:../../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.2.0
+        version: link:../../MJCoreEntities
+      '@memberjunction/global':
+        specifier: 6.2.0
+        version: link:../../MJGlobal
+      '@memberjunction/realtime-runtime':
+        specifier: 6.2.0
+        version: link:../../RealtimeRuntime
+      '@memberjunction/theme-engine':
+        specifier: 6.2.0
+        version: link:../../ThemeEngine
+      rxjs:
+        specifier: ^7.8.2
+        version: 7.8.2
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.11
+        version: 24.10.11
+      jsdom:
+        specifier: 26.1.0
+        version: 26.1.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@opentelemetry/api@1.10.0)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/BrowserExtension/Host:
+    dependencies:
+      '@memberjunction/ai-core-plus':
+        specifier: 6.2.0
+        version: link:../../AI/CorePlus
+      '@memberjunction/browser-extension-core':
+        specifier: 6.2.0
+        version: link:../Core
+      '@memberjunction/computer-use':
+        specifier: 6.2.0
+        version: link:../../AI/ComputerUse
+      '@memberjunction/core':
+        specifier: 6.2.0
+        version: link:../../MJCore
+      '@memberjunction/global':
+        specifier: 6.2.0
+        version: link:../../MJGlobal
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+    devDependencies:
+      jsdom:
+        specifier: 26.1.0
+        version: 26.1.0
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -48255,7 +48406,7 @@ snapshots:
 
   mutation-server-protocol@0.4.1:
     dependencies:
-      zod: 4.3.6
+      zod: 4.6.7
 
   mutation-testing-elements@3.7.3: {}
 

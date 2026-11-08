@@ -1,0 +1,40 @@
+{
+  "name": "@memberjunction/browser-extension-host",
+  "version": "6.2.0",
+  "description": "Manifest V3 Chrome Extension Host entry points (Service Worker, Content Script with Shadow-DOM Coach-Mark renderer, Offscreen Audio Daemon, and Side Panel bootstrap) for the MemberJunction Browser Extension.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "public",
+    "manifest.template.json"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@memberjunction/ai-core-plus": "6.2.0",
+    "@memberjunction/browser-extension-core": "6.2.0",
+    "@memberjunction/computer-use": "6.2.0",
+    "@memberjunction/core": "6.2.0",
+    "@memberjunction/global": "6.2.0",
+    "tslib": "^2.8.1"
+  },
+  "devDependencies": {
+    "jsdom": "^27.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ.git"
+  },
+  "license": "MIT",
+  "author": "MemberJunction.com"
+}

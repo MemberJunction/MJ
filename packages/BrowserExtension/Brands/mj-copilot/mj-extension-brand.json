@@ -1,0 +1,46 @@
+{
+  "BrandSlug": "mj-copilot",
+  "BrandName": "MemberJunction Co-Pilot",
+  "ShortName": "MJ Co-Pilot",
+  "Version": "6.2.0",
+  "Description": "Enterprise AI Browser Co-Pilot with multi-app context braiding, zero-blip voice continuity, and guided admin playbooks.",
+  "AssistantDisplayName": "MJ Co-Pilot",
+  "Tagline": "Enterprise AI Browser Companion",
+  "DefaultControlBackend": "content-script",
+  "IncludeDebuggerPermission": true,
+  "HostPermissions": [
+    "<all_urls>"
+  ],
+  "ExternallyConnectableMatches": [
+    "https://*.memberjunction.com/*",
+    "http://localhost:*/*"
+  ],
+  "BlockedDomains": [
+    "*.1password.com",
+    "*.lastpass.com",
+    "*.bitwarden.com",
+    "*.dashlane.com"
+  ],
+  "ThemeSeeds": {
+    "primary": "#2563eb",
+    "accent": "#06b6d4",
+    "tertiary": "#6366f1",
+    "neutralChroma": 0.25,
+    "vibrancy": 1,
+    "radius": 8,
+    "depth": 1,
+    "fontFamily": "Inter, system-ui, -apple-system, sans-serif",
+    "fontFamilyMono": "JetBrains Mono, monospace"
+  },
+  "Icons": {
+    "Icon16": "icons/icon-16.png",
+    "Icon32": "icons/icon-32.png",
+    "Icon48": "icons/icon-48.png",
+    "Icon128": "icons/icon-128.png"
+  },
+  "SuggestedPrompts": [
+    "Summarize this page and show related MemberJunction records",
+    "Enrich this contact or organization in MemberJunction",
+    "Guide me through setting up OAuth credentials"
+  ]
+}

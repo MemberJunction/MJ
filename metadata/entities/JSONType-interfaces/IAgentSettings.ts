@@ -91,4 +91,103 @@ export interface IAgentSettings {
             RequireZeroDataRetentionFor?: Array<'state' | 'pixels'> | null;
         } | null;
     } | null;
+
+    /**
+     * Browser Extension configuration for this application — declares URL/DOM entity resolution rules
+     * (`ContextRules`), multi-app entity braiding facets (`EntityFacets`), default browser control backend,
+     * enterprise debugger ceiling (`AllowDebuggerCDP`), and optional runtime `BrandKitID`.
+     */
+    BrowserExtension?: {
+        /** Default browser control backend for this app (`'content-script'` default, `'debugger-cdp'`, or `'auto'`). */
+        DefaultControlBackend?: 'content-script' | 'debugger-cdp' | 'auto' | null;
+        /** Enterprise safety ceiling: when `false`, forbids `chrome.debugger` CDP attach and locks to `'content-script'`. */
+        AllowDebuggerCDP?: boolean | null;
+        /** Optional `MJ: Brand Kits` ID used to dynamically skin the Side Panel and Coach-Mark overlays at runtime. */
+        BrandKitID?: string | null;
+        /** Optional blocked domain wildcards (e.g. `['*.1password.com', '*.okta.com']`) that force exposure to `'none'`. */
+        BlockedDomains?: string[] | null;
+        /** URL & DOM → MJ Entity anchor resolution rules contributed by this application. */
+        ContextRules?: Array<{
+            /** Unique rule key, e.g. `'common.organization.by-domain'` or `'common.person.linkedin'`. */
+            Key: string;
+            /** Owning Open App or package name, e.g. `'@mj-biz-apps/common'`. */
+            SourceApp: string;
+            /** Human-readable rule name. */
+            Name: string;
+            /** Evaluation priority (lower number = higher priority; sorted deterministically). */
+            Priority: number;
+            /** Whether this rule is active. */
+            IsActive: boolean;
+            /** URL inclusion/exclusion patterns for triggering this rule. */
+            UrlMatch: {
+                /** Glob or regex patterns matching candidate URLs (e.g. LinkedIn profile paths or domain globs). */
+                IncludePatterns: string[];
+                /** Excluded domain/URL patterns. */
+                ExcludePatterns?: string[];
+            };
+            /** How signals are extracted from the active tab's URL and DOM. */
+            Extractor: {
+                /** Registered `BaseBrowserPageExtractor` class name (default: `'StandardPageExtractor'`). */
+                DriverClass: string;
+                /** Optional CSS/XPath/JSON-LD/Meta selectors mapped to logical signal keys. */
+                Selectors?: Record<string, {
+                    Source: 'url-param' | 'url-regex' | 'hostname-root' | 'meta' | 'json-ld' | 'css-text' | 'css-attr';
+                    Expression: string;
+                    Attribute?: string;
+                }>;
+            };
+            /** How extracted signals resolve to an MJ Entity record via batched `RunViews()`. */
+            EntityResolution: {
+                /** Target MJ Entity Name, e.g. `'MJ_BizApps_Common: Organizations'`. */
+                EntityName: string;
+                /** Parameterized `RunView` ExtraFilter template using `{{signalKey}}` placeholders. */
+                FilterTemplate: string;
+                /** Optional secondary fallback filter template when primary filter returns 0 rows. */
+                FallbackFilterTemplate?: string;
+                /** Maximum rows to return (bounded per MJ rule). */
+                MaxRows: number;
+            };
+            /** Optional mapping from extracted signal keys to entity field names for page-to-entity diff & 1-click capture. */
+            CandidateFieldMapping?: Record<string, string>;
+            /** Optional domain-specific control backend override when this rule matches. */
+            PreferredControlBackend?: 'content-script' | 'debugger-cdp' | 'auto';
+        }> | null;
+        /** Multi-app contextual slices braided onto a resolved anchor entity (`AnchorEntityName`). */
+        EntityFacets?: Array<{
+            /** Unique facet key, e.g. `'sales.active-deals'` or `'betty.member-status'`. */
+            Key: string;
+            /** Anchor entity name that triggers this facet, e.g. `'MJ_BizApps_Common: Organizations'`. */
+            AnchorEntityName: string;
+            /** Owning Open App name (used for badge, icon, and permission scoping). */
+            ApplicationName: string;
+            /** Display title for the facet card in the Side Panel. */
+            Title: string;
+            /** Font Awesome icon class for the facet header. */
+            IconClass: string;
+            /** Display ordering sequence (ascending). */
+            Sequence: number;
+            /** Batched `RunViews()` query definition referencing `{{AnchorRecordID}}` / `{{AnchorEntityName}}`. */
+            Query: {
+                EntityName: string;
+                FilterTemplate: string;
+                OrderBy?: string;
+                MaxRows: number;
+                Fields?: string[];
+            };
+            /** How the facet renders in the Side Panel Braided Context Drawer. */
+            Surface: {
+                Renderer: 'entity-cards' | 'metric-summary' | 'component-spec';
+                ComponentArtifactID?: string;
+                EmptyStateBehavior: 'hide' | 'show-quick-create';
+            };
+            /** Contextual Quick Actions / Agent Prompts surfaced in this facet. */
+            QuickActions?: Array<{
+                Label: string;
+                IconClass: string;
+                Kind: 'agent-prompt' | 'remote-operation' | 'open-in-explorer' | 'create-related-record';
+                Target: string;
+                ParamsTemplate?: Record<string, string>;
+            }>;
+        }> | null;
+    } | null;
 }
