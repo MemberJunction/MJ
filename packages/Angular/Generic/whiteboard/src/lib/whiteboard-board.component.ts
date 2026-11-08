@@ -14,7 +14,8 @@ import {
   WhiteboardItem, WhiteboardItemPatch, WhiteboardMarkdownItem, WhiteboardPageInfo,
   WhiteboardPoint, WhiteboardShapeItem, WhiteboardState, WhiteboardStickyItem, WhiteboardTagClass, WhiteboardTextItem
 } from './whiteboard-state';
-import { WhiteboardTextStyleEvent, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
+import { WhiteboardTextStyleEvent } from './whiteboard-toolbar.component';
+import { WHITEBOARD_PEN_COLORS } from './whiteboard-state';
 import {
   EvaluateWidgetInteractionMessage, EvaluateWidgetSubmitMessage,
   WHITEBOARD_WIDGET_INTERACTION_MAX_CHARS, WHITEBOARD_WIDGET_SUBMIT_MAX_CHARS,

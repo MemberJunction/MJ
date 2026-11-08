@@ -632,13 +632,16 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     const md = this.ProviderToUse;
     const transGroup = await md.CreateTransactionGroup();
 
-    // Queue all saves - no need to await individual saves since transaction group queues them
+    // Queue all saves. A grouped Save() runs validation and pre-save hooks before it joins the
+    // group, so wait for every one to be queued; submitting earlier sends an empty group that
+    // reports success and persists nothing. A grouped Save() resolves once queued, not once sent.
+    const queued: Promise<boolean>[] = [];
     for (const notification of this.AllNotifications) {
       if (notification.Unread && bRead || !notification.Unread && !bRead) {
-        // Don't await - Save() with transaction group queues the operation immediately
-        this.MarkAsRead(notification, bRead, transGroup);
+        queued.push(this.MarkAsRead(notification, bRead, transGroup));
       }
     }
+    await Promise.all(queued);
 
     // Submit transaction group - this is where the actual network call happens
     if (!await transGroup.Submit())
