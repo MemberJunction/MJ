@@ -7,6 +7,8 @@ import { PredictionUnit } from '../prediction-unit';
 import { HoldoutCarveDateError } from '../holdout-carve';
 import { ProtocolRows } from '../protocol-rows';
 import { EvaluationProtocolRules } from '../evaluation-protocol-rules';
+import type { PredictionUnitSpec } from '../prediction-unit';
+import type { EvaluationProtocolSpec } from '../evaluation-protocol';
 
 const pipeline = (over: Partial<LegacyPipelineFields> = {}): LegacyPipelineFields => ({
   Name: 'Member Renewal Risk', TargetEntity: 'Membership Years', TargetVariable: 'Renewed', ProblemType: 'classification',
@@ -193,6 +195,24 @@ describe('LegacyProtocolDraft', () => {
     const plain = LegacyPipelines.LegacyProtocolInputs(null, null, null, []);
     if (plain.Kind !== 'protocol') throw new Error(plain.Reason);
     expect(LegacyPipelines.LegacyProtocolDraft(parsed.Value, plain, 'x').innerValidation).toEqual(EvaluationProtocolRules.DefaultEvaluationProtocolDraft({ Unit: parsed.Value, Holdout: plain.Holdout, Candidates: 1, Seed: 0, Name: 'x' }).innerValidation);
+  });
+
+  it('gives a pipeline bound to a grouped unit grouped folds and cluster-bootstrap intervals that the unit accepts', () => {
+    const r = LegacyPipelines.LegacyUnitInputs(pipeline({ AsOfStrategy: null }), ['1', '0'], '2026-10-20', LegacyCandidatesFor('Renewed'), 'migration');
+    if (r.Kind !== 'unit') throw new Error(r.Kind);
+    const parsed = PredictionUnit.ParsePredictionUnitRow({ ID: 'U', LineageRootID: 'U', Version: 1, LabelVersion: 1, AuthoredBy: JSON.stringify({ kind: 'system', component: 'pipeline-migration' }), ...ProtocolRows.UnitDraftColumns(r.Draft) });
+    if (parsed.Ok === false) throw new Error(parsed.Errors.join('; '));
+    const inputs = LegacyPipelines.LegacyProtocolInputs(JSON.stringify({ Strategy: 'kfold', K: 3, LockedHoldoutFraction: 0.15 }), null, null, []);
+    if (inputs.Kind !== 'protocol') throw new Error(inputs.Reason);
+    const grouped: PredictionUnitSpec = { ...parsed.Value, groupKey: 'PersonID' };
+    const d = LegacyPipelines.LegacyProtocolDraft(grouped, inputs, 'P — migrated protocol');
+    expect(d.innerValidation).toEqual({ kind: 'grouped-kfold', folds: 3, repeats: 3, groupKey: 'PersonID' });
+    expect(d.intervals.method).toBe('cluster-bootstrap');
+    const spec: EvaluationProtocolSpec = { ...d, id: 'P1', lineageRootId: 'P1', version: 1, authoredBy: { kind: 'system', component: 'pipeline-migration' } };
+    expect(EvaluationProtocolRules.ValidateProtocolForUnit(spec, grouped)).toEqual([]);
+    const ungrouped = LegacyPipelines.LegacyProtocolDraft(parsed.Value, inputs, 'P — migrated protocol');
+    expect(ungrouped.innerValidation).toEqual({ kind: 'repeated-stratified-kfold', folds: 3, repeats: 3 });
+    expect(EvaluationProtocolRules.ValidateProtocolForUnit({ ...spec, ...ungrouped }, parsed.Value)).toEqual([]);
   });
 });
 

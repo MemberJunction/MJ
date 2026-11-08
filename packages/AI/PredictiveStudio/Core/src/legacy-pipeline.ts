@@ -383,11 +383,19 @@ export class LegacyPipelines {
 
   /**
    * Version 1 of a migrated pipeline's protocol: the unit's default protocol for one candidate with the legacy holdout,
-   * the legacy k-fold (when it had one) and the legacy deny lists as exclusions.
+   * the legacy k-fold (when it had one) and the legacy deny lists as exclusions. A grouped unit's legacy k-fold becomes
+   * grouped folds by the unit's key (S2.6), and its intervals stay the default's cluster-bootstrap.
    */
   public static LegacyProtocolDraft(unit: PredictionUnitSpec, inputs: Extract<LegacyProtocolOutcome, { readonly Kind: 'protocol' }>, name: string): EvaluationProtocolDraft {
     const draft = EvaluationProtocolRules.DefaultEvaluationProtocolDraft({ Unit: unit, Holdout: inputs.Holdout, Candidates: 1, Seed: LEGACY_PROTOCOL_SEED, Name: name });
-    return { ...draft, exclusions: inputs.Exclusions, innerValidation: inputs.InnerValidation === null ? draft.innerValidation : inputs.InnerValidation };
+    const inner = inputs.InnerValidation === null ? draft.innerValidation : LegacyPipelines.groupedForUnit(inputs.InnerValidation, unit);
+    return { ...draft, exclusions: inputs.Exclusions, innerValidation: inner };
+  }
+
+  /** Stratified folds on a grouped unit become grouped folds of the same size by the unit's group key. */
+  private static groupedForUnit(inner: InnerValidation, unit: PredictionUnitSpec): InnerValidation {
+    if (unit.groupKey === null || inner.kind !== 'repeated-stratified-kfold') return inner;
+    return { kind: 'grouped-kfold', folds: inner.folds, repeats: inner.repeats, groupKey: unit.groupKey };
   }
 
   /**
