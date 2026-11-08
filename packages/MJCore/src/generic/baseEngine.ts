@@ -2389,10 +2389,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * error) does not, so without this the refresh would stop for good after a single failed read
      * and the property would keep its last rows indefinitely.
      * The re-arm uses the config as it is now, so a reload that dropped the Expiration while this
-     * tick was running stops the timer instead of keeping it at the old interval.
-     * @param timer - The handle that fired; if the map no longer holds it, a successful load, a
-     *                {@link ReconcileExpirationTimers} or a {@link RemoveDynamicConfig} already
-     *                decided what happens next.
+     * tick was running stops the timer instead of keeping it at the old interval, including a
+     * timer this tick's own load armed from the config it started with.
+     * @param timer - The handle that fired; if the map no longer holds it and the config still has
+     *                an Expiration, a successful load, a {@link ReconcileExpirationTimers} or a
+     *                {@link RemoveDynamicConfig} already decided what happens next.
      */
     private async runExpirationRefresh(propertyName: string, expiration: number, timer: number): Promise<void> {
         try {
@@ -2400,14 +2401,17 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         } catch (e) {
             LogError(`${this.constructor.name}: timed refresh of ${propertyName} failed — ${(e as Error).message}. Retrying in ${expiration} ms.`);
         }
-        if (this._expirationTimers.get(propertyName) !== timer) {
+        const config = this._metadataConfigs.find(c => c.PropertyName === propertyName) || this._dynamicConfigs.get(propertyName);
+        if (!config?.Expiration) {
+            // The refresh is disabled now. A load that was already reading when the interval was
+            // set to 0 finishes with the config it started with and may have armed a new timer
+            // after the reconcile ran, so stop whatever timer the map holds.
+            clearTimeout(this._expirationTimers.get(propertyName));
+            this._expirationTimers.delete(propertyName);
             return;
         }
-        const config = this._metadataConfigs.find(c => c.PropertyName === propertyName) || this._dynamicConfigs.get(propertyName);
-        if (config?.Expiration) {
+        if (this._expirationTimers.get(propertyName) === timer) {
             this.SetExpirationTimer(propertyName, config.Expiration);
-        } else {
-            this._expirationTimers.delete(propertyName);
         }
     }
 

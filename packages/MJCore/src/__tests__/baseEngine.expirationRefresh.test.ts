@@ -22,6 +22,8 @@ class TestEngine extends BaseEngine<TestEngine> {
     public BypassCacheArgs: boolean[] = [];
     /** Outcome per load (shifted per call): 'ok', 'fail' (Success false) or 'throw'. Defaults to 'ok'. */
     public Outcomes: Array<'ok' | 'fail' | 'throw'> = [];
+    /** When set, the next load waits on this promise before returning its result (one use). */
+    public HoldNextRead: Promise<void> | null = null;
 
     public async Config(_forceRefresh?: boolean, _contextUser?: UserInfo): Promise<void> {
         // no-op — configs are injected via SetConfigsForTest
@@ -67,6 +69,11 @@ class TestEngine extends BaseEngine<TestEngine> {
         bypassCache: boolean = false,
     ): Promise<void> {
         this.BypassCacheArgs.push(bypassCache);
+        const hold = this.HoldNextRead;
+        this.HoldNextRead = null;
+        if (hold) {
+            await hold;
+        }
         const outcome = this.Outcomes.length > 0 ? this.Outcomes.shift() : 'ok';
         if (outcome === 'throw') {
             throw new Error('connection reset');
@@ -210,6 +217,24 @@ describe('BaseEngine timed refresh (Expiration)', () => {
             // reload ran to clear the timer — only the re-arm check stands between it and forever.
             engine.SetConfigsForTest([makeConfig()]);
             await tick();
+            expect(vi.getTimerCount()).toBe(0);
+            const before = engine.BypassCacheArgs.length;
+            await tick();
+            await tick();
+            expect(engine.BypassCacheArgs.length).toBe(before);
+        });
+
+        it('stops a timer armed by a tick whose read was in flight during the disable', async () => {
+            // The tick's read is held while the disable's reload runs and reconciles to 0 timers.
+            // When the read resumes it finishes with the config it started with, which still has
+            // an Expiration, so it arms a new timer that the tick itself must then stop.
+            let release: () => void = () => undefined;
+            engine.HoldNextRead = new Promise<void>(resolve => { release = resolve; });
+            await vi.advanceTimersByTimeAsync(EXPIRATION_MS);
+            await engine.LoadForTest([makeConfig()]);
+            expect(vi.getTimerCount()).toBe(0);
+            release();
+            await vi.advanceTimersByTimeAsync(0);
             expect(vi.getTimerCount()).toBe(0);
             const before = engine.BypassCacheArgs.length;
             await tick();
