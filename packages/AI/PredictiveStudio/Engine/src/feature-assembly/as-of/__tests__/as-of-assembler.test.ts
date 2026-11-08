@@ -813,6 +813,21 @@ describe('AsOfFeatureAssembler — a stored value changed after the decision by 
     const out = await new AsOfFeatureAssembler().Assemble(input([replayed], { Rows: onAssemblyDay, Tables: withoutP1, Changes: noCreate, Unit: { ...unit, history: { ...unit.history, onUncoveredRow: 'exclude-and-count' } } }));
     expect(out.Status === 'assembled' ? out.UncoveredRowsExcluded : out).toEqual([{ entity: 'People', field: 'Status', rows: 1 }]);
   });
+  it('excludes, under exclude-and-count, a stored read of a parent whose only history is an Update and a Delete before the decision date', async () => {
+    const past: AssemblyRowRef[] = [{ RowID: 'y1', EntityKey: 'y1', DecisionDate: new Date('2023-06-01T00:00:00Z'), Period: null }];
+    const withoutP1 = { ...data, People: data.People.filter((p) => p.ID !== 'P1') };
+    const noCreate = { People: [rc('u0', 'P1', 'Update', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }, ['Status']), rc('d1', 'P1', 'Delete', '2022-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' })] };
+    const out = await new AsOfFeatureAssembler().Assemble(input([stored], { Rows: past, Tables: withoutP1, Changes: noCreate, Unit: { ...unit, history: { ...unit.history, onUncoveredRow: 'exclude-and-count' } } }));
+    expect(out.Status === 'assembled' ? out.UncoveredRowsExcluded : out).toEqual([{ entity: 'People', field: 'Status', rows: 1 }]);
+  });
+  it('refuses, under refuse, a replayed parent hard-deleted with a value no change row produced: its Delete row fails continuity', async () => {
+    const replayed: FeatureColumnSpec = { ...stored, source: { kind: 'record-changes', entity: 'People', field: 'Status', keyField: 'PersonID' } };
+    const past: AssemblyRowRef[] = [{ RowID: 'y1', EntityKey: 'y1', DecisionDate: new Date('2023-12-01T00:00:00Z'), Period: null }];
+    const withoutP1 = { ...data, People: data.People.filter((p) => p.ID !== 'P1') };
+    const moved = { People: [rc('c0', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' }), rc('d1', 'P1', 'Delete', '2024-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' })] };
+    const out = await new AsOfFeatureAssembler().Assemble(input([replayed], { Rows: past, Tables: withoutP1, Changes: moved }));
+    expect(out).toEqual({ Status: 'refused', Refusal: { kind: 'decision-date-before-change-history', entity: 'People', field: 'Status', historyStart: '2021-01-01T00:00:00.000Z', rowsAffected: 1 } });
+  });
 
   it('keeps the stored value when a later Snapshot or Create row carries the same value of the field', async () => {
     const out = await new AsOfFeatureAssembler().Assemble(input([stored], { Rows: one, Tables: data, Changes: { People: [

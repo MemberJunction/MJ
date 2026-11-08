@@ -121,8 +121,8 @@ export class RecordHistory {
 
   /**
    * Pure: index the change rows, run the continuity check against the current values, and expose replay.
-   * `current` is keyed by the lower-cased record key, as `KeyedReader.ReadPresentByKeys` produces it; a deleted record has
-   * no current row and is skipped by the continuity check. The entity's field types
+   * `current` is keyed by the lower-cased record key, as `KeyedReader.ReadPresentByKeys` produces it; a hard-deleted
+   * record has no current row, so its Delete row stands in for it in the continuity check. The entity's field types
    * decide how two values of a field compare (see {@link comparable}).
    */
   public static BuildEntityHistory(
@@ -137,8 +137,8 @@ export class RecordHistory {
     const byKey = RecordHistory.indexByKey(changes);
     const start = RecordHistory.historyStarts(byKey);
     const created = RecordHistory.creationInstants(byKey);
-    const continuity = RecordHistory.checkContinuity(scope, byKey, start, current, fields);
     const hardDeleted = new Set([...RecordHistory.endingInDelete(byKey)].filter((k) => !current.has(k)));
+    const continuity = RecordHistory.checkContinuity(scope, byKey, start, current, hardDeleted, fields);
     const allCovered = [...current.keys()].every((k) => start.has(k));
     const historyStart = allCovered && start.size > 0 ? new Date(Math.max(...[...start.values()].map((d) => d.getTime()))).toISOString() : null;
     return {
@@ -280,10 +280,14 @@ export class RecordHistory {
     return created;
   }
 
-  /** Replays every covered record to now and compares it with the stored value; a mismatch marks that record-field. */
+  /**
+   * Replays every covered record to now and compares it with the stored value; a mismatch marks that record-field. A
+   * covered hard-deleted record (`hardDeleted`) has no stored value, so its Delete row is compared with the change row
+   * before it: a value the Delete recorded that no change row produced is the same untracked write.
+   */
   private static checkContinuity(
     scope: ComparisonScope, byKey: ReadonlyMap<string, readonly RecordChangeRow[]>, start: ReadonlyMap<string, Date>,
-    current: ReadonlyMap<string, Readonly<Record<string, CellValue>>>, fields: readonly string[],
+    current: ReadonlyMap<string, Readonly<Record<string, CellValue>>>, hardDeleted: ReadonlySet<string>, fields: readonly string[],
   ): { readonly Mismatched: ReadonlySet<string>; readonly Replayed: number; readonly RecordsMismatched: number } {
     const mismatched = new Set<string>();
     let replayed = 0;
@@ -294,6 +298,16 @@ export class RecordHistory {
       const last = list[list.length - 1];
       for (const f of fields) {
         if (RecordHistory.comparable(RecordHistory.fieldOf(last.FullRecordJSON, f), scope, f) !== RecordHistory.comparable(row[f], scope, f)) mismatched.add(`${k}|${f}`);
+      }
+    }
+    for (const k of hardDeleted) {
+      const list = byKey.get(k);
+      if (!list || list.length < 2 || !start.has(k)) continue;
+      replayed++;
+      const lastChange = list[list.length - 2];
+      const del = list[list.length - 1];
+      for (const f of fields) {
+        if (RecordHistory.comparable(RecordHistory.fieldOf(lastChange.FullRecordJSON, f), scope, f) !== RecordHistory.comparable(RecordHistory.fieldOf(del.FullRecordJSON, f), scope, f)) mismatched.add(`${k}|${f}`);
       }
     }
     return { Mismatched: mismatched, Replayed: replayed, RecordsMismatched: new Set([...mismatched].map((x) => x.split('|')[0])).size };
@@ -344,7 +358,10 @@ export class RecordHistory {
     return lo;
   }
 
-  /** The value in force strictly before `before`, or why it cannot be replayed. Today's value never fills a gap. */
+  /**
+   * The value in force strictly before `before`, or why it cannot be replayed. Today's value never fills a gap. A Delete
+   * in force before the instant reads as deleted whatever the record's history start.
+   */
   private static valueAt(
     byKey: ReadonlyMap<string, readonly RecordChangeRow[]>, start: ReadonlyMap<string, Date>, mismatched: ReadonlySet<string>,
     policy: ChangeHistoryPolicy, recordKey: string, field: string, before: Date,
@@ -352,12 +369,12 @@ export class RecordHistory {
     const k = recordKey.toLowerCase();
     const list = byKey.get(k);
     const s = start.get(k);
+    const inForce = list ? list.filter((c) => c.ChangedAt.getTime() < before.getTime()) : [];
+    if (inForce.length > 0 && inForce[inForce.length - 1].Type === 'Delete') return { Status: 'uncovered', Reason: 'deleted' };
     if (!list || !s) return { Status: 'uncovered', Reason: 'no-history' };
     if (before.getTime() <= s.getTime()) return { Status: 'uncovered', Reason: 'before-history-start' };
     if (mismatched.has(`${k}|${field}`)) return { Status: 'uncovered', Reason: 'continuity-mismatch' };
-    const inForce = list.filter((c) => c.ChangedAt.getTime() < before.getTime());
     const last = inForce[inForce.length - 1];
-    if (last.Type === 'Delete') return { Status: 'uncovered', Reason: 'deleted' };
     if (policy.externalSourceRows === 'ineligible' && inForce.some((c) => c.Source === 'External' && (c.Type !== 'Update' || RecordHistory.changedFields(c.ChangesJSON).has(field)))) {
       return { Status: 'uncovered', Reason: 'external-ineligible' };
     }
