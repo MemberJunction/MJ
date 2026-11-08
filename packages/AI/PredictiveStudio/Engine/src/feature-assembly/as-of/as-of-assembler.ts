@@ -38,7 +38,10 @@
  * instant are consulted for it). Child rows are judged for the whole batch, against the earliest decision day: a child row re-owned or re-dated
  * after a decision day can move between owners, so every child row read passes the rule for its owner key, date, value
  * and filter fields (void and end dates are compared with the decision day and need no check), and one the rule
- * excludes makes every unit row uncovered.
+ * excludes makes every unit row uncovered. On a child entity that tracks Record Changes, the child rows include every
+ * child hard-deleted since (its history ends in a Delete, no current row is left) that an owner of the batch ever held:
+ * for an owner row decided while it stood (its Delete at or after the row's as-of instant) it is read and judged on its
+ * Delete row exactly as a present child is; for a row decided after its Delete it is absent, neither counted nor judged.
  *
  * Coverage: every Record Changes history the assembly reads (replayed fields and the stable-value rule) is reported in
  * the result's `Coverage`, one entry per entity and field. A history is loaded once per assembly for one entity, field
@@ -84,7 +87,7 @@ import type { AssemblyEntityInfo, IAssemblyMetadata } from '../assembly-metadata
 import type { FeatureAssemblyResult } from '../feature-assembly-executor';
 import { CompleteReader } from '../read-policy';
 import { KeyedReader } from './read-by-keys';
-import { RecordHistory, type EntityHistory, type IRecordHistoryReader } from './record-history';
+import { RecordHistory, type DeletedChildRecord, type EntityHistory, type IRecordHistoryReader } from './record-history';
 import { AssemblyRefused } from './refusal';
 import { WindowedAggregates, type ChildRow, type ChildRowIndex } from './windowed-aggregate';
 import { SeriesFeatures, type SeriesHistory } from './series-features';
@@ -163,6 +166,11 @@ interface UncoveredTally { readonly Entity: string; readonly Field: string; read
 interface AssembledRows { readonly Rows: AssembledRow[]; readonly Excluded: Set<string>; readonly Uncovered: UncoveredTally[] }
 /** One stored record the stable-value rule judges, with the unit rows whose values its stored fields stand for. */
 interface StableRead { readonly Key: string; readonly Rows: readonly AssemblyRowRef[] }
+/** A windowed aggregate's child rows as read (see `childIndex`); `DeletedAt` holds each hard-deleted child's Delete instant. */
+interface ChildRowsRead {
+  readonly Child: AssemblyEntityInfo; readonly Index: ChildRowIndex; readonly Keys: readonly string[];
+  readonly CreatedAt: ReadonlyMap<string, CellValue>; readonly DeletedAt: ReadonlyMap<string, Date>;
+}
 /** The rule's verdict on a stored record; `changed` and `uncovered` refuse the assembly and are never returned. */
 type StableOutcome = 'stable' | 'created-after' | 'changed' | 'uncovered' | 'excluded';
 /**
@@ -916,14 +924,18 @@ export class AsOfFeatureAssembler {
    * A windowed aggregate over the owner's child rows; its version hashes the contributing rows (and their update times).
    * Every child row read passes the stable-value rule before any value is used, and a child row that did not exist on
    * the owner row's decision day (late-entered) is dropped from that owner's window; the drops are recorded per column.
+   * A child hard-deleted after an owner row's decision day counts for that row as its Delete row recorded it, and one
+   * deleted before is absent (see {@link childIndex}).
    */
   private async aggregateReader(spec: FeatureColumnSpec, source: WindowedAggregateSource, input: AsOfAssemblyInput, state: AssemblyState): Promise<FeatureReader> {
-    const { Child: child, Index: index, Keys: keys, CreatedAt: createdAt } = await this.childIndex(source, input);
     // The contract: a null owner key field means the row's entity key.
     const join = await this.keyResolver(source.ownerKeyField, input, (row) => row.EntityKey, state);
-    const excludedFor = await this.assertStableChildRows(child, source, keys, (key) => createdAt.get(key.toLowerCase()) || null, input, state);
+    const ownerKeys = AsOfFeatureAssembler.uniqueKeys(input.Rows.map((row) => join.KeyOf(row)).filter((k): k is string => k !== null));
+    const { Child: child, Index: index, Keys: keys, CreatedAt: createdAt, DeletedAt: deletedAt } = await this.childIndex(source, ownerKeys, input);
+    const excludedFor = await this.assertStableChildRows(child, source, keys, deletedAt, (key) => createdAt.get(key.toLowerCase()) || null, input, state);
     const history = child.TrackRecordChanges && keys.length > 0 ? await AsOfFeatureAssembler.loadHistory(child, keys, [source.foreignKey], input, state) : null;
-    const existedAt = (c: ChildRow, at: Date): boolean => AsOfFeatureAssembler.existedBefore(AsOfFeatureAssembler.creationInstant(history, c.Id, createdAt.get(c.Id.toLowerCase())), at);
+    const existedAt = (c: ChildRow, at: Date): boolean => AsOfFeatureAssembler.existedBefore(AsOfFeatureAssembler.creationInstant(history, c.Id, createdAt.get(c.Id.toLowerCase())), at)
+      && AsOfFeatureAssembler.standsAt(deletedAt, c.Id, at);
     const values = new Map<AssemblyRowRef, RawValue>();
     let dropped = 0;
     for (const row of input.Rows) {
@@ -933,7 +945,7 @@ export class AsOfFeatureAssembler {
         values.set(row, AsOfFeatureAssembler.aggregateValue(spec, source, null, row, [], null, input));
         continue;
       }
-      const agg = AsOfFeatureAssembler.aggregateOfPresentRows(index, owner, row, source, existedAt);
+      const agg = AsOfFeatureAssembler.aggregateOfPresentRows(index, owner, row, source, existedAt, deletedAt);
       dropped += agg.Dropped;
       values.set(row, AsOfFeatureAssembler.aggregateValue(spec, source, owner, row, agg.Contributors, agg.Value, input));
     }
@@ -951,16 +963,20 @@ export class AsOfFeatureAssembler {
   /**
    * One owner's aggregate as of its decision day over the child rows that existed then: the rows the full window would
    * have read but that were entered after the decision day are dropped and counted, and the aggregate is recomputed
-   * over the owner's remaining rows.
+   * over the owner's remaining rows. A hard-deleted child whose Delete is before the decision instant
+   * (`deletedAt`, by lower-cased child key) is not in the full window at all: it is absent, not late-entered.
    */
   private static aggregateOfPresentRows(
-    index: ChildRowIndex, owner: string, row: AssemblyRowRef, source: WindowedAggregateSource, existedAt: (c: ChildRow, at: Date) => boolean,
+    index: ChildRowIndex, owner: string, row: AssemblyRowRef, source: WindowedAggregateSource, existedAt: (c: ChildRow, at: Date) => boolean, deletedAt: ReadonlyMap<string, Date>,
   ): { readonly Value: number | null; readonly Contributors: readonly ChildRow[]; readonly Dropped: number } {
-    const full = WindowedAggregates.ComputeWindowedAggregate(index, owner, row.DecisionDate, source);
     const asOf = AsOfFeatureAssembler.asOfInstant(row.DecisionDate);
+    const all = index.get(owner.toLowerCase()) || [];
+    const standing = all.filter((c) => AsOfFeatureAssembler.standsAt(deletedAt, c.Id, asOf));
+    const window: ChildRowIndex = standing.length === all.length ? index : new Map([[owner.toLowerCase(), standing]]);
+    const full = WindowedAggregates.ComputeWindowedAggregate(window, owner, row.DecisionDate, source);
     const late = full.Contributors.filter((c) => !existedAt(c, asOf)).length;
     if (late === 0) return { ...full, Dropped: 0 };
-    const present = (index.get(owner.toLowerCase()) || []).filter((c) => existedAt(c, asOf));
+    const present = standing.filter((c) => existedAt(c, asOf));
     const recomputed = WindowedAggregates.ComputeWindowedAggregate(new Map([[owner.toLowerCase(), present]]), owner, row.DecisionDate, source);
     return { ...recomputed, Dropped: late };
   }
@@ -971,13 +987,16 @@ export class AsOfFeatureAssembler {
    * re-dated after a decision day can move between owners, so none is exempt for contributing to no row. Every field is
    * judged, so a later field's refusal is never hidden by an earlier field's exclusion. A child row the rule excludes
    * at a unit row's decision instant makes that row uncovered for that field, since the child's owner on that day cannot
-   * be trusted; rows decided at instants where every child row is stable are read. Returns, per unit row, the first
-   * such field's marker, else null.
+   * be trusted; rows decided at instants where every child row is stable are read. A hard-deleted child (`deletedAt`,
+   * by lower-cased key) stands for the unit rows decided while it stood (its Delete at or after their as-of instant),
+   * judged on its Delete row as its stored value; after its Delete it is absent and judged for no row. Returns, per unit
+   * row, the first such field's marker, else null.
    */
   private async assertStableChildRows(
-    child: AssemblyEntityInfo, source: WindowedAggregateSource, keys: readonly string[], storedCreatedAt: (key: string) => CellValue, input: AsOfAssemblyInput, state: AssemblyState,
+    child: AssemblyEntityInfo, source: WindowedAggregateSource, keys: readonly string[], deletedAt: ReadonlyMap<string, Date>, storedCreatedAt: (key: string) => CellValue,
+    input: AsOfAssemblyInput, state: AssemblyState,
   ): Promise<(row: AssemblyRowRef) => Uncovered | null> {
-    const reads: StableRead[] = keys.map((k) => ({ Key: k, Rows: input.Rows }));
+    const reads = AsOfFeatureAssembler.childReads(keys, deletedAt, input.Rows);
     const excludedByField: { readonly Instants: ReadonlySet<number>; readonly Marker: Uncovered }[] = [];
     for (const field of AsOfFeatureAssembler.childStableFields(source)) {
       const stable = await this.assertStableCurrentValue(child, field, reads, storedCreatedAt, input, state);
@@ -988,6 +1007,30 @@ export class AsOfFeatureAssembler {
       const hit = excludedByField.find((e) => e.Instants.has(at));
       return hit ? hit.Marker : null;
     };
+  }
+
+  /**
+   * One read per child key: a present child stands for every unit row; a hard-deleted one for the rows decided while it
+   * stood, and for none after its Delete (it is then dropped). Hard-deleted children deleted at one instant share one
+   * rows list, so their decision instants are computed once.
+   */
+  private static childReads(keys: readonly string[], deletedAt: ReadonlyMap<string, Date>, rows: readonly AssemblyRowRef[]): StableRead[] {
+    const byDelete = new Map<number, readonly AssemblyRowRef[]>();
+    const reads: StableRead[] = [];
+    for (const key of keys) {
+      const del = deletedAt.get(key.toLowerCase());
+      if (del === undefined) { reads.push({ Key: key, Rows: rows }); continue; }
+      const standing = byDelete.get(del.getTime()) || rows.filter((row) => AsOfFeatureAssembler.standsAt(deletedAt, key, AsOfFeatureAssembler.asOfInstant(row.DecisionDate)));
+      byDelete.set(del.getTime(), standing);
+      if (standing.length > 0) reads.push({ Key: key, Rows: standing });
+    }
+    return reads;
+  }
+
+  /** Whether a child still stood at `at`: it is not hard-deleted, or its Delete is at or after `at` (as `DeletedRecordAt` reads `held`). */
+  private static standsAt(deletedAt: ReadonlyMap<string, Date>, key: string, at: Date): boolean {
+    const del = deletedAt.get(key.toLowerCase());
+    return del === undefined || del.getTime() >= at.getTime();
   }
 
   /** One aggregate value; a row with no owner key has no child rows ('' would read the bucket of ownerless child rows). */
@@ -1134,10 +1177,14 @@ export class AsOfFeatureAssembler {
   }
 
   /**
-   * The child entity, its indexed rows, the keys of every row read (the index skips undated and filtered-out rows) and,
-   * when the entity lists `__mj_CreatedAt`, each row's value of it by lower-cased key.
+   * The child entity, its indexed rows, the keys of every row read (the index skips undated and filtered-out rows),
+   * when the entity lists `__mj_CreatedAt` each row's value of it by lower-cased key, and the Delete instant of every
+   * hard-deleted child by lower-cased key. On a child entity that tracks Record Changes the rows read are the current
+   * rows plus every child whose history ends in a Delete, that has no current row and that one of `ownerKeys` held
+   * (`IRecordHistoryReader.LoadDeletedChildren`), read from its Delete row: a child deleted after an owner row's
+   * decision day existed then, and today's set of rows would silently leave it out of that row's aggregate.
    */
-  private async childIndex(source: WindowedAggregateSource, input: AsOfAssemblyInput): Promise<{ readonly Child: AssemblyEntityInfo; readonly Index: ChildRowIndex; readonly Keys: readonly string[]; readonly CreatedAt: ReadonlyMap<string, CellValue> }> {
+  private async childIndex(source: WindowedAggregateSource, ownerKeys: readonly string[], input: AsOfAssemblyInput): Promise<ChildRowsRead> {
     const child = input.Metadata.Entity(source.childEntity);
     if (!child) throw new AssemblyRefused({ kind: 'unresolved-column', entity: source.childEntity, field: '*' });
     const hasCreatedAt = AsOfFeatureAssembler.hasField(child, '__mj_CreatedAt');
@@ -1148,12 +1195,27 @@ export class AsOfFeatureAssembler {
     const read = await CompleteReader.ReadCompletely(input.DataAccess, { EntityName: child.Name, KeyField: child.PrimaryKey, Fields: [...new Set(fields)] }, input.Read);
     if (read.Status === 'refused') throw new AssemblyRefused(read.Refusal);
     const keyOf = (r: SourceRow): string => String(r[child.PrimaryKey]);
+    const present = new Set(read.Rows.map((r) => keyOf(r).toLowerCase()));
+    const deleted = child.TrackRecordChanges && ownerKeys.length > 0
+      ? (await input.History.LoadDeletedChildren(child, source.foreignKey, ownerKeys)).filter((d) => !present.has(d.Key))
+      : [];
+    const rowsRead = [...read.Rows, ...deleted.map((d) => AsOfFeatureAssembler.deletedChildRow(child, d))];
     return {
       Child: child,
-      Index: WindowedAggregates.BuildChildRowIndex(read.Rows, source, child.PrimaryKey),
-      Keys: read.Rows.map(keyOf),
-      CreatedAt: new Map(hasCreatedAt ? read.Rows.map((r) => [keyOf(r).toLowerCase(), r.__mj_CreatedAt] as const) : []),
+      Index: WindowedAggregates.BuildChildRowIndex(rowsRead, source, child.PrimaryKey),
+      Keys: rowsRead.map(keyOf),
+      CreatedAt: new Map(hasCreatedAt ? rowsRead.map((r) => [keyOf(r).toLowerCase(), r.__mj_CreatedAt] as const) : []),
+      DeletedAt: new Map(deleted.map((d) => [d.Key, d.ChangedAt] as const)),
     };
+  }
+
+  /** A hard-deleted child as a stored row: its Delete row's fields, keyed by the recorded key when the row omits it. */
+  private static deletedChildRow(child: AssemblyEntityInfo, d: DeletedChildRecord): SourceRow {
+    const row: SourceRow = {};
+    for (const [f, v] of d.Row) row[f] = v;
+    const recorded = row[child.PrimaryKey];
+    if (recorded === null || recorded === undefined) row[child.PrimaryKey] = d.Key;
+    return row;
   }
 
   /**

@@ -465,7 +465,10 @@ describe('AsOfFeatureAssembler history loads, late-entered child rows and creati
   it('loads the history of one entity, field and key set once for every feature that reads it', async () => {
     const base = input([statusVia('StatusA', 'PersonID'), statusVia('StatusB', 'PersonID')]);
     const loads: string[] = [];
-    const counting: IRecordHistoryReader = { Load: (entity, keys, fields, policy, now) => { loads.push(`${entity.Name}|${fields.join(',')}`); return base.History.Load(entity, keys, fields, policy, now); } };
+    const counting: IRecordHistoryReader = {
+      Load: (entity, keys, fields, policy, now) => { loads.push(`${entity.Name}|${fields.join(',')}`); return base.History.Load(entity, keys, fields, policy, now); },
+      LoadDeletedChildren: (entity, foreignKeyField, ownerKeys) => base.History.LoadDeletedChildren(entity, foreignKeyField, ownerKeys),
+    };
     const out = await new AsOfFeatureAssembler().Assemble({ ...base, History: counting });
     expect(out.Status).toBe('assembled');
     if (out.Status !== 'assembled') return;
@@ -905,6 +908,64 @@ describe('AsOfFeatureAssembler — child rows are judged at each unit row\'s own
     if (out.Status !== 'assembled') return;
     expect(out.Rows.map((r) => [r.RowID, r.Values[0]])).toEqual([['y1', 10]]);
     expect(out.UncoveredRowsExcluded).toEqual([{ entity: 'Gifts', field: 'PersonID', rows: 1 }]);
+  });
+});
+
+describe('AsOfFeatureAssembler — a windowed aggregate over hard-deleted child rows', () => {
+  const owners: AssemblyRowRef[] = [
+    { RowID: 'y1', EntityKey: 'P1', DecisionDate: new Date('2022-12-01T00:00:00Z'), Period: null },
+    { RowID: 'y2', EntityKey: 'P1', DecisionDate: new Date('2024-06-01T00:00:00Z'), Period: null },
+  ];
+  const count: FeatureColumnSpec = { name: 'EventsToDate', source: { kind: 'windowed-aggregate', childEntity: 'Events', foreignKey: 'PersonID', ownerKeyField: null, dateField: 'EventDate', endDateField: null, voidedAtField: null, aggregate: 'count', valueField: null, windowDays: null, filter: [] }, encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing: { impute: 'median', indicator: true, constant: null } };
+  const e1 = { ID: 'e1', PersonID: 'P1', EventDate: '2021-09-01' };
+  const e2 = { ID: 'e2', PersonID: 'P1', EventDate: '2022-03-01' };
+  const data: Record<string, SourceRow[]> = { Years: [{ ID: 'y1', PersonID: 'P1' }, { ID: 'y2', PersonID: 'P1' }], Events: [e1] };
+  const history = (extra: RecordChangeRow[] = []): Record<string, RecordChangeRow[]> => ({
+    Events: [
+      rc('ec-1', 'e1', 'Create', '2021-09-01T00:00:00Z', e1),
+      // e2 existed from March 2022 and was hard-deleted in March 2023: it has no current row.
+      rc('ec-2', 'e2', 'Create', '2022-03-01T00:00:00Z', e2),
+      rc('ed-2', 'e2', 'Delete', '2023-03-01T00:00:00Z', e2),
+      ...extra,
+    ],
+  });
+  const sha = (text: string): string => createHash('sha256').update(text).digest('hex');
+
+  for (const onUncoveredRow of ['refuse', 'exclude-and-count'] as const) {
+    it(`counts a child hard-deleted after the owner's decision day as it stood, and leaves it out after its Delete (${onUncoveredRow})`, async () => {
+      const policy: PredictionUnitSpec = { ...unit, history: { onUncoveredRow, externalSourceRows: 'ineligible' } };
+      const out = await new AsOfFeatureAssembler().Assemble(input([count], { Rows: owners, Tables: data, Changes: history(), Unit: policy }));
+      expect(out.Status).toBe('assembled');
+      if (out.Status !== 'assembled') return;
+      expect(out.Rows.map((r) => [r.RowID, r.Values[0]])).toEqual([['y1', 2], ['y2', 1]]);
+      expect(out.UncoveredRowsExcluded).toEqual([]);
+      expect(out.Rows[0].Provenance[0]).toMatchObject({ sourceRef: 'Events?PersonID=p1&as-of=2022-12-01&aggregate=count', sourceVersion: sha('e1\ne2') });
+      expect(out.ColumnProvenance[0]).toMatchObject({ lateEnteredDropped: 0 });
+      expect(out.Coverage.filter((c) => c.entity === 'Events' && c.field === 'PersonID')).toEqual([
+        expect.objectContaining({ historyStart: '2022-03-01T00:00:00.000Z', continuity: expect.objectContaining({ recordsReplayed: 2, recordsMismatched: 0 }) }),
+      ]);
+    });
+  }
+  it('loads only hard-deleted children that an owner of the batch held, so another owner\'s deleted child changes nothing', async () => {
+    const other = { ID: 'e9', PersonID: 'P9', EventDate: '2020-01-01' };
+    const base = await new AsOfFeatureAssembler().Assemble(input([count], { Rows: owners, Tables: data, Changes: history() }));
+    const withOther = await new AsOfFeatureAssembler().Assemble(input([count], { Rows: owners, Tables: data, Changes: history([
+      rc('ec-9', 'e9', 'Create', '2019-01-01T00:00:00Z', other), rc('ed-9', 'e9', 'Delete', '2023-01-01T00:00:00Z', { ...other, EventDate: '2020-02-02' }),
+    ]) }));
+    expect(JSON.stringify(withOther)).toBe(JSON.stringify(base));
+  });
+  it('judges a hard-deleted child re-owned away from the batch\'s owner after the decision day, as a present child is judged', async () => {
+    // Gifts declares its owner key updatable: g2 belonged to P1 on y1's decision day, moved to P9, then was hard-deleted.
+    const gifts: FeatureColumnSpec = { ...count, name: 'Given', source: { ...count.source, childEntity: 'Gifts', dateField: 'GivenOn' } as FeatureColumnSpec['source'] };
+    const g1 = { ID: 'g1', PersonID: 'P1', GivenOn: '2021-09-01', Amount: 10 };
+    const g2 = { ID: 'g2', PersonID: 'P1', GivenOn: '2022-03-01', Amount: 20 };
+    const out = await new AsOfFeatureAssembler().Assemble(input([gifts], { Rows: owners, Tables: { ...data, Gifts: [g1] }, Changes: { Gifts: [
+      rc('gc-1', 'g1', 'Create', '2021-09-01T00:00:00Z', g1),
+      rc('gc-2', 'g2', 'Create', '2022-03-01T00:00:00Z', g2),
+      rc('gu-2', 'g2', 'Update', '2023-01-01T00:00:00Z', { ...g2, PersonID: 'P9' }, ['PersonID']),
+      rc('gd-2', 'g2', 'Delete', '2023-03-01T00:00:00Z', { ...g2, PersonID: 'P9' }),
+    ] } }));
+    expect(out).toEqual({ Status: 'refused', Refusal: { kind: 'select-changes-after-decision-date', entity: 'Gifts', field: 'PersonID', changesAfter: 1 } });
   });
 });
 

@@ -44,6 +44,17 @@ export interface DeletedRecordRead {
   readonly ChangedAt: Date;
 }
 
+/** A child record whose change rows end in a Delete, as that Delete row recorded it (see {@link IRecordHistoryReader.LoadDeletedChildren}). */
+export interface DeletedChildRecord {
+  /** The record's key, lower-cased, as {@link RecordHistory.KeyOfRecordID} reads it. */
+  readonly Key: string;
+  /** The record as its Delete row recorded it, by field (the row's FullRecordJSON; a non-scalar value reads as null). */
+  readonly Row: ReadonlyMap<string, CellValue>;
+  /** The Delete change row. */
+  readonly ChangeID: string;
+  readonly ChangedAt: Date;
+}
+
 export interface EntityHistory {
   readonly Coverage: ChangeHistoryCoverage;
   /** The field's value in force strictly before `before`. */
@@ -79,6 +90,14 @@ export interface EntityHistory {
 
 export interface IRecordHistoryReader {
   Load(entity: AssemblyEntityInfo, keys: readonly string[], fields: readonly string[], policy: ChangeHistoryPolicy, now: Date): Promise<EntityHistory>;
+  /**
+   * The records of a child entity whose change rows end in a Delete and any of whose change rows records one of
+   * `ownerKeys` (compared lower-cased) in `foreignKeyField`: the children a windowed aggregate over those owners could
+   * have read on a past day although no current row is left. A record re-owned before its deletion is included when it
+   * was ever held by one of the owners, so the stable-value rule judges the move as it does a present child's. Whether
+   * a record still has a current row is the caller's to check.
+   */
+  LoadDeletedChildren(entity: AssemblyEntityInfo, foreignKeyField: string, ownerKeys: readonly string[]): Promise<readonly DeletedChildRecord[]>;
 }
 
 /** The description every history snapshot row carries, so an operator can tell them from ordinary changes. */
@@ -118,6 +137,24 @@ export class RecordHistory {
    */
   public static KeysDeletedByHistory(changes: readonly RecordChangeRow[]): ReadonlySet<string> {
     return RecordHistory.endingInDelete(RecordHistory.indexByKey(changes));
+  }
+
+  /** Pure: see {@link IRecordHistoryReader.LoadDeletedChildren}; `changes` are the child entity's change rows. */
+  public static DeletedChildren(changes: readonly RecordChangeRow[], foreignKeyField: string, ownerKeys: readonly string[]): DeletedChildRecord[] {
+    const owners = new Set(ownerKeys.map((k) => k.toLowerCase()));
+    const byKey = RecordHistory.indexByKey(changes);
+    const out: DeletedChildRecord[] = [];
+    for (const k of RecordHistory.endingInDelete(byKey)) {
+      const list = byKey.get(k) || [];
+      const held = list.some((c) => {
+        const owner = RecordHistory.fieldOf(c.FullRecordJSON, foreignKeyField);
+        return owner !== null && owner !== undefined && owners.has(String(owner).toLowerCase());
+      });
+      if (!held) continue;
+      const del = list[list.length - 1];
+      out.push({ Key: k, Row: RecordHistory.recordOf(del.FullRecordJSON), ChangeID: del.ID, ChangedAt: del.ChangedAt });
+    }
+    return out;
   }
 
   /**
@@ -471,6 +508,11 @@ export class RunViewRecordHistoryReader implements IRecordHistoryReader {
       throw new AssemblyRefused({ kind: 'truncated-read', entity: entity.Name, rowsExpected: current.Rows.size + current.MissingKeys.length, rowsRead: current.Rows.size });
     }
     return history;
+  }
+
+  /** See {@link IRecordHistoryReader.LoadDeletedChildren}; reads the entity's change rows once, shared with {@link Load}. */
+  public async LoadDeletedChildren(entity: AssemblyEntityInfo, foreignKeyField: string, ownerKeys: readonly string[]): Promise<readonly DeletedChildRecord[]> {
+    return RecordHistory.DeletedChildren(await this.changeRowsOf(entity), foreignKeyField, ownerKeys);
   }
 
   /** The entity's complete change rows, read on the first load of the entity and shared by every later one. */
