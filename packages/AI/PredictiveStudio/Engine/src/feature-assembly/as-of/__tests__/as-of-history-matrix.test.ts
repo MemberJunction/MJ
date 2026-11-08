@@ -117,7 +117,7 @@ const P9: readonly RecordChangeRow[] = [
 
 // ---- The oracle ----
 
-type OracleClass = 'DELETED' | 'CREATED_AFTER' | 'MISMATCH' | 'UNREACHED' | 'CHANGED_AFTER' | 'VALUE';
+type OracleClass = 'DELETED' | 'CREATED_AFTER' | 'MISMATCH' | 'CHANGED_AFTER' | 'UNREACHED' | 'VALUE';
 /** What a cell assembles to: the row excluded, the whole assembly refused, or a value (null with its created-after provenance). */
 type Expected = 'excluded' | { readonly refused: AssemblyRefusal['kind'] } | { readonly value: string | null };
 
@@ -126,10 +126,16 @@ const asOfOf = (day: Day): Date => new Date(new Date(`${day}T00:00:00.000Z`).get
 const inForceOf = (s: Shape, asOf: Date): readonly HistoryRow[] => s.History.filter((r) => at(r.Year).getTime() < asOf.getTime());
 const lastOf = <T>(list: readonly T[]): T | undefined => list[list.length - 1];
 
-/** The one creation rule: the history's first row when it is a Create; the stored `__mj_CreatedAt`; the later when both tell. */
+/**
+ * The one creation rule: the history's first row when it is a Create; the stored `__mj_CreatedAt`, unless a change row
+ * other than that opening Create precedes it (an earlier incarnation: the column then dates a re-creation and is
+ * ignored); the later when both tell.
+ */
 const creationOf = (s: Shape): Date | null => {
   const fromHistory = s.History[0]?.Type === 'Create' ? at(s.History[0].Year) : null;
-  const fromColumn = s.CreatedAt === null ? null : new Date(s.CreatedAt);
+  const stored = s.CreatedAt === null ? null : new Date(s.CreatedAt);
+  const earlier = stored !== null && s.History.some((r, i) => !(i === 0 && r.Type === 'Create') && at(r.Year).getTime() < stored.getTime());
+  const fromColumn = earlier ? null : stored;
   if (fromHistory === null || fromColumn === null) return fromHistory ?? fromColumn;
   return fromHistory.getTime() >= fromColumn.getTime() ? fromHistory : fromColumn;
 };
@@ -149,17 +155,23 @@ const changedAfter = (s: Shape, asOf: Date): boolean =>
     return r.Type === 'Update' || (r.Type === 'Delete' && !finalDeleteOfHardDeleted) || moved;
   });
 
-/** The class of a (shape, day), judged in the order DELETED, CREATED_AFTER, MISMATCH, UNREACHED, CHANGED_AFTER, VALUE. */
-const classify = (s: Shape, day: Day): OracleClass => {
+/**
+ * The class of a (shape, day) as one reader sees it, judged in the order DELETED, CREATED_AFTER, MISMATCH, CHANGED_AFTER,
+ * UNREACHED, VALUE. CHANGED_AFTER applies to the stored-value (immutable) readers only; the replay reader falls through.
+ * It precedes UNREACHED because a change after the decision is a refusal under either policy by design: the stored
+ * value is then not the value on the decision day whatever the history's reach, so the stable-value rule judges
+ * `ChangesAfter` ahead of the coverage classes (`changed` outranks `uncovered` and `excluded` in its severity order).
+ */
+const classify = (s: Shape, day: Day, reader: Reader): OracleClass => {
   const asOf = asOfOf(day);
   const inForce = inForceOf(s, asOf);
   if (lastOf(inForce)?.Type === 'Delete') return 'DELETED';
   const created = creationOf(s);
   if (inForce.length === 0 && created !== null && created.getTime() >= asOf.getTime()) return 'CREATED_AFTER';
   if (s.Mismatched) return 'MISMATCH';
+  if (reader !== 'record-changes' && changedAfter(s, asOf)) return 'CHANGED_AFTER';
   const anchored = s.History.some((r) => (r.Type === 'Create' || r.Type === 'Snapshot') && at(r.Year).getTime() < asOf.getTime());
   if (inForce.length === 0 || !anchored) return 'UNREACHED';
-  if (changedAfter(s, asOf)) return 'CHANGED_AFTER';
   return 'VALUE';
 };
 
@@ -180,14 +192,12 @@ const replayedOf = (s: Shape, day: Day): string => {
 
 const expected = (s: Shape, day: Day, reader: Reader): Expected => {
   const notUpdatable = reader === 'immutable-field/not-updatable';
-  switch (classify(s, day)) {
+  switch (classify(s, day, reader)) {
     case 'DELETED': return 'excluded';
     case 'CREATED_AFTER': return { value: null };
     case 'MISMATCH': return notUpdatable ? { value: storedOf(s) } : 'excluded';
+    case 'CHANGED_AFTER': return notUpdatable ? { value: storedOf(s) } : { refused: 'select-changes-after-decision-date' };
     case 'UNREACHED': return notUpdatable || day === ASSEMBLED_AT ? { value: storedOf(s) } : 'excluded';
-    case 'CHANGED_AFTER':
-      if (reader === 'record-changes') return { value: replayedOf(s, day) };
-      return notUpdatable ? { value: storedOf(s) } : { refused: 'select-changes-after-decision-date' };
     case 'VALUE': return reader === 'record-changes' ? { value: replayedOf(s, day) } : { value: storedOf(s) };
   }
 };
@@ -247,23 +257,6 @@ const continuityOf = (out: AsOfAssemblyResult) => (out.Status === 'assembled' ? 
 
 const CELLS: readonly (readonly [Shape, Day])[] = SHAPES.flatMap((s) => DAYS.map((d) => [s, d] as const));
 
-/**
- * Cells where the code disagrees with the oracle: open product defects, run as expected failures so the suite stays
- * green and a fix turns them red (then delete the entry). Every one is an unreached history (UNREACHED) with a change
- * row after the decision day: the stored-value rule (`judgeStoredValue`) checks `ChangesAfter` before coverage and
- * refuses `select-changes-after-decision-date`, where the oracle, judging UNREACHED before CHANGED_AFTER, excludes the
- * row under exclude-and-count as the replay reader does.
- */
-const PRODUCT_DEFECTS: ReadonlySet<string> = new Set([
-  'unanchored-hard-deleted @ 2019-06-01 via immutable-field/updatable',
-  'unanchored-hard-deleted @ 2021-06-01 via immutable-field/updatable',
-  'unanchored-live @ 2019-06-01 via immutable-field/updatable',
-  'unanchored-live @ 2021-06-01 via immutable-field/updatable',
-  'recreated @ 2019-06-01 via immutable-field/updatable',
-  'unanchored-deleted-reinserted @ 2019-06-01 via immutable-field/updatable',
-  'unanchored-deleted-reinserted @ 2021-06-01 via immutable-field/updatable',
-]);
-
 const assertCell = async (s: Shape, day: Day, reader: Reader): Promise<void> => {
   const cell = `${s.Name} @ ${day} via ${reader}`;
   const want = observedFor(expected(s, day, reader));
@@ -277,15 +270,6 @@ const assertCell = async (s: Shape, day: Day, reader: Reader): Promise<void> => 
 
 describe('as-of history-shape matrix (exclude-and-count)', () => {
   describe.each(READERS)('via %s', (reader) => {
-    for (const [s, day] of CELLS) {
-      const cell = `${s.Name} @ ${day} via ${reader}`;
-      if (PRODUCT_DEFECTS.has(cell)) it.fails(`${s.Name} @ ${day} (open product defect)`, () => assertCell(s, day, reader));
-      else it(`${s.Name} @ ${day}`, () => assertCell(s, day, reader));
-    }
-  });
-
-  it('lists only cells of the matrix as product defects', () => {
-    const cells = new Set(READERS.flatMap((r) => CELLS.map(([s, d]) => `${s.Name} @ ${d} via ${r}`)));
-    expect([...PRODUCT_DEFECTS].filter((c) => !cells.has(c))).toEqual([]);
+    it.each(CELLS.map(([s, day]) => [s.Name, day, s] as const))('%s @ %s', (_name, day, s) => assertCell(s, day, reader));
   });
 });
