@@ -7,7 +7,7 @@ import {
     Metadata,
     UserInfo
 } from "@memberjunction/core";
-import { UUIDsEqual } from "@memberjunction/global";
+import { IsValueEncrypted, UUIDsEqual } from "@memberjunction/global";
 
 import {
     MJAuditLogEntity,
@@ -33,6 +33,7 @@ import {
     CredentialExpiredError,
     CredentialNotFoundError,
     CredentialOwnerMismatchError,
+    CredentialValuesUnreadableError,
     DEFAULT_EXPIRATION_CONFIG,
     EvaluateExpiration
 } from "./expiration";
@@ -399,7 +400,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
                     this.warnIfExpiringOrExpired(credential, expiration);
 
                     // Values field is already decrypted by BaseEntity via field-level encryption
-                    const parsedValues = this.parseCredentialValues(credential.Values);
+                    const parsedValues = this.parseCredentialValues(credential);
                     // Enforce strict OwnerUserID isolation for user-delegated (3LO) credentials
                     if (parsedValues.ownerUserId) {
                         const requestingUserId = options.contextUser?.ID ?? null;
@@ -676,7 +677,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
             };
         }
 
-        const values = this.parseCredentialValues(credential.Values);
+        const values = this.parseCredentialValues(credential);
 
         // Call validation endpoint
         const result = await this.callValidationEndpoint(credType.ValidationEndpoint, values);
@@ -766,7 +767,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
      * keyed by owner, so a mismatch means the row was edited out of band; refuse rather than overwrite.
      */
     private assertDelegatedOwner(existing: MJCredentialEntity, credentialName: string, contextUser: UserInfo): void {
-        const parsed = this.parseCredentialValues(existing.Values);
+        const parsed = this.parseCredentialValues(existing);
         if (parsed.ownerUserId && !UUIDsEqual(parsed.ownerUserId, contextUser.ID)) {
             throw new CredentialOwnerMismatchError(credentialName, parsed.ownerUserId, contextUser.ID);
         }
@@ -881,7 +882,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         }
 
         // Verify ownership before revoking
-        const parsed = this.parseCredentialValues(match.Values);
+        const parsed = this.parseCredentialValues(match);
         if (parsed.ownerUserId && !UUIDsEqual(parsed.ownerUserId, contextUser.ID)) {
             throw new CredentialOwnerMismatchError(credentialName, parsed.ownerUserId, contextUser.ID);
         }
@@ -971,21 +972,35 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     }
 
     /**
-     * Parses JSON credential values, handling already-parsed objects.
+     * Parses a credential's JSON values, handling already-parsed objects.
+     *
+     * An unreadable field throws rather than reading as `{}`: empty values would let a caller
+     * proceed without its secret, skip the `ownerUserId` check, and merge or overwrite the
+     * stored values on a later update.
+     *
+     * @throws CredentialValuesUnreadableError when `Values` is not a JSON object
      */
-    private parseCredentialValues(valuesField: string): Record<string, string> {
+    private parseCredentialValues(credential: MJCredentialEntity): Record<string, string> {
+        const valuesField = credential.Values;
         if (!valuesField) return {};
 
-        try {
-            // Handle case where it's already an object
-            if (typeof valuesField === 'object') {
-                return valuesField as Record<string, string>;
-            }
-            return JSON.parse(valuesField);
-        } catch (e) {
-            LogError(`Failed to parse credential values: ${e}`);
-            return {};
+        // Handle case where it's already an object
+        if (typeof valuesField === 'object') {
+            return valuesField as Record<string, string>;
         }
+        const stillEncrypted = IsValueEncrypted(valuesField);
+        let parsed: Record<string, string> | null = null;
+        if (!stillEncrypted) {
+            try {
+                parsed = JSON.parse(valuesField);
+            } catch {
+                // reported below without the parser's message, which quotes the start of the value
+            }
+        }
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            throw new CredentialValuesUnreadableError(credential.Name, credential.ID, stillEncrypted);
+        }
+        return parsed;
     }
 
     /**
