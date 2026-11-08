@@ -187,9 +187,9 @@ metadata-optional/integration-test/tests/gates/**
 metadata-optional/integration-test/test-suites/.ps-gates-*.json
 # Server entity subclasses: the existing pipeline subclass, the three new ones, their test and the export barrel
 packages/MJCoreEntitiesServer/src/custom/MJMLTrainingPipelineEntityServer.server.ts
-packages/MJCoreEntitiesServer/src/custom/MJPredictionUnitEntityServer.server.ts
-packages/MJCoreEntitiesServer/src/custom/MJEvaluationProtocolEntityServer.server.ts
-packages/MJCoreEntitiesServer/src/custom/MJTrainingSnapshotEntityServer.server.ts
+packages/MJCoreEntitiesServer/src/custom/MJMLPredictionUnitEntityServer.server.ts
+packages/MJCoreEntitiesServer/src/custom/MJMLEvaluationProtocolEntityServer.server.ts
+packages/MJCoreEntitiesServer/src/custom/MJMLTrainingSnapshotEntityServer.server.ts
 packages/MJCoreEntitiesServer/src/__tests__/PredictiveStudioVersionedEntities.test.ts
 packages/MJCoreEntitiesServer/src/index.ts
 # CodeGen-owned output
@@ -253,6 +253,40 @@ guides/PREDICTIVE_STUDIO_GUIDE.md
 plans/predictive-studio/PR-3-honest-training.md
 .changeset/ps-honest-training.md
 pnpm-lock.yaml
+# Post-M12 CI fixes carried on this branch (ESM import guard parallelism, df568df796)
+.github/scripts/check-esm-imports.mjs
+.github/scripts/__tests__/check-esm-imports.test.mjs
+# Model Development Agent prompts: the agent's model stays Draft and the plan states the 25% holdout (38a84aef5e)
+metadata/prompts/output/model-development-agent/**
+metadata/prompts/templates/model-development-agent/**
+# Dashboards and artifacts tests that log on purpose capture their lines (d3d5318c08, 043e07724a); the filter panel and
+# New Category panel dropdowns are named (4fa5d82d78); ExpectConsoleLines moves to ng-test-utils
+packages/Angular/Explorer/dashboards/src/**/*.dom.test.ts
+packages/Angular/Explorer/dashboards/src/Actions/components/explorer/new-category-panel.component.html
+packages/Angular/Explorer/dashboards/src/__tests__/predictive-studio-engine.test.ts
+packages/Angular/Explorer/dashboards/src/__tests__/predictive-studio-score-history.test.ts
+packages/Angular/Explorer/dashboards/src/__tests__/predictive-studio-view-models.test.ts
+packages/Angular/Explorer/dashboards/src/__tests__/vector-document-rules.test.ts
+packages/Angular/Explorer/core-entity-forms/src/__tests__/ml-model-view-models.test.ts
+packages/Angular/Generic/artifacts/src/lib/components/**/*.dom.test.ts
+packages/Angular/Generic/artifacts/tsconfig.spec.json
+packages/Angular/Generic/test-utils/**
+packages/Angular/Generic/ui-components/src/lib/filter-panel/**
+# The lazy feature config names the four PS form panels (8a70be09ed, 02ce7092dd)
+packages/Angular/Explorer/explorer-core/src/generated/lazy-feature-config.ts
+# Deleting an entity removes its pipelines' training snapshots before the pipelines (a3d2ea5682)
+packages/CodeGenLib/src/__tests__/fixtures/entity-delete-fk-policy.json
+# Delete compares a UUID primary key case-insensitively (2f314faadc); the UUID guard's exemption list (16bddfe689)
+packages/GraphQLDataProvider/src/graphQLDataProvider.ts
+packages/GraphQLDataProvider/src/__tests__/graphQLDataProvider.saveDelete.wire.test.ts
+packages/MJGlobal/src/__tests__/UUIDCompliance.test.ts
+# PS live rigs and their lifecycle library; LC7's keeper role (e289ec9a78)
+packages/TestingFramework/integration-test-suite/rigs/**
+packages/TestingFramework/integration-test-suite/tsconfig.rigs.json
+packages/TestingFramework/integration-test-suite/src/__tests__/ps-train-output.test.ts
+packages/TestingFramework/integration-test-suite/src/__tests__/rig-pipeline-lifecycle.test.ts
+packages/TestingFramework/integration-test-suite/src/__tests__/rig-scoring-action-cleanup.test.ts
+packages/TestingFramework/integration-test-suite/src/checks/fls-lifecycle.checks.ts
 ```
 
 Paths the milestones named that this block leaves out (2026-10-26 check of every `**Files**` paragraph in §6):

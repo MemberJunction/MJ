@@ -11,7 +11,6 @@
 "@memberjunction/storage": minor
 "@memberjunction/global": minor
 "@memberjunction/codegen-lib": minor
-"@memberjunction/diagnostics": minor
 "@memberjunction/graphql-dataprovider": minor
 "@memberjunction/ng-artifacts": minor
 "@memberjunction/ng-test-utils": minor
@@ -50,7 +49,7 @@ An incumbent rule with no value on a training-snapshot row (a column it reads is
 - `@memberjunction/predictive-studio`: a unit training run refuses a sidecar gate that differs from the TypeScript
   decision (`sidecar-gate-mismatch`), creates the model row from the shipped artifact only (none under `no-signal`),
   and `TrainModelResult.model` is nullable. `IRecordLoader.resolveAlgorithmIDForDriver` and
-  `IArtifactStore.Delete` are new required members. `PredictiveStudioBuildOutcome.trustGrade` / `trustOneLiner` are
+  `IArtifactStore.AssertWritable` are new required members (see the storage paragraph below for `save` / `delete`). `PredictiveStudioBuildOutcome.trustGrade` / `trustOneLiner` are
   renamed `trustTitle` / `headline`;
   `GenerateMarkdownReport` takes `trustTitle` / `headline`; `SingleModelLeaderboard` takes a `TrustComparison | null`.
   The free functions `ExtractNormalizedScore` / `extractNormalizedScore` are removed; use
@@ -152,3 +151,5 @@ with `MODEL_NOT_SERVABLE` and never scored. A kept simple baseline carries its r
 (`trainingLeakageAudit`), so it needs the same leakage sign-off as the finalist. The Pipeline Builder agent publishes
 through the promotion gate. Binding a binary or multiclass unit to a protocol whose calibration is `not-applicable` is
 refused.
+
+- Round 3 (2026-11-07): a Delete in force reads as deleted whatever the record's history start, and a hard-deleted record's Delete row is continuity-checked (`@memberjunction/predictive-studio`); a grouped unit refuses `repeated-stratified-kfold` inner folds (`inner-validation-ungrouped`) and `bootstrap` intervals (`intervals-not-clustered`) (`@memberjunction/predictive-studio-core`, `@memberjunction/core-entities-server`); the sidecar refuses a snapshot whose reference score is missing on any row (`reference-score-missing`, `@memberjunction/predictive-studio-sidecar`); an undated scenario fixture keeps its group key (`@memberjunction/predictive-studio-truth-suite`); a throwing artifact cleanup no longer masks the `MJ: Files` save error.
