@@ -78,7 +78,7 @@ async function loadElasticsearchClient(): Promise<ElasticsearchClientCtor> {
                 return mod.Client;
             } catch (err) {
                 throw new Error(
-                    `ElasticsearchSearchProvider: '@elastic/elasticsearch' is not installed. Add it to your project's dependencies if you intend to use this provider. Underlying error: ${err instanceof Error ? err.message : String(err)}`,
+                    `ElasticsearchSearchProvider: could not load '@elastic/elasticsearch', an optional dependency of @memberjunction/search-engine. It is skipped when its install fails or optional dependencies are omitted (--no-optional, --omit=optional); reinstall with optional dependencies to use this provider. Underlying error: ${err instanceof Error ? err.message : String(err)}`,
                 );
             }
         })();
