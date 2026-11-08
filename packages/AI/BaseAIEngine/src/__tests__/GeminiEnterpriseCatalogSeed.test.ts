@@ -380,9 +380,14 @@ describe('Gemini 3.8 Live on Vertex AI — the turn coverage a session asks for'
         expect(realtimeOn(GOOGLE).TurnDetection?.Coverage).toBe('audioActivityAndAllVideo');
     });
 
-    it("differs from Google's Realtime configuration only in the coverage and the avatar video price", () => {
-        const { TurnDetection: vertexTurns, Pricing: _pricing, ...vertex } = realtimeOn(VERTEX);
-        const { TurnDetection: googleTurns, ...google } = realtimeOn(GOOGLE);
+    it('trusts native session resumption on Vertex AI while Google disables it for v1alpha ephemeral token constraints', () => {
+        expect(realtimeOn(VERTEX).TrustNativeResumption).toBe(true);
+        expect(realtimeOn(GOOGLE).TrustNativeResumption).toBe(false);
+    });
+
+    it("differs from Google's Realtime configuration only in the coverage, the avatar video price, and native resumption trust", () => {
+        const { TurnDetection: vertexTurns, Pricing: _pricing, TrustNativeResumption: _vertexTrust, ...vertex } = realtimeOn(VERTEX);
+        const { TurnDetection: googleTurns, TrustNativeResumption: _googleTrust, ...google } = realtimeOn(GOOGLE);
         expect(vertex).toEqual(google);
         expect({ ...vertexTurns, Coverage: undefined }).toEqual({ ...googleTurns, Coverage: undefined });
     });

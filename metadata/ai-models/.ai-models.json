@@ -26069,7 +26069,8 @@
         {
           "_comments": [
             "Realtime.TurnDetection.Coverage is audioActivityOnly on this row, unlike the model's and the Google row's: Gemini Enterprise refuses TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO at session setup (1007, invalid value at setup.realtime_input_config.turn_coverage; found against Vertex AI on 2026-10-09). The Gemini Enterprise driver sends only activity there whatever is configured.",
-            "Realtime.Pricing.AvatarVideoOutput is $1.00 per 1M avatar video output tokens, Google's Vertex AI Live API list price. It prices the output tokens Google reports as VIDEO, not the stored video seconds: Google bills avatar video only while the avatar speaks, while the stored seconds also count the idle avatar between answers."
+            "Realtime.Pricing.AvatarVideoOutput is $1.00 per 1M avatar video output tokens, Google's Vertex AI Live API list price. It prices the output tokens Google reports as VIDEO, not the stored video seconds: Google bills avatar video only while the avatar speaks, while the stored seconds also count the idle avatar between answers.",
+            "Realtime.TrustNativeResumption is true on Vertex AI (which connects through the server relay with Bearer auth) and false on the Google Developer API row (whose v1alpha ephemeral token liveConnectConstraints reject sessionResumption.handle at setup)."
           ],
           "fields": {
             "ModelID": "@parent:ID",

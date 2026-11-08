@@ -3,6 +3,9 @@ import {
     RealtimeConversationMemory,
     RenderRealtimeMemoryEntry,
     RenderRealtimeMemorySeed,
+    RenderRealtimeMemorySeedAsContextNote,
+    ResumePreamble,
+    REALTIME_MEMORY_CONTINUITY_PREAMBLE,
     REALTIME_MEMORY_MAX_SEED_CHARS,
     REALTIME_MEMORY_MAX_ENTRY_CHARS,
     REALTIME_MEMORY_TRUNCATED_TAIL,
@@ -285,6 +288,26 @@ describe('RenderRealtimeMemorySeed', () => {
             memory.Record({ Kind: 'toolResult', Name: 'x', OutputJson: `{"a":"${']'.repeat(20)}"}` });
             const [entry] = memory.Seed().Entries;
             expect(entry).toEqual({ Kind: 'toolResult', Name: 'x', OutputJson: `{"a":"]]]]…[truncated]` });
+        });
+    });
+
+    describe('ResumePreamble and RenderRealtimeMemorySeedAsContextNote', () => {
+        it('ResumePreamble(0) matches REALTIME_MEMORY_CONTINUITY_PREAMBLE and ResumePreamble(N) states omitted count', () => {
+            expect(ResumePreamble(0)).toBe(REALTIME_MEMORY_CONTINUITY_PREAMBLE);
+            expect(ResumePreamble(3)).toContain('; 3 earlier entries omitted');
+        });
+
+        it('RenderRealtimeMemorySeedAsContextNote returns null for empty entries and formats User/Assistant turns otherwise', () => {
+            expect(RenderRealtimeMemorySeedAsContextNote({ Entries: [], DroppedEntries: 0, Chars: 0 })).toBeNull();
+            const note = RenderRealtimeMemorySeedAsContextNote({
+                Entries: [
+                    { Kind: 'user', Text: 'Hello there' },
+                    { Kind: 'assistant', Text: 'Welcome back!' },
+                ],
+                DroppedEntries: 2,
+                Chars: 24,
+            });
+            expect(note).toBe(`${ResumePreamble(2)}\nUser: Hello there\nAssistant: Welcome back!`);
         });
     });
 });

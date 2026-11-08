@@ -116,7 +116,7 @@ function entryChars(entry: RealtimeMemoryEntry): number {
  * entries: a preamble with no transcript behind it would mislead the model.
  */
 export function RenderRealtimeMemorySeed(seed: RealtimeMemorySeed): ReadonlyArray<{ Role: 'user' | 'model'; Texts: readonly string[] }> {
-    const turns: Array<{ Role: 'user' | 'model'; Texts: string[] }> = [{ Role: 'user', Texts: [resumePreamble(seed.DroppedEntries)] }];
+    const turns: Array<{ Role: 'user' | 'model'; Texts: string[] }> = [{ Role: 'user', Texts: [ResumePreamble(seed.DroppedEntries)] }];
     for (const entry of seed.Entries) {
         const role = entry.Kind === 'assistant' || entry.Kind === 'toolCall' ? 'model' : 'user';
         const last = turns[turns.length - 1];
@@ -155,7 +155,7 @@ export function RenderRealtimeMemorySeedAsContextNote(seed: RealtimeMemorySeed):
         .join('\n');
 }
 
-export function resumePreamble(dropped: number): string {
+export function ResumePreamble(dropped: number): string {
     const omitted = dropped > 0 ? `; ${dropped} earlier entries omitted` : '';
     return (
         `[Connection resumed. Transcript so far, for continuity${omitted}. Continue exactly where the conversation left off. ` +
@@ -165,7 +165,7 @@ export function resumePreamble(dropped: number): string {
 }
 
 /** Default continuity preamble when no earlier entries were dropped. */
-export const REALTIME_MEMORY_CONTINUITY_PREAMBLE = resumePreamble(0);
+export const REALTIME_MEMORY_CONTINUITY_PREAMBLE = ResumePreamble(0);
 
 /** One entry as the text a seed carries. A tool exchange reads as bracketed text, not a function-call part. */
 export function RenderRealtimeMemoryEntry(entry: RealtimeMemoryEntry): string {
