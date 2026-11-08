@@ -26,8 +26,8 @@
  * declared not updatable reads its stored value there, as it does through a continuity mismatch; on the stored-value
  * reader of an updatable field a change row after
  * the decision outranks the coverage judgement and refuses `select-changes-after-decision-date` under either policy
- * (the precedence of stored-read verdicts is deleted, created after, continuity mismatch, changed after the decision,
- * coverage, value); a covering history replays
+ * (the precedence of stored-read verdicts is deleted, created after, changed after the decision, continuity mismatch
+ * and an ineligible external row, coverage, value: a later change refuses through a mismatch); a covering history replays
  * (or, read directly, refuses an update dated after the day, exactly as for a past day). On an untracked entity
  * nothing can be consulted, so the stored value is read for such a row. A record created after the decision day still
  * reads as missing. Rows with a past decision day keep the rule above. On any decision day, past or later, a record
@@ -781,7 +781,11 @@ export class AsOfFeatureAssembler {
     return { Outcomes: outcomes, ExcludedInstants: excludedInstants, History: history, HistoryStart: history.Coverage.historyStart };
   }
 
-  /** The rule's verdict on one stored record at one instant (the order of the checks is the order of the doc above). */
+  /**
+   * The rule's verdict on one stored record at one instant, in the stored-read precedence (D3-251): deleted, created
+   * after, changed after the decision, then what the replay says (a continuity mismatch or an ineligible external row
+   * excludes, an unreached history is uncovered, else the value stands).
+   */
   private static judgeStoredValue(history: EntityHistory, key: string, field: string, at: Date, storedCreatedAt: CellValue): StableOutcome {
     const hv = history.ValueAt(key, field, at);
     if (hv.Status === 'uncovered' && hv.Reason === 'deleted') return 'excluded';

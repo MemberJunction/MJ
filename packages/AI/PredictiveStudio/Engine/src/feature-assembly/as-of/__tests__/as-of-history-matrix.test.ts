@@ -103,6 +103,8 @@ const SHAPES: readonly Shape[] = [
   // A Snapshot precedes the stored creation instant, so the column dates a re-creation and is ignored: creation is unknown.
   shape('snapshot-with-created-at', [h('Snapshot', 2022, 'Active')], 'Active', { CreatedAt: at(2023).toISOString() }),
   shape('continuity-mismatch', [h('Create', 2020, 'Active')], 'Lapsed', { Mismatched: true }),
+  // A continuity mismatch and a change after the decision: the change outranks the mismatch on the stored readers.
+  shape('mismatch-then-updated', [h('Create', 2020, 'Active'), h('Update', 2022, 'Lapsed')], 'Gold', { Mismatched: true }),
 ];
 
 const DAYS = ['2019-06-01', '2021-06-01', '2023-06-01', '2025-06-01', ASSEMBLED_AT] as const;
@@ -158,11 +160,13 @@ const changedAfter = (s: Shape, asOf: Date): boolean =>
   });
 
 /**
- * The class of a (shape, day) as one reader sees it, judged in the order DELETED, CREATED_AFTER, MISMATCH, CHANGED_AFTER,
- * UNREACHED, VALUE. CHANGED_AFTER applies to the stored-value (immutable) readers only; the replay reader falls through.
- * It precedes UNREACHED because a change after the decision is a refusal under either policy by design: the stored
- * value is then not the value on the decision day whatever the history's reach, so the stable-value rule judges
- * `ChangesAfter` ahead of the coverage classes (`changed` outranks `uncovered` and `excluded` in its severity order).
+ * The class of a (shape, day) as one reader sees it, judged in the order DELETED, CREATED_AFTER, CHANGED_AFTER, MISMATCH,
+ * UNREACHED, VALUE (D3-251, the order of `judgeStoredValue`). CHANGED_AFTER applies to the stored-value (immutable)
+ * readers only; the replay reader falls through. It precedes MISMATCH and UNREACHED because a change after the
+ * decision is a refusal under either policy by design: the stored value is then not the value on the decision day
+ * whatever the continuity or the history's reach says, so the stable-value rule judges `ChangesAfter` ahead of the
+ * continuity and coverage classes (`changed` outranks `uncovered` and `excluded` in its severity order). The shape
+ * `mismatch-then-updated` pins it.
  */
 const classify = (s: Shape, day: Day, reader: Reader): OracleClass => {
   const asOf = asOfOf(day);
@@ -170,8 +174,8 @@ const classify = (s: Shape, day: Day, reader: Reader): OracleClass => {
   if (lastOf(inForce)?.Type === 'Delete') return 'DELETED';
   const created = creationOf(s);
   if (inForce.length === 0 && created !== null && created.getTime() >= asOf.getTime()) return 'CREATED_AFTER';
-  if (s.Mismatched) return 'MISMATCH';
   if (reader !== 'record-changes' && changedAfter(s, asOf)) return 'CHANGED_AFTER';
+  if (s.Mismatched) return 'MISMATCH';
   const anchored = s.History.some((r) => (r.Type === 'Create' || r.Type === 'Snapshot') && at(r.Year).getTime() < asOf.getTime());
   if (inForce.length === 0 || !anchored) return 'UNREACHED';
   return 'VALUE';
