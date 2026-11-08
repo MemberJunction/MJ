@@ -184,6 +184,14 @@ export class xAIRealtime extends OpenAIRealtime {  // case-violation-ok-legacy-b
 
     public static override readonly SupportsDynamicToolSet = XAI_REALTIME_PROFILE.supportsDynamicToolSet;
 
+    public override get DefaultCallDurationSeconds(): number | undefined {
+        return 1800;
+    }
+
+    public override get TrustsNativeResumption(): boolean {
+        return false;
+    }
+
     /**
      * @param apiKey The xAI API key used to authenticate the Grok Voice realtime socket.
      */
@@ -201,7 +209,7 @@ export class xAIRealtime extends OpenAIRealtime {  // case-violation-ok-legacy-b
 
     /** Returns the xAI-branded session subclass so instanceof checks and logs stay provider-true. */
     protected override createSessionInstance(connection: IOpenAIRealtimeConnection): OpenAIRealtimeSession {
-        return new xAIRealtimeSession(connection, RealtimeDriverFactsOf(this));
+        return new xAIRealtimeSession(connection, RealtimeDriverFactsOf(this), this);
     }
 
     /**
@@ -226,8 +234,17 @@ export class xAIRealtimeSession extends OpenAIRealtimeSession {  // case-violati
      * @param connection The injectable provider-connection seam (a real `OpenAIRealtimeWebSocket`
      * in production, a fake in tests).
      * @param driverFacts The creating driver's static facts; defaults to {@link xAIRealtime.DriverFacts} (xAI's own static) for direct construction.
+     * @param model Optional parent driver instance.
      */
-    constructor(connection: IxAIRealtimeConnection, driverFacts: Readonly<RealtimeDriverFacts> = xAIRealtime.DriverFacts) {
-        super(connection, XAI_REALTIME_PROFILE, driverFacts);
+    constructor(
+        connection: IxAIRealtimeConnection,
+        driverFacts: Readonly<RealtimeDriverFacts> = xAIRealtime.DriverFacts,
+        model?: BaseRealtimeModel,
+    ) {
+        super(connection, XAI_REALTIME_PROFILE, driverFacts, model);
+    }
+
+    protected override get DefaultCallDurationSeconds(): number | undefined {
+        return this.model?.DefaultCallDurationSeconds ?? 1800;
     }
 }

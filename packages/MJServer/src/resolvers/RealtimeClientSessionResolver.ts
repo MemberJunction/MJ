@@ -34,7 +34,7 @@
 import { Resolver, Mutation, Arg, Ctx, Int, Float, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { AuthorizationEvaluator, UserInfo, IMetadataProvider, DatabaseProviderBase, LogError, LogErrorEx, LogStatus, RunView, BaseEntity } from '@memberjunction/core';
-import { EscapeSQLString, UUIDsEqual, IsValidUUID } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual, IsValidUUID, NormalizeUUID, MJLruCache } from '@memberjunction/global';
 import {
     MJAIAgentEntity,
     MJAIAgentSessionEntity,
@@ -85,6 +85,7 @@ import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SessionManager } from '../agentSessions/index.js';
 import { SessionRunIDVerifier } from '../agentSessions/SessionRunIDVerifier.js';
+import { IsMaxSessionDeadlineElapsed, RemainingSessionSeconds } from '../agentSessions/sessionDeadline.js';
 import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 import { ResolveWidgetGuestRunContext, ResolveScopedAnonymousRunUser, ResolveRecordingStoreUser } from '../realtimeWidget/widgetGuestElevation.js';
 import { RunWithTrustedSessionConfigWrites } from '@memberjunction/core-entities-server';
@@ -445,6 +446,39 @@ export class UploadRealtimeRecordingResult {
 }
 
 /**
+ * Result of {@link RealtimeClientSessionResolver.RefreshRealtimeClientSessionToken} — a structured
+ * success/failure envelope returning freshly minted ephemeral credentials or an extended relay grant
+ * for an active client-direct session.
+ */
+@ObjectType()
+export class RefreshRealtimeClientSessionTokenResult {
+    @Field(() => Boolean)
+    Success: boolean;
+
+    @Field(() => String, { nullable: true })
+    EphemeralToken?: string;
+
+    @Field(() => String, { nullable: true })
+    ExpiresAt?: string;
+
+    @Field(() => String, { nullable: true })
+    RelayUrl?: string;
+
+    @Field(() => String, { nullable: true })
+    SessionConfigJson?: string;
+
+    @Field(() => String, { nullable: true })
+    ErrorMessage?: string;
+}
+
+const REFRESH_RATE_LIMIT_MAX_CALLS = 6;
+const REFRESH_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const refreshRateLimitBuckets = new MJLruCache<string, number[]>({
+    maxSize: 5000,
+    ttlMs: REFRESH_RATE_LIMIT_WINDOW_MS,
+});
+
+/**
  * Resolver for the client-direct realtime voice topology. A single {@link SessionManager} and a
  * single {@link RealtimeClientSessionService} are shared across requests — neither holds per-user or
  * per-provider state; every method is passed the request `contextUser` + provider explicitly.
@@ -632,6 +666,80 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         // board). Strictly tolerant — any problem yields a null field, never a failed start.
         result.PriorChannelStatesJson = (await this.loadPriorChannelStatesJson(lastSessionId, contextUser, provider)) ?? undefined;
         return result;
+    }
+
+    /**
+     * Refresh the short-lived ephemeral credential (or extend the MJAPI relay ticket) for an
+     * already-running client-direct voice session without creating a new `AIAgentSession` row.
+     */
+    @Mutation(() => RefreshRealtimeClientSessionTokenResult)
+    async RefreshRealtimeClientSessionToken(
+        @Arg('agentSessionId', () => String) agentSessionId: string,
+        @Ctx() { userPayload, providers }: AppContext,
+    ): Promise<RefreshRealtimeClientSessionTokenResult> {
+        const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
+        const session = await this.loadOwnedActiveSession(agentSessionId, contextUser, provider);
+
+        if (!this.allowRefreshUnderRateLimit(session.ID)) {
+            return {
+                Success: false,
+                ErrorMessage: 'Rate limit exceeded: too many token refreshes for this session.',
+            };
+        }
+
+        if (IsMaxSessionDeadlineElapsed(session.Config_)) {
+            await this.sessionManager.CloseSession(session.ID, contextUser, provider, 'TimeLimit');
+            return {
+                Success: false,
+                ErrorMessage: 'Session time limit reached.',
+            };
+        }
+
+        const config = this.readSessionConfig(session);
+        await this.assertCanRunTarget(config.targetAgentID, contextUser, provider);
+
+        const runUser = ResolveScopedAnonymousRunUser(contextUser);
+        const verified = await this.runIDVerifier.Verify(
+            session.ID,
+            { CoAgentRunID: config.coAgentRunID, CoAgentRunStepID: config.coAgentRunStepID },
+            runUser,
+            provider,
+        );
+
+        const remainingSeconds = RemainingSessionSeconds(session.Config_);
+        const refreshed = await this.clientSessionService.RefreshClientSessionCredential(
+            {
+                AgentSessionID: session.ID,
+                CoAgentID: session.AgentID,
+                CoAgentRunStepID: verified.CoAgentRunStepID,
+                RemainingSessionSeconds: remainingSeconds,
+            },
+            runUser,
+            provider,
+        );
+
+        if (refreshed.Success) {
+            await this.sessionManager.Heartbeat(agentSessionId, contextUser, provider);
+        }
+
+        return refreshed;
+    }
+
+    /**
+     * Enforces a rolling 10-minute window rate limit of at most 6 credential refreshes per session.
+     */
+    private allowRefreshUnderRateLimit(sessionID: string, nowMs: number = Date.now()): boolean {
+        const key = NormalizeUUID(sessionID);
+        const existing = refreshRateLimitBuckets.Get(key) ?? [];
+        const cutoff = nowMs - REFRESH_RATE_LIMIT_WINDOW_MS;
+        const recent = existing.filter((ts) => ts > cutoff);
+        if (recent.length >= REFRESH_RATE_LIMIT_MAX_CALLS) {
+            refreshRateLimitBuckets.Set(key, recent);
+            return false;
+        }
+        recent.push(nowMs);
+        refreshRateLimitBuckets.Set(key, recent);
+        return true;
     }
 
     /**

@@ -8,42 +8,33 @@ vi.mock('@memberjunction/global', () => ({
 // Mock @memberjunction/ai — provide BaseModel/BaseRealtimeModel base classes only. The realtime
 // type aliases (RealtimeSessionParams, etc.) are compile-time interfaces and need no runtime mock.
 vi.mock('@memberjunction/ai', async () => {
-    class BaseModel {
-        private _apiKey: string;
-        protected get apiKey(): string {
-            return this._apiKey;
-        }
-        constructor(apiKey: string) {
-            this._apiKey = apiKey;
-        }
-    }
-    // Mirror the real BaseRealtimeModel's default client-direct surface so the driver — which does
-    // NOT override either member (Inworld is server-bridged only) — inherits the correct behavior:
-    // SupportsClientDirect defaults to false and CreateClientSession throws unless overridden.
-    class BaseRealtimeModel extends BaseModel {
-        public get SupportsClientDirect(): boolean {
-            return false;
-        }
-        public async CreateClientSession(): Promise<never> {
-            throw new Error(`${this.constructor.name} does not support client-direct realtime sessions`);
-        }
-    }
-    // A REPRESENTATIVE shared-key list, not the real one. Reaching for the real export here means
-    // `importOriginal`, which loads the whole @memberjunction/ai barrel — realtimeProxyRegistry then
-    // wants BaseSingleton off the mocked @memberjunction/global, and the mocks cascade. Which is why
-    // this mock exists in the first place.
-    //
-    // The split that keeps this honest: these tests pin the driver's MECHANISM (it consults the
-    // registry and skips every key in it), while membership of the registry — that `firstMessage` is
-    // in the shared vocabulary at all — is pinned in @memberjunction/ai's own suite. Neither test
-    // can drift without the other failing.
+    const { BaseModel } = await import('../../../../Core/src/generic/baseModel');
+    const { BaseRealtimeModel, BaseRealtimeSession, RealtimeDriverFactsOf, DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS, DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS, MAX_REALTIME_RAPID_RECONNECTS, REALTIME_RAPID_RECONNECT_WINDOW_MS } = await import('../../../../Core/src/generic/baseRealtime');
+    const { RealtimeConversationMemory, RenderRealtimeMemorySeed, RenderRealtimeMemorySeedAsContextNote, REALTIME_MEMORY_CONTINUITY_PREAMBLE } = await import('../../../../Core/src/generic/realtimeConversationMemory');
     const REALTIME_SHARED_CONFIG_KEYS = ['voice', 'firstMessage', 'reasoningEffort', 'mcpTools', 'turnDetection'];
     // The dropped-input reporter is dependency-free, so the REAL implementation loads from its own
     // module without the barrel: the drop tests below assert against shipped behavior.
     const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
     // The turn-detection reader is dependency-free too, so the mapping tests run against the real one.
     const { ReadRealtimeTurnDetection, DescribeUnappliedTurnDetection } = await import('../../../../Core/src/generic/realtimeTurnDetection');
-    return { BaseModel, BaseRealtimeModel, REALTIME_SHARED_CONFIG_KEYS, RealtimeDroppedInputReporter, ReadRealtimeTurnDetection, DescribeUnappliedTurnDetection };
+    return {
+        BaseModel,
+        BaseRealtimeModel,
+        BaseRealtimeSession,
+        RealtimeConversationMemory,
+        RenderRealtimeMemorySeed,
+        RenderRealtimeMemorySeedAsContextNote,
+        REALTIME_MEMORY_CONTINUITY_PREAMBLE,
+        DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS,
+        DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS,
+        MAX_REALTIME_RAPID_RECONNECTS,
+        REALTIME_RAPID_RECONNECT_WINDOW_MS,
+        RealtimeDriverFactsOf,
+        REALTIME_SHARED_CONFIG_KEYS,
+        RealtimeDroppedInputReporter,
+        ReadRealtimeTurnDetection,
+        DescribeUnappliedTurnDetection,
+    };
 });
 
 import {

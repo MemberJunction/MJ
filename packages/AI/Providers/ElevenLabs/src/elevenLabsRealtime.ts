@@ -4,9 +4,12 @@ import { ElevenLabs, ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 // MemberJunction AI core contract
 import {
     BaseRealtimeModel,
+    BaseRealtimeSession,
     RealtimeDroppedInputReporter,
+    RenderRealtimeMemorySeedAsContextNote,
     type ClientRealtimeSessionConfig,
     type IRealtimeSession,
+    type RealtimeReconnectContext,
     type RealtimeSessionParams,
     type RealtimeToolDefinition,
     type RealtimeTranscript,
@@ -461,6 +464,14 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
         SupportedTurnSettings: ELEVENLABS_TURN_SETTING_FIDELITY,
     };
 
+    public override get DefaultCallDurationSeconds(): number | undefined {
+        return undefined;
+    }
+
+    public override get TrustsNativeResumption(): boolean {
+        return false;
+    }
+
     private elevenClient: ElevenLabsClient | null = null;
 
     /**
@@ -496,7 +507,7 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
     public async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
         const agentId = await this.ensureAgent(params);
         const signedUrl = await this.mintSignedUrl(agentId);
-        const session = new ElevenLabsRealtimeSession();
+        const session = new ElevenLabsRealtimeSession(this, params);
         session.SetConnectTimeTools(params.Tools ?? []);
         const socket = await this.connectConversation({
             SignedUrl: signedUrl,
@@ -505,6 +516,15 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
             OnClose: (code, reason) => session.HandleTransportClose(code, reason),
         });
         session.AttachSocket(socket);
+        session.SetReconnectFactory(async () => {
+            const nextSignedUrl = await this.mintSignedUrl(agentId);
+            return this.connectConversation({
+                SignedUrl: nextSignedUrl,
+                OnMessage: (event) => session.HandleServerEvent(event),
+                OnError: (message) => session.HandleTransportError(message),
+                OnClose: (code, reason) => session.HandleTransportClose(code, reason),
+            });
+        });
         session.SendInitiation(
             ElevenLabsRealtime.BuildSessionOverrides(params.SystemPrompt, params.Config),
             params.InitialContext
@@ -545,6 +565,9 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
         const resolvedModel = (reasoning?.Remote?.Ref && reasoning.Remote.Ref.length > 0)
             ? reasoning.Remote.Ref
             : (params.Model && params.Model.length > 0 ? params.Model : 'MJ Realtime Co-Agent');
+        const connectionMaxSeconds = this.ResolveConnectionDurationSeconds(params.Config);
+        const reconnectBufferSeconds = this.ResolveReconnectBufferSeconds(params.Config);
+        const trustNativeResumption = this.ResolveTrustsNativeResumption(params.Config);
         return {
             Provider: 'elevenlabs',
             Model: resolvedModel,
@@ -559,6 +582,9 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
             // own max_duration_seconds applies — ElevenLabs creates agents with 600 s, not the 7200 s ceiling — and it
             // is not known here, so none is reported.
             MaxSessionSeconds: resolvedModel.startsWith(ELEVENLABS_AGENT_ID_PREFIX) ? undefined : this.resolveNativeMaxDuration(params),
+            ...(connectionMaxSeconds !== undefined ? { ConnectionMaxSeconds: connectionMaxSeconds } : {}),
+            ReconnectBufferSeconds: reconnectBufferSeconds,
+            TrustNativeResumption: trustNativeResumption,
         };
     }
 
@@ -1145,16 +1171,16 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
  *   reference it ("you asked me to give an update") — hosts should phrase instructions
  *   accordingly. {@link SendContextNote} is NATIVE (`contextual_update`) and never interrupts.
  */
-export class ElevenLabsRealtimeSession implements IRealtimeSession {
+export class ElevenLabsRealtimeSession extends BaseRealtimeSession implements IRealtimeSession {
     private socket: ElevenLabsRealtimeSocket | null = null;
+    private reconnectFactory?: () => Promise<ElevenLabsRealtimeSocket>;
+    private initialOverrides?: JSONObject;
 
     private outputHandler: ((chunk: ArrayBuffer) => void) | null = null;
     private transcriptHandler: ((t: RealtimeTranscript) => void) | null = null;
     private toolCallHandler: ((call: RealtimeToolCall) => void) | null = null;
     private interruptionHandler: (() => void) | null = null;
     private errorHandler: ((error: RealtimeSessionError) => void) | null = null;
-    /** True once Close() ran — an expected close must not surface as a fatal error. */
-    private closedByConsumer = false;
 
     /** Resolves when `conversation_initiation_metadata` arrives; rejects on transport death. */
     private metadataPromise: Promise<void>;
@@ -1185,7 +1211,8 @@ export class ElevenLabsRealtimeSession implements IRealtimeSession {
     /** Reports the frames {@link SendInput} drops, once per kind and type. */
     private readonly droppedInput = new RealtimeDroppedInputReporter('ElevenLabsRealtime', 'this session sends audio only');
 
-    constructor() {
+    constructor(model?: BaseRealtimeModel, params?: RealtimeSessionParams) {
+        super(model, params?.Config as Record<string, unknown> | undefined);
         this.metadataPromise = new Promise<void>((resolve, reject) => {
             this.resolveMetadata = resolve;
             this.rejectMetadata = reject;
@@ -1196,9 +1223,22 @@ export class ElevenLabsRealtimeSession implements IRealtimeSession {
         this.metadataPromise.catch(() => undefined);
     }
 
+    protected override get DefaultCallDurationSeconds(): number | undefined {
+        return this.model?.DefaultCallDurationSeconds ?? undefined;
+    }
+
+    protected override get DefaultTrustsNativeResumption(): boolean {
+        return false;
+    }
+
     /** Binds the underlying socket. Called by the driver once the websocket is open. */
     public AttachSocket(socket: ElevenLabsRealtimeSocket): void {
         this.socket = socket;
+    }
+
+    /** Registers the factory used to mint a fresh signed URL and open a replacement conversation socket. */
+    public SetReconnectFactory(factory: () => Promise<ElevenLabsRealtimeSocket>): void {
+        this.reconnectFactory = factory;
     }
 
     /**
@@ -1216,11 +1256,16 @@ export class ElevenLabsRealtimeSession implements IRealtimeSession {
      * @param initialContext Optional prior context to inject once the session is confirmed.
      */
     public SendInitiation(overrides: JSONObject, initialContext?: string): void {
+        this.initialOverrides = overrides;
         this.pendingInitialContext = initialContext && initialContext.trim().length > 0 ? initialContext : null;
         this.sendFrame({
             type: 'conversation_initiation_client_data',
             conversation_config_override: overrides,
         });
+        if (this.metadataReceived && this.pendingInitialContext) {
+            this.sendFrame({ type: 'contextual_update', text: this.pendingInitialContext });
+            this.pendingInitialContext = null;
+        }
     }
 
     /**
@@ -1323,7 +1368,7 @@ export class ElevenLabsRealtimeSession implements IRealtimeSession {
      * death reaches the consumer.
      */
     public HandleTransportClose(code?: number, reason?: string): void {
-        if (this.closedByConsumer) {
+        if (this.closedByConsumer || this.IsReconnecting) {
             return;
         }
         const detail = [code != null ? `code ${code}` : null, reason || null].filter(Boolean).join(' — ');
@@ -1341,6 +1386,18 @@ export class ElevenLabsRealtimeSession implements IRealtimeSession {
      * The result string rides as given, never parsed.
      */
     public async SendToolResult(callID: string, output: string): Promise<void> {
+        const name = this.pendingToolCallNames.get(callID) ?? callID;
+        this.conversationMemory.Record({
+            Kind: 'toolResult',
+            Name: name,
+            OutputJson: output,
+        });
+        this.pendingToolCallNames.delete(callID);
+        if (this.callsFromBeforeReseed.delete(callID)) {
+            this.sendFrame({ type: 'contextual_update', text: `[Tool result for ${name}: ${output}]` });
+            this.RequestSpokenUpdate(`Please continue with the tool result for ${name}.`);
+            return;
+        }
         this.sendFrame({
             type: 'client_tool_result',
             tool_call_id: callID,
@@ -1359,6 +1416,10 @@ export class ElevenLabsRealtimeSession implements IRealtimeSession {
      * (the platform guarantees it never triggers or disturbs generation).
      */
     public SendContextNote(text: string): void {
+        this.conversationMemory.Record({
+            Kind: 'note',
+            Text: text,
+        });
         this.sendFrame({ type: 'contextual_update', text });
     }
 
@@ -1373,13 +1434,55 @@ export class ElevenLabsRealtimeSession implements IRealtimeSession {
     public RequestSpokenUpdate(instructions: string): void {
         this.enqueueOrRun(() => {
             this.responseActive = true; // the emulated turn triggers a response of its own
+            this.NotifyTurnStarted();
             this.sendFrame({ type: 'user_message', text: instructions });
         });
     }
 
+    /**
+     * Reconnects the ElevenLabs conversation websocket by minting a fresh signed URL, opening a
+     * replacement socket, sending initiation overrides, and injecting accumulated conversation
+     * history as a `contextual_update` once metadata is confirmed.
+     */
+    protected override async Reconnect(context: RealtimeReconnectContext): Promise<void> {
+        if (!this.reconnectFactory) {
+            throw new Error('ElevenLabsRealtimeSession: No reconnect factory available for Reconnect');
+        }
+        this.metadataReceived = false;
+        this.metadataPromise = new Promise<void>((resolve, reject) => {
+            this.resolveMetadata = resolve;
+            this.rejectMetadata = reject;
+        });
+        this.metadataPromise.catch(() => undefined);
+
+        const nextSocket = await this.reconnectFactory();
+        const prevSocket = this.socket;
+        this.socket = nextSocket;
+
+        const seedNote =
+            context.ConversationSeed && context.ConversationSeed.Entries.length > 0
+                ? RenderRealtimeMemorySeedAsContextNote(context.ConversationSeed)
+                : undefined;
+        this.SendInitiation(this.initialOverrides ?? {}, seedNote);
+        await this.WaitForMetadata();
+        this.responseActive = false;
+        try {
+            prevSocket?.close();
+        } catch {
+            // ignore close error on replaced socket
+        }
+    }
+
+    protected override onReconnectFailed(error: Error): void {
+        if (this.closedByConsumer) {
+            return;
+        }
+        this.errorHandler?.({ Message: error.message, Fatal: true });
+    }
+
     /** @inheritdoc */
     public async Close(): Promise<void> {
-        this.closedByConsumer = true;
+        this.DisposeReconnectTimers();
         this.failMetadataWait('session closed by consumer before initiation completed');
         this.socket?.close();
         this.socket = null;
@@ -1392,23 +1495,29 @@ export class ElevenLabsRealtimeSession implements IRealtimeSession {
      */
     public HandleServerEvent(event: ElevenLabsServerEvent): void {
         switch (event.type) {
-            case 'conversation_initiation_metadata':
+            case 'conversation_initiation_metadata': {
+                const convId = event.conversation_initiation_metadata_event?.conversation_id;
+                if (convId && convId.length > 0) {
+                    this.RecordResumptionHandle(convId);
+                }
                 this.handleInitiationMetadata();
                 break;
+            }
             case 'audio':
                 this.handleAudio(event.audio_event?.audio_base_64);
                 break;
             case 'user_transcript':
-                this.emitTranscript('user', event.user_transcription_event?.user_transcript);
+                this.emitTranscript('user', event.user_transcription_event?.user_transcript, false);
                 break;
             case 'agent_response':
                 this.responseActive = true;
-                this.emitTranscript('assistant', event.agent_response_event?.agent_response);
+                this.NotifyTurnStarted();
+                this.emitTranscript('assistant', event.agent_response_event?.agent_response, false);
                 break;
             case 'agent_response_correction':
                 // Post-barge-in truncation: the corrected text is what was ACTUALLY spoken —
                 // re-finalize the assistant turn with it (see the class-level note).
-                this.emitTranscript('assistant', event.agent_response_correction_event?.corrected_agent_response);
+                this.emitTranscript('assistant', event.agent_response_correction_event?.corrected_agent_response, true);
                 break;
             case 'agent_response_complete':
                 this.completeResponse();
@@ -1436,9 +1545,10 @@ export class ElevenLabsRealtimeSession implements IRealtimeSession {
     /** Marks the session configured, releases {@link WaitForMetadata}, injects initial context. */
     private handleInitiationMetadata(): void {
         this.metadataReceived = true;
+        this.ArmConnectionDurationTimer();
         this.resolveMetadata?.();
         if (this.pendingInitialContext) {
-            this.SendContextNote(this.pendingInitialContext);
+            this.sendFrame({ type: 'contextual_update', text: this.pendingInitialContext });
             this.pendingInitialContext = null;
         }
     }
@@ -1449,6 +1559,7 @@ export class ElevenLabsRealtimeSession implements IRealtimeSession {
             return;
         }
         this.responseActive = true;
+        this.NotifyTurnStarted();
         this.outputHandler?.(ElevenLabsRealtimeSession.base64ToArrayBuffer(audioBase64));
     }
 
@@ -1463,16 +1574,26 @@ export class ElevenLabsRealtimeSession implements IRealtimeSession {
             return;
         }
         this.responseActive = false;
+        const callId = call.tool_call_id ?? '';
+        const toolName = call.tool_name ?? '';
+        const args = JSON.stringify(call.parameters ?? {});
+        this.pendingToolCallNames.set(callId, toolName);
+        this.conversationMemory.Record({
+            Kind: 'toolCall',
+            Name: toolName,
+            ArgumentsJson: args,
+        });
         this.toolCallHandler?.({
-            CallID: call.tool_call_id ?? '',
-            ToolName: call.tool_name ?? '',
-            Arguments: JSON.stringify(call.parameters ?? {}),
+            CallID: callId,
+            ToolName: toolName,
+            Arguments: args,
         });
     }
 
     /** Response boundary: releases the busy flag and drains queued sends in order. */
     private completeResponse(): void {
         this.responseActive = false;
+        this.NotifyTurnEnded();
         while (!this.responseActive && this.queuedSends.length > 0) {
             const send = this.queuedSends.shift();
             send?.();
@@ -1480,11 +1601,16 @@ export class ElevenLabsRealtimeSession implements IRealtimeSession {
     }
 
     /** Emits a FINAL transcript (this provider has no interim deltas — see the class note). */
-    private emitTranscript(role: 'user' | 'assistant', text: string | undefined): void {
-        if (!this.transcriptHandler || !text || text.trim().length === 0) {
+    private emitTranscript(role: 'user' | 'assistant', text: string | undefined, replacesPrevious: boolean): void {
+        if (!text || text.trim().length === 0) {
             return;
         }
-        this.transcriptHandler({ Role: role, Text: text, IsFinal: true });
+        this.conversationMemory.Record({
+            Kind: role,
+            Text: text,
+            ReplacesPrevious: replacesPrevious,
+        });
+        this.transcriptHandler?.({ Role: role, Text: text, IsFinal: true });
     }
 
     /** Runs a send immediately when idle; otherwise queues it for the next response boundary. */

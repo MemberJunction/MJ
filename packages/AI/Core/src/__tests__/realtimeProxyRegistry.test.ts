@@ -261,6 +261,38 @@ describe('RealtimeProxyRegistry relay sessions', () => {
         expect(registry().Consume(proxy.ID)?.UpstreamUrl).toBe('ws://hf.internal/v1/realtime');
         expect(registry().FindRelaySession(relayId)).not.toBeNull();
     });
+
+    it('ExtendRelaySession extends expiry, increments MaxConnections, preserves handles, re-arms FreshOpened, and notifies listeners', () => {
+        const id = issue({ LifetimeSeconds: 600, MaxConnections: 2 });
+        const grant1 = granted(registry().OpenRelaySession(id, FRESH));
+        registry().RecordRelayHandle(id, 'h-preserved');
+
+        const notified: number[] = [];
+        const unsub = grant1.OnExpiresAtExtended?.((newExpiresAtMs) => notified.push(newExpiresAtMs));
+
+        // Second connection consumes the cap of 2
+        expect(granted(registry().OpenRelaySession(id, resume('h-preserved'))).ConnectionNumber).toBe(2);
+        expect(refusal(registry().OpenRelaySession(id, resume('h-preserved')))).toBe('connection-cap');
+
+        advance(500);
+        const extended = registry().ExtendRelaySession(id, 1800, 10);
+        expect(extended).not.toBeNull();
+        expect(notified).toEqual([Date.now() + 1800 * 1000]);
+
+        // Preserved handle still works and MaxConnections is now 12
+        const grant3 = granted(registry().OpenRelaySession(id, resume('h-preserved')));
+        expect(grant3.ConnectionNumber).toBe(3);
+        expect(grant3.MaxConnections).toBe(12);
+
+        // FreshOpened was re-armed to false, so a seed-fallback fresh open is also accepted
+        const grant4 = granted(registry().OpenRelaySession(id, FRESH));
+        expect(grant4.Resumed).toBe(false);
+        expect(grant4.ConnectionNumber).toBe(4);
+
+        unsub?.();
+        registry().ExtendRelaySession(id, 2400, 5);
+        expect(notified).toHaveLength(1);
+    });
 });
 
 describe('relay and proxy URLs', () => {

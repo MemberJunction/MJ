@@ -13,32 +13,9 @@ vi.mock('@memberjunction/global', () => ({
 // time must exist here alongside BaseModel/BaseRealtimeModel. The realtime type aliases
 // (RealtimeSessionParams, etc.) are compile-time interfaces and need no runtime mock.
 vi.mock('@memberjunction/ai', async () => {
-    class BaseModel {
-        protected _apiKey: string;
-        constructor(apiKey: string) {
-            this._apiKey = apiKey;
-        }
-    }
-    // Mirror the real BaseRealtimeModel's default client-direct surface: SupportsClientDirect
-    // defaults to false and CreateClientSession throws unless overridden (OpenAIRealtime — which
-    // xAIRealtime now subclasses — overrides both, matching Grok Voice's real client-direct support).
-    class BaseRealtimeModel extends BaseModel {
-        public get SupportsClientDirect(): boolean {
-            return false;
-        }
-        // Same body as the real BaseRealtimeModel.ClampSessionSeconds (the real module cannot be imported here; see RealtimeDriverFactsOf below).
-        protected ClampSessionSeconds(...candidates: ReadonlyArray<number | undefined>): number | undefined {
-            let smallest: number | undefined;
-            for (const c of candidates) {
-                if (typeof c !== 'number' || !Number.isInteger(c) || c <= 0) continue;
-                if (smallest === undefined || c < smallest) smallest = c;
-            }
-            return smallest;
-        }
-        public async CreateClientSession(): Promise<never> {
-            throw new Error(`${this.constructor.name} does not support client-direct realtime sessions`);
-        }
-    }
+    const { BaseModel } = await import('../../../../Core/src/generic/baseModel');
+    const { BaseRealtimeModel, BaseRealtimeSession, RealtimeDriverFactsOf, DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS, DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS, MAX_REALTIME_RAPID_RECONNECTS, REALTIME_RAPID_RECONNECT_WINDOW_MS } = await import('../../../../Core/src/generic/baseRealtime');
+    const { RealtimeConversationMemory, RenderRealtimeMemorySeed, RenderRealtimeMemorySeedAsContextNote, REALTIME_MEMORY_CONTINUITY_PREAMBLE } = await import('../../../../Core/src/generic/realtimeConversationMemory');
     // Base classes the OpenAI provider's other modules extend during module evaluation.
     class BaseLLM extends BaseModel {}
     class BaseEmbeddings extends BaseModel {}
@@ -59,25 +36,39 @@ vi.mock('@memberjunction/ai', async () => {
     }
     // RealtimeDiagLog is a verbose-gated console logger used by the realtime session; a no-op suffices.
     const RealtimeDiagLog = () => { /* no-op in tests */ };
-    // IsTranscriptContinuation is a PURE, dependency-free helper — pull in the REAL implementation
-    // rather than stubbing it, so this driver test asserts against shipped behavior. It lives in its
-    // own module precisely so importing it here can't cascade into other mocked packages.
     const { IsTranscriptContinuation } = await import('../../../../Core/src/generic/transcriptContinuation');
-    // Same reasoning for ResolveResponseDoneUsage — PURE and dependency-free, and it encodes the
-    // provider-specific rule for WHERE usage lives on a response.done frame (xAI puts it at the
-    // top level, OpenAI under response.usage). Stubbing it would let this test restate that rule
-    // and drift from reality, which is how the xAI top-level-usage bug survived here in the first
-    // place — so the real implementation is the thing under test.
     const { ResolveResponseDoneUsage, MapRealtimeUsageModalityDetail } = await import('../../../../Core/src/generic/realtimeUsage');
-    // NormalizeTurnDetectionSettings is the single shared normalizer — run the real one so tests cannot drift from it.
-    // turnDetectionSettings.ts is dependency-free BY DESIGN and must stay so: it is loaded from source here, under mocks.
     const { NormalizeTurnDetectionSettings } = await import('../../../../Core/src/generic/turnDetectionSettings');
-    // Same for RealtimeDroppedInputReporter, which the shared OpenAI-protocol session uses to report the input it drops.
     const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
-    // Same body as the real RealtimeDriverFactsOf (baseRealtime.ts). The real module cannot be imported here: it pulls in
-    // @memberjunction/global, which these suites mock. The mocked BaseRealtimeModel has no static, so only drivers declaring their own resolve.
-    const RealtimeDriverFactsOf = (driver: object): object => (driver.constructor as { DriverFacts: object }).DriverFacts;
-    return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseTextToSpeech, BaseSpeechToText, BaseImageGenerator, BaseDecision, BaseSystemOneDecision, ErrorAnalyzer, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, MapRealtimeUsageModalityDetail, NormalizeTurnDetectionSettings, RealtimeDroppedInputReporter, RealtimeDriverFactsOf };
+    return {
+        BaseModel,
+        BaseRealtimeModel,
+        BaseRealtimeSession,
+        RealtimeConversationMemory,
+        RenderRealtimeMemorySeed,
+        RenderRealtimeMemorySeedAsContextNote,
+        REALTIME_MEMORY_CONTINUITY_PREAMBLE,
+        DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS,
+        DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS,
+        MAX_REALTIME_RAPID_RECONNECTS,
+        REALTIME_RAPID_RECONNECT_WINDOW_MS,
+        BaseLLM,
+        BaseEmbeddings,
+        BaseAudioGenerator,
+        BaseTextToSpeech,
+        BaseSpeechToText,
+        BaseImageGenerator,
+        BaseDecision,
+        BaseSystemOneDecision,
+        ErrorAnalyzer,
+        RealtimeDiagLog,
+        IsTranscriptContinuation,
+        ResolveResponseDoneUsage,
+        MapRealtimeUsageModalityDetail,
+        NormalizeTurnDetectionSettings,
+        RealtimeDroppedInputReporter,
+        RealtimeDriverFactsOf,
+    };
 });
 
 // Mock the SDK WebSocket so importing the driver never touches the network. The driver's

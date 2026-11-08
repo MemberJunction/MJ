@@ -101,11 +101,21 @@ export class xAIRealtimeClient extends OpenAIProtocolWebSocketRealtimeClient {  
         return 'xAIRealtimeClient';
     }
 
+    protected override get DefaultCallDurationSeconds(): number | undefined {
+        return 1800;
+    }
+
     // ── Transport hooks ────────────────────────────────────────────────────────
 
     /** @inheritdoc — model on the URL, ephemeral secret as the subprotocol. */
-    protected openProviderSocket(config: ClientRealtimeSessionConfig): IOpenAIProtocolClientSocket {
-        const url = `${XAI_REALTIME_WS_URL}?model=${encodeURIComponent(config.Model)}`;
+    protected openProviderSocket(
+        config: ClientRealtimeSessionConfig,
+        resumptionHandle?: string | null
+    ): IOpenAIProtocolClientSocket {
+        let url = `${XAI_REALTIME_WS_URL}?model=${encodeURIComponent(config.Model)}`;
+        if (resumptionHandle && resumptionHandle.trim().length > 0) {
+            url += `&conversation_id=${encodeURIComponent(resumptionHandle.trim())}`;
+        }
         const subprotocol = `${XAI_CLIENT_SECRET_SUBPROTOCOL_PREFIX}${config.EphemeralToken}`;
         return this.createSocket(url, subprotocol);
     }

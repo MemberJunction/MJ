@@ -17114,7 +17114,15 @@
       "IsActive": true,
       "SpeedRank": 8,
       "CostRank": 8,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Realtime": {
+          "ConnectionMaxSeconds": 3600,
+          "SessionMaxSeconds": 3600,
+          "ReconnectBufferSeconds": 10,
+          "TrustNativeResumption": false
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -19419,7 +19427,14 @@
       "IsActive": true,
       "SpeedRank": 8,
       "CostRank": 4,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Realtime": {
+          "ConnectionMaxSeconds": 600,
+          "SessionMaxSeconds": 1800,
+          "ReconnectBufferSeconds": 10
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -19434,7 +19449,15 @@
             "Status": "Active",
             "SupportedResponseFormats": "Any",
             "SupportsEffortLevel": false,
-            "SupportsStreaming": true
+            "SupportsStreaming": true,
+            "ModelConfiguration": {
+              "Realtime": {
+                "ConnectionMaxSeconds": 600,
+                "SessionMaxSeconds": 1800,
+                "ReconnectBufferSeconds": 10,
+                "TrustNativeResumption": false
+              }
+            }
           },
           "primaryKey": {
             "ID": "BAFB6CB9-C5E4-4BBB-9168-3CB8D38ACDC5"
@@ -19463,7 +19486,14 @@
       "IsActive": true,
       "SpeedRank": 7,
       "CostRank": 5,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Realtime": {
+          "ConnectionMaxSeconds": 7200,
+          "ReconnectBufferSeconds": 10,
+          "TrustNativeResumption": false
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -19562,7 +19592,15 @@
       "IsActive": true,
       "SpeedRank": 8,
       "CostRank": 5,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Realtime": {
+          "ConnectionMaxSeconds": 7200,
+          "SessionMaxSeconds": 3600,
+          "ReconnectBufferSeconds": 10,
+          "TrustNativeResumption": true
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -21812,7 +21850,15 @@
       "SpeedRank": 8,
       "CostRank": 8,
       "InheritTypeModalities": true,
-      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT Realtime 2"
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT Realtime 2",
+      "ModelConfiguration": {
+        "Realtime": {
+          "ConnectionMaxSeconds": 3600,
+          "SessionMaxSeconds": 3600,
+          "ReconnectBufferSeconds": 10,
+          "TrustNativeResumption": false
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -21903,7 +21949,15 @@
       "IsActive": true,
       "SpeedRank": 9,
       "CostRank": 10,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Realtime": {
+          "ConnectionMaxSeconds": 3600,
+          "SessionMaxSeconds": 3600,
+          "ReconnectBufferSeconds": 10,
+          "TrustNativeResumption": false
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -23254,7 +23308,15 @@
       "SpeedRank": 9,
       "CostRank": 4,
       "InheritTypeModalities": true,
-      "PriorVersionID": "@lookup:MJ: AI Models.Name=Grok Voice"
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Grok Voice",
+      "ModelConfiguration": {
+        "Realtime": {
+          "ConnectionMaxSeconds": 7200,
+          "SessionMaxSeconds": 3600,
+          "ReconnectBufferSeconds": 10,
+          "TrustNativeResumption": true
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -25612,7 +25674,10 @@
       "InheritTypeModalities": true,
       "ModelConfiguration": {
         "Realtime": {
-          "FullDuplex": true
+          "FullDuplex": true,
+          "ConnectionMaxSeconds": 3600,
+          "ReconnectBufferSeconds": 10,
+          "TrustNativeResumption": false
         }
       }
     },
@@ -25954,7 +26019,10 @@
           "TurnDetection": {
             "Coverage": "audioActivityAndAllVideo"
           },
-          "FullDuplex": true
+          "FullDuplex": true,
+          "ConnectionMaxSeconds": 600,
+          "SessionMaxSeconds": 1800,
+          "ReconnectBufferSeconds": 10
         }
       }
     },
@@ -25982,7 +26050,11 @@
                 "TurnDetection": {
                   "Coverage": "audioActivityAndAllVideo"
                 },
-                "FullDuplex": true
+                "FullDuplex": true,
+                "ConnectionMaxSeconds": 600,
+                "SessionMaxSeconds": 1800,
+                "ReconnectBufferSeconds": 10,
+                "TrustNativeResumption": false
               }
             }
           },
@@ -26027,7 +26099,11 @@
                     "Unit": "Per 1M Tokens",
                     "Currency": "USD"
                   }
-                }
+                },
+                "ConnectionMaxSeconds": 600,
+                "SessionMaxSeconds": 1800,
+                "ReconnectBufferSeconds": 10,
+                "TrustNativeResumption": true
               }
             }
           },
@@ -26253,7 +26329,10 @@
           "TurnDetection": {
             "Coverage": "audioActivityAndAllVideo"
           },
-          "FullDuplex": true
+          "FullDuplex": true,
+          "ConnectionMaxSeconds": 600,
+          "SessionMaxSeconds": 1800,
+          "ReconnectBufferSeconds": 10
         }
       }
     },
@@ -26285,7 +26364,11 @@
                 "TurnDetection": {
                   "Coverage": "audioActivityAndAllVideo"
                 },
-                "FullDuplex": true
+                "FullDuplex": true,
+                "ConnectionMaxSeconds": 600,
+                "SessionMaxSeconds": 1800,
+                "ReconnectBufferSeconds": 10,
+                "TrustNativeResumption": false
               }
             }
           },
@@ -29624,7 +29707,15 @@
       "SpeedRank": 9,
       "CostRank": 4,
       "InheritTypeModalities": true,
-      "PriorVersionID": "@lookup:MJ: AI Models.Name=Grok Voice Think Fast 2.0"
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Grok Voice Think Fast 2.0",
+      "ModelConfiguration": {
+        "Realtime": {
+          "ConnectionMaxSeconds": 7200,
+          "SessionMaxSeconds": 3600,
+          "ReconnectBufferSeconds": 10,
+          "TrustNativeResumption": true
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -29810,7 +29901,14 @@
       "IsActive": true,
       "SpeedRank": 9,
       "CostRank": 5,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Realtime": {
+          "ConnectionMaxSeconds": 7200,
+          "ReconnectBufferSeconds": 10,
+          "TrustNativeResumption": false
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -29873,7 +29971,14 @@
       "IsActive": true,
       "SpeedRank": 9,
       "CostRank": 5,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Realtime": {
+          "ConnectionMaxSeconds": 7200,
+          "ReconnectBufferSeconds": 10,
+          "TrustNativeResumption": false
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [

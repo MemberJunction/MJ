@@ -3,11 +3,14 @@
 // MemberJunction AI core contract
 import {
     BaseRealtimeModel,
+    BaseRealtimeSession,
     RealtimeDroppedInputReporter,
     ReadRealtimeTurnDetection,
     DescribeUnappliedTurnDetection,
+    RenderRealtimeMemorySeedAsContextNote,
     type ClientRealtimeSessionConfig,
     type IRealtimeSession,
+    type RealtimeReconnectContext,
     type RealtimeSessionParams,
     type RealtimeToolDefinition,
     type RealtimeTranscript,
@@ -225,6 +228,14 @@ export class AssemblyAIRealtime extends BaseRealtimeModel {
     /** Provider ceiling unconfirmed; unknown until an in-repo source states it. */
     public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = {};
 
+    public override get DefaultCallDurationSeconds(): number | undefined {
+        return undefined;
+    }
+
+    public override get TrustsNativeResumption(): boolean {
+        return false;
+    }
+
     /**
      * The voices the AssemblyAI Voice Agent API can speak with — used to populate the voice picker.
      */
@@ -243,7 +254,7 @@ export class AssemblyAIRealtime extends BaseRealtimeModel {
      * `StartSession` not resolving until ready makes that unrepresentable for consumers.
      */
     public async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
-        const session = new AssemblyAIRealtimeSession(AssemblyAIRealtime.BuildSessionObject(params));
+        const session = new AssemblyAIRealtimeSession(AssemblyAIRealtime.BuildSessionObject(params), this, params);
         session.SetConnectTimeTools(params.Tools ?? []);
         const socket = await this.connectAgentSocket({
             Url: `${ASSEMBLYAI_AGENT_WS_URL}?token=${encodeURIComponent(this.apiKey)}`,
@@ -252,6 +263,14 @@ export class AssemblyAIRealtime extends BaseRealtimeModel {
             OnClose: (code, reason) => session.HandleTransportClose(code, reason),
         });
         session.AttachSocket(socket);
+        session.SetReconnectFactory(() =>
+            this.connectAgentSocket({
+                Url: `${ASSEMBLYAI_AGENT_WS_URL}?token=${encodeURIComponent(this.apiKey)}`,
+                OnMessage: (event) => session.HandleServerEvent(event),
+                OnError: (message) => session.HandleTransportError(message),
+                OnClose: (code, reason) => session.HandleTransportClose(code, reason),
+            }),
+        );
         session.SendSessionUpdate();
         await session.WaitForReady();
         return session;
@@ -274,6 +293,9 @@ export class AssemblyAIRealtime extends BaseRealtimeModel {
      */
     public override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
         const token = await this.mintClientToken(ASSEMBLYAI_TOKEN_TTL_SECONDS);
+        const connectionMaxSeconds = this.ResolveConnectionDurationSeconds(params.Config);
+        const reconnectBufferSeconds = this.ResolveReconnectBufferSeconds(params.Config);
+        const trustNativeResumption = this.ResolveTrustsNativeResumption(params.Config);
         return {
             Provider: 'assemblyai',
             Model: params.Model,
@@ -284,6 +306,9 @@ export class AssemblyAIRealtime extends BaseRealtimeModel {
                 config: params.Config ?? {},
             },
             MaxSessionSeconds: this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds),
+            ...(connectionMaxSeconds !== undefined ? { ConnectionMaxSeconds: connectionMaxSeconds } : {}),
+            ReconnectBufferSeconds: reconnectBufferSeconds,
+            TrustNativeResumption: trustNativeResumption,
         };
     }
 
@@ -478,16 +503,15 @@ export class AssemblyAIRealtime extends BaseRealtimeModel {
  *   field, so (unlike ElevenLabs) a genuinely different post-start set is applied to the
  *   live session; an identical set is a silent no-op per the idempotency rule.
  */
-export class AssemblyAIRealtimeSession implements IRealtimeSession {
+export class AssemblyAIRealtimeSession extends BaseRealtimeSession implements IRealtimeSession {
     private socket: AssemblyAIRealtimeSocket | null = null;
+    private reconnectFactory?: () => Promise<AssemblyAIRealtimeSocket>;
 
     private outputHandler: ((chunk: ArrayBuffer) => void) | null = null;
     private transcriptHandler: ((t: RealtimeTranscript) => void) | null = null;
     private toolCallHandler: ((call: RealtimeToolCall) => void) | null = null;
     private interruptionHandler: (() => void) | null = null;
     private errorHandler: ((error: RealtimeSessionError) => void) | null = null;
-    /** True once Close() ran — an expected close must not surface as a fatal error. */
-    private closedByConsumer = false;
 
     /** Resolves when `session.ready` arrives; rejects on transport death. */
     private readyPromise: Promise<void>;
@@ -522,7 +546,8 @@ export class AssemblyAIRealtimeSession implements IRealtimeSession {
     /** Reports the frames {@link SendInput} drops, once per kind and type. */
     private readonly droppedInput = new RealtimeDroppedInputReporter('AssemblyAIRealtime', 'this session sends audio only');
 
-    constructor(sessionObject: JSONObject) {
+    constructor(sessionObject: JSONObject, model?: BaseRealtimeModel, params?: RealtimeSessionParams) {
+        super(model, params?.Config as Record<string, unknown> | undefined);
         this.sessionObject = sessionObject;
         this.basePrompt = typeof sessionObject['system_prompt'] === 'string' ? sessionObject['system_prompt'] : '';
         this.readyPromise = new Promise<void>((resolve, reject) => {
@@ -535,9 +560,22 @@ export class AssemblyAIRealtimeSession implements IRealtimeSession {
         this.readyPromise.catch(() => undefined);
     }
 
+    protected override get DefaultCallDurationSeconds(): number | undefined {
+        return this.model?.DefaultCallDurationSeconds ?? undefined;
+    }
+
+    protected override get DefaultTrustsNativeResumption(): boolean {
+        return false;
+    }
+
     /** Binds the underlying socket. Called by the driver once the websocket is open. */
     public AttachSocket(socket: AssemblyAIRealtimeSocket): void {
         this.socket = socket;
+    }
+
+    /** Registers the factory used to open a replacement agent socket on reconnect. */
+    public SetReconnectFactory(factory: () => Promise<AssemblyAIRealtimeSocket>): void {
+        this.reconnectFactory = factory;
     }
 
     /**
@@ -587,9 +625,11 @@ export class AssemblyAIRealtimeSession implements IRealtimeSession {
             return; // identical to the declared set — silent no-op
         }
         this.currentToolsFingerprint = fingerprint;
+        const mapped = tools.map((tool) => AssemblyAIRealtime.MapToolToFunction(tool));
+        this.sessionObject['tools'] = mapped;
         this.sendFrame({
             type: 'session.update',
-            session: { tools: tools.map((tool) => AssemblyAIRealtime.MapToolToFunction(tool)) },
+            session: { tools: mapped },
         });
     }
 
@@ -649,7 +689,7 @@ export class AssemblyAIRealtimeSession implements IRealtimeSession {
      * consumer.
      */
     public HandleTransportClose(code?: number, reason?: string): void {
-        if (this.closedByConsumer) {
+        if (this.closedByConsumer || this.IsReconnecting) {
             return;
         }
         const detail = [code != null ? `code ${code}` : null, reason || null].filter(Boolean).join(' — ');
@@ -669,8 +709,21 @@ export class AssemblyAIRealtimeSession implements IRealtimeSession {
      * set eagerly so a queued narration can't slip in before the spoken result.
      */
     public async SendToolResult(callID: string, output: string): Promise<void> {
+        const name = this.pendingToolCallNames.get(callID) ?? callID;
+        this.conversationMemory.Record({
+            Kind: 'toolResult',
+            Name: name,
+            OutputJson: output,
+        });
+        this.pendingToolCallNames.delete(callID);
+        if (this.callsFromBeforeReseed.delete(callID)) {
+            this.SendContextNote(`[Tool result for ${name}: ${output}]`);
+            this.RequestSpokenUpdate(`Please continue with the tool result for ${name}.`);
+            return;
+        }
         this.sendFrame({ type: 'tool.result', call_id: callID, result: output });
         this.responseActive = true; // the result's spoken continuation is imminent
+        this.NotifyTurnStarted();
     }
 
     /**
@@ -683,6 +736,10 @@ export class AssemblyAIRealtimeSession implements IRealtimeSession {
      * available the next time it speaks.
      */
     public SendContextNote(text: string): void {
+        this.conversationMemory.Record({
+            Kind: 'note',
+            Text: text,
+        });
         this.contextNotes.push(text);
         this.sendFrame({ type: 'session.update', session: { system_prompt: this.composePromptWithNotes() } });
     }
@@ -697,8 +754,47 @@ export class AssemblyAIRealtimeSession implements IRealtimeSession {
     public RequestSpokenUpdate(instructions: string): void {
         this.enqueueOrRun(() => {
             this.responseActive = true; // the instructed reply is now in flight
+            this.NotifyTurnStarted();
             this.sendFrame({ type: 'reply.create', instructions });
         });
+    }
+
+    protected override async Reconnect(context: RealtimeReconnectContext): Promise<void> {
+        if (!this.reconnectFactory) {
+            throw new Error('AssemblyAIRealtimeSession: No reconnect factory available for Reconnect');
+        }
+        this.readyReceived = false;
+        this.readyPromise = new Promise<void>((resolve, reject) => {
+            this.resolveReady = resolve;
+            this.rejectReady = reject;
+        });
+        this.readyPromise.catch(() => undefined);
+
+        const nextSocket = await this.reconnectFactory();
+        const prevSocket = this.socket;
+        this.socket = nextSocket;
+
+        const seedNote =
+            context.ConversationSeed && context.ConversationSeed.Entries.length > 0
+                ? RenderRealtimeMemorySeedAsContextNote(context.ConversationSeed)
+                : null;
+        const promptWithSeed = seedNote ? `${this.basePrompt}\n\n${seedNote}` : this.composePromptWithNotes();
+        this.sessionObject = { ...this.sessionObject, system_prompt: promptWithSeed };
+        this.SendSessionUpdate();
+        await this.WaitForReady();
+        this.responseActive = false;
+        try {
+            prevSocket?.close();
+        } catch {
+            // ignore close error on replaced socket
+        }
+    }
+
+    protected override onReconnectFailed(error: Error): void {
+        if (this.closedByConsumer) {
+            return;
+        }
+        this.errorHandler?.({ Message: error.message, Fatal: true });
     }
 
     /**
@@ -708,7 +804,7 @@ export class AssemblyAIRealtimeSession implements IRealtimeSession {
      * session (billable) for a 30-second resume window.
      */
     public async Close(): Promise<void> {
-        this.closedByConsumer = true;
+        this.DisposeReconnectTimers();
         this.failReadyWait('session closed by consumer before session.ready arrived');
         if (this.socket) {
             try {
@@ -729,13 +825,18 @@ export class AssemblyAIRealtimeSession implements IRealtimeSession {
     public HandleServerEvent(event: AssemblyAIServerEvent): void {
         switch (event.type) {
             case 'session.ready':
+                if (event.session_id && event.session_id.length > 0) {
+                    this.RecordResumptionHandle(event.session_id);
+                }
                 this.readyReceived = true;
+                this.ArmConnectionDurationTimer();
                 this.resolveReady?.();
                 break;
             case 'session.updated':
                 break; // config-apply confirmation — nothing to surface
             case 'reply.started':
                 this.responseActive = true;
+                this.NotifyTurnStarted();
                 break;
             case 'reply.audio':
                 this.handleReplyAudio(event.data);
@@ -779,6 +880,7 @@ export class AssemblyAIRealtimeSession implements IRealtimeSession {
             return;
         }
         this.responseActive = true;
+        this.NotifyTurnStarted();
         this.outputHandler?.(AssemblyAIRealtimeSession.base64ToArrayBuffer(audioBase64));
     }
 
@@ -804,10 +906,19 @@ export class AssemblyAIRealtimeSession implements IRealtimeSession {
      */
     private handleToolCall(event: AssemblyAIServerEvent): void {
         this.responseActive = false;
+        const callId = event.call_id ?? '';
+        const name = event.name ?? '';
+        const args = JSON.stringify(event.arguments ?? {});
+        this.pendingToolCallNames.set(callId, name);
+        this.conversationMemory.Record({
+            Kind: 'toolCall',
+            Name: name,
+            ArgumentsJson: args,
+        });
         this.toolCallHandler?.({
-            CallID: event.call_id ?? '',
-            ToolName: event.name ?? '',
-            Arguments: JSON.stringify(event.arguments ?? {}),
+            CallID: callId,
+            ToolName: name,
+            Arguments: args,
         });
     }
 
@@ -817,7 +928,7 @@ export class AssemblyAIRealtimeSession implements IRealtimeSession {
      * surfaced as FATAL so the consumer finalizes instead of idling on a dying socket.
      */
     private handleSessionEnded(): void {
-        if (this.closedByConsumer) {
+        if (this.closedByConsumer || this.IsReconnecting) {
             return;
         }
         const message = 'AssemblyAI agent session ended by the provider';
@@ -828,6 +939,7 @@ export class AssemblyAIRealtimeSession implements IRealtimeSession {
     /** Reply boundary: releases the busy flag and drains queued sends in order. */
     private completeResponse(): void {
         this.responseActive = false;
+        this.NotifyTurnEnded();
         while (!this.responseActive && this.queuedSends.length > 0) {
             const send = this.queuedSends.shift();
             send?.();
@@ -836,10 +948,16 @@ export class AssemblyAIRealtimeSession implements IRealtimeSession {
 
     /** Emits a transcript event (user turns have deltas; agent turns are final-only). */
     private emitTranscript(role: 'user' | 'assistant', text: string | undefined, isFinal: boolean): void {
-        if (!this.transcriptHandler || !text || text.trim().length === 0) {
+        if (!text || text.trim().length === 0) {
             return;
         }
-        this.transcriptHandler({ Role: role, Text: text, IsFinal: isFinal });
+        if (isFinal) {
+            this.conversationMemory.Record({
+                Kind: role,
+                Text: text,
+            });
+        }
+        this.transcriptHandler?.({ Role: role, Text: text, IsFinal: isFinal });
     }
 
     /** Runs a send immediately when idle; otherwise queues it for the next reply boundary. */

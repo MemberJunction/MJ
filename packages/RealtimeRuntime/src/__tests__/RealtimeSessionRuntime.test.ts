@@ -1780,5 +1780,64 @@ describe('one slot, one owner on the mint path (StartRealtimeSession) and when a
         await runtime.StartRealtimeSession('agent-1', null).catch(() => undefined);
         expect(runtime.CurrentAgentSessionId).toBe('minted-2');
     });
+
+    it('wires SetTokenRefreshCallback to RefreshRealtimeClientSessionToken and supports rolling-upgrade fallback', async () => {
+        const { runtime, provider } = build();
+        await runtime.StartRealtimeSession('agent-1', null);
+
+        const refreshFn = (
+            runtime as unknown as {
+                refreshClientSessionCredential: (s: unknown) => Promise<{
+                    EphemeralToken: string;
+                    ExpiresAt: string;
+                    SessionConfig: Record<string, unknown>;
+                }>;
+            }
+        ).refreshClientSessionCredential.bind(runtime);
+
+        const origExecute = provider.ExecuteGQL.bind(provider);
+        provider.ExecuteGQL = async (query: string, variables?: Record<string, unknown>) => {
+            if (query.includes('RefreshRealtimeClientSessionToken')) {
+                return {
+                    RefreshRealtimeClientSessionToken: {
+                        Success: true,
+                        EphemeralToken: 'fresh-tok-99',
+                        ExpiresAt: '2030-01-01T00:10:00Z',
+                        SessionConfigJson: '{"voice":"alloy"}',
+                    },
+                };
+            }
+            return origExecute(query, variables);
+        };
+
+        const refreshed = await refreshFn({
+            AgentSessionId: 'minted-1',
+            EphemeralToken: 'initial-tok',
+            ExpiresAt: '2030-01-01T00:05:00Z',
+            SessionConfigJson: '{}',
+        });
+        expect(refreshed.EphemeralToken).toBe('fresh-tok-99');
+        expect(refreshed.SessionConfig).toEqual({ voice: 'alloy' });
+
+        // Rolling-upgrade fallback when older MJServer rejects unknown field RefreshRealtimeClientSessionToken:
+        provider.ExecuteGQL = async (query: string, variables?: Record<string, unknown>) => {
+            if (query.includes('RefreshRealtimeClientSessionToken')) {
+                throw new Error('Cannot query field "RefreshRealtimeClientSessionToken" on type "Mutation".');
+            }
+            return origExecute(query, variables);
+        };
+
+        const fallback = await refreshFn({
+            AgentSessionId: 'minted-1',
+            EphemeralToken: 'initial-tok',
+            ExpiresAt: '2030-01-01T00:05:00Z',
+            SessionConfigJson: '{"voice":"shimmer"}',
+        });
+        expect(fallback.EphemeralToken).toBe('initial-tok');
+        expect(fallback.SessionConfig).toEqual({ voice: 'shimmer' });
+
+        await runtime.EndRealtimeSession();
+    });
 });
+
 

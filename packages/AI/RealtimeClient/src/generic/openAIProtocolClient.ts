@@ -1,5 +1,5 @@
-import { ClientRealtimeSessionConfig, JSONObject, MapRealtimeUsageModalityDetail, ResolveResponseDoneUsage } from '@memberjunction/ai';
-import { BaseRealtimeClient, RealtimeClientState, ToProviderSessionConfig } from './baseRealtimeClient';
+import { ClientRealtimeSessionConfig, JSONObject, MapRealtimeUsageModalityDetail, RealtimeMemorySeed, RenderRealtimeMemorySeed, ResolveResponseDoneUsage } from '@memberjunction/ai';
+import { BaseRealtimeClient, RealtimeClientReconnectContext, RealtimeClientState, ToProviderSessionConfig } from './baseRealtimeClient';
 import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
@@ -137,11 +137,11 @@ export interface OAIProtocolSessionUpdateEvent {
     session: JSONObject;
 }
 
-/** A user or system `message` conversation item. */
+/** A user, assistant, or system `message` conversation item. */
 export interface OAIProtocolMessageItem {
     type: 'message';
-    role: 'user' | 'system';
-    content: Array<{ type: 'input_text'; text: string }>;
+    role: 'user' | 'assistant' | 'system';
+    content: Array<{ type: 'input_text' | 'output_text'; text: string }>;
 }
 
 /** The output of an executed function (tool) call, correlated by `call_id`. */
@@ -416,6 +416,7 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
      * 'developer' items ("Developer messages are only supported for quicksilver sessions").
      */
     public SendContextNote(text: string): void {
+        this.ConversationMemory.Record({ Kind: 'note', Text: text });
         if (!this.canSendEvents()) {
             return;
         }
@@ -423,6 +424,28 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
             type: 'conversation.item.create',
             item: { type: 'message', role: 'system', content: [{ type: 'input_text', text }] },
         });
+    }
+
+    /**
+     * Seeds bounded conversation history turns into a freshly reconnected OpenAI-protocol session.
+     */
+    protected seedConversationHistory(seed: RealtimeMemorySeed | null): void {
+        if (!seed || seed.Entries.length === 0) {
+            return;
+        }
+        const turns = RenderRealtimeMemorySeed(seed);
+        for (const turn of turns) {
+            const role: 'user' | 'assistant' = turn.Role === 'model' ? 'assistant' : 'user';
+            const contentType = role === 'assistant' ? 'output_text' : 'input_text';
+            this.sendEvent({
+                type: 'conversation.item.create',
+                item: {
+                    type: 'message',
+                    role,
+                    content: turn.Texts.map((text) => ({ type: contentType, text })),
+                },
+            });
+        }
     }
 
     /**
@@ -542,7 +565,20 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
      * delegated work comes back.
      */
     public SendToolResult(callID: string, outputJson: string): void {
+        const name = this.recordToolResult(callID, outputJson);
         if (!this.canSendEvents()) {
+            return;
+        }
+        if (this.callsFromBeforeReseed.delete(callID)) {
+            this.sendEvent({
+                type: 'conversation.item.create',
+                item: {
+                    type: 'message',
+                    role: 'user',
+                    content: [{ type: 'input_text', text: `[Tool result for ${name}: ${outputJson}]` }],
+                },
+            });
+            this.requestResultResponse();
             return;
         }
         this.sendEvent({
@@ -595,6 +631,20 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
             case 'session.created':
                 this.onSessionCreatedFrame();
                 break;
+            case 'conversation.created': {
+                const conv = (event as { conversation?: { id?: unknown } }).conversation;
+                if (typeof conv?.id === 'string' && conv.id.trim().length > 0) {
+                    this.RecordResumptionHandle(conv.id);
+                }
+                break;
+            }
+            case 'session.going_away':
+            case 'go_away': {
+                const rawMs = (event as { time_left_ms?: unknown }).time_left_ms;
+                const timeLeftMs = typeof rawMs === 'number' && Number.isFinite(rawMs) ? rawMs : undefined;
+                this.NotifyConnectionEnding(timeLeftMs);
+                break;
+            }
             case 'response.output_audio_transcript.delta':
             case 'response.audio_transcript.delta':
                 this.onAssistantDelta((event as OAIProtocolTranscriptDelta).delta);
@@ -936,6 +986,8 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
      * Protected so test subclasses can seed it without a full Connect.
      */
     protected sessionObject: JSONObject = {};
+    /** The active ClientRealtimeSessionConfig, updated on credential refresh. */
+    protected activeConfig: ClientRealtimeSessionConfig | null = null;
     /** True once Disconnect ran — an expected socket close must not surface as fatal. */
     protected closedByConsumer = false;
     /** True while the socket is OPEN — gates every send so a CONNECTING socket never throws. */
@@ -948,7 +1000,10 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
     // ── Per-provider transport hooks ────────────────────────────────────────────
 
     /** Opens the provider socket for this connection (drivers own URL/auth specifics). */
-    protected abstract openProviderSocket(config: ClientRealtimeSessionConfig): IOpenAIProtocolClientSocket;
+    protected abstract openProviderSocket(
+        config: ClientRealtimeSessionConfig,
+        resumptionHandle?: string | null
+    ): IOpenAIProtocolClientSocket;
     /**
      * Extracts the wire-shaped `session` object from the server pact. Default: the pact minus the
      * client-only hints ({@link ToProviderSessionConfig}).
@@ -986,6 +1041,8 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
      */
     public async Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream): Promise<void> {
         this.AssertTransportSupported(config);
+        this.ApplySessionConfigTiming(config);
+        this.activeConfig = config;
         this.sessionObject = this.resolveSessionObject(config);
         this.micStream = micStream;
         this.closedByConsumer = false;
@@ -1081,6 +1138,7 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
         // environments simply leave the session un-metered.
         this.attachOutputAudioMeter(this.playback?.CreateMeter?.() ?? null);
         this.attachInputAudioMeter(RealtimeAudioMeter.ForMicStream(micStream));
+        this.ArmConnectionDurationTimer();
         this.setState('listening');
     }
 
@@ -1101,6 +1159,7 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
      */
     public async Disconnect(): Promise<void> {
         this.closedByConsumer = true;
+        this.DisposeReconnectTimers();
         // Release an in-flight Connect (open or created phase) so the awaited promise cannot
         // outlive the session the consumer just tore down.
         this.failPendingConnect?.(new Error(`${this.providerDebugLabel} disconnected during connect`));
@@ -1124,10 +1183,100 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
             this.socket = null;
         }
         this.sessionObject = {};
+        this.activeConfig = null;
         this.resetResponseState();
         if (this.currentState !== 'error') {
             this.setState('closed');
         }
+    }
+
+    /**
+     * Performs an in-place WebSocket swap on duration expiry or provider GoAway while keeping
+     * the existing `micCapture`, `playback`, and audio meters intact.
+     */
+    protected override async Reconnect(context: RealtimeClientReconnectContext): Promise<void> {
+        if (!this.activeConfig) {
+            throw new Error(`${this.providerDebugLabel}: cannot reconnect before Connect`);
+        }
+        const refreshedConfig: ClientRealtimeSessionConfig = {
+            ...this.activeConfig,
+            EphemeralToken: context.Credential.EphemeralToken || this.activeConfig.EphemeralToken,
+            ExpiresAt: context.Credential.ExpiresAt || this.activeConfig.ExpiresAt,
+            ...(context.Credential.RelayUrl !== undefined ? { RelayUrl: context.Credential.RelayUrl } : {}),
+            ...(context.Credential.SessionConfig !== undefined ? { SessionConfig: context.Credential.SessionConfig } : {}),
+        };
+        this.activeConfig = refreshedConfig;
+        this.sessionObject = this.resolveSessionObject(refreshedConfig);
+
+        const prevSocket = this.socket;
+        let openSocket: (() => void) | null = null;
+        const opened = new Promise<void>((resolve) => {
+            openSocket = resolve;
+        });
+        const created = this.waitsForSessionCreated
+            ? new Promise<void>((resolve) => {
+                  this.sessionCreatedResolver = resolve;
+              })
+            : null;
+        let failReconnect: ((error: Error) => void) | null = null;
+        const failure = new Promise<never>((_, reject) => {
+            failReconnect = reject;
+        });
+        failure.catch(() => undefined);
+
+        const nextSocket = this.openProviderSocket(
+            refreshedConfig,
+            context.UseNativeResumption ? context.ResumptionHandle : null
+        );
+        this.socket = nextSocket;
+        this.socketOpen = false;
+        nextSocket.onopen = () => {
+            if (this.socket !== nextSocket) { return; }
+            this.socketOpen = true;
+            openSocket?.();
+        };
+        nextSocket.onmessage = (data) => {
+            if (this.socket !== nextSocket) { return; }
+            this.handleProtocolMessage(data);
+        };
+        nextSocket.onerror = (message) => {
+            if (this.socket !== nextSocket) { return; }
+            this.socketOpen = false;
+            failReconnect?.(new Error(message));
+            if (!this.IsReconnecting) {
+                this.handleSocketError(message);
+            }
+        };
+        nextSocket.onclose = () => {
+            if (this.socket !== nextSocket) { return; }
+            this.socketOpen = false;
+            failReconnect?.(new Error(`${this.providerDebugLabel} socket closed during reconnect`));
+            if (!this.IsReconnecting) {
+                this.handleSocketClose();
+            }
+        };
+
+        try {
+            await Promise.race([opened, failure]);
+            if (created) {
+                await Promise.race([created, failure]);
+            }
+        } finally {
+            failReconnect = null;
+            this.sessionCreatedResolver = null;
+        }
+
+        try {
+            prevSocket?.close();
+        } catch {
+            /* already closing */
+        }
+
+        this.responseActive = false;
+        this.confirmedResponseActive = false;
+        this.applySessionConfig();
+        this.seedConversationHistory(context.ConversationSeed);
+        this.setState('listening');
     }
 
     // ── Brain seam implementations ─────────────────────────────────────────────
@@ -1241,7 +1390,7 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
      * close semantics (a self-hosted proxy hop) override.
      */
     protected handleSocketClose(): void {
-        if (this.closedByConsumer || this.currentState === 'error' || this.currentState === 'closed') {
+        if (this.closedByConsumer || this.IsReconnecting || this.currentState === 'error' || this.currentState === 'closed') {
             return;
         }
         this.emitError({ Message: this.unexpectedCloseMessage, Fatal: true });

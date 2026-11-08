@@ -42,6 +42,7 @@ import {
   RealtimeClientToolCall,
   RealtimeClientTranscript,
   RealtimeClientUsage,
+  type RefreshedRealtimeClientCredential,
   VideoSourceArbiter,
   type DisplayCaptureOptions,
   type MediaVideoSource,
@@ -1880,6 +1881,8 @@ export class RealtimeSessionRuntime {
       }
 
       const clientConfig = this.BuildClientConfig(session);
+      client.ApplySessionConfigTiming(clientConfig);
+      client.SetTokenRefreshCallback(() => this.refreshClientSessionCredential(session));
       const connectError = await this.connectClient(client, clientConfig, microphone.Stream);
       if (this.startGeneration !== generation) {
         await this.unwindAbandonedStart(session, client, lease);
@@ -4287,6 +4290,69 @@ export class RealtimeSessionRuntime {
     } catch (error) {
       console.error('[RealtimeSession] Failed to parse/apply SessionConfigJson:', error);
       return {};
+    }
+  }
+
+  /**
+   * Mints a fresh single-use ephemeral credential (or extends the relay grant) for an active
+   * browser realtime session via `RefreshRealtimeClientSessionToken(agentSessionId)`.
+   * During rolling upgrades where an older MJServer does not expose `RefreshRealtimeClientSessionToken`
+   * yet, falls back once to the initial credential if its `ExpiresAt` is still in the future.
+   */
+  private async refreshClientSessionCredential(
+    initialSession: StartRealtimeClientSessionResult
+  ): Promise<RefreshedRealtimeClientCredential> {
+    const agentSessionId = this.agentSessionId ?? initialSession.AgentSessionId;
+    if (!agentSessionId) {
+      throw new Error('Cannot refresh realtime session credential: no active agentSessionId');
+    }
+    const mutation = `
+      mutation RefreshRealtimeClientSessionToken($agentSessionId: String!) {
+        RefreshRealtimeClientSessionToken(agentSessionId: $agentSessionId) {
+          Success
+          ErrorMessage
+          EphemeralToken
+          ExpiresAt
+          RelayUrl
+          SessionConfigJson
+        }
+      }
+    `;
+    try {
+      const response = (await this.gql().ExecuteGQL(mutation, { agentSessionId })) as {
+        RefreshRealtimeClientSessionToken?: {
+          Success: boolean;
+          ErrorMessage?: string;
+          EphemeralToken?: string;
+          ExpiresAt?: string;
+          RelayUrl?: string | null;
+          SessionConfigJson?: string | null;
+        };
+      };
+      const result = response?.RefreshRealtimeClientSessionToken;
+      if (!result?.Success || !result.EphemeralToken) {
+        throw new Error(result?.ErrorMessage ?? 'RefreshRealtimeClientSessionToken failed');
+      }
+      return {
+        EphemeralToken: result.EphemeralToken,
+        ExpiresAt: result.ExpiresAt ?? initialSession.ExpiresAt,
+        ...(result.RelayUrl ? { RelayUrl: result.RelayUrl } : {}),
+        SessionConfig: this.parseSessionConfig(result.SessionConfigJson ?? initialSession.SessionConfigJson),
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const isUnknownSchemaField =
+        message.includes('Cannot query field') && message.includes('RefreshRealtimeClientSessionToken');
+      const initialExpiryMs = Date.parse(initialSession.ExpiresAt);
+      if (isUnknownSchemaField && Number.isFinite(initialExpiryMs) && initialExpiryMs > Date.now()) {
+        return {
+          EphemeralToken: initialSession.EphemeralToken,
+          ExpiresAt: initialSession.ExpiresAt,
+          ...(initialSession.RelayUrl ? { RelayUrl: initialSession.RelayUrl } : {}),
+          SessionConfig: this.parseSessionConfig(initialSession.SessionConfigJson),
+        };
+      }
+      throw error;
     }
   }
 

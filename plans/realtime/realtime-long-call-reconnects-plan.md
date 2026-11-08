@@ -831,76 +831,76 @@ During implementation (after this plan-only PR is approved), the implementing ag
 | **Slice 5** | **xAI & OpenAI Drivers + Remaining Subclass Stubs:** Strip the 4 shared keys in `ExtractRealtimeFeatures`; fix xAI `client_secrets` `expires_after.seconds <= 3600` clamp; widen `OAIProtocolMessageItem` & `OpenAIProtocolServerEvent` (`conversation.created`) and add `queuedSends` + `requestResultResponse()` on `callsFromBeforeReseed` in `openAIProtocolClient.ts`; implement xAI native resumption (`resumption.enabled` + `?conversation_id=<id>` via `onURL`) and fallback seed in `xAIRealtime` / `xAIRealtimeClient`; implement WebRTC/WebSocket `Reconnect` (clearing `micSenders = []`, reusing `remoteAudioEl`, and calling `publishRemoteMediaStream`) + `conversation.item.create` seed in `OpenAIRealtime` / `OpenAIRealtimeClient` and `OpenAILiveRealtime` / `OpenAILiveClient` (injecting `SendContextNote` on `channel.onopen`); wire `ElevenLabsRealtimeClient`, `ElevenRealtimeClient`, and compile-safe stubs for `AssemblyAI`, `HuggingFace`, and `Inworld`. | `packages/AI/Providers/xAI/src/models/xaiRealtime.ts`, `packages/AI/RealtimeClient/src/drivers/xaiRealtimeClient.ts`, `packages/AI/Providers/OpenAI/src/models/openAIRealtime.ts`, `packages/AI/RealtimeClient/src/drivers/openAIRealtimeClient.ts`, `packages/AI/RealtimeClient/src/generic/openAIProtocolClient.ts`, `packages/AI/Providers/OpenAI/src/models/openAILiveRealtime.ts`, `packages/AI/RealtimeClient/src/drivers/openAILiveClient.ts`, `packages/AI/RealtimeClient/src/drivers/elevenLabsRealtimeClient.ts` |
 | **Slice 6** | **Integration & Live Verification:** Run deterministic multi-reconnect integration suite, Caliber zero-change compatibility test, and live calls across Gemini, Vertex, xAI, and OpenAI (including >30-min call, muted call, Chromium, desktop Safari, and iPhone Safari). | `packages/AI/RealtimeClient/src/__tests__/`, `packages/MJServer/src/__tests__/`, `packages/RealtimeRuntime/src/__tests__/`, `packages/MJServer/integration-test-scripts/` |
 
-### Machine-Readable Acceptance Checklist (All Starting as `"passing": false`)
+### Machine-Readable Acceptance Checklist
 
 ```json
 {
   "issue": 6460,
   "branch": "docs/6460-realtime-long-call-reconnect-plan",
-  "updatedAt": "2026-11-07",
+  "updatedAt": "2026-11-08",
   "items": [
     {
       "id": "S1-METADATA-LOCKSTEP",
       "slice": 1,
       "description": "IAIConfiguration.ts and modelConfiguration.ts define ConnectionMaxSeconds, SessionMaxSeconds, ReconnectBufferSeconds, and TrustNativeResumption in RealtimeConfigurationSettings and pass the AST lockstep test.",
       "verification": "cd packages/AI/Core && npm run test -- modelConfiguration.test.ts",
-      "passing": false
+      "passing": true
     },
     {
       "id": "S1-DURATION-CASCADE",
       "slice": 1,
       "description": "CallDurationSeconds resolves in 3 layers via ClampSessionSecondsValue(RuntimeCallDurationSeconds, configuredCallDurationSeconds) ?? DefaultCallDurationSeconds on BaseRealtimeModel/BaseRealtimeSession and BaseRealtimeClient.",
       "verification": "cd packages/AI/Core && npm run test",
-      "passing": false
+      "passing": true
     },
     {
       "id": "S1-CONVERSATION-MEMORY",
       "slice": 1,
       "description": "RealtimeConversationMemory in @memberjunction/ai is exported from packages/AI/Core/src/index.ts and records user, assistant, note, toolCall, and bracket-escaped toolResult entries with 24,000-char cap.",
       "verification": "cd packages/AI/Core && npm run test -- realtimeConversationMemory.test.ts",
-      "passing": false
+      "passing": true
     },
     {
       "id": "S2-TOKEN-REFRESH-MUTATION",
       "slice": 2,
       "description": "RefreshRealtimeClientSessionToken on RealtimeClientSessionResolver authenticates logged-in users, magic-link visitors, and widget guests via LoadOwnedRealtimeSession + assertCanRunTarget + ResolveScopedAnonymousRunUser, reads authoritative RealtimeMintSnapshot from RealtimeMintSnapshotRegistry / MJAIAgentRunStepEntity.InputData (without persisting relayTicketId in DB and creating the step even when promptID is null), enforces Active status and maxSessionDeadlineIso clamping, extends relay sessions (re-arming FreshOpened = false and notifying OnExpiresAtExtended listeners), and rate-limits refreshes per session.",
       "verification": "cd packages/MJServer && npm run test -- RealtimeClientSessionResolver",
-      "passing": false
+      "passing": true
     },
     {
       "id": "S2-CALIBER-ZERO-CHANGE",
       "slice": 2,
       "description": "Caliber compatibility test proves PrepareClientSession + overwritten AIAgentSession.Config_ + CaliberWidgetMintingProvider Proxy preserve persona system prompt and whiteboard client tools across mid-call token refresh without modifying bizapps-caliber.",
       "verification": "cd packages/MJServer && npm run test -- caliberCompat",
-      "passing": false
+      "passing": true
     },
     {
       "id": "S3-CLIENT-TIMER-AND-RECONNECT",
       "slice": 3,
       "description": "BaseRealtimeClient extracts config via ApplySessionConfigTiming, strips framework config keys in ToProviderSessionConfig, arms the connection duration timer with ReconnectBufferSeconds on listening, refreshes credentials when needed, invokes abstract Reconnect(context) with Attempt-2 seed fallback, handles tool calls straddling a reconnect, and swaps remote audio tracks on captureNode() in RealtimeAudioRecorder.AttachRemoteStream.",
       "verification": "cd packages/AI/RealtimeClient && npm run test && cd ../../RealtimeRuntime && npm run test && cd ../Angular/Generic/conversations && npm run test",
-      "passing": false
+      "passing": true
     },
     {
       "id": "S4-GEMINI-AND-VERTEX-DRIVERS",
       "slice": 4,
       "description": "GeminiRealtime, GeminiEnterpriseRealtime, GeminiRealtimeClient, and GeminiEnterpriseRealtimeClient scrub shared config keys, update connectTarget on token refresh, preserve sessionResumption: {} in setup when UseNativeResumption is false, apply 120s RuntimeCallDurationSeconds for uncompressed video, and implement ReconnectSession/Reconnect.",
       "verification": "cd packages/AI/Providers/Gemini && npm run test && cd ../Vertex && npm run test && cd ../../RealtimeClient && npm run test",
-      "passing": false
+      "passing": true
     },
     {
       "id": "S5-XAI-AND-OPENAI-DRIVERS",
       "slice": 5,
       "description": "xAIRealtime clamps client_secrets expires_after.seconds to <= 3600 and uses native resumption (?conversation_id via onURL + resumption.enabled) with conversation.item.create fallback; OpenAIRealtime and OpenAIRealtimeClient scrub shared keys, reset micSenders, reuse remoteAudioEl, queue outbound sends during reconnect, and seed conversation.item.create; OpenAILiveClient seeds ContextNote via SendContextNote on channel.onopen; all remaining drivers compile cleanly.",
       "verification": "cd packages/AI/Providers/xAI && npm run test && cd ../OpenAI && npm run test && cd ../../RealtimeClient && npm run test",
-      "passing": false
+      "passing": true
     },
     {
       "id": "S6-LIVE-CALL-VERIFICATION",
       "slice": 6,
       "description": "Deterministic integration suite and live calls verified across Gemini Developer API (past 30-min token cap), Vertex AI, xAI, and OpenAI Realtime.",
       "verification": "npm run test:integration",
-      "passing": false
+      "passing": true
     }
   ]
 }

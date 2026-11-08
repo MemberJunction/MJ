@@ -207,6 +207,11 @@ export interface RealtimeRelayGrant {
     DriverClass?: string;
     /** The MJ user the session was minted for. */
     UserID?: string;
+    /**
+     * Subscribes to in-place session lifetime extensions granted via {@link RealtimeProxyRegistry.ExtendRelaySession}.
+     * Returns an unsubscribe function.
+     */
+    OnExpiresAtExtended?: (listener: (newExpiresAtMs: number) => void) => () => void;
 }
 
 /** Why the registry refused a relay connection (logged by the relay, never sent to the browser). */
@@ -232,6 +237,8 @@ interface RelaySessionRecord {
     FreshOpened: boolean;
     /** Handles the relay forwarded to this session, oldest first, at most {@link RELAY_HANDLE_MEMORY}. */
     Handles: string[];
+    /** Active tunnel listeners notified when the relay session's expiry is extended in place. */
+    ExpiresAtListeners: Set<(newExpiresAtMs: number) => void>;
 }
 
 // ── Browser-facing URLs ─────────────────────────────────────────────────────────────────────────────
@@ -446,8 +453,42 @@ export class RealtimeProxyRegistry extends BaseSingleton<RealtimeProxyRegistry> 
             Connections: 0,
             FreshOpened: false,
             Handles: [],
+            ExpiresAtListeners: new Set(),
         });
         return { ID: id, ExpiresAt: new Date(expiresAtMs).toISOString() };
+    }
+
+    /**
+     * Extends an existing relay session in place without invalidating its forwarded resumption handles (`Handles`).
+     * Advances `ExpiresAtMs`, increments `MaxConnections`, re-arms the fresh-open window (`FreshOpened = false` and
+     * `OpenByMs = now + OpenWithinSeconds`) so either a handle-based resume or a seed-fallback fresh open is accepted,
+     * and notifies any live tunnel via `OnExpiresAtExtended`.
+     */
+    public ExtendRelaySession(
+        id: string,
+        additionalSeconds: number = REALTIME_RELAY_SESSION_LIFETIME_SECONDS,
+        maxConnectionsIncrement: number = REALTIME_RELAY_MAX_CONNECTIONS,
+    ): { ExpiresAt: string } | null {
+        const now = Date.now();
+        this.pruneRelaySessions(now);
+        const entry = id ? this._relaySessions.get(id) : undefined;
+        if (!entry || entry.ExpiresAtMs <= now) {
+            return null;
+        }
+        const deltaSeconds = RealtimeProxyRegistry.relaySeconds(additionalSeconds, REALTIME_RELAY_SESSION_LIFETIME_SECONDS);
+        const newExpiresAtMs = Math.max(entry.ExpiresAtMs, now + deltaSeconds * 1000);
+        entry.ExpiresAtMs = newExpiresAtMs;
+        entry.MaxConnections += RealtimeProxyRegistry.relayMaxConnections(maxConnectionsIncrement);
+        entry.FreshOpened = false;
+        entry.OpenByMs = Math.min(newExpiresAtMs, now + REALTIME_RELAY_OPEN_WINDOW_SECONDS * 1000);
+        for (const listener of entry.ExpiresAtListeners) {
+            try {
+                listener(newExpiresAtMs);
+            } catch {
+                /* ignore listener errors */
+            }
+        }
+        return { ExpiresAt: new Date(newExpiresAtMs).toISOString() };
     }
 
     /**
@@ -493,6 +534,12 @@ export class RealtimeProxyRegistry extends BaseSingleton<RealtimeProxyRegistry> 
                 ExpiresAtMs: entry.ExpiresAtMs,
                 DriverClass: entry.DriverClass,
                 UserID: entry.UserID,
+                OnExpiresAtExtended: (listener: (newExpiresAtMs: number) => void): (() => void) => {
+                    entry.ExpiresAtListeners.add(listener);
+                    return () => {
+                        entry.ExpiresAtListeners.delete(listener);
+                    };
+                },
             },
         };
     }

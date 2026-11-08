@@ -3573,3 +3573,122 @@ describe('RealtimeClientSessionService: the deprecated realtime.video provider k
         ]);
     });
 });
+
+describe('RealtimeClientSessionService.RefreshClientSessionCredential', () => {
+    it('stamps model catalog timing onto ClientConfig.SessionConfig during PrepareClientSession and caches the mint snapshot', async () => {
+        const svc = new TestableService();
+        const sessionId = '44444444-0000-4000-8000-000000000004';
+        const prep = await svc.PrepareClientSession(
+            makePrepInput({ AgentSessionID: sessionId }),
+            contextUser,
+            provider,
+        );
+        expect(prep.Success).toBe(true);
+
+        const refreshed = await svc.RefreshClientSessionCredential(
+            { AgentSessionID: sessionId, CoAgentID: 'co-1', RemainingSessionSeconds: 900 },
+            contextUser,
+            provider,
+        );
+        expect(refreshed.Success).toBe(true);
+        expect(refreshed.EphemeralToken).toBe('ephemeral-123');
+        expect(refreshed.ExpiresAt).toBe('2099-01-01T00:00:00.000Z');
+        // Direct session config had MaxSessionSeconds narrowed to RemainingSessionSeconds (900):
+        expect(svc.Model.LastParams?.MaxSessionSeconds).toBe(900);
+    });
+
+    it('extends an active MJAPI relay ticket via RealtimeProxyRegistry.ExtendRelaySession without re-running prompt rendering', async () => {
+        const { RealtimeProxyRegistry } = await import('@memberjunction/ai');
+        const grant = RealtimeProxyRegistry.Instance.IssueRelaySession({
+            UpstreamUrl: 'wss://aiplatform.googleapis.com/ws',
+            Policy: {
+                Name: 'test-policy',
+                OnSessionOpen: async () => undefined,
+                OnClientFrame: () => ({ Action: 'forward', Data: '' }),
+                OnUpstreamFrame: () => ({ Action: 'forward', Data: '' }),
+            },
+            UserID: 'user-1',
+            DriverClass: 'GeminiEnterpriseRealtime',
+            MaxSessionSeconds: 600,
+        });
+        const relayUrl = `wss://mjapi.example.test/realtime/relay/${grant.ID}`;
+
+        class RelayModel extends MockRealtimeModel {
+            override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
+                this.LastParams = params;
+                return {
+                    Provider: 'gemini-enterprise',
+                    Model: params.Model,
+                    EphemeralToken: '',
+                    ExpiresAt: grant.ExpiresAt,
+                    Transport: 'relay',
+                    RelayUrl: relayUrl,
+                    SessionConfig: { model: params.Model, connectionMaxSeconds: 600 },
+                };
+            }
+        }
+
+        const svc = new TestableService();
+        svc.Model = new RelayModel();
+        svc.ResolveModelResult = { Model: svc.Model, ModelID: 'm1', VendorID: 'v1', APIName: 'mock-realtime' };
+        const sessionId = '55555555-0000-4000-8000-000000000005';
+        const prep = await svc.PrepareClientSession(
+            makePrepInput({ AgentSessionID: sessionId }),
+            contextUser,
+            provider,
+        );
+        expect(prep.Success).toBe(true);
+
+        const refreshed = await svc.RefreshClientSessionCredential(
+            { AgentSessionID: sessionId, CoAgentID: 'co-1' },
+            contextUser,
+            provider,
+        );
+        expect(refreshed.Success).toBe(true);
+        expect(refreshed.RelayUrl).toBe(relayUrl);
+        expect(refreshed.EphemeralToken).toBe('');
+        expect(Date.parse(refreshed.ExpiresAt!)).toBeGreaterThan(Date.parse(grant.ExpiresAt));
+    });
+
+    it('hydrates from MJAIAgentRunStepEntity.InputData on L1 cache miss (multi-instance failover)', async () => {
+        const persistedPayload = {
+            version: 1,
+            modelID: 'model-realtime-1',
+            vendorID: 'vendor-openai',
+            driverClass: 'OpenAIRealtime',
+            apiName: 'gpt-realtime',
+            transport: 'direct',
+            connectionMaxSeconds: 3600,
+            sessionParams: {
+                Model: 'gpt-realtime',
+                SystemPrompt: 'Hydrated system prompt from DB step',
+                Tools: [{ Name: 'invoke-target-agent', Description: 'd', ParametersSchema: { type: 'object' } }],
+            },
+        };
+        const stepId = '66666666-0000-4000-8000-000000000006';
+        const stepEntity = {
+            ID: stepId,
+            InputData: JSON.stringify(persistedPayload),
+            Load: vi.fn(async () => true),
+        };
+        const stepProvider = {
+            GetEntityObject: vi.fn(async () => stepEntity),
+        } as unknown as IMetadataProvider;
+
+        const svc = new TestableService();
+        const refreshed = await svc.RefreshClientSessionCredential(
+            {
+                AgentSessionID: '77777777-0000-4000-8000-000000000007',
+                CoAgentID: 'co-1',
+                CoAgentRunStepID: stepId,
+            },
+            contextUser,
+            stepProvider,
+        );
+
+        expect(refreshed.Success).toBe(true);
+        expect(stepEntity.Load).toHaveBeenCalledWith(stepId);
+        expect(svc.Model.LastParams?.SystemPrompt).toBe('Hydrated system prompt from DB step');
+    });
+});
+

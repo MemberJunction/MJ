@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { LiveServerContent, LiveServerMessage } from '@google/genai';
-import { REALTIME_CONNECTION_SETUP_TIMEOUT_MS, type ClientRealtimeSessionConfig, type JSONObject } from '@memberjunction/ai';
+import {
+    REALTIME_CONNECTION_SETUP_TIMEOUT_MS,
+    REALTIME_MEMORY_CONTINUITY_PREAMBLE,
+    type ClientRealtimeSessionConfig,
+    type JSONObject,
+} from '@memberjunction/ai';
 import type { GeminiClientConnectArgs, GeminiLiveClientSession } from '../drivers/geminiRealtimeClient';
 import {
     collect,
@@ -558,4 +563,149 @@ describe('GeminiRealtimeClient session resumption', () => {
             expect(errors).toEqual([]);
         });
     });
+
+    describe('long-call reconnects, 600s/120s ceiling, token refresh, and history seeding (#6460)', () => {
+        it('proactively reconnects before the 600s ceiling, refreshes the single-use token, omits handle, and seeds conversation memory', async () => {
+            const devClient = new MultiConnectionClient();
+            const devEmitted = collect(devClient);
+            let refreshCount = 0;
+            devClient.SetTokenRefreshCallback(async () => {
+                refreshCount++;
+                return {
+                    EphemeralToken: `auth_tokens/refreshed-${refreshCount}`,
+                    ExpiresAt: new Date(Date.now() + 1800_000).toISOString(),
+                    SessionConfig: { model: 'gemini-3.8-live', config: { responseModalities: ['AUDIO'], sessionResumption: {} } },
+                };
+            });
+
+            await devClient.Connect(
+                {
+                    ...sessionConfig(),
+                    ConnectionMaxSeconds: 600,
+                    ReconnectBufferSeconds: 30,
+                    TrustNativeResumption: false,
+                },
+                new FakeMediaStream([new FakeTrack()])
+            );
+
+            devClient.EmitOn(0, RESUMABLE('dev-h1'));
+            devClient.EmitOn(0, HEARD('What is the status of project Atlas?'));
+            devClient.EmitOn(0, SAID('Project Atlas is on schedule.'));
+            devClient.EmitOn(0, TURN_COMPLETE);
+
+            // Soft window opens at 600 - 45 = 555s; turn is idle so reconnect triggers immediately
+            await vi.advanceTimersByTimeAsync(555_000);
+
+            expect(refreshCount).toBe(1);
+            expect(devClient.Connections).toHaveLength(2);
+            expect(devClient.Connections[1].Args.EphemeralToken).toBe('auth_tokens/refreshed-1');
+            expect(devClient.Connections[1].Args.Config.sessionResumption).toEqual({});
+            expect(devClient.Connections[1].Session.ClientContents).toEqual([
+                {
+                    turns: [
+                        {
+                            role: 'user',
+                            parts: [
+                                { text: REALTIME_MEMORY_CONTINUITY_PREAMBLE },
+                                { text: 'What is the status of project Atlas?' },
+                            ],
+                        },
+                        { role: 'model', parts: [{ text: 'Project Atlas is on schedule.' }] },
+                    ],
+                    turnComplete: false,
+                },
+            ]);
+            expect(devClient.Connections[0].Session.Closed).toBe(true);
+            expect(devEmitted.errors).toEqual([]);
+        });
+
+        it('lowers CallDurationSeconds to 120s when inbound video is active and frames have been sent', async () => {
+            const videoClient = await connectAnother({
+                supportsInboundVideo: true,
+                maxInboundVideoRate: 1,
+                requestedTracks: [
+                    { Modality: 'audio', Direction: 'inbound' },
+                    { Modality: 'audio', Direction: 'outbound' },
+                    { Modality: 'video', Direction: 'inbound', Encoding: 'image/jpeg', Rate: 1 },
+                ],
+            });
+            expect(videoClient.CallDurationSeconds).toBe(600);
+            expect(videoClient.SendVideoFrame('BBBB', 'image/jpeg')).toBe(true);
+            expect(videoClient.CallDurationSeconds).toBe(120);
+
+            // Soft window for 120s (buffer 10s + soft lead 15s = 25s) fires at 95s
+            await vi.advanceTimersByTimeAsync(95_000);
+            expect(videoClient.Connections).toHaveLength(2);
+        });
+
+        it('sends tool results from before a non-native seed reconnect as a user turn via sendClientContent', async () => {
+            const devClient = new MultiConnectionClient();
+            await devClient.Connect(
+                {
+                    ...sessionConfig(),
+                    TrustNativeResumption: false,
+                },
+                new FakeMediaStream([new FakeTrack()])
+            );
+
+            devClient.EmitOn(0, TOOL_CALL('call-before-seed'));
+            devClient.CloseOn(0, 1006);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(devClient.Connections).toHaveLength(2);
+
+            devClient.SendToolResult('call-before-seed', '{"ok":true}');
+            expect(devClient.Connections[1].Session.ToolResponses).toEqual([]);
+            expect(devClient.Connections[1].Session.ClientContents.at(-1)).toEqual({
+                turns: [
+                    {
+                        role: 'user',
+                        parts: [{ text: '[Tool result for lookup_order: {"ok":true}]' }],
+                    },
+                ],
+                turnComplete: true,
+            });
+        });
+
+        it('falls back from native handle on Attempt 1 to ConversationSeed on Attempt 2 when TrustNativeResumption is true', async () => {
+            const entClient = new MultiConnectionClient();
+            await entClient.Connect(
+                {
+                    ...sessionConfig(),
+                    TrustNativeResumption: true,
+                },
+                new FakeMediaStream([new FakeTrack()])
+            );
+
+            entClient.EmitOn(0, RESUMABLE('vertex-h1'));
+            entClient.EmitOn(0, HEARD('Summarize the Q3 numbers'));
+            entClient.EmitOn(0, SAID('Revenue grew 18 percent in Q3.'));
+            entClient.EmitOn(0, TURN_COMPLETE);
+
+            // Make Attempt 1 (native handle) fail, so Attempt 2 falls back to ConversationSeed
+            entClient.FailConnects = 1;
+            const reconnecting = entClient.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(2000);
+            expect(await reconnecting).toBe(true);
+
+            expect(entClient.Connections).toHaveLength(2);
+            // Attempt 2 omitted handle and seeded turns
+            expect(entClient.Connections[1].Args.Config.sessionResumption).toEqual({});
+            expect(entClient.Connections[1].Session.ClientContents).toEqual([
+                {
+                    turns: [
+                        {
+                            role: 'user',
+                            parts: [
+                                { text: REALTIME_MEMORY_CONTINUITY_PREAMBLE },
+                                { text: 'Summarize the Q3 numbers' },
+                            ],
+                        },
+                        { role: 'model', parts: [{ text: 'Revenue grew 18 percent in Q3.' }] },
+                    ],
+                    turnComplete: false,
+                },
+            ]);
+        });
+    });
 });
+

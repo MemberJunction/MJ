@@ -11,34 +11,9 @@ vi.mock('@memberjunction/global', () => ({
 // importing `@memberjunction/ai-openai` evaluates that package's whole index, so every base class
 // its modules EXTEND at module-evaluation time must exist here. Mirrors the xAI driver's spec.
 vi.mock('@memberjunction/ai', async () => {
-    class BaseModel {
-        private _apiKey: string;
-        constructor(apiKey: string) {
-            this._apiKey = apiKey;
-        }
-        // The real BaseModel exposes the key through this protected getter; the driver reads it to
-        // send `xi-api-key`.
-        protected get apiKey(): string {
-            return this._apiKey;
-        }
-    }
-    class BaseRealtimeModel extends BaseModel {
-        public get SupportsClientDirect(): boolean {
-            return false;
-        }
-        // Same body as the real BaseRealtimeModel.ClampSessionSeconds (the real module cannot be imported here; see RealtimeDriverFactsOf below).
-        protected ClampSessionSeconds(...candidates: ReadonlyArray<number | undefined>): number | undefined {
-            let smallest: number | undefined;
-            for (const c of candidates) {
-                if (typeof c !== 'number' || !Number.isInteger(c) || c <= 0) continue;
-                if (smallest === undefined || c < smallest) smallest = c;
-            }
-            return smallest;
-        }
-        public async CreateClientSession(): Promise<never> {
-            throw new Error(`${this.constructor.name} does not support client-direct realtime sessions`);
-        }
-    }
+    const { BaseModel } = await import('../../../../Core/src/generic/baseModel');
+    const { BaseRealtimeModel, BaseRealtimeSession, RealtimeDriverFactsOf, DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS, DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS, MAX_REALTIME_RAPID_RECONNECTS, REALTIME_RAPID_RECONNECT_WINDOW_MS } = await import('../../../../Core/src/generic/baseRealtime');
+    const { RealtimeConversationMemory, RenderRealtimeMemorySeed, RenderRealtimeMemorySeedAsContextNote, REALTIME_MEMORY_CONTINUITY_PREAMBLE } = await import('../../../../Core/src/generic/realtimeConversationMemory');
     class BaseLLM extends BaseModel {}
     class BaseEmbeddings extends BaseModel {}
     class BaseAudioGenerator extends BaseModel {}
@@ -55,15 +30,38 @@ vi.mock('@memberjunction/ai', async () => {
     const RealtimeDiagLog = () => { /* no-op in tests */ };
     // Pure, dependency-free helpers — the REAL implementations, so this spec asserts shipped behavior.
     const { IsTranscriptContinuation } = await import('../../../../Core/src/generic/transcriptContinuation');
-    const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');
-    // NormalizeTurnDetectionSettings is the single shared normalizer — run the real one so tests cannot drift from it.
-    // turnDetectionSettings.ts is dependency-free BY DESIGN and must stay so: it is loaded from source here, under mocks.
+    const { ResolveResponseDoneUsage, MapRealtimeUsageModalityDetail } = await import('../../../../Core/src/generic/realtimeUsage');
     const { NormalizeTurnDetectionSettings } = await import('../../../../Core/src/generic/turnDetectionSettings');
     const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
-    // Same body as the real RealtimeDriverFactsOf (baseRealtime.ts). The real module cannot be imported here: it pulls in
-    // @memberjunction/global, which these suites mock. The mocked BaseRealtimeModel has no static, so only drivers declaring their own resolve.
-    const RealtimeDriverFactsOf = (driver: object): object => (driver.constructor as { DriverFacts: object }).DriverFacts;
-    return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseTextToSpeech, BaseSpeechToText, BaseImageGenerator, BaseDecision, BaseSystemOneDecision, ErrorAnalyzer, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, NormalizeTurnDetectionSettings, RealtimeDroppedInputReporter, RealtimeDriverFactsOf };
+    return {
+        BaseModel,
+        BaseRealtimeModel,
+        BaseRealtimeSession,
+        RealtimeConversationMemory,
+        RenderRealtimeMemorySeed,
+        RenderRealtimeMemorySeedAsContextNote,
+        REALTIME_MEMORY_CONTINUITY_PREAMBLE,
+        DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS,
+        DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS,
+        MAX_REALTIME_RAPID_RECONNECTS,
+        REALTIME_RAPID_RECONNECT_WINDOW_MS,
+        BaseLLM,
+        BaseEmbeddings,
+        BaseAudioGenerator,
+        BaseTextToSpeech,
+        BaseSpeechToText,
+        BaseImageGenerator,
+        BaseDecision,
+        BaseSystemOneDecision,
+        ErrorAnalyzer,
+        RealtimeDiagLog,
+        IsTranscriptContinuation,
+        ResolveResponseDoneUsage,
+        MapRealtimeUsageModalityDetail,
+        NormalizeTurnDetectionSettings,
+        RealtimeDroppedInputReporter,
+        RealtimeDriverFactsOf,
+    };
 });
 
 // The SDK socket: never touches the network; records what it was opened with.

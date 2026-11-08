@@ -1,6 +1,6 @@
 import { RegisterClass } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
-import { BaseRealtimeClient, RealtimeClientState } from '../generic/baseRealtimeClient';
+import { ClientRealtimeSessionConfig, JSONObject, RenderRealtimeMemorySeedAsContextNote } from '@memberjunction/ai';
+import { BaseRealtimeClient, RealtimeClientReconnectContext, RealtimeClientState } from '../generic/baseRealtimeClient';
 import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
@@ -128,6 +128,7 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
     private micStream: MediaStream | null = null;
     private micCapture: IPcmMicCapture | null = null;
     private playback: IRealtimePcmPlayback | null = null;
+    private activeConfig: ClientRealtimeSessionConfig | null = null;
 
     // ── Response state machine ─────────────────────────────────────────────────
     /** True while an agent response is in flight; gates (queues) client-triggered sends. */
@@ -159,6 +160,10 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
      */
     private currentState: RealtimeClientState = 'closed';
 
+    protected override get DefaultCallDurationSeconds(): number | undefined {
+        return undefined;
+    }
+
     // ── BaseRealtimeClient: connection lifecycle ───────────────────────────────
 
     /**
@@ -169,6 +174,8 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
      */
     public async Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream): Promise<void> {
         this.AssertTransportSupported(config);
+        this.ApplySessionConfigTiming(config);
+        this.activeConfig = config;
         this.micStream = micStream;
         this.closedByConsumer = false;
         this.setState('connecting');
@@ -216,6 +223,9 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
 
         const metadataEvent = await metadata;
         const formats = metadataEvent.conversation_initiation_metadata_event;
+        if (formats?.conversation_id) {
+            this.RecordResumptionHandle(formats.conversation_id);
+        }
         const outputRate = ElevenLabsRealtimeClient.ParsePcmRate(formats?.agent_output_audio_format, 'output');
         const inputRate = ElevenLabsRealtimeClient.ParsePcmRate(formats?.user_input_audio_format, 'input');
         this.playback = this.createPlayback(outputRate);
@@ -230,6 +240,7 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
         // no-WebAudio environments simply leave the session un-metered.
         this.attachOutputAudioMeter(this.playback?.CreateMeter?.() ?? null);
         this.attachInputAudioMeter(RealtimeAudioMeter.ForMicStream(micStream));
+        this.ArmConnectionDurationTimer();
         this.setState('listening');
     }
 
@@ -240,6 +251,8 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
      */
     public async Disconnect(): Promise<void> {
         this.closedByConsumer = true;
+        this.DisposeReconnectTimers();
+        this.cancelToolResultNudge();
         this.closeAudioMeters();
         this.micStream?.getTracks().forEach((track) => track.stop());
         this.micStream = null;
@@ -256,10 +269,90 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
             }
             this.socket = null;
         }
+        this.activeConfig = null;
         this.resetResponseState();
         if (this.currentState !== 'error') {
             this.setState('closed');
         }
+    }
+
+    protected override async Reconnect(context: RealtimeClientReconnectContext): Promise<void> {
+        if (!this.activeConfig) {
+            throw new Error('ElevenLabsRealtimeClient: cannot reconnect before Connect');
+        }
+        const refreshedConfig: ClientRealtimeSessionConfig = {
+            ...this.activeConfig,
+            EphemeralToken: context.Credential.EphemeralToken || this.activeConfig.EphemeralToken,
+            ExpiresAt: context.Credential.ExpiresAt || this.activeConfig.ExpiresAt,
+            ...(context.Credential.SessionConfig !== undefined ? { SessionConfig: context.Credential.SessionConfig } : {}),
+        };
+        this.activeConfig = refreshedConfig;
+        const overrides = this.parseOverrides(refreshedConfig);
+
+        const prevSocket = this.socket;
+        let openSocket: (() => void) | null = null;
+        let failOpen: ((error: Error) => void) | null = null;
+        let confirmMetadata: ((event: ElevenLabsServerEvent) => void) | null = null;
+        let failMetadata: ((error: Error) => void) | null = null;
+        const opened = new Promise<void>((resolve, reject) => {
+            openSocket = resolve;
+            failOpen = reject;
+        });
+        const metadata = new Promise<ElevenLabsServerEvent>((resolve, reject) => {
+            confirmMetadata = resolve;
+            failMetadata = reject;
+        });
+        metadata.catch(() => undefined);
+        this.onInitiationMetadata = confirmMetadata;
+        const failConnect = (error: Error) => {
+            failOpen?.(error);
+            failMetadata?.(error);
+        };
+
+        const nextSocket = this.createSocket(refreshedConfig.EphemeralToken);
+        this.socket = nextSocket;
+        nextSocket.onopen = () => openSocket?.();
+        nextSocket.onmessage = (data) => {
+            if (this.socket === nextSocket) {
+                this.handleSocketMessage(data);
+            }
+        };
+        nextSocket.onerror = (message) => {
+            failConnect(new Error(message));
+            if (this.socket === nextSocket && !this.IsReconnecting) {
+                this.handleSocketError(message);
+            }
+        };
+        nextSocket.onclose = () => {
+            failConnect(new Error('ElevenLabs conversation socket closed during reconnect'));
+            if (this.socket === nextSocket && !this.IsReconnecting) {
+                this.handleSocketClose();
+            }
+        };
+
+        await opened;
+        this.sendFrame({ type: 'conversation_initiation_client_data', conversation_config_override: overrides });
+        const metadataEvent = await metadata;
+        const formats = metadataEvent.conversation_initiation_metadata_event;
+        if (formats?.conversation_id) {
+            this.RecordResumptionHandle(formats.conversation_id);
+        }
+
+        try {
+            prevSocket?.close();
+        } catch {
+            /* already closing */
+        }
+
+        this.responseActive = false;
+        this.activeResponseKind = 'normal';
+        if (context.ConversationSeed && context.ConversationSeed.Entries.length > 0) {
+            const note = RenderRealtimeMemorySeedAsContextNote(context.ConversationSeed);
+            if (note.length > 0) {
+                this.sendFrame({ type: 'contextual_update', text: note });
+            }
+        }
+        this.setState('listening');
     }
 
     // ── BaseRealtimeClient: outbound actions ──────────────────────────────────
@@ -316,6 +409,7 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
      * generation), so unlike the Gemini driver no queueing applies.
      */
     public SendContextNote(text: string): void {
+        this.ConversationMemory.Record({ Kind: 'note', Text: text });
         if (!this.socket) {
             return;
         }
@@ -363,6 +457,12 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
             return;
         }
         this.pendingToolCallIds.delete(callID);
+        const name = this.recordToolResult(callID, outputJson);
+        if (this.callsFromBeforeReseed.delete(callID)) {
+            this.sendFrame({ type: 'contextual_update', text: `[Tool result for ${name}: ${outputJson}]` });
+            this.enqueueOrRun(() => this.sendUserMessage(`Please continue with the tool result for ${name}.`, 'normal', false));
+            return;
+        }
         this.enqueueOrRun(() => this.sendToolResultFrame(callID, outputJson));
     }
 

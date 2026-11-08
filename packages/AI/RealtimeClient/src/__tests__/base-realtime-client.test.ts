@@ -2,11 +2,14 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { ClientRealtimeSessionConfig } from '@memberjunction/ai';
 import {
     BaseRealtimeClient,
+    REQUESTED_TRACKS_SESSION_KEY,
     RealtimeClientError,
+    RealtimeClientReconnectContext,
     RealtimeClientState,
     RealtimeClientToolCall,
     RealtimeClientTranscript,
     RealtimeClientUsage,
+    ToProviderSessionConfig,
 } from '../generic/baseRealtimeClient';
 import type { MediaVideoSource } from '../media/model';
 import { FakeMediaStream } from './helpers/realtime-fakes';
@@ -16,21 +19,35 @@ import { FakeMediaStream } from './helpers/realtime-fakes';
  * handler plumbing can be exercised without any provider wiring.
  */
 class StubRealtimeClient extends BaseRealtimeClient {
+    public Busy = false;
+    public Playing = false;
+    public ReconnectContexts: RealtimeClientReconnectContext[] = [];
+    public ReconnectImpl: (ctx: RealtimeClientReconnectContext) => Promise<void> = async () => undefined;
+
     public async Connect(_config: ClientRealtimeSessionConfig, _micStream: MediaStream): Promise<void> {
         /* not used in these tests */
     }
     public SendText(_text: string): void {}
     public SendContextNote(_text: string): void {}
     public RequestSpokenUpdate(_instructions: string): void {}
-    public SendToolResult(_callID: string, _outputJson: string): void {}
+    public SendToolResult(callID: string, outputJson: string): void {
+        this.recordToolResult(callID, outputJson);
+    }
     public CancelActiveResponse(): void {}
     public SetMuted(_muted: boolean): void {}
-    public async Disconnect(): Promise<void> {}
+    public async Disconnect(): Promise<void> {
+        this.DisposeReconnectTimers();
+    }
     public get IsBusy(): boolean {
-        return false;
+        return this.Busy;
     }
     public get IsAudioPlaying(): boolean {
-        return false;
+        return this.Playing;
+    }
+
+    protected override async Reconnect(context: RealtimeClientReconnectContext): Promise<void> {
+        this.ReconnectContexts.push(context);
+        await this.ReconnectImpl(context);
     }
 
     // expose the protected emit helpers
@@ -281,4 +298,131 @@ describe('BaseRealtimeClient', () => {
             expect(fresh).toHaveLength(1);
         });
     });
+
+    describe('ToProviderSessionConfig and reconnect orchestration', () => {
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        it('strips REQUESTED_TRACKS_SESSION_KEY and all 4 shared timing/resumption keys from SessionConfig', () => {
+            const cleaned = ToProviderSessionConfig({
+                model: 'gpt-realtime-1.5',
+                voice: 'alloy',
+                [REQUESTED_TRACKS_SESSION_KEY]: [{ Modality: 'audio', Direction: 'inbound' }],
+                connectionMaxSeconds: 600,
+                sessionMaxSeconds: 3600,
+                reconnectBufferSeconds: 30,
+                trustNativeResumption: true,
+            });
+            expect(cleaned).toEqual({
+                model: 'gpt-realtime-1.5',
+                voice: 'alloy',
+            });
+        });
+
+        it('records final normal turns (including ReplacesPrevious), tool calls, and tool results in ConversationMemory', () => {
+            const client = new StubRealtimeClient();
+            client.EmitTranscript({ Role: 'User', Text: 'First draft', IsFinal: true, Kind: 'normal' });
+            client.EmitTranscript({
+                Role: 'User',
+                Text: 'Corrected question',
+                IsFinal: true,
+                Kind: 'normal',
+                ReplacesPrevious: true,
+            });
+            client.EmitTranscript({ Role: 'Assistant', Text: 'Still working...', IsFinal: true, Kind: 'narration' });
+            client.EmitToolCall({ CallID: 'call-1', ToolName: 'search_db', ArgumentsJson: '{"q":"mj"}' });
+            client.SendToolResult('call-1', '{"count":3}');
+            client.EmitTranscript({ Role: 'Assistant', Text: 'Found 3 records.', IsFinal: true, Kind: 'normal' });
+
+            const seed = client.ConversationMemory.Seed();
+            expect(seed.Entries).toEqual([
+                { Kind: 'user', Text: 'Corrected question' },
+                { Kind: 'toolCall', Name: 'search_db', ArgumentsJson: '{"q":"mj"}' },
+                { Kind: 'toolResult', Name: 'search_db', OutputJson: '{"count":3}' },
+                { Kind: 'assistant', Text: 'Found 3 records.' },
+            ]);
+        });
+
+        it('refreshes credential and falls back from native resumption on Attempt 1 to ConversationSeed on Attempt 2', async () => {
+            vi.useFakeTimers();
+            const client = new StubRealtimeClient();
+            client.ApplySessionConfigTiming({
+                Provider: 'test',
+                Model: 'test-model',
+                EphemeralToken: 'tok-initial',
+                ExpiresAt: new Date(Date.now() + 600_000).toISOString(),
+                SessionConfig: {
+                    connectionMaxSeconds: 600,
+                    reconnectBufferSeconds: 30,
+                    trustNativeResumption: true,
+                },
+            });
+            client.RecordResumptionHandle('handle-abc');
+            client.EmitTranscript({ Role: 'User', Text: 'Hello before reconnect', IsFinal: true, Kind: 'normal' });
+
+            let refreshCount = 0;
+            client.SetTokenRefreshCallback(async () => {
+                refreshCount++;
+                return {
+                    EphemeralToken: `tok-refresh-${refreshCount}`,
+                    ExpiresAt: new Date(Date.now() + 600_000).toISOString(),
+                    SessionConfig: {},
+                };
+            });
+
+            client.ReconnectImpl = async (ctx) => {
+                if (ctx.Attempt === 1) {
+                    throw new Error('Invalid resumption handle');
+                }
+            };
+
+            const promise = client.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(1500);
+            const ok = await promise;
+
+            expect(ok).toBe(true);
+            expect(refreshCount).toBe(2);
+            expect(client.ReconnectContexts).toHaveLength(2);
+            expect(client.ReconnectContexts[0].UseNativeResumption).toBe(true);
+            expect(client.ReconnectContexts[0].ResumptionHandle).toBe('handle-abc');
+            expect(client.ReconnectContexts[0].ConversationSeed).toBeNull();
+            expect(client.ReconnectContexts[1].UseNativeResumption).toBe(false);
+            expect(client.ReconnectContexts[1].ResumptionHandle).toBeNull();
+            expect(client.ReconnectContexts[1].ConversationSeed?.Entries).toEqual([
+                { Kind: 'user', Text: 'Hello before reconnect' },
+            ]);
+        });
+
+        it('defers reconnect in the soft window while busy and triggers immediately when state becomes listening', async () => {
+            vi.useFakeTimers();
+            const client = new StubRealtimeClient();
+            client.ApplySessionConfigTiming({
+                Provider: 'test',
+                Model: 'test-model',
+                EphemeralToken: 'tok-1',
+                ExpiresAt: new Date(Date.now() + 600_000).toISOString(),
+                SessionConfig: {
+                    connectionMaxSeconds: 100,
+                    reconnectBufferSeconds: 10,
+                },
+            });
+            client.Busy = true;
+            client.ArmConnectionDurationTimer();
+
+            // Advance into the soft window (between 75s and 90s)
+            await vi.advanceTimersByTimeAsync(80_000);
+            expect(client.ReconnectContexts).toHaveLength(0);
+
+            // Turn finishes -> state becomes listening -> triggers deferred reconnect
+            client.Busy = false;
+            client.EmitState('listening');
+            await vi.advanceTimersByTimeAsync(10);
+
+            expect(client.ReconnectContexts).toHaveLength(1);
+            expect(client.ReconnectContexts[0].Reason).toBe('duration-expiry');
+            await client.Disconnect();
+        });
+    });
 });
+

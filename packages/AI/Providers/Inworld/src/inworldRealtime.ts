@@ -23,11 +23,14 @@
 
 import {
     BaseRealtimeModel,
+    BaseRealtimeSession,
     REALTIME_SHARED_CONFIG_KEYS,
     RealtimeDroppedInputReporter,
     ReadRealtimeTurnDetection,
     DescribeUnappliedTurnDetection,
+    RenderRealtimeMemorySeedAsContextNote,
     type IRealtimeSession,
+    type RealtimeReconnectContext,
     type RealtimeTurnDetectionSettings,
     type RealtimeTurnDetectionSettingKey,
     type RealtimeSessionParams,
@@ -246,6 +249,14 @@ export class InworldRealtime extends BaseRealtimeModel {
     /** Provider ceiling unconfirmed; unknown until an in-repo source states it. */
     public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = {};
 
+    public override get DefaultCallDurationSeconds(): number | undefined {
+        return undefined;
+    }
+
+    public override get TrustsNativeResumption(): boolean {
+        return false;
+    }
+
     /**
      * Opens a server-bridged session: connects the realtime WebSocket authenticated with the API
      * key, sends the full session config as the FIRST frame (`session.update` — model, instructions,
@@ -258,7 +269,7 @@ export class InworldRealtime extends BaseRealtimeModel {
      * @returns A promise resolving to the live {@link IRealtimeSession} handle, post-ready.
      */
     public async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
-        const session = new InworldRealtimeSession(params);
+        const session = new InworldRealtimeSession(params, this);
         const socket = await this.connectRealtimeSocket({
             Url: this.buildConnectUrl(),
             OnMessage: (event) => session.HandleServerEvent(event),
@@ -266,6 +277,14 @@ export class InworldRealtime extends BaseRealtimeModel {
             OnClose: (code, reason) => session.HandleTransportClose(code, reason),
         });
         session.AttachSocket(socket);
+        session.SetReconnectFactory(() =>
+            this.connectRealtimeSocket({
+                Url: this.buildConnectUrl(),
+                OnMessage: (event) => session.HandleServerEvent(event),
+                OnError: (message) => session.HandleTransportError(message),
+                OnClose: (code, reason) => session.HandleTransportClose(code, reason),
+            }),
+        );
         session.SendSessionUpdate();
         await session.WaitForReady();
         return session;
@@ -384,8 +403,9 @@ export class InworldRealtime extends BaseRealtimeModel {
  * - **{@link RequestSpokenUpdate} queues behind an in-flight response** per the collision rule; a
  *   `tool.call` clears the busy flag WITHOUT draining the queue (deadlock guard, obligation #2).
  */
-export class InworldRealtimeSession implements IRealtimeSession {
+export class InworldRealtimeSession extends BaseRealtimeSession implements IRealtimeSession {
     private socket: InworldRealtimeSocket | null = null;
+    private reconnectFactory?: () => Promise<InworldRealtimeSocket>;
 
     private outputHandler: ((chunk: ArrayBuffer) => void) | null = null;
     private transcriptHandler: ((t: RealtimeTranscript) => void) | null = null;
@@ -394,8 +414,6 @@ export class InworldRealtimeSession implements IRealtimeSession {
     private usageHandler: ((u: RealtimeUsage) => void) | null = null;
     private errorHandler: ((error: RealtimeSessionError) => void) | null = null;
     private closeHandler: (() => void) | null = null;
-    /** True once {@link Close} ran — an expected close must not surface as a fatal error. */
-    private closedByConsumer = false;
 
     /** Resolves when the session-ready frame arrives; rejects on transport death. */
     private readyPromise: Promise<void>;
@@ -433,8 +451,10 @@ export class InworldRealtimeSession implements IRealtimeSession {
 
     /**
      * @param params The session parameters (model, system prompt, tools, initial context, config bag).
+     * @param model Optional parent driver instance for timing resolution.
      */
-    constructor(params: RealtimeSessionParams) {
+    constructor(params: RealtimeSessionParams, model?: BaseRealtimeModel) {
+        super(model, params.Config as Record<string, unknown> | undefined);
         this.params = params;
         this.basePrompt = InworldRealtimeSession.composeSystemPrompt(params.SystemPrompt, params.InitialContext);
         this.currentToolsFingerprint = InworldRealtime.ToolSetFingerprint(params.Tools ?? []);
@@ -448,9 +468,22 @@ export class InworldRealtimeSession implements IRealtimeSession {
         this.readyPromise.catch(() => undefined);
     }
 
+    protected override get DefaultCallDurationSeconds(): number | undefined {
+        return this.model?.DefaultCallDurationSeconds ?? undefined;
+    }
+
+    protected override get DefaultTrustsNativeResumption(): boolean {
+        return false;
+    }
+
     /** Binds the underlying socket. Called by the driver once the WebSocket is open. */
     public AttachSocket(socket: InworldRealtimeSocket): void {
         this.socket = socket;
+    }
+
+    /** Registers the factory used to open a replacement realtime socket on reconnect. */
+    public SetReconnectFactory(factory: () => Promise<InworldRealtimeSocket>): void {
+        this.reconnectFactory = factory;
     }
 
     /**
@@ -506,6 +539,7 @@ export class InworldRealtimeSession implements IRealtimeSession {
             return; // identical to the declared set — silent no-op (idempotency rule)
         }
         this.currentToolsFingerprint = fingerprint;
+        this.params = { ...this.params, Tools: tools };
         this.sendFrame(this.buildToolsUpdateFrame(tools));
     }
 
@@ -556,8 +590,21 @@ export class InworldRealtimeSession implements IRealtimeSession {
      * @param output The tool's result as a JSON-stringified string.
      */
     public async SendToolResult(callID: string, output: string): Promise<void> {
+        const name = this.pendingToolCallNames.get(callID) ?? callID;
+        this.conversationMemory.Record({
+            Kind: 'toolResult',
+            Name: name,
+            OutputJson: output,
+        });
+        this.pendingToolCallNames.delete(callID);
+        if (this.callsFromBeforeReseed.delete(callID)) {
+            this.SendContextNote(`[Tool result for ${name}: ${output}]`);
+            this.RequestSpokenUpdate(`Please continue with the tool result for ${name}.`);
+            return;
+        }
         this.sendFrame(this.buildToolResultFrame(callID, output));
         this.responseActive = true; // the result's spoken continuation is imminent
+        this.NotifyTurnStarted();
     }
 
     /**
@@ -572,6 +619,10 @@ export class InworldRealtimeSession implements IRealtimeSession {
      * @param text The context note to append to the conversation.
      */
     public SendContextNote(text: string): void {
+        this.conversationMemory.Record({
+            Kind: 'note',
+            Text: text,
+        });
         this.contextNotes.push(text);
         this.sendFrame(this.buildContextItemFrame(this.composePromptWithNotes()));
     }
@@ -589,8 +640,49 @@ export class InworldRealtimeSession implements IRealtimeSession {
     public RequestSpokenUpdate(instructions: string): void {
         this.enqueueOrRun(() => {
             this.responseActive = true; // the instructed response is now in flight
+            this.NotifyTurnStarted();
             this.sendFrame(this.buildResponseCreateFrame(instructions));
         });
+    }
+
+    protected override async Reconnect(context: RealtimeReconnectContext): Promise<void> {
+        if (!this.reconnectFactory) {
+            throw new Error('InworldRealtimeSession: No reconnect factory available for Reconnect');
+        }
+        this.readyReceived = false;
+        this.readyPromise = new Promise<void>((resolve, reject) => {
+            this.resolveReady = resolve;
+            this.rejectReady = reject;
+        });
+        this.readyPromise.catch(() => undefined);
+
+        const nextSocket = await this.reconnectFactory();
+        const prevSocket = this.socket;
+        this.socket = nextSocket;
+
+        const seedNote =
+            context.ConversationSeed && context.ConversationSeed.Entries.length > 0
+                ? RenderRealtimeMemorySeedAsContextNote(context.ConversationSeed)
+                : null;
+        if (seedNote) {
+            this.basePrompt = `${InworldRealtimeSession.composeSystemPrompt(this.params.SystemPrompt, this.params.InitialContext)}\n\n${seedNote}`;
+            this.contextNotes = [];
+        }
+        this.SendSessionUpdate();
+        await this.WaitForReady();
+        this.responseActive = false;
+        try {
+            prevSocket?.close();
+        } catch {
+            // ignore close error on replaced socket
+        }
+    }
+
+    protected override onReconnectFailed(error: Error): void {
+        if (this.closedByConsumer) {
+            return;
+        }
+        this.errorHandler?.({ Message: error.message, Fatal: true });
     }
 
     /**
@@ -601,7 +693,7 @@ export class InworldRealtimeSession implements IRealtimeSession {
      * handlers so no stale callback fires afterward.
      */
     public async Close(): Promise<void> {
-        this.closedByConsumer = true;
+        this.DisposeReconnectTimers();
         this.failReadyWait('session closed by consumer before the session was ready');
         if (this.socket) {
             try {
@@ -627,6 +719,9 @@ export class InworldRealtimeSession implements IRealtimeSession {
     public HandleServerEvent(event: InworldServerEvent): void {
         switch (this.classifyServerEvent(event)) {
             case 'ready':
+                if (event.session_id && event.session_id.length > 0) {
+                    this.RecordResumptionHandle(event.session_id);
+                }
                 return this.handleReady();
             case 'config-applied':
                 return; // mid-session config-apply confirmation — nothing to surface
@@ -642,6 +737,7 @@ export class InworldRealtimeSession implements IRealtimeSession {
                 return this.emitTranscript('assistant', event.text, true);
             case 'response-started':
                 this.responseActive = true;
+                this.NotifyTurnStarted();
                 return;
             case 'response-done':
                 return this.completeResponse();
@@ -663,6 +759,7 @@ export class InworldRealtimeSession implements IRealtimeSession {
     /** Resolves the ready wait so {@link InworldRealtime.StartSession} can hand back the session. */
     private handleReady(): void {
         this.readyReceived = true;
+        this.ArmConnectionDurationTimer();
         this.resolveReady?.();
     }
 
@@ -672,6 +769,7 @@ export class InworldRealtimeSession implements IRealtimeSession {
             return;
         }
         this.responseActive = true;
+        this.NotifyTurnStarted();
         this.outputHandler?.(InworldRealtimeSession.base64ToArrayBuffer(audioBase64));
     }
 
@@ -686,10 +784,19 @@ export class InworldRealtimeSession implements IRealtimeSession {
      */
     private handleToolCall(event: InworldServerEvent): void {
         this.responseActive = false;
+        const callId = event.call_id ?? '';
+        const name = event.name ?? '';
+        const args = InworldRealtimeSession.normalizeToolArguments(event.arguments);
+        this.pendingToolCallNames.set(callId, name);
+        this.conversationMemory.Record({
+            Kind: 'toolCall',
+            Name: name,
+            ArgumentsJson: args,
+        });
         this.toolCallHandler?.({
-            CallID: event.call_id ?? '',
-            ToolName: event.name ?? '',
-            Arguments: InworldRealtimeSession.normalizeToolArguments(event.arguments),
+            CallID: callId,
+            ToolName: name,
+            Arguments: args,
         });
     }
 
@@ -763,7 +870,7 @@ export class InworldRealtimeSession implements IRealtimeSession {
      * @param reason Optional WebSocket close reason.
      */
     public HandleTransportClose(code?: number, reason?: string): void {
-        if (this.closedByConsumer) {
+        if (this.closedByConsumer || this.IsReconnecting) {
             return;
         }
         const detail = [code != null ? `code ${code}` : null, reason || null].filter(Boolean).join(' — ');
@@ -1030,15 +1137,22 @@ export class InworldRealtimeSession implements IRealtimeSession {
 
     /** Emits a transcript event (drops empty/whitespace-only text so no blank turns are persisted). */
     private emitTranscript(role: 'user' | 'assistant', text: string | undefined, isFinal: boolean): void {
-        if (!this.transcriptHandler || !text || text.trim().length === 0) {
+        if (!text || text.trim().length === 0) {
             return;
         }
-        this.transcriptHandler({ Role: role, Text: text, IsFinal: isFinal });
+        if (isFinal) {
+            this.conversationMemory.Record({
+                Kind: role,
+                Text: text,
+            });
+        }
+        this.transcriptHandler?.({ Role: role, Text: text, IsFinal: isFinal });
     }
 
     /** Response boundary: releases the busy flag and drains queued sends in order. */
     private completeResponse(): void {
         this.responseActive = false;
+        this.NotifyTurnEnded();
         while (!this.responseActive && this.queuedSends.length > 0) {
             const send = this.queuedSends.shift();
             send?.();

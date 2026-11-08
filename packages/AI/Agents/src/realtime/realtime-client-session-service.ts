@@ -32,13 +32,15 @@
 
 import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView, DatabaseProviderBase } from '@memberjunction/core';
 import { MJAIAgentRunStepEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity, MJActionParamEntity } from '@memberjunction/core-entities';
-import { MJGlobal, MJLruCache, UUIDsEqual, EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
+import { BaseSingleton, MJGlobal, MJLruCache, UUIDsEqual, EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionParam, MJActionEntityExtended, RunActionParams } from '@memberjunction/actions-base';
 import {
     BaseRealtimeModel,
+    BuildRealtimeRelayUrl,
     ChatMessage,
     ClientRealtimeSessionConfig,
+    ExtractRealtimeTimingConfig,
     GetAIAPIKey,
     AIAPIKey,
     AIAPIKeyResolver,
@@ -47,10 +49,14 @@ import {
     IRealtimeSession,
     IsZeroDataRetention,
     JSONObject,
+    REALTIME_RELAY_PATH,
+    REALTIME_RELAY_SESSION_LIFETIME_SECONDS,
     RealtimeAvatarStatus,
+    RealtimeProxyRegistry,
     RealtimeSessionParams,
     RealtimeToolCall,
-    RealtimeToolDefinition
+    RealtimeToolDefinition,
+    ResolveRealtimeProxyBaseWsUrl
 } from '@memberjunction/ai';
 import {
     MJAIAgentEntityExtended,
@@ -457,6 +463,113 @@ export interface CoAgentSystemPromptResolution {
     Text: string;
     /** The `MJ: AI Prompts` row id, or `null` when the co-agent has no active prompt. */
     PromptID: string | null;
+}
+
+/**
+ * Server-authoritative mint snapshot persisted in `MJAIAgentRunStepEntity.InputData` for cross-instance
+ * credential refresh (`RefreshRealtimeClientSessionToken`). Deliberately excludes `relayTicketId`
+ * (which is a live credential in `RealtimeProxyRegistry`).
+ */
+export interface PersistedRealtimeMintSnapshot {
+    modelID: string;
+    modelVendorID?: string;
+    driverClass: string;
+    credentialScope?: AICredentialScope;
+    sessionParams: RealtimeSessionParams;
+}
+
+/**
+ * In-memory mint snapshot stored in {@link RealtimeMintSnapshotRegistry}, including `relayTicketId`
+ * for same-instance in-place relay lifetime extension.
+ */
+export interface InMemoryRealtimeMintSnapshot extends PersistedRealtimeMintSnapshot {
+    relayTicketId?: string;
+    relayUrl?: string;
+}
+
+/**
+ * Input for {@link RealtimeClientSessionService.RefreshClientSessionCredential}.
+ */
+export interface RefreshClientSessionCredentialInput {
+    AgentSessionID: string;
+    CoAgentID?: string;
+    CoAgentRunStepID?: string;
+    RemainingSessionSeconds?: number;
+    APIKeys?: AIAPIKey[];
+}
+
+/**
+ * Result of {@link RealtimeClientSessionService.RefreshClientSessionCredential}.
+ */
+export interface RefreshClientSessionCredentialResult {
+    Success: boolean;
+    EphemeralToken?: string;
+    ExpiresAt?: string;
+    RelayUrl?: string;
+    SessionConfigJson?: string;
+    ErrorMessage?: string;
+}
+
+/**
+ * Process-wide singleton registry of mint snapshots for active client-direct realtime sessions,
+ * backed by `BaseSingleton` (`GetGlobalObjectStore()`) with bounded LRU/TTL eviction.
+ */
+export class RealtimeMintSnapshotRegistry extends BaseSingleton<RealtimeMintSnapshotRegistry> {
+    private readonly _snapshots = new MJLruCache<string, InMemoryRealtimeMintSnapshot>({
+        maxSize: 2000,
+        ttlMs: 4 * 60 * 60 * 1000,
+    });
+
+    protected constructor() {
+        super();
+    }
+
+    public static get Instance(): RealtimeMintSnapshotRegistry {
+        return super.getInstance<RealtimeMintSnapshotRegistry>();
+    }
+
+    public Set(agentSessionID: string, snapshot: InMemoryRealtimeMintSnapshot): void {
+        const key = NormalizeUUID(agentSessionID);
+        if (!key) {
+            return;
+        }
+        this._snapshots.Set(key, snapshot);
+    }
+
+    public Get(agentSessionID: string): InMemoryRealtimeMintSnapshot | undefined {
+        const key = NormalizeUUID(agentSessionID);
+        return key ? this._snapshots.Get(key) : undefined;
+    }
+
+    public Delete(agentSessionID: string): void {
+        const key = NormalizeUUID(agentSessionID);
+        if (key) {
+            this._snapshots.Delete(key);
+        }
+    }
+
+    public Clear(): void {
+        this._snapshots.Clear();
+    }
+}
+
+function extractRelayTicketId(relayUrl: string | undefined): string | undefined {
+    if (!relayUrl) {
+        return undefined;
+    }
+    const marker = `${REALTIME_RELAY_PATH}/`;
+    const idx = relayUrl.indexOf(marker);
+    if (idx < 0) {
+        return undefined;
+    }
+    const tail = relayUrl.slice(idx + marker.length);
+    const slash = tail.indexOf('/');
+    const raw = slash >= 0 ? tail.slice(0, slash) : tail;
+    try {
+        return decodeURIComponent(raw) || undefined;
+    } catch {
+        return raw || undefined;
+    }
 }
 
 /**
@@ -979,7 +1092,24 @@ export class RealtimeClientSessionService {
             const message = error instanceof Error ? error.message : String(error);
             return { Success: false, ErrorMessage: `Failed to mint client realtime session: ${message}` };
         }
+        this.stampClientConfigTiming(clientConfig, sessionParams, resolution.Model);
         const avatarStatus = this.resolveMintedAvatarStatus(prep, clientConfig);
+
+        const persistedSnapshot: PersistedRealtimeMintSnapshot = {
+            modelID: resolution.ModelID,
+            modelVendorID: resolution.ModelVendorID,
+            driverClass: resolution.DriverClass ?? resolution.Model.constructor.name,
+            credentialScope: input.CredentialScope,
+            sessionParams: sessionParams,
+        };
+        const relayTicketId = extractRelayTicketId(clientConfig.RelayUrl);
+        if (input.AgentSessionID?.trim()) {
+            RealtimeMintSnapshotRegistry.Instance.Set(input.AgentSessionID, {
+                ...persistedSnapshot,
+                ...(relayTicketId ? { relayTicketId } : {}),
+                ...(clientConfig.RelayUrl ? { relayUrl: clientConfig.RelayUrl } : {}),
+            });
+        }
 
         // Best-effort observability: create a server-side co-agent run (+ prompt run) so the voice
         // session is visible in the agent-run timeline and delegated runs can nest under it. A
@@ -989,6 +1119,7 @@ export class RealtimeClientSessionService {
             coAgent, promptID, resolution.ModelID, resolution.VendorID,
             input.UserID || contextUser?.ID, input.AgentSessionID,
             contextUser, provider, input.ConversationID,
+            persistedSnapshot,
         );
         this.logMissingCoAgentObservability(coAgent, promptID, obs, input.AgentSessionID, 'PrepareClientSession');
 
@@ -1008,6 +1139,201 @@ export class RealtimeClientSessionService {
             NarrationPaceMs: GetNarrationPaceMs(effectiveConfig) ?? undefined,
             ...(avatarStatus ? { AvatarStatus: avatarStatus } : {}),
         };
+    }
+
+    /**
+     * Stamps `ConnectionMaxSeconds`, `ReconnectBufferSeconds`, and `TrustNativeResumption` onto
+     * `ClientRealtimeSessionConfig` and its `SessionConfig` bag so `BaseRealtimeClient` can schedule
+     * proactive reconnects and choose between native handle resumption and `ConversationSeed` fallback.
+     */
+    private stampClientConfigTiming(
+        clientConfig: ClientRealtimeSessionConfig,
+        sessionParams: RealtimeSessionParams,
+        model: BaseRealtimeModel,
+    ): void {
+        const timing = ExtractRealtimeTimingConfig(sessionParams.Config);
+        const connectionMaxSeconds =
+            clientConfig.ConnectionMaxSeconds ?? timing.ConnectionMaxSeconds ?? model.DefaultCallDurationSeconds;
+        const reconnectBufferSeconds = clientConfig.ReconnectBufferSeconds ?? timing.ReconnectBufferSeconds;
+        const trustNativeResumption = clientConfig.TrustNativeResumption ?? timing.TrustNativeResumption;
+
+        if (connectionMaxSeconds !== undefined && clientConfig.ConnectionMaxSeconds === undefined) {
+            clientConfig.ConnectionMaxSeconds = connectionMaxSeconds;
+        }
+        if (reconnectBufferSeconds !== undefined && clientConfig.ReconnectBufferSeconds === undefined) {
+            clientConfig.ReconnectBufferSeconds = reconnectBufferSeconds;
+        }
+        if (trustNativeResumption !== undefined && clientConfig.TrustNativeResumption === undefined) {
+            clientConfig.TrustNativeResumption = trustNativeResumption;
+        }
+
+        if (clientConfig.SessionConfig && typeof clientConfig.SessionConfig === 'object' && !Array.isArray(clientConfig.SessionConfig)) {
+            if (connectionMaxSeconds !== undefined && clientConfig.SessionConfig['connectionMaxSeconds'] === undefined) {
+                clientConfig.SessionConfig['connectionMaxSeconds'] = connectionMaxSeconds;
+            }
+            if (reconnectBufferSeconds !== undefined && clientConfig.SessionConfig['reconnectBufferSeconds'] === undefined) {
+                clientConfig.SessionConfig['reconnectBufferSeconds'] = reconnectBufferSeconds;
+            }
+            if (trustNativeResumption !== undefined && clientConfig.SessionConfig['trustNativeResumption'] === undefined) {
+                clientConfig.SessionConfig['trustNativeResumption'] = trustNativeResumption;
+            }
+        }
+    }
+
+    /**
+     * Refreshes the browser-facing credential for an active client-direct realtime session without
+     * re-running the companion prompt / memory / tool cascade.
+     *
+     * - If the session is a relay session whose ticket is still live in `RealtimeProxyRegistry`,
+     *   extends the relay session in place (`ExtendRelaySession`) so existing forwarded resumption
+     *   handles remain valid.
+     * - Otherwise re-mints via `Model.CreateClientSession(clampedParams)` using the mint snapshot
+     *   from `RealtimeMintSnapshotRegistry` (falling back to `MJAIAgentRunStepEntity.InputData` for
+     *   cross-instance failover).
+     */
+    public async RefreshClientSessionCredential(
+        input: RefreshClientSessionCredentialInput,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<RefreshClientSessionCredentialResult> {
+        await this.configureEngine(contextUser, provider);
+        const sessionID = input.AgentSessionID?.trim();
+        if (!sessionID) {
+            return { Success: false, ErrorMessage: 'AgentSessionID is required to refresh a client realtime session credential.' };
+        }
+
+        let snapshot = RealtimeMintSnapshotRegistry.Instance.Get(sessionID);
+        if (!snapshot && input.CoAgentRunStepID) {
+            const loaded = await this.loadPersistedMintSnapshot(input.CoAgentRunStepID, contextUser, provider);
+            if (loaded) {
+                snapshot = loaded;
+                RealtimeMintSnapshotRegistry.Instance.Set(sessionID, snapshot);
+            }
+        }
+        if (!snapshot) {
+            return {
+                Success: false,
+                ErrorMessage: `No mint snapshot found for realtime session '${sessionID}'.`,
+            };
+        }
+
+        const clampedParams: RealtimeSessionParams = {
+            ...snapshot.sessionParams,
+            ...(input.RemainingSessionSeconds !== undefined
+                ? {
+                      MaxSessionSeconds:
+                          snapshot.sessionParams.MaxSessionSeconds !== undefined
+                              ? Math.min(snapshot.sessionParams.MaxSessionSeconds, input.RemainingSessionSeconds)
+                              : input.RemainingSessionSeconds,
+                  }
+                : {}),
+        };
+
+        if (snapshot.relayTicketId) {
+            const additionalSeconds = clampedParams.MaxSessionSeconds ?? REALTIME_RELAY_SESSION_LIFETIME_SECONDS;
+            const extended = RealtimeProxyRegistry.Instance.ExtendRelaySession(snapshot.relayTicketId, additionalSeconds);
+            if (extended) {
+                const baseWs = ResolveRealtimeProxyBaseWsUrl(clampedParams);
+                return {
+                    Success: true,
+                    EphemeralToken: '',
+                    ExpiresAt: extended.ExpiresAt,
+                    RelayUrl: snapshot.relayUrl ?? BuildRealtimeRelayUrl(baseWs, snapshot.relayTicketId),
+                };
+            }
+        }
+
+        const coAgent = input.CoAgentID
+            ? ((AIEngine.Instance.Agents ?? []).find((a) => UUIDsEqual(a.ID, input.CoAgentID!)) ?? undefined)
+            : undefined;
+        const resolution = await this.resolveModelFromSnapshot(snapshot, coAgent, input.APIKeys, contextUser);
+        if (!resolution) {
+            return {
+                Success: false,
+                ErrorMessage: `Could not resolve realtime model '${snapshot.modelID}' (${snapshot.driverClass}) for credential refresh.`,
+            };
+        }
+
+        try {
+            const clientConfig = await resolution.Model.CreateClientSession(clampedParams);
+            this.stampClientConfigTiming(clientConfig, clampedParams, resolution.Model);
+            const newRelayTicketId = extractRelayTicketId(clientConfig.RelayUrl);
+            if (newRelayTicketId) {
+                snapshot.relayTicketId = newRelayTicketId;
+                snapshot.relayUrl = clientConfig.RelayUrl;
+                RealtimeMintSnapshotRegistry.Instance.Set(sessionID, snapshot);
+            }
+            return {
+                Success: true,
+                EphemeralToken: clientConfig.EphemeralToken,
+                ExpiresAt: clientConfig.ExpiresAt,
+                RelayUrl: clientConfig.RelayUrl,
+                SessionConfigJson: JSON.stringify(clientConfig.SessionConfig),
+            };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return { Success: false, ErrorMessage: `Failed to refresh client realtime session credential: ${message}` };
+        }
+    }
+
+    private async resolveModelFromSnapshot(
+        snapshot: InMemoryRealtimeMintSnapshot,
+        coAgent: MJAIAgentEntityExtended | undefined,
+        apiKeys: AIAPIKey[] | undefined,
+        contextUser: UserInfo,
+    ): Promise<RealtimeModelResolution | null> {
+        const scope = snapshot.credentialScope ?? 'Any';
+        const resolveRunKey = this.buildRunKeyResolver(apiKeys);
+        const placeholderAgent = coAgent ?? ({ ID: '' } as unknown as MJAIAgentEntityExtended);
+        const platform = await this.resolvePlatformCredentials(scope, placeholderAgent, snapshot.modelID, contextUser);
+        const resolveKey = this.buildKeyChain(resolveRunKey, scope, platform, snapshot.modelID);
+        const apiKey = resolveKey(snapshot.driverClass);
+        if (apiKey) {
+            const instance = this.createModelInstance(snapshot.driverClass, apiKey);
+            if (instance) {
+                return {
+                    Model: instance,
+                    ModelID: snapshot.modelID,
+                    VendorID: '',
+                    ModelVendorID: snapshot.modelVendorID,
+                    APIName: snapshot.sessionParams.Model,
+                    DriverClass: snapshot.driverClass,
+                };
+            }
+        }
+        return this.resolveRealtimeModel(placeholderAgent, resolveRunKey, scope, false, platform);
+    }
+
+    private async loadPersistedMintSnapshot(
+        coAgentRunStepID: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<InMemoryRealtimeMintSnapshot | null> {
+        try {
+            const step = await provider.GetEntityObject<MJAIAgentRunStepEntity>('MJ: AI Agent Run Steps', contextUser);
+            if (!(await step.Load(coAgentRunStepID)) || !step.InputData) {
+                return null;
+            }
+            const parsed = JSON.parse(step.InputData) as Partial<PersistedRealtimeMintSnapshot>;
+            if (
+                typeof parsed.modelID !== 'string' ||
+                typeof parsed.driverClass !== 'string' ||
+                !parsed.sessionParams ||
+                typeof parsed.sessionParams !== 'object'
+            ) {
+                return null;
+            }
+            return {
+                modelID: parsed.modelID,
+                modelVendorID: typeof parsed.modelVendorID === 'string' ? parsed.modelVendorID : undefined,
+                driverClass: parsed.driverClass,
+                credentialScope: parsed.credentialScope,
+                sessionParams: parsed.sessionParams,
+            };
+        } catch (error) {
+            LogError(`RealtimeClientSessionService.loadPersistedMintSnapshot failed: ${error instanceof Error ? error.message : String(error)}`);
+            return null;
+        }
     }
 
     /**
@@ -1671,6 +1997,7 @@ export class RealtimeClientSessionService {
         contextUser: UserInfo,
         provider: IMetadataProvider,
         conversationID?: string,
+        persistedSnapshot?: PersistedRealtimeMintSnapshot,
     ): Promise<{ CoAgentRunID: string; PromptRunID?: string; CoAgentRunStepID?: string } | null> {
         const coAgentRunID = await this.createCoAgentRun(
             coAgent, userID, agentSessionID, conversationID, contextUser, provider,
@@ -1679,7 +2006,7 @@ export class RealtimeClientSessionService {
             return null;
         }
         const promptRunID = await this.createCoAgentPromptRun(coAgent, promptID, modelID, vendorID, coAgentRunID, contextUser, provider);
-        const runStepID = await this.createCoAgentRunStep(coAgentRunID, promptID, promptRunID, contextUser, provider);
+        const runStepID = await this.createCoAgentRunStep(coAgentRunID, promptID, promptRunID, contextUser, provider, persistedSnapshot);
         return { CoAgentRunID: coAgentRunID, PromptRunID: promptRunID ?? undefined, CoAgentRunStepID: runStepID ?? undefined };
     }
 
@@ -1829,8 +2156,9 @@ export class RealtimeClientSessionService {
         promptRunID: string | null,
         contextUser: UserInfo,
         provider: IMetadataProvider,
+        persistedSnapshot?: PersistedRealtimeMintSnapshot,
     ): Promise<string | null> {
-        if (!promptID) {
+        if (!promptID && !persistedSnapshot) {
             return null;
         }
         try {
@@ -1842,6 +2170,9 @@ export class RealtimeClientSessionService {
             step.StepName = 'Realtime session system prompt';
             step.TargetID = promptID;
             step.TargetLogID = promptRunID;
+            if (persistedSnapshot) {
+                step.InputData = JSON.stringify(persistedSnapshot);
+            }
             step.Status = 'Running';
             step.StartedAt = new Date();
             if (await step.Save()) {

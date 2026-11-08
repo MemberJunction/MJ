@@ -1,6 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import {
     BaseRealtimeModel,
+    BaseRealtimeSession,
     RealtimeDiagLog,
     IRealtimeSession,
     RealtimeSessionCapabilities,
@@ -19,8 +20,12 @@ import {
     RealtimeTurnDetectionSettings,
     RealtimeDroppedInputReporter,
     RealtimeDriverFactsOf,
+    RenderRealtimeMemorySeed,
+    RenderRealtimeMemorySeedAsContextNote,
+    REALTIME_CONNECTION_SETUP_TIMEOUT_MS,
     type RealtimeDriverFacts,
     type RealtimeInputFrame,
+    type RealtimeReconnectContext,
 } from '@memberjunction/ai';
 import { ClientRealtimeSessionConfig, MapRealtimeUsageModalityDetail, NormalizeTurnDetectionSettings, RealtimeWireUsageModalityDetail, ResolveResponseDoneUsage } from '@memberjunction/ai';
 import { OpenAI } from 'openai';
@@ -429,7 +434,12 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
     const bag = rest as JSONObject & {
         inputTranscriptionModel?: unknown; transcriptionLanguages?: unknown; endpoint?: unknown; sampleRate?: unknown; proxyBaseUrl?: unknown;
         brokerBaseUrl?: unknown;
+        connectionMaxSeconds?: unknown; sessionMaxSeconds?: unknown; reconnectBufferSeconds?: unknown; trustNativeResumption?: unknown;
     };
+    delete bag.connectionMaxSeconds;
+    delete bag.sessionMaxSeconds;
+    delete bag.reconnectBufferSeconds;
+    delete bag.trustNativeResumption;
     const rawItm = bag.inputTranscriptionModel;
     delete bag.inputTranscriptionModel;
     const inputTranscriptionModel = typeof rawItm === 'string' && rawItm.trim().length > 0 ? rawItm.trim() : undefined;
@@ -799,6 +809,14 @@ export class OpenAIRealtime extends BaseRealtimeModel {
 
     public static override readonly SupportsDynamicToolSet = OPENAI_REALTIME_PROFILE.supportsDynamicToolSet;
 
+    public override get DefaultCallDurationSeconds(): number | undefined {
+        return 3600;
+    }
+
+    public override get TrustsNativeResumption(): boolean {
+        return false;
+    }
+
     private _openAI: OpenAI;
 
     /**
@@ -845,7 +863,7 @@ export class OpenAIRealtime extends BaseRealtimeModel {
      * @returns The session bound to this driver's {@link Profile}.
      */
     protected createSessionInstance(connection: IOpenAIRealtimeConnection): OpenAIRealtimeSession {
-        return new OpenAIRealtimeSession(connection, this.Profile, RealtimeDriverFactsOf(this));
+        return new OpenAIRealtimeSession(connection, this.Profile, RealtimeDriverFactsOf(this), this);
     }
 
     /**
@@ -857,6 +875,7 @@ export class OpenAIRealtime extends BaseRealtimeModel {
     public async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
         const connection = this.createConnection(params.Model);
         const session = this.createSessionInstance(connection);
+        session.SetConnectionFactory(() => this.createConnection(params.Model));
         session.applyInitialConfig(params);
         return session;
     }
@@ -931,6 +950,9 @@ export class OpenAIRealtime extends BaseRealtimeModel {
         }
         applyGAFeatures(session, features, profile);
         const response = await this.mintClientSecret({ session });
+        const connectionMaxSeconds = this.ResolveConnectionDurationSeconds(params.Config);
+        const reconnectBufferSeconds = this.ResolveReconnectBufferSeconds(params.Config);
+        const trustNativeResumption = this.ResolveTrustsNativeResumption(params.Config);
         return {
             Provider: profile.providerKey,
             Model: params.Model,
@@ -939,6 +961,9 @@ export class OpenAIRealtime extends BaseRealtimeModel {
             // The provider-native session config the browser applies verbatim (plain JSON).
             SessionConfig: JSON.parse(JSON.stringify(session)) as JSONObject,
             MaxSessionSeconds: this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds),
+            ...(connectionMaxSeconds !== undefined ? { ConnectionMaxSeconds: connectionMaxSeconds } : {}),
+            ReconnectBufferSeconds: reconnectBufferSeconds,
+            TrustNativeResumption: trustNativeResumption,
         };
     }
 }
@@ -952,10 +977,13 @@ export class OpenAIRealtime extends BaseRealtimeModel {
  * The session is profile-parameterized (see {@link OpenAIRealtimeProfile}) so OpenAI-compatible
  * provider subclasses reuse it verbatim with their own knobs.
  */
-export class OpenAIRealtimeSession implements IRealtimeSession {
+export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealtimeSession {
     private connection: IOpenAIRealtimeConnection;
+    private connectionFactory?: () => IOpenAIRealtimeConnection | Promise<IOpenAIRealtimeConnection>;
     private profile: OpenAIRealtimeProfile;
     private readonly driverFacts: Readonly<RealtimeDriverFacts>;
+    private initialParams?: RealtimeSessionParams;
+    private currentTools?: RealtimeToolDefinition[];
     private outputHandler?: (chunk: ArrayBuffer) => void;
     private transcriptHandler?: (t: RealtimeTranscript) => void;
     private toolCallHandler?: (call: RealtimeToolCall) => void;
@@ -965,8 +993,6 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     private closeHandler?: () => void;
     private eventListener: (event: RealtimeServerEvent) => void;
     private errorListener: (error: OpenAIRealtimeError) => void;
-    /** Set by {@link Close} so a consumer-initiated teardown never reports an "unexpected" close. */
-    private closedByConsumer = false;
 
     /**
      * The features extracted from the LAST applied session config, kept so {@link Reconfigure}'s
@@ -1039,12 +1065,15 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
      * @param profile The provider profile (defaults to OpenAI's so existing direct construction keeps working).
      * @param driverFacts The creating driver's static facts. Passed in (not read from a hard-coded
      * class) so a subclass driver's own ceiling wins; direct construction defaults to OpenAI's.
+     * @param model Optional parent driver instance for timing resolution.
      */
     constructor(
         connection: IOpenAIRealtimeConnection,
         profile: OpenAIRealtimeProfile = OPENAI_REALTIME_PROFILE,
         driverFacts: Readonly<RealtimeDriverFacts> = OpenAIRealtime.DriverFacts,
+        model?: BaseRealtimeModel,
     ) {
+        super(model);
         this.connection = connection;
         this.profile = profile;
         this.driverFacts = driverFacts;
@@ -1059,9 +1088,30 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         this.connection.on('event', this.eventListener);
         this.errorListener = (error: OpenAIRealtimeError) => this.handleConnectionError(error);
         this.connection.on('error', this.errorListener);
+        this.wireCloseListener(this.connection);
+    }
+
+    protected override get DefaultCallDurationSeconds(): number | undefined {
+        return this.model?.DefaultCallDurationSeconds ?? this.driverFacts.ProviderMaxSessionSeconds;
+    }
+
+    protected override get DefaultTrustsNativeResumption(): boolean {
+        return false;
+    }
+
+    /** Registers the factory used to open replacement connections on duration expiry. */
+    public SetConnectionFactory(factory: () => IOpenAIRealtimeConnection | Promise<IOpenAIRealtimeConnection>): void {
+        this.connectionFactory = factory;
+    }
+
+    private wireCloseListener(conn: IOpenAIRealtimeConnection): void {
         // The SDK emitter has no close event; detect unexpected closure from the raw socket when
         // the connection exposes it (the real OpenAIRealtimeWebSocket does; fakes may omit it).
-        this.connection.socket?.addEventListener('close', () => this.handleSocketClose());
+        conn.socket?.addEventListener('close', () => {
+            if (this.connection === conn) {
+                this.handleSocketClose();
+            }
+        });
     }
 
     /**
@@ -1080,6 +1130,9 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
      * @param params The session parameters.
      */
     public applyInitialConfig(params: RealtimeSessionParams): void {
+        this.initialParams = params;
+        this.currentTools = params.Tools;
+        this.ApplySessionTimingConfig(params.Config as Record<string, unknown> | undefined);
         // Compat endpoints with no history-seeding channel fold the prior context into the system
         // prompt instead of seeding a separate user message (profile-driven).
         const fold = this.profile.foldInitialContextIntoPrompt;
@@ -1089,6 +1142,9 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
             this.sendSessionUpdate(systemPrompt, params.Tools, params.Config);
             if (!fold && context && context.length > 0) {
                 this.sendInitialContext(context);
+            }
+            if (this.connectionFactory) {
+                this.ArmConnectionDurationTimer();
             }
             this.clearConfigReadinessTimer();
             this.resolveConfigApplied?.();
@@ -1207,6 +1263,7 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
 
     /** @inheritdoc */
     public async RegisterTools(tools: RealtimeToolDefinition[]): Promise<void> {
+        this.currentTools = tools;
         this.connection.send({
             type: 'session.update',
             session: { type: 'realtime', tools: this.mapTools(tools) },
@@ -1224,6 +1281,25 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
      * @param output The tool's result as a JSON-stringified string.
      */
     public async SendToolResult(callID: string, output: string): Promise<void> {
+        const name = this.pendingToolCallNames.get(callID) ?? callID;
+        this.conversationMemory.Record({
+            Kind: 'toolResult',
+            Name: name,
+            OutputJson: output,
+        });
+        this.pendingToolCallNames.delete(callID);
+        if (this.callsFromBeforeReseed.delete(callID)) {
+            const item: RealtimeConversationItemUserMessage = {
+                type: 'message',
+                role: 'user',
+                content: [{ type: 'input_text', text: `[Tool result for ${name}: ${output}]` }],
+            };
+            this.connection.send({ type: 'conversation.item.create', item });
+            this.connection.send({ type: 'response.create' });
+            this.responseActive = true;
+            this.NotifyTurnStarted();
+            return;
+        }
         const item: RealtimeConversationItemFunctionCallOutput = {
             type: 'function_call_output',
             call_id: callID,
@@ -1234,6 +1310,7 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         // This deliberately triggers a response — mark it active eagerly so an interim
         // RequestSpokenUpdate arriving before the server's response.created cannot collide.
         this.responseActive = true;
+        this.NotifyTurnStarted();
     }
 
     /**
@@ -1250,6 +1327,10 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
      * @param text The context note to append to the conversation.
      */
     public SendContextNote(text: string): void {
+        this.conversationMemory.Record({
+            Kind: 'note',
+            Text: text,
+        });
         const item: RealtimeConversationItemSystemMessage = {
             type: 'message',
             role: 'system',
@@ -1279,6 +1360,7 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
             return false; // NOT sent — the caller (bridge) releases the floor instead of wedging on it
         }
         this.responseActive = true;
+        this.NotifyTurnStarted();
         const direction = typeof instructions === 'string' ? instructions.trim() : '';
         RealtimeDiagLog(`[${this.profile.providerKey}Realtime][diag] RequestSpokenUpdate → sending response.create (perResponseInstructions=${direction.length > 0 ? 'yes, with the session prompt carried ahead of it' : 'none → session prompt governs'})`);
         // CRITICAL: OpenAI's `response.create` treats `response.instructions` as a FULL override of the
@@ -1424,9 +1506,126 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         this.closeHandler = handler;
     }
 
+    /**
+     * Reconnects the underlying OpenAI-protocol WebSocket before connection expiry and seeds
+     * accumulated conversation history (`ConversationSeed`) onto the replacement connection.
+     */
+    protected override async Reconnect(context: RealtimeReconnectContext): Promise<void> {
+        if (!this.connectionFactory) {
+            throw new Error(`[${this.profile.providerKey}Realtime] No connection factory available for Reconnect`);
+        }
+        const factoryResult = this.connectionFactory();
+        const nextConn = factoryResult instanceof Promise ? await factoryResult : factoryResult;
+        if (this.profile.deferInitialConfigUntilSessionCreated) {
+            await this.awaitConnectionCreated(nextConn);
+        }
+
+        const prevConn = this.connection;
+        prevConn.off('event', this.eventListener);
+        prevConn.off('error', this.errorListener);
+
+        this.connection = nextConn;
+        this.connection.on('event', this.eventListener);
+        this.connection.on('error', this.errorListener);
+        this.wireCloseListener(this.connection);
+
+        const params = this.initialParams;
+        if (params) {
+            const fold = this.profile.foldInitialContextIntoPrompt;
+            const initialCtx = params.InitialContext?.trim();
+            const seedNote = fold && context.ConversationSeed ? RenderRealtimeMemorySeedAsContextNote(context.ConversationSeed) : null;
+            const combinedFoldCtx = [initialCtx, seedNote].filter((s): s is string => !!s && s.length > 0).join('\n\n');
+            const systemPrompt =
+                fold && combinedFoldCtx.length > 0
+                    ? `${params.SystemPrompt}\n\n## Prior context\n${combinedFoldCtx}`
+                    : params.SystemPrompt;
+
+            this.sendSessionUpdate(systemPrompt, this.currentTools ?? params.Tools, params.Config);
+            if (!fold && initialCtx && initialCtx.length > 0) {
+                this.sendInitialContext(initialCtx);
+            }
+        }
+
+        if (!this.profile.foldInitialContextIntoPrompt && context.ConversationSeed && context.ConversationSeed.Entries.length > 0) {
+            const turns = RenderRealtimeMemorySeed(context.ConversationSeed);
+            for (const turn of turns) {
+                if (turn.Role === 'user') {
+                    const item: RealtimeConversationItemUserMessage = {
+                        type: 'message',
+                        role: 'user',
+                        content: turn.Texts.map((text) => ({ type: 'input_text', text })),
+                    };
+                    this.connection.send({ type: 'conversation.item.create', item });
+                } else {
+                    this.connection.send({
+                        type: 'conversation.item.create',
+                        item: {
+                            type: 'message',
+                            role: 'assistant',
+                            content: turn.Texts.map((text) => ({ type: 'output_text', text })),
+                        },
+                    } as unknown as RealtimeClientEvent);
+                }
+            }
+        }
+
+        this.responseActive = false;
+        try {
+            prevConn.close();
+        } catch {
+            // ignore close error on replaced connection
+        }
+    }
+
+    protected override onReconnectFailed(error: Error): void {
+        if (this.closedByConsumer) {
+            return;
+        }
+        this.errorHandler?.({ Message: error.message, Fatal: true });
+    }
+
+    private awaitConnectionCreated(conn: IOpenAIRealtimeConnection): Promise<void> {
+        return new Promise<void>((resolve, reject) => {
+            const timer = setTimeout(() => {
+                conn.off('event', onEvent);
+                conn.off('error', onError);
+                try {
+                    conn.close();
+                } catch {
+                    // ignore
+                }
+                reject(new Error(`session.created not received within ${REALTIME_CONNECTION_SETUP_TIMEOUT_MS}ms during reconnect`));
+            }, REALTIME_CONNECTION_SETUP_TIMEOUT_MS);
+            (timer as { unref?: () => void }).unref?.();
+
+            const onEvent = (event: RealtimeServerEvent): void => {
+                if (event.type !== 'session.created') {
+                    return;
+                }
+                clearTimeout(timer);
+                conn.off('event', onEvent);
+                conn.off('error', onError);
+                resolve();
+            };
+
+            const onError = (error: OpenAIRealtimeError): void => {
+                if (error.error != null) {
+                    return;
+                }
+                clearTimeout(timer);
+                conn.off('event', onEvent);
+                conn.off('error', onError);
+                reject(new Error(error.message));
+            };
+
+            conn.on('event', onEvent);
+            conn.on('error', onError);
+        });
+    }
+
     /** @inheritdoc */
     public async Close(): Promise<void> {
-        this.closedByConsumer = true;
+        this.DisposeReconnectTimers();
         this.failConfigWait('session closed by consumer before the initial config was applied');
         this.clearPendingConfigListener();
         this.connection.off('event', this.eventListener);
@@ -1462,6 +1661,11 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
      * @param event The OpenAI realtime server event.
      */
     protected dispatch(event: RealtimeServerEvent): void {
+        const rawType = (event as { type?: string }).type;
+        if (rawType === 'session.going_away' || rawType === 'go_away') {
+            this.NotifyConnectionEnding();
+            return;
+        }
         switch (event.type) {
             case 'response.output_audio.delta':
                 return this.handleAudioDelta(event.delta);
@@ -1502,10 +1706,12 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
                 this.lastUserTranscript = '';
                 // A response is in flight (whether server-VAD-triggered or locally triggered).
                 this.responseActive = true;
+                this.NotifyTurnStarted();
                 return;
             case 'response.done':
                 // Emitted for every terminal status (completed, cancelled, failed) — always clears.
                 this.responseActive = false;
+                this.NotifyTurnEnded();
                 return this.handleResponseDone(ResolveResponseDoneUsage(event));
             default:
                 return this.dispatchMcpEvent(event);
@@ -1578,11 +1784,24 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         if (!text || text.trim().length === 0) {
             return;
         }
+        if (isFinal) {
+            this.conversationMemory.Record({
+                Kind: role,
+                Text: text,
+                ...(replacesPrevious ? { ReplacesPrevious: true } : {}),
+            });
+        }
         this.transcriptHandler?.({ Role: role, Text: text, IsFinal: isFinal, ReplacesPrevious: replacesPrevious });
     }
 
     /** Forwards a completed function call to the tool-call handler. */
     private handleFunctionCall(callId: string, name: string, args: string): void {
+        this.pendingToolCallNames.set(callId, name);
+        this.conversationMemory.Record({
+            Kind: 'toolCall',
+            Name: name,
+            ArgumentsJson: args,
+        });
         this.toolCallHandler?.({ CallID: callId, ToolName: name, Arguments: args });
     }
 

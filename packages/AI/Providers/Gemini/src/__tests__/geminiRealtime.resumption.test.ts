@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { LiveServerContent, LiveServerMessage, Blob as GeminiBlob, Content, FunctionResponse } from '@google/genai';
-import type { IRealtimeSession, RealtimeSessionError, RealtimeSessionParams } from '@memberjunction/ai';
+import {
+    REALTIME_MEMORY_CONTINUITY_PREAMBLE,
+    type IRealtimeSession,
+    type RealtimeSessionError,
+    type RealtimeSessionParams,
+} from '@memberjunction/ai';
 
 import { GeminiRealtime, type GeminiLiveSession, type GeminiConnectArgs } from '../geminiRealtime';
 import { ConfirmGeminiSetup } from './live-session-test-helpers';
@@ -96,6 +101,7 @@ describe('GeminiRealtime server-bridged session resumption', () => {
     let errors: RealtimeSessionError[];
 
     async function start(overrides: Partial<RealtimeSessionParams> = {}): Promise<void> {
+        await session?.Close();
         session = await driver.StartSession(params(overrides));
         errors = [];
         session.OnError?.((error) => errors.push(error));
@@ -407,4 +413,78 @@ describe('GeminiRealtime server-bridged session resumption', () => {
             expect(driver.Connections[first + 1].Fake.RealtimeInputs).toEqual([{ activityStart: {} }, { activityEnd: {} }]);
         });
     });
+
+    describe('long-call reconnects, 600s/120s connection ceiling, and history seeding (#6460)', () => {
+        it('proactively reconnects before the 600s connection ceiling and seeds accumulated history when TrustNativeResumption is false', async () => {
+            await start({ Config: { trustNativeResumption: false, connectionMaxSeconds: 600, reconnectBufferSeconds: 30 } });
+            const first = driver.Connections.length - 1;
+            driver.EmitOn(first, RESUMABLE('dev-handle-ignored'));
+            driver.EmitOn(first, HEARD('Hello Gemini'));
+            driver.EmitOn(first, SAID('Hi there! How can I help?'));
+            driver.EmitOn(first, TURN_COMPLETE);
+
+            // Advance to soft window (600 - 45 = 555s) when turn is idle
+            await vi.advanceTimersByTimeAsync(555_000);
+
+            expect(driver.Connections).toHaveLength(first + 2);
+            const reconnected = driver.Connections[first + 1];
+            // Developer API omits handle while keeping sessionResumption: {}
+            expect(reconnected.Args.Config.sessionResumption).toEqual({});
+            expect(reconnected.Fake.ClientContents).toEqual([
+                {
+                    turns: [
+                        {
+                            role: 'user',
+                            parts: [{ text: REALTIME_MEMORY_CONTINUITY_PREAMBLE }, { text: 'Hello Gemini' }],
+                        },
+                        { role: 'model', parts: [{ text: 'Hi there! How can I help?' }] },
+                    ],
+                    turnComplete: false,
+                },
+            ]);
+            expect(driver.Connections[first].Fake.Closed).toBe(true);
+            expect(errors).toEqual([]);
+        });
+
+        it('applies the 120s dynamic video connection ceiling when inbound video frames are sent', async () => {
+            await start({
+                Model: 'gemini-3.1-flash-live-preview',
+                Config: { trustNativeResumption: false, connectionMaxSeconds: 600, reconnectBufferSeconds: 20 },
+            });
+            const first = driver.Connections.length - 1;
+            session.SendInput({ Data: new Uint8Array([0xff, 0xd8]).buffer, Kind: 'video', MimeType: 'image/jpeg' });
+            driver.EmitOn(first, HEARD('Look at this diagram'));
+            driver.EmitOn(first, SAID('I see a flowchart.'));
+            driver.EmitOn(first, TURN_COMPLETE);
+
+            // Effective ceiling drops from 600s to 120s once videoFramesSent > 0; soft window opens at 120 - 30 = 90s
+            await vi.advanceTimersByTimeAsync(95_000);
+            expect(driver.Connections).toHaveLength(first + 2);
+            expect(driver.Connections[first + 1].Args.Config.sessionResumption).toEqual({});
+        });
+
+        it('delivers tool results from before a non-native seed reconnect as a user turn via sendClientContent', async () => {
+            await start({ Config: { trustNativeResumption: false } });
+            const first = driver.Connections.length - 1;
+            driver.EmitOn(first, TOOL_CALL('call-pre-seed'));
+            // Unexpected close while tool call is in flight triggers BaseRealtimeSession reconnect with seed
+            driver.CloseOn(first, 1006);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(driver.Connections).toHaveLength(first + 2);
+
+            await session.SendToolResult('call-pre-seed', '{"status":"delivered"}');
+            const resumedFake = driver.Connections[first + 1].Fake;
+            expect(resumedFake.ToolResponses).toEqual([]);
+            expect(resumedFake.ClientContents.at(-1)).toEqual({
+                turns: [
+                    {
+                        role: 'user',
+                        parts: [{ text: '[Tool result for lookup_order: {"status":"delivered"}]' }],
+                    },
+                ],
+                turnComplete: true,
+            });
+        });
+    });
 });
+

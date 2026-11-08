@@ -5,23 +5,9 @@ vi.mock('@memberjunction/global', () => ({
   RegisterClass: () => (target: unknown) => target,
 }));
 vi.mock('@memberjunction/ai', async () => {
-  class BaseModel {
-    protected _apiKey: string;
-    constructor(apiKey: string) {
-      this._apiKey = apiKey;
-    }
-  }
-  class BaseRealtimeModel extends BaseModel {
-    // Same body as the real BaseRealtimeModel.ClampSessionSeconds (the real module cannot be imported here; see RealtimeDriverFactsOf below).
-    protected ClampSessionSeconds(...candidates: ReadonlyArray<number | undefined>): number | undefined {
-        let smallest: number | undefined;
-        for (const c of candidates) {
-            if (typeof c !== 'number' || !Number.isInteger(c) || c <= 0) continue;
-            if (smallest === undefined || c < smallest) smallest = c;
-        }
-        return smallest;
-    }
-  }
+  const { BaseModel } = await import('../../../../Core/src/generic/baseModel');
+  const { BaseRealtimeModel, BaseRealtimeSession, RealtimeDriverFactsOf, DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS, DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS, MAX_REALTIME_RAPID_RECONNECTS, REALTIME_RAPID_RECONNECT_WINDOW_MS } = await import('../../../../Core/src/generic/baseRealtime');
+  const { RealtimeConversationMemory, RenderRealtimeMemorySeed, RenderRealtimeMemorySeedAsContextNote, REALTIME_MEMORY_CONTINUITY_PREAMBLE } = await import('../../../../Core/src/generic/realtimeConversationMemory');
   const RealtimeDiagLog = () => { /* no-op in tests */ };
   const { IsTranscriptContinuation } = await import('../../../../Core/src/generic/transcriptContinuation');
   const { ResolveResponseDoneUsage, MapRealtimeUsageModalityDetail } = await import('../../../../Core/src/generic/realtimeUsage');
@@ -29,10 +15,26 @@ vi.mock('@memberjunction/ai', async () => {
   // turnDetectionSettings.ts is dependency-free BY DESIGN and must stay so: it is loaded from source here, under mocks.
   const { NormalizeTurnDetectionSettings } = await import('../../../../Core/src/generic/turnDetectionSettings');
   const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
-  // Same body as the real RealtimeDriverFactsOf (baseRealtime.ts). The real module cannot be imported here: it pulls in
-  // @memberjunction/global, which these suites mock. The mocked BaseRealtimeModel has no static, so only drivers declaring their own resolve.
-  const RealtimeDriverFactsOf = (driver: object): object => (driver.constructor as { DriverFacts: object }).DriverFacts;
-  return { BaseModel, BaseRealtimeModel, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, MapRealtimeUsageModalityDetail, NormalizeTurnDetectionSettings, RealtimeDroppedInputReporter, RealtimeDriverFactsOf };
+  return {
+    BaseModel,
+    BaseRealtimeModel,
+    BaseRealtimeSession,
+    RealtimeConversationMemory,
+    RenderRealtimeMemorySeed,
+    RenderRealtimeMemorySeedAsContextNote,
+    REALTIME_MEMORY_CONTINUITY_PREAMBLE,
+    DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS,
+    DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS,
+    MAX_REALTIME_RAPID_RECONNECTS,
+    REALTIME_RAPID_RECONNECT_WINDOW_MS,
+    RealtimeDiagLog,
+    IsTranscriptContinuation,
+    ResolveResponseDoneUsage,
+    MapRealtimeUsageModalityDetail,
+    NormalizeTurnDetectionSettings,
+    RealtimeDroppedInputReporter,
+    RealtimeDriverFactsOf,
+  };
 });
 vi.mock('openai/realtime/websocket', () => ({ OpenAIRealtimeWebSocket: vi.fn() }));
 vi.mock('openai', () => ({

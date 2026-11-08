@@ -473,17 +473,30 @@ export function GetSessionTuningSettings(config: RealtimeCoAgentConfig | null | 
  */
 export function GetModelCatalogSessionSettings(config: AIModelConfiguration | null | undefined): JSONObjectLike | null {
     const bag: JSONObjectLike = {};
-    const turnDetection = config?.Realtime?.TurnDetection;
+    const rt = config?.Realtime;
+    const turnDetection = rt?.TurnDetection;
     if (isPlainObject(turnDetection)) {
         bag['turnDetection'] = { ...turnDetection } as JSONObjectLike;
     }
-    const reasoning = config?.Realtime?.Reasoning;
+    const reasoning = rt?.Reasoning;
     if (isPlainObject(reasoning)) {
         bag['reasoning'] = { ...reasoning } as JSONObjectLike;
     }
-    const tooling = config?.Realtime?.Tooling;
+    const tooling = rt?.Tooling;
     if (isPlainObject(tooling)) {
         bag['tooling'] = { ...tooling } as JSONObjectLike;
+    }
+    if (typeof rt?.ConnectionMaxSeconds === 'number' && Number.isFinite(rt.ConnectionMaxSeconds) && rt.ConnectionMaxSeconds > 0) {
+        bag['connectionMaxSeconds'] = Math.floor(rt.ConnectionMaxSeconds);
+    }
+    if (typeof rt?.SessionMaxSeconds === 'number' && Number.isFinite(rt.SessionMaxSeconds) && rt.SessionMaxSeconds > 0) {
+        bag['sessionMaxSeconds'] = Math.floor(rt.SessionMaxSeconds);
+    }
+    if (typeof rt?.ReconnectBufferSeconds === 'number' && Number.isFinite(rt.ReconnectBufferSeconds) && rt.ReconnectBufferSeconds > 0) {
+        bag['reconnectBufferSeconds'] = Math.floor(rt.ReconnectBufferSeconds);
+    }
+    if (typeof rt?.TrustNativeResumption === 'boolean') {
+        bag['trustNativeResumption'] = rt.TrustNativeResumption;
     }
     return Object.keys(bag).length > 0 ? bag : null;
 }

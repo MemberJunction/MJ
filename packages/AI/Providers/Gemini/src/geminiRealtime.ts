@@ -27,6 +27,10 @@ import {
 // MemberJunction AI core contract
 import {
     BaseRealtimeModel,
+    BaseRealtimeSession,
+    ExtractRealtimeTimingConfig,
+    RenderRealtimeMemorySeed,
+    type RealtimeReconnectContext,
     RealtimeDiagLog,
     NormalizeTurnDetectionSettings,
     type RealtimeTurnDetectionSettings,
@@ -238,6 +242,16 @@ export class GeminiRealtime extends BaseRealtimeModel {
         SupportedTurnSettings: { Eagerness: 'approximate', SilenceDurationMs: 'exact', Threshold: 'approximate', Coverage: 'exact' },
     };
 
+    /** Gemini Live caps each WebSocket connection at ~10 minutes (600 s). */
+    public override get DefaultCallDurationSeconds(): number | undefined {
+        return GEMINI_LIVE_CONNECTION_SECONDS;
+    }
+
+    /** Server-side Gemini Live sessions trust Google's native sessionResumption handles (with Attempt 2 fallback to seed). */
+    public override get TrustsNativeResumption(): boolean {
+        return true;
+    }
+
     private geminiClient: GoogleGenAI | null = null;
     private geminiTokenClient: GoogleGenAI | null = null;
 
@@ -292,8 +306,10 @@ export class GeminiRealtime extends BaseRealtimeModel {
      */
     public async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
         const profile = ResolveGeminiLiveProfile(params.Model, this.Endpoint);
-        const session = new GeminiRealtimeSession(profile, RealtimeDriverFactsOf(this));
+        const session = new GeminiRealtimeSession(profile, RealtimeDriverFactsOf(this), this);
         session.SetConnectTimeTools(params.Tools ?? []);
+        session.SetZeroDataRetention(params.ZeroDataRetention === true);
+        session.ApplySessionTimingConfig(params.Config as Record<string, unknown> | undefined);
         const config = this.BuildConnectConfig(this.withoutAvatarOnServer(params));
         session.SetAvatar(this.serverAvatarStatus(params, config), profile.AvatarOutputEncoding);
         // Meeting mode (auto activity detection disabled) → the session must drive turns manually.
@@ -308,6 +324,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
             })
         );
         await session.Open();
+        session.ArmConnectionDurationTimer();
         // If the caller provided initial context, seed it as client content (without completing the
         // turn) so the model starts with the same history a loop agent would assemble.
         if (params.InitialContext && params.InitialContext.trim().length > 0) {
@@ -370,6 +387,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
      * @returns The minted {@link ClientRealtimeSessionConfig} the browser authenticates + applies.
      */
     public override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
+        const timing = ExtractRealtimeTimingConfig(params.Config);
         const config = this.BuildConnectConfig(params);
         const maxSessionSeconds = this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds);
         // The token is a credential the browser holds, so it lives no longer than the session cap (plus a little slack)
@@ -402,6 +420,10 @@ export class GeminiRealtime extends BaseRealtimeModel {
             throw new Error('Gemini auth-token mint returned no token name');
         }
         const avatarStatus = this.AvatarStatusFor(params, config);
+        const connectionMaxSeconds = timing.ConnectionMaxSeconds ?? this.DefaultCallDurationSeconds;
+        const trustNativeResumption = params.ZeroDataRetention
+            ? false
+            : (timing.TrustNativeResumption ?? (this.Endpoint === 'enterprise'));
         return {
             Provider: 'gemini',
             Model: params.Model,
@@ -412,6 +434,9 @@ export class GeminiRealtime extends BaseRealtimeModel {
             SessionConfig: this.SessionPactFor(params.Model, config),
             ...(avatarStatus ? { AvatarStatus: avatarStatus } : {}),
             MaxSessionSeconds: maxSessionSeconds,
+            ConnectionMaxSeconds: connectionMaxSeconds,
+            ...(timing.ReconnectBufferSeconds !== undefined ? { ReconnectBufferSeconds: timing.ReconnectBufferSeconds } : {}),
+            TrustNativeResumption: trustNativeResumption,
         };
     }
 
@@ -763,6 +788,10 @@ export class GeminiRealtime extends BaseRealtimeModel {
             delete cfg.tooling;
             delete cfg.toolBehavior;
             delete cfg.functionCallingBehavior;
+            delete cfg.connectionMaxSeconds;
+            delete cfg.sessionMaxSeconds;
+            delete cfg.reconnectBufferSeconds;
+            delete cfg.trustNativeResumption;
             // Consume the driver-NEUTRAL `voice` key the same way: it is not a Gemini config field
             // (LiveConnectConfig has no `voice`), so spreading it raw sends nothing — the SDK's
             // config converter is a path allowlist and drops unknown keys silently. Gemini takes an
@@ -1291,7 +1320,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
  * translation (Core calls → Gemini send methods). It is created by {@link GeminiRealtime.StartSession}
  * and never instantiated directly by consumers.
  */
-class GeminiRealtimeSession implements IRealtimeSession {
+class GeminiRealtimeSession extends BaseRealtimeSession {
     /**
      * Gemini Live consumes **16 kHz** PCM input ({@link GEMINI_INPUT_AUDIO_MIME_TYPE}) and emits 24 kHz. A
      * server-bridged host reads these to resample room audio correctly — without it the bridge feeds Gemini
@@ -1303,6 +1332,8 @@ class GeminiRealtimeSession implements IRealtimeSession {
 
     private live: GeminiLiveSession | null = null;
     private profile: GeminiLiveModelProfile;
+    private zeroDataRetention = false;
+    private videoFramesSent = 0;
 
     private readonly driverFacts: Readonly<RealtimeDriverFacts>;
 
@@ -1310,9 +1341,34 @@ class GeminiRealtimeSession implements IRealtimeSession {
      * @param driverFacts The creating driver's static facts, passed in so a subclass driver's own
      * ceiling wins; direct construction defaults to Gemini's.
      */
-    constructor(profile?: GeminiLiveModelProfile, driverFacts: Readonly<RealtimeDriverFacts> = GeminiRealtime.DriverFacts) {
+    constructor(
+        profile?: GeminiLiveModelProfile,
+        driverFacts: Readonly<RealtimeDriverFacts> = GeminiRealtime.DriverFacts,
+        model?: BaseRealtimeModel
+    ) {
+        super(model);
         this.profile = profile ?? GEMINI_LIVE_FALLBACK_PROFILE;
         this.driverFacts = driverFacts;
+    }
+
+    public SetZeroDataRetention(on: boolean): void {
+        this.zeroDataRetention = on;
+    }
+
+    protected override get DefaultCallDurationSeconds(): number | undefined {
+        return GEMINI_LIVE_CONNECTION_SECONDS;
+    }
+
+    protected override get RuntimeCallDurationSeconds(): number | undefined {
+        return this.videoFramesSent > 0 ? 120 : undefined;
+    }
+
+    protected override get DefaultTrustsNativeResumption(): boolean {
+        return !this.zeroDataRetention;
+    }
+
+    public override get TrustsNativeResumption(): boolean {
+        return !this.zeroDataRetention && super.TrustsNativeResumption;
     }
 
     private outputHandler: ((chunk: ArrayBuffer) => void) | null = null;
@@ -1322,19 +1378,11 @@ class GeminiRealtimeSession implements IRealtimeSession {
     private interruptionHandler: (() => void) | null = null;
     private usageHandler: ((u: RealtimeUsage) => void) | null = null;
     private errorHandler: ((error: RealtimeSessionError) => void) | null = null;
-    /** True once Close() ran — an expected close must not surface as a fatal error. */
-    private closedByConsumer = false;
-
-    /**
-     * Maps each pending tool call's `CallID` to its function name. Gemini's `sendToolResponse`
-     * requires the function name, but the Core {@link IRealtimeSession.SendToolResult} contract only
-     * carries `callID` + `output`. We cache the name when a tool call arrives and clear the entry
-     * once the result is sent.
-     */
-    private pendingToolCallNames = new Map<string, string>();
 
     /** Accumulates in-flight thought text deltas until finalized on turn completion. */
     private pendingThoughtText = '';
+    private pendingUserTranscript = '';
+    private pendingAssistantTranscript = '';
 
     /** MIME types of model output this session dropped, so each is reported once. */
     private droppedOutputTypes = new Set<string>();
@@ -1429,9 +1477,6 @@ class GeminiRealtimeSession implements IRealtimeSession {
 
     /** Bytes in {@link heldAudio}, kept under {@link MAX_HELD_INPUT_AUDIO_BYTES}. */
     private heldAudioBytes = 0;
-
-    /** See {@link IsTurnOpen}. */
-    private turnOpen = false;
 
     /** A turn's `turnComplete` came while a tool call was pending: the turn ends once the last pending call's result goes out. */
     private turnEndAwaitsToolResults = false;
@@ -1636,6 +1681,12 @@ class GeminiRealtimeSession implements IRealtimeSession {
             this.droppedInput.Report(frame);
             return;
         }
+        const wasZeroVideoFrames = this.videoFramesSent === 0;
+        this.videoFramesSent++;
+        if (wasZeroVideoFrames) {
+            // Re-arm connection duration timer under the 120s uncompressed video cap.
+            this.ArmConnectionDurationTimer();
+        }
         this.requireLive().sendRealtimeInput({ video: { data: GeminiRealtimeSession.arrayBufferToBase64(frame.Data), mimeType } });
     }
 
@@ -1709,8 +1760,13 @@ class GeminiRealtimeSession implements IRealtimeSession {
         this.usageHandler = handler;
     }
 
+    /** @inheritdoc */
     public OnError(handler: (error: RealtimeSessionError) => void): void {
         this.errorHandler = handler;
+    }
+
+    protected override onReconnectFailed(error: Error): void {
+        this.handleResumeFailed(error);
     }
 
     /**
@@ -1734,6 +1790,10 @@ class GeminiRealtimeSession implements IRealtimeSession {
      */
     public HandleTransportClose(code?: number, reason?: string): void {
         if (this.closedByConsumer) {
+            return;
+        }
+        if (!this.TrustsNativeResumption && !this.zeroDataRetention) {
+            void this.TriggerReconnect('connection-lost');
             return;
         }
         if (this.resumption?.ConnectionLost()) {
@@ -1822,6 +1882,48 @@ class GeminiRealtimeSession implements IRealtimeSession {
     }
 
     /**
+     * Reconnects the Gemini Live session via `BaseRealtimeSession.TriggerReconnect` (proactive
+     * duration timer, `goAway` when `TrustsNativeResumption === false`, or Attempt 2 seed fallback
+     * after a native resumption failure).
+     */
+    public override async Reconnect(context: RealtimeReconnectContext): Promise<void> {
+        this.moving = true;
+        try {
+            const handle = context.UseNativeResumption && context.ResumptionHandle ? context.ResumptionHandle : undefined;
+            if (!handle) {
+                for (const callID of this.pendingToolCallNames.keys()) {
+                    this.callsFromBeforeReseed.add(callID);
+                }
+            }
+            const opened = await this.openConnection(handle);
+            await GeminiRealtimeSession.awaitSetup(opened);
+            if (this.closedByConsumer) {
+                GeminiRealtimeSession.closeQuietly(opened.Live);
+                return;
+            }
+            const previous = this.live;
+            this.useConnection(opened);
+            if (previous) {
+                GeminiRealtimeSession.closeQuietly(previous);
+            }
+            if (!handle && context.ConversationSeed && context.ConversationSeed.Entries.length > 0) {
+                const seedTurns = RenderRealtimeMemorySeed(context.ConversationSeed);
+                if (seedTurns.length > 0) {
+                    const turns: Content[] = seedTurns.map((t) => ({
+                        role: t.Role,
+                        parts: t.Texts.map((text) => ({ text })),
+                    }));
+                    this.requireLive().sendClientContent({ turns, turnComplete: false });
+                }
+            }
+            this.handleResumed();
+        } catch (error) {
+            this.moving = false;
+            throw error;
+        }
+    }
+
+    /**
      * The session continues on a new connection, whose setup Google has confirmed. It has no open
      * meeting-mode activity window, and a turn cut off by a drop or the deadline never completes
      * there, so the turn is ended the way `turnComplete` ends one: thought text emitted, the busy
@@ -1832,6 +1934,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
         this.avatarOutput?.Resumed();
         this.endTurn();
         this.moving = false;
+        this.ArmConnectionDurationTimer();
         this.sendHeldAudio();
         this.completeTurn();
     }
@@ -1878,6 +1981,11 @@ class GeminiRealtimeSession implements IRealtimeSession {
      */
     public async SendToolResult(callID: string, output: string): Promise<void> {
         const name = this.pendingToolCallNames.get(callID) ?? '';
+        this.conversationMemory.Record({
+            Kind: 'toolResult',
+            Name: name || callID,
+            OutputJson: output,
+        });
         const parsed = this.parseToolOutput(output);
         const sched = GeminiRealtime.ExtractAndResolveScheduling(
             parsed,
@@ -1893,8 +2001,16 @@ class GeminiRealtimeSession implements IRealtimeSession {
 
         const send = (): void => {
             const live = this.requireLive();
-            live.sendToolResponse({ functionResponses: [functionResponse] });
-            this.closeOpenClientTurn(live);
+            if (this.callsFromBeforeReseed.delete(callID)) {
+                live.sendClientContent({
+                    turns: [{ role: 'user', parts: [{ text: `[Tool result for ${name || callID}: ${output}]` }] }],
+                    turnComplete: true,
+                });
+                this.openClientTurn = false;
+            } else {
+                live.sendToolResponse({ functionResponses: [functionResponse] });
+                this.closeOpenClientTurn(live);
+            }
             this.pendingToolCallNames.delete(callID);
             this.endTurnIfToolResultsIn();
         };
@@ -1956,6 +2072,10 @@ class GeminiRealtimeSession implements IRealtimeSession {
      * @param text The context note to append to the conversation.
      */
     public SendContextNote(text: string): void {
+        this.conversationMemory.Record({
+            Kind: 'note',
+            Text: text,
+        });
         this.enqueueOrRun(() => {
             this.requireLive().sendClientContent({ turns: [{ role: 'user', parts: [{ text }] }], turnComplete: false });
             this.openClientTurn = true;
@@ -2081,11 +2201,25 @@ class GeminiRealtimeSession implements IRealtimeSession {
                 IsThought: true,
             });
         }
+        this.flushPendingMemoryTranscripts();
         RealtimeDiagLog(`[GeminiRealtime][diag] turn boundary — clearing responseActive (was ${this.responseActive}), draining ${this.queuedSends.length} queued send(s)`);
         this.responseActive = false;
         while (!this.responseActive && !this.moving && this.queuedSends.length > 0) {
             const send = this.queuedSends.shift();
             send?.();
+        }
+    }
+
+    private flushPendingMemoryTranscripts(role?: 'user' | 'assistant'): void {
+        if ((!role || role === 'user') && this.pendingUserTranscript.trim().length > 0) {
+            const text = this.pendingUserTranscript;
+            this.pendingUserTranscript = '';
+            this.conversationMemory.Record({ Kind: 'user', Text: text });
+        }
+        if ((!role || role === 'assistant') && this.pendingAssistantTranscript.trim().length > 0) {
+            const text = this.pendingAssistantTranscript;
+            this.pendingAssistantTranscript = '';
+            this.conversationMemory.Record({ Kind: 'assistant', Text: text });
         }
     }
 
@@ -2125,7 +2259,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
 
     /** A turn started or continued: a planned move waits until it ends. */
     private markTurnOpen(): void {
-        this.turnOpen = true;
+        this.NotifyTurnStarted();
         this.turnEndAwaitsToolResults = false;
         this.resumption?.TurnStarted();
     }
@@ -2148,14 +2282,15 @@ class GeminiRealtimeSession implements IRealtimeSession {
 
     /** The turn is over: a planned move happens at the next resumable handle Google issues. */
     private endTurn(): void {
-        this.turnOpen = false;
+        this.flushPendingMemoryTranscripts();
         this.turnEndAwaitsToolResults = false;
         this.resumption?.TurnEnded();
+        this.NotifyTurnEnded();
     }
 
     /** @inheritdoc */
     public async Close(): Promise<void> {
-        this.closedByConsumer = true;
+        this.DisposeReconnectTimers();
         // Stop resuming before the socket closes, and drop events still in flight from it.
         this.resumption?.Dispose();
         this.currentConnection = 0;
@@ -2180,10 +2315,18 @@ class GeminiRealtimeSession implements IRealtimeSession {
         // an update without the flag is treated as resumable.
         if (message.sessionResumptionUpdate) {
             const update = message.sessionResumptionUpdate;
+            if (update.resumable !== false && update.newHandle) {
+                this.RecordResumptionHandle(update.newHandle);
+            }
             this.resumption?.RecordHandle(update.newHandle, update.resumable !== false);
         }
         if (message.goAway) {
-            this.resumption?.ConnectionEnding(ParseDurationToMs(message.goAway.timeLeft));
+            const timeLeftMs = ParseDurationToMs(message.goAway.timeLeft);
+            if (!this.TrustsNativeResumption) {
+                this.NotifyConnectionEnding(timeLeftMs);
+            } else {
+                this.resumption?.ConnectionEnding(timeLeftMs);
+            }
         }
         if (message.serverContent) {
             this.handleServerContent(message.serverContent);
@@ -2227,18 +2370,18 @@ class GeminiRealtimeSession implements IRealtimeSession {
         if (content.generationComplete) {
             this.avatarOutput?.GenerationComplete();
         }
+        if (content.inputTranscription) {
+            this.emitTranscript('user', content.inputTranscription.text, content.inputTranscription.finished, 'normal');
+        }
+        if (content.outputTranscription) {
+            this.emitTranscript('assistant', content.outputTranscription.text, content.outputTranscription.finished, 'normal');
+        }
         if (content.turnComplete) {
             this.avatarOutput?.TurnComplete();
             // Before the drain: a queued send that starts a new turn opens it again, and a queued note opens a client turn.
             this.endTurnUnlessToolCallPending();
             this.openClientTurn = false; // the model's turn took in any note that left the client turn open
             this.completeTurn();
-        }
-        if (content.inputTranscription) {
-            this.emitTranscript('user', content.inputTranscription.text, content.inputTranscription.finished, 'normal');
-        }
-        if (content.outputTranscription) {
-            this.emitTranscript('assistant', content.outputTranscription.text, content.outputTranscription.finished, 'normal');
         }
     }
 
@@ -2340,10 +2483,34 @@ class GeminiRealtimeSession implements IRealtimeSession {
         finished: boolean | undefined,
         kind?: 'normal' | 'narration',
     ): void {
+        const isFinal = finished ?? false;
+        const normalizedText = text ?? '';
+        if (kind !== 'narration' && normalizedText.length > 0) {
+            if (role === 'assistant') {
+                this.flushPendingMemoryTranscripts('user');
+            }
+            if (isFinal) {
+                if (role === 'user') {
+                    this.pendingUserTranscript = '';
+                } else {
+                    this.pendingAssistantTranscript = '';
+                }
+                if (normalizedText.trim().length > 0) {
+                    this.conversationMemory.Record({
+                        Kind: role,
+                        Text: normalizedText,
+                    });
+                }
+            } else if (role === 'user') {
+                this.pendingUserTranscript += normalizedText;
+            } else {
+                this.pendingAssistantTranscript += normalizedText;
+            }
+        }
         if (!this.transcriptHandler) {
             return;
         }
-        const t: RealtimeTranscript = { Role: role, Text: text ?? '', IsFinal: finished ?? false };
+        const t: RealtimeTranscript = { Role: role, Text: normalizedText, IsFinal: isFinal };
         if (kind === 'narration') {
             t.Kind = 'narration';
         }
@@ -2358,6 +2525,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
         if (!functionCalls) {
             return;
         }
+        this.flushPendingMemoryTranscripts();
         // The model has yielded the floor pending the tool result — clear the busy flag (without
         // draining the queue; queued sends flush at the next real turn boundary) so the eventual
         // SendToolResult and any fresh context note are not deferred behind a turn that will not
@@ -2368,16 +2536,22 @@ class GeminiRealtimeSession implements IRealtimeSession {
         for (const call of functionCalls) {
             const callID = call.id ?? '';
             const toolName = call.name ?? '';
+            const argsJson = JSON.stringify(call.args ?? {});
             // Cache the call's name (regardless of whether a tool-call handler is registered) so
             // SendToolResult can supply it to Gemini's sendToolResponse, which requires the function
             // name the Core contract does not carry.
             this.pendingToolCallNames.set(callID, toolName);
+            this.conversationMemory.Record({
+                Kind: 'toolCall',
+                Name: toolName,
+                ArgumentsJson: argsJson,
+            });
             // A pending call keeps its turn open until its result goes out (see IsTurnOpen).
             this.markTurnOpen();
             this.toolCallHandler?.({
                 CallID: callID,
                 ToolName: toolName,
-                Arguments: JSON.stringify(call.args ?? {}),
+                Arguments: argsJson,
             });
         }
     }
@@ -2428,11 +2602,15 @@ class GeminiRealtimeSession implements IRealtimeSession {
         this.toolCallHandler = null;
         this.interruptionHandler = null;
         this.usageHandler = null;
+        this.errorHandler = null;
         this.pendingToolCallNames.clear();
+        this.callsFromBeforeReseed.clear();
         this.queuedSends = [];
         this.responseActive = false;
         this.openClientTurn = false;
         this.pendingThoughtText = '';
+        this.pendingUserTranscript = '';
+        this.pendingAssistantTranscript = '';
     }
 
     /** Returns the bound live session or throws if it was never attached / already closed. */

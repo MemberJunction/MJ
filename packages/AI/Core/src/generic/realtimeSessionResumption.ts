@@ -1,8 +1,8 @@
 /**
- * Why a reconnect was started: the provider announced the connection is ending, or the
- * connection closed without the consumer asking.
+ * Why a reconnect was started: the provider announced the connection is ending, the
+ * connection closed without the consumer asking, or the configured connection duration elapsed.
  */
-export type RealtimeReconnectReason = 'connection-ending' | 'connection-lost';
+export type RealtimeReconnectReason = 'connection-ending' | 'connection-lost' | 'duration-expiry';
 
 /**
  * One reconnect attempt, handed to {@link RealtimeSessionResumptionOptions.Reconnect}.

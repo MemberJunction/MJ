@@ -13,6 +13,7 @@ import {
     RealtimeTrackDescriptor,
     ExtractToolSchedulingHint,
     REALTIME_RELAY_TIME_LIMIT_CLOSE_CODE,
+    RenderRealtimeMemorySeed,
     type RealtimeAvatarUnavailableReason,
     type RealtimeClientTransport,
     type RealtimeResumeAttempt,
@@ -38,6 +39,7 @@ import {
     REALTIME_CLIENT_TIME_LIMIT_ERROR_CODE,
     RealtimeClientState,
     REQUESTED_TRACKS_SESSION_KEY,
+    type RealtimeClientReconnectContext,
 } from '../generic/baseRealtimeClient';
 import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
@@ -270,6 +272,36 @@ export class GeminiPcmPlayback extends RealtimePcmPlayback {
 @RegisterClass(BaseRealtimeClient, 'gemini')
 export class GeminiRealtimeClient extends BaseRealtimeClient {
     public static readonly ASSISTANT_SAFETY_BACKSTOP_MS = 15000;
+    public static readonly GEMINI_LIVE_CONNECTION_SECONDS = 600;
+    public static readonly GEMINI_LIVE_UNCOMPRESSED_VIDEO_CONNECTION_SECONDS = 120;
+
+    protected override get DefaultCallDurationSeconds(): number | undefined {
+        return GeminiRealtimeClient.GEMINI_LIVE_CONNECTION_SECONDS;
+    }
+
+    protected override get RuntimeCallDurationSeconds(): number | undefined {
+        if (this.IsTrackEstablished('video', 'inbound') && this.videoFramesSent > 0) {
+            return GeminiRealtimeClient.GEMINI_LIVE_UNCOMPRESSED_VIDEO_CONNECTION_SECONDS;
+        }
+        return undefined;
+    }
+
+    /**
+     * Developer API client-direct sessions default to `false` because Google's `v1alpha` ephemeral
+     * tokens reject `BidiGenerateContentSetup.sessionResumption.handle` (`1008/1007` invalid field
+     * mask), so `GeminiRealtimeClient` reconnects with a freshly minted token and history seeding.
+     * `GeminiEnterpriseRealtimeClient` overrides this to `true`.
+     */
+    protected override get DefaultTrustsNativeResumption(): boolean {
+        return false;
+    }
+
+    protected override get RequiresFreshTokenPerReconnect(): boolean {
+        if (this.connectTarget?.Transport === 'relay') {
+            return this.isCredentialNearExpiry();
+        }
+        return !this.TrustsNativeResumption || this.isCredentialNearExpiry();
+    }
 
     // ── Transport / audio resources ────────────────────────────────────────────
     private session: GeminiLiveClientSession | null = null;
@@ -321,8 +353,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private currentConnection = 0;
 
     /** Returns the latest session resumption handle reported by the server, if any. */
-    public get ResumptionHandle(): string | null {
-        return this.resumption?.Handle ?? null;
+    public override get ResumptionHandle(): string | null {
+        return this.resumption?.Handle ?? super.ResumptionHandle;
     }
 
     /**
@@ -439,6 +471,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     public async Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream, cameraStream?: MediaStream): Promise<void> {
         this.AssertTransportSupported(config);
         this.resetForConnect(micStream, cameraStream);
+        this.ApplySessionConfigTiming(config);
         this.setState('connecting');
         const session = this.parseSessionConfig(config);
         this.idleSignal = session.idleSignal;
@@ -664,6 +697,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * Safe to call more than once.
      */
     public async Disconnect(): Promise<void> {
+        this.DisposeReconnectTimers();
         this.closeAudioMeters();
         this.clearSafetyBackstop();
         this.toolBatchBarrier.Clear();
@@ -759,7 +793,12 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         if (this.firstVideoSendTimestamp === 0) {
             this.firstVideoSendTimestamp = now;
         }
+        const wasZeroVideoFrames = this.videoFramesSent === 0;
         this.videoFramesSent++;
+        if (wasZeroVideoFrames) {
+            // Re-arm connection duration timer under the 120s uncompressed video cap.
+            this.ArmConnectionDurationTimer();
+        }
         // Reviewer Item 31: Send `video` alone — do not populate sibling `media` slot to avoid duplicate bytes & billing
         this.session?.sendRealtimeInput({
             video: { data: base64Image, mimeType },
@@ -814,6 +853,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         if (!this.session) {
             return;
         }
+        this.conversationMemory.Record({
+            Kind: 'note',
+            Text: text,
+        });
         this.enqueueOrRun(() => {
             this.session?.sendClientContent({ turns: [{ role: 'user', parts: [{ text }] }], turnComplete: false });
             this.openClientTurn = true;
@@ -860,6 +903,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             return;
         }
         const name = this.pendingToolCallNames.get(callID) ?? '';
+        this.recordToolResult(callID, outputJson, name);
         // Non-blocking results go out while the model talks; blocking ones wait for the turn in flight. Both wait while
         // the session moves to a new connection.
         this.enqueueOrRun(() => this.sendToolResponseTurn(callID, name, outputJson), !this.isNonBlocking);
@@ -1148,6 +1192,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             this.setState('error');
             return;
         }
+        if (this.configuredTrustNativeResumption === false) {
+            void this.TriggerReconnect('connection-lost');
+            return;
+        }
         if (this.resumption?.ConnectionLost()) {
             return;
         }
@@ -1176,10 +1224,18 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         // handle; an update without the flag is treated as resumable.
         if (message.sessionResumptionUpdate) {
             const update = message.sessionResumptionUpdate;
+            if (update.resumable !== false && update.newHandle) {
+                this.RecordResumptionHandle(update.newHandle);
+            }
             this.resumption?.RecordHandle(update.newHandle, update.resumable !== false);
         }
         if (message.goAway) {
-            this.resumption?.ConnectionEnding(ParseDurationToMs(message.goAway.timeLeft));
+            const timeLeftMs = ParseDurationToMs(message.goAway.timeLeft);
+            if (this.configuredTrustNativeResumption === false) {
+                this.NotifyConnectionEnding(timeLeftMs);
+            } else {
+                this.resumption?.ConnectionEnding(timeLeftMs);
+            }
         }
 
         if (message.serverContent) {
@@ -1191,6 +1247,74 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         if (message.usageMetadata) {
             this.handleUsageMetadata(message.usageMetadata);
         }
+    }
+
+    /**
+     * Re-establishes the underlying Gemini Live WebSocket mid-call via `BaseRealtimeClient.TriggerReconnect`
+     * (proactive connection-duration timer, `goAway` / unexpected close when `TrustNativeResumption === false`,
+     * or Attempt 2 seed fallback after a native resumption failure).
+     *
+     * When `context.UseNativeResumption` is `false`, `sessionResumption: {}` is preserved on the connect config
+     * (with any prior `handle` stripped) so the key set matches the ephemeral token's `liveConnectConstraints`
+     * field mask, and accumulated turns from `context.ConversationSeed` are re-seeded via
+     * `sendClientContent({ turns, turnComplete: false })`.
+     */
+    protected override async Reconnect(context: RealtimeClientReconnectContext): Promise<void> {
+        const target = this.connectTarget;
+        if (!target) {
+            throw new Error('there is no Gemini Live session to reconnect');
+        }
+        this.connectionReady = false;
+        const refreshedToken = context.Credential.EphemeralToken || target.EphemeralToken;
+        const refreshedRelayUrl = context.Credential.RelayUrl || target.RelayUrl;
+        const handle = context.UseNativeResumption && context.ResumptionHandle ? context.ResumptionHandle : undefined;
+        if (!handle) {
+            for (const callID of this.pendingToolCallNames.keys()) {
+                this.callsFromBeforeReseed.add(callID);
+            }
+        }
+        const existingResumption = target.Config.sessionResumption;
+        let nextSessionResumption: LiveConnectConfig['sessionResumption'];
+        if (handle) {
+            nextSessionResumption = { ...existingResumption, handle };
+        } else if (existingResumption) {
+            const { handle: _omitted, ...withoutHandle } = existingResumption;
+            nextSessionResumption = withoutHandle;
+        } else {
+            nextSessionResumption = {};
+        }
+        const reconnectTarget: GeminiConnectTarget = {
+            ...target,
+            EphemeralToken: refreshedToken,
+            ...(refreshedRelayUrl ? { RelayUrl: refreshedRelayUrl } : {}),
+            Config: {
+                ...target.Config,
+                sessionResumption: nextSessionResumption,
+            },
+        };
+        const opened = await this.openConnection(reconnectTarget);
+        await GeminiRealtimeClient.awaitSetup(opened);
+        if (this.connectTarget !== target) {
+            GeminiRealtimeClient.closeQuietly(opened.Session);
+            return;
+        }
+        const previous = this.session;
+        this.useConnection(opened);
+        this.connectTarget = reconnectTarget;
+        if (previous) {
+            GeminiRealtimeClient.closeQuietly(previous);
+        }
+        if (!handle && context.ConversationSeed && context.ConversationSeed.Entries.length > 0) {
+            const seedTurns = RenderRealtimeMemorySeed(context.ConversationSeed);
+            if (seedTurns.length > 0) {
+                const turns: Content[] = seedTurns.map((t) => ({
+                    role: t.Role,
+                    parts: t.Texts.map((text) => ({ text })),
+                }));
+                this.session?.sendClientContent({ turns, turnComplete: false });
+            }
+        }
+        this.handleResumed();
     }
 
     /**
@@ -1950,6 +2074,20 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             return;
         }
         this.toolBatchBarrier.RecordResult(callID);
+        if (this.callsFromBeforeReseed.delete(callID)) {
+            session.sendClientContent({
+                turns: [{ role: 'user', parts: [{ text: `[Tool result for ${name || callID}: ${outputJson}]` }] }],
+                turnComplete: true,
+            });
+            this.openClientTurn = false;
+            this.toolResponseAwaitsCommit = false;
+            this.responseActive = true;
+            this.activeResponseKind = 'normal';
+            this.setState('speaking');
+            this.pendingToolCallNames.delete(callID);
+            this.endTurnIfToolResultsIn();
+            return;
+        }
         const parsed = this.parseToolOutput(outputJson);
         const sched = this.resolveFunctionScheduling(parsed as Record<string, unknown>, name);
         const functionResponse: FunctionResponse = {

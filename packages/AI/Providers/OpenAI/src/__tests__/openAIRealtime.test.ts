@@ -8,23 +8,9 @@ vi.mock('@memberjunction/global', () => ({
 // Mock @memberjunction/ai — provide BaseModel/BaseRealtimeModel base classes only. The realtime
 // type aliases (RealtimeSessionParams, etc.) are compile-time interfaces and need no runtime mock.
 vi.mock('@memberjunction/ai', async () => {
-    class BaseModel {
-        protected _apiKey: string;
-        constructor(apiKey: string) {
-            this._apiKey = apiKey;
-        }
-    }
-    class BaseRealtimeModel extends BaseModel {
-        // Same body as the real BaseRealtimeModel.ClampSessionSeconds (the real module cannot be imported here; see RealtimeDriverFactsOf below).
-        protected ClampSessionSeconds(...candidates: ReadonlyArray<number | undefined>): number | undefined {
-            let smallest: number | undefined;
-            for (const c of candidates) {
-                if (typeof c !== 'number' || !Number.isInteger(c) || c <= 0) continue;
-                if (smallest === undefined || c < smallest) smallest = c;
-            }
-            return smallest;
-        }
-    }
+    const { BaseModel } = await import('../../../../Core/src/generic/baseModel');
+    const { BaseRealtimeModel, BaseRealtimeSession, RealtimeDriverFactsOf, DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS, DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS, MAX_REALTIME_RAPID_RECONNECTS, REALTIME_RAPID_RECONNECT_WINDOW_MS, REALTIME_CONNECTION_SETUP_TIMEOUT_MS } = await import('../../../../Core/src/generic/baseRealtime');
+    const { RealtimeConversationMemory, RenderRealtimeMemorySeed, RenderRealtimeMemorySeedAsContextNote, REALTIME_MEMORY_CONTINUITY_PREAMBLE } = await import('../../../../Core/src/generic/realtimeConversationMemory');
     // RealtimeDiagLog is a verbose-gated console logger used by the realtime session; a no-op suffices.
     const RealtimeDiagLog = () => { /* no-op in tests */ };
     // IsTranscriptContinuation is a PURE, dependency-free helper — pull in the REAL implementation
@@ -42,10 +28,27 @@ vi.mock('@memberjunction/ai', async () => {
     const { NormalizeTurnDetectionSettings } = await import('../../../../Core/src/generic/turnDetectionSettings');
     // Same for RealtimeDroppedInputReporter: dependency-free, and the drop tests assert its real once-per-type report.
     const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
-    // Same body as the real RealtimeDriverFactsOf (baseRealtime.ts). The real module cannot be imported here: it pulls in
-    // @memberjunction/global, which these suites mock. The mocked BaseRealtimeModel has no static, so only drivers declaring their own resolve.
-    const RealtimeDriverFactsOf = (driver: object): object => (driver.constructor as { DriverFacts: object }).DriverFacts;
-    return { BaseModel, BaseRealtimeModel, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage, MapRealtimeUsageModalityDetail, NormalizeTurnDetectionSettings, RealtimeDroppedInputReporter, RealtimeDriverFactsOf };
+    return {
+        BaseModel,
+        BaseRealtimeModel,
+        BaseRealtimeSession,
+        RealtimeConversationMemory,
+        RenderRealtimeMemorySeed,
+        RenderRealtimeMemorySeedAsContextNote,
+        REALTIME_MEMORY_CONTINUITY_PREAMBLE,
+        DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS,
+        DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS,
+        MAX_REALTIME_RAPID_RECONNECTS,
+        REALTIME_RAPID_RECONNECT_WINDOW_MS,
+        REALTIME_CONNECTION_SETUP_TIMEOUT_MS,
+        RealtimeDiagLog,
+        IsTranscriptContinuation,
+        ResolveResponseDoneUsage,
+        MapRealtimeUsageModalityDetail,
+        NormalizeTurnDetectionSettings,
+        RealtimeDroppedInputReporter,
+        RealtimeDriverFactsOf,
+    };
 });
 
 // Mock the SDK WebSocket so importing the driver never touches the network. The driver's
@@ -1740,3 +1743,72 @@ describe('catalog turn detection end-to-end through the session', () => {
         }
     });
 });
+
+describe('OpenAIRealtimeSession — long-call duration reconnect and history seeding', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('reconnects in place before ConnectionDurationSeconds expires and seeds prior turns via conversation.item.create', async () => {
+        class MultiConnectionOpenAIRealtime extends OpenAIRealtime {
+            public Connections: FakeConnection[] = [];
+            protected override createConnection(): IOpenAIRealtimeConnection {
+                const conn = new FakeConnection();
+                this.Connections.push(conn);
+                queueMicrotask(() => {
+                    conn.Fire({ type: 'session.created' } as RealtimeServerEvent);
+                });
+                return conn;
+            }
+        }
+
+        const driver = new MultiConnectionOpenAIRealtime('k');
+        const session = await driver.StartSession({
+            Model: 'gpt-realtime-2.1',
+            SystemPrompt: 'Keep context across reconnects.',
+            Config: {
+                connectionMaxSeconds: 120,
+                reconnectBufferSeconds: 10,
+            },
+        });
+        await vi.advanceTimersByTimeAsync(1);
+        expect(driver.Connections).toHaveLength(1);
+
+        // Simulate a completed user turn and assistant turn on the first connection
+        driver.Connections[0].Fire({
+            type: 'conversation.item.input_audio_transcription.completed',
+            item_id: 'item_u1',
+            transcript: 'My order number is 4242.',
+        } as unknown as RealtimeServerEvent);
+        driver.Connections[0].Fire({
+            type: 'response.output_audio_transcript.done',
+            item_id: 'item_a1',
+            transcript: 'Got it, looking up order 4242.',
+        } as unknown as RealtimeServerEvent);
+        driver.Connections[0].Fire({
+            type: 'response.done',
+            response: { id: 'resp_1', status: 'completed', output: [] },
+        } as unknown as RealtimeServerEvent);
+
+        // Advance to the soft reconnect window (120s - 28s = 92s) while idle
+        await vi.advanceTimersByTimeAsync(95_000);
+
+        expect(driver.Connections).toHaveLength(2);
+        expect(driver.Connections[0].Closed).toBe(true);
+
+        const secondSent = driver.Connections[1].Sent;
+        expect(secondSent[0]?.type).toBe('session.update');
+        const seededItems = secondSent.filter((e) => e.type === 'conversation.item.create');
+        expect(seededItems.length).toBeGreaterThanOrEqual(2);
+        const serializedSeed = JSON.stringify(seededItems);
+        expect(serializedSeed).toContain('My order number is 4242.');
+        expect(serializedSeed).toContain('Got it, looking up order 4242.');
+
+        await session.Close();
+    });
+});
+

@@ -1,7 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
-import { BaseRealtimeClient, ToProviderSessionConfig } from '../generic/baseRealtimeClient';
+import { BaseRealtimeClient, RealtimeClientReconnectContext, ToProviderSessionConfig } from '../generic/baseRealtimeClient';
 import {
     OpenAIProtocolRealtimeClient,
     OpenAIProtocolClientEvent,
@@ -87,6 +87,10 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
      */
     private audioPlaying = false;
 
+    protected override get DefaultCallDurationSeconds(): number | undefined {
+        return 3600;
+    }
+
     // ── BaseRealtimeClient: connection lifecycle ───────────────────────────────
 
     /**
@@ -97,6 +101,7 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
      */
     public async Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream): Promise<void> {
         this.AssertTransportSupported(config);
+        this.ApplySessionConfigTiming(config);
         this.sessionConfig = config.SessionConfig;
         this.micStream = micStream;
         this.setState('connecting');
@@ -137,6 +142,7 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
      * response state machine, and emits a final `'closed'` (unless already `'error'`).
      */
     public async Disconnect(): Promise<void> {
+        this.DisposeReconnectTimers();
         this.closeAudioMeters();
         this.micStream?.getTracks().forEach((t) => t.stop());
         this.micStream = null;
@@ -164,6 +170,85 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
         if (this.currentState !== 'error') {
             this.setState('closed');
         }
+    }
+
+    /**
+     * Performs an in-place WebRTC peer-connection and data-channel swap on duration expiry
+     * while preserving the existing `micStream` and hidden `<audio>` sink.
+     */
+    protected override async Reconnect(context: RealtimeClientReconnectContext): Promise<void> {
+        if (!this.micStream) {
+            throw new Error('OpenAIRealtimeClient: cannot reconnect without an active microphone stream');
+        }
+        if (context.Credential.SessionConfig !== undefined) {
+            this.sessionConfig = context.Credential.SessionConfig;
+        }
+
+        const prevPc = this.peerConnection;
+        const prevDc = this.dataChannel;
+
+        const nextPc = this.createPeerConnection();
+        const nextSenders = this.micStream.getAudioTracks().map((track) => nextPc.addTrack(track, this.micStream!));
+        if (!this.remoteAudioEl) {
+            this.remoteAudioEl = this.createAudioSink();
+        }
+        nextPc.ontrack = (e: RTCTrackEvent) => {
+            if (this.remoteAudioEl && e.streams[0]) {
+                this.remoteAudioEl.srcObject = e.streams[0];
+                this.publishRemoteMediaStream(e.streams[0]);
+                this.attachOutputAudioMeter(RealtimeAudioMeter.ForStream(e.streams[0]));
+            }
+        };
+
+        const nextDc = nextPc.createDataChannel('oai-events');
+        let openDc: (() => void) | null = null;
+        let failDc: ((error: Error) => void) | null = null;
+        const dcOpened = new Promise<void>((resolve, reject) => {
+            openDc = resolve;
+            failDc = reject;
+        });
+        dcOpened.catch(() => undefined);
+
+        nextDc.onopen = () => {
+            openDc?.();
+        };
+        nextDc.onmessage = (e: MessageEvent) => {
+            if (this.dataChannel === nextDc) {
+                this.handleProtocolMessage(String(e.data));
+            }
+        };
+        nextDc.onerror = (e: Event) => {
+            failDc?.(new Error(`Data channel error: ${String(e)}`));
+            if (this.dataChannel === nextDc && !this.IsReconnecting) {
+                this.emitError({ Message: `Data channel error: ${String(e)}`, Fatal: true });
+                this.setState('error');
+            }
+        };
+        nextDc.onclose = () => {
+            failDc?.(new Error('OpenAI data channel closed during reconnect'));
+            if (this.dataChannel === nextDc && !this.IsReconnecting && this.currentState !== 'error') {
+                this.setState('closed');
+            }
+        };
+
+        await this.performSdpHandshake(nextPc, context.Credential.EphemeralToken);
+        if (nextDc.readyState !== 'open') {
+            await dcOpened;
+        }
+
+        this.peerConnection = nextPc;
+        this.dataChannel = nextDc;
+        this.micSenders = nextSenders;
+        this.responseActive = false;
+        this.confirmedResponseActive = false;
+        this.audioPlaying = false;
+
+        try { prevDc?.close(); } catch { /* already closing */ }
+        try { prevPc?.close(); } catch { /* already closing */ }
+
+        this.applySessionConfig(nextDc);
+        this.seedConversationHistory(context.ConversationSeed);
+        this.setState('listening');
     }
 
     // ── Brain seam implementations (WebRTC transport) ──────────────────────────
@@ -290,17 +375,20 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
         this.dataChannel = channel;
         channel.onopen = () => {
             this.applySessionConfig(channel);
+            this.ArmConnectionDurationTimer();
             this.setState('listening');
         };
         channel.onmessage = (e: MessageEvent) => {
             this.handleProtocolMessage(String(e.data));
         };
         channel.onerror = (e: Event) => {
-            this.emitError({ Message: `Data channel error: ${String(e)}`, Fatal: true });
-            this.setState('error');
+            if (!this.IsReconnecting) {
+                this.emitError({ Message: `Data channel error: ${String(e)}`, Fatal: true });
+                this.setState('error');
+            }
         };
         channel.onclose = () => {
-            if (this.currentState !== 'error') {
+            if (!this.IsReconnecting && this.currentState !== 'error') {
                 this.setState('closed');
             }
         };
