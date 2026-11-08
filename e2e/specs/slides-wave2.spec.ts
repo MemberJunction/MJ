@@ -388,6 +388,9 @@ async function buildWave2AngularBundle(): Promise<string> {
               )};
               export const ArtifactMetadataEngine = { Instance: { FindArtifactType: () => null } };
               export const QueryEngine = { Instance: { Queries: [] } };
+              export async function FilterReadableAnchoredConversations(_provider, _user, rows) {
+                return rows || [];
+              }
               export const UserInfoEngine = {
                 Instance: {
                   GetSetting: () => null,
@@ -1013,10 +1016,18 @@ test.describe.serial(
       );
 
       // Verify Live MJ Block on Slide 3 was automatically frozen upon entering Presentation Mode (O6)
+      const freezeBanner = page.getByTestId('o6-presentation-freeze-banner');
+      await expect(freezeBanner).toHaveAttribute('data-refresh-count', '0');
+      const initialFrozenAt = await freezeBanner.getAttribute('data-frozen-at');
+      expect(initialFrozenAt).toBeTruthy();
       await expect(page.getByTestId('slide-block-mode-data')).toContainText('Frozen Snapshot');
 
-      // Click one-click Refresh Live Data button (O6)
+      // Click one-click Refresh Live Data button (O6) and verify data-refresh-count increments and data-frozen-at updates
       await page.getByTestId('presenter-refresh-live-btn').click();
+      await expect(freezeBanner).toHaveAttribute('data-refresh-count', '1');
+      const refreshedFrozenAt = await freezeBanner.getAttribute('data-frozen-at');
+      expect(refreshedFrozenAt).toBeTruthy();
+      expect(refreshedFrozenAt).not.toBe(initialFrozenAt);
       await expect(page.getByTestId('slide-block-mode-data')).toContainText('Frozen Snapshot');
 
       await page.screenshot({
@@ -1101,7 +1112,6 @@ test.describe.serial(
         await pageMarcus.getByTestId('move-slide-up-slide-3').click();
 
         // Verify Sarah's filmstrip rail converges the new slide order (slide-1, slide-3, slide-2)
-        // AND preserves both Sarah's Slide 1 notes and Marcus's Slide 2 notes with zero data loss (Accept #1)
         await expect(async () => {
           const cards = await pageSarah
             .locator('[data-testid^="filmstrip-slide-"]')
@@ -1113,8 +1123,41 @@ test.describe.serial(
           ]);
         }).toPass({ timeout: 5000 });
 
-        // Open Theme drawer on Sarah's page and click .pptx Export so the export audit summary is visible
+        // Verify on Sarah's page that Marcus's Slide 2 Speaker Notes arrived over Yjs
+        await pageSarah.getByTestId('filmstrip-slide-slide-2').click();
+        await expect(pageSarah.getByTestId('speaker-notes-input')).toHaveValue(
+          'Marcus concurrent speaker notes on Slide 2',
+        );
+
+        // Verify on Marcus's page that Sarah's Slide 1 Speaker Notes arrived over Yjs
+        await pageMarcus.getByTestId('filmstrip-slide-slide-1').click();
+        await expect(pageMarcus.getByTestId('speaker-notes-input')).toHaveValue(
+          'Sarah live speaker notes synced over Yjs',
+        );
+
+        // Return Sarah to Slide 1, open Theme drawer, apply Brand Theme Seeds (deckMeta), and compact version to server
+        await pageSarah.getByTestId('filmstrip-slide-slide-1').click();
         await pageSarah.getByTestId('toggle-theme-drawer-btn').click();
+        await pageSarah.getByTestId('apply-brand-seeds-btn').click();
+        await pageSarah.getByTestId('save-slide-version-btn').click();
+
+        // Verify server savedVersions compacted the converged slideOrder, both speaker notes, AND the Brand Theme from deckMeta
+        await expect(async () => {
+          expect(savedVersions.length).toBeGreaterThanOrEqual(1);
+          const compactedDeck = JSON.parse(savedVersions[savedVersions.length - 1].Content);
+          expect(compactedDeck.Slides.map((s: { SlideID: string }) => s.SlideID)).toEqual([
+            'slide-1',
+            'slide-3',
+            'slide-2',
+          ]);
+          const s1 = compactedDeck.Slides.find((s: { SlideID: string }) => s.SlideID === 'slide-1');
+          const s2 = compactedDeck.Slides.find((s: { SlideID: string }) => s.SlideID === 'slide-2');
+          expect(s1.SpeakerNotes).toBe('Sarah live speaker notes synced over Yjs');
+          expect(s2.SpeakerNotes).toBe('Marcus concurrent speaker notes on Slide 2');
+          expect(compactedDeck.Theme.BrandSeedSource).toBe('Acme Enterprise');
+          expect(compactedDeck.Master.OrganizationName).toBe('Acme Enterprise');
+        }).toPass({ timeout: 5000 });
+
         await pageSarah.getByTestId('export-pptx-btn').click();
 
         const exportSummary = pageSarah.getByTestId('pptx-export-audit-summary');

@@ -397,6 +397,11 @@ export async function FilterAnchoredConversationsForUser<T extends AnchoredConve
 }
 
 /**
+ * Alias for {@link FilterAnchoredConversationsForUser} used by artifact viewer components.
+ */
+export const FilterReadableAnchoredConversations = FilterAnchoredConversationsForUser;
+
+/**
  * Deterministic Stage 1 detector for FLS-governed fields referenced by a comment.
  *
  * Runs only when `entityInfo.FieldLevelSecurityApplies` is `true`. Checks:

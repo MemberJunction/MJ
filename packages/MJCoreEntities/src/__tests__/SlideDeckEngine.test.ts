@@ -152,8 +152,7 @@ describe('SlideDeckEngine (Wave 2 Slides Schema, Layouts, Theme Seeds, Freeze & 
                         { Name: 'Project Aurora', Status: 'Active' },
                         { Name: 'Project Titan', Status: 'Approved' }
                     ],
-                    TotalRowCount: 2,
-                    ExecutedAt: '2026-11-08T12:00:00.000Z'
+                    TotalRowCount: 2
                 }
             ]
         ]);

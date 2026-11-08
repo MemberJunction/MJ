@@ -232,7 +232,9 @@ describe('Wave 2 Slides: SlideDeckExportService, Per-Slide Yjs Session Sync & Sl
     expect(frozenBlock?.Mode).toBe('Frozen');
 
     // One-click Refresh Live Data during presentation (O6)
+    expect(component.PresentationRefreshCount).toBe(0);
     await component.RefreshLiveBlocksDuringPresentation();
+    expect(component.PresentationRefreshCount).toBe(1);
     expect(component.PresentationFrozenAt).toBeInstanceOf(Date);
     component.ExitPresentationMode();
     expect(component.WorkspaceMode).toBe('edit');
@@ -266,6 +268,192 @@ describe('Wave 2 Slides: SlideDeckExportService, Per-Slide Yjs Session Sync & Sl
     const exportedPkg = component.OnExportPptx();
     expect(exportedPkg.SlideCount).toBe(4);
     expect(component.LastExportedPptxSummary?.SlideCount).toBe(4);
+
+    component.ngOnDestroy();
+  });
+
+  it('surfaces access-denied live block errors without synthetic fallback rows and persists/hydrates SlideRegion anchored threads & delegated child Whiteboards with contextUser', async () => {
+    const injector = Injector.create({
+      providers: [
+        { provide: ChangeDetectorRef, useValue: { markForCheck: () => {}, detectChanges: () => {} } },
+        { provide: DocumentCollaborationService, useValue: collabService },
+        { provide: SlideDeckExportService, useValue: exportService },
+      ],
+    });
+
+    const savedConversations: Array<Record<string, unknown>> = [];
+    const savedDetails: Array<Record<string, unknown>> = [];
+    const savedArtifacts: Array<Record<string, unknown>> = [];
+    const savedVersions: Array<Record<string, unknown>> = [];
+    const getEntityCalls: Array<{ entityName: string; contextUser: unknown }> = [];
+
+    const mockUser = {
+      ID: '11111111-1111-4111-8111-111111111111',
+      Name: 'Sarah Chen',
+      Email: 'sarah.chen@memberjunction.org',
+      IsActive: true,
+    };
+
+    const mockProvider = {
+      CurrentUser: mockUser,
+      Entities: [
+        {
+          ID: 'AE24303E-F36B-1410-8DB0-00021F8B792E',
+          Name: 'MJ: Artifacts',
+          DisplayNameOrName: 'MJ: Artifacts',
+          FieldLevelSecurityApplies: false,
+          GetUserPermisions: () => ({ CanRead: true }),
+          Fields: [{ Name: 'ID', IsPrimaryKey: true, DefaultInView: true, IsBinaryFieldType: false, TSType: 'string' }],
+        },
+        {
+          ID: 'e-restricted-finance',
+          Name: 'MJ: Confidential Financials',
+          DisplayNameOrName: 'MJ: Confidential Financials',
+          FieldLevelSecurityApplies: false,
+          GetUserPermisions: () => ({ CanRead: false }),
+          Fields: [],
+        },
+      ],
+      RunView: async (params: { EntityName: string; ExtraFilter?: string }) => {
+        if (params.EntityName === 'MJ: Artifacts') {
+          return {
+            Success: true,
+            Results: [
+              {
+                ID: '22222222-3333-4444-8555-666666666666',
+                UserID: mockUser.ID,
+                EnvironmentID: 'env-1',
+              },
+            ],
+            TotalRowCount: 1,
+          };
+        }
+        if (params.EntityName === 'MJ: Conversations') {
+          return {
+            Success: true,
+            Results: [
+              {
+                ID: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+                Name: 'SlideComment: Slide 1 · Primary Content (slide-1:main)',
+                LinkedEntityID: 'AE24303E-F36B-1410-8DB0-00021F8B792E',
+                LinkedRecordID: '22222222-3333-4444-8555-666666666666',
+                AnchorType: 'SlideRegion',
+                AnchorKey: 'slide-1:main',
+                IsResolved: false,
+                AnchorMetadata: JSON.stringify({
+                  slideId: 'slide-1',
+                  regionId: 'main',
+                  anchorDisplayName: 'Slide 1 · Primary Content',
+                  quotedText: 'Hydrated Quote',
+                  agentMode: 'edit',
+                  status: 'Open',
+                }),
+              },
+            ],
+            TotalRowCount: 1,
+          };
+        }
+        if (params.EntityName === 'MJ: Conversation Details') {
+          return {
+            Success: true,
+            Results: [
+              {
+                ID: 'dddddddd-1111-4222-8333-444444444444',
+                ConversationID: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+                Role: 'User',
+                Message: 'Hydrated SlideRegion thread from database',
+              },
+            ],
+            TotalRowCount: 1,
+          };
+        }
+        return { Success: true, Results: [], TotalRowCount: 0 };
+      },
+      GetEntityObject: async (entityName: string, contextUser?: unknown) => {
+        getEntityCalls.push({ entityName, contextUser });
+        const rec: Record<string, unknown> = {
+          ID: `99999999-0000-4000-8000-${String(getEntityCalls.length).padStart(12, '0')}`,
+          NewRecord: () => undefined,
+          Load: async () => true,
+          Save: async () => {
+            if (entityName === 'MJ: Conversations') savedConversations.push({ ...rec });
+            if (entityName === 'MJ: Conversation Details') savedDetails.push({ ...rec });
+            if (entityName === 'MJ: Artifacts') savedArtifacts.push({ ...rec });
+            if (entityName === 'MJ: Artifact Versions') savedVersions.push({ ...rec });
+            return true;
+          },
+        };
+        return rec;
+      },
+    };
+
+    const component = runInInjectionContext(injector, () => new SlideDeckArtifactViewerComponent());
+    Object.defineProperty(component, 'ProviderToUse', {
+      get: () => mockProvider,
+    });
+    const seededDeck = SlideDeckEngine.Instance.CreateDefaultDeck(
+      'Governed Security Deck',
+      '22222222-3333-4444-8555-666666666666',
+    );
+    component.artifactVersion = {
+      ID: 'ver-sec-1',
+      ArtifactID: '22222222-3333-4444-8555-666666666666',
+      VersionNumber: 1,
+      Name: 'Governed Security Deck',
+      Content: SlideDeckEngine.Instance.SerializeDeckSpec(seededDeck),
+    } as unknown as MJArtifactVersionEntity;
+    component.readonly = false;
+
+    component.ngOnInit();
+    await new Promise((r) => setTimeout(r, 30));
+
+    // Verify SlideRegion anchored conversation was hydrated and filtered via FilterReadableAnchoredConversations
+    expect(component.AnchoredThreads).toHaveLength(1);
+    expect(component.AnchoredThreads[0].ConversationID).toBe('aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee');
+    expect(component.AnchoredThreads[0].Messages[0].Message).toBe(
+      'Hydrated SlideRegion thread from database',
+    );
+
+    // Execute an access-denied live block -> must NOT fall back to synthetic preview rows
+    const restrictedRegion = component.Deck.Slides[2].Regions[0];
+    const restrictedBlock = {
+      BlockID: 'blk-restricted-fin',
+      Kind: 'EntityView' as const,
+      Mode: 'Live' as const,
+      Title: 'Confidential Financials',
+      EntityName: 'MJ: Confidential Financials',
+    };
+    await component.ExecuteSlideRegionBlock(restrictedRegion, restrictedBlock);
+    const blockError = component.GetBlockExecutionError(restrictedBlock);
+    expect(blockError).not.toBeNull();
+    expect(blockError?.Success).toBe(false);
+    expect(blockError?.AccessDenied).toBe(true);
+    expect(blockError?.ErrorMessage).toContain('You do not have permission to read');
+    expect(component.GetDisplayRowsForBlock(restrictedBlock).Rows).toEqual([]);
+
+    // Post a new SlideRegion comment -> verify AnchorType = 'SlideRegion', AnchorKey, LinkedEntityID, LinkedRecordID, and contextUser
+    component.OpenCommentForSlideRegion('slide-2', 'left', 'Left Column');
+    component.NewCommentDraft = 'Check slide region anchor metadata';
+    await component.SubmitSlideRegionComment();
+
+    expect(savedConversations).toHaveLength(1);
+    expect(savedConversations[0].AnchorType).toBe('SlideRegion');
+    expect(savedConversations[0].AnchorKey).toBe('slide-2:left');
+    expect(savedConversations[0].LinkedEntityID).toBe('AE24303E-F36B-1410-8DB0-00021F8B792E');
+    expect(savedConversations[0].LinkedRecordID).toBe('22222222-3333-4444-8555-666666666666');
+    expect(savedConversations[0].UserID).toBe(mockUser.ID);
+    expect(savedDetails).toHaveLength(1);
+
+    // Embed an inline OLE Whiteboard -> verify child artifact + initial v1 version record are created with contextUser
+    await component.EmbedInlineWhiteboardInRegion(component.Deck.Slides[1].Regions[0]);
+    expect(savedArtifacts).toHaveLength(1);
+    expect(savedArtifacts[0].UserID).toBe(mockUser.ID);
+    expect(savedArtifacts[0].DelegateEntityID).toBe('AE24303E-F36B-1410-8DB0-00021F8B792E');
+    expect(savedArtifacts[0].DelegateRecordID).toBe('22222222-3333-4444-8555-666666666666');
+    expect(savedVersions).toHaveLength(1);
+    expect(savedVersions[0].VersionNumber).toBe(1);
+    expect(savedVersions[0].UserID).toBe(mockUser.ID);
+    expect(getEntityCalls.every((c) => c.contextUser === mockUser)).toBe(true);
 
     component.ngOnDestroy();
   });

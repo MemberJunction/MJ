@@ -868,13 +868,34 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         expect(clientA.doc.getArray<string>('slideOrder').toArray()).toEqual(['slide-1', 'slide-2', 'slide-3']);
         expect(clientB.doc.getArray<string>('slideOrder').toArray()).toEqual(['slide-1', 'slide-2', 'slide-3']);
 
-        // Editor A updates Slide 1 in `slidesById`
+        // Editor A updates Slide 1 in `slidesById` AND updates `deckMeta` (Brand Theme Seeds + Master + Title)
         clientA.doc.transact(() => {
             const slidesById = clientA.doc.getMap<string>('slidesById');
             const slide1 = JSON.parse(slidesById.get('slide-1')!);
             slide1.Title = 'Alice Updated Slide 1 Title';
             slide1.SpeakerNotes = 'Alice speaker notes on slide 1';
             slidesById.set('slide-1', JSON.stringify(slide1));
+
+            const deckMeta = clientA.doc.getMap<string>('deckMeta');
+            deckMeta.set('Title', 'Alice Brand-Themed Strategy Deck');
+            deckMeta.set(
+                'Theme',
+                JSON.stringify({
+                    ...initialDeck.Theme,
+                    ThemeID: 'nova-brand-seed',
+                    Name: 'Nova Cybernetics Brand Theme',
+                    PrimaryColor: '#7C3AED',
+                    AccentColor: '#10B981',
+                    BackgroundColor: '#0F172A'
+                })
+            );
+            deckMeta.set(
+                'Master',
+                JSON.stringify({
+                    ...initialDeck.Master,
+                    OrganizationName: 'Nova Cybernetics'
+                })
+            );
         });
 
         // Simultaneously, Editor B updates Slide 2 in `slidesById` AND reorders the deck to ['slide-3', 'slide-1', 'slide-2']
@@ -890,10 +911,14 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             slideOrder.insert(0, ['slide-3', 'slide-1', 'slide-2']);
         });
 
-        // Wait for server room to converge both concurrent per-slide edits AND the new slide order
+        // Wait for server room to converge both concurrent per-slide edits, deckMeta theme/master, AND the new slide order
         await vi.waitFor(async () => {
             const roomJson = await ArtifactCollaborationServer.Instance.GetRoomContent(artifactId, editorUser);
             const mergedDeck = JSON.parse(roomJson) as typeof initialDeck;
+            expect(mergedDeck.Title).toBe('Alice Brand-Themed Strategy Deck');
+            expect(mergedDeck.Theme.ThemeID).toBe('nova-brand-seed');
+            expect(mergedDeck.Theme.PrimaryColor).toBe('#7C3AED');
+            expect(mergedDeck.Master.OrganizationName).toBe('Nova Cybernetics');
             expect(mergedDeck.Slides.map((s) => s.SlideID)).toEqual(['slide-3', 'slide-1', 'slide-2']);
             const s1 = mergedDeck.Slides.find((s) => s.SlideID === 'slide-1')!;
             const s2 = mergedDeck.Slides.find((s) => s.SlideID === 'slide-2')!;
@@ -905,13 +930,17 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             expect(s3.Title).toBe('Original Slide 3 KPI');
         });
 
-        // Compact room into MJ: Artifact Versions and verify the compacted JSON preserves everything
+        // Compact room into MJ: Artifact Versions and verify the compacted JSON preserves deckMeta + slidesById + slideOrder
         const compacted = await ArtifactCollaborationServer.Instance.CompactRoomToArtifactVersion(
             artifactId,
             editorUser
         );
         expect(compacted.Saved).toBe(true);
         const savedDeck = JSON.parse(versions[versions.length - 1].Content) as typeof initialDeck;
+        expect(savedDeck.Title).toBe('Alice Brand-Themed Strategy Deck');
+        expect(savedDeck.Theme.ThemeID).toBe('nova-brand-seed');
+        expect(savedDeck.Theme.PrimaryColor).toBe('#7C3AED');
+        expect(savedDeck.Master.OrganizationName).toBe('Nova Cybernetics');
         expect(savedDeck.Slides.map((s) => s.SlideID)).toEqual(['slide-3', 'slide-1', 'slide-2']);
 
         clientA.ws.close();

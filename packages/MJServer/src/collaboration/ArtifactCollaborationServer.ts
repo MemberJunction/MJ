@@ -1070,17 +1070,30 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             const slidesById = doc.getMap<string>('slidesById');
             const slideOrder = doc.getArray<string>('slideOrder');
 
-            const metaPayload = JSON.stringify({
-                SchemaVersion: '1.0',
-                DeckID: deck.DeckID,
-                Title: deck.Title,
-                Subtitle: deck.Subtitle,
-                AspectRatio: deck.AspectRatio,
-                Theme: deck.Theme,
-                Master: deck.Master
-            });
-            if (deckMeta.get('metaJson') !== metaPayload) {
-                deckMeta.set('metaJson', metaPayload);
+            const nextDeckId = deck.DeckID || 'deck-1';
+            const nextTitle = deck.Title || 'Presentation';
+            const nextSubtitle = deck.Subtitle || '';
+            const nextAspectRatio = deck.AspectRatio === '4:3' ? '4:3' : '16:9';
+            const nextThemeJson = JSON.stringify(deck.Theme);
+            const nextMasterJson = JSON.stringify(deck.Master);
+
+            if (deckMeta.get('DeckID') !== nextDeckId) {
+                deckMeta.set('DeckID', nextDeckId);
+            }
+            if (deckMeta.get('Title') !== nextTitle) {
+                deckMeta.set('Title', nextTitle);
+            }
+            if (deckMeta.get('Subtitle') !== nextSubtitle) {
+                deckMeta.set('Subtitle', nextSubtitle);
+            }
+            if (deckMeta.get('AspectRatio') !== nextAspectRatio) {
+                deckMeta.set('AspectRatio', nextAspectRatio);
+            }
+            if (deckMeta.get('Theme') !== nextThemeJson) {
+                deckMeta.set('Theme', nextThemeJson);
+            }
+            if (deckMeta.get('Master') !== nextMasterJson) {
+                deckMeta.set('Master', nextMasterJson);
             }
 
             const nextIds = new Set<string>();
@@ -1116,7 +1129,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     /**
      * Reconstructs the canonical string content of a Yjs room.
      * If the room contains per-slide CRDT maps (`slidesById` + `slideOrder`), reconstructs
-     * the merged {@link SlideDeckSpec} JSON so concurrent slide edits and reorders are preserved.
+     * the merged {@link SlideDeckSpec} JSON so concurrent slide edits, reorders, and `deckMeta`
+     * theme/master updates are preserved.
      */
     private extractRoomSerializedContent(doc: Y.Doc): string {
         const slidesById = doc.getMap<string>('slidesById');
@@ -1125,8 +1139,36 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
         if (slidesById.size > 0) {
             try {
-                const rawMeta = deckMeta.get('metaJson');
-                const metaObj = rawMeta ? (JSON.parse(rawMeta) as Partial<SlideDeckSpec>) : {};
+                let baseDeck: Partial<SlideDeckSpec> = {};
+                const rawText = doc.getText('content').toString().trim();
+                if (rawText.startsWith('{')) {
+                    try {
+                        baseDeck = JSON.parse(rawText) as Partial<SlideDeckSpec>;
+                    } catch {
+                        baseDeck = {};
+                    }
+                }
+
+                let theme = baseDeck.Theme;
+                const rawTheme = deckMeta.get('Theme');
+                if (rawTheme) {
+                    try {
+                        theme = JSON.parse(rawTheme) as SlideDeckSpec['Theme'];
+                    } catch {
+                        // Keep baseDeck.Theme
+                    }
+                }
+
+                let master = baseDeck.Master;
+                const rawMaster = deckMeta.get('Master');
+                if (rawMaster) {
+                    try {
+                        master = JSON.parse(rawMaster) as SlideDeckSpec['Master'];
+                    } catch {
+                        // Keep baseDeck.Master
+                    }
+                }
+
                 const orderedIds = slideOrder.toArray();
                 const placed = new Set<string>();
                 const slides: SlideSpec[] = [];
@@ -1152,8 +1194,20 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     }));
                     const reconstructed: SlideDeckSpec = SlideDeckEngine.Instance.ParseDeckSpec(
                         JSON.stringify({
-                            ...metaObj,
+                            ...baseDeck,
                             SchemaVersion: '1.0',
+                            DeckID: deckMeta.get('DeckID') || baseDeck.DeckID || 'deck-1',
+                            Title: deckMeta.get('Title') || baseDeck.Title || 'Presentation',
+                            Subtitle:
+                                deckMeta.get('Subtitle') !== undefined
+                                    ? deckMeta.get('Subtitle')
+                                    : baseDeck.Subtitle,
+                            AspectRatio:
+                                (deckMeta.get('AspectRatio') as '16:9' | '4:3') ||
+                                baseDeck.AspectRatio ||
+                                '16:9',
+                            Theme: theme,
+                            Master: master,
                             Slides: renumbered
                         })
                     );
