@@ -22,6 +22,7 @@ import { MJEmptyStateComponent, MJAlertComponent, MJButtonDirective } from '@mem
 import { JsonArtifactViewerComponent } from './components/plugins/json-artifact-viewer.component';
 import { CodeArtifactViewerComponent } from './components/plugins/code-artifact-viewer.component';
 import { MarkdownArtifactViewerComponent } from './components/plugins/markdown-artifact-viewer.component';
+import { SlideDeckArtifactViewerComponent } from './components/plugins/slide-deck-artifact-viewer.component';
 import { HtmlArtifactViewerComponent } from './components/plugins/html-artifact-viewer.component';
 import { SvgArtifactViewerComponent } from './components/plugins/svg-artifact-viewer.component';
 import { ComponentArtifactViewerComponent } from './components/plugins/component-artifact-viewer.component';
@@ -84,6 +85,7 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     JsonArtifactViewerComponent,
     CodeArtifactViewerComponent,
     MarkdownArtifactViewerComponent,
+    SlideDeckArtifactViewerComponent,
     HtmlArtifactViewerComponent,
     SvgArtifactViewerComponent,
     ComponentArtifactViewerComponent,
@@ -149,6 +151,7 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     JsonArtifactViewerComponent,
     CodeArtifactViewerComponent,
     MarkdownArtifactViewerComponent,
+    SlideDeckArtifactViewerComponent,
     HtmlArtifactViewerComponent,
     SvgArtifactViewerComponent,
     ComponentArtifactViewerComponent,
@@ -190,6 +193,7 @@ export class ArtifactsModule {
       JsonArtifactViewerComponent,
       CodeArtifactViewerComponent,
       MarkdownArtifactViewerComponent,
+      SlideDeckArtifactViewerComponent,
       HtmlArtifactViewerComponent,
       SvgArtifactViewerComponent,
       ComponentArtifactViewerComponent,

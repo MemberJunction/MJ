@@ -3,6 +3,7 @@ import { MJGlobal } from '@memberjunction/global';
 import { BaseArtifactToolLibrary } from '@memberjunction/ai-core-plus';
 import { DocumentToolLibrary } from '../artifact-tools/DocumentToolLibrary';
 import { WhiteboardToolLibrary } from '../artifact-tools/WhiteboardToolLibrary';
+import { SlideDeckToolLibrary } from '../artifact-tools/SlideDeckToolLibrary';
 
 const SAMPLE_DOC = `# Quarterly Strategy Report
 
@@ -294,5 +295,130 @@ describe('WhiteboardToolLibrary (@RegisterClass BaseArtifactToolLibrary)', () =>
     const afterDel = (delRes.data as { updatedContent: string }).updatedContent;
     const finalSummary = await wbLib.InvokeTool('get_board_summary', {}, afterDel);
     expect((finalSummary.data as { totalElements: number }).totalElements).toBe(2); // node-db + its attached connector removed
+  });
+});
+
+describe('SlideDeckToolLibrary (@RegisterClass BaseArtifactToolLibrary — Wave 2 Slides)', () => {
+  const slideLib = new SlideDeckToolLibrary();
+
+  it('registers SlideDeckToolLibrary in MJGlobal ClassFactory under BaseArtifactToolLibrary', () => {
+    const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseArtifactToolLibrary>(
+      BaseArtifactToolLibrary,
+      'SlideDeckToolLibrary',
+    );
+    expect(instance).toBeInstanceOf(SlideDeckToolLibrary);
+  });
+
+  it('exposes all structured slide deck perception and mutation tools', () => {
+    const toolNames = slideLib.GetToolList().map((t) => t.name);
+    expect(toolNames).toEqual(
+      expect.arrayContaining([
+        'read_deck',
+        'get_deck_outline',
+        'get_slide',
+        'add_slide',
+        'update_slide',
+        'delete_slide',
+        'reorder_slides',
+        'upsert_slide_element',
+        'update_slide_region',
+        'delete_slide_element',
+        'update_speaker_notes',
+        'apply_theme',
+        'generate_deck_from_markdown',
+      ]),
+    );
+  });
+
+  it('generates a deck from Markdown, updates a single slide in isolation (Accept #3), embeds live/OLE blocks, reorders, and applies brand themes (Accept #4)', async () => {
+    // 1. Convert SAMPLE_DOC Markdown into a structured presentation deck
+    const genRes = await slideLib.InvokeTool(
+      'generate_deck_from_markdown',
+      { markdown: SAMPLE_DOC, title: 'Q4 Strategy Presentation' },
+      '',
+    );
+    expect(genRes.success).toBe(true);
+    const deckJson1 = (genRes.data as { updatedContent: string }).updatedContent;
+
+    const readRes = await slideLib.InvokeTool('read_deck', { includeFullSlides: true }, deckJson1);
+    expect(readRes.success).toBe(true);
+    const rev1 = (readRes.data as { revisionHash: string }).revisionHash;
+    const initialSlides = (readRes.data as { slides: Array<{ SlideID: string; Title: string }> }).slides;
+    expect(initialSlides.length).toBeGreaterThanOrEqual(3);
+
+    const slide1Before = JSON.stringify(initialSlides[0]);
+    const slide3Before = JSON.stringify(initialSlides[2]);
+
+    // 2. Update ONLY slide-2 via update_slide (Accept #3)
+    const updateSlide2Res = await slideLib.InvokeTool(
+      'update_slide',
+      {
+        slideId: 'slide-2',
+        title: 'AI-Rewritten Architecture & Collaboration Slide',
+        speakerNotes: 'Agent updated speaker notes for slide 2 only.',
+        expectedRevisionHash: rev1,
+      },
+      deckJson1,
+    );
+    expect(updateSlide2Res.success).toBe(true);
+    const deckJson2 = (updateSlide2Res.data as { updatedContent: string }).updatedContent;
+    const parsedAfterSlide2 = JSON.parse(deckJson2) as { Slides: Array<{ SlideID: string; Title: string }> };
+
+    // Verify slide-1 and slide-3 were untouched
+    expect(JSON.stringify(parsedAfterSlide2.Slides[0])).toBe(slide1Before);
+    expect(JSON.stringify(parsedAfterSlide2.Slides[2])).toBe(slide3Before);
+    expect(parsedAfterSlide2.Slides[1].Title).toBe('AI-Rewritten Architecture & Collaboration Slide');
+
+    // Verify stale revision hash is rejected
+    const staleRes = await slideLib.InvokeTool(
+      'update_slide',
+      { slideId: 'slide-2', title: 'Should Fail', expectedRevisionHash: rev1 },
+      deckJson2,
+    );
+    expect(staleRes.success).toBe(false);
+
+    // 3. Upsert a Live MJ EntityView block and an OLE Whiteboard block into slide-2
+    const upsertLiveRes = await slideLib.InvokeTool(
+      'upsert_slide_element',
+      {
+        slideId: 'slide-2',
+        regionId: 'live-data',
+        kind: 'mj-block',
+        mjBlock: {
+          Kind: 'EntityView',
+          EntityName: 'MJ: Artifacts',
+          Title: 'Live Governed Artifacts',
+        },
+      },
+      deckJson2,
+    );
+    expect(upsertLiveRes.success).toBe(true);
+    const deckJson3 = (upsertLiveRes.data as { updatedContent: string }).updatedContent;
+    expect(deckJson3).toContain('"Kind": "EntityView"');
+
+    // 4. Apply organization brand color seeds (Accept #4)
+    const themeRes = await slideLib.InvokeTool(
+      'apply_theme',
+      {
+        organizationName: 'Global FinTech',
+        primaryColor: '#0F766E',
+        accentColor: '#F59E0B',
+        backgroundColor: '#0F172A',
+      },
+      deckJson3,
+    );
+    expect(themeRes.success).toBe(true);
+    const deckJson4 = (themeRes.data as { updatedContent: string }).updatedContent;
+    expect(deckJson4).toContain('Global FinTech');
+
+    // 5. Reorder slides
+    const reorderRes = await slideLib.InvokeTool(
+      'reorder_slides',
+      { slideIds: ['slide-3', 'slide-1', 'slide-2'] },
+      deckJson4,
+    );
+    expect(reorderRes.success).toBe(true);
+    const orderedIds = (reorderRes.data as { orderedSlideIds: string[] }).orderedSlideIds;
+    expect(orderedIds).toEqual(['slide-3', 'slide-1', 'slide-2']);
   });
 });

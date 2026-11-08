@@ -7,8 +7,11 @@ import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
 import {
   DocumentLiveBlockEngine,
+  SlideDeckEngine,
   type DocumentBlockSpec,
   type DocumentBlockKind,
+  type SlideDeckSpec,
+  type SlideSpec,
 } from '@memberjunction/core-entities';
 
 const MSG_SYNC = 0;
@@ -177,9 +180,17 @@ export class DocumentCollaborationSession {
   }
 
   /**
-   * Returns the current string content of the shared Yjs `Y.Text('content')` CRDT.
+   * Returns the current string content of the shared Yjs `Y.Text('content')` CRDT
+   * (or the reconstructed `SlideDeckSpec` JSON when the room hosts a presentation deck).
    */
   public GetContent(): string {
+    const slideOrder = this.Doc.getArray<string>('slideOrder');
+    if (slideOrder.length > 0) {
+      const reconstructed = this.reconstructSlideDeckJsonFromCrdt();
+      if (reconstructed) {
+        return reconstructed;
+      }
+    }
     const yText = this.ContentText.toString();
     if (yText.length === 0 && !this.seededInDoc && this.initialSeedContent.length > 0) {
       return this.initialSeedContent;
@@ -202,6 +213,7 @@ export class DocumentCollaborationSession {
     if (initialContent && !deferInitialSeedForRemoteSync) {
       this.Doc.transact(() => {
         this.ContentText.insert(0, initialContent);
+        this.populateSlideDeckCrdtIfPresentation(initialContent);
       }, 'init');
       this.seededInDoc = true;
     }
@@ -219,7 +231,7 @@ export class DocumentCollaborationSession {
       if (origin !== 'remote') {
         this.sendYjsUpdate(update);
       }
-      this.contentChanged$.next(this.ContentText.toString());
+      this.contentChanged$.next(this.GetContent());
     });
 
     this.Awareness.on('change', () => {
@@ -322,6 +334,112 @@ export class DocumentCollaborationSession {
       }
       if (insertText.length > 0) {
         this.ContentText.insert(prefixLen, insertText);
+      }
+      this.populateSlideDeckCrdtIfPresentation(newMarkdown);
+    }, 'local');
+  }
+
+  /**
+   * Surgically updates a single slide in `slidesById` (`Y.Map`) and appends its `SlideID` to `slideOrder` (`Y.Array`)
+   * if not yet present, enabling conflict-free concurrent multi-slide editing (`Accept #1`).
+   */
+  public UpdateSlideInDeck(slide: SlideSpec, fullDeckFallback?: SlideDeckSpec): void {
+    if (!this.canEdit || this.applyingRemote) {
+      return;
+    }
+    this.seededInDoc = true;
+    this.Doc.transact(() => {
+      if (this.Doc.getArray<string>('slideOrder').length === 0 && fullDeckFallback) {
+        this.populateSlideDeckCrdtIfPresentation(SlideDeckEngine.Instance.SerializeDeckSpec(fullDeckFallback));
+      }
+      const slidesById = this.Doc.getMap<string>('slidesById');
+      const slideOrder = this.Doc.getArray<string>('slideOrder');
+      slidesById.set(slide.SlideID, JSON.stringify(slide));
+      const existingOrder = slideOrder.toArray();
+      if (!existingOrder.includes(slide.SlideID)) {
+        slideOrder.push([slide.SlideID]);
+      }
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+        this.syncContentTextFromSlideCrdt();
+      }
+    }, 'local');
+  }
+
+  /**
+   * Reorders the presentation deck via the shared `slideOrder` (`Y.Array<string>`) CRDT
+   * without overwriting individual slide contents in `slidesById` (`Accept #1`).
+   */
+  public ReorderSlidesInDeck(orderedSlideIds: string[], fullDeckFallback?: SlideDeckSpec): void {
+    if (!this.canEdit || this.applyingRemote) {
+      return;
+    }
+    this.seededInDoc = true;
+    this.Doc.transact(() => {
+      if (this.Doc.getArray<string>('slideOrder').length === 0 && fullDeckFallback) {
+        this.populateSlideDeckCrdtIfPresentation(SlideDeckEngine.Instance.SerializeDeckSpec(fullDeckFallback));
+      }
+      const slideOrder = this.Doc.getArray<string>('slideOrder');
+      const existing = slideOrder.toArray();
+      const nextOrder = [...orderedSlideIds];
+      for (const id of existing) {
+        if (!nextOrder.includes(id)) {
+          nextOrder.push(id);
+        }
+      }
+      slideOrder.delete(0, slideOrder.length);
+      slideOrder.insert(0, nextOrder);
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+        this.syncContentTextFromSlideCrdt();
+      }
+    }, 'local');
+  }
+
+  /**
+   * Deletes a slide by `slideId` from `slidesById` (`Y.Map`) and `slideOrder` (`Y.Array`).
+   */
+  public DeleteSlideFromDeck(slideId: string, fullDeckFallback?: SlideDeckSpec): void {
+    if (!this.canEdit || this.applyingRemote) {
+      return;
+    }
+    this.seededInDoc = true;
+    this.Doc.transact(() => {
+      if (this.Doc.getArray<string>('slideOrder').length === 0 && fullDeckFallback) {
+        this.populateSlideDeckCrdtIfPresentation(SlideDeckEngine.Instance.SerializeDeckSpec(fullDeckFallback));
+      }
+      const slidesById = this.Doc.getMap<string>('slidesById');
+      const slideOrder = this.Doc.getArray<string>('slideOrder');
+      slidesById.delete(slideId);
+      const nextOrder = slideOrder.toArray().filter((id) => id !== slideId);
+      slideOrder.delete(0, slideOrder.length);
+      slideOrder.insert(0, nextOrder);
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+        this.syncContentTextFromSlideCrdt();
+      }
+    }, 'local');
+  }
+
+  /**
+   * Updates deck-level metadata (`Title`, `Subtitle`, `AspectRatio`, `Theme`, `Master`) in `deckMeta` (`Y.Map`)
+   * without touching individual slide entries in `slidesById`.
+   */
+  public UpdateDeckMeta(deck: SlideDeckSpec): void {
+    if (!this.canEdit || this.applyingRemote) {
+      return;
+    }
+    this.seededInDoc = true;
+    this.Doc.transact(() => {
+      if (this.Doc.getArray<string>('slideOrder').length === 0) {
+        this.populateSlideDeckCrdtIfPresentation(SlideDeckEngine.Instance.SerializeDeckSpec(deck));
+      }
+      const deckMeta = this.Doc.getMap<string>('deckMeta');
+      deckMeta.set('DeckID', deck.DeckID);
+      deckMeta.set('Title', deck.Title);
+      deckMeta.set('Subtitle', deck.Subtitle ?? '');
+      deckMeta.set('AspectRatio', deck.AspectRatio);
+      deckMeta.set('Theme', JSON.stringify(deck.Theme));
+      deckMeta.set('Master', JSON.stringify(deck.Master));
+      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+        this.syncContentTextFromSlideCrdt();
       }
     }, 'local');
   }
@@ -428,6 +546,7 @@ export class DocumentCollaborationSession {
         this.seededInDoc = true;
         this.Doc.transact(() => {
           this.ContentText.insert(0, this.initialSeedContent);
+          this.populateSlideDeckCrdtIfPresentation(this.initialSeedContent);
         }, 'local');
       } else if (this.ContentText.length > 0) {
         this.seededInDoc = true;
@@ -468,6 +587,158 @@ export class DocumentCollaborationSession {
       } catch {
         // Ignore malformed frame
       }
+    }
+  }
+
+  private populateSlideDeckCrdtIfPresentation(rawContent: string): void {
+    const trimmed = (rawContent ?? '').trim();
+    if (!trimmed.startsWith('{') || !trimmed.includes('"Slides"')) {
+      return;
+    }
+    try {
+      const parsed = JSON.parse(trimmed) as Partial<SlideDeckSpec>;
+      if (!parsed || !Array.isArray(parsed.Slides) || parsed.Slides.length === 0) {
+        return;
+      }
+      const deckMeta = this.Doc.getMap<string>('deckMeta');
+      const slidesById = this.Doc.getMap<string>('slidesById');
+      const slideOrder = this.Doc.getArray<string>('slideOrder');
+
+      deckMeta.set('DeckID', parsed.DeckID || 'deck-1');
+      deckMeta.set('Title', parsed.Title || 'Presentation');
+      deckMeta.set('Subtitle', parsed.Subtitle || '');
+      deckMeta.set('AspectRatio', parsed.AspectRatio === '4:3' ? '4:3' : '16:9');
+      if (parsed.Theme) {
+        deckMeta.set('Theme', JSON.stringify(parsed.Theme));
+      }
+      if (parsed.Master) {
+        deckMeta.set('Master', JSON.stringify(parsed.Master));
+      }
+
+      const nextIds: string[] = [];
+      for (const slide of parsed.Slides) {
+        if (slide && typeof slide.SlideID === 'string' && slide.SlideID.trim()) {
+          slidesById.set(slide.SlideID, JSON.stringify(slide));
+          nextIds.push(slide.SlideID);
+        }
+      }
+      const currentOrder = slideOrder.toArray();
+      const sameOrder =
+        currentOrder.length === nextIds.length &&
+        currentOrder.every((id, idx) => id === nextIds[idx]);
+      if (!sameOrder) {
+        slideOrder.delete(0, slideOrder.length);
+        slideOrder.insert(0, nextIds);
+      }
+    } catch {
+      // Ignore non-deck content
+    }
+  }
+
+  private reconstructSlideDeckJsonFromCrdt(): string | null {
+    const slideOrder = this.Doc.getArray<string>('slideOrder');
+    const slidesById = this.Doc.getMap<string>('slidesById');
+    const deckMeta = this.Doc.getMap<string>('deckMeta');
+    if (slideOrder.length === 0 || slidesById.size === 0) {
+      return null;
+    }
+
+    const orderedIds = slideOrder.toArray();
+    const placedIds = new Set<string>();
+    const slides: SlideSpec[] = [];
+
+    for (const id of orderedIds) {
+      const rawSlide = slidesById.get(id);
+      if (rawSlide && !placedIds.has(id)) {
+        try {
+          const parsedSlide = JSON.parse(rawSlide) as SlideSpec;
+          slides.push({
+            ...parsedSlide,
+            SlideNumber: slides.length + 1,
+          });
+          placedIds.add(id);
+        } catch {
+          // Ignore malformed slide entry
+        }
+      }
+    }
+
+    slidesById.forEach((rawSlide, id) => {
+      if (!placedIds.has(id)) {
+        try {
+          const parsedSlide = JSON.parse(rawSlide) as SlideSpec;
+          slides.push({
+            ...parsedSlide,
+            SlideNumber: slides.length + 1,
+          });
+          placedIds.add(id);
+        } catch {
+          // Ignore malformed slide entry
+        }
+      }
+    });
+
+    if (slides.length === 0) {
+      return null;
+    }
+
+    let baseDeck: Partial<SlideDeckSpec> = {};
+    const currentText = this.ContentText.toString().trim();
+    if (currentText.startsWith('{')) {
+      try {
+        baseDeck = JSON.parse(currentText) as Partial<SlideDeckSpec>;
+      } catch {
+        baseDeck = {};
+      }
+    }
+
+    let theme = baseDeck.Theme;
+    const rawTheme = deckMeta.get('Theme');
+    if (rawTheme) {
+      try {
+        theme = JSON.parse(rawTheme) as SlideDeckSpec['Theme'];
+      } catch {
+        // Keep baseDeck.Theme
+      }
+    }
+
+    let master = baseDeck.Master;
+    const rawMaster = deckMeta.get('Master');
+    if (rawMaster) {
+      try {
+        master = JSON.parse(rawMaster) as SlideDeckSpec['Master'];
+      } catch {
+        // Keep baseDeck.Master
+      }
+    }
+
+    const merged: Partial<SlideDeckSpec> = {
+      ...baseDeck,
+      SchemaVersion: '1.0',
+      DeckID: deckMeta.get('DeckID') || baseDeck.DeckID || 'deck-1',
+      Title: deckMeta.get('Title') || baseDeck.Title || 'Presentation',
+      Subtitle: deckMeta.get('Subtitle') || baseDeck.Subtitle,
+      AspectRatio: (deckMeta.get('AspectRatio') as '16:9' | '4:3') || baseDeck.AspectRatio || '16:9',
+      Theme: theme,
+      Master: master,
+      Slides: slides,
+      UpdatedAt: baseDeck.UpdatedAt || new Date().toISOString(),
+    };
+
+    return JSON.stringify(merged, null, 2);
+  }
+
+  private syncContentTextFromSlideCrdt(): void {
+    const reconstructed = this.reconstructSlideDeckJsonFromCrdt();
+    if (!reconstructed) {
+      return;
+    }
+    const current = this.ContentText.toString();
+    if (current !== reconstructed) {
+      if (current.length > 0) {
+        this.ContentText.delete(0, current.length);
+      }
+      this.ContentText.insert(0, reconstructed);
     }
   }
 

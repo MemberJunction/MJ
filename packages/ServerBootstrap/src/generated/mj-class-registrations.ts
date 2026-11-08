@@ -1269,7 +1269,7 @@ import {
     VoyageReRanker,
 } from '@memberjunction/search-engine';
 
-// @memberjunction/ai-agents (27 classes)
+// @memberjunction/ai-agents (28 classes)
 import {
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
@@ -1295,6 +1295,7 @@ import {
     QueryBuilderAgent,
     RealtimeAgentType,
     SearchResultSetToolLibrary,
+    SlideDeckToolLibrary,
     TextToolLibrary,
     WhiteboardChannelServer,
     WhiteboardToolLibrary,
@@ -2721,6 +2722,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     QueryBuilderAgent,
     RealtimeAgentType,
     SearchResultSetToolLibrary,
+    SlideDeckToolLibrary,
     TextToolLibrary,
     WhiteboardChannelServer,
     WhiteboardToolLibrary,
@@ -2846,11 +2848,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
-    MJConversationEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJConversationEntityServer,
     MJDashboardEntityServer,
     MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
@@ -3050,11 +3052,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PrepareOutboundCallBriefAction,
     PreviewDocumentAction,
     QRCodeAction,
-    ReadRSSFeedAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    ReadRSSFeedAction,
     ReembedLocalVectorsAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
@@ -3159,7 +3161,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1287;
+export const CLASS_REGISTRATIONS_COUNT = 1288;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -13,6 +13,7 @@ export * from './lib/services/interactive-form-apply.service';
 export * from './lib/services/artifact-preview-resolver.service';
 export * from './lib/services/document-collaboration.service';
 export * from './lib/services/document-import-export.service';
+export * from './lib/services/slide-deck-export.service';
 
 // Interfaces
 export * from './lib/interfaces/artifact-viewer-plugin.interface';
@@ -41,6 +42,7 @@ export * from './lib/components/artifact-message-card.component';
 export * from './lib/components/plugins/json-artifact-viewer.component';
 export * from './lib/components/plugins/code-artifact-viewer.component';
 export * from './lib/components/plugins/markdown-artifact-viewer.component';
+export * from './lib/components/plugins/slide-deck-artifact-viewer.component';
 export * from './lib/components/plugins/html-artifact-viewer.component';
 export * from './lib/components/plugins/svg-artifact-viewer.component';
 export * from './lib/components/plugins/component-artifact-viewer.component';

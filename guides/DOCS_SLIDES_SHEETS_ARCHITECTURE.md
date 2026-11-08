@@ -1,6 +1,6 @@
 # MemberJunction Docs, Slides, and Sheets Architecture Guide
 
-This guide documents the shared real-time collaboration core, viewer-scoped live MJ blocks, "MS OLE" inline artifact embedding, server-side agent tool libraries (`BaseArtifactToolLibrary`), and the collaborative **MJ Docs** editor implemented in Wave 1 of [plans/docs-slides-sheets.md](../plans/docs-slides-sheets.md).
+This guide documents the shared real-time collaboration core, viewer-scoped live MJ blocks, "MS OLE" inline artifact embedding, server-side agent tool libraries (`BaseArtifactToolLibrary`), the collaborative **MJ Docs** editor (Wave 1), and the **MJ Slides** presentation deck editor & OpenXML `.pptx` exporter (Wave 2) implemented per [plans/docs-slides-sheets.md](../plans/docs-slides-sheets.md).
 
 ---
 
@@ -10,8 +10,10 @@ This guide documents the shared real-time collaboration core, viewer-scoped live
 flowchart TD
     subgraph Browser["Angular Browser Client (@memberjunction/ng-artifacts & @memberjunction/ng-conversations)"]
         Docs["MarkdownArtifactViewerComponent (MJ Docs)"]
-        CollabSvc["DocumentCollaborationService (Yjs + Awareness)"]
+        Slides["SlideDeckArtifactViewerComponent (MJ Slides)"]
+        CollabSvc["DocumentCollaborationService (Yjs + Awareness + Per-Slide CRDT)"]
         ImpExp["DocumentImportExportService (.md / .docx / .pdf)"]
+        PptxExp["SlideDeckExportService (.pptx OpenXML + .pdf)"]
         PluginHost["ArtifactTypePluginViewerComponent (OLE Host)"]
         WbPlugin["WhiteboardArtifactViewerComponent (SupportsInlineEdit = true)"]
     end
@@ -25,7 +27,9 @@ flowchart TD
     subgraph Core["Shared Core (@memberjunction/core-entities & @memberjunction/ai-agents)"]
         PermEng["ArtifactPermissionEngine + IArtifactPermissionDelegate"]
         LiveEng["DocumentLiveBlockEngine (Viewer RLS/FLS + Freeze/Live)"]
+        SlideEng["SlideDeckEngine (Layouts, Brand Themes, O6 Freeze, Outline)"]
         DocTools["DocumentToolLibrary (@RegisterClass BaseArtifactToolLibrary)"]
+        SlideTools["SlideDeckToolLibrary (@RegisterClass BaseArtifactToolLibrary)"]
         WbTools["WhiteboardToolLibrary (@RegisterClass BaseArtifactToolLibrary)"]
     end
 
@@ -33,12 +37,16 @@ flowchart TD
         Art["MJ: Artifacts (DelegateEntityID, DelegateRecordID)"]
         Ver["MJ: Artifact Versions (Immutable Checkpoints)"]
         Work["MJ: Artifact Working States (YjsState VARBINARY(MAX))"]
-        Conv["MJ: Conversations (AnchorType = 'DocBlock')"]
+        Conv["MJ: Conversations (AnchorType = 'DocBlock' | 'SlideRegion')"]
     end
 
     Docs --> CollabSvc
     Docs --> ImpExp
     Docs --> PluginHost
+    Slides --> CollabSvc
+    Slides --> PptxExp
+    Slides --> PluginHost
+    Slides --> SlideEng
     PluginHost --> WbPlugin
     CollabSvc <-->|"y-protocols/sync + awareness"| CollabSrv
     CollabSrv <--> Relay
@@ -48,8 +56,10 @@ flowchart TD
     GqlRes --> LiveEng
     GqlRes --> PermEng
     DocTools --> LiveEng
+    SlideTools --> SlideEng
     PermEng --> Art
     Docs --> Conv
+    Slides --> Conv
 ```
 
 ---
@@ -120,3 +130,45 @@ Located in `packages/AI/Agents/src/artifact-tools/`:
   - Mutation tools (with optional `expectedRevisionHash` SHA-256 optimistic concurrency check): `insert_block_after`, `replace_block`, `delete_block`, `upsert_table`, `insert_live_block`, `embed_artifact_block`, `propose_suggestion`.
 - **`WhiteboardToolLibrary`** (`@RegisterClass(BaseArtifactToolLibrary, 'WhiteboardToolLibrary')`):
   - Inspection & layout tools: `get_board_summary`, `list_elements`, `upsert_nodes`, `connect_nodes`, `add_sticky_notes`, `delete_elements`, `auto_layout`.
+- **`SlideDeckToolLibrary`** (`@RegisterClass(BaseArtifactToolLibrary, 'SlideDeckToolLibrary')`):
+  - Inspection tools: `read_deck`, `get_deck_outline`, `get_slide`.
+  - Mutation tools: `add_slide`, `update_slide`, `delete_slide`, `reorder_slides`, `upsert_slide_element`, `update_slide_region`, `delete_slide_element`, `update_speaker_notes`, `apply_theme`, `generate_deck_from_markdown`.
+
+---
+
+## 7. MJ Slides — Presentation Deck Architecture (Wave 2, § 5)
+
+### 7.1 `SlideDeckSpec` & `SlideDeckEngine` (`@memberjunction/core-entities`)
+
+Located in `packages/MJCoreEntities/src/custom/SlideDeckEngine.ts`:
+- **Canonical Slide Layouts (11 supported layouts)**:
+  - `Title`, `SectionHeader`, `TitleAndBody`, `TwoColumn`, `Comparison`, `LiveDataSlide`, `ChartAndText`, `BigNumber`, `Quote`, `FullBleedImage`, and `Blank`.
+- **Theme Engine & Brand Color Seed Derivation (`Accept #4`)**:
+  - `SLIDE_DECK_THEME_PRESETS` provides 4 built-in themes (`mj-corporate-light`, `mj-executive-dark`, `mj-emerald-growth`, `mj-sunset-strategy`).
+  - `SlideDeckEngine.Instance.DeriveThemeFromBrandSeeds(seeds)` deterministically derives a high-contrast slide theme (surface, elevated card, primary/secondary text, accent badges, borders, and font stacks) from an organization's brand color seeds (`PrimaryColor`, `SecondaryColor`, `AccentColor`, `DarkMode`) and applies it across every slide via `ApplyTheme`.
+- **"Make a Deck from This Doc" (`ConvertMarkdownToSlideDeck`, § 5.2)**:
+  - Converts Markdown documents (headings, bullet lists, callouts, and `:::mj-block` directives) into a structured multi-slide `SlideDeckSpec`, preserving live MJ blocks (`EntityView`, `SavedQuery`, `DashboardPart`, `InteractiveComponent`) and embedded `Artifact` blocks (`Whiteboard`) as live slide regions.
+- **Presentation Mode Automatic Live-Block Freeze (`O6` & `Accept #2`)**:
+  - `SlideDeckEngine.Instance.FreezeDeckLiveBlocksForPresentation(deck, user, executionSnapshots)` freezes all live MJ blocks across the deck when entering `Present` / `Presenter View` (or exporting `.pptx`), stamping `FrozenAt`, `FrozenByUserID`, and `FrozenByUserName` so live presentations never flicker or fail mid-talk while supporting one-click **Refresh Live Data**.
+
+### 7.2 Per-Slide Yjs CRDT Room Synchronization (`Accept #1`)
+
+- Both `ArtifactCollaborationServer` (`@memberjunction/server`) and `DocumentCollaborationSession` (`@memberjunction/ng-artifacts`) synchronize `SlideDeckSpec` decks using structured Yjs shared types alongside `Y.Text('content')`:
+  - `doc.getMap('deckMeta')`: Deck title, subtitle, aspect ratio, theme JSON, and master header/footer settings.
+  - `doc.getMap('slidesById')`: Keyed by `SlideID`, storing each slide's serialized `SlideSpec` independently.
+  - `doc.getArray('slideOrder')`: Ordered list of `SlideID` strings.
+- **Conflict-Free Co-Editing**:
+  - When User A edits Slide 1 (`slidesById.set(slide1Id, ...)`), User B edits Slide 2 (`slidesById.set(slide2Id, ...)`), and User A reorders slides in the filmstrip (`slideOrder`), Yjs merges all operations with zero data loss or last-writer-wins clobbering.
+
+### 7.3 Angular Slides Editor & OpenXML `.pptx` Exporter (`@memberjunction/ng-artifacts`)
+
+- **`SlideDeckArtifactViewerComponent` (`@RegisterClass(BaseArtifactViewerPluginComponent, 'SlideDeckArtifactViewerPlugin')`)**:
+  - 16:9 widescreen visual slide stage with CSS custom property bindings derived from `Deck.Theme`.
+  - Left filmstrip sorter rail (`add`, `duplicate`, `move up/down`, `delete`) with per-slide awareness badges and comment counters.
+  - In-place `contenteditable` editing for slide titles, subtitles, rich-text regions, callouts, big-number metrics, and speaker notes.
+  - Live MJ Block region execution via `DocumentLiveBlockEngine` with viewer RLS/FLS, `O5` freeze warning modal, and inline OLE `Whiteboard` canvas editing (`<mj-artifact-type-plugin-viewer>` -> `<mj-realtime-whiteboard-host>`).
+  - Full-screen **Presenter View** (`O6`) with elapsed timer, speaker notes, slide navigation, automatic live-block freeze, and one-click **Refresh Live Data**.
+  - Anchored `SlideRegion` comment threads (`AnchorType = 'SlideRegion'`) with `@SlidesAgent` invocation that mutates only the targeted slide (`Accept #3`).
+- **`SlideDeckExportService`**:
+  - `ExportToPptxPackage(deck, user, executionSnapshots)`: Generates a standards-compliant OpenXML `.pptx` PKZIP archive (`PK\x03\x04`) containing `[Content_Types].xml`, `ppt/presentation.xml`, `ppt/theme/theme1.xml`, `ppt/slides/slide1..N.xml` (with editable `<p:sp>` `<a:t>` text runs and native DrawingML `<a:tbl>` tables for frozen live block rows per `Accept #2`), and `ppt/notesSlides/notesSlide1..N.xml` (preserving speaker notes per `Accept #5`).
+  - `BuildPrintableDeckHtml(deck, executionSnapshots)`: Generates a 16:9 widescreen `@page { size: 13.333in 7.5in; }` HTML document for `.pdf` export.

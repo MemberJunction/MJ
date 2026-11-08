@@ -785,4 +785,136 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         await relayServerA.Shutdown();
         clientOnB.ws.close();
     });
+
+    it('synchronizes concurrent per-slide Yjs edits (slidesById Y.Map) and slide reordering (slideOrder Y.Array) with zero data loss (Wave 2 Accept #1)', async () => {
+        // Seed version 1 with a 3-slide presentation deck JSON
+        const initialDeck = {
+            SchemaVersion: '1.0',
+            DeckID: 'deck-wave2-sync',
+            Title: 'Board Strategy Deck',
+            AspectRatio: '16:9',
+            Theme: {
+                ThemeID: 'mj-default',
+                Name: 'MemberJunction Default',
+                PrimaryColor: '#2563EB',
+                AccentColor: '#0EA5E9',
+                BackgroundColor: '#FFFFFF',
+                SurfaceColor: '#F8FAFC',
+                TextPrimaryColor: '#0F172A',
+                TextSecondaryColor: '#475569',
+                BorderColor: '#E2E8F0',
+                HeadingFontFamily: 'Inter, system-ui, sans-serif',
+                BodyFontFamily: 'Inter, system-ui, sans-serif',
+                MonospaceFontFamily: 'JetBrains Mono, monospace'
+            },
+            Master: {
+                HeaderText: 'MemberJunction Confidential',
+                FooterText: 'Q4 Strategy',
+                ShowSlideNumbers: true,
+                ShowHeaderOnTitleSlide: false,
+                ShowFooterOnTitleSlide: false,
+                OrganizationName: 'MemberJunction'
+            },
+            Slides: [
+                {
+                    SlideID: 'slide-1',
+                    Layout: 'Title',
+                    Title: 'Original Slide 1 Title',
+                    Subtitle: 'Original Subtitle',
+                    SpeakerNotes: 'Notes 1',
+                    Regions: []
+                },
+                {
+                    SlideID: 'slide-2',
+                    Layout: 'TitleAndBody',
+                    Title: 'Original Slide 2 Title',
+                    SpeakerNotes: 'Notes 2',
+                    Regions: [
+                        {
+                            RegionID: 'body',
+                            Label: 'Primary Content',
+                            Kind: 'rich-text',
+                            MarkdownContent: '- Initial bullet on Slide 2'
+                        }
+                    ]
+                },
+                {
+                    SlideID: 'slide-3',
+                    Layout: 'BigNumber',
+                    Title: 'Original Slide 3 KPI',
+                    SpeakerNotes: 'Notes 3',
+                    Regions: [
+                        {
+                            RegionID: 'kpi',
+                            Label: 'Headline Metric',
+                            Kind: 'big-number',
+                            MarkdownContent: '',
+                            BigNumberValue: '$4.2M',
+                            BigNumberLabel: 'ARR'
+                        }
+                    ]
+                }
+            ]
+        };
+        versions[0].Content = JSON.stringify(initialDeck, null, 2);
+
+        const clientA = await connectYjsClient(editorUser.ID);
+        const clientB = await connectYjsClient(secondEditorUser.ID);
+
+        await clientA.waitForText('Original Slide 1 Title');
+        await clientB.waitForText('Original Slide 2 Title');
+
+        // Verify per-slide Y.Map and Y.Array structures were populated on the Y.Doc
+        expect(clientA.doc.getArray<string>('slideOrder').toArray()).toEqual(['slide-1', 'slide-2', 'slide-3']);
+        expect(clientB.doc.getArray<string>('slideOrder').toArray()).toEqual(['slide-1', 'slide-2', 'slide-3']);
+
+        // Editor A updates Slide 1 in `slidesById`
+        clientA.doc.transact(() => {
+            const slidesById = clientA.doc.getMap<string>('slidesById');
+            const slide1 = JSON.parse(slidesById.get('slide-1')!);
+            slide1.Title = 'Alice Updated Slide 1 Title';
+            slide1.SpeakerNotes = 'Alice speaker notes on slide 1';
+            slidesById.set('slide-1', JSON.stringify(slide1));
+        });
+
+        // Simultaneously, Editor B updates Slide 2 in `slidesById` AND reorders the deck to ['slide-3', 'slide-1', 'slide-2']
+        clientB.doc.transact(() => {
+            const slidesById = clientB.doc.getMap<string>('slidesById');
+            const slide2 = JSON.parse(slidesById.get('slide-2')!);
+            slide2.Title = 'Bob Updated Slide 2 Revenue Analysis';
+            slide2.Regions[0].MarkdownContent = '- Bob added Q4 enterprise pipeline metrics';
+            slidesById.set('slide-2', JSON.stringify(slide2));
+
+            const slideOrder = clientB.doc.getArray<string>('slideOrder');
+            slideOrder.delete(0, slideOrder.length);
+            slideOrder.insert(0, ['slide-3', 'slide-1', 'slide-2']);
+        });
+
+        // Wait for server room to converge both concurrent per-slide edits AND the new slide order
+        await vi.waitFor(async () => {
+            const roomJson = await ArtifactCollaborationServer.Instance.GetRoomContent(artifactId, editorUser);
+            const mergedDeck = JSON.parse(roomJson) as typeof initialDeck;
+            expect(mergedDeck.Slides.map((s) => s.SlideID)).toEqual(['slide-3', 'slide-1', 'slide-2']);
+            const s1 = mergedDeck.Slides.find((s) => s.SlideID === 'slide-1')!;
+            const s2 = mergedDeck.Slides.find((s) => s.SlideID === 'slide-2')!;
+            const s3 = mergedDeck.Slides.find((s) => s.SlideID === 'slide-3')!;
+            expect(s1.Title).toBe('Alice Updated Slide 1 Title');
+            expect(s1.SpeakerNotes).toBe('Alice speaker notes on slide 1');
+            expect(s2.Title).toBe('Bob Updated Slide 2 Revenue Analysis');
+            expect(s2.Regions[0].MarkdownContent).toContain('Bob added Q4 enterprise pipeline metrics');
+            expect(s3.Title).toBe('Original Slide 3 KPI');
+        });
+
+        // Compact room into MJ: Artifact Versions and verify the compacted JSON preserves everything
+        const compacted = await ArtifactCollaborationServer.Instance.CompactRoomToArtifactVersion(
+            artifactId,
+            editorUser
+        );
+        expect(compacted.Saved).toBe(true);
+        const savedDeck = JSON.parse(versions[versions.length - 1].Content) as typeof initialDeck;
+        expect(savedDeck.Slides.map((s) => s.SlideID)).toEqual(['slide-3', 'slide-1', 'slide-2']);
+
+        clientA.ws.close();
+        clientB.ws.close();
+    });
 });

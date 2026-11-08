@@ -134,6 +134,7 @@ export class MyCustomViewerComponent extends BaseArtifactViewerComponent {
 | `JsonArtifactViewerComponent` | JSON | Formatted JSON with syntax highlighting |
 | `CodeArtifactViewerComponent` | Code | Code editor with language detection |
 | `MarkdownArtifactViewerComponent` | Markdown Document | Collaborative MJ Docs editor & viewer with TOC outline rail, `/` slash menu, live MJ blocks (`EntityView`, `SavedQuery`, `DashboardPart`, `InteractiveComponent`), inline OLE `Artifact` / `Whiteboard` blocks, Suggest mode, anchored `DocBlock` comments with `@mention`, version diffing, and `.md`/`.docx`/`.pdf` import/export |
+| `SlideDeckArtifactViewerComponent` | Presentation | Collaborative MJ Slides 16:9 presentation editor & presenter studio (`SlideDeckArtifactViewerPlugin`) with 11 canonical layouts, filmstrip sorter rail, in-place editable regions, per-slide Yjs CRDT co-editing (`slidesById` + `slideOrder`), Organization Brand Color Seeds theme derivation (`Accept #4`), Live MJ Blocks + inline OLE `Whiteboard` regions, `O6` Presenter View automatic live-block freeze, anchored `SlideRegion` comments with `@SlidesAgent` single-slide isolation (`Accept #3`), *"Make a Deck from This Doc"* conversion, and OpenXML `.pptx` / `.pdf` export |
 | `HtmlArtifactViewerComponent` | HTML | Sandboxed HTML rendering |
 | `SvgArtifactViewerComponent` | SVG | SVG image rendering |
 | `AudioArtifactViewerComponent` | Audio | Audio playback via `mj-media-player` (transport, waveform scrubber, playback speed) |

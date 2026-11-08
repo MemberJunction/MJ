@@ -19,7 +19,10 @@ import { IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } f
 import {
     ArtifactPermissionEngine,
     MJArtifactVersionEntity,
-    MJArtifactWorkingStateEntity
+    MJArtifactWorkingStateEntity,
+    SlideDeckEngine,
+    type SlideDeckSpec,
+    type SlideSpec
 } from '@memberjunction/core-entities';
 import { getUserPayload } from '../context.js';
 import { InMemoryYjsRoomRelay, type IYjsRoomRelay, type YjsRelayMessage } from './YjsRoomRelay.js';
@@ -352,7 +355,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
         await this.FlushWorkingState(artifactId, user);
 
-        const currentContent = room.Doc.getText('content').toString();
+        const currentContent = this.extractRoomSerializedContent(room.Doc);
         const contentHash = createHash('sha256').update(currentContent, 'utf8').digest('hex');
 
         const rv = RunView.FromMetadataProvider(provider);
@@ -450,7 +453,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         }
 
         const yText = room.Doc.getText('content');
-        const existing = yText.toString();
+        const existing = this.extractRoomSerializedContent(room.Doc);
         if (existing !== newContent) {
             room.Doc.transact(() => {
                 if (yText.length > 0) {
@@ -459,6 +462,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 if (newContent.length > 0) {
                     yText.insert(0, newContent);
                 }
+                this.syncSlideDeckStructuresIfPresent(room.Doc, newContent);
             }, 'server-agent');
             room.LastModifiedByUser = user;
             room.DirtyWorkingState = true;
@@ -508,7 +512,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
      */
     public async GetRoomContent(artifactId: string, contextUser: UserInfo): Promise<string> {
         const room = await this.GetOrCreateRoom(artifactId, contextUser);
-        return room ? room.Doc.getText('content').toString() : '';
+        return room ? this.extractRoomSerializedContent(room.Doc) : '';
     }
 
     /**
@@ -739,6 +743,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             if (yText.length === 0 && versionRow?.Content) {
                 room.Doc.transact(() => {
                     yText.insert(0, versionRow.Content!);
+                    this.syncSlideDeckStructuresIfPresent(room.Doc, versionRow.Content!);
                     room.Doc.getMap('meta').set('versionNumber', versionRow.VersionNumber);
                     room.Doc.getMap('meta').set('versionId', versionRow.ID);
                 }, 'hydrate');
@@ -1043,5 +1048,122 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             return new Uint8Array(Buffer.concat(rawData));
         }
         return new Uint8Array(rawData as Buffer);
+    }
+
+    /**
+     * When `rawContent` represents a serialized {@link SlideDeckSpec} (`Presentation` artifact),
+     * populates `doc.getMap('deckMeta')`, `doc.getMap('slidesById')`, and `doc.getArray('slideOrder')`
+     * so concurrent per-slide edits and slide reorders merge cleanly across Yjs CRDT maps/arrays (`§ 5.1`, `Accept #1`).
+     */
+    private syncSlideDeckStructuresIfPresent(doc: Y.Doc, rawContent: string): void {
+        const trimmed = (rawContent ?? '').trim();
+        if (!trimmed.startsWith('{')) {
+            return;
+        }
+        try {
+            const parsed = JSON.parse(trimmed) as Partial<SlideDeckSpec>;
+            if (!parsed || !Array.isArray(parsed.Slides) || parsed.Slides.length === 0 || !parsed.Theme) {
+                return;
+            }
+            const deck = SlideDeckEngine.Instance.ParseDeckSpec(trimmed);
+            const deckMeta = doc.getMap<string>('deckMeta');
+            const slidesById = doc.getMap<string>('slidesById');
+            const slideOrder = doc.getArray<string>('slideOrder');
+
+            const metaPayload = JSON.stringify({
+                SchemaVersion: '1.0',
+                DeckID: deck.DeckID,
+                Title: deck.Title,
+                Subtitle: deck.Subtitle,
+                AspectRatio: deck.AspectRatio,
+                Theme: deck.Theme,
+                Master: deck.Master
+            });
+            if (deckMeta.get('metaJson') !== metaPayload) {
+                deckMeta.set('metaJson', metaPayload);
+            }
+
+            const nextIds = new Set<string>();
+            for (const slide of deck.Slides) {
+                nextIds.add(slide.SlideID);
+                const slideJson = JSON.stringify(slide);
+                if (slidesById.get(slide.SlideID) !== slideJson) {
+                    slidesById.set(slide.SlideID, slideJson);
+                }
+            }
+            for (const existingKey of Array.from(slidesById.keys())) {
+                if (!nextIds.has(existingKey)) {
+                    slidesById.delete(existingKey);
+                }
+            }
+
+            const currentOrder = slideOrder.toArray();
+            const targetOrder = deck.Slides.map((s) => s.SlideID);
+            if (
+                currentOrder.length !== targetOrder.length ||
+                currentOrder.some((id, idx) => id !== targetOrder[idx])
+            ) {
+                if (slideOrder.length > 0) {
+                    slideOrder.delete(0, slideOrder.length);
+                }
+                slideOrder.insert(0, targetOrder);
+            }
+        } catch {
+            // Non-SlideDeck JSON content — keep Y.Text('content') only
+        }
+    }
+
+    /**
+     * Reconstructs the canonical string content of a Yjs room.
+     * If the room contains per-slide CRDT maps (`slidesById` + `slideOrder`), reconstructs
+     * the merged {@link SlideDeckSpec} JSON so concurrent slide edits and reorders are preserved.
+     */
+    private extractRoomSerializedContent(doc: Y.Doc): string {
+        const slidesById = doc.getMap<string>('slidesById');
+        const slideOrder = doc.getArray<string>('slideOrder');
+        const deckMeta = doc.getMap<string>('deckMeta');
+
+        if (slidesById.size > 0) {
+            try {
+                const rawMeta = deckMeta.get('metaJson');
+                const metaObj = rawMeta ? (JSON.parse(rawMeta) as Partial<SlideDeckSpec>) : {};
+                const orderedIds = slideOrder.toArray();
+                const placed = new Set<string>();
+                const slides: SlideSpec[] = [];
+
+                for (const id of orderedIds) {
+                    const sJson = slidesById.get(id);
+                    if (sJson && !placed.has(id)) {
+                        slides.push(JSON.parse(sJson) as SlideSpec);
+                        placed.add(id);
+                    }
+                }
+                for (const [id, sJson] of slidesById.entries()) {
+                    if (!placed.has(id) && sJson) {
+                        slides.push(JSON.parse(sJson) as SlideSpec);
+                        placed.add(id);
+                    }
+                }
+
+                if (slides.length > 0) {
+                    const renumbered = slides.map((s, idx) => ({
+                        ...s,
+                        SlideNumber: idx + 1
+                    }));
+                    const reconstructed: SlideDeckSpec = SlideDeckEngine.Instance.ParseDeckSpec(
+                        JSON.stringify({
+                            ...metaObj,
+                            SchemaVersion: '1.0',
+                            Slides: renumbered
+                        })
+                    );
+                    return SlideDeckEngine.Instance.SerializeDeckSpec(reconstructed);
+                }
+            } catch {
+                // Fall back to Y.Text('content')
+            }
+        }
+
+        return doc.getText('content').toString();
     }
 }
