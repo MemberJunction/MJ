@@ -1431,8 +1431,10 @@ export class ElevenLabsRealtimeSession extends BaseRealtimeSession implements IR
      * Surfaces a websocket-level failure as a FATAL session error — the transport is gone,
      * so the consumer should finalize cleanly instead of idling (driver obligation #6).
      */
-    public HandleTransportError(message: string): void {
-        this.failMetadataWait(message);
+    public HandleTransportError(message: string, fromSocket?: ElevenLabsRealtimeSocket): void {
+        if (!fromSocket || fromSocket === (this.pendingSocket ?? this.socket)) {
+            this.failMetadataWait(message);
+        }
         if (this.IsReconnecting) {
             return;
         }
@@ -1445,13 +1447,15 @@ export class ElevenLabsRealtimeSession extends BaseRealtimeSession implements IR
      * the agent itself ends the conversation, so this is also how credential / conversation
      * death reaches the consumer.
      */
-    public HandleTransportClose(code?: number, reason?: string): void {
+    public HandleTransportClose(code?: number, reason?: string, fromSocket?: ElevenLabsRealtimeSocket): void {
+        const detail = [code != null ? `code ${code}` : null, reason || null].filter(Boolean).join(' — ');
+        const message = `ElevenLabs conversation closed unexpectedly${detail ? ` (${detail})` : ''}`;
+        if (!fromSocket || fromSocket === (this.pendingSocket ?? this.socket)) {
+            this.failMetadataWait(message);
+        }
         if (this.closedByConsumer || this.IsReconnecting) {
             return;
         }
-        const detail = [code != null ? `code ${code}` : null, reason || null].filter(Boolean).join(' — ');
-        const message = `ElevenLabs conversation closed unexpectedly${detail ? ` (${detail})` : ''}`;
-        this.failMetadataWait(message);
         this.errorHandler?.({ Message: message, Fatal: true });
     }
 
@@ -1484,6 +1488,9 @@ export class ElevenLabsRealtimeSession extends BaseRealtimeSession implements IR
             result: output,
             is_error: false,
         });
+        if (this.pendingToolCallNames.size === 0) {
+            this.NotifyToolCallsDrained();
+        }
     }
 
     /**
@@ -1526,7 +1533,7 @@ export class ElevenLabsRealtimeSession extends BaseRealtimeSession implements IR
      */
     protected override async Reconnect(context: RealtimeReconnectContext): Promise<void> {
         if (context.Abandoned) {
-            return;
+            throw new Error('ElevenLabs reconnect attempt abandoned');
         }
         if (!this.reconnectFactory) {
             throw new Error('ElevenLabsRealtimeSession: No reconnect factory available for Reconnect');
@@ -1545,7 +1552,7 @@ export class ElevenLabsRealtimeSession extends BaseRealtimeSession implements IR
             } catch {
                 // ignore close error on abandoned socket
             }
-            return;
+            throw new Error('ElevenLabs reconnect attempt abandoned');
         }
 
         this.pendingSocket = nextSocket;
@@ -1583,7 +1590,7 @@ export class ElevenLabsRealtimeSession extends BaseRealtimeSession implements IR
             } catch {
                 // ignore close error on abandoned socket
             }
-            return;
+            throw new Error('ElevenLabs reconnect attempt abandoned');
         }
 
         const prevSocket = this.socket;
@@ -1607,11 +1614,11 @@ export class ElevenLabsRealtimeSession extends BaseRealtimeSession implements IR
         return clone;
     }
 
-    protected override onReconnectFailed(error: Error): void {
+    protected override emitSessionError(error: RealtimeSessionError): void {
         if (this.closedByConsumer) {
             return;
         }
-        this.errorHandler?.({ Message: error.message, Fatal: true });
+        this.errorHandler?.(error);
     }
 
     /** @inheritdoc */
@@ -1629,9 +1636,12 @@ export class ElevenLabsRealtimeSession extends BaseRealtimeSession implements IR
      * Entry point for an inbound websocket frame. Multiplexes on `type` to focused
      * per-concern handlers so each translation unit stays small and testable.
      */
-    public HandleServerEvent(event: ElevenLabsServerEvent): void {
+    public HandleServerEvent(event: ElevenLabsServerEvent, fromSocket?: ElevenLabsRealtimeSocket): void {
         switch (event.type) {
             case 'conversation_initiation_metadata': {
+                if (fromSocket && fromSocket !== (this.pendingSocket ?? this.socket)) {
+                    return;
+                }
                 const convId = event.conversation_initiation_metadata_event?.conversation_id;
                 if (convId && convId.length > 0) {
                     this.RecordResumptionHandle(convId);
@@ -1666,7 +1676,10 @@ export class ElevenLabsRealtimeSession extends BaseRealtimeSession implements IR
                 this.completeResponse();
                 break;
             case 'ping':
-                this.sendFrame({ type: 'pong', event_id: event.ping_event?.event_id ?? 0 }, this.pendingSocket ?? undefined);
+                this.sendFrame(
+                    { type: 'pong', event_id: event.ping_event?.event_id ?? 0 },
+                    fromSocket ?? this.socket ?? undefined
+                );
                 break;
             case 'vad_score':
                 break; // continuous voice-activity telemetry — deliberately ignored

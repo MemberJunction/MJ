@@ -102,7 +102,7 @@ export class xAIRealtimeClient extends OpenAIProtocolWebSocketRealtimeClient {  
     }
 
     protected override get DefaultCallDurationSeconds(): number | undefined {
-        return 1800;
+        return 7200;
     }
 
     protected override get DefaultTrustsNativeResumption(): boolean {

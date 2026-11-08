@@ -33,14 +33,13 @@ class TestRealtimeSession extends BaseRealtimeSession {
         return this.runtimeOverride ?? super.RuntimeCallDurationSeconds;
     }
 
-    protected override onReconnectFailed(error: Error, code = 'reconnect-failed'): void {
-        const payload: RealtimeSessionError = {
-            Message: error.message,
-            Code: code,
-            Fatal: true,
-        };
-        this.Errors.push({ Error: payload, Code: code });
-        this.errorHandler?.(payload);
+    protected override emitSessionError(error: RealtimeSessionError): void {
+        this.Errors.push({ Error: error, Code: error.Code });
+        this.errorHandler?.(error);
+    }
+
+    public SimulateToolCall(callID: string, name: string): void {
+        this.pendingToolCallNames.set(callID, name);
     }
 
     public SendInput(_frame: RealtimeInputFrame): void {}
@@ -48,7 +47,12 @@ class TestRealtimeSession extends BaseRealtimeSession {
     public OnOutput(_handler: (chunk: ArrayBuffer) => void): void {}
     public OnTranscript(_handler: (t: RealtimeTranscript) => void): void {}
     public OnToolCall(_handler: (call: RealtimeToolCall) => void): void {}
-    public async SendToolResult(_callID: string, _output: string): Promise<void> {}
+    public async SendToolResult(callID: string, _output: string): Promise<void> {
+        this.pendingToolCallNames.delete(callID);
+        if (this.pendingToolCallNames.size === 0) {
+            this.NotifyToolCallsDrained();
+        }
+    }
     public OnInterruption(_handler: () => void): void {}
     public OnError(handler: (error: RealtimeSessionError) => void): void {
         this.errorHandler = handler;

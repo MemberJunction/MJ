@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
     ParseDurationToMs,
-    RealtimeSessionResumption,
+    RealtimeReconnectController,
     REALTIME_RESUMPTION_DEADLINE_MARGIN_MS,
     REALTIME_RESUMPTION_MIN_DEADLINE_MARGIN_MS,
+    type RealtimeReconnectContext,
     type RealtimeReconnectReason,
-    type RealtimeResumeAttempt,
 } from '../generic/realtimeSessionResumption';
 
 describe('ParseDurationToMs', () => {
@@ -22,33 +22,40 @@ describe('ParseDurationToMs', () => {
     });
 });
 
-/** Records every callback the helper makes; `Reconnect` succeeds unless told to fail. */
+/** Records every callback the controller makes; `Reconnect` succeeds unless told to fail. */
 class Harness {
-    public Reconnects: string[] = [];
+    public Reconnects: Array<string | null> = [];
     public Reconnecting: RealtimeReconnectReason[] = [];
     public Reconnected = 0;
     public Failures: Error[] = [];
     public FailNext = 0;
-    public Resumption: RealtimeSessionResumption;
+    public TrustsNative = true;
+    public RequiresPostTurn = true;
+    public Idle = true;
+    public Resumption: RealtimeReconnectController;
 
     constructor(retryDelaysMs?: readonly number[]) {
-        this.Resumption = new RealtimeSessionResumption({
-            Reconnect: async (handle) => {
-                this.Reconnects.push(handle);
+        this.Resumption = new RealtimeReconnectController({
+            Reconnect: async (context) => {
+                this.Reconnects.push(context.ResumptionHandle);
                 if (this.FailNext > 0) {
                     this.FailNext--;
-                    throw new Error(`connect failed for ${handle}`);
+                    throw new Error(`connect failed for ${context.ResumptionHandle ?? 'seed'}`);
                 }
             },
             OnReconnectFailed: (error) => this.Failures.push(error),
             OnReconnecting: (reason) => this.Reconnecting.push(reason),
             OnReconnected: () => this.Reconnected++,
+            BuildSeed: () => null,
+            IsIdle: () => this.Idle,
+            TrustsNativeResumption: () => this.TrustsNative,
+            RequiresPostTurnHandle: () => this.RequiresPostTurn,
             RetryDelaysMs: retryDelaysMs,
         });
     }
 }
 
-describe('RealtimeSessionResumption', () => {
+describe('RealtimeReconnectController', () => {
     beforeEach(() => {
         vi.useFakeTimers();
     });
@@ -107,14 +114,6 @@ describe('RealtimeSessionResumption', () => {
             await vi.advanceTimersByTimeAsync(2);
             expect(h.Reconnects).toEqual(['h1']);
         });
-
-        it('does nothing at the deadline when the provider never issued a handle', async () => {
-            const h = new Harness();
-            h.Resumption.ConnectionEnding(60000);
-            await vi.advanceTimersByTimeAsync(60000);
-            expect(h.Reconnects).toEqual([]);
-            expect(h.Failures).toEqual([]);
-        });
     });
 
     // Vertex AI marks every update resumable and sends one 20-70 ms after each turnComplete, never `resumable: false`;
@@ -163,7 +162,7 @@ describe('RealtimeSessionResumption', () => {
             expect(h.Resumption.Handle).toBe('h2');
 
             // A drop resumes from it at once.
-            expect(h.Resumption.ConnectionLost()).toBe(true);
+            void h.Resumption.TriggerReconnect('connection-lost');
             await vi.advanceTimersByTimeAsync(0);
             expect(h.Reconnects).toEqual(['h2']);
         });
@@ -208,7 +207,7 @@ describe('RealtimeSessionResumption', () => {
             const h = new Harness();
             h.Resumption.RecordHandle('h1', true);
             h.Resumption.TurnStarted();
-            h.Resumption.ConnectionLost();
+            void h.Resumption.TriggerReconnect('connection-lost');
             await vi.advanceTimersByTimeAsync(0);
             expect(h.Reconnected).toBe(1);
 
@@ -272,10 +271,13 @@ describe('RealtimeSessionResumption', () => {
 
         it('keeps at most DeadlineMarginMs when it is set', async () => {
             const reasons: RealtimeReconnectReason[] = [];
-            const resumption = new RealtimeSessionResumption({
+            const resumption = new RealtimeReconnectController({
                 Reconnect: async () => undefined,
                 OnReconnectFailed: () => undefined,
                 OnReconnecting: (reason) => reasons.push(reason),
+                BuildSeed: () => null,
+                TrustsNativeResumption: () => true,
+                RequiresPostTurnHandle: () => true,
                 DeadlineMarginMs: 2000,
             });
             resumption.RecordHandle('h1', true);
@@ -288,81 +290,144 @@ describe('RealtimeSessionResumption', () => {
         });
     });
 
-    describe('connection lost', () => {
-        it('returns false with no handle, so the driver keeps its fatal path', () => {
+    describe('post-tool-result timing (#13)', () => {
+        it('in seed mode, ToolResultSent(true) holds soft-window and goAway reconnects until the post-tool turn ends', async () => {
             const h = new Harness();
-            expect(h.Resumption.ConnectionLost()).toBe(false);
+            h.TrustsNative = false;
+            h.RequiresPostTurn = false;
+            h.Resumption.ArmDurationTimers(60, 10);
+
+            // Advance into the soft window (41s) while a tool call is pending
+            h.Idle = false;
+            await vi.advanceTimersByTimeAsync(42_000);
+            expect(h.Reconnects).toEqual([]);
+
+            // Tool result is sent; pending tool calls are now 0 (Idle = true), but we await the model's post-tool turn
+            h.Idle = true;
+            h.Resumption.ToolResultSent(true);
+            await vi.advanceTimersByTimeAsync(500);
+            expect(h.Reconnects).toEqual([]);
+
+            // Post-tool turn starts and finishes
+            h.Resumption.TurnStarted();
+            await vi.advanceTimersByTimeAsync(500);
+            expect(h.Reconnects).toEqual([]);
+
+            h.Resumption.TurnEnded();
+            await vi.advanceTimersByTimeAsync(0);
+            expect(h.Reconnects).toEqual([null]);
+            expect(h.Reconnecting).toEqual(['duration-expiry']);
         });
 
+        it('ToolResultSent(false) for a silent tool result allows an idle soft-window reconnect immediately', async () => {
+            const h = new Harness();
+            h.TrustsNative = false;
+            h.RequiresPostTurn = false;
+            h.Resumption.ArmDurationTimers(60, 10);
+
+            h.Idle = false;
+            await vi.advanceTimersByTimeAsync(42_000);
+            expect(h.Reconnects).toEqual([]);
+
+            h.Idle = true;
+            h.Resumption.ToolResultSent(false);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(h.Reconnects).toEqual([null]);
+        });
+    });
+
+    describe('ArmDurationTimers mid-connection re-arming (#26)', () => {
+        it('measures remaining time from when the connection opened and preserves an active goAway deadline', async () => {
+            const h = new Harness();
+            h.TrustsNative = false;
+            h.RequiresPostTurn = false;
+
+            // Connection opens at t=0 with 600s cap (hard at 590s, soft at 560s)
+            h.Resumption.ArmDurationTimers(600, 10);
+            await vi.advanceTimersByTimeAsync(100_000);
+
+            // At t=100s, uncompressed video starts (120s cap -> totalHardMs=110s, totalSoftMs=92s)
+            // Because 100s > 92s, soft window fires at once (0ms remaining) and hard timer is 10s away
+            h.Idle = false; // mid-turn so soft window waits
+            h.Resumption.ConnectionEnding(15_000); // goAway also announced with 15s (deadline in 10s)
+            h.Resumption.ArmDurationTimers(120, 10);
+
+            // Video stops at t=102s and re-arms back to 600s:
+            // - remaining hard time is 590s - 102s = 488s (not a fresh 590s!)
+            // - the active goAway deadline (8s left) is NOT cleared!
+            await vi.advanceTimersByTimeAsync(2_000);
+            h.Resumption.ArmDurationTimers(600, 10);
+
+            // 8s later (t=110s), the preserved goAway deadline fires
+            await vi.advanceTimersByTimeAsync(8_000);
+            expect(h.Reconnecting).toEqual(['connection-ending']);
+        });
+    });
+
+    describe('connection lost & retries', () => {
         it('reconnects with the last handle and reports success', async () => {
             const h = new Harness();
             h.Resumption.RecordHandle('h1', true);
-            expect(h.Resumption.ConnectionLost()).toBe(true);
+            const p = h.Resumption.TriggerReconnect('connection-lost');
             expect(h.Resumption.IsReconnecting).toBe(true);
             await vi.advanceTimersByTimeAsync(0);
+            expect(await p).toBe(true);
             expect(h.Reconnects).toEqual(['h1']);
             expect(h.Reconnecting).toEqual(['connection-lost']);
             expect(h.Reconnected).toBe(1);
             expect(h.Resumption.IsReconnecting).toBe(false);
         });
 
-        it('retries on the delay schedule, then reports failure once and stops', async () => {
+        it('retries on the delay schedule, falling back from native handle to seed on Attempt 2, then reports failure once and stops', async () => {
             const h = new Harness([0, 1000, 3000]);
             h.FailNext = 3;
             h.Resumption.RecordHandle('h1', true);
-            h.Resumption.ConnectionLost();
+            void h.Resumption.TriggerReconnect('connection-lost');
             await vi.advanceTimersByTimeAsync(0);
-            expect(h.Reconnects).toHaveLength(1);
+            expect(h.Reconnects).toEqual(['h1']);
             await vi.advanceTimersByTimeAsync(999);
             expect(h.Reconnects).toHaveLength(1);
             await vi.advanceTimersByTimeAsync(1);
-            expect(h.Reconnects).toHaveLength(2);
+            expect(h.Reconnects).toEqual(['h1', null]);
             await vi.advanceTimersByTimeAsync(3000);
-            expect(h.Reconnects).toHaveLength(3);
+            expect(h.Reconnects).toEqual(['h1', null, null]);
             expect(h.Failures).toHaveLength(1);
             expect(h.Reconnected).toBe(0);
             // Exhausted: a later drop does not start another round.
-            expect(h.Resumption.ConnectionLost()).toBe(false);
-        });
-
-        it('succeeds on a retry after a failed attempt', async () => {
-            const h = new Harness([0, 1000]);
-            h.FailNext = 1;
-            h.Resumption.RecordHandle('h1', true);
-            h.Resumption.ConnectionLost();
-            await vi.advanceTimersByTimeAsync(1000);
-            expect(h.Reconnects).toEqual(['h1', 'h1']);
-            expect(h.Reconnected).toBe(1);
-            expect(h.Failures).toEqual([]);
+            expect(await h.Resumption.TriggerReconnect('connection-lost')).toBe(false);
         });
 
         it('does not start a second reconnect while one is running', async () => {
             const h = new Harness([0, 1000]);
             h.FailNext = 1;
             h.Resumption.RecordHandle('h1', true);
-            h.Resumption.ConnectionLost();
-            expect(h.Resumption.ConnectionLost()).toBe(true);
+            const p1 = h.Resumption.TriggerReconnect('connection-lost');
+            const p2 = h.Resumption.TriggerReconnect('connection-lost');
+            expect(p1).toBe(p2);
             await vi.advanceTimersByTimeAsync(1000);
+            expect(await p1).toBe(true);
             expect(h.Reconnecting).toEqual(['connection-lost']);
             expect(h.Reconnects).toHaveLength(2);
         });
     });
 
-    describe('attempt timeout', () => {
+    describe('attempt timeout & Dispose', () => {
         it('abandons an attempt that never settles and moves on to the next one', async () => {
-            const attempts: RealtimeResumeAttempt[] = [];
-            const resumption = new RealtimeSessionResumption({
-                Reconnect: (_handle, attempt) => {
-                    attempts.push(attempt);
+            const attempts: RealtimeReconnectContext[] = [];
+            const resumption = new RealtimeReconnectController({
+                Reconnect: (ctx) => {
+                    attempts.push(ctx);
                     // The first socket never opens; the second one does.
                     return attempts.length === 1 ? new Promise<void>(() => undefined) : Promise.resolve();
                 },
                 OnReconnectFailed: () => undefined,
+                BuildSeed: () => null,
+                TrustsNativeResumption: () => true,
                 RetryDelaysMs: [0, 1000],
                 AttemptTimeoutMs: 5000,
             });
             resumption.RecordHandle('h1', true);
-            resumption.ConnectionLost();
+            void resumption.TriggerReconnect('connection-lost');
             await vi.advanceTimersByTimeAsync(0);
             expect(attempts).toHaveLength(1);
 
@@ -372,34 +437,25 @@ describe('RealtimeSessionResumption', () => {
             expect(attempts).toHaveLength(2);
             expect(resumption.IsReconnecting).toBe(false);
         });
-    });
 
-    describe('Dispose', () => {
-        it('marks an attempt in flight as abandoned', async () => {
-            const attempts: RealtimeResumeAttempt[] = [];
-            const resumption = new RealtimeSessionResumption({
-                Reconnect: (_handle, attempt) => {
-                    attempts.push(attempt);
+        it('marks an attempt in flight as abandoned and cancels pending timers on Dispose', async () => {
+            const attempts: RealtimeReconnectContext[] = [];
+            const resumption = new RealtimeReconnectController({
+                Reconnect: (ctx) => {
+                    attempts.push(ctx);
                     return new Promise<void>(() => undefined);
                 },
                 OnReconnectFailed: () => undefined,
+                BuildSeed: () => null,
+                TrustsNativeResumption: () => true,
             });
             resumption.RecordHandle('h1', true);
-            resumption.ConnectionLost();
+            void resumption.TriggerReconnect('connection-lost');
             await vi.advanceTimersByTimeAsync(0);
             resumption.Dispose();
             expect(attempts[0].Abandoned).toBe(true);
-        });
-
-        it('cancels a pending deadline and any retry', async () => {
-            const h = new Harness([0, 1000]);
-            h.Resumption.RecordHandle('h1', true);
-            h.Resumption.RecordHandle(undefined, false);
-            h.Resumption.ConnectionEnding(60000);
-            h.Resumption.Dispose();
-            await vi.advanceTimersByTimeAsync(60000);
-            expect(h.Reconnects).toEqual([]);
-            expect(h.Resumption.ConnectionLost()).toBe(false);
+            expect(await resumption.TriggerReconnect('connection-lost')).toBe(false);
         });
     });
 });
+

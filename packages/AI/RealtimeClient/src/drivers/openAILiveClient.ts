@@ -242,11 +242,17 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         if (!this.remoteAudioEl) {
             this.remoteAudioEl = this.createAudioSink();
         }
+        let pendingRemoteStream: MediaStream | null = null;
         nextPc.ontrack = (e: RTCTrackEvent) => {
-            if (this.peerConnection === nextPc && this.remoteAudioEl && e.streams[0]) {
+            if (context.Abandoned || !e.streams[0]) {
+                return;
+            }
+            if (this.peerConnection === nextPc && this.remoteAudioEl) {
                 this.remoteAudioEl.srcObject = e.streams[0];
                 this.publishRemoteMediaStream(e.streams[0]);
                 this.attachOutputAudioMeter(RealtimeAudioMeter.ForStream(e.streams[0]));
+            } else {
+                pendingRemoteStream = e.streams[0];
             }
         };
 
@@ -336,6 +342,12 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         this.peerConnection = nextPc;
         this.dataChannel = nextDc;
         this.micSenders = nextSenders;
+        if (pendingRemoteStream && this.remoteAudioEl) {
+            this.remoteAudioEl.srcObject = pendingRemoteStream;
+            this.publishRemoteMediaStream(pendingRemoteStream);
+            this.attachOutputAudioMeter(RealtimeAudioMeter.ForStream(pendingRemoteStream));
+            pendingRemoteStream = null;
+        }
         this.responseActive = false;
         this.audioPlaying = false;
 

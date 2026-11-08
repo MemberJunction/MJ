@@ -476,14 +476,19 @@ export abstract class BaseRealtimeSession implements IRealtimeSession {
     }
 
     /** Marks a turn as ended and triggers a queued soft-window or `ConnectionEnding` reconnect if ready. */
-    public NotifyTurnEnded(): void {
+    public NotifyTurnEnded(keepPostToolTurnWait = false): void {
         this.turnOpen = false;
-        this.reconnectController.TurnEnded();
+        this.reconnectController.TurnEnded(keepPostToolTurnWait);
     }
 
-    /** Notifies the reconnect controller when pending tool calls drain so a queued soft reconnect can proceed. */
-    protected NotifyToolCallsDrained(): void {
-        this.reconnectController.NotifyIdleStateChanged();
+    /**
+     * Notifies the reconnect controller when pending tool calls drain on `SendToolResult`.
+     * When `expectsReply` is `true` (default), a queued soft-window or `ConnectionEnding` move waits
+     * for the model's post-tool turn (or a fresh trusted native handle) rather than reconnecting in
+     * the gap between `SendToolResult` and the first model output frame.
+     */
+    protected NotifyToolCallsDrained(expectsReply = true): void {
+        this.reconnectController.ToolResultSent(expectsReply);
     }
 
     /**
@@ -536,9 +541,27 @@ export abstract class BaseRealtimeSession implements IRealtimeSession {
         // Optional hook for concrete session subclasses.
     }
 
-    /** Hook invoked when all reconnect attempts fail. Subclasses override to emit on their error handler. */
-    protected onReconnectFailed(_error: Error, _code: RealtimeReconnectFailureCode = 'reconnect-failed'): void {
-        // Overridden by concrete session subclasses to emit Fatal: true on their error callback.
+    /**
+     * Hook invoked when all reconnect attempts fail or the rapid-reconnect circuit breaker trips.
+     * Formats the error message via {@link formatReconnectFailureMessage} and emits a fatal
+     * {@link RealtimeSessionError} with `Code: code` via {@link emitSessionError}.
+     */
+    protected onReconnectFailed(error: Error, code: RealtimeReconnectFailureCode = 'reconnect-failed'): void {
+        this.emitSessionError({
+            Message: this.formatReconnectFailureMessage(error, code),
+            Code: code,
+            Fatal: true,
+        });
+    }
+
+    /** Formats the fatal error message surfaced when all reconnect attempts fail. */
+    protected formatReconnectFailureMessage(error: Error, _code: RealtimeReconnectFailureCode): string {
+        return `Realtime session reconnect failed: ${error.message}`;
+    }
+
+    /** Emits a session error to the consumer's registered `OnError` handler(s). */
+    protected emitSessionError(_error: RealtimeSessionError): void {
+        // Overridden by concrete session subclasses to dispatch to their registered error handler(s).
     }
 
     /** Cancels all reconnect and duration timers and abandons any in-flight attempt when closed by the consumer. */
@@ -1288,6 +1311,13 @@ export interface IRealtimeSession {
      * @param frame The media frame, with its kind and (when known) its format.
      */
     SendInput(frame: RealtimeInputFrame): void;
+
+    /**
+     * **Optional capability** — clears any active inbound-video connection duration limit
+     * (for example, Gemini Live's 2-minute uncompressed video limit) when the last inbound
+     * video stream ends, re-arming the session's audio connection duration timer.
+     */
+    ClearVideoLimit?(): void;
 
     /**
      * Registers the set of tools the model may call, translating them into the provider's

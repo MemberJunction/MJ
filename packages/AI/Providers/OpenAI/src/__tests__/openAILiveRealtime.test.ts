@@ -1204,7 +1204,7 @@ describe('OpenAILiveRealtime turn detection', () => {
             event: { type: 'response.completed' },
         }));
 
-        const reconnectPromise = session.TriggerReconnect('soft_deadline');
+        const reconnectPromise = session.TriggerReconnect('duration-expiry');
         await new Promise((r) => setTimeout(r, 0));
         const socket2 = driver.lastMockSocket!;
         expect(socket2).not.toBe(socket1);

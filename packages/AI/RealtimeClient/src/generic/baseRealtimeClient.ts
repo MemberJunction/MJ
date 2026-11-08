@@ -1252,6 +1252,8 @@ export abstract class BaseRealtimeClient {
         );
     }
 
+    private wasSpeaking = false;
+
     /**
      * Initiates an in-place reconnect with bounded retries (`REALTIME_RESUMPTION_RETRY_DELAYS_MS`),
      * rapid-reconnect circuit breaker, and Attempt-2 fallback from native handle to history seeding.
@@ -1264,7 +1266,7 @@ export abstract class BaseRealtimeClient {
         if (
             !this.refreshedInActiveCycle &&
             this.tokenRefreshCallback &&
-            (this.RequiresFreshTokenPerReconnect || this.isCredentialNearExpiry())
+            (this.RequiresFreshTokenPerReconnect || this.isCredentialNearExpiry() || context.Attempt > 1)
         ) {
             try {
                 await this.refreshCredentialForReconnect();
@@ -1337,6 +1339,24 @@ export abstract class BaseRealtimeClient {
     }
 
     /**
+     * Whether a tool result's payload requests `SILENT` scheduling (meaning no post-tool model reply is expected).
+     * Subclasses that gate scheduling on model capability (e.g. `GeminiRealtimeClient.supportsScheduling`) can override.
+     */
+    protected isToolResultSilent(outputJson: string): boolean {
+        try {
+            const parsed: unknown = JSON.parse(outputJson);
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                return false;
+            }
+            const record = parsed as Record<string, unknown>;
+            const raw = record['__mj_scheduling'] ?? record['scheduling'];
+            return typeof raw === 'string' && raw.trim().toUpperCase() === 'SILENT';
+        } catch {
+            return false;
+        }
+    }
+
+    /**
      * Records a completed tool result into {@link conversationMemory} and clears its in-flight guard.
      * Invoked automatically by the {@link SendToolResult} template method after {@link doSendToolResult} succeeds.
      */
@@ -1352,7 +1372,11 @@ export abstract class BaseRealtimeClient {
                 OutputJson: outputJson,
             });
         }
-        this.reconnectController.NotifyIdleStateChanged();
+        if (this.inFlightToolCallIds.size === 0) {
+            this.reconnectController.ToolResultSent(!this.isToolResultSilent(outputJson));
+        } else {
+            this.reconnectController.NotifyIdleStateChanged();
+        }
         return resolvedName;
     }
 
@@ -1367,7 +1391,7 @@ export abstract class BaseRealtimeClient {
     protected emitTranscript(transcript: RealtimeClientTranscript): void {
         if (transcript.IsFinal && transcript.Kind === 'normal' && !transcript.IsThought && transcript.Text.trim().length > 0) {
             this.conversationMemory.Record({
-                Kind: transcript.Role === 'User' ? 'user' : 'assistant',
+                Kind: transcript.Role === 'User' ? 'User' === transcript.Role ? 'user' : 'assistant' : 'assistant',
                 Text: transcript.Text,
                 ReplacesPrevious: transcript.ReplacesPrevious,
             });
@@ -1391,10 +1415,16 @@ export abstract class BaseRealtimeClient {
     /** Emits a state change to the registered handler (if any) and flushes any deferred turn-boundary reconnect. */
     protected emitStateChange(state: RealtimeClientState): void {
         if (state === 'closed' || state === 'error') {
+            this.wasSpeaking = false;
             this.DisposeReconnectTimers();
             this.inFlightToolCallIds.clear();
             this.recordedToolCallIds.clear();
             this.toolCallNamesById.clear();
+        } else if (state === 'connecting') {
+            this.wasSpeaking = false;
+        } else if (state === 'speaking') {
+            this.wasSpeaking = true;
+            this.reconnectController.TurnStarted();
         } else if (
             state === 'listening' &&
             !this.reconnectController.HasDurationTimersArmed &&
@@ -1405,7 +1435,12 @@ export abstract class BaseRealtimeClient {
         }
         this.stateChangeHandler?.(state);
         if (state === 'listening') {
-            this.reconnectController.NotifyIdleStateChanged();
+            if (this.wasSpeaking) {
+                this.wasSpeaking = false;
+                this.reconnectController.TurnEnded();
+            } else {
+                this.reconnectController.NotifyIdleStateChanged();
+            }
         }
     }
 

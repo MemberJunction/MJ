@@ -824,7 +824,7 @@ describe('InworldRealtime', () => {
 
             const socket2 = new FakeSocket();
             driver.Fake = socket2;
-            const reconnectPromise = session.TriggerReconnect('soft_deadline');
+            const reconnectPromise = session.TriggerReconnect('duration-expiry');
             await new Promise((r) => setTimeout(r, 0));
             driver.Fire({ type: 'session.created' });
             expect(await reconnectPromise).toBe(true);

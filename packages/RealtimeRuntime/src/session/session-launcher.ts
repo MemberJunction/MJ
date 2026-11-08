@@ -138,7 +138,7 @@ export function IsUnsupportedGraphQLExtension(error: unknown, fieldOrArgument: s
   const message = error instanceof Error ? error.message : String(error);
   return (
     (message.includes('Cannot query field') || message.includes('Unknown argument')) &&
-    message.includes(fieldOrArgument)
+    message.includes(`"${fieldOrArgument}"`)
   );
 }
 
@@ -150,19 +150,23 @@ export function IsUnsupportedGraphQLExtension(error: unknown, fieldOrArgument: s
  * rejection names one field at a time, so a server that predates several extensions is found out one step at a time.
  */
 function unsupportedExtension(error: unknown, asked: MintExtensions): keyof MintExtensions | null {
-  const message = error instanceof Error ? error.message : String(error);
-  if (asked.NoAgentVideo && message.includes('showsAgentVideo')) {
+  if (asked.NoAgentVideo && IsUnsupportedGraphQLExtension(error, 'showsAgentVideo')) {
     return 'NoAgentVideo';
   }
-  if (asked.AvatarStatus && message.includes('AvatarStatusJson')) {
+  if (asked.AvatarStatus && IsUnsupportedGraphQLExtension(error, 'AvatarStatusJson')) {
     return 'AvatarStatus';
   }
-  // The quoted field names, not the bare words: "Transport" alone could be any transport error, and "RelayUrl"
-  // any message that names the field.
-  if (asked.RelayTransport && (message.includes('field "Transport"') || message.includes('field "RelayUrl"'))) {
+  if (
+    asked.RelayTransport &&
+    (IsUnsupportedGraphQLExtension(error, 'Transport') || IsUnsupportedGraphQLExtension(error, 'RelayUrl'))
+  ) {
     return 'RelayTransport';
   }
-  if (asked.ChannelScoping && (message.includes('channelCandidatesJson') || message.includes('ClientPolicyJson'))) {
+  if (
+    asked.ChannelScoping &&
+    (IsUnsupportedGraphQLExtension(error, 'channelCandidatesJson') ||
+      IsUnsupportedGraphQLExtension(error, 'ClientPolicyJson'))
+  ) {
     return 'ChannelScoping';
   }
   return null;

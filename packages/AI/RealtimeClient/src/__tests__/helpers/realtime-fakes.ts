@@ -314,6 +314,7 @@ export class FakeGeminiSession implements GeminiLiveClientSession {
     public ClientContents: Array<{ turns?: Content[]; turnComplete?: boolean }> = [];
     public ToolResponses: Array<{ functionResponses: FunctionResponse[] }> = [];
     public Closed = false;
+    public OnCloseCallback?: () => void;
 
     public sendRealtimeInput(params: { audio?: GeminiBlob; text?: string; media?: GeminiBlob; video?: GeminiBlob }): void {
         this.RealtimeInputs.push(params);
@@ -325,7 +326,11 @@ export class FakeGeminiSession implements GeminiLiveClientSession {
         this.ToolResponses.push(params);
     }
     public close(): void {
+        const wasClosed = this.Closed;
         this.Closed = true;
+        if (!wasClosed) {
+            this.OnCloseCallback?.();
+        }
     }
 }
 
@@ -433,6 +438,8 @@ export class GeminiTestClient extends GeminiRealtimeClient {
 
     protected override async connectLiveSession(args: GeminiClientConnectArgs): Promise<GeminiLiveClientSession> {
         this.LastConnectArgs = args;
+        this.Fake.OnCloseCallback = () =>
+            args.OnClose({ code: 1000, reason: 'closed', wasClean: true } as CloseEvent);
         if (this.AutoConfirmSetup) {
             ConfirmGeminiSetup(args);
         }
@@ -501,5 +508,8 @@ export function makeGeminiAvatarConfig(options: GeminiAvatarConfigOptions = {}):
     if (options.RequestAgentVideo !== false) {
         sessionConfig['requestedTracks'] = [{ Modality: 'video', Direction: 'outbound' }];
     }
-    return makeGeminiConfig(sessionConfig);
+    return {
+        ...makeGeminiConfig(sessionConfig),
+        TrustNativeResumption: true,
+    };
 }

@@ -1427,7 +1427,7 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
 
     /** Surfaces a fatal socket error and marks the session unusable (obligation #6). */
     protected handleSocketError(message: string): void {
-        if (this.currentState === 'error' || this.currentState === 'closed') {
+        if (this.IsReconnecting || this.currentState === 'error' || this.currentState === 'closed') {
             return;
         }
         this.emitError({ Message: this.formatTransportError(message), Fatal: true });

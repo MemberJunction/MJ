@@ -227,6 +227,7 @@ export class OpenAILiveSession extends BaseRealtimeSession implements IRealtimeS
     private _options: OpenAILiveSessionOptions;
     private _tools: RealtimeToolDefinition[];
     private _appendedInstructions: string[] = [];
+    private _latestToolPolicy: string | null = null;
     private _active = false;
     private _closed = false;
     private _closeRequested = false;
@@ -367,7 +368,7 @@ export class OpenAILiveSession extends BaseRealtimeSession implements IRealtimeS
                 this._rejectPendingStart?.(new Error(msg));
                 return;
             }
-            if (this._socket !== socket) return;
+            if (this._socket !== socket || this.IsReconnecting) return;
             RealtimeDiagLog(`[OpenAILiveSession][diag] Socket error: ${msg}`);
             if (!this._active) {
                 this._rejectStart(new Error(msg));
@@ -384,7 +385,7 @@ export class OpenAILiveSession extends BaseRealtimeSession implements IRealtimeS
                 this._rejectPendingStart?.(new Error(`Socket closed before session.started: ${reason}`));
                 return;
             }
-            if (this._socket !== socket) return;
+            if (this._socket !== socket || this.IsReconnecting) return;
             RealtimeDiagLog(`[OpenAILiveSession][diag] Socket closed: code=${event.code}, reason=${reason}`);
             this._closed = true;
 
@@ -890,8 +891,13 @@ export class OpenAILiveSession extends BaseRealtimeSession implements IRealtimeS
         this._tools = [...tools];
         this._params = { ...this._params, Tools: this._tools };
         const policy = this.compileDelegationPolicy(tools);
+        this._latestToolPolicy = policy;
         if (this._active) {
-            await this.SendInstructions(policy);
+            this.sendFrame({
+                event_id: randomUUID(),
+                type: 'session.instructions.append',
+                instructions: policy,
+            });
         }
     }
 
@@ -930,6 +936,9 @@ export class OpenAILiveSession extends BaseRealtimeSession implements IRealtimeS
                 content: RenderLateToolResultNote(name, output),
                 delegation_id: null,
             });
+            if (this.pendingToolCallNames.size === 0) {
+                this.NotifyToolCallsDrained();
+            }
             return;
         }
 
@@ -961,6 +970,9 @@ export class OpenAILiveSession extends BaseRealtimeSession implements IRealtimeS
                 content: output,
                 delegation_id: callID,
             });
+        }
+        if (this.pendingToolCallNames.size === 0) {
+            this.NotifyToolCallsDrained();
         }
     }
 
@@ -1064,6 +1076,14 @@ export class OpenAILiveSession extends BaseRealtimeSession implements IRealtimeS
         this._active = true;
         this.ArmConnectionDurationTimer();
 
+        if (this._latestToolPolicy !== null && (this._params.HasToolFraming === true)) {
+            this.sendFrame({
+                event_id: randomUUID(),
+                type: 'session.instructions.append',
+                instructions: this._latestToolPolicy,
+            });
+        }
+
         for (const instructions of this._appendedInstructions) {
             this.sendFrame({
                 event_id: randomUUID(),
@@ -1091,14 +1111,11 @@ export class OpenAILiveSession extends BaseRealtimeSession implements IRealtimeS
         }
     }
 
-    protected override onReconnectFailed(error: Error): void {
+    protected override emitSessionError(error: RealtimeSessionError): void {
         if (this.closedByConsumer) {
             return;
         }
-        this.dispatchError({
-            Message: error.message,
-            Fatal: true,
-        });
+        this.dispatchError(error);
     }
 
     public OnInterruption(handler: () => void): void {
@@ -1546,11 +1563,7 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
         offerSdp: string,
         sessionConfig?: Record<string, unknown>
     ): Promise<{ answerSdp: string; sessionId: string; prebillSeconds: number }> {
-        let scrubbedSessionConfig: Record<string, unknown> | undefined;
-        if (sessionConfig) {
-            scrubbedSessionConfig = { ...sessionConfig };
-            ScrubRealtimeSharedConfigKeys(scrubbedSessionConfig);
-        }
+        const scrubbedSessionConfig = sessionConfig ? ScrubRealtimeSharedConfigKeys(sessionConfig) : undefined;
         const payload = {
             session: scrubbedSessionConfig ?? { model: 'gpt-live-1' },
             transport: {

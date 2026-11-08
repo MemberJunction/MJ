@@ -203,7 +203,7 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
     private activeConfig: ClientRealtimeSessionConfig | null = null;
 
     protected override get DefaultCallDurationSeconds(): number | undefined {
-        return 1800;
+        return undefined;
     }
 
     // ── BaseRealtimeClient: connection lifecycle ───────────────────────────────
@@ -375,9 +375,6 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
             ...(context.Credential.RelayUrl ? { RelayUrl: context.Credential.RelayUrl } : {}),
             SessionConfig: context.Credential.SessionConfig ?? baseConfig.SessionConfig,
         };
-        this.activeConfig = config;
-        this.ApplySessionConfigTiming(config);
-        this.callsFromBeforeReseed = new Set(this.pendingToolCallIds);
 
         const prevSocket = this.socket;
         const useNativeResume = context.UseNativeResumption && Boolean(context.ResumptionHandle);
@@ -393,9 +390,10 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
                 nextBasePrompt = nextBasePrompt ? `${nextBasePrompt}\n\n${seedNote}` : seedNote;
             }
         }
-        this.initialBasePrompt = nextInitialBasePrompt;
-        this.basePrompt = nextBasePrompt;
-        sessionObject['system_prompt'] = this.composePromptWithNotes();
+        sessionObject['system_prompt'] =
+            this.contextNotes.length === 0
+                ? nextBasePrompt
+                : [nextBasePrompt, ...this.contextNotes].filter((s) => s.length > 0).join('\n\n');
 
         let openSocket: (() => void) | null = null;
         let failOpen: ((error: Error) => void) | null = null;
@@ -500,6 +498,15 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
             prevSocket.onerror = null;
             prevSocket.onclose = null;
         }
+        this.activeConfig = config;
+        this.ApplySessionConfigTiming(config);
+        if (!useNativeResume) {
+            for (const callID of this.pendingToolCallIds) {
+                this.callsFromBeforeReseed.add(callID);
+            }
+        }
+        this.initialBasePrompt = nextInitialBasePrompt;
+        this.basePrompt = nextBasePrompt;
         this.connectUrl = nextConnectUrl;
         this.resumeAttempted = false;
         this.socket = nextSocket;

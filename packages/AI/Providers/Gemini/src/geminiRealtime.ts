@@ -29,7 +29,6 @@ import {
     BaseRealtimeModel,
     BaseRealtimeSession,
     AsConfigRecord,
-    ExtractRealtimeTimingConfig,
     ResolveRealtimeTiming,
     RenderRealtimeMemorySeed,
     RenderLateToolResultNote,
@@ -493,6 +492,9 @@ export class GeminiRealtime extends BaseRealtimeModel {
                 // How many concurrent inbound video streams the model accepts (0 without video support).
                 // The browser's source arbiter maps live sources onto this many streams.
                 maxInboundVideoStreams: ResolveGeminiMaxInboundVideoStreams(profile),
+                ...(GeminiRealtime.hasContextWindowCompression(config)
+                    ? {}
+                    : { uncompressedVideoConnectionMaxSeconds: GEMINI_LIVE_UNCOMPRESSED_VIDEO_CONNECTION_SECONDS }),
                 ...this.AvatarPactFor(config, profile),
             })
         ) as JSONObject;
@@ -1817,13 +1819,39 @@ class GeminiRealtimeSession extends BaseRealtimeSession {
         this.errorHandler = handler;
     }
 
+    private hasResumedOnce = false;
+
+    private get canAttemptReconnect(): boolean {
+        return (
+            !this.TrustsNativeResumption ||
+            this.ResumptionHandle !== null ||
+            this.hasResumedOnce ||
+            this.conversationMemory.Seed().Entries.length > 0 ||
+            this.IsReconnecting
+        );
+    }
+
     protected override onReconnecting(reason: string): void {
         RealtimeDiagLog(`[GeminiRealtime] Resuming the session on a new connection (${reason})`);
         this.moving = true;
     }
 
-    protected override onReconnectFailed(error: Error, _code: RealtimeReconnectFailureCode = 'reconnect-failed'): void {
-        this.handleResumeFailed(error);
+    protected override onReconnectFailed(error: Error, code: RealtimeReconnectFailureCode = 'reconnect-failed'): void {
+        this.moving = false;
+        this.heldAudio = [];
+        this.heldAudioBytes = 0;
+        if (this.closedByConsumer) {
+            return;
+        }
+        super.onReconnectFailed(error, code);
+    }
+
+    protected override formatReconnectFailureMessage(error: Error, _code: RealtimeReconnectFailureCode): string {
+        return `Gemini Live connection was lost and could not be resumed: ${error.message}`;
+    }
+
+    protected override emitSessionError(error: RealtimeSessionError): void {
+        this.errorHandler?.(error);
     }
 
     /**
@@ -1833,7 +1861,7 @@ class GeminiRealtimeSession extends BaseRealtimeSession {
      * followed by a `close`, and {@link HandleTransportClose} resumes from there.
      */
     public HandleTransportError(message: string): void {
-        if (!this.TrustsNativeResumption || this.ResumptionHandle !== null || this.IsReconnecting) {
+        if (this.canAttemptReconnect) {
             RealtimeDiagLog(`[GeminiRealtime] Transport error, resuming on close: ${message}`);
             return;
         }
@@ -1851,7 +1879,7 @@ class GeminiRealtimeSession extends BaseRealtimeSession {
         if (this.closedByConsumer) {
             return;
         }
-        if (!this.TrustsNativeResumption || this.ResumptionHandle !== null || this.IsReconnecting) {
+        if (this.canAttemptReconnect) {
             void this.TriggerReconnect('connection-lost');
             return;
         }
@@ -1933,7 +1961,7 @@ class GeminiRealtimeSession extends BaseRealtimeSession {
             await GeminiRealtimeSession.awaitSetup(opened);
             if (context.Abandoned || this.closedByConsumer) {
                 GeminiRealtimeSession.closeQuietly(opened.Live);
-                return;
+                throw new Error('Gemini realtime reconnect attempt was abandoned.');
             }
             const previous = this.live;
             this.useConnection(opened);
@@ -1948,6 +1976,7 @@ class GeminiRealtimeSession extends BaseRealtimeSession {
                         parts: t.Texts.map((text) => ({ text })),
                     }));
                     this.requireLive().sendClientContent({ turns, turnComplete: false });
+                    this.openClientTurn = true;
                 }
             }
             this.handleResumed();
@@ -1963,6 +1992,8 @@ class GeminiRealtimeSession extends BaseRealtimeSession {
      * flag cleared. The audio held during the move goes out, then the queued sends.
      */
     private handleResumed(): void {
+        this.hasResumedOnce = true;
+        this.videoStreamActive = false;
         this.manualActivityOpen = false;
         this.avatarOutput?.Resumed();
         this.endTurn();
@@ -1970,20 +2001,6 @@ class GeminiRealtimeSession extends BaseRealtimeSession {
         this.ArmConnectionDurationTimer();
         this.sendHeldAudio();
         this.completeTurn();
-    }
-
-    /**
-     * Every resume attempt failed: the session ends with a fatal error. Input no longer waits for a new connection; the
-     * audio held for one is dropped.
-     */
-    private handleResumeFailed(error: Error): void {
-        this.moving = false;
-        this.heldAudio = [];
-        this.heldAudioBytes = 0;
-        if (this.closedByConsumer) {
-            return;
-        }
-        this.errorHandler?.({ Message: `Gemini Live connection was lost and could not be resumed: ${error.message}`, Fatal: true });
     }
 
     /** Closes a connection the session no longer uses; it may already be closed. */
@@ -2025,6 +2042,7 @@ class GeminiRealtimeSession extends BaseRealtimeSession {
             this.profile.Tooling.SupportsScheduling ?? false,
             name
         );
+        const expectsReply = sched !== FunctionResponseScheduling.SILENT;
         const functionResponse: FunctionResponse = {
             id: callID,
             name,
@@ -2050,7 +2068,7 @@ class GeminiRealtimeSession extends BaseRealtimeSession {
                 this.closeOpenClientTurn(live);
             }
             this.pendingToolCallNames.delete(callID);
-            this.endTurnIfToolResultsIn();
+            this.endTurnIfToolResultsIn(expectsReply);
         };
         if (this.moving) {
             this.queuedSends.push(send);
@@ -2110,6 +2128,9 @@ class GeminiRealtimeSession extends BaseRealtimeSession {
      * @param text The context note to append to the conversation.
      */
     public SendContextNote(text: string): void {
+        if (text.startsWith('[You can no longer see: ')) {
+            this.ClearVideoLimit();
+        }
         this.conversationMemory.Record({
             Kind: 'note',
             Text: text,
@@ -2311,19 +2332,21 @@ class GeminiRealtimeSession extends BaseRealtimeSession {
     }
 
     /** A tool result went out: a turn whose `turnComplete` waited on the pending calls ends once none is left. */
-    private endTurnIfToolResultsIn(): void {
-        if (this.turnEndAwaitsToolResults && this.pendingToolCallNames.size === 0) {
-            this.endTurn();
-        } else {
-            this.NotifyToolCallsDrained();
+    private endTurnIfToolResultsIn(expectsReply = true): void {
+        if (this.pendingToolCallNames.size > 0) {
+            return;
+        }
+        this.NotifyToolCallsDrained(expectsReply);
+        if (this.turnEndAwaitsToolResults || (!expectsReply && !this.responseActive)) {
+            this.endTurn(expectsReply);
         }
     }
 
     /** The turn is over: a planned move happens at the next resumable handle Google issues. */
-    private endTurn(): void {
+    private endTurn(keepPostToolTurnWait = false): void {
         this.flushPendingMemoryTranscripts();
         this.turnEndAwaitsToolResults = false;
-        this.NotifyTurnEnded();
+        this.NotifyTurnEnded(keepPostToolTurnWait);
     }
 
     /** @inheritdoc */

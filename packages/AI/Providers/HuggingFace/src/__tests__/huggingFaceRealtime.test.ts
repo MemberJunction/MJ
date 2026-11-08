@@ -655,7 +655,7 @@ describe('HuggingFaceRealtime DriverFacts', () => {
 
         const conn2 = new FakeConnection();
         driver.Fake = conn2;
-        const reconnectPromise = session.TriggerReconnect('soft_deadline');
+        const reconnectPromise = session.TriggerReconnect('duration-expiry');
         await new Promise((r) => setTimeout(r, 0));
         conn2.Fire({ type: 'session.created' } as unknown as RealtimeServerEvent);
         expect(await reconnectPromise).toBe(true);

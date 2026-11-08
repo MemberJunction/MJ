@@ -978,9 +978,6 @@ export class OpenAIRealtime extends BaseRealtimeModel {
             session.tools = mapRealtimeTools(params.Tools);
         }
         applyGAFeatures(session, features, profile);
-        if (profile.supportsNativeResumption && timing.TrustNativeResumption && !params.ZeroDataRetention) {
-            session.resumption = { enabled: true };
-        }
         const response = await this.mintClientSecret({ session });
         return {
             Provider: profile.providerKey,
@@ -1343,6 +1340,9 @@ export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealt
         };
         this.connection.send({ type: 'conversation.item.create', item });
         this.connection.send({ type: 'response.create' });
+        if (this.pendingToolCallNames.size === 0) {
+            this.NotifyToolCallsDrained();
+        }
         // This deliberately triggers a response — mark it active eagerly so an interim
         // RequestSpokenUpdate arriving before the server's response.created cannot collide.
         this.responseActive = true;
@@ -1549,6 +1549,9 @@ export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealt
      * accumulated conversation history (`ConversationSeed`) onto the replacement connection.
      */
     protected override async Reconnect(context: RealtimeReconnectContext): Promise<void> {
+        if (context.Abandoned) {
+            throw new Error(`[${this.profile.providerKey}Realtime] Reconnect attempt abandoned`);
+        }
         if (!this.connectionFactory) {
             throw new Error(`[${this.profile.providerKey}Realtime] No connection factory available for Reconnect`);
         }
@@ -1563,7 +1566,7 @@ export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealt
             } catch {
                 // ignore
             }
-            return;
+            throw new Error(`[${this.profile.providerKey}Realtime] Reconnect attempt abandoned`);
         }
 
         const prevConn = this.connection;
@@ -1634,11 +1637,11 @@ export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealt
         }
     }
 
-    protected override onReconnectFailed(error: Error): void {
+    protected override emitSessionError(error: RealtimeSessionError): void {
         if (this.closedByConsumer) {
             return;
         }
-        this.errorHandler?.({ Message: error.message, Fatal: true });
+        this.errorHandler?.(error);
     }
 
     private awaitConnectionCreated(conn: IOpenAIRealtimeConnection): Promise<void> {
@@ -1662,10 +1665,6 @@ export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealt
                 clearTimeout(timer);
                 conn.off('event', onEvent);
                 conn.off('error', onError);
-                const createdId = (event as { session?: { id?: string } }).session?.id;
-                if (this.profile.supportsNativeResumption && createdId) {
-                    this.RecordResumptionHandle(createdId);
-                }
                 resolve();
             };
 
@@ -1727,13 +1726,8 @@ export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealt
             this.NotifyConnectionEnding();
             return;
         }
-        if (
-            this.profile.supportsNativeResumption &&
-            (rawType === 'conversation.created' || rawType === 'session.created' || rawType === 'session.updated')
-        ) {
-            const handle =
-                (event as { conversation?: { id?: string } }).conversation?.id ??
-                (event as { session?: { id?: string } }).session?.id;
+        if (this.profile.supportsNativeResumption && rawType === 'conversation.created') {
+            const handle = (event as { conversation?: { id?: string } }).conversation?.id;
             if (typeof handle === 'string' && handle.trim().length > 0) {
                 this.RecordResumptionHandle(handle.trim());
             }
@@ -1903,6 +1897,9 @@ export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealt
         const isProviderFrame = error.error != null;
         if (!isProviderFrame) {
             this.failConfigWait(error.message);
+            if (this.IsReconnecting) {
+                return;
+            }
         }
         this.errorHandler?.({
             Message: error.message,
@@ -1917,7 +1914,7 @@ export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealt
      * so consumers finalize instead of idling on a dead socket — followed by the close handler.
      */
     private handleSocketClose(): void {
-        if (this.closedByConsumer) {
+        if (this.closedByConsumer || this.IsReconnecting) {
             return;
         }
         this.failConfigWait(this.profile.unexpectedCloseMessage);
@@ -1986,9 +1983,6 @@ export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealt
             session.tools = this.mapTools(tools);
         }
         applyGAFeatures(session, features, this.profile);
-        if (this.profile.supportsNativeResumption && this.TrustsNativeResumption && !this.zeroDataRetention) {
-            session.resumption = { enabled: true };
-        }
         this.connection.send({ type: 'session.update', session });
     }
 

@@ -29,12 +29,18 @@ class MultiConnectionClient extends GeminiTestClient {
     public PendingConnect: (() => void) | null = null;
     public HangNextConnect = false;
 
+    protected override get SupportsRelayTransport(): boolean {
+        return true;
+    }
+
     protected override async connectLiveSession(args: GeminiClientConnectArgs): Promise<GeminiLiveClientSession> {
         if (this.FailConnects > 0) {
             this.FailConnects--;
             throw new Error('socket refused');
         }
         const session = new FakeGeminiSession();
+        session.OnCloseCallback = () =>
+            args.OnClose({ code: 1000, reason: 'closed', wasClean: true } as CloseEvent);
         this.Connections.push({ Args: args, Session: session });
         this.LastConnectArgs = args;
         if (this.HangNextConnect) {
@@ -85,7 +91,10 @@ const TOOL_CALL = (id: string): LiveServerMessage =>
 
 /** The session config every client here connects with, plus what a test adds to it. */
 function sessionConfig(extra: JSONObject = {}): ClientRealtimeSessionConfig {
-    return makeGeminiConfig({ model: 'gemini-3.8-live', config: { responseModalities: ['AUDIO'], sessionResumption: {} }, ...extra });
+    return {
+        ...makeGeminiConfig({ model: 'gemini-3.8-live', config: { responseModalities: ['AUDIO'], sessionResumption: {} }, ...extra }),
+        TrustNativeResumption: true,
+    };
 }
 
 /** A second client, connected with `extra` added to its session config (Google confirms the setup). */
@@ -699,6 +708,117 @@ describe('GeminiRealtimeClient session resumption', () => {
                     turnComplete: false,
                 },
             ]);
+        });
+
+        it('resets the 120s video cap on reconnect and RemoveTrack while preserving cumulative VideoFramesSent telemetry (#9, #25, #28)', async () => {
+            const videoClient = await connectAnother({
+                supportsInboundVideo: true,
+                maxInboundVideoRate: 1,
+                requestedTracks: [
+                    { Modality: 'audio', Direction: 'inbound' },
+                    { Modality: 'audio', Direction: 'outbound' },
+                    { Modality: 'video', Direction: 'inbound', Encoding: 'image/jpeg', Rate: 1 },
+                ],
+            });
+            expect(videoClient.CallDurationSeconds).toBe(600);
+            expect(videoClient.SendVideoFrame('BBBB', 'image/jpeg')).toBe(true);
+            expect(videoClient.CallDurationSeconds).toBe(120);
+            expect(videoClient.VideoFramesSent).toBe(1);
+
+            // Reconnect resets the 120s video cap back to 600s until a new video frame is sent on the new connection
+            videoClient.EmitOn(0, RESUMABLE('vid-h1'));
+            await videoClient.TriggerReconnect('duration-expiry');
+            expect(videoClient.Connections).toHaveLength(2);
+            expect(videoClient.CallDurationSeconds).toBe(600);
+            expect(videoClient.VideoFramesSent).toBe(1);
+
+            // Sending a frame on Connection 2 re-engages the 120s cap; RemoveTrack lifts the cap without zeroing VideoFramesSent
+            await vi.advanceTimersByTimeAsync(1000);
+            expect(videoClient.SendVideoFrame('CCCC', 'image/jpeg')).toBe(true);
+            expect(videoClient.CallDurationSeconds).toBe(120);
+            expect(videoClient.VideoFramesSent).toBe(2);
+
+            expect(videoClient.RemoveTrack({ Modality: 'video', Direction: 'inbound' })).toBe(true);
+            expect(videoClient.CallDurationSeconds).toBe(600);
+            expect(videoClient.VideoFramesSent).toBe(2);
+        });
+
+        it('sets openClientTurn = true after seeding history on a blocking model so a subsequent tool result sends turnComplete: true (#24)', async () => {
+            const devClient = new MultiConnectionClient();
+            await devClient.Connect(
+                {
+                    ...makeGeminiConfig({
+                        model: 'gemini-3.1-live',
+                        supportsBlocking: true,
+                        config: { responseModalities: ['AUDIO'], sessionResumption: {} },
+                    }),
+                },
+                new FakeMediaStream([new FakeTrack()])
+            );
+
+            // DefaultTrustsNativeResumption on GeminiRealtimeClient is false
+            expect(devClient.TrustsNativeResumption).toBe(false);
+
+            devClient.EmitOn(0, HEARD('Check order 99'));
+            devClient.EmitOn(0, SAID('Checking order 99 now.'));
+            devClient.EmitOn(0, TURN_COMPLETE);
+
+            await devClient.TriggerReconnect('duration-expiry');
+            expect(devClient.Connections).toHaveLength(2);
+
+            // Emit a tool call on Connection 2 without any intervening turnComplete, then send the tool result
+            devClient.EmitOn(1, TOOL_CALL('call-after-seed'));
+            devClient.SendToolResult('call-after-seed', '{"status":"delivered"}');
+
+            expect(devClient.Connections[1].Session.ToolResponses).toHaveLength(1);
+            // Because seeding left openClientTurn = true, SendToolResult must append { turnComplete: true }
+            expect(devClient.Connections[1].Session.ClientContents.at(-1)).toEqual({
+                turnComplete: true,
+            });
+        });
+
+        it('queues outbound sends issued while a relay seed reconnect has nulled this.session (#24, #28)', async () => {
+            const relayClient = new MultiConnectionClient();
+            let closeSettledBeforeRefresh = false;
+            relayClient.SetTokenRefreshCallback(async (opts) => {
+                if (opts?.AllowFreshReopen) {
+                    closeSettledBeforeRefresh = relayClient.Connections[0].Session.Closed;
+                    // Issue a send while this.session is null during the relay seed move
+                    relayClient.SendContextNote('queued during relay seed move');
+                }
+                return {
+                    Kind: 'relay',
+                    EphemeralToken: '',
+                    ExpiresAt: new Date(Date.now() + 600_000).toISOString(),
+                    RelayUrl: 'wss://relay.example/realtime-proxy?ticket=relay-2',
+                };
+            });
+
+            await relayClient.Connect(
+                {
+                    ...makeGeminiConfig({
+                        model: 'gemini-3.8-live',
+                        config: { responseModalities: ['AUDIO'], sessionResumption: {} },
+                    }),
+                    Transport: 'relay',
+                    RelayUrl: 'wss://relay.example/realtime-proxy?ticket=relay-1',
+                    TrustNativeResumption: false,
+                },
+                new FakeMediaStream([new FakeTrack()])
+            );
+
+            relayClient.EmitOn(0, HEARD('Hello relay'));
+            relayClient.EmitOn(0, SAID('Hi there'));
+            relayClient.EmitOn(0, TURN_COMPLETE);
+
+            await relayClient.TriggerReconnect('duration-expiry');
+            expect(closeSettledBeforeRefresh).toBe(true);
+            expect(relayClient.Connections).toHaveLength(2);
+            expect(
+                relayClient.Connections[1].Session.ClientContents.some((c) =>
+                    JSON.stringify(c).includes('queued during relay seed move')
+                )
+            ).toBe(true);
         });
     });
 });

@@ -482,6 +482,7 @@ export interface CoAgentSystemPromptResolution {
 export interface PersistedRealtimeMintSnapshot {
     coAgentID?: string;
     modelID: string;
+    vendorID?: string;
     modelVendorID?: string;
     driverClass: string;
     credentialScope: AICredentialScope;
@@ -1119,6 +1120,7 @@ export class RealtimeClientSessionService {
         const persistedSnapshot: PersistedRealtimeMintSnapshot = {
             coAgentID: coAgent.ID,
             modelID: resolution.ModelID,
+            vendorID: resolution.VendorID,
             modelVendorID: resolution.ModelVendorID,
             driverClass: resolution.DriverClass ?? resolution.Model.constructor.name,
             credentialScope: input.CredentialScope ?? 'Any',
@@ -1392,7 +1394,7 @@ export class RealtimeClientSessionService {
                     return {
                         Model: instance,
                         ModelID: model.ID,
-                        VendorID: '',
+                        VendorID: snapshot.vendorID ?? '',
                         ModelVendorID: snapshot.modelVendorID,
                         APIName: snapshot.sessionParams.Model,
                         ModelName: model.Name,
@@ -1410,7 +1412,7 @@ export class RealtimeClientSessionService {
                 return {
                     Model: instance,
                     ModelID: snapshot.modelID,
-                    VendorID: '',
+                    VendorID: snapshot.vendorID ?? '',
                     ModelVendorID: snapshot.modelVendorID,
                     APIName: snapshot.sessionParams.Model,
                     DriverClass: snapshot.driverClass,
@@ -1459,6 +1461,7 @@ export class RealtimeClientSessionService {
         return {
             coAgentID: typeof parsed.coAgentID === 'string' ? parsed.coAgentID : expectedCoAgentID,
             modelID: parsed.modelID,
+            vendorID: typeof parsed.vendorID === 'string' ? parsed.vendorID : undefined,
             modelVendorID: typeof parsed.modelVendorID === 'string' ? parsed.modelVendorID : undefined,
             driverClass: parsed.driverClass,
             credentialScope: parsed.credentialScope,

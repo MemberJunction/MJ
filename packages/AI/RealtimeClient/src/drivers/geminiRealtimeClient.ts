@@ -169,6 +169,8 @@ interface GeminiOpenedConnection {
     ConnectionNumber: number;
     /** Google's confirmation of the connection's setup (`setupComplete`); the connection is put to use only after it. */
     Setup: RealtimeConnectionSetup;
+    /** Resolves when the underlying session's `OnClose` callback fires. */
+    Closed: Promise<void>;
 }
 
 /**
@@ -248,7 +250,7 @@ export class GeminiPcmPlayback extends RealtimePcmPlayback {
  *   stops at the first send that starts a new response).
  * - **Moving to a new connection**: Google ends a connection after about 10 minutes, announcing
  *   it with `goAway`, and the session resumes on a new one with Google's handle
- *   ({@link RealtimeSessionResumption}). A planned move waits until no turn is in progress
+ *   ({@link RealtimeReconnectController}). A planned move waits until no turn is in progress
  *   ({@link IsTurnOpen}). A connection is put to use only once Google confirms its setup
  *   (`setupComplete`): input that reaches it earlier is dropped. During a move, sends queue and
  *   the latest 2 s of mic audio are held; both go out on the new connection once it is ready.
@@ -258,7 +260,7 @@ export class GeminiPcmPlayback extends RealtimePcmPlayback {
  *   commit. {@link SendToolResult} therefore follows `sendToolResponse` with an empty-turn
  *   commit whenever a note left the turn open, so the model speaks the result immediately
  *   (the behavioral equivalent of the OpenAI driver's explicit `response.create`).
- - **Triggering turns ride realtime text**: typed text ({@link SendText}) and narration
+ * - **Triggering turns ride realtime text**: typed text ({@link SendText}) and narration
  *   triggers ({@link RequestSpokenUpdate}) are sent via `sendRealtimeInput({ text })` — the
  *   Live API's documented in-conversation text path. Native-audio Live models treat
  *   `sendClientContent` as initial-history seeding only: a mid-call `turnComplete: true`
@@ -278,8 +280,11 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     public static readonly GEMINI_LIVE_CONNECTION_SECONDS = 600;
     public static readonly GEMINI_LIVE_UNCOMPRESSED_VIDEO_CONNECTION_SECONDS = 120;
 
-    private uncompressedVideoConnectionSeconds =
+    private uncompressedVideoConnectionSeconds: number | undefined =
         GeminiRealtimeClient.GEMINI_LIVE_UNCOMPRESSED_VIDEO_CONNECTION_SECONDS;
+    private videoCapActive = false;
+    private hasResumedOnce = false;
+    private currentClosedPromise: Promise<void> | null = null;
 
     protected override get DefaultCallDurationSeconds(): number | undefined {
         return GeminiRealtimeClient.GEMINI_LIVE_CONNECTION_SECONDS;
@@ -287,25 +292,25 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
 
     /**
      * Applies the 120 s uncompressed-video connection cap only when inbound video is active,
-     * at least one frame has been sent, AND `contextWindowCompression` is absent on the connect
-     * config (sliding-window compression lifts the 2-minute audio+video limit).
+     * at least one frame has been sent on the current connection/stream (`videoCapActive`), AND
+     * `contextWindowCompression` is absent on the connect config (sliding-window compression lifts
+     * the 2-minute audio+video limit).
      */
     protected override get RuntimeCallDurationSeconds(): number | undefined {
         const hasContextCompression = Boolean(this.connectTarget?.Config?.contextWindowCompression);
-        if (!hasContextCompression && this.IsTrackEstablished('video', 'inbound') && this.videoFramesSent > 0) {
+        if (!hasContextCompression && this.IsTrackEstablished('video', 'inbound') && this.videoCapActive) {
             return this.uncompressedVideoConnectionSeconds;
         }
         return undefined;
     }
 
     /**
-     * When `TrustNativeResumption` is not explicitly set on `ClientRealtimeSessionConfig` (e.g. direct
-     * Developer API sessions where the server stamps `TrustNativeResumption: false`), defaults to `true`
-     * so Vertex AI relay sessions and direct sessions with resumption handles resume natively unless
-     * `TrustNativeResumption: false` was explicitly configured.
+     * Google Gemini Developer API (`GeminiRealtimeClient`, key `'gemini'`) defaults to `false`
+     * because `BidiGenerateContent` does not reliably honor `sessionResumption.handle` across
+     * connections; `GeminiEnterpriseRealtimeClient` (Vertex AI Live) overrides this to `true`.
      */
     protected override get DefaultTrustsNativeResumption(): boolean {
-        return true;
+        return false;
     }
 
     /** Gemini / Vertex AI Live emits a fresh resumable handle shortly after each `turnComplete`. */
@@ -324,10 +329,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
 
     public override RemoveTrack(descriptor: Pick<RealtimeTrackDescriptor, 'Modality' | 'Direction' | 'SourceID'>): boolean {
         const removed = super.RemoveTrack(descriptor);
-        if (removed && !this.IsTrackEstablished('video', 'inbound') && this.videoFramesSent > 0) {
-            this.videoFramesSent = 0;
-            this.firstVideoSendTimestamp = 0;
-            this.lastVideoSendTimestamp = 0;
+        if (removed && !this.IsTrackEstablished('video', 'inbound') && this.videoCapActive) {
+            this.videoCapActive = false;
             if (this.connectionReady && !this.IsReconnecting) {
                 this.ArmConnectionDurationTimer();
             }
@@ -497,9 +500,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.idleSignal = session.idleSignal;
         this.supportsScheduling = session.supportsScheduling;
         this.supportsBlocking = session.supportsBlocking;
+        const hasContextCompression = Boolean(session.liveConfig.contextWindowCompression);
         this.uncompressedVideoConnectionSeconds =
             session.uncompressedVideoConnectionMaxSeconds ??
-            GeminiRealtimeClient.GEMINI_LIVE_UNCOMPRESSED_VIDEO_CONNECTION_SECONDS;
+            (hasContextCompression ? undefined : GeminiRealtimeClient.GEMINI_LIVE_UNCOMPRESSED_VIDEO_CONNECTION_SECONDS);
         this.negotiateSessionTracks(session);
         const playback = this.createPlayback();
         this.playback = playback;
@@ -536,6 +540,9 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.firstVideoSendTimestamp = 0;
         this.lastVideoSendTimestamp = 0;
         this.videoFramesSent = 0;
+        this.videoCapActive = false;
+        this.hasResumedOnce = false;
+        this.currentClosedPromise = null;
         this.resetConnectionState();
         this.disposeAvatarOutput();
     }
@@ -734,11 +741,14 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.playback = null;
         this.connectTarget = null;
         this.currentConnection = 0;
+        this.currentClosedPromise = null;
         this.resetConnectionState();
         this.clearRemoteMediaStream();
         this.firstVideoSendTimestamp = 0;
         this.lastVideoSendTimestamp = 0;
         this.videoFramesSent = 0;
+        this.videoCapActive = false;
+        this.hasResumedOnce = false;
         if (this.session) {
             try {
                 this.session.close();
@@ -770,7 +780,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * needed.
      */
     public SendText(text: string): void {
-        if (!this.session) {
+        if (!this.session && !this.IsReconnecting) {
             return;
         }
         this.CancelActiveResponse();
@@ -811,9 +821,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         if (this.firstVideoSendTimestamp === 0) {
             this.firstVideoSendTimestamp = now;
         }
-        const wasZeroVideoFrames = this.videoFramesSent === 0;
+        const wasVideoCapInactive = !this.videoCapActive;
+        this.videoCapActive = true;
         this.videoFramesSent++;
-        if (wasZeroVideoFrames) {
+        if (wasVideoCapInactive) {
             // Re-arm connection duration timer under the 120s uncompressed video cap.
             this.ArmConnectionDurationTimer();
         }
@@ -837,7 +848,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * when nothing is active. An avatar's video stops with the voice.
      */
     public CancelActiveResponse(): void {
-        if (!this.session) {
+        if (!this.session && !this.IsReconnecting) {
             return;
         }
         if (!this.responseActive && !this.IsAudioPlaying && !this.interactionInProgress) {
@@ -868,7 +879,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * tracks this so {@link SendToolResult} can commit the turn and unblock the spoken reply.
      */
     public SendContextNote(text: string): void {
-        if (!this.session) {
+        if (!this.session && !this.IsReconnecting) {
             return;
         }
         this.conversationMemory.Record({
@@ -891,7 +902,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * in-flight turn so it can never interrupt a pending reply.
      */
     public RequestSpokenUpdate(instructions: string): void {
-        if (!this.session) {
+        if (!this.session && !this.IsReconnecting) {
             return;
         }
         this.enqueueOrRun(() => this.sendTriggeringUserTurn(instructions, 'narration', false));
@@ -899,7 +910,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
 
     /** A spoken TURN: the same realtime-text trigger as the update, with the reply kept `normal` (MJ#4591). */
     public RequestSpokenTurn(instructions: string): void {
-        if (!this.session) {
+        if (!this.session && !this.IsReconnecting) {
             return;
         }
         this.enqueueOrRun(() => this.sendTriggeringUserTurn(instructions, 'normal', false));
@@ -917,7 +928,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * reply (observed live as the model staying silent after a delegated agent's result).
      */
     protected override doSendToolResult(callID: string, outputJson: string): boolean | void {
-        if (!this.session) {
+        if (!this.session && !this.IsReconnecting) {
             return false;
         }
         const name = this.pendingToolCallNames.get(callID) ?? '';
@@ -1180,8 +1191,14 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * Whether an unexpected close or `goAway` can be recovered via `TriggerReconnect` / `NotifyConnectionEnding`:
      * either native resumption has a recorded handle, or history seeding is active (`TrustsNativeResumption === false`).
      */
-    private canRecoverConnection(): boolean {
-        return this.ResumptionHandle !== null || !this.TrustsNativeResumption;
+    private canRecoverConnection(allowEmptySeed = false): boolean {
+        if (this.ResumptionHandle !== null) {
+            return true;
+        }
+        if (this.TrustsNativeResumption) {
+            return false;
+        }
+        return allowEmptySeed || this.hasResumedOnce || this.conversationMemory.Seed().Entries.length > 0;
     }
 
     /**
@@ -1256,7 +1273,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         }
         if (message.goAway) {
             const timeLeftMs = ParseDurationToMs(message.goAway.timeLeft);
-            if (this.canRecoverConnection()) {
+            if (this.canRecoverConnection(true)) {
                 this.NotifyConnectionEnding(timeLeftMs);
             }
         }
@@ -1275,6 +1292,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     protected override onReconnecting(reason: RealtimeReconnectReason): void {
         RealtimeDiagLog(`[GeminiRealtimeClient] Resuming the session on a new connection (${reason})`);
         this.connectionReady = false;
+        this.currentState = 'connecting';
         super.onReconnecting(reason);
     }
 
@@ -1285,8 +1303,9 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * - Preserves `sessionResumption` only when present on the initial connect config or when `handle` is set
      *   (never adding `sessionResumption: {}` on ZDR sessions that omitted it).
      * - On a relay session falling back to history seeding (`!handle && target.Transport === 'relay'`), closes the
-     *   old tunnel first, requests `context.RefreshCredential({ AllowFreshReopen: true })` so the relay resets
-     *   `FreshOpened` once `ExpiresAtListeners.size === 0`, and seeds via `RenderRealtimeMemorySeedAsContextNote`.
+     *   old tunnel first, awaits its close callback, requests `context.RefreshCredential({ AllowFreshReopen: true })`
+     *   so the relay resets `FreshOpened` once `ExpiresAtListeners.size === 0`, and seeds via
+     *   `RenderRealtimeMemorySeedAsContextNote`.
      */
     protected override async Reconnect(context: RealtimeClientReconnectContext): Promise<void> {
         const target = this.connectTarget;
@@ -1303,9 +1322,15 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
 
         let refreshedRelayUrl = context.Credential.RelayUrl || target.RelayUrl;
         if (!handle && target.Transport === 'relay') {
+            const prevClosed = this.currentClosedPromise;
+            this.currentClosedPromise = null;
+            this.currentConnection = 0;
             if (this.session) {
                 GeminiRealtimeClient.closeQuietly(this.session);
                 this.session = null;
+            }
+            if (prevClosed) {
+                await prevClosed;
             }
             const freshRelayCred = await context.RefreshCredential({ AllowFreshReopen: true });
             if (freshRelayCred.RelayUrl) {
@@ -1353,7 +1378,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         }
         if (context.Abandoned || this.connectTarget !== target) {
             GeminiRealtimeClient.closeQuietly(opened.Session);
-            return;
+            throw new Error('GeminiRealtimeClient: reconnect attempt abandoned');
         }
         const previous = this.session;
         this.useConnection(opened);
@@ -1369,6 +1394,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
                         turns: [{ role: 'user', parts: [{ text: note }] }],
                         turnComplete: false,
                     });
+                    this.openClientTurn = true;
                 }
             } else {
                 const seedTurns = RenderRealtimeMemorySeed(context.ConversationSeed);
@@ -1378,6 +1404,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
                         parts: t.Texts.map((text) => ({ text })),
                     }));
                     this.session?.sendClientContent({ turns, turnComplete: false });
+                    this.openClientTurn = true;
                 }
             }
         }
@@ -1395,6 +1422,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         const number = ++this.issuedConnections;
         const isCurrent = (): boolean => number === this.currentConnection;
         const setup = new RealtimeConnectionSetup();
+        let markClosed!: () => void;
+        const closed = new Promise<void>((resolve) => {
+            markClosed = resolve;
+        });
         const session = await this.connectLiveSession({
             ...target,
             OnMessage: (message) => {
@@ -1412,13 +1443,14 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
                 }
             },
             OnClose: (event) => {
+                markClosed();
                 setup.Fail(new Error(`Gemini Live closed the connection before confirming its setup (${event?.code}): ${event?.reason || 'no reason given'}`));
                 if (isCurrent()) {
                     this.handleTransportClose(event);
                 }
             },
         });
-        return { Session: session, ConnectionNumber: number, Setup: setup };
+        return { Session: session, ConnectionNumber: number, Setup: setup, Closed: closed };
     }
 
     /** Waits for Google to confirm a new connection's setup. On failure the connection is closed and the error rethrown. */
@@ -1440,6 +1472,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private useConnection(opened: GeminiOpenedConnection): void {
         this.session = opened.Session;
         this.currentConnection = opened.ConnectionNumber;
+        this.currentClosedPromise = opened.Closed;
     }
 
     /**
@@ -1450,6 +1483,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * last frame.
      */
     private handleResumed(): void {
+        this.hasResumedOnce = true;
+        this.videoCapActive = false;
         this.avatarOutput?.Resumed();
         this.emitAvatarVideoSeconds();
         this.finalizeUserTranscript();
@@ -1959,17 +1994,21 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     }
 
     /** A tool result went out: a turn whose `turnComplete` waited on the pending calls ends once none is left. */
-    private endTurnIfToolResultsIn(): void {
+    private endTurnIfToolResultsIn(expectsReply = true): void {
         if (this.turnEndAwaitsToolResults && this.pendingToolCallNames.size === 0) {
-            this.endTurn();
+            this.endTurn(expectsReply);
         }
     }
 
     /** The turn is over: a planned move happens at the next resumable handle Google issues. */
-    private endTurn(): void {
+    private endTurn(keepPostToolTurnWait = false): void {
         this.turnOpen = false;
         this.turnEndAwaitsToolResults = false;
-        this.reconnectController.TurnEnded();
+        this.reconnectController.TurnEnded(keepPostToolTurnWait);
+    }
+
+    protected override isToolResultSilent(outputJson: string): boolean {
+        return this.supportsScheduling && super.isToolResultSilent(outputJson);
     }
 
     // ── Collision-safe send machinery ──────────────────────────────────────────
@@ -2098,7 +2137,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
                 this.setState('speaking');
             }
             this.pendingToolCallNames.delete(callID);
-            this.endTurnIfToolResultsIn();
+            this.endTurnIfToolResultsIn(true);
             return;
         }
         const parsed = this.parseToolOutput(outputJson);
@@ -2128,7 +2167,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         }
 
         this.pendingToolCallNames.delete(callID);
-        this.endTurnIfToolResultsIn();
+        this.endTurnIfToolResultsIn(sched !== FunctionResponseScheduling.SILENT);
     }
 
     /**

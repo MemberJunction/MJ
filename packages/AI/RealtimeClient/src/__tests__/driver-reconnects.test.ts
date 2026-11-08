@@ -833,5 +833,106 @@ describe('Slice 5 — Client driver long-call reconnects and history seeding', (
 
         await client.Disconnect();
     });
+
+    it('attaches remote audio stream when nextPc.ontrack fires during setRemoteDescription before peerConnection swap (#23)', async () => {
+        const remoteStream = new FakeMediaStream([new FakeTrack()]) as unknown as MediaStream;
+        class EarlyOnTrackOpenAIClient extends OpenAIRealtimeClient {
+            public PeerConnections: FakePeerConnection[] = [];
+            public AudioSinks: FakeAudioSink[] = [];
+            protected override createPeerConnection(): IRealtimePeerConnection {
+                const pc = new FakePeerConnection();
+                const origSetRemote = pc.setRemoteDescription.bind(pc);
+                pc.setRemoteDescription = async (desc: RTCSessionDescriptionInit): Promise<void> => {
+                    await origSetRemote(desc);
+                    // Fire ontrack synchronously inside setRemoteDescription (before dcOpened resolves / before swap)
+                    pc.ontrack?.({ streams: [remoteStream] } as unknown as RTCTrackEvent);
+                    queueMicrotask(() => pc.Channel.Open());
+                };
+                this.PeerConnections.push(pc);
+                return pc;
+            }
+            protected override createAudioSink(): IRealtimeAudioSink {
+                const sink = new FakeAudioSink();
+                this.AudioSinks.push(sink);
+                return sink;
+            }
+            protected override async postSdpOffer(): Promise<string> {
+                return 'FAKE_ANSWER_SDP';
+            }
+        }
+
+        const client = new EarlyOnTrackOpenAIClient();
+        const mic = new FakeMediaStream([new FakeTrack()]) as unknown as MediaStream;
+        const connectPromise = client.Connect(
+            {
+                Provider: 'openai',
+                Model: 'gpt-realtime-2.1',
+                EphemeralToken: 'tok-early-1',
+                ExpiresAt: new Date(Date.now() + 600_000).toISOString(),
+                SessionConfig: { type: 'realtime', instructions: 'System prompt' },
+            },
+            mic
+        );
+        await vi.advanceTimersByTimeAsync(1);
+        await connectPromise;
+
+        const reconnected = client.TriggerReconnect('duration-expiry');
+        await vi.advanceTimersByTimeAsync(1);
+        expect(await reconnected).toBe(true);
+        expect(client.AudioSinks[0]?.srcObject).toBe(remoteStream);
+        await client.Disconnect();
+    });
+
+    it('ignores old-socket onerror during an in-flight WebSocket reconnect (#27)', async () => {
+        class ErrorDuringReconnectXAIClient extends xAIRealtimeClient {
+            public Sockets: FakeProtocolSocket[] = [];
+            protected override createSocket(): IOpenAIProtocolClientSocket {
+                const sock = new FakeProtocolSocket();
+                this.Sockets.push(sock);
+                if (this.Sockets.length === 1) {
+                    queueMicrotask(() => sock.onopen?.());
+                }
+                return sock;
+            }
+            protected override async createMicCapture(): Promise<IPcmMicCapture> {
+                return new FakeMicCapture();
+            }
+            protected override createPlayback(): IRealtimePcmPlayback {
+                return new FakePlayback();
+            }
+        }
+
+        const client = new ErrorDuringReconnectXAIClient();
+        const errors: string[] = [];
+        client.OnError((e) => errors.push(e.Message));
+
+        const mic = new FakeMediaStream([new FakeTrack()]) as unknown as MediaStream;
+        const connectPromise = client.Connect(
+            {
+                Provider: 'xai',
+                Model: 'grok-2-realtime',
+                EphemeralToken: 'tok-xai-err-1',
+                ExpiresAt: new Date(Date.now() + 600_000).toISOString(),
+                SessionConfig: { instructions: 'Grok prompt' },
+            },
+            mic
+        );
+        await vi.advanceTimersByTimeAsync(1);
+        await connectPromise;
+
+        const reconnecting = client.TriggerReconnect('duration-expiry');
+        await vi.advanceTimersByTimeAsync(0);
+        expect(client.Sockets).toHaveLength(2);
+
+        // Old socket emits an error while the new socket is still connecting
+        client.Sockets[0].onerror?.('stale socket reset');
+        expect(errors).toEqual([]);
+
+        client.Sockets[1].onopen?.();
+        await vi.advanceTimersByTimeAsync(1);
+        expect(await reconnecting).toBe(true);
+        expect(errors).toEqual([]);
+        await client.Disconnect();
+    });
 });
 

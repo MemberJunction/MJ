@@ -730,26 +730,44 @@ describe('AssemblyAIRealtimeSession guard rails', () => {
         expect(() => session.SendInput({ Data: new Uint8Array([1]).buffer, Kind: 'audio' })).toThrow('not open');
     });
 
-    it('reconnects in place with a fresh socket and injects memory seed into system_prompt (#21)', async () => {
+    it('reconnects in place with a fresh socket, strips greeting, and preserves memory seed across SendContextNote (#2, #7, #13, #21, #28)', async () => {
         const driver = new TestAssemblyAIRealtime('fake-api-key');
-        const session = (await startSession(driver, { SystemPrompt: 'Base prompt.' })) as AssemblyAIRealtimeSession;
+        const session = (await startSession(driver, {
+            SystemPrompt: 'Base prompt.',
+            Config: { firstMessage: 'Welcome!' },
+        })) as AssemblyAIRealtimeSession;
         const socket1 = driver.Socket;
+        const { errors } = collect(session);
 
         driver.Emit({ type: 'transcript.user', text: 'Hello agent', item_id: 'u1' });
         driver.Emit({ type: 'transcript.agent', text: 'Hi caller', reply_id: 'r1', item_id: 'a1', interrupted: false });
 
         const socket2 = new FakeSocket();
         driver.Socket = socket2;
-        const reconnectPromise = session.TriggerReconnect('soft_deadline');
+        const reconnectPromise = session.TriggerReconnect('duration-expiry');
         await flushAsync();
+
+        // Before session.ready on socket2, socket1 has not been closed yet, and an error on socket1 is ignored
+        expect(socket1.Closed).toBe(false);
+        socket1.ConnectArgs?.OnError('old socket error during handshake');
+        expect(errors).toEqual([]);
+
         driver.Emit(readyEvent());
         expect(await reconnectPromise).toBe(true);
 
         expect(socket1.Closed).toBe(true);
+        expect(errors).toEqual([]);
         const updateFrame = socket2.SentFrames().find((f) => f.type === 'session.update');
         expect(updateFrame?.session?.system_prompt).toContain('Base prompt.');
         expect(updateFrame?.session?.system_prompt).toContain('Hello agent');
         expect(updateFrame?.session?.system_prompt).toContain('Hi caller');
+        expect(updateFrame?.session?.greeting).toBeUndefined();
+
+        // A subsequent SendContextNote after reconnect must preserve the seeded conversation history
+        session.SendContextNote('Order 99 shipped');
+        const noteUpdate = socket2.SentFrames().at(-1);
+        expect(noteUpdate?.session?.system_prompt).toContain('Hello agent');
+        expect(noteUpdate?.session?.system_prompt).toContain('Order 99 shipped');
     });
 });
 

@@ -276,17 +276,17 @@ export class InworldRealtime extends BaseRealtimeModel {
             Url: this.buildConnectUrl(),
             OnMessage: (event) => {
                 if (!initialSocket || session.IsActiveOrPendingSocket(initialSocket)) {
-                    session.HandleServerEvent(event);
+                    session.HandleServerEvent(event, initialSocket ?? undefined);
                 }
             },
             OnError: (message) => {
                 if (!initialSocket || session.IsActiveOrPendingSocket(initialSocket)) {
-                    session.HandleTransportError(message);
+                    session.HandleTransportError(message, initialSocket ?? undefined);
                 }
             },
             OnClose: (code, reason) => {
                 if (!initialSocket || session.IsActiveOrPendingSocket(initialSocket)) {
-                    session.HandleTransportClose(code, reason);
+                    session.HandleTransportClose(code, reason, initialSocket ?? undefined);
                 }
             },
         });
@@ -299,22 +299,21 @@ export class InworldRealtime extends BaseRealtimeModel {
                 const connected = await this.connectRealtimeSocket({
                     Url: this.buildConnectUrl(),
                     OnMessage: (event) => {
-                        if (!reconnectSocket || session.IsActiveOrPendingSocket(reconnectSocket)) {
-                            session.HandleServerEvent(event);
+                        if (reconnectSocket ? session.IsActiveOrPendingSocket(reconnectSocket) : activeAttempt) {
+                            session.HandleServerEvent(event, reconnectSocket ?? undefined);
                         }
                     },
                     OnError: (message) => {
                         if (reconnectSocket ? session.IsActiveOrPendingSocket(reconnectSocket) : activeAttempt) {
-                            session.HandleTransportError(message);
+                            session.HandleTransportError(message, reconnectSocket ?? undefined);
                         }
                     },
                     OnClose: (code, reason) => {
                         if (reconnectSocket ? session.IsActiveOrPendingSocket(reconnectSocket) : activeAttempt) {
-                            session.HandleTransportClose(code, reason);
+                            session.HandleTransportClose(code, reason, reconnectSocket ?? undefined);
                         }
                     },
                 });
-                session.AttachPendingSocket(connected);
                 reconnectSocket = connected;
                 return connected;
             } finally {
@@ -547,8 +546,8 @@ export class InworldRealtimeSession extends BaseRealtimeSession implements IReal
      * (model, instructions, audio/STT/TTS, tools, semantic-VAD turn-taking). Always the FIRST client
      * frame — the provider drops audio sent before the session is configured.
      */
-    public SendSessionUpdate(targetSocket?: InworldRealtimeSocket): void {
-        this.sendFrame(this.buildSessionUpdateFrame(this.params.Tools ?? []), targetSocket);
+    public SendSessionUpdate(targetSocket?: InworldRealtimeSocket, instructionsOverride?: string): void {
+        this.sendFrame(this.buildSessionUpdateFrame(this.params.Tools ?? [], instructionsOverride), targetSocket);
     }
 
     /**
@@ -659,6 +658,9 @@ export class InworldRealtimeSession extends BaseRealtimeSession implements IReal
             return;
         }
         this.sendFrame(this.buildToolResultFrame(callID, output));
+        if (this.pendingToolCallNames.size === 0) {
+            this.NotifyToolCallsDrained();
+        }
         this.responseActive = true; // the result's spoken continuation is imminent
         this.NotifyTurnStarted();
     }
@@ -703,7 +705,7 @@ export class InworldRealtimeSession extends BaseRealtimeSession implements IReal
 
     protected override async Reconnect(context: RealtimeReconnectContext): Promise<void> {
         if (context.Abandoned) {
-            return;
+            throw new Error('Inworld reconnect attempt abandoned');
         }
         if (!this.reconnectFactory) {
             throw new Error('InworldRealtimeSession: No reconnect factory available for Reconnect');
@@ -722,7 +724,7 @@ export class InworldRealtimeSession extends BaseRealtimeSession implements IReal
             } catch {
                 // ignore close error on abandoned socket
             }
-            return;
+            throw new Error('Inworld reconnect attempt abandoned');
         }
 
         this.pendingSocket = nextSocket;
@@ -739,16 +741,16 @@ export class InworldRealtimeSession extends BaseRealtimeSession implements IReal
         };
         context.Signal.addEventListener('abort', onAbort, { once: true });
 
+        const seedNote =
+            context.ConversationSeed && context.ConversationSeed.Entries.length > 0
+                ? RenderRealtimeMemorySeedAsContextNote(context.ConversationSeed)
+                : null;
+        const nextBasePrompt = seedNote
+            ? `${InworldRealtimeSession.composeSystemPrompt(this.params.SystemPrompt, this.params.InitialContext)}\n\n${seedNote}`
+            : null;
+
         try {
-            const seedNote =
-                context.ConversationSeed && context.ConversationSeed.Entries.length > 0
-                    ? RenderRealtimeMemorySeedAsContextNote(context.ConversationSeed)
-                    : null;
-            if (seedNote) {
-                this.basePrompt = `${InworldRealtimeSession.composeSystemPrompt(this.params.SystemPrompt, this.params.InitialContext)}\n\n${seedNote}`;
-                this.contextNotes = [];
-            }
-            this.SendSessionUpdate(nextSocket);
+            this.SendSessionUpdate(nextSocket, nextBasePrompt ?? undefined);
             await this.WaitForReady();
         } finally {
             context.Signal.removeEventListener('abort', onAbort);
@@ -763,9 +765,13 @@ export class InworldRealtimeSession extends BaseRealtimeSession implements IReal
             } catch {
                 // ignore close error on abandoned socket
             }
-            return;
+            throw new Error('Inworld reconnect attempt abandoned');
         }
 
+        if (nextBasePrompt !== null) {
+            this.basePrompt = nextBasePrompt;
+            this.contextNotes = [];
+        }
         const prevSocket = this.socket;
         this.socket = nextSocket;
         this.responseActive = false;
@@ -776,11 +782,11 @@ export class InworldRealtimeSession extends BaseRealtimeSession implements IReal
         }
     }
 
-    protected override onReconnectFailed(error: Error): void {
+    protected override emitSessionError(error: RealtimeSessionError): void {
         if (this.closedByConsumer) {
             return;
         }
-        this.errorHandler?.({ Message: error.message, Fatal: true });
+        this.errorHandler?.(error);
     }
 
     /**
@@ -816,9 +822,12 @@ export class InworldRealtimeSession extends BaseRealtimeSession implements IReal
      *
      * @param event The parsed Inworld server event.
      */
-    public HandleServerEvent(event: InworldServerEvent): void {
+    public HandleServerEvent(event: InworldServerEvent, fromSocket?: InworldRealtimeSocket): void {
         switch (this.classifyServerEvent(event)) {
             case 'ready':
+                if (fromSocket && fromSocket !== (this.pendingSocket ?? this.socket)) {
+                    return;
+                }
                 if (event.session_id && event.session_id.length > 0) {
                     this.RecordResumptionHandle(event.session_id);
                 }
@@ -955,8 +964,10 @@ export class InworldRealtimeSession extends BaseRealtimeSession implements IReal
      *
      * @param message The transport error message.
      */
-    public HandleTransportError(message: string): void {
-        this.failReadyWait(message);
+    public HandleTransportError(message: string, fromSocket?: InworldRealtimeSocket): void {
+        if (!fromSocket || fromSocket === (this.pendingSocket ?? this.socket)) {
+            this.failReadyWait(message);
+        }
         if (this.IsReconnecting) {
             return;
         }
@@ -972,13 +983,15 @@ export class InworldRealtimeSession extends BaseRealtimeSession implements IReal
      * @param code Optional WebSocket close code.
      * @param reason Optional WebSocket close reason.
      */
-    public HandleTransportClose(code?: number, reason?: string): void {
+    public HandleTransportClose(code?: number, reason?: string, fromSocket?: InworldRealtimeSocket): void {
+        const detail = [code != null ? `code ${code}` : null, reason || null].filter(Boolean).join(' — ');
+        const message = `Inworld realtime session closed unexpectedly${detail ? ` (${detail})` : ''}`;
+        if (!fromSocket || fromSocket === (this.pendingSocket ?? this.socket)) {
+            this.failReadyWait(message);
+        }
         if (this.closedByConsumer || this.IsReconnecting) {
             return;
         }
-        const detail = [code != null ? `code ${code}` : null, reason || null].filter(Boolean).join(' — ');
-        const message = `Inworld realtime session closed unexpectedly${detail ? ` (${detail})` : ''}`;
-        this.failReadyWait(message);
         this.errorHandler?.({ Message: message, Fatal: true });
         this.closeHandler?.();
     }
@@ -997,11 +1010,11 @@ export class InworldRealtimeSession extends BaseRealtimeSession implements IReal
      * `model` / `instructions` / `audio` / `voice` / `stt` / `turn_detection.eagerness` are mapped to
      * Inworld's documented protocol shape; verify each key against a live Inworld endpoint.
      */
-    private buildSessionUpdateFrame(tools: RealtimeToolDefinition[]): JSONObject {
+    private buildSessionUpdateFrame(tools: RealtimeToolDefinition[], instructionsOverride?: string): JSONObject {
         const config = this.params.Config ?? {};
         const session: JSONObject = {
             model: this.resolveModelId(),
-            instructions: this.composePromptWithNotes(),
+            instructions: instructionsOverride ?? this.composePromptWithNotes(),
             // Inworld runs server-side STT (with voice profiling) on input and TTS-2 on output; the
             // audio block configures both halves. Recognized Config keys map to their wire slots.
             audio: this.buildAudioConfig(config),
