@@ -837,6 +837,35 @@ describe('AsOfFeatureAssembler — a stored value changed after the decision by 
     expect(out).toEqual({ Status: 'refused', Refusal: { kind: 'decision-date-before-change-history', entity: 'People', field: 'Status', historyStart: '2021-01-01T00:00:00.000Z', rowsAffected: 1 } });
   });
 
+  it('excludes, on both readers, a row decided inside a re-created parent\'s deleted interval instead of reading it as created after the decision', async () => {
+    const past: AssemblyRowRef[] = [{ RowID: 'y1', EntityKey: 'y1', DecisionDate: new Date('2020-06-01T00:00:00Z'), Period: null }];
+    const recreated = { People: [rc('d1', 'P1', 'Delete', '2020-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' }), rc('c2', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' })] };
+    const replayed: FeatureColumnSpec = { ...stored, source: { kind: 'record-changes', entity: 'People', field: 'Status', keyField: 'PersonID' } };
+    const policy = { ...unit, history: { ...unit.history, onUncoveredRow: 'exclude-and-count' as const } };
+    for (const spec of [stored, replayed]) {
+      const out = await new AsOfFeatureAssembler().Assemble(input([spec], { Rows: past, Tables: data, Changes: recreated, Unit: policy }));
+      expect(out.Status === 'assembled' ? out.UncoveredRowsExcluded : out, spec.source.kind).toEqual([{ entity: 'People', field: 'Status', rows: 1 }]);
+    }
+  });
+  it('excludes, for a field declared not updatable, an assembly-day row whose parent has a current row and a Delete in force', async () => {
+    const notUpdatable: AssemblyEntityInfo = { ...entities.People, Fields: entities.People.Fields.map((f) => (f.Name === 'Status' ? { ...f, AllowUpdateAPI: false } : f)) };
+    const onAssemblyDay: AssemblyRowRef[] = [{ RowID: 'y1', EntityKey: 'y1', DecisionDate: new Date('2026-10-12T00:00:00Z'), Period: null }];
+    const deletedInForce = { People: [rc('u0', 'P1', 'Update', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }, ['Status']), rc('d1', 'P1', 'Delete', '2022-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' })] };
+    const out = await new AsOfFeatureAssembler().Assemble({
+      ...input([stored], { Rows: onAssemblyDay, Tables: data, Changes: deletedInForce, Unit: { ...unit, history: { ...unit.history, onUncoveredRow: 'exclude-and-count' } } }),
+      Metadata: { Entity: (n) => (n === 'People' ? notUpdatable : metadata.Entity(n)) },
+    });
+    expect(out.Status === 'assembled' ? out.UncoveredRowsExcluded : out).toEqual([{ entity: 'People', field: 'Status', rows: 1 }]);
+  });
+  it('excludes, under exclude-and-count, a stored read whose history does not reach a past decision day, as the replay reader does, and refuses it under refuse', async () => {
+    const past: AssemblyRowRef[] = [{ RowID: 'y1', EntityKey: 'y1', DecisionDate: new Date('2021-06-01T00:00:00Z'), Period: null }];
+    const unanchored = { People: [rc('u0', 'P1', 'Update', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }, ['Status'])] };
+    const excluded = await new AsOfFeatureAssembler().Assemble(input([stored], { Rows: past, Tables: data, Changes: unanchored, Unit: { ...unit, history: { ...unit.history, onUncoveredRow: 'exclude-and-count' } } }));
+    expect(excluded.Status === 'assembled' ? excluded.UncoveredRowsExcluded : excluded).toEqual([{ entity: 'People', field: 'Status', rows: 1 }]);
+    const refused = await new AsOfFeatureAssembler().Assemble(input([stored], { Rows: past, Tables: data, Changes: unanchored }));
+    expect(refused).toEqual({ Status: 'refused', Refusal: { kind: 'decision-date-before-change-history', entity: 'People', field: 'Status', historyStart: null, rowsAffected: 1 } });
+  });
+
   it('keeps the stored value when a later Snapshot or Create row carries the same value of the field', async () => {
     const out = await new AsOfFeatureAssembler().Assemble(input([stored], { Rows: one, Tables: data, Changes: { People: [
       rc('s0', 'P1', 'Snapshot', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }),

@@ -20,7 +20,9 @@
  * UTC day (`AssembledAt`, the clock training and scoring are run with), for a field read directly, replayed, as a join
  * key or as a child row's field: on a tracked entity the history is consulted first, and only where it does not reach
  * that day (no history, or one that starts after it) is the stored value read, as covered — except that a history
- * whose rows in force end in a Delete reads as deleted even with a current row and no anchor; a covering history replays
+ * whose rows in force end in a Delete reads as deleted even with a current row and no anchor, on every reader and for a
+ * field declared not updatable; a history that does not reach a past decision day excludes the row under
+ * exclude-and-count on every reader; a covering history replays
  * (or, read directly, refuses an update dated after the day, exactly as for a past day). On an untracked entity
  * nothing can be consulted, so the stored value is read for such a row. A record created after the decision day still
  * reads as missing. Rows with a past decision day keep the rule above. On any decision day, past or later, a record
@@ -611,6 +613,8 @@ export class AsOfFeatureAssembler {
       const asOf = AsOfFeatureAssembler.asOfInstant(row.DecisionDate);
       const hv = history.ValueAt(key, source.field, asOf);
       if (hv.Status === 'uncovered') {
+        // A Delete in force reads as deleted before any other verdict: a record re-created later was not created after the decision.
+        if (hv.Reason === 'deleted') return { Uncovered: true, Entity: entity.Name, Field: source.field, HistoryStart: history.Coverage.historyStart };
         const unreached = hv.Reason === 'no-history' || hv.Reason === 'before-history-start';
         if (unreached && AsOfFeatureAssembler.onAssemblyDayOrLater(row, input)) return AsOfFeatureAssembler.storedOnDecisionDay(spec, source, entity, key, row, reads.Stored, history, input);
         if (AsOfFeatureAssembler.createdAfter(history, key, asOf, reads.CreatedAt.get(key.toLowerCase()) ?? null)) return AsOfFeatureAssembler.missingValue(spec, AsOfFeatureAssembler.fieldRef(entity, key, source.field), 'created-after-decision', input);
@@ -699,8 +703,10 @@ export class AsOfFeatureAssembler {
    * instant did not exist then (`created-after`); one the history cannot replay for another reason (a continuity
    * mismatch, a deletion, an ineligible external row) is `excluded`, as a replayed field treats it. An update after the
    * instant refuses `select-changes-after-decision-date`; a history that starts after it with a Snapshot, or no history,
-   * refuses `decision-date-before-change-history`; both count the distinct unit rows whose own decision instant is
-   * affected. An updatable field of an untracked entity cannot be known on a past day and refuses for every unit row.
+   * refuses `decision-date-before-change-history` under the `refuse` policy and is `excluded` under `exclude-and-count`,
+   * as a replayed field's uncovered row is; both refusals count the distinct unit rows whose own decision instant is
+   * affected. A Delete in force at an instant is `excluded` before any other verdict, a field declared not updatable
+   * included. An updatable field of an untracked entity cannot be known on a past day and refuses for every unit row.
    * On a tracked entity the history is read for every field, a field declared not updatable included: its stored value
    * is the value since creation, so only the creation instant is consulted for it. Creation follows the one creation
    * rule, so a record whose history starts with a Snapshot after the decision day but whose `__mj_CreatedAt`
@@ -722,11 +728,18 @@ export class AsOfFeatureAssembler {
     }
     const history = await AsOfFeatureAssembler.loadHistory(entity, reads.map((r) => r.Key), [field], input, state);
     const onDayOrLater = AsOfFeatureAssembler.asOfInstant(input.AssembledAt).getTime();
+    // Under exclude-and-count a history that does not reach a past decision day excludes its rows, as a replayed field does.
+    const uncoveredVerdict: StableOutcome = input.Unit.history.onUncoveredRow === 'refuse' ? 'uncovered' : 'excluded';
     const judgeOnce = (key: string, at: Date): StableOutcome => {
-      if (info.AllowUpdateAPI === false) return AsOfFeatureAssembler.createdAfter(history, key, at, storedCreatedAt(key)) ? 'created-after' : 'stable';
+      if (info.AllowUpdateAPI === false) {
+        const hv = history.ValueAt(key, field, at);
+        if (hv.Status === 'uncovered' && hv.Reason === 'deleted') return 'excluded';
+        return AsOfFeatureAssembler.createdAfter(history, key, at, storedCreatedAt(key)) ? 'created-after' : 'stable';
+      }
       const verdict = AsOfFeatureAssembler.judgeStoredValue(history, key, field, at, storedCreatedAt(key));
+      if (verdict !== 'uncovered') return verdict;
       // The replay rule: only a history that does not reach a day on or after the assembly's reads the stored value.
-      return verdict === 'uncovered' && at.getTime() >= onDayOrLater ? 'stable' : verdict;
+      return at.getTime() >= onDayOrLater ? 'stable' : uncoveredVerdict;
     };
     // A verdict depends on the instant only through the change rows before it, whether the record existed then and
     // whether the instant is on or after the assembly's day; judging each such combination once keeps a child read,
@@ -753,9 +766,10 @@ export class AsOfFeatureAssembler {
 
   /** The rule's verdict on one stored record at one instant (the order of the checks is the order of the doc above). */
   private static judgeStoredValue(history: EntityHistory, key: string, field: string, at: Date, storedCreatedAt: CellValue): StableOutcome {
+    const hv = history.ValueAt(key, field, at);
+    if (hv.Status === 'uncovered' && hv.Reason === 'deleted') return 'excluded';
     if (AsOfFeatureAssembler.createdAfter(history, key, at, storedCreatedAt)) return 'created-after';
     if (history.ChangesAfter(key, field, at) > 0) return 'changed';
-    const hv = history.ValueAt(key, field, at);
     if (hv.Status === 'value') return 'stable';
     return hv.Reason === 'before-history-start' || hv.Reason === 'no-history' ? 'uncovered' : 'excluded';
   }
