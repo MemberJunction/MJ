@@ -14,6 +14,7 @@ const finalizeCoAgentRunMock = vi.fn(async () => undefined);
 const keepCoAgentRunAliveMock = vi.fn();
 const hostSessionStartedMock = vi.fn(async () => undefined);
 const hostSessionClosedMock = vi.fn(async () => undefined);
+const mintSnapshotDeleteMock = vi.fn();
 vi.mock('@memberjunction/ai-agents', () => ({
     RealtimeClientSessionService: class {
         FinalizeCoAgentRun = finalizeCoAgentRunMock;
@@ -24,6 +25,13 @@ vi.mock('@memberjunction/ai-agents', () => ({
             return {
                 OnSessionStarted: hostSessionStartedMock,
                 OnSessionClosed: hostSessionClosedMock,
+            };
+        },
+    },
+    RealtimeMintSnapshotRegistry: {
+        get Instance() {
+            return {
+                Delete: mintSnapshotDeleteMock,
             };
         },
     },
