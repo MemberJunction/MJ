@@ -213,9 +213,9 @@ export class SessionManager {
             return false;
         }
         this.heartbeatLastWrite.Delete(agentSessionID.toLowerCase());
-        RealtimeMintSnapshotRegistry.Instance.Delete(agentSessionID);
 
         if (session.Status === 'Closed') {
+            this.deleteMintSnapshotBestEffort(agentSessionID);
             // Idempotent — already terminal. Still notify the channel-plugin host so a session
             // whose plugin instances live in THIS process is cleaned up even when another host
             // instance won the close race (the host no-ops for sessions it doesn't hold).
@@ -229,6 +229,7 @@ export class SessionManager {
         if (!closed) {
             return false;
         }
+        this.deleteMintSnapshotBestEffort(agentSessionID);
         if (session.RecordingStartedAt) {
             // A client-direct recording is assembled only after the grace period while its call is open
             // (a hidden tab must not rewrite recording.wav on every switch; see RealtimeRecordingHandler).
@@ -244,6 +245,19 @@ export class SessionManager {
         // Best-effort + no-op for non-returning-visitor conversations; never blocks teardown.
         await WriteReturningVisitorRecap(session.ConversationID, session.AgentID, contextUser, provider);
         return true;
+    }
+
+    /** Evicts any cached client-session mint snapshot for `agentSessionID`; best-effort so cleanup never blocks close. */
+    private deleteMintSnapshotBestEffort(agentSessionID: string): void {
+        try {
+            RealtimeMintSnapshotRegistry.Instance.Delete(agentSessionID);
+        } catch (err) {
+            LogError(
+                `SessionManager.CloseSession: failed to delete mint snapshot for ${agentSessionID}: ${
+                    err instanceof Error ? err.message : String(err)
+                }`,
+            );
+        }
     }
 
     /**
