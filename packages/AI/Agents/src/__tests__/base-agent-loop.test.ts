@@ -3979,7 +3979,7 @@ describe('BaseAgent — a native complete_task refused by validation', () => {
     });
 });
 
-describe('BaseAgent.Execute — a payload change sent with a completion is applied only if the completion is accepted', () => {
+describe('BaseAgent.Execute — a payload change sent with a completion is committed only when a completion is accepted', () => {
     type ToolBlock = { type: string; toolCallId?: string; isError?: boolean; content?: string };
 
     /** Refuses the first `refusals` completions for an unmet minimum-execution requirement. */
@@ -4017,7 +4017,7 @@ describe('BaseAgent.Execute — a payload change sent with a completion is appli
         return next.content as unknown as ToolBlock[];
     }
 
-    it('native: a complete_task refused for minimum executions leaves its change out of the next request and the final payload, and says so', async () => {
+    it('native: a refused complete_task holds its change — the next request sees it, the accepted completion commits it — and says so', async () => {
         const { agent, runner } = makeMinExecAgent([
             () => llmImplicitCalls([completeTask('call_done', { newElements: { verdict: 'approved' } })]),
             () => llmImplicitCalls([completeTask('call_done_2')]),
@@ -4027,37 +4027,39 @@ describe('BaseAgent.Execute — a payload change sent with a completion is appli
         const result = await agent.Execute(params);
 
         expect(runner.Calls).toHaveLength(2);
-        expect(injectedPayload(runner.Calls[1])).toEqual({ summary: 'draft' });
-        expect(result.payload).toEqual({ summary: 'draft' });
+        expect(injectedPayload(runner.Calls[1])).toEqual({ summary: 'draft', verdict: 'approved' });
+        expect(result.payload).toEqual({ summary: 'draft', verdict: 'approved' });
         const [answer] = answerTo(params.conversationMessages as AgentChatMessage[], 'call_done');
         expect(answer.isError).toBe(true);
         expect(answer.content).toMatch(/Minimum execution requirements not met/);
-        expect(answer.content).toMatch(/payloadChangeRequest sent with this complete_task call was NOT applied/);
+        expect(answer.content).toMatch(/complete_task call was not applied yet: it is held/);
+        expect(answer.content).toMatch(/send only the corrections/);
     });
 
-    it('envelope: a refused completion leaves its change out of the next request and the final payload, and the Retry says to send it again', async () => {
+    it('envelope: a refused completion holds its change, the next completion builds on it, and the Retry says to send only corrections', async () => {
         const { agent, runner } = makeMinExecAgent([
             () => llmEnvelope(successEnvelope({ payloadChangeRequest: { newElements: { verdict: 'approved' } } })),
-            () => llmEnvelope(successEnvelope()),
+            () => llmEnvelope(successEnvelope({ payloadChangeRequest: { newElements: { reviewer: 'Ana' } } })),
         ]);
         const params = makeParams({ payload: { summary: 'draft' } });
 
         const result = await agent.Execute(params);
 
         expect(runner.Calls).toHaveLength(2);
-        expect(injectedPayload(runner.Calls[1])).toEqual({ summary: 'draft' });
-        expect(result.payload).toEqual({ summary: 'draft' });
+        expect(injectedPayload(runner.Calls[1])).toEqual({ summary: 'draft', verdict: 'approved' });
+        expect(result.payload).toEqual({ summary: 'draft', verdict: 'approved', reviewer: 'Ana' });
         const retry = params.conversationMessages.find((m) => typeof m.content === 'string' && m.content.startsWith('Retrying due to:'));
         expect(retry?.content).toMatch(/Minimum execution requirements not met/);
-        expect(retry?.content).toMatch(/NOT applied\. Send it again with your next completion/);
+        expect(retry?.content).toMatch(/completion was not applied yet: it is held/);
     });
 
-    it('validates the draft against FinalPayloadValidation, and commits nothing when it fails', async () => {
+    it('validates the draft against FinalPayloadValidation, and a correction-only completion then passes', async () => {
         harness.agent = makeAgentRow({ FinalPayloadValidation: JSON.stringify({ 'summary:string': 'x', 'title:string': 'x', 'count:number': 1 }) });
         const { agent, runner } = makeAgent([
             // Adds the title but not the count: the draft fails on the count alone.
             () => llmEnvelope(successEnvelope({ payloadChangeRequest: { newElements: { title: 'Q3 report' } } })),
-            () => llmEnvelope(successEnvelope({ payloadChangeRequest: { newElements: { title: 'Q3 report', count: 3 } } })),
+            // Sends only the correction; the held title is still there.
+            () => llmEnvelope(successEnvelope({ payloadChangeRequest: { newElements: { count: 3 } } })),
         ]);
         const params = makeParams({ payload: { summary: 'draft' } });
 
@@ -4065,14 +4067,11 @@ describe('BaseAgent.Execute — a payload change sent with a completion is appli
 
         expect(runner.Calls).toHaveLength(2);
         const retry = params.conversationMessages.find((m) => typeof m.content === 'string' && m.content.startsWith('Retrying due to:'));
-        expect(injectedPayload(runner.Calls[1])).toEqual({ summary: 'draft' });
-        // The draft was what failed: the title it added is not reported missing, the count is. (The
-        // note after the validation errors quotes the change back, title included.)
+        // The draft was what failed: the title it added is not reported missing, the count is.
         const validationErrors = String(retry?.content).split('\n\nThe payloadChangeRequest')[0];
         expect(validationErrors).toMatch(/count/);
         expect(validationErrors).not.toMatch(/title/i);
-        expect(retry?.content).toMatch(/NOT applied/);
-        // The accepted completion's change is applied.
+        expect(injectedPayload(runner.Calls[1])).toEqual({ summary: 'draft', title: 'Q3 report' });
         expect(result.success).toBe(true);
         expect(result.payload).toEqual({ summary: 'draft', title: 'Q3 report', count: 3 });
     });
@@ -4091,35 +4090,36 @@ describe('BaseAgent.Execute — a payload change sent with a completion is appli
         expect(answerTo(params.conversationMessages as AgentChatMessage[], 'call_done')[0]).toMatchObject({ isError: false, content: 'Task complete.' });
     });
 
-    it('envelope: the Retry quotes the discarded change, since the history does not hold the response that sent it', async () => {
+    it('does not apply a resent change twice when it is identical to the held one', async () => {
         const { agent } = makeMinExecAgent([
+            () => llmEnvelope(successEnvelope({ payloadChangeRequest: { newElements: { items: ['a', 'b'], note: 'x' } } })),
+            // The model resends the whole refused change, keys in another order.
+            () => llmEnvelope(successEnvelope({ payloadChangeRequest: { newElements: { note: 'x', items: ['a', 'b'] } } })),
+        ]);
+        const params = makeParams({ payload: { items: [] } });
+
+        const result = await agent.Execute(params);
+
+        expect(result.payload).toEqual({ items: ['a', 'b'], note: 'x' });
+    });
+
+    it('drops the held change when the run ends without an accepted completion', async () => {
+        harness.agent = makeAgentRow({ MaxIterationsPerRun: 2 });
+        const { agent, runner } = makeMinExecAgent([
             () => llmEnvelope(successEnvelope({ payloadChangeRequest: { newElements: { verdict: 'approved' } } })),
-            () => llmEnvelope(successEnvelope()),
+            () => llmEnvelope(actionsEnvelope()),
         ]);
+        agent.Refusals = 99;
         const params = makeParams({ payload: { summary: 'draft' } });
 
-        await agent.Execute(params);
+        const result = await agent.Execute(params);
 
-        const retry = params.conversationMessages.find((m) => typeof m.content === 'string' && m.content.startsWith('Retrying due to:'));
-        expect(retry?.content).toContain('This is the change you sent:\n```json\n');
-        expect(retry?.content).toContain(JSON.stringify({ newElements: { verdict: 'approved' } }, null, 2));
+        expect(runner.Calls).toHaveLength(2);
+        expect(result.success).toBe(false);
+        expect(result.payload).toEqual({ summary: 'draft' });
     });
 
-    it('native: the refusal does not quote the change, since the complete_task call is in the history', async () => {
-        const { agent } = makeMinExecAgent([
-            () => llmImplicitCalls([completeTask('call_done', { newElements: { verdict: 'approved' } })]),
-            () => llmImplicitCalls([completeTask('call_done_2')]),
-        ]);
-        const params = makeParams({ payload: { summary: 'draft' } });
-
-        await agent.Execute(params);
-
-        const [answer] = answerTo(params.conversationMessages as AgentChatMessage[], 'call_done');
-        expect(answer.content).toMatch(/NOT applied/);
-        expect(answer.content).not.toContain('```json');
-    });
-
-    it('does not report a Chat change as discarded when a subclass turns the Chat step into a Success in place', async () => {
+    it('does not report a Chat change as held when a subclass turns the Chat step into a Success in place', async () => {
         /** Validates a Chat reply as a completion, changing the step in place. */
         class ChatAsCompletionAgent extends MinExecAgent {
             protected override async validateChatNextStep<P>(
@@ -4147,7 +4147,7 @@ describe('BaseAgent.Execute — a payload change sent with a completion is appli
         // ...and the refusal must not tell the model to send it again.
         const retry = params.conversationMessages.find((m) => typeof m.content === 'string' && m.content.startsWith('Retrying due to:'));
         expect(retry?.content).toMatch(/Minimum execution requirements not met/);
-        expect(retry?.content).not.toMatch(/NOT applied/);
+        expect(retry?.content).not.toMatch(/not applied|is held/i);
     });
 
     it('keeps a payload_change_request made on the same turn as a refused complete_task', async () => {
