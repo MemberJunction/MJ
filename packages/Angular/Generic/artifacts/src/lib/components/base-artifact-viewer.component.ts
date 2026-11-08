@@ -3,6 +3,7 @@ import { DataSnapshot } from '@memberjunction/core';
 import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { IArtifactViewerComponent } from '../interfaces/artifact-viewer-plugin.interface';
+import type { PdfOrientation } from '@memberjunction/ng-react';
 
 /**
  * General-purpose navigation request emitted by artifact viewer plugins.
@@ -241,6 +242,25 @@ export abstract class BaseArtifactViewerPluginComponent extends BaseAngularCompo
    */
   public AskUserForFeedback(): void {
     // Subclasses override to implement feedback UX
+  }
+
+  /**
+   * Whether this plugin can export what it shows as a PDF.
+   * Plugins that return true get an Export PDF button in the artifact viewer header.
+   *
+   * Default: false
+   */
+  public get SupportsPDFExport(): boolean {
+    return false;
+  }
+
+  /**
+   * Download what the plugin shows as a PDF on A4 pages. Called from the artifact viewer header menu.
+   *
+   * Default: no-op. Subclasses that return true from {@link SupportsPDFExport} override it.
+   */
+  public async ExportPDF(_orientation: PdfOrientation = 'portrait'): Promise<void> {
+    // Subclasses override to export their content
   }
 
   /**

@@ -1343,6 +1343,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                             ReportEncryptionKeyUnavailable(decryptError);
                             continue;
                         }
+                        // Inactive rows (e.g., disabled template credentials seeded before activation)
+                        // may hold placeholder ciphertext from another environment; preserve ciphertext without spamming error logs.
+                        if (processedRow['IsActive'] === false || processedRow['IsActive'] === 0) {
+                            continue;
+                        }
                         const message = decryptError instanceof Error ? decryptError.message : String(decryptError);
                         LogError(
                             `Failed to decrypt field "${field.Name}" on entity "${entityInfo.Name}": ${message}. ` +

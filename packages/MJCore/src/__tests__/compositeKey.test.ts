@@ -772,3 +772,13 @@ describe('ToWhereClause Unicode prefix (#5664)', () => {
     expect(CompositeKey.FromKeyValuePair('Code', 'x').ToWhereClause(true, 'double', entity)).toBe('Code="x"');
   });
 });
+
+describe('ResourceUrlsEquivalent with prototype-key query names (#4589)', () => {
+  it('compares __proto__ and constructor as ordinary keys and leaves Object.prototype untouched', () => {
+    expect(ResourceUrlsEquivalent('/a?__proto__=x&a=1', '/a?a=1&__proto__=x')).toBe(true);
+    expect(ResourceUrlsEquivalent('/a?__proto__=x&a=1', '/a?__proto__=y&a=1')).toBe(false);
+    expect(ResourceUrlsEquivalent('/a?constructor=1', '/a?other=1')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(Object.prototype, 'x')).toBe(false);
+    expect(({} as Record<string, unknown>)['a']).toBeUndefined();
+  });
+});
