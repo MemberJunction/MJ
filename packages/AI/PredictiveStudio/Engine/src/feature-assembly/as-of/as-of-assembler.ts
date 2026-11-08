@@ -22,7 +22,9 @@
  * that day (no history, or one that starts after it) is the stored value read, as covered — except that a history
  * whose rows in force end in a Delete reads as deleted even with a current row and no anchor, on every reader and for a
  * field declared not updatable; a history that does not reach a past decision day excludes the row under
- * exclude-and-count on every reader, except that on the stored-value reader of an updatable field a change row after
+ * exclude-and-count on both updatable readers (the replayed field and the stored read of an updatable field); a field
+ * declared not updatable reads its stored value there, as it does through a continuity mismatch; on the stored-value
+ * reader of an updatable field a change row after
  * the decision outranks the coverage judgement and refuses `select-changes-after-decision-date` under either policy
  * (the precedence of stored-read verdicts is deleted, created after, continuity mismatch, changed after the decision,
  * coverage, value); a covering history replays
@@ -31,8 +33,9 @@
  * reads as missing. Rows with a past decision day keep the rule above. On any decision day, past or later, a record
  * whose history reaches the day but cannot be replayed (a continuity mismatch, a deletion, an ineligible external row)
  * makes the rows reading it uncovered, read directly or replayed alike; it never reads the stored value, except for a
- * field declared not updatable read directly, which reads its stored value through a continuity mismatch by the
- * not-updatable rule above (only a deletion and the creation instant are consulted for it). Child rows are judged for the whole batch, against the earliest decision day: a child row re-owned or re-dated
+ * field declared not updatable read directly, which reads its stored value through a continuity mismatch, an
+ * ineligible external row and an unreached history by the not-updatable rule above (only a deletion and the creation
+ * instant are consulted for it). Child rows are judged for the whole batch, against the earliest decision day: a child row re-owned or re-dated
  * after a decision day can move between owners, so every child row read passes the rule for its owner key, date, value
  * and filter fields (void and end dates are compared with the decision day and need no check), and one the rule
  * excludes makes every unit row uncovered.
