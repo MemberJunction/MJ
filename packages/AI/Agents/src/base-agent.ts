@@ -6674,11 +6674,51 @@ export class BaseAgent {
                 params.conversationMessages.push(volatileStateMessage);
             }
             this._lastVolatileStateMessage = volatileStateMessage;
+            if (promptParams.data?._SPECIALIZATION_RELOCATED === true) {
+                promptParams.OnTemplateDataFinalized = (finalParams) =>
+                    this.refreshRelocatedSpecialization(finalParams, config, payload, params, volatileStateMessage);
+            }
         }
         if (promptParams.conversationMessages) {
             promptParams.conversationMessages = this.dropReasoningBehindChangedHistory(params, promptParams.conversationMessages, promptParams);
         }
         return promptParams;
+    }
+
+    /**
+     * Renders the trailing message again once the prompt runner has set the native tool-calling flags,
+     * and swaps it in when the text changed.
+     *
+     * A relocated specialization is pre-rendered here, before a model is selected, so it renders
+     * without the flags the runner sets from the selected model's tool-calling decision — a child
+     * prompt that words its instructions for the native or envelope path would get the envelope
+     * wording while the system prompt gets the native one. The runner calls this through
+     * {@link AIPromptParams.OnTemplateDataFinalized}. On any failure the message already built is kept.
+     */
+    private async refreshRelocatedSpecialization<P>(
+        promptParams: AIPromptParams,
+        config: AgentConfiguration,
+        payload: P,
+        params: ExecuteAgentParams,
+        previous: AgentChatMessage
+    ): Promise<void> {
+        try {
+            const rebuilt = await this.buildVolatileStateMessage(params, promptParams, payload, config.childPrompt, config.agentType, config.systemPrompt);
+            if (!rebuilt || rebuilt.content === previous.content) {
+                return;
+            }
+            const replace = (messages: ChatMessage[] | undefined) => {
+                const at = messages ? messages.indexOf(previous) : -1;
+                if (messages && at >= 0) {
+                    messages[at] = rebuilt;
+                }
+            };
+            replace(promptParams.conversationMessages);
+            replace(params.conversationMessages);
+            this._lastVolatileStateMessage = rebuilt;
+        } catch (error) {
+            this.logStatus(`Kept the trailing message as first built: re-rendering it with the final template data failed (${error instanceof Error ? error.message : String(error)})`, true, params);
+        }
     }
 
     /**

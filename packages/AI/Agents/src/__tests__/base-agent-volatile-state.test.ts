@@ -86,6 +86,7 @@ interface Internals {
     _promptRunner: { RenderChildPromptTemplates: (children: unknown[], params: AIPromptParams) => Promise<{ renderedTemplates: Record<string, string> }> };
     logStatus: (msg: string) => void;
     logError: (e: unknown) => void;
+    finalizePromptParams<P>(promptParams: AIPromptParams, config: { childPrompt?: MJAIPromptEntityExtended; agentType?: MJAIAgentTypeEntity }, payload: P, params: ExecuteAgentParams): Promise<AIPromptParams>;
     buildVolatileStateMessage<P>(params: ExecuteAgentParams, promptParams: AIPromptParams, payload: P, childPrompt: MJAIPromptEntityExtended | undefined, agentType: MJAIAgentTypeEntity, systemPrompt?: MJAIPromptEntityExtended): Promise<VolatileMessage | null>;
     assembleOutgoingMessages(history: ChatMessage[], fragment: VolatileMessage, isAppendOnly?: boolean): ChatMessage[];
     shouldUseAppendOnlyTrailingState(promptParams: AIPromptParams): boolean;
@@ -913,3 +914,60 @@ describe('BaseAgent.shouldUseAppendOnlyTrailingState — replayed reasoning boun
         expect(BaseLLM.ReplayedReasoningRequiresStablePrefix).toBe(false);
     });
 });
+
+describe('finalizePromptParams — a relocated specialization follows the native flags the runner sets', () => {
+    /** Renders the child as the native or the envelope wording, from the data it is given. */
+    function flagAwareAgent(): Internals {
+        const a = agentUnderTest();
+        a._promptRunner = {
+            RenderChildPromptTemplates: vi.fn(async (_children: unknown[], p: AIPromptParams) => ({
+                renderedTemplates: { agentSpecificPrompt: p.data?._NATIVE_TOOL_CALLING === true ? 'Call the tools.' : 'Return JSON.' },
+            })),
+        };
+        return a;
+    }
+    const lastContent = (pp: AIPromptParams) => String(pp.conversationMessages![pp.conversationMessages!.length - 1].content);
+
+    it('re-renders the trailing message with the final flags, before the prompt renders', async () => {
+        templates.byId.set('tmpl-sage', '# Sage\n\nToday is {{ _CURRENT_DATE_AND_TIME }}.');
+        const a = flagAwareAgent();
+        const { params, promptParams } = makeInputs(TRAILING);
+
+        const prepared = await a.finalizePromptParams(promptParams, { childPrompt: CHILD, agentType: AGENT_TYPE }, {}, params);
+        expect(lastContent(prepared)).toContain('Return JSON.');
+
+        // What the prompt runner does once the selected model's gate has decided on native tools.
+        prepared.data = { ...prepared.data, _NATIVE_TOOL_CALLING: true, _NATIVE_CONTROL_FLOW: 'implicit' };
+        await prepared.OnTemplateDataFinalized!(prepared);
+
+        expect(lastContent(prepared)).toContain('Call the tools.');
+        expect(lastContent(prepared)).not.toContain('Return JSON.');
+        expect(prepared.PreRenderedChildTemplates).toEqual({ agentSpecificPrompt: 'Call the tools.' });
+        // The stored history never held the fragment (replace-in-place), and still does not.
+        expect(params.conversationMessages).toHaveLength(2);
+    });
+
+    it('registers nothing when the specialization stays in the system prompt', async () => {
+        templates.byId.set('tmpl-sage', '# Sage\n\n## Role\n- static');
+        const a = flagAwareAgent();
+        const { params, promptParams } = makeInputs(TRAILING);
+
+        const prepared = await a.finalizePromptParams(promptParams, { childPrompt: CHILD, agentType: AGENT_TYPE }, {}, params);
+
+        expect(prepared.OnTemplateDataFinalized).toBeUndefined();
+    });
+
+    it('keeps the message it built when the re-render fails', async () => {
+        templates.byId.set('tmpl-sage', '# Sage\n\nToday is {{ _CURRENT_DATE_AND_TIME }}.');
+        const a = flagAwareAgent();
+        const { params, promptParams } = makeInputs(TRAILING);
+        const prepared = await a.finalizePromptParams(promptParams, { childPrompt: CHILD, agentType: AGENT_TYPE }, {}, params);
+        const before = prepared.conversationMessages![prepared.conversationMessages!.length - 1];
+        a._promptRunner.RenderChildPromptTemplates = vi.fn().mockRejectedValue(new Error('template error'));
+
+        await expect(prepared.OnTemplateDataFinalized!(prepared)).resolves.toBeUndefined();
+
+        expect(prepared.conversationMessages![prepared.conversationMessages!.length - 1]).toBe(before);
+    });
+});
+

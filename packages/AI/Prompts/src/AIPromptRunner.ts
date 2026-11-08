@@ -378,7 +378,7 @@ export class AIPromptRunner extends BaseModelRunner {
               selection.selectionInfo?.vendorSelected?.ID ?? params.override?.vendorId ?? null,
               selection.promptModelConfiguration)
           : null;
-        params.data = this.ApplyNativeTemplateFlags(params.data, nativeDecision);
+        await this.finalizeTemplateData(params, nativeDecision);
 
         // Check if we have a system prompt override
         if (params.systemPromptOverride) {
@@ -1981,6 +1981,17 @@ export class AIPromptRunner extends BaseModelRunner {
       _NATIVE_TOOL_CALLING: current._NATIVE_TOOL_CALLING ?? false,
       _NATIVE_CONTROL_FLOW: current._NATIVE_CONTROL_FLOW ?? 'envelope'
     };
+  }
+
+  /**
+   * Sets the native tool-calling flags from this attempt's decision, then lets the caller re-render
+   * anything it rendered from the data before a model was selected ({@link AIPromptParams.OnTemplateDataFinalized}).
+   */
+  private async finalizeTemplateData(params: AIPromptParams, nativeDecision: NativeToolCallingDecision | null): Promise<void> {
+    params.data = this.ApplyNativeTemplateFlags(params.data, nativeDecision);
+    if (params.OnTemplateDataFinalized) {
+      await params.OnTemplateDataFinalized(params);
+    }
   }
 
   /**
