@@ -41,8 +41,9 @@
  * (version `created-after-decision`), never the stored value and never as uncovered. When creation is known: on an
  * entity that tracks Record Changes, from the record's own Create row (a history that starts with a Snapshot says
  * nothing about creation, and the column below is consulted instead); on any entity that lists `__mj_CreatedAt`, from
- * that column; when both tell, the later of the two (a record is never read before either says it existed); when
- * neither tells, the unit's premise that its records exist on their decision days applies. The rule
+ * that column, unless the history holds a change row before the column's instant other than its own opening Create
+ * (an earlier incarnation: the column then dates a re-creation and is ignored); when both tell, the later of the two (a record is never read before either
+ * says it existed); when neither tells, the unit's premise that its records exist on their decision days applies. The rule
  * is consulted on every current read: fields declared not updatable and the key a unit row joins through included,
  * and by the stable-value rule before it judges a history that starts after the decision day. A
  * unit row created after its decision day resolves its join key as null, so every value read through that key is
@@ -786,13 +787,28 @@ export class AsOfFeatureAssembler {
    * The one rule for when a record came into existence: its own Create row when the entity tracks Record Changes and
    * its history starts with one; else `__mj_CreatedAt` when the entity lists the column (`stored` is its value for the
    * record); when both are known, the later one, so neither source can make a record readable before the other says it
-   * existed; else null, and the unit's premise that its records exist on their decision days applies.
+   * existed; else null, and the unit's premise that its records exist on their decision days applies. A change row
+   * before the column's instant (other than the history's own opening Create, which dates the same incarnation) proves
+   * an earlier incarnation; the column then dates a re-creation and is ignored, so creation is unknown and the premise
+   * applies, unless the history's opening Create dates it.
    */
   private static creationInstant(history: EntityHistory | null, key: string, stored: CellValue): Date | null {
     const fromHistory = history === null ? null : history.CreatedAt(key);
     const fromColumn = AsOfFeatureAssembler.instantOf(stored);
-    if (fromHistory === null || fromColumn === null) return fromHistory || fromColumn;
-    return fromHistory.getTime() >= fromColumn.getTime() ? fromHistory : fromColumn;
+    const column = fromColumn !== null && AsOfFeatureAssembler.earlierIncarnation(history, key, fromHistory, fromColumn) ? null : fromColumn;
+    if (fromHistory === null || column === null) return fromHistory || column;
+    return fromHistory.getTime() >= column.getTime() ? fromHistory : column;
+  }
+
+  /**
+   * Whether the history holds a change row before `columnAt` (the stored `__mj_CreatedAt`) other than its own opening
+   * Create (`createdAt`, from {@link EntityHistory.CreatedAt}): the record existed before the column's instant, so the
+   * column dates a re-creation.
+   */
+  private static earlierIncarnation(history: EntityHistory | null, key: string, createdAt: Date | null, columnAt: Date): boolean {
+    if (history === null) return false;
+    const openingCreateBefore = createdAt !== null && createdAt.getTime() < columnAt.getTime() ? 1 : 0;
+    return history.RowsBefore(key, columnAt) - openingCreateBefore > 0;
   }
 
   /** Whether a record with creation instant `created` (null = unknown, the premise applies) existed before `at`. */

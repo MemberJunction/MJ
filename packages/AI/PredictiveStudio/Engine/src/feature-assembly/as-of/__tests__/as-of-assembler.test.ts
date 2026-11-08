@@ -847,6 +847,18 @@ describe('AsOfFeatureAssembler — a stored value changed after the decision by 
       expect(out.Status === 'assembled' ? out.UncoveredRowsExcluded : out, spec.source.kind).toEqual([{ entity: 'People', field: 'Status', rows: 1 }]);
     }
   });
+  it('ignores a stored creation date later than an earlier change row: it dates a re-creation, so a row decided before it is excluded, not created after the decision', async () => {
+    const withCreatedAt: AssemblyEntityInfo = { ...entities.People, Fields: [...entities.People.Fields, field('__mj_CreatedAt', 'Date')] };
+    const early: AssemblyRowRef[] = [{ RowID: 'y1', EntityKey: 'y1', DecisionDate: new Date('2019-06-01T00:00:00Z'), Period: null }];
+    const recreated = { People: [rc('d1', 'P1', 'Delete', '2020-07-01T00:00:00Z', { ID: 'P1', Status: 'Active' }), rc('c2', 'P1', 'Create', '2021-07-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' })] };
+    const current = { ...data, People: [{ ID: 'P1', Status: 'Lapsed', __mj_CreatedAt: '2021-07-01T00:00:00.000Z' }] };
+    const replayed: FeatureColumnSpec = { ...stored, source: { kind: 'record-changes', entity: 'People', field: 'Status', keyField: 'PersonID' } };
+    const out = await new AsOfFeatureAssembler().Assemble({
+      ...input([replayed], { Rows: early, Tables: current, Changes: recreated, Unit: { ...unit, history: { ...unit.history, onUncoveredRow: 'exclude-and-count' } } }),
+      Metadata: { Entity: (n) => (n === 'People' ? withCreatedAt : metadata.Entity(n)) },
+    });
+    expect(out.Status === 'assembled' ? out.UncoveredRowsExcluded : out).toEqual([{ entity: 'People', field: 'Status', rows: 1 }]);
+  });
   it('excludes, for a field declared not updatable, an assembly-day row whose parent has a current row and a Delete in force', async () => {
     const notUpdatable: AssemblyEntityInfo = { ...entities.People, Fields: entities.People.Fields.map((f) => (f.Name === 'Status' ? { ...f, AllowUpdateAPI: false } : f)) };
     const onAssemblyDay: AssemblyRowRef[] = [{ RowID: 'y1', EntityKey: 'y1', DecisionDate: new Date('2026-10-12T00:00:00Z'), Period: null }];
