@@ -1704,7 +1704,7 @@ SELECT
     MJEntity_EntityID.[Name] AS [Entity]
 FROM
     [${flyway:defaultSchema}].[EntityUniqueKey] AS e
-INNER JOIN
+LEFT OUTER JOIN
     [${flyway:defaultSchema}].[Entity] AS MJEntity_EntityID
   ON
     [e].[EntityID] = MJEntity_EntityID.[ID]
@@ -1973,7 +1973,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityUniqueKey] TO [cdp_Dev
             510,
             0,
             0,
-            0,
+           1,
             NULL,
             0,
             0,

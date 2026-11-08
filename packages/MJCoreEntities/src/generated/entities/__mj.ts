@@ -22727,7 +22727,7 @@ export const MJEntityUniqueKeySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -107325,7 +107325,7 @@ export class MJEntityUniqueKeyEntity extends BaseEntity<MJEntityUniqueKeyEntityT
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 }
