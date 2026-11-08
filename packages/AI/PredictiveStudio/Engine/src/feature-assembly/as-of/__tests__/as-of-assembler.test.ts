@@ -7,6 +7,7 @@ import { SeriesFeatures, type SeriesHistory } from '../series-features';
 import type { SourceRow } from '../../data-access';
 import type { AssemblyEntityInfo, AssemblyFieldInfo, IAssemblyMetadata } from '../../assembly-metadata';
 import { TableDataAccess } from '../../../__tests__/fakes/table-data-access';
+import { TrainingRefusedError } from '../../../training/training-refusal';
 
 const rows: AssemblyRowRef[] = [
   { RowID: 'y1', EntityKey: 'y1', DecisionDate: new Date('2022-12-01T00:00:00Z'), Period: null },
@@ -57,6 +58,8 @@ const entities: Record<string, AssemblyEntityInfo> = {
   Gifts: { ID: 'E-GI', Name: 'Gifts', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), field('PersonID'), field('GivenOn', 'Date'), field('Amount', 'number')] },
   // A field declared not updatable, on an entity that carries its creation time.
   Badges: { ID: 'E-BA', Name: 'Badges', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), { ...field('Level'), AllowUpdateAPI: false }, field('__mj_CreatedAt', 'Date')] },
+  // A tracked child whose visit date can be edited.
+  Visits: { ID: 'E-VI', Name: 'Visits', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), fixed('PersonID'), field('VisitDate', 'Date')] },
   // A tracked entity with an updatable field that also carries its creation time.
   Tiers: { ID: 'E-TI', Name: 'Tiers', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), field('Tier'), field('__mj_CreatedAt', 'Date')] },
 };
@@ -1001,16 +1004,44 @@ describe('AsOfFeatureAssembler — a windowed aggregate over hard-deleted child 
     });
   }
   it('loads the child history once per field over every child read, so coverage counts each child record once', async () => {
-    // e3 was deleted before every decision: it stands for no unit row, but it is still one of the child records read.
+    // e3 was deleted after y1's decision and before y2's: it stands for y1 alone, and is one of the child records read.
     const e3 = { ID: 'e3', PersonID: 'P1', EventDate: '2021-01-01' };
     const out = await new AsOfFeatureAssembler().Assemble(input([count], { Rows: owners, Tables: data, Changes: history([
-      rc('ec-3', 'e3', 'Create', '2021-01-01T00:00:00Z', e3), rc('ed-3', 'e3', 'Delete', '2022-06-01T00:00:00Z', e3),
+      rc('ec-3', 'e3', 'Create', '2021-01-01T00:00:00Z', e3), rc('ed-3', 'e3', 'Delete', '2023-01-01T00:00:00Z', e3),
     ]) }));
     expect(out.Status).toBe('assembled');
     if (out.Status !== 'assembled') return;
-    expect(out.Rows.map((r) => [r.RowID, r.Values[0]])).toEqual([['y1', 2], ['y2', 1]]);
+    expect(out.Rows.map((r) => [r.RowID, r.Values[0]])).toEqual([['y1', 3], ['y2', 1]]);
     const once = expect.objectContaining({ historyStart: '2022-03-01T00:00:00.000Z', continuity: expect.objectContaining({ recordsReplayed: 3, recordsMismatched: 0 }) });
     expect(out.Coverage.filter((c) => c.entity === 'Events').map((c) => [c.field, c])).toEqual([['PersonID', once], ['EventDate', once]]);
+  });
+  it('leaves a child deleted before every owner row\'s decision instant out of the child history, so it shapes no coverage, while one deleted after a decision still counts', async () => {
+    // e4 has only a Delete row, before every decision: it bears on no unit row. e2 (deleted March 2023) bears on y1.
+    const e4 = { ID: 'e4', PersonID: 'P1', EventDate: '2021-01-01' };
+    for (const onUncoveredRow of ['refuse', 'exclude-and-count'] as const) {
+      const out = await new AsOfFeatureAssembler().Assemble(input([count], { Rows: owners, Tables: data, Changes: history([rc('ed-4', 'e4', 'Delete', '2021-06-01T00:00:00Z', e4)]), Unit: { ...unit, history: { onUncoveredRow, externalSourceRows: 'ineligible' } } }));
+      expect(out.Status === 'assembled' ? [out.Rows.map((r) => [r.RowID, r.Values[0]]), out.UncoveredRowsExcluded] : out).toEqual([[['y1', 2], ['y2', 1]], []]);
+      const covered = expect.objectContaining({ historyStart: '2022-03-01T00:00:00.000Z', continuity: expect.objectContaining({ recordsReplayed: 2, recordsMismatched: 0 }) });
+      expect(out.Status === 'assembled' && out.Coverage.filter((c) => c.entity === 'Events').map((c) => [c.field, c])).toEqual([['PersonID', covered], ['EventDate', covered]]);
+    }
+  });
+  it('names the real history start in a refusal although a Delete-only child that bears on no unit row has none', async () => {
+    // Visits.VisitDate is updatable; v5's history starts with a Snapshot in June 2023, after y1's decision.
+    const visited: FeatureColumnSpec = { ...count, name: 'Visited', source: { ...count.source, childEntity: 'Visits', dateField: 'VisitDate' } as FeatureColumnSpec['source'] };
+    const v1 = { ID: 'v1', PersonID: 'P1', VisitDate: '2021-02-01' };
+    const v5 = { ID: 'v5', PersonID: 'P1', VisitDate: '2021-03-01' };
+    const v4 = { ID: 'v4', PersonID: 'P1', VisitDate: '2021-01-01' };
+    const visitChanges = (extra: RecordChangeRow[]): Record<string, RecordChangeRow[]> => ({ Visits: [
+      rc('vc-1', 'v1', 'Create', '2021-02-01T00:00:00Z', v1), rc('vs-5', 'v5', 'Snapshot', '2023-06-01T00:00:00Z', v5), ...extra,
+    ] });
+    const run = (extra: RecordChangeRow[]) => new AsOfFeatureAssembler().Assemble(input([visited], { Rows: owners, Tables: { ...data, Visits: [v1, v5] }, Changes: visitChanges(extra) }));
+    const refusal = { kind: 'decision-date-before-change-history', entity: 'Visits', field: 'VisitDate', historyStart: '2023-06-01T00:00:00.000Z', rowsAffected: 1 } as const;
+    expect(await run([])).toEqual({ Status: 'refused', Refusal: refusal });
+    const withDeleteOnly = await run([rc('vd-4', 'v4', 'Delete', '2021-06-01T00:00:00Z', v4)]);
+    expect(withDeleteOnly).toEqual({ Status: 'refused', Refusal: refusal });
+    const sentence = withDeleteOnly.Status === 'refused' ? TrainingRefusedError.DescribeTrainingRefusal({ stage: 'assembly', reason: withDeleteOnly.Refusal }) : '';
+    expect(sentence).toContain('its change history starts 2023-06-01T00:00:00.000Z');
+    expect(sentence).not.toContain('it has no change history');
   });
   for (const lastType of ['Update', 'Snapshot'] as const) {
     it(`counts a child whose final Delete shares its instant with its last ${lastType}, deleted after the decision day, as it stood (either ID order)`, async () => {

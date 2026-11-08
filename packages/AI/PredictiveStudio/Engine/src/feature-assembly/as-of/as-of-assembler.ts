@@ -1076,7 +1076,7 @@ export class AsOfFeatureAssembler {
   ): OwnerRowsAt {
     const read = (owner: string): readonly ChildRow[] => index.get(owner.toLowerCase()) || [];
     if (history === null || rows.length === 0) return read;
-    const earliest = new Date(rows.reduce((min, row) => Math.min(min, AsOfFeatureAssembler.asOfInstant(row.DecisionDate).getTime()), Number.POSITIVE_INFINITY));
+    const earliest = new Date(AsOfFeatureAssembler.earliestAsOf(rows));
     const recreated = AsOfFeatureAssembler.uniqueKeys(keys).filter((k) => history.EarlierIncarnationEnd(k, earliest) !== null);
     if (recreated.length === 0) return read;
     const byInstant = new Map<number, EarlierIncarnations>();
@@ -1257,7 +1257,10 @@ export class AsOfFeatureAssembler {
    * hard-deleted child by lower-cased key. On a child entity that tracks Record Changes the rows read are the current
    * rows plus every child whose history ends in a Delete, that has no current row and that one of `ownerKeys` held
    * (`IRecordHistoryReader.LoadDeletedChildren`), read from its Delete row: a child deleted after an owner row's
-   * decision day existed then, and today's set of rows would silently leave it out of that row's aggregate.
+   * decision day existed then, and today's set of rows would silently leave it out of that row's aggregate. Only a
+   * hard-deleted child that bears on a unit row is read (its Delete at or after the as-of instant of at least one row
+   * of the batch); one deleted before every row's as-of instant is absent for every row, so it is left out of the
+   * child history's key set and shapes neither its history start nor its continuity counts.
    */
   private async childIndex(source: WindowedAggregateSource, ownerKeys: readonly string[], input: AsOfAssemblyInput): Promise<ChildRowsRead> {
     const child = input.Metadata.Entity(source.childEntity);
@@ -1271,8 +1274,9 @@ export class AsOfFeatureAssembler {
     if (read.Status === 'refused') throw new AssemblyRefused(read.Refusal);
     const keyOf = (r: SourceRow): string => String(r[child.PrimaryKey]);
     const present = new Set(read.Rows.map((r) => keyOf(r).toLowerCase()));
+    const earliest = AsOfFeatureAssembler.earliestAsOf(input.Rows);
     const deleted = child.TrackRecordChanges && ownerKeys.length > 0
-      ? (await input.History.LoadDeletedChildren(child, source.foreignKey, ownerKeys)).filter((d) => !present.has(d.Key))
+      ? (await input.History.LoadDeletedChildren(child, source.foreignKey, ownerKeys)).filter((d) => !present.has(d.Key) && d.ChangedAt.getTime() >= earliest)
       : [];
     const rowsRead = [...read.Rows, ...deleted.map((d) => AsOfFeatureAssembler.recordedChildRow(child, d.Key, d.Row))];
     return {
@@ -1282,6 +1286,11 @@ export class AsOfFeatureAssembler {
       CreatedAt: new Map(hasCreatedAt ? rowsRead.map((r) => [keyOf(r).toLowerCase(), r.__mj_CreatedAt] as const) : []),
       DeletedAt: new Map(deleted.map((d) => [d.Key, d.ChangedAt] as const)),
     };
+  }
+
+  /** The earliest as-of instant of the rows, in epoch milliseconds (positive infinity for no rows). */
+  private static earliestAsOf(rows: readonly AssemblyRowRef[]): number {
+    return rows.reduce((min, row) => Math.min(min, AsOfFeatureAssembler.asOfInstant(row.DecisionDate).getTime()), Number.POSITIVE_INFINITY);
   }
 
   /** A child as a Delete row recorded it, as a stored row: the row's fields, keyed by `key` when the row omits the key. */
