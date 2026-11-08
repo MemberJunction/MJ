@@ -59,6 +59,22 @@ describe('BuildEntityHistory', () => {
   });
 });
 
+describe('BuildEntityHistory — rows at one instant', () => {
+  const now = new Date('2026-10-12T00:00:00Z');
+  const policy = { onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' } as const;
+  it('orders a Delete before a Create at the same instant, so a same-instant re-creation reads as live, whatever the IDs and input order', () => {
+    // The IDs alone would put the Create ('aa') first and the Delete ('zz') last.
+    const del = rc('zz', 'P1', 'Delete', '2020-07-01T00:00:00Z', { Status: 'Active' });
+    const create = rc('aa', 'P1', 'Create', '2020-07-01T00:00:00Z', { Status: 'Lapsed' });
+    for (const order of [[del, create], [create, del]]) {
+      const h = RecordHistory.BuildEntityHistory(PEOPLE, order, new Map([['p1', { Status: 'Lapsed' }]]), ['Status'], policy, now);
+      expect(h.ValueAt('P1', 'Status', new Date('2021-01-01T00:00:00Z'))).toMatchObject({ Status: 'value', Value: 'Lapsed', ChangeID: 'aa' });
+      expect(h.Coverage.continuity).toMatchObject({ recordsReplayed: 1, recordsMismatched: 0 });
+      expect(RecordHistory.KeysDeletedByHistory(order).size).toBe(0);
+    }
+  });
+});
+
 /** The fields of a saved Record Change the snapshot writer sets. */
 type SavedChange = Pick<MJRecordChangeEntity, 'EntityID' | 'RecordID' | 'UserID' | 'Type' | 'Source' | 'Status' | 'ChangedAt' | 'ChangesJSON' | 'ChangesDescription' | 'FullRecordJSON'>;
 

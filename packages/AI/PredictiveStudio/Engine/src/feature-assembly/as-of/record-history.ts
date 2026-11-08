@@ -132,8 +132,9 @@ export class RecordHistory {
   }
 
   /**
-   * The lower-cased keys whose latest change row (ChangedAt order, ties by ID) is a Delete: records the history says
-   * were deleted, so a missing current row is explained rather than a short read.
+   * The lower-cased keys whose latest change row (ChangedAt order, a Delete before any other row at one instant, then
+   * ties by ID) is a Delete: records the history says were deleted, so a missing current row is explained rather than
+   * a short read.
    */
   public static KeysDeletedByHistory(changes: readonly RecordChangeRow[]): ReadonlySet<string> {
     return RecordHistory.endingInDelete(RecordHistory.indexByKey(changes));
@@ -280,10 +281,15 @@ export class RecordHistory {
     return `${label}: ${change.LatestResult?.CompleteMessage || 'unknown error'}`;
   }
 
-  /** Change rows per record key, in ChangedAt order (ties by ID, ordinal). */
+  /**
+   * Change rows per record key, in ChangedAt order; at one instant a Delete orders before any other row (a record
+   * deleted and re-created at one instant is live after it, and the row that re-creates it happened last), then ties
+   * by ID, ordinal.
+   */
   private static indexByKey(changes: readonly RecordChangeRow[]): Map<string, RecordChangeRow[]> {
     const byKey = new Map<string, RecordChangeRow[]>();
-    for (const c of [...changes].sort((a, b) => a.ChangedAt.getTime() - b.ChangedAt.getTime() || OrdinalCompare(a.ID, b.ID))) {
+    const deleteFirst = (c: RecordChangeRow): number => (c.Type === 'Delete' ? 0 : 1);
+    for (const c of [...changes].sort((a, b) => a.ChangedAt.getTime() - b.ChangedAt.getTime() || deleteFirst(a) - deleteFirst(b) || OrdinalCompare(a.ID, b.ID))) {
       const k = RecordHistory.KeyOfRecordID(c.RecordID);
       const list = byKey.get(k) || [];
       list.push(c);
