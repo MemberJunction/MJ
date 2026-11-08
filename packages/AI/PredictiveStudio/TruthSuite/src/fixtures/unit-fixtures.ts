@@ -179,9 +179,12 @@ export class UnitFixtures {
     return { Steps: steps };
   }
 
-  /** A cross-sectional planted scenario (no dates): one decision moment for every row. */
-  public static ScenarioUnitDraft(h: TruthHarness, scenario: string, task: TaskType): UnitDraft {
-    return UnitFixtures.scenarioDraft(h, scenario, task, `${scenario} (${task.kind})`, { kind: 'fixed', date: '2020-01-01' }, '2020-12-31', null);
+  /**
+   * A cross-sectional planted scenario (no dates): one decision moment for every row; `groupKey` groups its rows
+   * (folds, new-entity report) when the scenario has several rows per entity.
+   */
+  public static ScenarioUnitDraft(h: TruthHarness, scenario: string, task: TaskType, groupKey: string | null = null): UnitDraft {
+    return UnitFixtures.scenarioDraft(h, scenario, task, `${scenario} (${task.kind})`, { kind: 'fixed', date: '2020-01-01' }, '2020-12-31', groupKey);
   }
 
   /** The registered entity name of a planted scenario's table (`Scn_<scenario without its dash>`). */
@@ -356,7 +359,7 @@ export class UnitFixtures {
   public static ProvisionScenarioUnitPipeline(h: TruthHarness, scenario: string, task: TaskType, o: ScenarioUnitPipelineOptions): Promise<ProvisionedUnitPipeline> {
     return UnitFixtures.provision(
       h,
-      o.DateColumn === null ? UnitFixtures.ScenarioUnitDraft(h, scenario, task) : UnitFixtures.DatedScenarioUnitDraft(h, scenario, task, o.DateColumn, o.GroupKey),
+      o.DateColumn === null ? UnitFixtures.ScenarioUnitDraft(h, scenario, task, o.GroupKey) : UnitFixtures.DatedScenarioUnitDraft(h, scenario, task, o.DateColumn, o.GroupKey),
       UnitFixtures.ScenarioFeatureColumns(h, scenario, o.DateColumn),
       UnitFixtures.ScenarioAlgorithm(task),
       o.Protocol,
