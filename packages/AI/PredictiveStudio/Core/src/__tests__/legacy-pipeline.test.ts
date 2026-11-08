@@ -213,6 +213,9 @@ describe('LegacyProtocolDraft', () => {
     const ungrouped = LegacyPipelines.LegacyProtocolDraft(parsed.Value, inputs, 'P — migrated protocol');
     expect(ungrouped.innerValidation).toEqual({ kind: 'repeated-stratified-kfold', folds: 3, repeats: 3 });
     expect(EvaluationProtocolRules.ValidateProtocolForUnit({ ...spec, ...ungrouped }, parsed.Value)).toEqual([]);
+    // A member × period unit naming no group key is grouped by its grain record (D3-250).
+    const panel: PredictionUnitSpec = { ...parsed.Value, rows: { kind: 'grain-x-periods', grainEntity: 'Stores', childEntity: 'Store Months', foreignKey: 'StoreID', periodDate: 'Month', filter: [] } };
+    expect(LegacyPipelines.LegacyProtocolDraft(panel, inputs, 'P — migrated protocol').innerValidation).toEqual({ kind: 'grouped-kfold', folds: 3, repeats: 3, groupKey: 'StoreID' });
   });
 });
 

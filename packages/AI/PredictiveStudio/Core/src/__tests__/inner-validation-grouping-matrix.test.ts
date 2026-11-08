@@ -16,6 +16,7 @@ const monthly: TemporalSpec = {
 const dateCarved: HoldoutSplit = { kind: 'date-carved', dateColumn: 'DecisionDate', cutoff: '2024-01-01', holdoutEnd: null, newEntityReport: null };
 const rolling = (origins: number, horizonPeriods = 3): HoldoutSplit => ({ kind: 'rolling-origin', origins, horizonPeriods, gapPeriods: 0, minTrainPeriods: 24, window: 'expanding' });
 const columnRows: UnitRows = { kind: 'grain', grainEntity: 'Members', decisionDate: { kind: 'column', column: 'DecisionDate' }, filter: [] };
+const panelRows: UnitRows = { kind: 'grain-x-periods', grainEntity: 'Stores', childEntity: 'Store Months', foreignKey: 'StoreID', periodDate: 'Month', filter: [] };
 
 /** A unit version as the Prediction Unit parser returns it (shape of the test unit). */
 function unit(outcome: TaskType, temporal: TemporalSpec | null = null, rows: UnitRows = columnRows, groupKey: string | null = null): PredictionUnitSpec {
@@ -74,6 +75,23 @@ describe('inner validation × unit grouping', () => {
         .filter((r) => r.Kind === 'inner-validation-ungrouped' || r.Kind === 'group-key-mismatch')
         .map((r) => r.Kind);
       expect(kinds, c.Name).toEqual(c.Expect === null ? [] : [c.Expect]);
+    }
+  });
+
+  // A member × period unit without a group key is still grouped: the manifest's group of a panel row is its grain
+  // record's key (`unit-row-reader.ts`), so the rules group it by the unit's foreign key (D3-250).
+  it('groups an ungrouped member × period (non-forecast) unit by its grain record', () => {
+    const panel = unit(binary, null, panelRows);
+    const panelCases: { readonly Name: string; readonly Inner: InnerValidation; readonly Expect: readonly ProtocolRefusal[] }[] = [
+      { Name: 'stratified on a panel', Inner: { kind: 'repeated-stratified-kfold', folds: 5, repeats: 3 }, Expect: [{ Kind: 'inner-validation-ungrouped', UnitGroupKey: 'StoreID', InnerKind: 'repeated-stratified-kfold' }] },
+      { Name: 'grouped-kfold by the grain key on a panel', Inner: { kind: 'grouped-kfold', folds: 5, repeats: 3, groupKey: 'storeid' }, Expect: [] },
+      { Name: 'grouped-kfold by another key on a panel', Inner: { kind: 'grouped-kfold', folds: 5, repeats: 3, groupKey: 'PersonID' }, Expect: [{ Kind: 'group-key-mismatch', ProtocolGroupKey: 'PersonID', UnitGroupKey: 'StoreID', UnitKeyImplied: true }] },
+    ];
+    for (const c of panelCases) {
+      const p = protocol({ ...draftFor(panel, dateCarved), innerValidation: c.Inner });
+      const refusals = EvaluationProtocolRules.ValidateProtocolForUnit(p, panel)
+        .filter((r) => r.Kind === 'inner-validation-ungrouped' || r.Kind === 'group-key-mismatch');
+      expect(refusals, c.Name).toEqual(c.Expect);
     }
   });
 });

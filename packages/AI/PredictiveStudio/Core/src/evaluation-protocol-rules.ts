@@ -32,7 +32,8 @@ export type ProtocolRefusal =
   | { readonly Kind: 'rolling-window-inside-horizon'; readonly EndLag: number; readonly HorizonPeriods: number }
   | { readonly Kind: 'horizon-mismatch'; readonly ProtocolHorizonPeriods: number; readonly UnitHorizonPeriods: number }
   | { readonly Kind: 'inner-gap-below-horizon'; readonly GapPeriods: number; readonly HorizonPeriods: number }
-  | { readonly Kind: 'group-key-mismatch'; readonly ProtocolGroupKey: string; readonly UnitGroupKey: string | null }
+  /** `UnitGroupKey` is the unit's effective group key; `UnitKeyImplied` is true when the unit names none and is grouped by its grain record. */
+  | { readonly Kind: 'group-key-mismatch'; readonly ProtocolGroupKey: string; readonly UnitGroupKey: string | null; readonly UnitKeyImplied: boolean }
   | { readonly Kind: 'inner-validation-ungrouped'; readonly UnitGroupKey: string; readonly InnerKind: InnerValidation['kind'] }
   | { readonly Kind: 'intervals-not-clustered'; readonly UnitGroupKey: string; readonly Method: IntervalSpec['method'] }
   | { readonly Kind: 'new-entity-group-key-mismatch'; readonly ReportGroupKey: string; readonly UnitGroupKey: string | null }
@@ -156,13 +157,13 @@ export class EvaluationProtocolRules {
       case 'inner-gap-below-horizon':
         return `Blocked-time inner folds need a gap of at least the horizon (${r.HorizonPeriods} periods); this protocol declares ${r.GapPeriods}.`;
       case 'group-key-mismatch':
-        return `The protocol groups its inner validation by "${r.ProtocolGroupKey}", but the Prediction Unit ${EvaluationProtocolRules.unitGrouping(r.UnitGroupKey)}; the folds would not be grouped the way the protocol says.`;
+        return `The protocol groups its inner validation by "${r.ProtocolGroupKey}", but the Prediction Unit ${EvaluationProtocolRules.unitGrouping(r.UnitGroupKey, r.UnitKeyImplied)}; the folds would not be grouped the way the protocol says.`;
       case 'inner-validation-ungrouped':
         return `The Prediction Unit groups its rows by "${r.UnitGroupKey}", but the protocol's inner validation (${r.InnerKind}) does not group; rows of one group would fall on both sides of an inner fold.`;
       case 'intervals-not-clustered':
         return `The Prediction Unit groups its rows by "${r.UnitGroupKey}", but the protocol's intervals (${r.Method}) do not resample whole groups; use cluster-bootstrap.`;
       case 'new-entity-group-key-mismatch':
-        return `The new-entity report holds out whole groups by "${r.ReportGroupKey}", but the Prediction Unit ${EvaluationProtocolRules.unitGrouping(r.UnitGroupKey)}; the report would not hold out the groups the protocol names.`;
+        return `The new-entity report holds out whole groups by "${r.ReportGroupKey}", but the Prediction Unit ${EvaluationProtocolRules.unitGrouping(r.UnitGroupKey, false)}; the report would not hold out the groups the protocol names.`;
       case 'primary-score-family-mismatch':
         return `The primary score is a ${r.Declared} score but the Prediction Unit's task is ${r.UnitTask}; candidates may only be ranked by a ${r.UnitTask} score.`;
       case 'calibration-not-applicable-for-probability-task':
@@ -276,6 +277,18 @@ export class EvaluationProtocolRules {
     };
   }
 
+  /**
+   * The key the unit's rows are grouped by for inner folds and intervals (S2.6): the unit's `groupKey` when it names
+   * one; else, for a member × period (`grain-x-periods`) unit that is not a forecast, its grain foreign key, because
+   * the manifest's group of a panel row is its grain record's key (`PredictionUnitRowReader`) and one record has a row
+   * per period; else null (a `grain` unit has one row per record, so each row is its own group; a forecast unit's
+   * grouping is the forecast rule's concern).
+   */
+  public static EffectiveGroupKey(unit: PredictionUnitSpec): string | null {
+    if (unit.groupKey !== null) return unit.groupKey;
+    return unit.rows.kind === 'grain-x-periods' && unit.label.outcome.kind !== 'forecast' ? unit.rows.foreignKey : null;
+  }
+
   /** True when every row of the unit shares one fixed decision date (cross-sectional data, no date to carve on). */
   private static hasFixedDecisionDate(unit: PredictionUnitSpec): boolean {
     return unit.rows.kind === 'grain' && unit.rows.decisionDate.kind === 'fixed';
@@ -314,15 +327,17 @@ export class EvaluationProtocolRules {
    * grouped the way the protocol says. Field names compare without case, as the database resolves them. A grouped
    * unit's inner validation must carry the unit's group key whatever its kind (S2.6: all rows of one entity stay
    * together across any inner split): stratified folds ignore groups, and blocked-time without a key makes every row
-   * its own group, so a group's early rows train the fold that validates its late rows. Both are refused.
+   * its own group, so a group's early rows train the fold that validates its late rows. Both are refused. The unit's
+   * key is its effective one ({@link EffectiveGroupKey}): a member × period unit is grouped by its grain record.
    */
   private static checkGroupKey(inner: InnerValidation, unit: PredictionUnitSpec): ProtocolRefusal[] {
     const protocolKey = inner.kind === 'repeated-stratified-kfold' ? null : inner.groupKey;
-    if (unit.groupKey !== null && protocolKey === null) {
-      return [{ Kind: 'inner-validation-ungrouped', UnitGroupKey: unit.groupKey, InnerKind: inner.kind }];
+    const unitKey = EvaluationProtocolRules.EffectiveGroupKey(unit);
+    if (unitKey !== null && protocolKey === null) {
+      return [{ Kind: 'inner-validation-ungrouped', UnitGroupKey: unitKey, InnerKind: inner.kind }];
     }
-    if (protocolKey === null || EvaluationProtocolRules.isUnitGroupKey(unit, protocolKey)) return [];
-    return [{ Kind: 'group-key-mismatch', ProtocolGroupKey: protocolKey, UnitGroupKey: unit.groupKey }];
+    if (protocolKey === null || EvaluationProtocolRules.isUnitGroupKey(unitKey, protocolKey)) return [];
+    return [{ Kind: 'group-key-mismatch', ProtocolGroupKey: protocolKey, UnitGroupKey: unitKey, UnitKeyImplied: unit.groupKey === null && unitKey !== null }];
   }
 
   /**
@@ -331,30 +346,33 @@ export class EvaluationProtocolRules {
    * forecast's intervals are pinned to block-bootstrap by the forecast rule instead.
    */
   private static checkIntervalsGrouping(intervals: IntervalSpec, unit: PredictionUnitSpec): ProtocolRefusal[] {
-    if (unit.groupKey === null || unit.label.outcome.kind === 'forecast' || intervals.method === 'cluster-bootstrap') return [];
-    return [{ Kind: 'intervals-not-clustered', UnitGroupKey: unit.groupKey, Method: intervals.method }];
+    const unitKey = EvaluationProtocolRules.EffectiveGroupKey(unit);
+    if (unitKey === null || unit.label.outcome.kind === 'forecast' || intervals.method === 'cluster-bootstrap') return [];
+    return [{ Kind: 'intervals-not-clustered', UnitGroupKey: unitKey, Method: intervals.method }];
   }
 
   /**
    * The new-entity report holds out whole groups by the row's value of the unit's group key (that is the key the carve
    * reads), so a report naming any other key would hold out groups the protocol does not name. A unit without a group
-   * key never matches: its rows are grouped by their entity key, which no field name states.
+   * key never matches: its rows are grouped by their entity key, which no field name states. This reads the declared
+   * `groupKey`, not the effective one: a report on a member × period unit names its grain key explicitly or is refused.
    */
   private static checkNewEntityGroupKey(holdout: HoldoutSplit, unit: PredictionUnitSpec): ProtocolRefusal[] {
     if (holdout.kind !== 'date-carved' || holdout.newEntityReport === null) return [];
     const reportKey = holdout.newEntityReport.groupKey;
-    if (EvaluationProtocolRules.isUnitGroupKey(unit, reportKey)) return [];
+    if (EvaluationProtocolRules.isUnitGroupKey(unit.groupKey, reportKey)) return [];
     return [{ Kind: 'new-entity-group-key-mismatch', ReportGroupKey: reportKey, UnitGroupKey: unit.groupKey }];
   }
 
-  /** Whether a field name is the unit's group key, compared without case or surrounding space; never for a unit without one. */
-  private static isUnitGroupKey(unit: PredictionUnitSpec, key: string): boolean {
-    return unit.groupKey !== null && unit.groupKey.trim().toLowerCase() === key.trim().toLowerCase();
+  /** Whether a field name is the unit's group key, compared without case or surrounding space; never when there is none. */
+  private static isUnitGroupKey(unitGroupKey: string | null, key: string): boolean {
+    return unitGroupKey !== null && unitGroupKey.trim().toLowerCase() === key.trim().toLowerCase();
   }
 
-  /** How the unit groups its rows, in words, for a refusal sentence. */
-  private static unitGrouping(unitGroupKey: string | null): string {
-    return unitGroupKey === null ? 'has no group key (its rows are grouped by their entity key)' : `groups its rows by "${unitGroupKey}"`;
+  /** How the unit groups its rows, in words, for a refusal sentence; `implied` = grouped by its grain record. */
+  private static unitGrouping(unitGroupKey: string | null, implied: boolean): string {
+    if (unitGroupKey === null) return 'has no group key (its rows are grouped by their entity key)';
+    return implied ? `groups its rows by its grain record ("${unitGroupKey}")` : `groups its rows by "${unitGroupKey}"`;
   }
 
   /** A heuristic scores one number per row; a multiclass unit's probabilities are one column per class, so it cannot be judged. */
@@ -430,9 +448,10 @@ export class EvaluationProtocolRules {
   private static defaultInnerValidation(unit: PredictionUnitSpec, holdout: HoldoutSplit): InnerValidation {
     if (unit.label.outcome.kind === 'forecast') {
       const gap = holdout.kind === 'rolling-origin' ? holdout.horizonPeriods : unit.temporal?.horizonPeriods || 1;
-      return { kind: 'blocked-time', folds: 5, gapPeriods: gap, groupKey: unit.groupKey };
+      return { kind: 'blocked-time', folds: 5, gapPeriods: gap, groupKey: EvaluationProtocolRules.EffectiveGroupKey(unit) };
     }
-    if (unit.groupKey !== null) return { kind: 'grouped-kfold', folds: 5, repeats: 3, groupKey: unit.groupKey };
+    const unitKey = EvaluationProtocolRules.EffectiveGroupKey(unit);
+    if (unitKey !== null) return { kind: 'grouped-kfold', folds: 5, repeats: 3, groupKey: unitKey };
     return { kind: 'repeated-stratified-kfold', folds: 5, repeats: 3 };
   }
 
@@ -454,7 +473,7 @@ export class EvaluationProtocolRules {
   }
 
   private static defaultIntervals(unit: PredictionUnitSpec): IntervalSpec {
-    const method: IntervalSpec['method'] = unit.label.outcome.kind === 'forecast' ? 'block-bootstrap' : unit.groupKey !== null ? 'cluster-bootstrap' : 'bootstrap';
+    const method: IntervalSpec['method'] = unit.label.outcome.kind === 'forecast' ? 'block-bootstrap' : EvaluationProtocolRules.EffectiveGroupKey(unit) !== null ? 'cluster-bootstrap' : 'bootstrap';
     return { level: 0.95, method, resamples: 2000, pairedTest: 'paired-bootstrap' };
   }
 }

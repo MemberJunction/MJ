@@ -393,14 +393,16 @@ export class LegacyPipelines {
   }
 
   /**
-   * On a grouped unit, stratified folds become grouped folds of the same size by the unit's group key, and blocked-time
-   * folds without a key take the unit's key (without one every row is its own group).
+   * On a grouped unit (by its effective group key, {@link EvaluationProtocolRules.EffectiveGroupKey}: a member × period
+   * unit is grouped by its grain record), stratified folds become grouped folds of the same size by that key, and
+   * blocked-time folds without a key take it (without one every row is its own group).
    */
   private static groupedForUnit(inner: InnerValidation, unit: PredictionUnitSpec): InnerValidation {
-    if (unit.groupKey === null) return inner;
-    if (inner.kind === 'blocked-time' && inner.groupKey === null) return { ...inner, groupKey: unit.groupKey };
+    const unitKey = EvaluationProtocolRules.EffectiveGroupKey(unit);
+    if (unitKey === null) return inner;
+    if (inner.kind === 'blocked-time' && inner.groupKey === null) return { ...inner, groupKey: unitKey };
     if (inner.kind !== 'repeated-stratified-kfold') return inner;
-    return { kind: 'grouped-kfold', folds: inner.folds, repeats: inner.repeats, groupKey: unit.groupKey };
+    return { kind: 'grouped-kfold', folds: inner.folds, repeats: inner.repeats, groupKey: unitKey };
   }
 
   /**

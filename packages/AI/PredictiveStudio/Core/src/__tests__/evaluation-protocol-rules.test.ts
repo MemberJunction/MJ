@@ -153,7 +153,7 @@ describe('ValidateProtocolForUnit', () => {
   it('refuses blocked-time folds grouped by a key when the unit has no group key, naming that it has none', () => {
     const p = protocol({ ...draftFor(series, rolling(5)), innerValidation: { kind: 'blocked-time', folds: 5, gapPeriods: 3, groupKey: 'PersonID' } });
     const refusals = EvaluationProtocolRules.ValidateProtocolForUnit(p, series);
-    expect(refusals).toEqual([{ Kind: 'group-key-mismatch', ProtocolGroupKey: 'PersonID', UnitGroupKey: null }]);
+    expect(refusals).toEqual([{ Kind: 'group-key-mismatch', ProtocolGroupKey: 'PersonID', UnitGroupKey: null, UnitKeyImplied: false }]);
     expect(EvaluationProtocolRules.DescribeProtocolRefusal(refusals[0])).toBe(
       'The protocol groups its inner validation by "PersonID", but the Prediction Unit has no group key (its rows are grouped by their entity key); the folds would not be grouped the way the protocol says.',
     );
@@ -178,7 +178,7 @@ describe('ValidateProtocolForUnit', () => {
     const grouped = unit(binary, null, columnRows, 'HouseholdID');
     const byPerson = protocol({ ...draftFor(grouped), innerValidation: { kind: 'grouped-kfold', folds: 5, repeats: 3, groupKey: 'PersonID' } });
     const refusals = EvaluationProtocolRules.ValidateProtocolForUnit(byPerson, grouped);
-    expect(refusals).toEqual([{ Kind: 'group-key-mismatch', ProtocolGroupKey: 'PersonID', UnitGroupKey: 'HouseholdID' }]);
+    expect(refusals).toEqual([{ Kind: 'group-key-mismatch', ProtocolGroupKey: 'PersonID', UnitGroupKey: 'HouseholdID', UnitKeyImplied: false }]);
     expect(EvaluationProtocolRules.DescribeProtocolRefusal(refusals[0])).toBe(
       'The protocol groups its inner validation by "PersonID", but the Prediction Unit groups its rows by "HouseholdID"; the folds would not be grouped the way the protocol says.',
     );
@@ -186,7 +186,7 @@ describe('ValidateProtocolForUnit', () => {
     expect(EvaluationProtocolRules.ValidateProtocolForUnit(sameKey, grouped)).toEqual([]);
     const ungrouped = unit(binary);
     expect(EvaluationProtocolRules.ValidateProtocolForUnit({ ...byPerson }, ungrouped)).toEqual([
-      { Kind: 'group-key-mismatch', ProtocolGroupKey: 'PersonID', UnitGroupKey: null },
+      { Kind: 'group-key-mismatch', ProtocolGroupKey: 'PersonID', UnitGroupKey: null, UnitKeyImplied: false },
     ]);
   });
 
@@ -225,6 +225,25 @@ describe('ValidateProtocolForUnit', () => {
     // An ungrouped unit's rows are their own groups.
     const plain = unit(binary);
     expect(EvaluationProtocolRules.ValidateProtocolForUnit(protocol({ ...draftFor(plain), innerValidation: { kind: 'repeated-stratified-kfold', folds: 5, repeats: 3 }, intervals: { ...draftFor(plain).intervals, method: 'bootstrap' } }), plain)).toEqual([]);
+  });
+
+  it('groups a member × period unit by its grain record when it names no group key: grouped folds and clustered intervals by default, stratified folds refused', () => {
+    const panel = unit(binary, null, panelRows);
+    const d = draftFor(panel, dateCarved);
+    expect(d.innerValidation).toEqual({ kind: 'grouped-kfold', folds: 5, repeats: 3, groupKey: 'StoreID' });
+    expect(d.intervals.method).toBe('cluster-bootstrap');
+    expect(EvaluationProtocolRules.ValidateProtocolForUnit(protocol(d), panel)).toEqual([]);
+    const rowBootstrap = protocol({ ...d, intervals: { ...d.intervals, method: 'bootstrap' } });
+    expect(EvaluationProtocolRules.ValidateProtocolForUnit(rowBootstrap, panel)).toEqual([{ Kind: 'intervals-not-clustered', UnitGroupKey: 'StoreID', Method: 'bootstrap' }]);
+    const stratified = protocol({ ...d, innerValidation: { kind: 'repeated-stratified-kfold', folds: 5, repeats: 3 } });
+    const refusals = EvaluationProtocolRules.ValidateProtocolForUnit(stratified, panel);
+    expect(refusals).toEqual([{ Kind: 'inner-validation-ungrouped', UnitGroupKey: 'StoreID', InnerKind: 'repeated-stratified-kfold' }]);
+    expect(EvaluationProtocolRules.EffectiveGroupKey(panel)).toBe('StoreID');
+    expect(EvaluationProtocolRules.EffectiveGroupKey(unit(binary))).toBeNull();
+    const byPerson = protocol({ ...d, innerValidation: { kind: 'grouped-kfold', folds: 5, repeats: 3, groupKey: 'PersonID' } });
+    expect(EvaluationProtocolRules.DescribeProtocolRefusal(EvaluationProtocolRules.ValidateProtocolForUnit(byPerson, panel)[0])).toBe(
+      'The protocol groups its inner validation by "PersonID", but the Prediction Unit groups its rows by its grain record ("StoreID"); the folds would not be grouped the way the protocol says.',
+    );
   });
 
   it('refuses a new-entity report grouped by a key other than the unit\'s group key, compared without case', () => {
