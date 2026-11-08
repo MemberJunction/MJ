@@ -913,6 +913,19 @@ describe('AsOfFeatureAssembler — a stored value changed after the decision by 
     expect(out.Rows[0].Provenance[0]).toMatchObject({ source: 'immutable-field', sourceRef: 'People/p1/Status', sourceVersion: 'd1', computedAt: '2020-07-01T00:00:00.000Z' });
     expect(out.Rows[1].Provenance[0]).toMatchObject({ sourceVersion: 'immutable-after-create' });
   });
+  it('resolves a join key through a unit row deleted and re-created after its decision day to the key the earlier incarnation recorded', async () => {
+    const notUpdatable: AssemblyEntityInfo = { ...entities.People, Fields: entities.People.Fields.map((f) => (f.Name === 'Status' ? { ...f, AllowUpdateAPI: false } : f)) };
+    const days: AssemblyRowRef[] = [one[0], { RowID: 'y2', EntityKey: 'y2', DecisionDate: new Date('2024-06-01T00:00:00Z'), Period: null }];
+    // y1 joined P1 until its Delete in January 2023; it was re-created in February joined to P2.
+    const recreatedRow = { Years: [
+      rc('yc-1', 'y1', 'Create', '2021-01-01T00:00:00Z', { ID: 'y1', PersonID: 'P1' }),
+      rc('yd-1', 'y1', 'Delete', '2023-01-01T00:00:00Z', { ID: 'y1', PersonID: 'P1' }),
+      rc('yr-1', 'y1', 'Create', '2023-02-01T00:00:00Z', { ID: 'y1', PersonID: 'P2' }),
+    ] };
+    const tablesNow = { Years: [{ ID: 'y1', PersonID: 'P2' }, { ID: 'y2', PersonID: 'P2' }], People: [{ ID: 'P1', Status: 'Active' }, { ID: 'P2', Status: 'Lapsed' }] };
+    const out = await new AsOfFeatureAssembler().Assemble({ ...input([stored], { Rows: days, Tables: tablesNow, Changes: recreatedRow }), Metadata: { Entity: (n) => (n === 'People' ? notUpdatable : metadata.Entity(n)) } });
+    expect(out.Status === 'assembled' ? out.Rows.map((r) => [r.RowID, r.Values[0], r.Provenance[0].sourceRef]) : out).toEqual([['y1', 'Active', 'People/p1/Status'], ['y2', 'Lapsed', 'People/p2/Status']]);
+  });
   it('excludes, under exclude-and-count, a stored read whose history does not reach a past decision day, as the replay reader does, and refuses it under refuse', async () => {
     const past: AssemblyRowRef[] = [{ RowID: 'y1', EntityKey: 'y1', DecisionDate: new Date('2021-06-01T00:00:00Z'), Period: null }];
     const unanchored = { People: [rc('u0', 'P1', 'Update', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }, ['Status'])] };
@@ -1012,6 +1025,23 @@ describe('AsOfFeatureAssembler — a windowed aggregate over hard-deleted child 
           const out = await new AsOfFeatureAssembler().Assemble(input([count], { Rows: owners, Tables: data, Changes: sameInstant, Unit: { ...unit, history: { onUncoveredRow, externalSourceRows: 'ineligible' } } }));
           expect(out.Status === 'assembled' ? [out.Rows.map((r) => [r.RowID, r.Values[0]]), out.UncoveredRowsExcluded] : out).toEqual([[['y1', 2], ['y2', 1]], []]);
         }
+      }
+    });
+  }
+  for (const ownerNow of ['P1', 'P9']) {
+    it(`counts a child deleted and re-created after the decision day as the incarnation that stood then, from the Delete row that ended it (re-created under ${ownerNow})`, async () => {
+      // e2 stood from March 2022 dated 2022-03-01, was deleted in January 2023 and re-created in February dated 2025-01-01.
+      const reborn = { ID: 'e2', PersonID: ownerNow, EventDate: '2025-01-01' };
+      const recreated = { Events: [
+        rc('ec-1', 'e1', 'Create', '2021-09-01T00:00:00Z', e1),
+        rc('ec-2', 'e2', 'Create', '2022-03-01T00:00:00Z', e2),
+        rc('ed-2', 'e2', 'Delete', '2023-01-01T00:00:00Z', e2),
+        rc('er-2', 'e2', 'Create', '2023-02-01T00:00:00Z', reborn),
+      ] };
+      for (const onUncoveredRow of ['refuse', 'exclude-and-count'] as const) {
+        const out = await new AsOfFeatureAssembler().Assemble(input([count], { Rows: owners, Tables: { ...data, Events: [e1, reborn] }, Changes: recreated, Unit: { ...unit, history: { onUncoveredRow, externalSourceRows: 'ineligible' } } }));
+        expect(out.Status === 'assembled' ? [out.Rows.map((r) => [r.RowID, r.Values[0]]), out.UncoveredRowsExcluded] : out).toEqual([[['y1', 2], ['y2', 1]], []]);
+        expect(out.Status === 'assembled' && out.Rows[0].Provenance[0].sourceVersion).toBe(sha('e1\ne2'));
       }
     });
   }

@@ -49,8 +49,13 @@ export class WindowedAggregates {
       });
       out.set(owner, list);
     }
-    for (const list of out.values()) list.sort((a, b) => a.Day.getTime() - b.Day.getTime() || OrdinalCompare(a.Id, b.Id));
+    for (const list of out.values()) list.sort(WindowedAggregates.CompareChildRows);
     return out;
+  }
+
+  /** The order of an owner's child rows in a {@link ChildRowIndex}: by day, then by ID (ordinal). */
+  public static CompareChildRows(a: ChildRow, b: ChildRow): number {
+    return a.Day.getTime() - b.Day.getTime() || OrdinalCompare(a.Id, b.Id);
   }
 
   /**
