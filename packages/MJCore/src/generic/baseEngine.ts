@@ -42,6 +42,11 @@ export class BaseEnginePropertyConfig extends BaseInfo {
      */
     Filter?: string;
     /**
+     * Optional semantic `Name` of a registered `EntityAlternateBaseView` on the target entity
+     * (for example, `'Active'`). Applies only when `Type` is `'entity'`.
+     */
+    AlternateBaseView?: string;
+    /**
      * Optional, filters to apply to each item in a dataset, only applies when type is 'dataset' and is optional in those cases.
      */
     DatasetItemFilters?: DatasetItemFilterType[];
@@ -215,6 +220,11 @@ export interface EngineDataMapEntry {
      * permission on its entity. The data array will be empty `[]`.
      */
     permissionDenied?: boolean;
+    /**
+     * True when a load of this config failed and the permission classifier said the user cannot
+     * read the entity, so the config was loaded empty.
+     */
+    readDenied?: boolean;
 }
 
 /**
@@ -462,6 +472,16 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
+     * True when the named config property has finished loading with valid data (not failed and
+     * not skipped due to permission denial), even if other configs on the same engine are still
+     * loading.
+     */
+    public IsPropertyLoaded(propertyName: string): boolean {
+        const entry = this._dataMap.get(propertyName);
+        return entry?.loadedSuccessfully === true && !entry.readDenied && !entry.permissionDenied;
+    }
+
+    /**
      * List of entity names that were skipped due to permission denial.
      * Empty if not permission-constrained. Useful for logging/diagnostics.
      */
@@ -516,7 +536,18 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         // do a full deep copy of the array to ensure no tampering
         return JSON.parse(JSON.stringify(this._metadataConfigs));
     }
- 
+
+    /**
+     * The engine's metadata configs themselves, not a copy: read them, never change them.
+     *
+     * {@link Configs} deep-copies on every read. `BaseEngineRegistry.FindCachedEntity()` reads the
+     * configs of every loaded engine on each call, and runs for every record an IsA parent with an
+     * opted-in `SubtypeSelector` loads, so it reads this instead.
+     */
+    public get ReadonlyConfigs(): ReadonlyArray<Readonly<BaseEnginePropertyConfig>> {
+        return this._metadataConfigs;
+    }
+
     /**
      * Configures the engine by loading metadata from the database.
      * Subclasses must implement this method to define their configuration behavior.
@@ -1619,7 +1650,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             if (!fresh) {
                 return null;
             }
-            await fresh.LoadFromData(source.GetAll());
+            await BaseEntity.CloneEntityWithISAChain(source, fresh, provider, this._contextUser);
             return fresh;
         }
         catch (e) {
@@ -2014,7 +2045,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (config.AddToObject !== false) {
             (this as any)[config.PropertyName] = [];
         }
-        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: [], loadedSuccessfully: true });
+        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: [], loadedSuccessfully: true, readDenied: true });
         this.NotifyDataChange(config, []);
     }
 
