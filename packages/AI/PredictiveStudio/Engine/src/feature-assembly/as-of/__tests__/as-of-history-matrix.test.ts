@@ -11,7 +11,7 @@
  * so every interval a shape names (a deleted interval between a Delete and a re-Create included) holds a decision day.
  */
 import { describe, it, expect } from 'vitest';
-import type { AssemblyRefusal, FeatureColumnSpec, PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
+import type { AssemblyRefusal, ChangeHistoryCoverage, FeatureColumnSpec, PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
 import { AsOfFeatureAssembler, type AsOfAssemblyInput, type AsOfAssemblyResult, type AssemblyRowRef, type MatrixCell } from '../as-of-assembler';
 import { RunViewRecordHistoryReader, type RecordChangeRow } from '../record-history';
 import type { SourceRow } from '../../data-access';
@@ -100,6 +100,8 @@ const SHAPES: readonly Shape[] = [
   shape('anchored-deleted-reinserted', [h('Create', 2020, 'Active'), h('Delete', 2022, 'Active')], 'Active'),
   shape('unanchored-deleted-reinserted', [h('Update', 2021, 'Active'), h('Delete', 2022, 'Active')], 'Active'),
   shape('snapshot-anchored', [h('Snapshot', 2022, 'Active')], 'Active'),
+  // A Snapshot precedes the stored creation instant, so the column dates a re-creation and is ignored: creation is unknown.
+  shape('snapshot-with-created-at', [h('Snapshot', 2022, 'Active')], 'Active', { CreatedAt: at(2023).toISOString() }),
   shape('continuity-mismatch', [h('Create', 2020, 'Active')], 'Lapsed', { Mismatched: true }),
 ];
 
@@ -253,7 +255,13 @@ const run = async (s: Shape, day: Day, reader: Reader, withUnrelated: boolean): 
   }));
 };
 
-const continuityOf = (out: AsOfAssemblyResult) => (out.Status === 'assembled' ? out.Coverage.find((c) => c.entity === 'People')?.continuity : undefined);
+/** The People coverage entry of an assembled outcome (undefined for a refusal); every assembled outcome read People's history. */
+const peopleCoverageOf = (out: AsOfAssemblyResult, cell: string): ChangeHistoryCoverage | undefined => {
+  if (out.Status !== 'assembled') return undefined;
+  const entry = out.Coverage.find((c) => c.entity === 'People');
+  expect(entry, `${cell} (People coverage present)`).toBeDefined();
+  return entry;
+};
 
 const CELLS: readonly (readonly [Shape, Day])[] = SHAPES.flatMap((s) => DAYS.map((d) => [s, d] as const));
 
@@ -265,7 +273,7 @@ const assertCell = async (s: Shape, day: Day, reader: Reader): Promise<void> => 
   expect(observe(alone), cell).toEqual(want);
   expect(observe(withP9), `${cell} +P9`).toEqual(want);
   expect(observe(withP9), `${cell} +P9 (outcome immune to P9)`).toEqual(observe(alone));
-  expect(continuityOf(withP9), `${cell} +P9 (continuity immune to P9)`).toEqual(continuityOf(alone));
+  expect(peopleCoverageOf(withP9, `${cell} +P9`), `${cell} +P9 (coverage immune to P9)`).toEqual(peopleCoverageOf(alone, cell));
 };
 
 describe('as-of history-shape matrix (exclude-and-count)', () => {
