@@ -305,7 +305,7 @@ interface DataTypeMap {
 |---|---|---|
 | `UNIQUEIDENTIFIER` | `UUID` | |
 | `BIT` | `BOOLEAN` | |
-| `NVARCHAR(n)` | `VARCHAR(n)` | |
+| `NVARCHAR(n)` | `VARCHAR(n)` | `TEXT` when n is over 10,485,760, PostgreSQL's `VARCHAR` ceiling |
 | `NVARCHAR(MAX)` | `TEXT` | Length = -1 or unspecified |
 | `VARCHAR(MAX)` | `TEXT` | Length = -1 or unspecified |
 | `NCHAR` / `CHAR` | `CHAR` | Preserves length |
