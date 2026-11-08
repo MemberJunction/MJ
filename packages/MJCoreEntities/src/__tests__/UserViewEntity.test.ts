@@ -15,7 +15,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
 
 vi.mock('@memberjunction/core', async () => {
     // The real validator, so the view's save-time Properties checks are exercised for real.
-    const { ValidateUserViewProperties } = await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core');
+    const { ValidateUserViewProperties, CompositeFilterSQLCompiler } = await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core');
     class MockBaseInfo {
         copyInitData(data: Record<string, unknown>) {
             if (data) Object.assign(this, data);
@@ -69,6 +69,7 @@ vi.mock('@memberjunction/core', async () => {
         },
         ValidationErrorType: { Failure: 'Failure', Warning: 'Warning' },
         ValidateUserViewProperties,
+        CompositeFilterSQLCompiler,
         ParseFilterField: (field: string) => {
             const raw = (field ?? '').trim();
             const dot = raw.indexOf('.');
@@ -1115,12 +1116,12 @@ describe('MJUserViewEntityExtended', () => {
         });
 
         // --- isempty operator ---
-        it('should generate IS NULL for isempty', () => {
+        it('should generate IS NULL OR = empty string for isempty on string fields', () => {
             const fs = JSON.stringify({
                 logic: 'and',
                 filters: [{ field: 'Name', operator: 'isempty', value: '' }],
             });
-            expect(testView.TestGenerateWhereClause(fs, entityInfo)).toBe('([Name] IS NULL)');
+            expect(testView.TestGenerateWhereClause(fs, entityInfo)).toBe("([Name] IS NULL OR [Name] = '')");
         });
 
         // --- isnotnull operator ---
@@ -1133,12 +1134,12 @@ describe('MJUserViewEntityExtended', () => {
         });
 
         // --- isnotempty operator ---
-        it('should generate IS NOT NULL for isnotempty', () => {
+        it('should generate IS NOT NULL AND <> empty string for isnotempty on string fields', () => {
             const fs = JSON.stringify({
                 logic: 'and',
                 filters: [{ field: 'Name', operator: 'isnotempty', value: '' }],
             });
-            expect(testView.TestGenerateWhereClause(fs, entityInfo)).toBe('([Name] IS NOT NULL)');
+            expect(testView.TestGenerateWhereClause(fs, entityInfo)).toBe("([Name] IS NOT NULL AND [Name] <> '')");
         });
 
         // --- Boolean value conversion ---
@@ -1294,14 +1295,70 @@ describe('MJUserViewEntityExtended', () => {
         });
 
         // --- Case-insensitive field name matching ---
-        it('should match field names case-insensitively', () => {
+        it('should match field names case-insensitively and emit the canonical entity field name', () => {
             const fs = JSON.stringify({
                 logic: 'and',
                 filters: [{ field: 'name', operator: 'eq', value: 'Test' }],
             });
-            // The field is 'Name' in entity but 'name' in filter -- should still match
-            // Note: the output uses the field name from the filter (not from the entity)
-            expect(testView.TestGenerateWhereClause(fs, entityInfo)).toBe("([name] = 'Test')");
+            expect(testView.TestGenerateWhereClause(fs, entityInfo)).toBe("([Name] = 'Test')");
+        });
+
+        // --- Phase 0: Escaping and SQL injection hardening ---
+        it("should escape single quotes in string values (e.g. O'Brien)", () => {
+            const fs = JSON.stringify({
+                logic: 'and',
+                filters: [{ field: 'Name', operator: 'eq', value: "O'Brien" }],
+            });
+            expect(testView.TestGenerateWhereClause(fs, entityInfo)).toBe("([Name] = 'O''Brien')");
+        });
+
+        it('should neutralize SQL injection attempts in string filter values and LIKE patterns', () => {
+            const eqInjection = JSON.stringify({
+                logic: 'and',
+                filters: [{ field: 'Name', operator: 'eq', value: "x') OR 1=1 --" }],
+            });
+            expect(testView.TestGenerateWhereClause(eqInjection, entityInfo)).toBe("([Name] = 'x'') OR 1=1 --')");
+
+            const likeWildcardAndQuote = JSON.stringify({
+                logic: 'and',
+                filters: [{ field: 'Name', operator: 'contains', value: "50%_O'Brien[1]" }],
+            });
+            expect(testView.TestGenerateWhereClause(likeWildcardAndQuote, entityInfo)).toBe(
+                "([Name] LIKE '%50[%][_]O''Brien[[]1]%')"
+            );
+        });
+
+        it('should reject non-numeric payloads on Number fields instead of interpolating raw text', () => {
+            const fs = JSON.stringify({
+                logic: 'and',
+                filters: [{ field: 'TotalRevenue', operator: 'gt', value: '100 OR 1=1' }],
+            });
+            expect(() => testView.TestGenerateWhereClause(fs, entityInfo)).toThrow(
+                /Invalid numeric filter value/
+            );
+        });
+
+        it('should reject invalid date strings on Date fields', () => {
+            const fs = JSON.stringify({
+                logic: 'and',
+                filters: [{ field: 'CreatedAt', operator: 'gte', value: "not-a-date' OR 1=1 --" }],
+            });
+            expect(() => testView.TestGenerateWhereClause(fs, entityInfo)).toThrow(
+                /Invalid date string filter value/
+            );
+        });
+
+        it('should compile in, notin, and between operators', () => {
+            const fs = JSON.stringify({
+                logic: 'and',
+                filters: [
+                    { field: 'City', operator: 'in', value: ['Chicago', "O'Fallon"] },
+                    { field: 'ActivityCount', operator: 'between', value: [5, 20] },
+                ],
+            });
+            expect(testView.TestGenerateWhereClause(fs, entityInfo)).toBe(
+                "([City] IN ('Chicago', 'O''Fallon')) AND ([ActivityCount] BETWEEN 5 AND 20)"
+            );
         });
 
         // --- Empty filters array ---

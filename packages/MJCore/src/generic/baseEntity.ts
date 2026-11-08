@@ -944,6 +944,14 @@ export class BaseEntityResult {
      */
     EndedAt: Date;
 
+    /**
+     * Populated when a server-side UPDATE fails (or records a conflict) due to a field-level
+     * concurrency conflict detected under a row lock.
+     */
+    ConcurrencyConflict?: {
+        ConflictingFields: string[];
+    };
+
     constructor(success?: boolean, message?: string, type? : 'create' | 'update' | 'delete') {
         this.Success = success === undefined ? false : success;
         this.Type = type === undefined ? 'create' : type;
@@ -5599,6 +5607,7 @@ export abstract class BaseEntity<T = unknown> {
                 parentSaveOptions.SkipEntityActions = _options.SkipEntityActions;
                 parentSaveOptions.ReplayOnly = _options.ReplayOnly;
                 parentSaveOptions.SkipOldValuesCheck = _options.SkipOldValuesCheck;
+                parentSaveOptions.ConcurrencyBaseline = _options.ConcurrencyBaseline;
                 parentSaveOptions.SkipAsyncValidation = _options.SkipAsyncValidation;
                 parentSaveOptions.IsParentEntitySave = true;
                 parentSaveOptions.ISAActiveChildEntityName = this.EntityInfo.Name;
@@ -5632,6 +5641,9 @@ export abstract class BaseEntity<T = unknown> {
                             `Failed to save parent entity '${this._parentEntity.EntityInfo?.Name}': ${detail}`;
                         // Surface the parent's field-level errors so the caller can act on them.
                         newResult.Errors = parentErrors;
+                        if (parentLatest?.ConcurrencyConflict) {
+                            newResult.ConcurrencyConflict = parentLatest.ConcurrencyConflict;
+                        }
                         // When `detail` was built from `parentErrors` (no parent Message), `Message` already renders
                         // them — say so, or CompleteMessage repeats every one.
                         newResult.MessageIncludesErrors = !parentLatest?.Message && parentErrors.length > 0;

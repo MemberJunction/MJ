@@ -3,6 +3,7 @@ import { AggregateResult, DatasetItemFilterType, DatasetResultType, IMetadataPro
 import { AggregateExpression, RunViewParams, RunViewParametersKey, IsMaterializedDataSource, NormalizeAlternateBaseViewName } from "../views/runView";
 import { GetEffectiveAlternateBaseViewName } from "./alternateBaseViews";
 import { ViewPropertyValuesKey } from "../views/viewProperties";
+import { CanonicalCompositeFilterKey } from "./filters/compositeFilterSQL";
 import { LogError, LogStatusEx, LogWarning } from "./logging";
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { Metadata } from "./metadata";
@@ -2935,6 +2936,11 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const paramsKey = RunViewParametersKey(params.Parameters);
         if (paramsKey.length > 0) {
             parts.push(`prm:${paramsKey}`);
+        }
+
+        const filterKey = CanonicalCompositeFilterKey(params.Filter);
+        if (filterKey.length > 0) {
+            parts.push(`cf:${filterKey.replace(/\|/g, '\\u007c')}`);
         }
 
         // Dataset namespace. `GetDatasetByName` caches each dataset ITEM's rows through this same

@@ -215,14 +215,17 @@ describe('MJQueryEntityServer Save — extraction', () => {
 
     it('gives a declared field the facts extraction found before the graph is written, keeping its annotations', async () => {
         h.fieldFacts = [{ Name: 'Name', Sequence: 1, SQLBaseType: 'character varying', SQLFullType: 'character varying(100)', IsNullable: null, IsComputed: false,
+            InAllBranchVariants: true,
             SourceEntityID: 'E1', SourceEntityFieldID: 'EF1', SourceFieldName: 'Name', SourceObjectName: null, DocDescription: null, SourceDescription: null }];
         const declared = { Name: 'name', Sequence: 4, SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)', IsNullable: false, IsComputed: true,
+            InAllBranchVariants: false,
             SourceEntityID: null, SourceEntityFieldID: null, SourceFieldName: null, SourceObjectName: 'x', Description: 'Authored.' };
         const query = createQuery();
         Object.assign(query.DeclaredFields, { Items: [declared] });
         await query.Save();
 
         expect(declared).toEqual({ Name: 'Name', Sequence: 1, SQLBaseType: 'character varying', SQLFullType: 'character varying(100)', IsNullable: null, IsComputed: false,
+            InAllBranchVariants: true,
             SourceEntityID: 'E1', SourceEntityFieldID: 'EF1', SourceFieldName: 'Name', SourceObjectName: null, Description: 'Authored.' });
     });
 

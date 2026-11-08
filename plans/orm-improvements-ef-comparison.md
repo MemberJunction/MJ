@@ -1,7 +1,7 @@
 # ORM Layer Improvements: Server-Side Concurrency, Structured Filters, Typed Query Wrappers
 
 ## Status
-- **Status**: Draft (plan only, no code in this PR)
+- **Status**: Implemented (Phases 0–3 shipped; Phase 4 benchmark harness planned)
 - **Created**: 2026-11-08
 - **Author**: Amith Nagarajan + Claude
 - **Branch**: `claude/orm-improvements-ef-comparison`

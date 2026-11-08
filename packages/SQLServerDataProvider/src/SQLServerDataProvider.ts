@@ -765,6 +765,7 @@ export class SQLServerDataProvider
       parent.ExcludeSchemas,
       false,
     );
+    cfg.ConcurrencyCheck = this.ConcurrencyCheck;
     await child.Config(cfg, this);
     return child;
   }
@@ -1893,6 +1894,26 @@ export class SQLServerDataProvider
    * parameter has nothing to replay, so it is logged as a comment. A hand-written update proc
    * (spUpdateGenerated off) makes no ISNULL promise, so it keeps the full-row form.
    */
+  /**
+   * Reads the target record's columns from `[schema].[BaseView] WITH (UPDLOCK, ROWLOCK)` inside
+   * the save transaction so concurrent writers serialize on the row lock before `spUpdate*` executes.
+   * Uses `BaseView` because runtime SQL logins (`MJ_Connect`, `cdp_UI`) have `SELECT` permission on
+   * `BaseView` rather than `BaseTable`, and SQL Server propagates `UPDLOCK, ROWLOCK` to the
+   * underlying base table pages/rows.
+   */
+  protected override RenderLockedRowReadSQL(
+    entityInfo: EntityInfo,
+    pkWhereClause: string,
+    columns: string[],
+  ): string | null {
+    if (columns.length === 0 || !pkWhereClause) {
+      return null;
+    }
+    const selectCols = columns.map((c) => this.QuoteIdentifier(c)).join(', ');
+    const viewRef = this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView);
+    return `SELECT ${selectCols} FROM ${viewRef} WITH (UPDLOCK, ROWLOCK) WHERE ${pkWhereClause}`;
+  }
+
   protected override RenderReplayUpdateSQL(
     binding: SaveCallBinding,
     entity: BaseEntity,

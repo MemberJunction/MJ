@@ -367,6 +367,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             parent.ExcludeSchemas,
             false,
         );
+        cfg.ConcurrencyCheck = this.ConcurrencyCheck;
         await child.ConfigWithSharedPool(cfg, this.DatabaseConnection);
         return child;
     }
@@ -1145,6 +1146,25 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             callArgsSQL: placeholders.join(', '),
             values,
         };
+    }
+
+    /**
+     * Reads the target record's physical columns from `"schema"."BaseTable" WHERE ... FOR UPDATE`
+     * inside the save transaction so concurrent writers serialize on the row lock before `spUpdate*`
+     * executes. Queries `BaseTable` directly because PostgreSQL does not allow `FOR UPDATE` on views
+     * containing `LEFT JOIN`s.
+     */
+    protected override RenderLockedRowReadSQL(
+        entityInfo: EntityInfo,
+        pkWhereClause: string,
+        columns: string[],
+    ): string | null {
+        if (columns.length === 0 || !pkWhereClause || !entityInfo.BaseTable) {
+            return null;
+        }
+        const selectCols = columns.map((c) => this.QuoteIdentifier(c)).join(', ');
+        const tableRef = this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseTable);
+        return `SELECT ${selectCols} FROM ${tableRef} WHERE ${pkWhereClause} FOR UPDATE`;
     }
 
     /**

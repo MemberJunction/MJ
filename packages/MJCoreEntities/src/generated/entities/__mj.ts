@@ -30900,6 +30900,12 @@ export const MJQueryFieldSchema = z.object({
         * * Display Name: Source Object Name
         * * SQL Data Type: nvarchar(500)
         * * Description: The source of this output column as the database server reported it (schema.object.column), recorded when the source is a table or view that backs no MJ entity. NULL when the column maps to an entity field (see SourceEntityFieldID) or has no direct source.`),
+    InAllBranchVariants: z.boolean().describe(`
+        * * Field Name: InAllBranchVariants
+        * * Display Name: In All Branch Variants
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: True when this output field is returned by every branch variant of a templated query (or when the query does not use template branches). False when the field is only returned by a subset of conditional {% if %} branches, so generated TypeScript row interfaces mark the property optional.`),
     Query: z.string().nullable().describe(`
         * * Field Name: Query
         * * Display Name: Query
@@ -128173,6 +128179,20 @@ export class MJQueryFieldEntity extends BaseEntity<MJQueryFieldEntityType> {
     }
     set SourceObjectName(value: string | null) {
         this.Set('SourceObjectName', value);
+    }
+
+    /**
+    * * Field Name: InAllBranchVariants
+    * * Display Name: In All Branch Variants
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: True when this output field is returned by every branch variant of a templated query (or when the query does not use template branches). False when the field is only returned by a subset of conditional {% if %} branches, so generated TypeScript row interfaces mark the property optional.
+    */
+    get InAllBranchVariants(): boolean {
+        return this.Get('InAllBranchVariants');
+    }
+    set InAllBranchVariants(value: boolean) {
+        this.Set('InAllBranchVariants', value);
     }
 
     /**

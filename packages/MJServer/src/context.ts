@@ -862,6 +862,7 @@ async function createPerRequestProviders(
     p = await createPostgresProvider();
   } else {
     const config = new SQLServerProviderConfigData(dataSource, mj_core_schema, 0, undefined, undefined, false);
+    config.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'log';
     const sqlProvider = new SQLServerDataProvider();
     await sqlProvider.Config(config);
     p = sqlProvider as unknown as DatabaseProviderBase;
@@ -904,6 +905,7 @@ async function createPostgresProvider(): Promise<DatabaseProviderBase> {
     undefined,
     false, // use existing metadata from global provider
   );
+  pgConfig.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'log';
 
   // Share the connection pool from the primary provider to avoid pool exhaustion
   const primaryProvider = Metadata.Provider as unknown as { DatabaseConnection?: import('pg').Pool }; // global-provider-ok: bootstrap (per-connection PG pool sharing)

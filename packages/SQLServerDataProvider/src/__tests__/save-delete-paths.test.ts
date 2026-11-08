@@ -105,6 +105,7 @@ class SaveDeleteTestProvider extends SQLServerDataProvider {
 
 function makeProvider(): SaveDeleteTestProvider {
   const provider = new SaveDeleteTestProvider();
+  provider.ConcurrencyCheck = 'off';
   provider.AttachPool(new MockConnectionPool());
   return provider;
 }
@@ -240,8 +241,9 @@ describe('SQLServerDataProvider save path (real Save() → GenerateSaveSQL → m
     expect(sql).toContain(`SET @ID${sfx} = 'w-0001'`);
     expect(sql).toContain(`@ID=@ID${sfx}`);
 
-    // Nullable field that is null on update still gets its _Clear companion
-    expect(sql).toContain('@ExternalID_Clear=1');
+    // Untouched nullable field is omitted on delta update (retains stored value via ISNULL in spUpdate)
+    expect(sql).not.toContain('@ExternalID_Clear=1');
+    expect(sql).not.toContain('@Description=');
 
     expect(result).toEqual(updatedRow);
 
@@ -411,7 +413,7 @@ describe('SQLServerDataProvider replay form of a create (Metadata_Sync recording
     expect(simpleSQL).not.toContain('spUpdateWidget');
   });
 
-  it('UPDATE: the logged simpleSQL carries only the changed field + PK; the executed fullSQL still passes every column', async () => {
+  it('UPDATE: both executed fullSQL and logged simpleSQL carry only the changed field + PK when spUpdateGenerated is true', async () => {
     const provider = makeProvider();
     const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
     entity.Set('Name', 'Renamed');
@@ -419,11 +421,13 @@ describe('SQLServerDataProvider replay form of a create (Metadata_Sync recording
     const { fullSQL, simpleSQL, literalSQL } = await provider.SaveSQLForTest(entity, false, TEST_USER);
     const sfx = extractSuffix(literalSQL!, 'Name');
 
-    // Executed form: every SP parameter, including untouched ones
-    expect(fullSQL).toContain('@Description=@Description$');
-    expect(literalSQL).toContain(`@Description=@Description${sfx}`);
-    expect(literalSQL).toContain(`@IsActive=@IsActive${sfx}`);
-    expect(literalSQL).toContain('@ExternalID_Clear=1');
+    // Delta-only execution: untouched SP parameters are omitted from fullSQL and literalSQL
+    expect(fullSQL).not.toContain('@Description=@Description$');
+    expect(literalSQL).not.toContain(`@Description=@Description${sfx}`);
+    expect(literalSQL).not.toContain(`@IsActive=@IsActive${sfx}`);
+    expect(literalSQL).not.toContain('@ExternalID_Clear=1');
+    expect(literalSQL).toContain(`@Name=@Name${sfx}`);
+    expect(literalSQL).toContain(`@ID=@ID${sfx}`);
 
     // Logged form: spUpdate with the changed field and the key, same suffix, nothing else
     expect(simpleSQL).toBe(
@@ -1309,5 +1313,85 @@ describe('SQLServerDataProvider Record Change snapshot of a narrowed object', ()
     expect(deleted).toBe(true);
     expect(mssqlState.Queries).toHaveLength(2);
     expect(fullRecordJSONInput(mssqlState.Queries[1]).Quantity).toBe(77);
+  });
+});
+
+describe('SQLServerDataProvider server-side concurrency check', () => {
+  beforeEach(() => {
+    mssqlState.Reset();
+  });
+
+  it('enforce mode: rejects UPDATE and rolls back when a dirty field changed concurrently in the database', async () => {
+    const provider = makeProvider();
+    provider.ConcurrencyCheck = 'enforce';
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    entity.Set('Name', 'Writer A Rename');
+
+    // Locked row read returns a concurrent change to Name ('Writer B Rename' != baseline 'Original Widget')
+    mssqlState.QueueResult({ rows: [{ Name: 'Writer B Rename' }] });
+
+    const saved = await provider.Save(entity, TEST_USER, new EntitySaveOptions());
+    expect(saved).toBe(false);
+    expect(entity.LatestResult?.Success).toBe(false);
+    expect(entity.LatestResult?.ConcurrencyConflict).toEqual({
+      ConflictingFields: ['Name'],
+    });
+    expect(entity.LatestResult?.Message).toContain('Concurrent modification conflict on Widgets for field(s): Name');
+    // Only the locked SELECT ran; spUpdateWidget was never executed
+    expect(mssqlState.Queries).toHaveLength(1);
+    expect(mssqlState.Queries[0].sql).toContain('SELECT [Name] FROM [dbo].[vwWidgets] WITH (UPDLOCK, ROWLOCK)');
+    expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'rollback']);
+  });
+
+  it('enforce mode: allows UPDATE when non-overlapping fields changed or concurrent write set the same value', async () => {
+    const provider = makeProvider();
+    provider.ConcurrencyCheck = 'enforce';
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    entity.Set('Name', 'Converged Rename');
+
+    // Locked row read shows Name was already updated to 'Converged Rename' (idempotent convergence)
+    mssqlState.QueueResult({ rows: [{ Name: 'Converged Rename' }] });
+    const updatedRow = { ...savedWidgetRow(), Name: 'Converged Rename' };
+    mssqlState.QueueResult({ rows: [updatedRow] });
+
+    const saved = await provider.Save(entity, TEST_USER, new EntitySaveOptions());
+    expect(saved).toEqual(updatedRow);
+    expect(mssqlState.Queries).toHaveLength(2);
+    expect(mssqlState.Queries[0].sql).toContain('WITH (UPDLOCK, ROWLOCK)');
+    expect(mssqlState.Queries[1].sql).toContain('EXEC [dbo].spUpdateWidget');
+    expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'query', 'commit']);
+  });
+
+  it('log mode: logs warning and proceeds with UPDATE when a conflict is detected', async () => {
+    const provider = makeProvider();
+    provider.ConcurrencyCheck = 'log';
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    entity.Set('Name', 'Writer A Rename');
+
+    mssqlState.QueueResult({ rows: [{ Name: 'Writer B Rename' }] });
+    const updatedRow = { ...savedWidgetRow(), Name: 'Writer A Rename' };
+    mssqlState.QueueResult({ rows: [updatedRow] });
+
+    const saved = await provider.Save(entity, TEST_USER, new EntitySaveOptions());
+    expect(saved).toEqual(updatedRow);
+    expect(mssqlState.Queries).toHaveLength(2);
+    expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'query', 'commit']);
+  });
+
+  it('SkipOldValuesCheck: skips the locked read and transaction wrapper', async () => {
+    const provider = makeProvider();
+    provider.ConcurrencyCheck = 'enforce';
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    entity.Set('Name', 'Skipped Check');
+
+    const updatedRow = { ...savedWidgetRow(), Name: 'Skipped Check' };
+    mssqlState.QueueResult({ rows: [updatedRow] });
+
+    const opts = new EntitySaveOptions();
+    opts.SkipOldValuesCheck = true;
+    const saved = await provider.Save(entity, TEST_USER, opts);
+    expect(saved).toEqual(updatedRow);
+    expect(mssqlState.Queries).toHaveLength(1);
+    expect(mssqlState.EventKinds()).toEqual(['query']);
   });
 });

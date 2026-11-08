@@ -19,6 +19,8 @@ import { ProviderBase } from "./providerBase";
 import { DatabaseProviderBase } from "./databaseProviderBase";
 import { TransformSimpleObjectToEntityObject, CanonicalPrimaryKeyValue } from "./util";
 import { WellKnownUserSource } from "./wellKnownUserSource";
+import { CompositeFilter } from "./filters/compositeFilter";
+import type { CompositeFilterDescriptor, FilterDescriptor } from "./filters/filter.types";
 
 /** The primary-key columns a key index is built for. */
 type PrimaryKeyColumn = Pick<EntityFieldInfo, 'Name' | 'IsUniqueIdentifier'>;
@@ -228,8 +230,11 @@ export class BaseEnginePropertyConfig extends BaseInfo {
     Entities?: string[];
     /**
      * Optional, filters to apply to the data load, applies only when type is 'entity'. Use DatasetItemFilters for dataset filters.
+     * Accepts either a SQL WHERE string (passed as `RunViewParams.ExtraFilter`) or a structured
+     * {@link CompositeFilterDescriptor} / {@link CompositeFilter} (passed as `RunViewParams.Filter`
+     * and evaluated in memory on save events for immediate cache mutation).
      */
-    Filter?: string;
+    Filter?: string | CompositeFilterDescriptor | CompositeFilter;
     /**
      * Optional semantic `Name` of a registered `EntityAlternateBaseView` on the target entity
      * (for example, `'Active'`). Applies only when `Type` is `'entity'`.
@@ -1508,6 +1513,20 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 if (!currentData) continue;
 
                 const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
+                if (this.isStructuredFilter(config.Filter)) {
+                    const matches = this.evaluateStructuredConfigFilter(config.Filter, entity);
+                    if (!matches) {
+                        if (index >= 0) {
+                            const removed = currentData[index];
+                            currentData.splice(index, 1);
+                            primaryKeyIndexRemoved(currentData, index, removed);
+                            this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
+                            this.NotifyDataChange(config, currentData, 'delete', entity);
+                            this.emitPropertyChange(config.PropertyName);
+                        }
+                        continue;
+                    }
+                }
                 if (index >= 0) {
                     currentData[index] = entity;
                     primaryKeyIndexReplaced(currentData, index, entity);
@@ -1955,11 +1974,52 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      *   (e.g., applyRemoteRecordData applies all config mutations then calls AdditionalLoading).
      * @returns true if immediate mutation is safe, false if a full view refresh is needed
      */
+    protected isStructuredFilter(
+        filter: BaseEnginePropertyConfig['Filter'],
+    ): filter is CompositeFilterDescriptor | CompositeFilter {
+        return filter != null && typeof filter === 'object';
+    }
+
+    protected evaluateStructuredConfigFilter(
+        filter: CompositeFilterDescriptor | CompositeFilter,
+        entity: BaseEntity,
+    ): boolean {
+        const compiled = filter instanceof CompositeFilter ? filter : CompositeFilter.FromDescriptor(filter);
+        return compiled.Evaluate({ '': entity.GetAll() });
+    }
+
+    /**
+     * Filters the in-memory array stored at `propertyName` using a structured
+     * {@link CompositeFilterDescriptor}, {@link CompositeFilter}, or single {@link FilterDescriptor}.
+     *
+     * Works with both `BaseEntity` instances (reading fields via `GetAll()`) and plain `'simple'`
+     * record objects.
+     */
+    protected Where<E = BaseEntity>(
+        propertyName: string,
+        filter: CompositeFilterDescriptor | CompositeFilter | FilterDescriptor,
+    ): E[] {
+        const items = (this as Record<string, unknown>)[propertyName];
+        if (!Array.isArray(items) || items.length === 0) {
+            return [];
+        }
+        const compiled = filter instanceof CompositeFilter ? filter : CompositeFilter.FromDescriptor(filter);
+        return (items as E[]).filter((item) => {
+            if (item == null || typeof item !== 'object') return false;
+            const maybeEntity = item as unknown as BaseEntity;
+            const row =
+                typeof maybeEntity.GetAll === 'function'
+                    ? maybeEntity.GetAll()
+                    : (item as unknown as Record<string, unknown>);
+            return compiled.Evaluate({ '': row });
+        });
+    }
+
     protected canUseImmediateMutation(config: BaseEnginePropertyConfig, skipAdditionalLoadingCheck: boolean = false): boolean {
-        // If there's a filter, we can't safely do immediate mutations because:
-        // - For creates: the new entity might not match the filter
-        // - For updates: the entity might now match or no longer match the filter
-        if (config.Filter) {
+        // If there's a string SQL filter, we can't safely do immediate mutations in memory because
+        // SQL predicates cannot be evaluated client-side. Structured CompositeFilter configs CAN be
+        // evaluated in memory via CompositeFilter.Evaluate().
+        if (typeof config.Filter === 'string' && config.Filter.trim().length > 0) {
             return false;
         }
 
@@ -2051,6 +2111,27 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const entity = event.baseEntity;
 
         if (event.type === 'save') {
+            if (this.isStructuredFilter(config.Filter)) {
+                const matches = this.evaluateStructuredConfigFilter(config.Filter, entity);
+                if (!matches) {
+                    const existingIndex = this.indexOfEntityByRefOrKey(currentData, entity);
+                    if (existingIndex >= 0) {
+                        const removed = currentData[existingIndex];
+                        currentData.splice(existingIndex, 1);
+                        primaryKeyIndexRemoved(currentData, existingIndex, removed);
+                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
+                        this.NotifyDataChange(config, currentData, 'delete', entity);
+                        this.emitPropertyChange(config.PropertyName);
+                    }
+                    if (config.CacheLocal) {
+                        this.syncLocalCacheForConfig(config, event).catch(e => {
+                            LogWarning(`BaseEngine: Failed to sync local cache for ${config.EntityName}: ${e}`, 'Cache');
+                        });
+                    }
+                    return;
+                }
+            }
+
             // Clone the entity so the cache holds an instance owned by THIS engine's provider,
             // not the saving provider. Falling back to the original entity here would reintroduce
             // the leak, so on clone failure we bail and let the next full refresh fix the cache.
@@ -2215,7 +2296,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             ? new Date(rawUpdatedAt).toISOString()
             : new Date().toISOString();
 
-        if (event.type === 'delete') {
+        if (event.type === 'delete' || (this.isStructuredFilter(config.Filter) && !this.evaluateStructuredConfigFilter(config.Filter, entity))) {
             await LocalCacheManager.Instance.RemoveSingleEntity(
                 fingerprint,
                 key,
@@ -2618,10 +2699,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * and field-security segments; see {@link configFingerprint}.
      */
     protected BuildRunViewParamsForConfig(config: BaseEnginePropertyConfig, bypassCache: boolean = false): RunViewParams {
+        const isStructured = this.isStructuredFilter(config.Filter);
         return {
             EntityName: config.EntityName,
             ResultType: config.ResultType || this.EngineDefaultResultType,
-            ExtraFilter: config.Filter,
+            ExtraFilter: typeof config.Filter === 'string' ? config.Filter : undefined,
+            ...(isStructured ? { Filter: config.Filter } : {}),
             OrderBy: config.OrderBy,
             ...(config.AlternateBaseView ? { AlternateBaseView: config.AlternateBaseView } : {}),
             IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
@@ -3706,9 +3789,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             literals.push(literal);
         }
         const keyFilter = `${pkField.Name} IN (${literals.join(', ')})`;
+        const stringFilter = typeof config.Filter === 'string' ? config.Filter.trim() : '';
         const params: RunViewParams = {
             ...this.BuildRunViewParamsForConfig(config, /*bypassCache*/ true),
-            ExtraFilter: config.Filter && config.Filter.trim().length > 0 ? `(${config.Filter}) AND ${keyFilter}` : keyFilter,
+            ExtraFilter: stringFilter.length > 0 ? `(${stringFilter}) AND ${keyFilter}` : keyFilter,
             // A one-off read of a few rows: never worth a cache slot of its own.
             CacheLocal: false,
         };

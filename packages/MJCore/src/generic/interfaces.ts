@@ -16,6 +16,14 @@ import type { GetRecordDependenciesOptions } from "./databaseProviderBase";
 export type { GetRecordDependenciesOptions } from "./databaseProviderBase";
 
 /**
+ * Mode controlling how server-side database providers handle field-level concurrency checks on UPDATE:
+ * - `'off'`: Skip server-side concurrency checking entirely.
+ * - `'log'` (default): Detect field-level conflicts under a row lock and log a warning, then allow the save to proceed.
+ * - `'enforce'`: Detect field-level conflicts under a row lock and reject the save (`Save()` returns `false` and populates `LatestResult.ConcurrencyConflict`).
+ */
+export type ConcurrencyCheckMode = 'off' | 'log' | 'enforce';
+
+/**
  * Base configuration class for data providers.
  * Contains schema inclusion/exclusion rules and configuration data.
  * Used to configure which database schemas should be included or excluded from metadata scanning.
@@ -51,6 +59,12 @@ export class ProviderConfigDataBase<D = any> {
      * default to an in-memory store.
      */
     public LocalStorageProvider?: ILocalStorageProvider;
+
+    /**
+     * Server-side concurrency check mode for entity UPDATEs (`'off' | 'log' | 'enforce'`).
+     * Defaults to `'log'` on server-side database providers when omitted.
+     */
+    public ConcurrencyCheck?: ConcurrencyCheckMode;
 
     /**
      * Constructor for ProviderConfigDataBase
@@ -391,9 +405,17 @@ export class EntitySaveOptions {
      * Setting this to true means that the system will not look for inconsistency between the state of the record at the time it was loaded and the current database version of the record. This is normally on
      * because it is a good way to prevent overwriting changes made by other users that happened after your version of the record was loaded. However, in some cases, you may want to skip this check, such as when you are
      * updating a record that you know has not been changed by anyone else since you loaded it. In that case, you can set this property to true to skip the check which will be more efficient.
-     * * IMPORTANT: This is only used for client-side providers. On server-side providers, this check never occurs because server side operations are as up to date as this check would yield. 
      */
     SkipOldValuesCheck?: boolean = false;
+
+    /**
+     * Optional field-name-keyed baseline of values as the caller originally observed them before
+     * editing. Set by GraphQL resolvers (`ResolverBase`) from `input.OldValues` so the server-side
+     * provider's locked concurrency read compares the stored row against what the client actually
+     * saw rather than what `InnerLoad` fetched moments before `Save()`. When omitted on a direct
+     * server-side `Save()`, the provider falls back to each dirty field's `EntityField.OldValue`.
+     */
+    ConcurrencyBaseline?: Record<string, unknown>;
     
     /**
      * When set to true, the entity will skip the asynchronous ValidateAsync() method during save.

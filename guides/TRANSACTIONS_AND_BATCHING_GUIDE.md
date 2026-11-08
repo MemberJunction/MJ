@@ -318,6 +318,35 @@ When adding an option, keep `RelatedRecordCollectionOptions` and
 
 ---
 
+## 4. Server-Side Concurrency & Delta-Only Updates
+
+Every update in MemberJunction compares the caller's pre-edit baseline (`Field.OldValue`) against the current database row **inside the save transaction**, under a row lock (`WITH (UPDLOCK, ROWLOCK)` on SQL Server; `FOR UPDATE` on PostgreSQL):
+
+- **Disjoint column edits merge cleanly.** If Writer A changes `Status` and Writer B changes `Notes` from the same baseline, both saves succeed and neither overwrites the other's column.
+- **Same-column edits are flagged.** If Writer A and Writer B both modify `Status` to different values from the same baseline, the second save detects a field-level conflict (`DetectFieldConflicts` in `@memberjunction/generic-database-provider`).
+- **Delta-only `UPDATE` statements.** When an existing row is saved, `GenericDatabaseProvider.GenerateSaveSQL` emits a direct `UPDATE` touching **only dirty editable columns** (plus `__mj_UpdatedAt`) instead of rewriting every column via the full-width `spUpdate*` stored procedure. Entities with a custom `spUpdate` or ISA parent chains automatically use the stored-procedure path.
+
+### Concurrency modes (`ConcurrencyCheckMode`)
+
+Configure the default mode in `mj.config.cjs` (`databaseSettings.concurrencyCheck: 'off' | 'log' | 'enforce'`, default `'log'`) or override per save via `EntitySaveOptions.ConcurrencyCheck`:
+
+| Mode | Behaviour on conflict |
+|---|---|
+| `'off'` | Skip the baseline comparison entirely (last writer wins). |
+| `'log'` (default) | Log a structured `SAVE_INCONSISTENCY` warning naming the entity, primary key, and conflicting fields, then proceed with the save. |
+| `'enforce'` | Abort the save before executing the `UPDATE`, populate `entity.LatestResult.ConcurrencyConflict` (`{ EntityName, PrimaryKey, Conflicts }`), and on GraphQL mutations return a structured `CONCURRENCY_CONFLICT` refusal (`refusalExtensions`). |
+
+```typescript
+const saved = await order.Save({ ConcurrencyCheck: 'enforce' });
+if (!saved && order.LatestResult?.ConcurrencyConflict) {
+    for (const c of order.LatestResult.ConcurrencyConflict.Conflicts) {
+        console.warn(`${c.FieldName}: baseline=${c.ClientOldValue}, db=${c.DatabaseValue}, incoming=${c.NewValue}`);
+    }
+}
+```
+
+---
+
 ## Decision tree
 
 ```
