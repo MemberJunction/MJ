@@ -89,6 +89,12 @@ describe('TransformExternalSQLClause — T-SQL N prefix', () => {
         expect(toPG(`COLUMN='N'`)).toBe(`COLUMN='N'`);
         expect(toPG(`OrderID='N''x'`)).toBe(`"OrderID"='N''x'`);
     });
+
+    it('keeps a word that ends in N right before a literal', () => {
+        const out = toPG(`CASE WHEN OrderID IS NULL THEN'x' ELSE'y' END = 'x'`);
+        expect(out).toContain(`THEN'x'`);
+        expect(out).not.toContain(`THE'x'`);
+    });
 });
 
 describe('BuildPrimaryKeyWhereClause on PostgreSQL — no N prefix', () => {

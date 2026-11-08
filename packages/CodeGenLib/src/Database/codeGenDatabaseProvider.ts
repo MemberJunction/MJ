@@ -1016,7 +1016,7 @@ export abstract class CodeGenDatabaseProvider {
     /**
      * {@link foreignKeyIndexName}, unless truncation made it equal to a name already used for
      * another column of the same entity. Then the truncated name's tail is replaced with `_` plus
-     * the first 8 hex characters of a SHA-1 of the untruncated name. Without this, the create-if-absent
+     * the first 8 hex characters of a SHA-256 of the untruncated name. Without this, the create-if-absent
      * form skips the second index silently (two FK columns on one long table name can truncate to the
      * same 63 characters on PostgreSQL). Only the colliding name changes, so every index that exists
      * today keeps its name.
@@ -1025,7 +1025,7 @@ export abstract class CodeGenDatabaseProvider {
         const name = this.foreignKeyIndexName(entity, f);
         if (!usedNames.has(name.toLowerCase())) return name;
         const full = `${this.indexPrefix()}${this.tableToken(entity)}_${this.columnToken(f)}`;
-        const hash = createHash('sha1').update(full).digest('hex').substring(0, 8);
+        const hash = createHash('sha256').update(full).digest('hex').substring(0, 8);
         const keep = Math.max(0, Math.min(full.length, this.maxIdentifierLength() - hash.length - 1));
         return `${full.substring(0, keep)}_${hash}`;
     }
