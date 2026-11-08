@@ -27,7 +27,7 @@
  *   NTL11 a tool call the provider rejected comes back as a corrective retry naming the tools;
  *   NTL12 a tools-payload rejection retries once without tools, keeping the calls in the history as text;
  *   NTL13 older large tool-call arguments are compacted when the agent opts in;
- *   NTL14 a complete_task refused by FinalPayloadValidation does not apply its payload change.
+ *   NTL14 a complete_task refused by FinalPayloadValidation holds its payload change; the next completion builds on it.
  *
  * Self-cleaning: Setup creates the vendor, model, model-vendor row, prompts and agents (named
  * 'IT: NTL …', and removes any an interrupted earlier run left); Teardown purges every run and
@@ -451,24 +451,24 @@ export const NativeToolLoopChecks: NamedCheck[] = [
     },
     {
         Id: 'native-tool-loop.NTL14',
-        Name: 'NTL14: a complete_task refused by FinalPayloadValidation does not apply its payload change, and its result says to send it again',
+        Name: 'NTL14: a complete_task refused by FinalPayloadValidation holds its payload change, says so, and the next completion builds on it',
         Fn: async (ctx) => {
             const complete = (elements: Record<string, unknown>) =>
                 ToolCallTurn([{ name: 'complete_task', args: { message: 'Done.', payloadChangeRequest: { newElements: elements } } }]);
-            // The first completion lacks the count; the second sends only the count. Had the first
-            // change been kept, the second would pass. It is refused too, so the third sends both.
+            // The first completion lacks the count and is refused; its change is held, not applied.
+            // The second sends only the count, is validated on top of the held status, and passes.
             const o = await run(ctx, VALIDATED_AGENT, 'Record the status and the count, then finish.', [
-                complete({ status: 'ready' }), complete({ count: 2 }), complete({ status: 'ready', count: 2 })
+                complete({ status: 'ready' }), complete({ count: 2 })
             ]);
             assertCompleted(o, 'NTL14');
-            AssertEqual(o.Requests.length, 3, 'NTL14: two refused completions, then an accepted one');
+            AssertEqual(o.Requests.length, 2, 'NTL14: one refused completion, then an accepted correction');
             const second = request(o, 1, 'NTL14');
             assertValidHistory(second, 'NTL14');
             const refused = answersTo(second, 'complete_task');
-            Assert(refused.length === 1 && refused[0].isError === true && (refused[0].content ?? '').includes('was NOT applied'),
-                `NTL14: the refused complete_task says its change was not applied, got ${JSON.stringify(refused)}`);
+            Assert(refused.length === 1 && refused[0].isError === true && (refused[0].content ?? '').includes('was not applied yet: it is held'),
+                `NTL14: the refused complete_task says its change is held, got ${JSON.stringify(refused)}`);
             AssertEqual(o.FinalStep, 'Success', 'NTL14: the run ended on Success');
-            AssertEqual(JSON.stringify(o.Payload), JSON.stringify({ status: 'ready', count: 2 }), 'NTL14: only the accepted change is in the payload');
+            AssertEqual(JSON.stringify(o.Payload), JSON.stringify({ status: 'ready', count: 2 }), 'NTL14: the held change and the correction are both in the payload');
         }
     }
 ];

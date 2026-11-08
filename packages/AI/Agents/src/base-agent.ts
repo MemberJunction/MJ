@@ -694,6 +694,13 @@ interface DecisionCallAllowance {
     Allowed: number;
 }
 
+/** A payload change from a refused completion, held until a completion is accepted. */
+interface HeldCompletionChange {
+    Change: AgentPayloadChangeRequest<unknown>;
+    /** Whether it was built on a payload still inherited unmodified from a prior run (see applyTurnPayloadChange). */
+    UnmodifiedInheritedPayload: boolean;
+}
+
 /** The prompt params that limit one turn's decisions. */
 type DecisionLimitParam = 'decisionsMaxRequests' | 'decisionsMaxItems' | 'decisionsMaxCallsPerTurn';
 
@@ -798,6 +805,13 @@ export class BaseAgent {
      * @private
      */
     private _lastVolatileStateMessage: AgentChatMessage | undefined;
+    /**
+     * Payload changes sent with completions that were refused, in order. They are held, not
+     * committed: the next prompt sees the payload with them applied, and the next completion is
+     * built on top of them, so a model only has to send its corrections. They are committed with
+     * the next accepted completion, and dropped if the run ends without one.
+     */
+    private _heldCompletionChanges: HeldCompletionChange[] = [];
     /** The previous request's outgoing messages, as {@link messageFingerprint}s. */
     private _lastSentFingerprints: string[] | undefined;
     /** The previous request's system-prompt-and-tools fingerprint, from the prompt runner. */
@@ -2784,6 +2798,7 @@ export class BaseAgent {
             this._agentConfig = undefined;
             this._lastModelSelectionInfo = undefined;
             this._lastVolatileStateMessage = undefined;
+            this._heldCompletionChanges = [];
             this._resolvedTrailingStateMode = undefined;
             this._lastSentFingerprints = undefined;
             this._lastSentPrefix = undefined;
@@ -10214,7 +10229,7 @@ The context is now within limits. Please retry your request with the recovered c
         const validatedNextStep = await this.validateNextStep<P>(params, nextStep, currentPayload, this._agentRun, currentStep);
         
         // Check guardrails if next step would continue execution
-        const guardrailCheckedStep = this.noteDiscardedCompletionChange(heldCompletionChange, await this.checkExecutionGuardrails<P>(
+        const guardrailCheckedStep = this.noteHeldCompletionChange(heldCompletionChange, await this.checkExecutionGuardrails<P>(
             params, 
             validatedNextStep, 
             currentPayload, 
@@ -10268,28 +10283,26 @@ The context is now within limits. Please retry your request with the recovered c
     }
  
     /**
-     * A completion refused with a payload change in hand: the change is discarded (the prompt step
-     * commits it only for an accepted completion), so the refusal the model reads says so, and asks
-     * for the change again with the next completion. Otherwise the model would take the change as
-     * saved and its work would be lost. The change is removed from the step, so nothing later
-     * applies it. Any other step is returned as it is.
+     * A completion refused with a payload change in hand: the change is held, not applied (see
+     * {@link _heldCompletionChanges}), so the refusal the model reads says so and asks for the
+     * corrections only. The model sees the payload with the held change applied from the next turn,
+     * and its next completion's change is applied on top of it. The change is removed from the step,
+     * so nothing later applies it a second time. Any other step is returned as it is.
      *
      * `heldChange` is the change the prompt step held as a draft, read from the step before
-     * validation, so a step a subclass changed in place is judged by what the model sent. A native
-     * model still has its `complete_task` call in the history; an envelope response is not kept in
-     * the history, so the envelope note quotes the change back for the model to correct and resend.
+     * validation, so a step a subclass changed in place is judged by what the model sent.
      */
-    private noteDiscardedCompletionChange<P>(heldChange: AgentPayloadChangeRequest<P> | undefined, step: BaseAgentNextStep<P>): BaseAgentNextStep<P> {
+    private noteHeldCompletionChange<P>(heldChange: AgentPayloadChangeRequest<P> | undefined, step: BaseAgentNextStep<P>): BaseAgentNextStep<P> {
         if (!heldChange || step.step === 'Success') {
             return step;
         }
         const native = !!step.payloadToolCallId && this.nativeToolNameForCall(step, step.payloadToolCallId) === COMPLETE_TASK_TOOL;
-        const note = native
-            ? 'The payloadChangeRequest sent with this complete_task call was NOT applied. Send it again with your next complete_task call.'
-            : 'The payloadChangeRequest sent with this completion was NOT applied. Send it again with your next completion, '
-                + `corrected as needed. This is the change you sent:\n\`\`\`json\n${JSON.stringify(heldChange, null, 2)}\n\`\`\``;
+        const call = native ? 'complete_task call' : 'completion';
+        const note = `The payloadChangeRequest sent with this ${call} was not applied yet: it is held, and the payload you see `
+            + `from now on includes it. It is applied together with your next ${call}. In that ${call}, send only the `
+            + `corrections, not the whole change again.`;
         const field = step.retryInstructions ? 'retryInstructions' : step.message ? 'message' : 'errorMessage';
-        const { payloadChangeRequest: _discarded, ...rest } = step;
+        const { payloadChangeRequest: _held, ...rest } = step;
         return { ...rest, [field]: step[field] ? `${step[field]}\n\n${note}` : note };
     }
 
@@ -16858,14 +16871,61 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * The payload a completion would leave behind: the committed payload with the completion's
-     * change applied. Success validation (the minimum-execution check, then `FinalPayloadValidation`)
-     * checks this draft, and it becomes the payload only if the completion is accepted. The
-     * opt-in payload change check is not asked here: it never runs on a step that ends the run.
+     * The payload a completion would leave behind: the committed payload with the held changes and
+     * then the completion's own change applied. Success validation (the minimum-execution check, then
+     * `FinalPayloadValidation`) checks this draft, and it becomes the payload only if the completion is
+     * accepted. A change identical to a held one is not applied again, so a model that resends its whole
+     * refused change does not duplicate array elements. The opt-in payload change check is not asked
+     * here: it never runs on a step that ends the run.
      */
-    private buildCompletionDraft<P>(params: ExecuteAgentParams, step: BaseAgentNextStep<P>, committed: P, isUnmodifiedInheritedPayload: boolean): { payload: P; summary: PayloadChangeResultSummary } {
-        const changeResult = this.applyTurnPayloadChange(params, step, committed, isUnmodifiedInheritedPayload);
+    private buildCompletionDraft<P>(params: ExecuteAgentParams, step: BaseAgentNextStep<P>, committed: P, isUnmodifiedInheritedPayload: boolean): { payload: P; summary: PayloadChangeResultSummary | undefined } {
+        const working = this.withHeldCompletionChanges(params, committed);
+        const change = step.payloadChangeRequest;
+        if (!change || this.isHeldCompletionChange(change)) {
+            return { payload: working, summary: undefined };
+        }
+        const changeResult = this.applyTurnPayloadChange(params, step, working, isUnmodifiedInheritedPayload && this._heldCompletionChanges.length === 0);
         return { payload: changeResult.result, summary: this.buildPayloadChangeResultSummary(changeResult) };
+    }
+
+    /** `payload` with the held completion changes applied in order; `payload` itself when none are held. */
+    private withHeldCompletionChanges<P>(params: ExecuteAgentParams, payload: P): P {
+        return this._heldCompletionChanges.reduce<P>((current, held) => {
+            const step: BaseAgentNextStep<P> = { step: 'Success', terminate: false, payloadChangeRequest: held.Change as AgentPayloadChangeRequest<P> };
+            return this.applyTurnPayloadChange(params, step, current, held.UnmodifiedInheritedPayload).result;
+        }, payload);
+    }
+
+    /**
+     * After a completion: an accepted one commits the held changes (they were in its draft), so the
+     * list is cleared; a refused one adds its own change to the list, unless the same change is held.
+     */
+    private updateHeldCompletionChanges<P>(step: BaseAgentNextStep<P>, committedDraft: boolean, isUnmodifiedInheritedPayload: boolean): void {
+        if (committedDraft) {
+            this._heldCompletionChanges = [];
+            return;
+        }
+        const change = BaseAgent.carriesCompletionChange(step) ? step.payloadChangeRequest : undefined;
+        if (change && !this.isHeldCompletionChange(change)) {
+            this._heldCompletionChanges.push({
+                Change: change as AgentPayloadChangeRequest<unknown>,
+                UnmodifiedInheritedPayload: isUnmodifiedInheritedPayload && this._heldCompletionChanges.length === 0
+            });
+        }
+    }
+
+    /** Whether `change` is, key order aside, one of the held completion changes. */
+    private isHeldCompletionChange<P>(change: AgentPayloadChangeRequest<P>): boolean {
+        const key = BaseAgent.stableJSON(change);
+        return this._heldCompletionChanges.some((held) => BaseAgent.stableJSON(held.Change) === key);
+    }
+
+    /** JSON with object keys sorted, so two equal values serialize the same. */
+    private static stableJSON(value: unknown): string {
+        return JSON.stringify(value, (_key, v: unknown) =>
+            v && typeof v === 'object' && !Array.isArray(v)
+                ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+                : v);
     }
 
     /**
@@ -16940,13 +17000,15 @@ The context is now within limits. Please retry your request with the recovered c
             // PayloadAtStart was already serialized from this same `payload` by createStepEntity
             // above (payloadAtStart: payload) — no need to re-serialize the (potentially large) payload here.
 
-            let downstreamPayload = payload; // Start with current payload
+            // The model sees the payload with any held completion changes applied (see _heldCompletionChanges).
+            const workingPayload = this.withHeldCompletionChanges(params, payload);
+            let downstreamPayload = workingPayload; // Start with current payload
             if (params.agent.PayloadSelfReadPaths) {
                 const downstreamPaths = JSON.parse(params.agent.PayloadSelfReadPaths);
                 // Extract only allowed downstream payload
                 downstreamPayload = this._payloadManager.extractDownstreamPayload(
                     `Self: ${params.agent.Name}`,
-                    payload, // our inbound payload before prompt
+                    workingPayload, // our inbound payload before prompt
                     downstreamPaths
                 );
             }
@@ -17167,7 +17229,8 @@ The context is now within limits. Please retry your request with the recovered c
             let currentStepPayloadChangeResult: PayloadChangeResultSummary | undefined = undefined;
             // A completion's payload change is held as a draft until Success validation accepts it
             // (see buildCompletionDraft); every other step's change is applied now, as it always was.
-            const holdsCompletionChange = BaseAgent.carriesCompletionChange(initialNextStep);
+            const holdsCompletionChange = BaseAgent.carriesCompletionChange(initialNextStep)
+                || (initialNextStep.step === 'Success' && this._heldCompletionChanges.length > 0);
             if (initialNextStep.payloadChangeRequest && !holdsCompletionChange) {
                 const changeResult = this.applyTurnPayloadChange(params, initialNextStep, payload, isUnmodifiedInheritedPayload);
                 // Store payload change metadata for audit trail; merged into outputData later
@@ -17280,8 +17343,9 @@ The context is now within limits. Please retry your request with the recovered c
             // sub-classes may have modified the payload, and we allow that, and so we need to update finalPayload to map to the updatedNextStep.newPayload
             const resolved = this.resolveTurnPayload(updatedNextStep, finalPayload, draft);
             finalPayload = resolved.payload;
-            const discardedCompletionChange = holdsCompletionChange && !resolved.committedDraft;
-            if (discardedCompletionChange && currentStepPayloadChangeResult) {
+            const heldCompletionChange = holdsCompletionChange && !resolved.committedDraft;
+            this.updateHeldCompletionChanges(initialNextStep, resolved.committedDraft, finalPayload === params.payload);
+            if (heldCompletionChange && currentStepPayloadChangeResult) {
                 currentStepPayloadChangeResult = { ...currentStepPayloadChangeResult, applied: { additions: 0, updates: 0, deletions: 0 } };
             }
 
@@ -17299,8 +17363,8 @@ The context is now within limits. Please retry your request with the recovered c
                     payloadChangeResult: currentStepPayloadChangeResult
                 }),
                 // A completion's change that was not applied because the completion was refused
-                ...(discardedCompletionChange && {
-                    payloadChangeDiscarded: 'The payload change was sent with a completion that was refused, so it was not applied.'
+                ...(heldCompletionChange && {
+                    payloadChangeHeld: 'The completion was refused, so its payload change is held: it is applied with the next accepted completion, or dropped if the run ends without one.'
                 }),
                 // Include scratchpad snapshot after changes for audit/training data
                 ...(this._scratchpadManager.HasContent() && {
