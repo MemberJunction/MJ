@@ -275,7 +275,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['concurrency-conflict-client', ConcurrencyConflictClientChecks, 5], // CC1-CC5 optimistic concurrency across two GraphQL sessions (IT158)
         ['entity-status-fanout-client', EntityStatusFanoutClientChecks, 3], // SF1-SF3 entity save pushes reach every session of the user (IT159)
         ['encrypted-read-client', EncryptedReadClientChecks, 4], // ER1-ER4 encrypted field plaintext over GraphQL, miss and hit (IT160)
-        ['ciphertext-cache', CiphertextCacheChecks, 5], // CT0-CT4 ciphertext at rest in the RunViewCache, plaintext to the caller (IT161)
+        ['ciphertext-cache', CiphertextCacheChecks, 7], // CT0-CT4 ciphertext at rest in the RunViewCache, plaintext to the caller; CT5-CT6 a peer's cache event leaves CredentialEngine plaintext (IT161)
         ['semantic-graph', SemanticGraphChecks, 7], // SG1-SG7 Semantic Graph substrate, Content Pipeline GraphStage overlay, and Executable Canon DAG similarity & telemetry (IT162)
         ['runview-features', RunViewFeatureChecks, 12], // RVF1-RVF12 RunView cross-feature edges and RunViewParams.Parameters wire binding (IT32)
     ];
@@ -366,7 +366,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'cache-immutability': 15,
         'calendar-event-links': 2,
         'chief-of-staff': 8,
-        'ciphertext-cache': 5,
+        'ciphertext-cache': 7,
         'class-resolution': 5,
         'client-cache': 26,
         'cloudflare-clef': 6,
@@ -645,6 +645,8 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'ciphertext-cache.CT2',
         'ciphertext-cache.CT3',
         'ciphertext-cache.CT4',
+        'ciphertext-cache.CT5',
+        'ciphertext-cache.CT6',
         'client-cache.C10',
         'client-cache.C14',
         'concurrency-conflict-client.CC1',
