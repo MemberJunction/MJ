@@ -65,6 +65,8 @@ import { PayloadFeedbackManager } from '../PayloadFeedbackManager';
 import { AIAPIKeys, type ChatMessage, type ChatResult } from '@memberjunction/ai';
 import { UserInfo as CoreUserInfo } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
+import nunjucks from 'nunjucks';
+import { AGENT_SPECIALIZATION_TAG, RUNTIME_STATE_TAG } from '../constants';
 
 // ============================================================================
 // Module mocks (boundaries only)
@@ -4200,3 +4202,51 @@ describe('BaseAgent.Execute — template data a subclass adds after super.prepar
         expect(runner.Calls[0].data?.addedBySubclass).toBe('yes');
     });
 });
+
+describe('BaseAgent.Execute — a relocated specialization renders the template data a subclass adds after super', () => {
+    // The child prompt reads the payload (so MJ relocates it into the trailing runtime-state message and renders it
+    // there) and a key only the subclass provides. A regression here sends the model a specialization without the
+    // subclass's data, silently: MJ 6.2.1 pre-rendered the relocated child inside preparePromptParams, before the
+    // subclass added it.
+    const CHILD_TEMPLATE = '# Strategist\nKnown queries: {{ subclassNote }}\nCurrent payload: {{ _CURRENT_PAYLOAD | dump | safe }}';
+    const SYSTEM_TEMPLATE = `# Loop\n{{ _AGENT_PROMPT_ }}\n## Runtime State\nIt is delivered inside <${RUNTIME_STATE_TAG}> tags.`;
+
+    /** Serves the two templates through the agent's own lookup seam and adds data after the base preparation. */
+    class SubclassDataAgent extends HarnessAgent {
+        protected override async preparePromptParams<P>(config: AgentConfiguration, payload: P, params: ExecuteAgentParams): Promise<AIPromptParams> {
+            const promptParams = await super.preparePromptParams(config, payload, params);
+            promptParams.data = { ...promptParams.data, subclassNote: 'NOTE-FROM-SUBCLASS' };
+            return promptParams;
+        }
+        protected override async loadPromptTemplateText(prompt: MJAIPromptEntityExtended | undefined): Promise<string | null> {
+            if (prompt?.ID === CHILD_PROMPT_ID) return CHILD_TEMPLATE;
+            if (prompt?.ID === SYS_PROMPT_ID) return SYSTEM_TEMPLATE;
+            return null;
+        }
+    }
+
+    /** A runner that renders the child prompt for real (Nunjucks) against the data it is given. */
+    class RenderingRunner extends ScriptedPromptRunner {
+        public async RenderChildPromptTemplates(children: Array<{ parentPlaceholder: string }>, params: AIPromptParams): Promise<{ renderedTemplates: Record<string, string> }> {
+            const env = new nunjucks.Environment(null, { autoescape: false });
+            return { renderedTemplates: { [children[0].parentPlaceholder]: env.renderString(CHILD_TEMPLATE, params.data ?? {}) } };
+        }
+    }
+
+    it('sends the model a specialization that contains the subclass data', async () => {
+        const agent = new SubclassDataAgent();
+        const runner = new RenderingRunner([() => llmEnvelope(successEnvelope())]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+
+        await agent.Execute(makeParams({ payload: { summary: 'draft' } }));
+
+        const sent = runner.Calls[0].conversationMessages ?? [];
+        const trailing = String(sent[sent.length - 1]?.content ?? '');
+        // The specialization was relocated (the scenario under test)...
+        expect(trailing).toContain(`<${AGENT_SPECIALIZATION_TAG}>`);
+        // ...and rendered with the data the subclass added after super.preparePromptParams().
+        expect(trailing).toContain('Known queries: NOTE-FROM-SUBCLASS');
+        expect(trailing).toContain('"summary":"draft"');
+    });
+});
+
