@@ -30,6 +30,15 @@ describe('AddRealtimeUsageRecord', () => {
         });
     });
 
+    it('adds cached tokens and cached audio tokens per turn, and reads them back from stored details', () => {
+        const sum = AddRealtimeUsageRecord(
+            { Input: { AudioTokens: 850, CachedTokens: 0 } },
+            { Input: { AudioTokens: 1700, CachedTokens: 1000, CachedAudioTokens: 850 } }
+        );
+        expect(sum.Input).toEqual({ AudioTokens: 2550, CachedTokens: 1000, CachedAudioTokens: 850 });
+        expect(ReadRealtimeUsageRecord(JSON.stringify({ [REALTIME_USAGE_DETAILS_KEY]: sum }))?.Input?.CachedAudioTokens).toBe(850);
+    });
+
     it('adds output video seconds: each update is the video generated since the last one', () => {
         const sum = AddRealtimeUsageRecord({ Output: { VideoSeconds: 4.5 } }, { Output: { VideoSeconds: 2.25 } });
         expect(sum.Output?.VideoSeconds).toBe(6.75);

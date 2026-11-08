@@ -57,6 +57,46 @@ describe('SplitPromptRunCost', () => {
         expect(split.Savings).toBeCloseTo(4000 * (0.75e-6 - 0.075e-6), 12);
     });
 
+    describe('audio lines', () => {
+        /** A GPT Realtime style row: $4 / $16 per 1M text tokens, cache reads $0.40. Audio at $32 in / $64 out. */
+        const TEXT_RATES: PromptRunTokenRates = { InputRate: 4e-6, OutputRate: 16e-6, CacheReadRate: 0.4e-6, CacheWriteRate: 4e-6 };
+
+        it('adds each audio line to its direction, so the parts add up to the run cost', () => {
+            const details = JSON.stringify({
+                RealtimeUsage: { Input: { TextTokens: 2000, AudioTokens: 8000 }, Output: { TextTokens: 500, AudioTokens: 1500 } },
+                CostLines: [
+                    { Modality: null, CostRowID: 'row', Measure: 'Tokens', Input: 2000, Output: 500, Cost: 0.016 },
+                    { Modality: 'Audio', CostRowID: null, Measure: 'Tokens', Input: 8000, Output: 0, Cost: 0.256 },
+                    { Modality: 'Audio', CostRowID: null, Measure: 'Tokens', Input: 0, Output: 1500, Cost: 0.096 },
+                ],
+            });
+            const split = SplitPromptRunCost({ TokensPrompt: 10000, TokensCompletion: 2000, ModelSpecificResponseDetails: details }, TEXT_RATES);
+
+            expect(split.InputCost).toBeCloseTo(2000 * 4e-6 + 0.256, 12);
+            expect(split.OutputCost).toBeCloseTo(500 * 16e-6 + 0.096, 12);
+            expect(split.InputCost + split.OutputCost + split.AvatarVideoCost).toBeCloseTo(0.368, 10);
+        });
+
+        it("prices a realtime run's cache hits from its record at the cache-read rate, as pricing did", () => {
+            const details = JSON.stringify({
+                RealtimeUsage: {
+                    Input: { TextTokens: 2000, AudioTokens: 8000, CachedTokens: 7000, CachedAudioTokens: 6000 },
+                    Output: { TextTokens: 500, AudioTokens: 1500 },
+                },
+                CostLines: [
+                    { Modality: null, CostRowID: 'row', Measure: 'Tokens', Input: 8000, Output: 500, Cost: 0.0148 },
+                    { Modality: 'Audio', CostRowID: null, Measure: 'Tokens', Input: 2000, Output: 0, Cost: 0.064 },
+                    { Modality: 'Audio', CostRowID: null, Measure: 'Tokens', Input: 0, Output: 1500, Cost: 0.096 },
+                ],
+            });
+            const split = SplitPromptRunCost({ TokensPrompt: 10000, TokensCompletion: 2000, ModelSpecificResponseDetails: details }, TEXT_RATES);
+
+            expect(split.InputCost).toBeCloseTo(1000 * 4e-6 + 7000 * 0.4e-6 + 0.064, 12);
+            expect(split.Savings).toBeCloseTo(7000 * (4e-6 - 0.4e-6), 12);
+            expect(split.InputCost + split.OutputCost).toBeCloseTo(0.1748, 10);
+        });
+    });
+
     it('reads malformed details as no cost lines', () => {
         const split = SplitPromptRunCost({ TokensPrompt: 1, TokensCompletion: 2, ModelSpecificResponseDetails: '{broken' }, RATES);
 
