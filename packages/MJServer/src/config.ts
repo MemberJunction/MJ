@@ -6,6 +6,7 @@ import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 import { TelemetryEnabledDefault } from './telemetryConfigUnits.js';
 import { RealtimeEnabledDefault } from './realtimeConfigUnits.js';
 import { ResolveServerRole, type ServerRole } from './serverRoleConfigUnits.js';
+import { DEFAULT_ROUTE_RATE_LIMITS, type RouteRateLimitName } from './routeRateLimitConfigUnits.js';
 import {
   AgentRunWatchdogDefaultsFromEnv,
   AgentRunWatchdogSchema,
@@ -418,6 +419,19 @@ const startupSchema = z.object({
   mode: z.enum(['full', 'task']).optional(),
 });
 
+/** One per-route limiter's settings; defaults come from {@link DEFAULT_ROUTE_RATE_LIMITS}. */
+function routeRateLimitSchema(name: RouteRateLimitName) {
+  const defaults = DEFAULT_ROUTE_RATE_LIMITS[name];
+  return z.object({
+    /** When false, the route has no per-route limiter. */
+    enabled: z.boolean().default(defaults.enabled),
+    /** Window length in milliseconds. */
+    windowMs: z.number().default(defaults.windowMs),
+    /** Requests allowed per IP per window. */
+    maxRequests: z.number().default(defaults.maxRequests),
+  }).default({});
+}
+
 const rateLimitSchema = z.object({
   /** Master switch — when false (default), no rate limiting is applied. */
   enabled: z.boolean().default(false),
@@ -440,6 +454,18 @@ const rateLimitSchema = z.object({
     windowMs: z.number().default(60_000),
     /** Maximum GraphQL operations per window per IP. */
     maxRequests: z.number().default(100),
+  }).default({}),
+  /**
+   * Per-route limiters on MJAPI's unauthenticated / capability-token routes. Independent of the
+   * `enabled` master switch above: these are ON by default with generous budgets (see
+   * `DEFAULT_ROUTE_RATE_LIMITS`). Set `<name>.enabled: false` when a gateway in front of MJAPI
+   * already limits the route.
+   */
+  routes: z.object({
+    oauthCallback: routeRateLimitSchema('oauthCallback'),
+    oauthAuthenticated: routeRateLimitSchema('oauthAuthenticated'),
+    mediaUpload: routeRateLimitSchema('mediaUpload'),
+    mediaRead: routeRateLimitSchema('mediaRead'),
   }).default({}),
 });
 
