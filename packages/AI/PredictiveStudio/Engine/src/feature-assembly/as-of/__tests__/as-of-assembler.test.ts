@@ -771,6 +771,27 @@ describe('AsOfFeatureAssembler — a stored value changed after the decision by 
     expect(excluded.Status === 'assembled' && excluded.UncoveredRowsExcluded).toEqual([{ entity: 'People', field: 'Status', rows: 1 }]);
   });
 
+  it('reads a parent whose final Delete shares its instant with its last Update as held before the Delete and deleted after it, on both readers, never as a truncated read', async () => {
+    const notUpdatable: AssemblyEntityInfo = { ...entities.People, Fields: entities.People.Fields.map((f) => (f.Name === 'Status' ? { ...f, AllowUpdateAPI: false } : f)) };
+    const replayed: FeatureColumnSpec = { ...stored, source: { kind: 'record-changes', entity: 'People', field: 'Status', keyField: 'PersonID' } };
+    const days: AssemblyRowRef[] = [one[0], { RowID: 'y2', EntityKey: 'y2', DecisionDate: new Date('2024-06-01T00:00:00Z'), Period: null }];
+    const gone = { Years: [{ ID: 'y1', PersonID: 'P1' }, { ID: 'y2', PersonID: 'P1' }], People: [] };
+    const counting: PredictionUnitSpec = { ...unit, history: { ...unit.history, onUncoveredRow: 'exclude-and-count' } };
+    for (const [updateId, deleteId] of [['aa', 'zz'], ['zz', 'aa']]) {
+      const sameInstant = { People: [
+        rc('c0', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' }),
+        rc(updateId, 'P1', 'Update', '2023-03-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }, ['Status']),
+        rc(deleteId, 'P1', 'Delete', '2023-03-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }),
+      ] };
+      const direct = await new AsOfFeatureAssembler().Assemble({ ...input([stored], { Rows: days, Tables: gone, Changes: sameInstant, Unit: counting }), Metadata: { Entity: (n) => (n === 'People' ? notUpdatable : metadata.Entity(n)) } });
+      expect(direct.Status === 'assembled' ? [direct.Rows.map((r) => [r.RowID, r.Values[0], r.Provenance[0].sourceVersion]), direct.UncoveredRowsExcluded] : direct)
+        .toEqual([[['y1', 'Lapsed', deleteId]], [{ entity: 'People', field: 'Status', rows: 1 }]]);
+      const replay = await new AsOfFeatureAssembler().Assemble(input([replayed], { Rows: days, Tables: gone, Changes: sameInstant, Unit: counting }));
+      expect(replay.Status === 'assembled' ? [replay.Rows.map((r) => [r.RowID, r.Values[0]]), replay.UncoveredRowsExcluded] : replay)
+        .toEqual([[['y1', 'Active']], [{ entity: 'People', field: 'Status', rows: 1 }]]);
+    }
+  });
+
   it('refuses a stored read of a parent with no row and no Delete in its history as a truncated read', async () => {
     const withoutP1 = { ...data, People: data.People.filter((p) => p.ID !== 'P1') };
     const out = await new AsOfFeatureAssembler().Assemble(input([stored], { Rows: one, Tables: withoutP1, Changes: { People: [rc('c0', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' })] } }));
@@ -964,6 +985,22 @@ describe('AsOfFeatureAssembler — a windowed aggregate over hard-deleted child 
       expect(out.Coverage.filter((c) => c.entity === 'Events' && c.field === 'PersonID')).toEqual([
         expect.objectContaining({ historyStart: '2022-03-01T00:00:00.000Z', continuity: expect.objectContaining({ recordsReplayed: 2, recordsMismatched: 0 }) }),
       ]);
+    });
+  }
+  for (const lastType of ['Update', 'Snapshot'] as const) {
+    it(`counts a child whose final Delete shares its instant with its last ${lastType}, deleted after the decision day, as it stood (either ID order)`, async () => {
+      for (const [lastId, deleteId] of [['aa', 'zz'], ['zz', 'aa']]) {
+        const sameInstant = { Events: [
+          rc('ec-1', 'e1', 'Create', '2021-09-01T00:00:00Z', e1),
+          rc('ec-2', 'e2', 'Create', '2022-03-01T00:00:00Z', e2),
+          rc(lastId, 'e2', lastType, '2023-03-01T00:00:00Z', e2, lastType === 'Update' ? ['EventDate'] : []),
+          rc(deleteId, 'e2', 'Delete', '2023-03-01T00:00:00Z', e2),
+        ] };
+        for (const onUncoveredRow of ['refuse', 'exclude-and-count'] as const) {
+          const out = await new AsOfFeatureAssembler().Assemble(input([count], { Rows: owners, Tables: data, Changes: sameInstant, Unit: { ...unit, history: { onUncoveredRow, externalSourceRows: 'ineligible' } } }));
+          expect(out.Status === 'assembled' ? [out.Rows.map((r) => [r.RowID, r.Values[0]]), out.UncoveredRowsExcluded] : out).toEqual([[['y1', 2], ['y2', 1]], []]);
+        }
+      }
     });
   }
   it('loads only hard-deleted children that an owner of the batch held, so another owner\'s deleted child changes nothing', async () => {

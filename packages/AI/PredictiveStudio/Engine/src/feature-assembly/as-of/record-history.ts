@@ -122,6 +122,17 @@ const TIMESTAMP_TEXT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d
 /** Text written as an ISO calendar date alone (how a SQL `date` column can serialize): `YYYY-MM-DD`. */
 const DATE_ONLY_TEXT = /^\d{4}-\d{2}-\d{2}$/;
 
+/** The rank of a change row's type among one key's rows at one instant (see `RecordHistory.indexByKey`). */
+type InstantRank = Readonly<Record<RecordChangeRow['Type'], number>>;
+const SAME_INSTANT_RANK: { readonly NoDelete: InstantRank; readonly Gone: InstantRank; readonly Recreated: InstantRank } = {
+  // No Delete at the instant: a record is created, then snapshotted or updated (Delete is unused here).
+  NoDelete: { Create: 0, Snapshot: 1, Update: 2, Delete: 3 },
+  // A Delete and no current row: whatever happened at the instant, the record is gone now.
+  Gone: { Create: 0, Snapshot: 1, Update: 2, Delete: 3 },
+  // A Delete and a current row: the Delete ended the earlier incarnation and the Create re-created it.
+  Recreated: { Snapshot: 0, Update: 1, Delete: 2, Create: 3 },
+};
+
 /** The entity a history is built for: its name, and its fields, whose declared types decide how values compare. */
 export type HistoryEntity = Pick<AssemblyEntityInfo, 'Name' | 'Fields'>;
 
@@ -140,9 +151,9 @@ export class RecordHistory {
   }
 
   /**
-   * The lower-cased keys whose latest change row (ChangedAt order, a Delete before any other row at one instant, then
-   * ties by ID) is a Delete: records the history says were deleted, so a missing current row is explained rather than
-   * a short read.
+   * The lower-cased keys whose latest change row is a Delete: records the history says were deleted, so a missing
+   * current row is explained rather than a short read. Asked only about keys with no current row, so the rows of one
+   * instant take the no-current-row order (a Delete ends its instant, see `indexByKey`).
    */
   public static KeysDeletedByHistory(changes: readonly RecordChangeRow[]): ReadonlySet<string> {
     return RecordHistory.endingInDelete(RecordHistory.indexByKey(changes));
@@ -182,7 +193,7 @@ export class RecordHistory {
     now: Date,
   ): EntityHistory {
     const scope: ComparisonScope = { EntityName: entity.Name, BooleanFields: new Set(entity.Fields.filter((f) => f.TSType === 'boolean').map((f) => f.Name)) };
-    const byKey = RecordHistory.indexByKey(changes);
+    const byKey = RecordHistory.indexByKey(changes, (k) => current.has(k));
     const start = RecordHistory.historyStarts(byKey);
     const created = RecordHistory.creationInstants(byKey);
     const hardDeleted = new Set([...RecordHistory.endingInDelete(byKey)].filter((k) => !current.has(k)));
@@ -291,20 +302,40 @@ export class RecordHistory {
   }
 
   /**
-   * Change rows per record key, in ChangedAt order; at one instant a Delete orders before any other row (a record
-   * deleted and re-created at one instant is live after it, and the row that re-creates it happened last), then ties
-   * by ID, ordinal.
+   * Change rows per record key, in ChangedAt order. Rows of one key that share an instant are ranked by what the
+   * record's state now proves happened last at that instant, then by ID (ordinal) within one rank:
+   * - no Delete at the instant: Create, Snapshot, Update (a record is created, then snapshotted or updated);
+   * - a Delete at the instant and no current row (`hasCurrentRow` false): Create, Snapshot, Update, Delete (the record
+   *   is gone now, so the Delete ends the instant);
+   * - a Delete at the instant and a current row: Snapshot, Update, Delete, Create (the Delete ended the earlier
+   *   incarnation and the Create re-created it; the current row proves the re-creation).
+   * `hasCurrentRow` takes the lower-cased key; without it every key is read as having no current row, the order
+   * {@link KeysDeletedByHistory} and {@link DeletedChildren} need, since they are asked only about such keys.
    */
-  private static indexByKey(changes: readonly RecordChangeRow[]): Map<string, RecordChangeRow[]> {
+  private static indexByKey(changes: readonly RecordChangeRow[], hasCurrentRow: (key: string) => boolean = () => false): Map<string, RecordChangeRow[]> {
     const byKey = new Map<string, RecordChangeRow[]>();
-    const deleteFirst = (c: RecordChangeRow): number => (c.Type === 'Delete' ? 0 : 1);
-    for (const c of [...changes].sort((a, b) => a.ChangedAt.getTime() - b.ChangedAt.getTime() || deleteFirst(a) - deleteFirst(b) || OrdinalCompare(a.ID, b.ID))) {
+    for (const c of changes) {
       const k = RecordHistory.KeyOfRecordID(c.RecordID);
       const list = byKey.get(k) || [];
       list.push(c);
       byKey.set(k, list);
     }
+    for (const [k, list] of byKey) byKey.set(k, RecordHistory.orderedRows(list, hasCurrentRow(k)));
     return byKey;
+  }
+
+  /** One key's rows in ChangedAt order, the rows of each instant ranked as {@link indexByKey} describes. */
+  private static orderedRows(list: readonly RecordChangeRow[], hasCurrentRow: boolean): RecordChangeRow[] {
+    const byInstant = new Map<number, RecordChangeRow[]>();
+    for (const c of list) {
+      const at = byInstant.get(c.ChangedAt.getTime()) || [];
+      at.push(c);
+      byInstant.set(c.ChangedAt.getTime(), at);
+    }
+    return [...byInstant.entries()].sort((a, b) => a[0] - b[0]).flatMap(([, rows]) => {
+      const rank = !rows.some((c) => c.Type === 'Delete') ? SAME_INSTANT_RANK.NoDelete : hasCurrentRow ? SAME_INSTANT_RANK.Recreated : SAME_INSTANT_RANK.Gone;
+      return [...rows].sort((a, b) => rank[a.Type] - rank[b.Type] || OrdinalCompare(a.ID, b.ID));
+    });
   }
 
   /** The keys of `byKey` whose last row is a Delete. */

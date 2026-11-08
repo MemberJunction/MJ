@@ -62,15 +62,46 @@ describe('BuildEntityHistory', () => {
 describe('BuildEntityHistory — rows at one instant', () => {
   const now = new Date('2026-10-12T00:00:00Z');
   const policy = { onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' } as const;
-  it('orders a Delete before a Create at the same instant, so a same-instant re-creation reads as live, whatever the IDs and input order', () => {
-    // The IDs alone would put the Create ('aa') first and the Delete ('zz') last.
-    const del = rc('zz', 'P1', 'Delete', '2020-07-01T00:00:00Z', { Status: 'Active' });
-    const create = rc('aa', 'P1', 'Create', '2020-07-01T00:00:00Z', { Status: 'Lapsed' });
-    for (const order of [[del, create], [create, del]]) {
+  const t = '2020-07-01T00:00:00Z';
+  const later = new Date('2021-01-01T00:00:00Z');
+  /** Both input orders of two rows at one instant, under both assignments of the two IDs. */
+  const orders = (make: (first: string, second: string) => readonly [RecordChangeRow, RecordChangeRow]): RecordChangeRow[][] =>
+    [make('aa', 'zz'), make('zz', 'aa')].flatMap(([a, b]) => [[a, b], [b, a]]);
+
+  it('orders a Delete before a Create at the same instant when the record has a current row, so a same-instant re-creation reads as live, whatever the IDs and input order', () => {
+    for (const order of orders((d, c) => [rc(d, 'P1', 'Delete', t, { Status: 'Active' }), rc(c, 'P1', 'Create', t, { Status: 'Lapsed' })])) {
+      const create = order.find((c) => c.Type === 'Create');
       const h = RecordHistory.BuildEntityHistory(PEOPLE, order, new Map([['p1', { Status: 'Lapsed' }]]), ['Status'], policy, now);
-      expect(h.ValueAt('P1', 'Status', new Date('2021-01-01T00:00:00Z'))).toMatchObject({ Status: 'value', Value: 'Lapsed', ChangeID: 'aa' });
+      expect(h.ValueAt('P1', 'Status', later)).toMatchObject({ Status: 'value', Value: 'Lapsed', ChangeID: create?.ID });
       expect(h.Coverage.continuity).toMatchObject({ recordsReplayed: 1, recordsMismatched: 0 });
-      expect(RecordHistory.KeysDeletedByHistory(order).size).toBe(0);
+      // KeysDeletedByHistory answers a question about keys with no current row; for this live key the history says it is not hard-deleted.
+      expect(h.DeletedRecordAt('P1', later)).toBeNull();
+    }
+  });
+  it('orders a Delete after an Update at the same instant when the record has no current row, so it reads as hard-deleted, whatever the IDs and input order', () => {
+    for (const order of orders((u, d) => [rc(u, 'P1', 'Update', t, { Status: 'Lapsed' }, ['Status']), rc(d, 'P1', 'Delete', t, { Status: 'Lapsed' })])) {
+      const del = order.find((c) => c.Type === 'Delete');
+      const h = RecordHistory.BuildEntityHistory(PEOPLE, order, new Map(), ['Status'], policy, now);
+      expect(h.ValueAt('P1', 'Status', later)).toEqual({ Status: 'uncovered', Reason: 'deleted' });
+      expect(h.DeletedRecordAt('P1', later)).toMatchObject({ Status: 'deleted', ChangeID: del?.ID });
+      expect([...RecordHistory.KeysDeletedByHistory(order)]).toEqual(['p1']);
+    }
+  });
+  it('orders a Delete after a Create at the same instant when the record has no current row, so it reads as deleted', () => {
+    for (const order of orders((c, d) => [rc(c, 'P1', 'Create', t, { Status: 'Lapsed' }), rc(d, 'P1', 'Delete', t, { Status: 'Lapsed' })])) {
+      const h = RecordHistory.BuildEntityHistory(PEOPLE, order, new Map(), ['Status'], policy, now);
+      expect(h.ValueAt('P1', 'Status', later)).toEqual({ Status: 'uncovered', Reason: 'deleted' });
+      expect(h.DeletedRecordAt('P1', later)).toMatchObject({ Status: 'deleted' });
+      expect([...RecordHistory.KeysDeletedByHistory(order)]).toEqual(['p1']);
+    }
+  });
+  it('orders a Create before an Update at the same instant with no Delete, so the record reads its updated value from its creation on', () => {
+    for (const order of orders((c, u) => [rc(c, 'P1', 'Create', t, { Status: 'Active' }), rc(u, 'P1', 'Update', t, { Status: 'Lapsed' }, ['Status'])])) {
+      const update = order.find((c) => c.Type === 'Update');
+      const h = RecordHistory.BuildEntityHistory(PEOPLE, order, new Map([['p1', { Status: 'Lapsed' }]]), ['Status'], policy, now);
+      expect(h.ValueAt('P1', 'Status', later)).toMatchObject({ Status: 'value', Value: 'Lapsed', ChangeID: update?.ID });
+      expect(h.Coverage.continuity).toMatchObject({ recordsReplayed: 1, recordsMismatched: 0 });
+      expect(h.CreatedAt('P1')).toEqual(new Date(t));
     }
   });
 });
