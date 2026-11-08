@@ -20,7 +20,7 @@
  * @module @memberjunction/browser-extension-core
  */
 
-import { RunView, type RunViewParams } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, KeyValuePair, Metadata, RunView, type RunViewParams } from '@memberjunction/core';
 import { BaseSingleton, MJGlobal } from '@memberjunction/global';
 import type {
     BraidedEntityContextMatch,
@@ -34,6 +34,7 @@ import type {
     BrowserPageStateSnapshot,
     UnmatchedPageEntityCandidate,
 } from '../types/extension-types.js';
+import { MatchWildcardPattern } from '../security/SensitivePageGuard.js';
 import { BaseBrowserPageExtractor, type ExtractedPageSignals } from './BaseBrowserPageExtractor.js';
 import { LoadStandardPageExtractor, StandardPageExtractor } from './StandardPageExtractor.js';
 import { LoadLinkedInPageExtractor } from './LinkedInPageExtractor.js';
@@ -104,13 +105,89 @@ export class MJRunViewBatchAdapter implements IBrowserEntityViewRunner {
 }
 
 /**
+ * Default `IBrowserEntityPersistenceAdapter` delegating to MemberJunction's `Metadata.GetEntityObject()`
+ * and `BaseEntity.SetMany()` / `Save()` for 1-click Page-to-Entity creation and field enrichment.
+ */
+export class MJMetadataPersistenceAdapter implements IBrowserEntityPersistenceAdapter {
+    public async CreateRecord(
+        entityName: string,
+        fields: Record<string, string>
+    ): Promise<{ Success: boolean; RecordID?: string; ErrorMessage?: string }> {
+        try {
+            const md = new Metadata();
+            const entity = await md.GetEntityObject<BaseEntity>(entityName);
+            entity.NewRecord();
+            entity.SetMany(fields, true);
+            const saved = await entity.Save();
+            if (!saved) {
+                return {
+                    Success: false,
+                    ErrorMessage:
+                        entity.LatestResult?.CompleteMessage ||
+                        `Failed to create "${entityName}" record.`,
+                };
+            }
+            const pkVal = entity.PrimaryKey.Values();
+            return {
+                Success: true,
+                RecordID: pkVal || undefined,
+            };
+        } catch (err: unknown) {
+            return {
+                Success: false,
+                ErrorMessage: err instanceof Error ? err.message : String(err),
+            };
+        }
+    }
+
+    public async UpdateRecord(
+        entityName: string,
+        recordId: string,
+        fields: Record<string, string>
+    ): Promise<{ Success: boolean; ErrorMessage?: string }> {
+        try {
+            const md = new Metadata();
+            const entity = await md.GetEntityObject<BaseEntity>(entityName);
+            const key = new CompositeKey();
+            const pkFieldName = entity.EntityInfo?.FirstPrimaryKey?.Name ?? 'ID';
+            key.KeyValuePairs.push(new KeyValuePair(pkFieldName, recordId));
+            const loaded = await entity.InnerLoad(key);
+            if (!loaded) {
+                return {
+                    Success: false,
+                    ErrorMessage: `Could not load "${entityName}" record "${recordId}" for enrichment.`,
+                };
+            }
+            entity.SetMany(fields, true);
+            const saved = await entity.Save();
+            if (!saved) {
+                return {
+                    Success: false,
+                    ErrorMessage:
+                        entity.LatestResult?.CompleteMessage ||
+                        `Failed to update "${entityName}" record "${recordId}".`,
+                };
+            }
+            return {
+                Success: true,
+            };
+        } catch (err: unknown) {
+            return {
+                Success: false,
+                ErrorMessage: err instanceof Error ? err.message : String(err),
+            };
+        }
+    }
+}
+
+/**
  * Multi-App Context Braiding Engine (`BaseSingleton`).
  */
 export class BrowserContextEngine extends BaseSingleton<BrowserContextEngine> {
     private rules: BrowserContextRuleSpec[] = [...REFERENCE_BROWSER_CONTEXT_RULES];
     private facets: BrowserEntityFacetSpec[] = [...REFERENCE_BROWSER_ENTITY_FACETS];
     private viewRunner: IBrowserEntityViewRunner = new MJRunViewBatchAdapter();
-    private persistenceAdapter: IBrowserEntityPersistenceAdapter | null = null;
+    private persistenceAdapter: IBrowserEntityPersistenceAdapter | null = new MJMetadataPersistenceAdapter();
     private readonly defaultExtractor = new StandardPageExtractor();
 
     protected constructor() {
@@ -484,15 +561,7 @@ export class BrowserContextEngine extends BaseSingleton<BrowserContextEngine> {
         if (!trimmed || trimmed === '*://*/*' || trimmed === '*') {
             return true;
         }
-        // Convert Chrome match pattern or wildcard pattern to RegExp
-        const escaped = trimmed
-            .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
-            .replace(/\*/g, '.*');
-        try {
-            return new RegExp(`^${escaped}$`, 'i').test(url);
-        } catch {
-            return false;
-        }
+        return MatchWildcardPattern(trimmed, url);
     }
 
     private resolveExtractor(customClass?: string): BaseBrowserPageExtractor {
@@ -519,7 +588,8 @@ export class BrowserContextEngine extends BaseSingleton<BrowserContextEngine> {
         signalsByKey: Record<string, string>
     ): string | null {
         let missingSignal = false;
-        const interpolated = template.replace(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g, (_match, key: string) => {
+        const interpolated = template.replace(/\{\{([^}]{1,80})\}\}/g, (_match, rawKey: string) => {
+            const key = rawKey.trim();
             const val = signalsByKey[key];
             if (!val || val.trim().length === 0) {
                 missingSignal = true;

@@ -264,6 +264,12 @@ export const INTERACTIVITYPROBE = (): RawInteractiveElement[] => {
         const scrollable = (el.scrollHeight > el.clientHeight + 4) &&
             (style.overflowY === 'auto' || style.overflowY === 'scroll');
 
+        try {
+            el.setAttribute('data-mj-cu-index', String(results.length));
+        } catch {
+            // Ignore in synthetic or read-only DOM mocks
+        }
+
         results.push({
             role: roleOf(el),
             name: nameOf(el),

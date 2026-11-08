@@ -287,14 +287,30 @@ export class ExtensionBrandBuilder {
   const BLOCKED_DOMAINS = ${JSON.stringify(profile.BlockedDomains)};
   const PRIMARY_COLOR = ${JSON.stringify(profile.ThemeSeeds.primary)};
 
-  const INTERACTIVE_WITHOUT_TABINDEX = [
-    'a[href]', 'button', 'input:not([type="hidden"])', 'select', 'textarea', 'summary',
+  const INTERACTIVE_SELECTOR = [
+    'a[href]', 'button', 'input', 'select', 'textarea', 'summary',
     '[role="button"]', '[role="link"]', '[role="checkbox"]', '[role="radio"]',
-    '[role="tab"]', '[role="menuitem"]', '[role="option"]', '[role="switch"]',
-    '[role="combobox"]', '[role="searchbox"]', '[role="textbox"]',
-    '[contenteditable="true"]', '[onclick]'
+    '[role="tab"]', '[role="menuitem"]', '[role="switch"]', '[role="combobox"]',
+    '[role="option"]', '[role="textbox"]', '[contenteditable=""]', '[contenteditable="true"]',
+    '[role="separator"]', '[onclick]', '[tabindex]'
   ].join(',');
-  const INTERACTIVE_SELECTOR = INTERACTIVE_WITHOUT_TABINDEX + ',[tabindex]';
+
+  const INTERACTIVE_WITHOUT_TABINDEX = INTERACTIVE_SELECTOR
+    .split(',')
+    .filter(sel => sel !== '[tabindex]' && sel !== '[onclick]')
+    .join(',');
+
+  const SCOPE_ROLES = new Set([
+    'group', 'region', 'dialog', 'alertdialog', 'navigation', 'main', 'form',
+    'table', 'grid', 'list', 'listbox', 'tabpanel', 'menu', 'toolbar',
+    'banner', 'complementary', 'contentinfo', 'search', 'article'
+  ]);
+  const IMPLICIT_SCOPE_ROLE = {
+    NAV: 'navigation', MAIN: 'main', FORM: 'form', DIALOG: 'dialog',
+    TABLE: 'table', SECTION: 'region', ASIDE: 'complementary',
+    HEADER: 'banner', FOOTER: 'contentinfo', UL: 'list', OL: 'list',
+    ARTICLE: 'article', SEARCH: 'search'
+  };
 
   function isSensitiveInput(el) {
     if (!(el instanceof HTMLInputElement)) return false;
@@ -303,24 +319,40 @@ export class ExtensionBrandBuilder {
     const auto = (el.getAttribute('autocomplete') || '').toLowerCase();
     if (auto.startsWith('cc-') || auto === 'one-time-code' || auto.includes('password')) return true;
     const nameId = ((el.name || '') + ' ' + (el.id || '')).toLowerCase();
-    if (/\\b(password|passcode|cvv|cvc|card[-_]?number|otp|totp)\\b/.test(nameId)) return true;
-    return false;
+    const tokens = ['password', 'passcode', 'cvv', 'cvc', 'card-number', 'card_number', 'cardnumber', 'otp', 'totp'];
+    return tokens.some(tok => nameId.includes(tok));
+  }
+
+  function detectAuthOrMfaUrl(rawUrl) {
+    try {
+      const parsed = new URL(rawUrl);
+      const host = parsed.hostname.toLowerCase();
+      const pathname = parsed.pathname.toLowerCase();
+      if (host === 'login.microsoftonline.com') return true;
+      if (host === 'accounts.google.com' && pathname.startsWith('/v3/signin')) return true;
+      const segments = pathname.split('/').filter(Boolean);
+      const authSegments = new Set(['login', 'signin', 'sign-in', 'mfa', '2fa', 'two-factor', 'totp']);
+      return segments.some(seg => authSegments.has(seg));
+    } catch {
+      return false;
+    }
   }
 
   function probeInteractiveElements() {
-    const xpathOf = (el) => {
-      const parts = [];
-      let node = el;
-      while (node && node.nodeType === 1 && node !== document.documentElement) {
-        const tag = node.tagName.toLowerCase();
-        const parent = node.parentElement;
-        if (!parent) { parts.unshift(tag); break; }
-        const sameTag = Array.from(parent.children).filter(c => c.tagName === node.tagName);
-        const idx = sameTag.indexOf(node) + 1;
-        parts.unshift(tag + '[' + idx + ']');
-        node = parent;
+    const xpathOf = (node) => {
+      const segments = [];
+      let el = node;
+      while (el && el.nodeType === 1 && el !== document.documentElement) {
+        let index = 1;
+        let sib = el.previousElementSibling;
+        while (sib) {
+          if (sib.tagName === el.tagName) index++;
+          sib = sib.previousElementSibling;
+        }
+        segments.unshift(el.tagName.toLowerCase() + '[' + index + ']');
+        el = el.parentElement;
       }
-      return '/html/' + parts.join('/');
+      return '/html/' + segments.join('/');
     };
 
     const roleOf = (el) => {
@@ -332,7 +364,7 @@ export class ExtensionBrandBuilder {
       if (tag === 'select') return 'combobox';
       if (tag === 'textarea') return 'textbox';
       if (tag === 'input') {
-        const t = (el.type || 'text').toLowerCase();
+        const t = (el.getAttribute('type') || el.type || 'text').toLowerCase();
         if (t === 'checkbox') return 'checkbox';
         if (t === 'radio') return 'radio';
         if (t === 'button' || t === 'submit' || t === 'reset') return 'button';
@@ -344,6 +376,11 @@ export class ExtensionBrandBuilder {
     const nameOf = (el) => {
       const aria = el.getAttribute('aria-label');
       if (aria) return aria.trim();
+      const labelledby = el.getAttribute('aria-labelledby');
+      if (labelledby) {
+        const ref = document.getElementById(labelledby);
+        if (ref && ref.textContent) return ref.textContent.trim();
+      }
       if (el.id) {
         const escaped = (typeof CSS !== 'undefined' && typeof CSS.escape === 'function')
           ? CSS.escape(el.id)
@@ -359,6 +396,34 @@ export class ExtensionBrandBuilder {
       return text.trim().slice(0, 120);
     };
 
+    const regionName = (node) => {
+      const label = node.getAttribute('aria-label');
+      if (label && label.trim()) return label.trim();
+      const labelledBy = node.getAttribute('aria-labelledby');
+      if (!labelledBy) return '';
+      return labelledBy
+        .split(' ')
+        .filter(Boolean)
+        .map(id => document.getElementById(id))
+        .map(n => (n && n.textContent ? n.textContent.trim() : ''))
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+    };
+
+    const scopeOf = (el) => {
+      let node = el.parentElement;
+      while (node && node !== document.body) {
+        const role = (node.getAttribute('role') || IMPLICIT_SCOPE_ROLE[node.tagName] || '').trim().toLowerCase();
+        if (role && SCOPE_ROLES.has(role)) {
+          const name = regionName(node);
+          if (name) return role + ':' + name;
+        }
+        node = node.parentElement;
+      }
+      return '';
+    };
+
     const results = [];
     const vw = window.innerWidth || 1280;
     const vh = window.innerHeight || 800;
@@ -367,28 +432,44 @@ export class ExtensionBrandBuilder {
     document.querySelectorAll(INTERACTIVE_SELECTOR).forEach((el) => {
       if (seen.has(el)) return;
       seen.add(el);
+      if (el.getAttribute && el.getAttribute('type') === 'hidden') return;
       if (el.getAttribute('tabindex') === '-1' && !el.hasAttribute('onclick') && !el.matches(INTERACTIVE_WITHOUT_TABINDEX)) return;
       const style = window.getComputedStyle(el);
-      if (style.display === 'none' || style.visibility === 'hidden' || parseFloat(style.opacity) === 0) return;
+      if (typeof el.checkVisibility === 'function') {
+        if (!el.checkVisibility({ opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true })) return;
+      } else if (style.display === 'none' || style.visibility === 'hidden' || parseFloat(style.opacity) === 0) {
+        return;
+      }
       if (style.pointerEvents === 'none') return;
       const rect = el.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return;
       if (rect.bottom < -vh || rect.top > vh * 2 || rect.right < -vw || rect.left > vw * 2) return;
+
+      const elementIndex = results.length;
+      try {
+        el.setAttribute('data-mj-cu-index', String(elementIndex));
+      } catch {}
+
       const isFormValue = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement;
       const rawVal = isFormValue ? String(el.value || '') : undefined;
       const safeVal = isSensitiveInput(el) ? REDACTED_SENTINEL : rawVal;
+      const scope = scopeOf(el);
+      const scrollable = (el.scrollHeight > el.clientHeight + 4) &&
+        (style.overflowY === 'auto' || style.overflowY === 'scroll');
 
       results.push({
-        Index: results.length + 1,
+        Index: elementIndex,
         Role: roleOf(el),
         Name: nameOf(el),
         Selector: 'xpath=' + xpathOf(el),
+        Scope: scope || undefined,
         Value: safeVal,
+        Scrollable: scrollable,
         BoundingBox: {
-          XMin: Math.round((rect.left / vw) * 1000),
-          YMin: Math.round((rect.top / vh) * 1000),
-          XMax: Math.round(((rect.left + rect.width) / vw) * 1000),
-          YMax: Math.round(((rect.top + rect.height) / vh) * 1000)
+          XMin: Math.round(rect.left),
+          YMin: Math.round(rect.top),
+          XMax: Math.round(rect.left + rect.width),
+          YMax: Math.round(rect.top + rect.height)
         },
         Disabled: Boolean(el.disabled || el.getAttribute('aria-disabled') === 'true')
       });
@@ -398,41 +479,60 @@ export class ExtensionBrandBuilder {
 
   function extractPageState() {
     const openGraph = {};
-    document.querySelectorAll('meta[property^="og:"]').forEach((m) => {
-      const p = m.getAttribute('property');
-      const c = m.getAttribute('content');
-      if (p && c) openGraph[p] = c;
-    });
     const metaTags = {};
-    document.querySelectorAll('meta[name]').forEach((m) => {
-      const n = m.getAttribute('name');
-      const c = m.getAttribute('content');
-      if (n && c) metaTags[n] = c;
+    document.querySelectorAll('meta').forEach((m) => {
+      const content = (m.getAttribute('content') || '').trim();
+      if (!content) return;
+      const prop = (m.getAttribute('property') || '').trim();
+      const name = (m.getAttribute('name') || '').trim();
+      if (prop) {
+        const lowerProp = prop.toLowerCase();
+        openGraph[prop] = content;
+        openGraph[lowerProp] = content;
+        if (lowerProp.startsWith('og:')) {
+          openGraph[lowerProp.slice(3)] = content;
+        }
+      }
+      if (name) {
+        metaTags[name] = content;
+        metaTags[name.toLowerCase()] = content;
+      }
     });
     const schemaOrg = [];
     document.querySelectorAll('script[type="application/ld+json"]').forEach((s) => {
       try {
         const parsed = JSON.parse(s.textContent || '');
-        if (parsed && typeof parsed === 'object') schemaOrg.push(parsed);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((item) => {
+            if (item && typeof item === 'object') schemaOrg.push(item);
+          });
+        } else if (parsed && typeof parsed === 'object') {
+          schemaOrg.push(parsed);
+        }
       } catch {}
     });
     const hasPasswordInput = document.querySelectorAll('input[type="password"]').length > 0;
+    const hasOtpInput = document.querySelectorAll('input[autocomplete="one-time-code"]').length > 0;
+    const rawHost = (window.location.hostname || '').toLowerCase();
+    const hostnameRoot = rawHost.startsWith('www.') ? rawHost.slice(4) : rawHost;
+    const isAuthOrMfa = hasPasswordInput || hasOtpInput || detectAuthOrMfaUrl(window.location.href);
+
     return {
       Url: window.location.href,
       Title: document.title || '',
-      Hostname: window.location.hostname || '',
+      Hostname: rawHost,
       ViewportWidth: window.innerWidth || 1280,
       ViewportHeight: window.innerHeight || 800,
       InteractiveElements: probeInteractiveElements(),
-      VisibleTextExcerpt: (document.body ? (document.body.innerText || document.body.textContent || '') : '').trim().slice(0, 2000),
+      VisibleTextExcerpt: (document.body ? (document.body.innerText || document.body.textContent || '') : '').trim().slice(0, 12000),
       OpenGraph: openGraph,
       SchemaOrgEntities: schemaOrg,
       MetaTags: metaTags,
       CapturedSignals: {
         FullUrl: window.location.href,
-        HostnameRoot: (window.location.hostname || '').replace(/^www\\./i, '').toLowerCase()
+        HostnameRoot: hostnameRoot
       },
-      IsAuthOrMfaScreen: hasPasswordInput,
+      IsAuthOrMfaScreen: isAuthOrMfa,
       ActiveBackend: 'content-script',
       BrandSlug: BRAND_SLUG,
       CapturedAtIso: new Date().toISOString()
@@ -449,10 +549,26 @@ export class ExtensionBrandBuilder {
     return document.querySelector(selector);
   }
 
+  function resolveTarget(req) {
+    if (req.Selector) {
+      const direct = resolveSelector(req.Selector);
+      if (direct) return direct;
+    }
+    const targetIdx = typeof req.Index === 'number' ? req.Index : (typeof req.ElementIndex === 'number' ? req.ElementIndex : undefined);
+    if (typeof targetIdx === 'number') {
+      const byAttr = document.querySelector('[data-mj-cu-index="' + targetIdx + '"]');
+      if (byAttr) return byAttr;
+      const list = probeInteractiveElements();
+      const entry = list.find(e => e.Index === targetIdx);
+      if (entry) return resolveSelector(entry.Selector);
+    }
+    return null;
+  }
+
   function highlightElement(req) {
-    const target = resolveSelector(req.Selector);
+    const target = resolveTarget(req);
     if (!target) {
-      return { Success: false, ErrorMessage: 'Target element not found for selector: ' + req.Selector };
+      return { Success: false, ErrorMessage: 'Target element not found for selector: ' + (req.Selector || req.Index) };
     }
     target.scrollIntoView({ block: 'center', inline: 'center' });
     const rect = target.getBoundingClientRect();
@@ -528,12 +644,7 @@ export class ExtensionBrandBuilder {
   }
 
   function clickElement(req) {
-    let target = req.Selector ? resolveSelector(req.Selector) : null;
-    if (!target && typeof req.ElementIndex === 'number') {
-      const list = probeInteractiveElements();
-      const entry = list.find(e => e.Index === req.ElementIndex);
-      if (entry) target = resolveSelector(entry.Selector);
-    }
+    const target = resolveTarget(req);
     if (!target) {
       return { Success: false, ErrorMessage: 'Element not found for click' };
     }
@@ -547,12 +658,7 @@ export class ExtensionBrandBuilder {
   }
 
   function fillInput(req) {
-    let target = req.Selector ? resolveSelector(req.Selector) : null;
-    if (!target && typeof req.ElementIndex === 'number') {
-      const list = probeInteractiveElements();
-      const entry = list.find(e => e.Index === req.ElementIndex);
-      if (entry) target = resolveSelector(entry.Selector);
-    }
+    const target = resolveTarget(req);
     if (!target) {
       return { Success: false, ErrorMessage: 'Input element not found' };
     }

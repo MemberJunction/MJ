@@ -32,6 +32,50 @@ export const DEFAULT_BLOCKED_DOMAINS: readonly string[] = Object.freeze([
 ]);
 
 /**
+ * Deterministic linear-time ($O(n)$) wildcard matcher (`*` matches any substring)
+ * without constructing dynamic regular expressions.
+ */
+export function MatchWildcardPattern(pattern: string, candidate: string): boolean {
+    const pat = pattern.toLowerCase();
+    const str = candidate.toLowerCase();
+    if (pat === '*') {
+        return true;
+    }
+    const parts = pat.split('*');
+    if (parts.length === 1) {
+        return str === pat;
+    }
+    let pos = 0;
+    const first = parts[0];
+    if (first.length > 0) {
+        if (!str.startsWith(first)) {
+            return false;
+        }
+        pos = first.length;
+    }
+    const last = parts[parts.length - 1];
+    const endLimit = last.length > 0 ? str.length - last.length : str.length;
+    if (endLimit < pos) {
+        return false;
+    }
+    if (last.length > 0 && !str.endsWith(last)) {
+        return false;
+    }
+    for (let i = 1; i < parts.length - 1; i++) {
+        const segment = parts[i];
+        if (segment.length === 0) {
+            continue;
+        }
+        const foundIdx = str.indexOf(segment, pos);
+        if (foundIdx === -1 || foundIdx + segment.length > endLimit) {
+            return false;
+        }
+        pos = foundIdx + segment.length;
+    }
+    return true;
+}
+
+/**
  * Options for constructing {@link SensitivePageGuard}.
  */
 export interface SensitivePageGuardOptions {
@@ -93,17 +137,17 @@ export class SensitivePageGuard {
         }
 
         for (const pattern of this.blockedPatterns) {
-            const cleanPattern = pattern.trim().toLowerCase().replace(/^\*:\/\//, '').replace(/\/\*$/, '');
+            let cleanPattern = pattern.trim().toLowerCase();
+            if (cleanPattern.startsWith('*://')) {
+                cleanPattern = cleanPattern.slice(4);
+            }
+            if (cleanPattern.endsWith('/*')) {
+                cleanPattern = cleanPattern.slice(0, -2);
+            }
             if (!cleanPattern) {
                 continue;
             }
-            const regexStr =
-                '^' +
-                cleanPattern
-                    .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
-                    .replace(/\*/g, '.*') +
-                '$';
-            if (new RegExp(regexStr, 'i').test(host)) {
+            if (MatchWildcardPattern(cleanPattern, host)) {
                 return true;
             }
         }
@@ -150,7 +194,10 @@ export class SensitivePageGuard {
 
         const auto = (field.Autocomplete ?? '').trim().toLowerCase();
         if (auto) {
-            const tokens = auto.split(/\s+/);
+            const tokens = auto
+                .split(' ')
+                .map((t) => t.trim())
+                .filter(Boolean);
             for (const token of tokens) {
                 if (
                     token.startsWith('cc-') ||
@@ -185,15 +232,30 @@ export class SensitivePageGuard {
         if (signals.HasPasswordInput || signals.HasOtpInput) {
             return true;
         }
-        const url = (signals.Url ?? '').toLowerCase();
+        const rawUrl = (signals.Url ?? '').trim();
         const title = (signals.Title ?? '').toLowerCase();
 
-        if (
-            /\/(login|signin|sign-in|mfa|2fa|two-factor|webauthn|passkey|oauth2?\/v?\d*\/authorize)(\/|\?|$)/.test(url) ||
-            url.includes('login.microsoftonline.com/') ||
-            url.includes('accounts.google.com/v3/signin')
-        ) {
-            return true;
+        if (rawUrl) {
+            try {
+                const parsed = new URL(rawUrl);
+                const host = parsed.hostname.toLowerCase();
+                const pathname = parsed.pathname.toLowerCase();
+
+                if (
+                    host === 'login.microsoftonline.com' ||
+                    (host === 'accounts.google.com' && pathname.startsWith('/v3/signin'))
+                ) {
+                    return true;
+                }
+
+                if (this.hasAuthPathSegment(pathname)) {
+                    return true;
+                }
+            } catch {
+                if (this.hasAuthPathSegment(rawUrl.toLowerCase())) {
+                    return true;
+                }
+            }
         }
 
         if (
@@ -240,5 +302,31 @@ export class SensitivePageGuard {
             ...snapshot,
             InteractiveElements: sanitizedElements,
         };
+    }
+
+    private hasAuthPathSegment(pathname: string): boolean {
+        const cleanPath = pathname.split('?')[0].split('#')[0];
+        const segments = cleanPath.split('/').filter((s) => s.length > 0);
+        const authTokens = new Set([
+            'login',
+            'signin',
+            'sign-in',
+            'mfa',
+            '2fa',
+            'two-factor',
+            'webauthn',
+            'passkey',
+        ]);
+
+        for (let i = 0; i < segments.length; i++) {
+            const seg = segments[i];
+            if (authTokens.has(seg)) {
+                return true;
+            }
+            if ((seg === 'oauth' || seg === 'oauth2') && segments.includes('authorize')) {
+                return true;
+            }
+        }
+        return false;
     }
 }

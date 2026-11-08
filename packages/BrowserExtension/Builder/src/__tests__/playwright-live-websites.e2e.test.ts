@@ -71,6 +71,8 @@ async function sendCommandToLiveContentScript<TResult>(
 describe('Headless Playwright E2E Proof — Live Wikipedia.org & Amazon.com with MV3 Extension', () => {
     let buildOutDir = '';
     let unpackedCopilotDir = '';
+    let unpackedBettyDir = '';
+    let unpackedSidecarDir = '';
     let context: BrowserContext | null = null;
 
     beforeAll(async () => {
@@ -82,16 +84,25 @@ describe('Headless Playwright E2E Proof — Live Wikipedia.org & Amazon.com with
             BrandSource: path.join(BRANDS_DIR, 'mj-copilot/mj-extension-brand.json'),
             OutputRootDir: buildOutDir,
         });
-        builder.BuildBrandedExtension({
+        const bettyRes = builder.BuildBrandedExtension({
             BrandSource: path.join(BRANDS_DIR, 'betty/mj-extension-brand.json'),
             OutputRootDir: buildOutDir,
         });
-        builder.BuildBrandedExtension({
+        const sidecarRes = builder.BuildBrandedExtension({
             BrandSource: path.join(BRANDS_DIR, 'sidecar/mj-extension-brand.json'),
             OutputRootDir: buildOutDir,
         });
 
         unpackedCopilotDir = copilotRes.UnpackedDir;
+        unpackedBettyDir = bettyRes.UnpackedDir;
+        unpackedSidecarDir = sidecarRes.UnpackedDir;
+
+        // Verify white-label manifest & sidepanel invariants across all 3 brands
+        expect(copilotRes.Manifest.optional_permissions).toContain('debugger');
+        expect(bettyRes.Manifest.optional_permissions).toBeUndefined();
+        expect(sidecarRes.BrandProfile.DefaultControlBackend).toBe('auto');
+        expect(fs.existsSync(path.join(unpackedBettyDir, 'manifest.json'))).toBe(true);
+        expect(fs.existsSync(path.join(unpackedSidecarDir, 'manifest.json'))).toBe(true);
 
         // Launch headless Chromium persistent context with the unpacked MV3 extension loaded
         context = await chromium.launchPersistentContext('', {
@@ -144,7 +155,20 @@ describe('Headless Playwright E2E Proof — Live Wikipedia.org & Amazon.com with
             expect(state.Url).toContain('wikipedia.org');
             expect(state.Hostname).toBe('en.wikipedia.org');
             expect(state.InteractiveElements.length).toBeGreaterThan(20);
+            expect(state.InteractiveElements[0].Index).toBe(0);
+            expect(state.InteractiveElements[1].Index).toBe(1);
+            expect(state.InteractiveElements[0].BoundingBox).toBeDefined();
+            expect(state.InteractiveElements[0].BoundingBox!.XMax).toBeGreaterThan(
+                state.InteractiveElements[0].BoundingBox!.XMin
+            );
+            expect(state.InteractiveElements[0].BoundingBox!.YMax).toBeGreaterThan(
+                state.InteractiveElements[0].BoundingBox!.YMin
+            );
             expect(state.CapturedSignals['HostnameRoot']).toBe('en.wikipedia.org');
+
+            // Verify data-mj-cu-index="0" was stamped into the live Wikipedia DOM by the probe
+            const cuZeroCount = await page.locator('[data-mj-cu-index="0"]').count();
+            expect(cuZeroCount).toBe(1);
 
             // Find the live search input on Wikipedia
             const searchSelector = 'input[name="search"], #searchInput';
@@ -309,6 +333,39 @@ describe('Headless Playwright E2E Proof — Live Wikipedia.org & Amazon.com with
             expect(
                 braided.Matches[0].Facets.some((f) => f.EntityName === 'Deals' && f.TotalCount === 1)
             ).toBe(true);
+
+            // 7. Verify UnmatchedCandidates (AllowCreateIfUnmatched: true) & 1-click ApplyCaptureOrEnrichment on live snapshot
+            const createdRecords: Array<{ EntityName: string; Fields: Record<string, string> }> = [];
+            engine.Configure({
+                ViewRunner: {
+                    RunViews: async (views) =>
+                        views.map(() => ({
+                            Success: true,
+                            TotalRowCount: 0,
+                            Results: [],
+                        })),
+                },
+                PersistenceAdapter: {
+                    CreateRecord: async (entityName, fields) => {
+                        createdRecords.push({ EntityName: entityName, Fields: fields });
+                        return { Success: true, RecordID: 'org-created-live-1' };
+                    },
+                    UpdateRecord: async () => ({ Success: true }),
+                },
+            });
+
+            const unmatchedBraided = await engine.ResolveBraidedContext(state);
+            expect(unmatchedBraided.UnmatchedCandidates.length).toBeGreaterThan(0);
+            const candidate = unmatchedBraided.UnmatchedCandidates[0];
+            expect(candidate.TargetEntityName).toBe('Organizations');
+
+            const captureRes = await engine.ApplyCaptureOrEnrichment({
+                EntityName: candidate.TargetEntityName,
+                Diffs: candidate.ProposedFields,
+            });
+            expect(captureRes.Success).toBe(true);
+            expect(captureRes.RecordID).toBe('org-created-live-1');
+            expect(createdRecords.length).toBe(1);
         } finally {
             await page.close();
         }
@@ -347,12 +404,17 @@ describe('Headless Playwright E2E Proof — Live Wikipedia.org & Amazon.com with
             expect(amazonState.Url).toContain('amazon.com');
             expect(amazonState.Hostname).toContain('amazon.com');
             expect(amazonState.InteractiveElements.length).toBeGreaterThan(0);
+            expect(amazonState.InteractiveElements[0].Index).toBe(0);
+            expect(amazonState.InteractiveElements[0].BoundingBox).toBeDefined();
             expect(amazonState.CapturedSignals['HostnameRoot']).toBe('amazon.com');
+            expect(typeof amazonState.MetaTags).toBe('object');
+            expect(typeof amazonState.OpenGraph).toBe('object');
 
-            // 2. Pick the first live interactive element on Amazon.com and render a Shadow-DOM Coach-Mark Spotlight
-            const firstInteractiveSelector =
-                amazonState.InteractiveElements[0]?.Selector ?? 'a[href], input, button';
+            // Verify data-mj-cu-index="0" was stamped into the live Amazon.com DOM by the probe
+            const amazonCuZeroCount = await page.locator('[data-mj-cu-index="0"]').count();
+            expect(amazonCuZeroCount).toBe(1);
 
+            // 2. Highlight element by 0-based Index: 0 on live Amazon.com and render a Shadow-DOM Coach-Mark Spotlight
             const highlightRes = await sendCommandToLiveContentScript<{
                 Success: boolean;
                 Data?: {
@@ -360,7 +422,7 @@ describe('Headless Playwright E2E Proof — Live Wikipedia.org & Amazon.com with
                     BoundingBox: { Top: number; Left: number; Width: number; Height: number };
                 };
             }>(page, 'MJ_CS_HIGHLIGHT_ELEMENT', {
-                Selector: firstInteractiveSelector,
+                Index: 0,
                 Label: 'Amazon Interactive Target Grounded by MJ Co-Pilot',
                 StepBadge: 'Amazon Live Spotlight',
             });

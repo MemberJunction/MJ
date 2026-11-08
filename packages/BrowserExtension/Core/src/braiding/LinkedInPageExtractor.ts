@@ -16,6 +16,7 @@ import type {
 } from '../types/extension-types.js';
 import {
     BaseBrowserPageExtractor,
+    StripTrailingSlashes,
     type ExtractedPageSignals,
 } from './BaseBrowserPageExtractor.js';
 
@@ -102,20 +103,24 @@ export class LinkedInPageExtractor extends BaseBrowserPageExtractor {
         }
         try {
             const parsed = new URL(url);
-            const pathMatch = /^\/(in|company)\/([^/?#]+)/i.exec(parsed.pathname);
-            if (pathMatch) {
-                const section = pathMatch[1].toLowerCase();
-                const slug = decodeURIComponent(pathMatch[2]).toLowerCase().replace(/\/+$/, '');
+            const pathSegments = parsed.pathname.split('/').filter((s) => s.length > 0);
+            if (
+                pathSegments.length >= 2 &&
+                (pathSegments[0].toLowerCase() === 'in' || pathSegments[0].toLowerCase() === 'company')
+            ) {
+                const section = pathSegments[0].toLowerCase();
+                const slug = StripTrailingSlashes(decodeURIComponent(pathSegments[1]).toLowerCase());
                 return `https://www.linkedin.com/${section}/${slug}`;
             }
-            return `${parsed.origin}${parsed.pathname.replace(/\/+$/, '')}`.toLowerCase();
+            return `${parsed.origin}${StripTrailingSlashes(parsed.pathname)}`.toLowerCase();
         } catch {
-            return url.trim().replace(/\/+$/, '').toLowerCase();
+            return StripTrailingSlashes(url.trim()).toLowerCase();
         }
     }
 
     /**
-     * Parses a LinkedIn page title or `<meta property="og:title">` into structured person/company parts.
+     * Parses a LinkedIn page title or `<meta property="og:title">` into structured person/company parts
+     * using deterministic linear-time string parsing.
      */
     public ParseLinkedInTitle(rawTitle: string): {
         FullName: string;
@@ -124,15 +129,20 @@ export class LinkedInPageExtractor extends BaseBrowserPageExtractor {
         HeadlineOrTitle?: string;
         Company?: string;
     } {
-        // Strip trailing "| LinkedIn" and leading notification counts like "(3) "
-        const withoutSuffix = rawTitle
-            .replace(/^\(\d+\)\s*/, '')
-            .replace(/\s*\|\s*LinkedIn.*$/i, '')
-            .trim();
+        const withoutPrefix = this.stripLeadingNotificationCount(rawTitle.trim());
+        const withoutSuffix = this.stripLinkedInSuffix(withoutPrefix);
 
-        const segments = withoutSuffix.split(/\s+-\s+|\s+–\s+/).map((s) => s.trim()).filter(Boolean);
+        const segments = withoutSuffix
+            .split(' - ')
+            .flatMap((part) => part.split(' – '))
+            .map((s) => s.trim())
+            .filter(Boolean);
+
         const fullName = segments[0] ?? withoutSuffix;
-        const nameParts = fullName.split(/\s+/).filter(Boolean);
+        const nameParts = fullName
+            .split(' ')
+            .map((s) => s.trim())
+            .filter(Boolean);
         const firstName = nameParts[0] ?? '';
         const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
 
@@ -143,6 +153,42 @@ export class LinkedInPageExtractor extends BaseBrowserPageExtractor {
             HeadlineOrTitle: segments[1],
             Company: segments[2],
         };
+    }
+
+    /**
+     * Strips a leading notification prefix such as `"(3) "` in $O(n)$ linear time.
+     */
+    private stripLeadingNotificationCount(title: string): string {
+        if (!title.startsWith('(')) {
+            return title;
+        }
+        const closeParen = title.indexOf(')');
+        if (closeParen <= 1 || closeParen > 10) {
+            return title;
+        }
+        const inner = title.slice(1, closeParen);
+        for (let i = 0; i < inner.length; i++) {
+            const code = inner.charCodeAt(i);
+            if (code < 48 || code > 57) {
+                return title;
+            }
+        }
+        return title.slice(closeParen + 1).trimStart();
+    }
+
+    /**
+     * Strips a trailing `"| LinkedIn"` suffix in $O(n)$ linear time.
+     */
+    private stripLinkedInSuffix(title: string): string {
+        const pipeIdx = title.lastIndexOf('|');
+        if (pipeIdx === -1) {
+            return title.trim();
+        }
+        const suffix = title.slice(pipeIdx + 1).toLowerCase();
+        if (suffix.includes('linkedin')) {
+            return title.slice(0, pipeIdx).trim();
+        }
+        return title.trim();
     }
 }
 

@@ -15,6 +15,18 @@ import type {
 } from '../types/extension-types.js';
 
 /**
+ * Deterministic linear-time ($O(n)$) helper that strips trailing `'/'` characters
+ * from a string without polynomial backtracking regular expressions.
+ */
+export function StripTrailingSlashes(value: string): string {
+    let end = value.length;
+    while (end > 0 && value.charCodeAt(end - 1) === 47 /* '/' */) {
+        end--;
+    }
+    return value.slice(0, end);
+}
+
+/**
  * Result of extracting signals and candidate field values from a {@link BrowserPageStateSnapshot}
  * for a given {@link BrowserContextRuleSpec}.
  */
@@ -108,10 +120,10 @@ export abstract class BaseBrowserPageExtractor {
         }
         try {
             const parsed = new URL(url);
-            const cleanPath = parsed.pathname.replace(/\/+$/, '');
+            const cleanPath = StripTrailingSlashes(parsed.pathname);
             return `${parsed.origin}${cleanPath}`;
         } catch {
-            return url.trim().replace(/\/+$/, '');
+            return StripTrailingSlashes(url.trim());
         }
     }
 
@@ -127,7 +139,9 @@ export abstract class BaseBrowserPageExtractor {
                 // keep as-is
             }
         }
-        host = host.replace(/^www\./, '');
+        if (host.startsWith('www.')) {
+            host = host.slice(4);
+        }
         const parts = host.split('.').filter((p) => p.length > 0);
         if (parts.length <= 2) {
             return parts.join('.');
@@ -180,7 +194,7 @@ export abstract class BaseBrowserPageExtractor {
             case 'Lowercase':
                 return trimmed.toLowerCase();
             case 'StripTrailingSlash':
-                return trimmed.replace(/\/+$/, '');
+                return StripTrailingSlashes(trimmed);
             case 'HostnameRoot':
                 return this.extractRegistrableDomain(trimmed);
             case 'Trim':
