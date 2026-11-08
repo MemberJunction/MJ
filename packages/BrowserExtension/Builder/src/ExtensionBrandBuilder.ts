@@ -681,7 +681,22 @@ export class ExtensionBrandBuilder {
     };
   }
 
+  function ensureReadyAttributes() {
+    if (document.documentElement) {
+      if (document.documentElement.getAttribute('data-mj-extension-content-script') !== 'ready') {
+        document.documentElement.setAttribute('data-mj-extension-content-script', 'ready');
+      }
+      if (document.documentElement.getAttribute('data-mj-extension-brand') !== BRAND_SLUG) {
+        document.documentElement.setAttribute('data-mj-extension-brand', BRAND_SLUG);
+      }
+      if (document.documentElement.getAttribute('data-mj-extension-assistant') !== ASSISTANT_NAME) {
+        document.documentElement.setAttribute('data-mj-extension-assistant', ASSISTANT_NAME);
+      }
+    }
+  }
+
   function handleCommand(cmd) {
+    ensureReadyAttributes();
     const p = cmd.Payload || {};
     switch (cmd.Type) {
       case 'MJ_CS_GET_PAGE_STATE':
@@ -699,10 +714,13 @@ export class ExtensionBrandBuilder {
     }
   }
 
-  if (document.documentElement) {
-    document.documentElement.setAttribute('data-mj-extension-content-script', 'ready');
-    document.documentElement.setAttribute('data-mj-extension-brand', BRAND_SLUG);
-    document.documentElement.setAttribute('data-mj-extension-assistant', ASSISTANT_NAME);
+  ensureReadyAttributes();
+  if (typeof MutationObserver !== 'undefined' && document.documentElement) {
+    const attrObserver = new MutationObserver(() => ensureReadyAttributes());
+    attrObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-mj-extension-content-script', 'data-mj-extension-brand']
+    });
   }
 
   // Listen to custom DOM command events so both Main World and Extension World can exchange structured messages

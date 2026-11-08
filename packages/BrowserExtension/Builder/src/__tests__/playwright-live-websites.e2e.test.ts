@@ -32,6 +32,50 @@ import { ExtensionBrandBuilder } from '../ExtensionBrandBuilder.js';
 
 const BRANDS_DIR = path.resolve(__dirname, '../../../Brands');
 
+const hasPlaywrightChromium = (() => {
+    try {
+        const execPath = chromium.executablePath();
+        return Boolean(execPath && fs.existsSync(execPath));
+    } catch {
+        return false;
+    }
+})();
+
+describe('White-Label Brand Stamping & Bundle Verification (mj-copilot, betty, sidecar)', () => {
+    it('stamps unpacked MV3 directories, manifests, theme stylesheets, and unified content scripts for all 3 reference brands', () => {
+        const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-ext-brand-verify-'));
+        try {
+            const builder = new ExtensionBrandBuilder();
+            const copilotRes = builder.BuildBrandedExtension({
+                BrandSource: path.join(BRANDS_DIR, 'mj-copilot/mj-extension-brand.json'),
+                OutputRootDir: outDir,
+            });
+            const bettyRes = builder.BuildBrandedExtension({
+                BrandSource: path.join(BRANDS_DIR, 'betty/mj-extension-brand.json'),
+                OutputRootDir: outDir,
+            });
+            const sidecarRes = builder.BuildBrandedExtension({
+                BrandSource: path.join(BRANDS_DIR, 'sidecar/mj-extension-brand.json'),
+                OutputRootDir: outDir,
+            });
+
+            expect(copilotRes.Manifest.optional_permissions).toContain('debugger');
+            expect(bettyRes.Manifest.optional_permissions).toBeUndefined();
+            expect(sidecarRes.BrandProfile.DefaultControlBackend).toBe('auto');
+
+            const contentScriptCode = fs.readFileSync(
+                path.join(copilotRes.UnpackedDir, 'content-script.js'),
+                'utf8'
+            );
+            expect(contentScriptCode).toContain('data-mj-cu-index');
+            expect(contentScriptCode).toContain('MJ_CS_GET_PAGE_STATE');
+            expect(contentScriptCode).toContain('MJ_CS_HIGHLIGHT_ELEMENT');
+        } finally {
+            fs.rmSync(outDir, { recursive: true, force: true });
+        }
+    });
+});
+
 /**
  * Helper to send a structured command to the injected MV3 content script on a live Playwright `Page`
  * via the `mj-ext-command` / `mj-ext-response` custom DOM event bridge.
@@ -68,7 +112,7 @@ async function sendCommandToLiveContentScript<TResult>(
     );
 }
 
-describe('Headless Playwright E2E Proof — Live Wikipedia.org & Amazon.com with MV3 Extension', () => {
+describe.runIf(hasPlaywrightChromium)('Headless Playwright E2E Proof — Live Wikipedia.org & Amazon.com with MV3 Extension', () => {
     let buildOutDir = '';
     let unpackedCopilotDir = '';
     let unpackedBettyDir = '';
@@ -389,6 +433,9 @@ describe('Headless Playwright E2E Proof — Live Wikipedia.org & Amazon.com with
             // Wait for at least one interactive element (link/button/input) on Amazon.com to be visible
             await page.waitForSelector('a[href], input, button', {
                 state: 'visible',
+                timeout: 15000,
+            });
+            await page.waitForSelector('html[data-mj-extension-brand="mj-copilot"]', {
                 timeout: 15000,
             });
 

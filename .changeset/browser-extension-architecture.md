@@ -1,4 +1,5 @@
 ---
+"@memberjunction/core-entities": minor
 "@memberjunction/computer-use": minor
 "@memberjunction/ai-core-plus": minor
 "@memberjunction/browser-extension-core": minor
