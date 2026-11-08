@@ -254,8 +254,12 @@ async function buildUserKeyProvider(rawKey: string): Promise<IMetadataProvider> 
             const provider = newSecondaryGraphQLProvider();
             const config = new GraphQLProviderConfigData(
                 '', client.Url, '', async () => '', undefined, undefined, undefined, undefined, rawKey);
-            if (!(await provider.Config(config, undefined, true /* separateConnection */))) {
-                throw new Error('secondary GraphQLDataProvider Config() returned false');
+            const ok = await provider.Config(config, undefined, true /* separateConnection */);
+            if (!ok || provider.Entities.length === 0) {
+                const cause = provider.LastMetadataLoadError;
+                throw cause
+                    ? new Error(`secondary GraphQLDataProvider Config() loaded no entity metadata: ${cause.message}`, { cause })
+                    : new Error('secondary GraphQLDataProvider Config() loaded no entity metadata');
             }
             return provider as unknown as IMetadataProvider;
         } catch (e) {

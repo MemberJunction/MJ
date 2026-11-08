@@ -18,7 +18,11 @@ export class AuditFormatter {
     }
 
     if (format === 'json') {
-      return JSON.stringify(runs.map(r => r.GetAll()), null, 2);
+      return JSON.stringify(
+        runs.map(r => (typeof (r as { GetAll?: unknown }).GetAll === 'function' ? r.GetAll() : r)),
+        null,
+        2
+      );
     }
 
     if (format === 'table') {

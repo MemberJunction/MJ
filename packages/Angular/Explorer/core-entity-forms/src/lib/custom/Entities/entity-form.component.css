@@ -204,6 +204,10 @@
 }
 
 /* Navigation Rail - Minimalist Icon-First Design */
+.phone-section-picker {
+    display: none;
+}
+
 .nav-rail {
     width: var(--nav-rail-width);
     background: var(--bg-primary);
@@ -2560,4 +2564,52 @@
   margin: var(--mj-space-2) 0 0;
   font-size: var(--mj-text-xs);
   color: var(--mj-status-error);
+}
+
+/* Phone (375px): the header stacks, the stat tiles wrap two per row, and the icon rail
+   becomes one section-picker button above the canvas (same pattern as the standard form). */
+@media (max-width: 768px) {
+    .explorer-body {
+        flex-direction: column;
+    }
+
+    .nav-rail {
+        display: none;
+    }
+
+    .phone-section-picker {
+        display: block;
+        flex-shrink: 0;
+        padding: 4px 8px;
+        border-bottom: 1px solid var(--border-color);
+        background: var(--bg-primary);
+    }
+
+    .explorer-header {
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 12px 16px;
+    }
+
+    .entity-identity {
+        flex-basis: 100%;
+    }
+
+    .entity-subtitle {
+        flex-wrap: wrap;
+    }
+
+    .entity-description {
+        flex-basis: 100%;
+        white-space: normal;
+    }
+
+    .header-stats {
+        flex-basis: 100%;
+        flex-wrap: wrap;
+    }
+
+    .stat-item {
+        flex: 1 1 40%;
+    }
 }
