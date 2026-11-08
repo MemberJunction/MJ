@@ -1056,13 +1056,13 @@ function mapInlineType(tsqlType: string): string {
  */
 export function RemoveNPrefix(sql: string): string {
   let result = '';
-  let previousType: 'code' | 'string' | 'comment' | null = null;
   for (const seg of segmentSQL(sql)) {
-    if (seg.type === 'string' && previousType !== 'string' && N_PREFIX_BEFORE_LITERAL.test(result)) {
+    // A literal right after another literal leaves `result` ending in a quote, which the
+    // pattern cannot match, so no separate check for the previous segment is needed.
+    if (seg.type === 'string' && N_PREFIX_BEFORE_LITERAL.test(result)) {
       result = result.slice(0, -1);
     }
     result += seg.text;
-    if (seg.text) previousType = seg.type;
   }
   return result;
 }
