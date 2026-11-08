@@ -1,0 +1,10 @@
+---
+"@memberjunction/ng-react": minor
+"@memberjunction/ng-artifacts": minor
+"@memberjunction/ng-realtime-widget": minor
+"@memberjunction/core": minor
+---
+
+Component artifacts can be exported as PDF. The artifact viewer header offers **PDF – Portrait** and **PDF – Landscape**, backed by the new `MJReactComponent.CapturePDF(orientation, title)`: the component is laid out at the A4 page's printable width (so the PDF is the same whatever the viewer's size), inner scroll areas are expanded, Chart.js charts are re-rendered sharp, and page breaks keep charts, rows, table lead-ins and headings together, shrinking a page by up to 20% rather than leaving it mostly empty. The component is captured on the background it is shown on, so a dark theme stays readable. The host page is not changed during capture. Viewer plugins opt in through `SupportsPDFExport` / `ExportPDF(orientation)` on `BaseArtifactViewerPluginComponent`. ng-react adds `html-to-image`, loaded only when a PDF is exported, and writes the PDF itself (`BuildImagePdf`), with no PDF library.
+
+Registry component metadata (`metadata/components`) changes, so the release needs a metadata migration: the new **ExportableData** wrapper (Generic/UI/Export) adds a CSV/Excel/PNG export icon to any data element; **DataGrid**, **EntityDataGrid** and **SimpleChart** export themselves (CSV and Excel, plus PNG for charts), with the record's primary key columns at the front of the file when the table does not show them; PNGs are drawn on the background the chart is shown on, so dark-theme labels stay readable; a SimpleChart date category exports as the day its axis shows; an EntityDataGrid export cut off at 100,000 records ends with a note row saying it is partial; **SimpleChart** rebuilds its chart only when what it draws changes, and without replaying the entry animation, so a click on one chart no longer re-animates charts whose inputs were only recreated; **DataExportPanel** is marked deprecated in its descriptions and stays Published so existing components keep working.

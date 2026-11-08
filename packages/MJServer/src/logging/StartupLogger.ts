@@ -1,4 +1,5 @@
 import { configInfo } from '../config.js';
+import { MJServerStartupState } from '../startupState.js';
 import { LogStatus } from '@memberjunction/core';
 import ora from 'ora';
 import type { Ora } from 'ora';
@@ -238,6 +239,8 @@ export class StartupLogger {
    */
   public BeginPhase(phase: string): number {
     this.currentPhase = phase;
+    // The startup gate reports this phase on /healthcheck while the server boots.
+    MJServerStartupState.Instance.SetPhase(phase);
     this.refreshBootText();
     return performance.now();
   }
