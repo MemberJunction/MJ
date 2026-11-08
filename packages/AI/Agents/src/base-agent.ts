@@ -19,6 +19,7 @@ import { BuildNativeToolSet, COMPLETE_TASK_TOOL, SUB_AGENT_TOOL_PREFIX, type Nat
 import { TurnToolCallingMode } from './native-tools/turn-mode';
 import { NATIVE_CONTROL_TEMPLATE_DATA, NATIVE_ONLY_TEMPLATE_FLAG, ResolveNativeControlConfig, type NativeControlConfig } from './native-tools/native-control-config';
 import type { AgentToolContext, AgentToolDefinition, AgentToolResult } from './native-tools/agent-tools';
+import { AgentToolCircuitBreaker } from './native-tools/agent-tool-circuit-breaker';
 import { BuildFrameworkTools, type FrameworkToolAvailability, type FrameworkToolHost } from './native-tools/framework-tools';
 import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactAnsweredToolCallArguments, CompactToolResultContent, CompactToolResultContentAsync, type NativeToolResult } from './native-tools/tool-result-turns';
 import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
@@ -901,6 +902,13 @@ export class BaseAgent {
     }> = new Map();
 
     /**
+     * The same identical-arguments and attempt-budget rules for agent-local tools
+     * ({@link GetAgentTools}), which run outside the action dispatch path.
+     * @private
+     */
+    private _agentToolBreaker = new AgentToolCircuitBreaker(IDENTICAL_FAILURE_THRESHOLD, ACTION_FAILURE_BUDGET);
+
+    /**
      * The identity of one action call's arguments, for the circuit breaker's identical-arguments
      * rule: two calls with the same normalized string are "the same call", whatever order the model
      * wrote the keys in.
@@ -1070,6 +1078,7 @@ export class BaseAgent {
         this._fatalActionFailures.clear();
         this._audienceLockedActions.clear();
         this._actionFailureHistory.clear();
+        this._agentToolBreaker.Reset();
     }
 
     /**
@@ -6220,24 +6229,71 @@ export class BaseAgent {
         });
         // Whatever fails below, the step is finalized and the call answered — never left Running.
         let outcome: { payload: P; content: string; isError: boolean } = { payload, content: '', isError: true };
+        const breakerKey = this.agentToolBreakerKey(call);
         try {
-            const ran = await this.runAgentTool(call, payload, params);
-            // payload_change_request keeps its single-call behaviour: the allowed parts apply.
-            const partial = this._nativeToolBindings?.get(call.toolName)?.kind === 'payloadChange';
-            const applied = !ran.IsError && ran.PayloadChange
-                ? this.applyAgentToolPayloadChange(payload, ran.PayloadChange, params, partial)
-                : { payload, error: undefined };
-            outcome = { payload: applied.payload, content: applied.error ?? ran.Content, isError: ran.IsError || applied.error !== undefined };
+            const refusal = breakerKey === null ? null : this._agentToolBreaker.Check(call.toolName, breakerKey);
+            if (refusal) {
+                this.logStatus(`   ⚡ Circuit breaker: agent tool '${call.toolName}' not run (0ms)`, false, params);
+                outcome = { payload, content: refusal, isError: true };
+            } else {
+                outcome = await this.runAndApplyAgentTool(call, payload, params);
+                this.recordAgentToolOutcome(call.toolName, breakerKey, outcome.isError);
+            }
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             LogError(`Agent '${params.agent?.Name}': applying agent tool '${call.toolName}' failed: ${message}`);
             outcome = { payload, content: `The tool's change could not be applied: ${message}. Nothing was changed.`, isError: true };
+            this.recordAgentToolOutcome(call.toolName, breakerKey, true);
         } finally {
             step.PayloadAtEnd = this.serializePayloadAtEnd(outcome.payload);
             await this.finalizeStepEntity(step, !outcome.isError, outcome.isError ? outcome.content : undefined,
                 { tool: call.toolName, content: outcome.content, isError: outcome.isError });
         }
         return { payload: outcome.payload, result: { toolCallId: call.toolCallId, toolName: call.toolName, content: outcome.content, isError: outcome.isError } };
+    }
+
+    /** Runs one call and applies its payload change; a refused change makes the call an error. */
+    private async runAndApplyAgentTool<P>(
+        call: AgentToolCallRequest,
+        payload: P,
+        params: ExecuteAgentParams
+    ): Promise<{ payload: P; content: string; isError: boolean }> {
+        const ran = await this.runAgentTool(call, payload, params);
+        // payload_change_request keeps its single-call behaviour: the allowed parts apply.
+        const partial = this._nativeToolBindings?.get(call.toolName)?.kind === 'payloadChange';
+        const applied = !ran.IsError && ran.PayloadChange
+            ? this.applyAgentToolPayloadChange(payload, ran.PayloadChange, params, partial)
+            : { payload, error: undefined };
+        return { payload: applied.payload, content: applied.error ?? ran.Content, isError: ran.IsError || applied.error !== undefined };
+    }
+
+    /**
+     * The identity of a call's arguments for the agent-tool circuit breaker, or null when the call is
+     * not tracked: it is not an agent tool (`payload_change_request`, an unknown name), the agent type
+     * opted out of the breaker (`UsesActionCircuitBreaker === false`), or the tool did
+     * (`UsesCircuitBreaker === false`). Arguments are normalized like an action's.
+     */
+    private agentToolBreakerKey(call: AgentToolCallRequest): string | null {
+        const binding = this._nativeToolBindings?.get(call.toolName);
+        if (binding?.kind !== 'agentTool' || binding.definition.UsesCircuitBreaker === false) {
+            return null;
+        }
+        if (this.AgentTypeInstance?.UsesActionCircuitBreaker === false) {
+            return null;
+        }
+        return this.normalizeActionParams(call.arguments);
+    }
+
+    /** Updates the agent-tool circuit breaker after a call that ran (nothing for an untracked call). */
+    private recordAgentToolOutcome(toolName: string, breakerKey: string | null, isError: boolean): void {
+        if (breakerKey === null) {
+            return;
+        }
+        if (isError) {
+            this._agentToolBreaker.RecordFailure(toolName, breakerKey);
+        } else {
+            this._agentToolBreaker.RecordSuccess(toolName);
+        }
     }
 
     /** Calls the tool's handler; an undeclared tool or a thrown error becomes an error result. */
