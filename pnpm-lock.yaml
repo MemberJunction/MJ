@@ -13655,6 +13655,9 @@ importers:
       adm-zip:
         specifier: ^0.5.16
         version: 0.5.16
+      cross-spawn:
+        specifier: ^7.0.6
+        version: 7.0.6
       minimatch:
         specifier: ^9.0.5
         version: 9.0.9
@@ -13671,6 +13674,9 @@ importers:
       '@types/adm-zip':
         specifier: ^0.5.7
         version: 0.5.7
+      '@types/cross-spawn':
+        specifier: ^6.0.6
+        version: 6.0.6
       '@types/mssql':
         specifier: ^9.1.9
         version: 9.1.9
@@ -23844,6 +23850,9 @@ packages:
   '@types/cors@2.8.19':
     resolution: {integrity: sha512-mFNylyeyqN93lfe/9CSxOGREz8cpzAhH+E93xJ4xWQf62V8sQ/24reV2nyzUWM6H6Xji+GGHpkbLe7pVoUEskg==}
 
+  '@types/cross-spawn@6.0.6':
+    resolution: {integrity: sha512-fXRhhUkG4H3TQk5dBhQ7m/JDdSNHKwR2BBia62lhwEIq9xGiQKLxd6LymNhn47SjXhsUEPmxi+PKw2OkW4LLjA==}
+
   '@types/d3-array@3.2.2':
     resolution: {integrity: sha512-hOLWVbm7uRza0BYXpIIW5pxfrKe0W+D5lrFiAEYR+pb6w3N2SwSMaJbXdUfSEv+dT4MfHBLtn5js0LAWaO6otw==}
 
@@ -27845,6 +27854,7 @@ packages:
   image-size@0.5.5:
     resolution: {integrity: sha512-6TDAlDPZxUFCv+fuOkIoXT/V/f3Qbq8e37p+YOiYrUv3v9cc3/6x78VdfPgFVaB9dZYeLUfKgHRebpkm/oP2VQ==}
     engines: {node: '>=0.10.0'}
+    deprecated: Please migrate to image-size@2.x
     hasBin: true
 
   image-size@1.2.1:
@@ -41475,6 +41485,10 @@ snapshots:
       '@types/node': 24.10.11
 
   '@types/cors@2.8.19':
+    dependencies:
+      '@types/node': 24.10.11
+
+  '@types/cross-spawn@6.0.6':
     dependencies:
       '@types/node': 24.10.11
 
