@@ -160,7 +160,7 @@ export class EvaluationProtocolRules {
       case 'inner-validation-ungrouped':
         return `The Prediction Unit groups its rows by "${r.UnitGroupKey}", but the protocol's inner validation (${r.InnerKind}) does not group; rows of one group would fall on both sides of an inner fold.`;
       case 'intervals-not-clustered':
-        return `The Prediction Unit groups its rows by "${r.UnitGroupKey}", but the protocol's intervals resample rows (${r.Method}) rather than whole groups; use cluster-bootstrap.`;
+        return `The Prediction Unit groups its rows by "${r.UnitGroupKey}", but the protocol's intervals (${r.Method}) do not resample whole groups; use cluster-bootstrap.`;
       case 'new-entity-group-key-mismatch':
         return `The new-entity report holds out whole groups by "${r.ReportGroupKey}", but the Prediction Unit ${EvaluationProtocolRules.unitGrouping(r.UnitGroupKey)}; the report would not hold out the groups the protocol names.`;
       case 'primary-score-family-mismatch':
@@ -324,9 +324,13 @@ export class EvaluationProtocolRules {
     return [{ Kind: 'group-key-mismatch', ProtocolGroupKey: protocolKey, UnitGroupKey: unit.groupKey }];
   }
 
-  /** A grouped unit's intervals resample whole groups (S2.6); plain bootstrap resamples rows. */
+  /**
+   * A grouped non-forecast unit's intervals resample whole groups (S2.6), which only cluster-bootstrap does: the
+   * sidecar resamples rows for bootstrap and delong, and period blocks (not entities) for block-bootstrap. A
+   * forecast's intervals are pinned to block-bootstrap by the forecast rule instead.
+   */
   private static checkIntervalsGrouping(intervals: IntervalSpec, unit: PredictionUnitSpec): ProtocolRefusal[] {
-    if (unit.groupKey === null || intervals.method !== 'bootstrap') return [];
+    if (unit.groupKey === null || unit.label.outcome.kind === 'forecast' || intervals.method === 'cluster-bootstrap') return [];
     return [{ Kind: 'intervals-not-clustered', UnitGroupKey: unit.groupKey, Method: intervals.method }];
   }
 

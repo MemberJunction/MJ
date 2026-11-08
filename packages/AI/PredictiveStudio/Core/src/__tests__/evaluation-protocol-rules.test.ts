@@ -190,7 +190,7 @@ describe('ValidateProtocolForUnit', () => {
     ]);
   });
 
-  it('refuses ungrouped inner folds and row-resampling intervals on a grouped unit, and keeps both for an ungrouped unit', () => {
+  it('refuses ungrouped inner folds and every interval method but cluster-bootstrap on a grouped non-forecast unit, and keeps both for an ungrouped unit', () => {
     const grouped = unit(binary, null, columnRows, 'HouseholdID');
     const stratified = protocol({ ...draftFor(grouped), innerValidation: { kind: 'repeated-stratified-kfold', folds: 5, repeats: 3 } });
     const refusals = EvaluationProtocolRules.ValidateProtocolForUnit(stratified, grouped);
@@ -202,8 +202,17 @@ describe('ValidateProtocolForUnit', () => {
     const intervalRefusals = EvaluationProtocolRules.ValidateProtocolForUnit(rowBootstrap, grouped);
     expect(intervalRefusals).toEqual([{ Kind: 'intervals-not-clustered', UnitGroupKey: 'HouseholdID', Method: 'bootstrap' }]);
     expect(EvaluationProtocolRules.DescribeProtocolRefusal(intervalRefusals[0])).toBe(
-      'The Prediction Unit groups its rows by "HouseholdID", but the protocol\'s intervals resample rows (bootstrap) rather than whole groups; use cluster-bootstrap.',
+      'The Prediction Unit groups its rows by "HouseholdID", but the protocol\'s intervals (bootstrap) do not resample whole groups; use cluster-bootstrap.',
     );
+    // DeLong and paired bootstrap resample rows in the sidecar; block-bootstrap resamples period blocks, not entities.
+    for (const method of ['delong', 'block-bootstrap'] as const) {
+      const other = protocol({ ...draftFor(grouped), intervals: { ...draftFor(grouped).intervals, method } });
+      expect(EvaluationProtocolRules.ValidateProtocolForUnit(other, grouped)).toEqual([{ Kind: 'intervals-not-clustered', UnitGroupKey: 'HouseholdID', Method: method }]);
+    }
+    // A grouped forecast's intervals are pinned to block-bootstrap by the forecast rule, not refused as unclustered.
+    const groupedForecast = unit(forecastTask, monthly, columnRows, 'HouseholdID');
+    const forecastProtocol = protocol({ ...draftFor(groupedForecast, rolling(5)), intervals: { ...draftFor(groupedForecast, rolling(5)).intervals, method: 'block-bootstrap' } });
+    expect(EvaluationProtocolRules.ValidateProtocolForUnit(forecastProtocol, groupedForecast).filter((r) => r.Kind === 'intervals-not-clustered')).toEqual([]);
     // Blocked-time folds without a group key keep a group's rows in one block per period, which S2.6 permits.
     const groupedSeries = unit(forecastTask, monthly, columnRows, 'HouseholdID');
     const blocked = protocol({ ...draftFor(groupedSeries, rolling(5)), innerValidation: { kind: 'blocked-time', folds: 5, gapPeriods: 3, groupKey: null } });
