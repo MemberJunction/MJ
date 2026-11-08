@@ -20,6 +20,8 @@ export class MemoryStorageAccount {
   public Initializations = 0;
   public RefusePut = false;
   public RefuseDelete = false;
+  /** When set, every delete throws (a driver whose delete call fails outright). */
+  public ThrowOnDelete = false;
   /** When set, every put throws this message (a driver whose credentials are set but wrong). */
   public PutError: string | null = null;
   constructor(public readonly Name: string, private readonly log: string[]) {}
@@ -36,6 +38,7 @@ export class MemoryStorageAccount {
     this.Initializations = 0;
     this.RefusePut = false;
     this.RefuseDelete = false;
+    this.ThrowOnDelete = false;
     this.PutError = null;
   }
 }
@@ -65,6 +68,7 @@ export function RegisterMemoryStorage(driverKey: string, account: MemoryStorageA
     }
     public override async DeleteObject(objectName: string): Promise<boolean> {
       account.Record(`delete ${objectName}`);
+      if (account.ThrowOnDelete) throw new Error(`${account.Name}: delete failed`);
       if (account.RefuseDelete) return false;
       account.Objects.delete(objectName);
       return true;

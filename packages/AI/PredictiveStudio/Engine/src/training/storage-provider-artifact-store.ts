@@ -143,8 +143,14 @@ export class StorageProviderArtifactStore implements IArtifactStore {
 
   /** Removes an object whose row could not be saved; a failure is logged, since the row's error is the one thrown. */
   private static async removeUnrecordedObject(binding: StorageDriverBinding, objectKey: string): Promise<void> {
-    if (!(await binding.Driver.DeleteObject(objectKey))) {
-      LogError(`Predictive Studio model artifacts: could not delete ${objectKey} from "${binding.Provider.Name}" after its MJ: Files row failed to save`);
+    let reason: string | null;
+    try {
+      reason = (await binding.Driver.DeleteObject(objectKey)) ? null : 'the provider refused the delete';
+    } catch (error) {
+      reason = error instanceof Error ? error.message : String(error);
+    }
+    if (reason !== null) {
+      LogError(`Predictive Studio model artifacts: could not delete ${objectKey} from "${binding.Provider.Name}" after its MJ: Files row failed to save (${reason})`);
     }
   }
 }

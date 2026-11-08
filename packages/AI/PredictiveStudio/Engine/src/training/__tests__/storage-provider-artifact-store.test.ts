@@ -173,4 +173,12 @@ describe('StorageProviderArtifactStore', () => {
     await expect(store.save(bytes, 'trainer-r1-c1.json')).rejects.toThrow(/the MJ: Files table is unavailable/);
     expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringMatching(/could not delete .*predictive-studio\/model-artifacts\//)]);
   });
+
+  it('a cleanup delete that throws after a failed row save still throws the save error and logs the delete failure', async () => {
+    files.SaveFailure = 'the MJ: Files table is unavailable';
+    local.ThrowOnDelete = true;
+    const errors = ConsoleCapture.Errors();
+    await expect(store.save(bytes, 'trainer-r1-c1.json')).rejects.toThrow(/the MJ: Files table is unavailable/);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringMatching(/could not delete .*predictive-studio\/model-artifacts\/.*\(local: delete failed\)/)]);
+  });
 });
