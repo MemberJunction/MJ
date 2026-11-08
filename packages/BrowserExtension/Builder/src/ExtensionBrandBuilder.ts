@@ -323,7 +323,7 @@ export class ExtensionBrandBuilder {
     return tokens.some(tok => nameId.includes(tok));
   }
 
-  function detectAuthOrMfaUrl(rawUrl) {
+  function matchesChallengeRoute(rawUrl) {
     try {
       const parsed = new URL(rawUrl);
       const host = parsed.hostname.toLowerCase();
@@ -331,8 +331,8 @@ export class ExtensionBrandBuilder {
       if (host === 'login.microsoftonline.com') return true;
       if (host === 'accounts.google.com' && pathname.startsWith('/v3/signin')) return true;
       const segments = pathname.split('/').filter(Boolean);
-      const authSegments = new Set(['login', 'signin', 'sign-in', 'mfa', '2fa', 'two-factor', 'totp']);
-      return segments.some(seg => authSegments.has(seg));
+      const challengeSegments = new Set(['login', 'signin', 'sign-in', 'mfa', '2fa', 'two-factor', 'totp']);
+      return segments.some(seg => challengeSegments.has(seg));
     } catch {
       return false;
     }
@@ -515,7 +515,7 @@ export class ExtensionBrandBuilder {
     const hasOtpInput = document.querySelectorAll('input[autocomplete="one-time-code"]').length > 0;
     const rawHost = (window.location.hostname || '').toLowerCase();
     const hostnameRoot = rawHost.startsWith('www.') ? rawHost.slice(4) : rawHost;
-    const isAuthOrMfa = hasPasswordInput || hasOtpInput || detectAuthOrMfaUrl(window.location.href);
+    const isAuthOrMfa = hasPasswordInput || hasOtpInput || matchesChallengeRoute(window.location.href);
 
     return {
       Url: window.location.href,

@@ -235,26 +235,43 @@ export class SensitivePageGuard {
         const rawUrl = (signals.Url ?? '').trim();
         const title = (signals.Title ?? '').toLowerCase();
 
-        if (rawUrl) {
-            try {
-                const parsed = new URL(rawUrl);
-                const host = parsed.hostname.toLowerCase();
-                const pathname = parsed.pathname.toLowerCase();
+        let candidatePath = rawUrl.toLowerCase();
+        try {
+            const parsed = new URL(rawUrl);
+            const host = parsed.hostname.toLowerCase();
+            const pathname = parsed.pathname.toLowerCase();
 
-                if (
-                    host === 'login.microsoftonline.com' ||
-                    (host === 'accounts.google.com' && pathname.startsWith('/v3/signin'))
-                ) {
-                    return true;
-                }
+            if (
+                host === 'login.microsoftonline.com' ||
+                (host === 'accounts.google.com' && pathname.startsWith('/v3/signin'))
+            ) {
+                return true;
+            }
+            candidatePath = pathname;
+        } catch {
+            // Non-URL string; inspect path segments directly below
+        }
 
-                if (this.hasAuthPathSegment(pathname)) {
-                    return true;
-                }
-            } catch {
-                if (this.hasAuthPathSegment(rawUrl.toLowerCase())) {
-                    return true;
-                }
+        const cleanPath = candidatePath.split('?')[0].split('#')[0];
+        const segments = cleanPath.split('/').filter((s) => s.length > 0);
+        const challengeTokens = new Set([
+            'login',
+            'signin',
+            'sign-in',
+            'mfa',
+            '2fa',
+            'two-factor',
+            'webauthn',
+            'passkey',
+        ]);
+
+        for (let i = 0; i < segments.length; i++) {
+            const seg = segments[i];
+            if (challengeTokens.has(seg)) {
+                return true;
+            }
+            if ((seg === 'oauth' || seg === 'oauth2') && segments.includes('authorize')) {
+                return true;
             }
         }
 
@@ -302,31 +319,5 @@ export class SensitivePageGuard {
             ...snapshot,
             InteractiveElements: sanitizedElements,
         };
-    }
-
-    private hasAuthPathSegment(pathname: string): boolean {
-        const cleanPath = pathname.split('?')[0].split('#')[0];
-        const segments = cleanPath.split('/').filter((s) => s.length > 0);
-        const authTokens = new Set([
-            'login',
-            'signin',
-            'sign-in',
-            'mfa',
-            '2fa',
-            'two-factor',
-            'webauthn',
-            'passkey',
-        ]);
-
-        for (let i = 0; i < segments.length; i++) {
-            const seg = segments[i];
-            if (authTokens.has(seg)) {
-                return true;
-            }
-            if ((seg === 'oauth' || seg === 'oauth2') && segments.includes('authorize')) {
-                return true;
-            }
-        }
-        return false;
     }
 }
