@@ -11,15 +11,17 @@
 
 **Why.** Associations on MemberJunction, starting with [BizApps Collaboration](https://github.com/MemberJunction/bizapps-collaboration)'s spaces, need somewhere to write and share documents without renting a separate tool for each relationship. Word and Google Docs stay: MJ imports from them, exports to them and links to them. What MJ adds that they can't:
 
-- **Blocks.** A document, slide or sheet holds live MJ things: a query, a view, a record, a chart, an interactive component, another artifact. Each renders for the reader, under the reader's permissions.
-- **Agents as co-editors.** An agent edits the same live document as the people in it, a paragraph or a cell at a time, and anyone can undo what it did.
+- **Blocks (live MJ data + "OLE" Artifact plugins).** A document, slide or sheet embeds two kinds of live blocks through one `@RegisterClass(BaseDocumentBlock, '<Kind>')` registry:
+  1. **Live MJ data blocks** (`Query`, `View`, `Record`, `Chart`, `Dashboard`, `SheetRange`) that query MJ directly under the reader's permissions.
+  2. **Artifact blocks (`MJ: Artifacts` as "MS OLE" objects — e.g., an inline Whiteboard or Interactive Component)** that bring their own persistence and version history (`MJ: Artifact Versions`), permissions, pluggable viewer/editor UI (`BaseArtifactViewerPluginComponent`), and agent read/write tools (`BaseArtifactToolLibrary`) into the middle of a doc, slide, or sheet.
+- **Agents as co-editors.** An agent edits the same live document as the people in it, a paragraph, slide region, cell, or embedded artifact (such as a Whiteboard) at a time, and anyone can undo what it did.
 - **One permission model.** The same row- and field-level rules that govern MJ Explorer govern every document, block and add-in.
 
-Collaboration keeps documents out of its own scope: its notes stay light, and becoming a document-management system is one of its non-goals ([its plan](https://github.com/MemberJunction/bizapps-collaboration/blob/next/plans/plan.md), D33 and the non-goals list). So this is core work that Collaboration, Committees, Contracts, Marketing and every other app consume, the way they consume the whiteboard.
+Collaboration keeps documents out of its own scope: its notes stay light, and becoming a document-management system is one of its non-goals ([its plan](https://github.com/MemberJunction/bizapps-collaboration/blob/next/plans/plan.md), D33 and the non-goals list; reinforced when [bizapps-collaboration#32](https://github.com/MemberJunction/bizapps-collaboration/pull/32) removed the interim `SpacePage` table). So this is core work that Collaboration, Committees, Contracts, Marketing and every other app consume, the way they consume the whiteboard.
 
-**Checked against:** MJ `next` at `bf01635ce` (2026-10-30, after [#6214](https://github.com/MemberJunction/MJ/pull/6214) merged). Paths are under `packages/` unless they start with `plans/`, `guides/`, `metadata/` or `.claude/`.
+**Checked against:** MJ `next` on 2026-11-08 (after [#6214](https://github.com/MemberJunction/MJ/pull/6214), [#6281](https://github.com/MemberJunction/MJ/pull/6281), [#6301](https://github.com/MemberJunction/MJ/pull/6301), and [#6388](https://github.com/MemberJunction/MJ/pull/6388) merged). Paths are under `packages/` unless they start with `plans/`, `guides/`, `metadata/` or `.claude/`.
 
-**Status:** draft for review. D1 to D11 are Amith's decisions from 2026-10-30.
+**Status:** draft for review. D1 to D12 are Amith's decisions from 2026-10-30 and 2026-11-08.
 
 ## Contents
 
@@ -34,7 +36,7 @@ Collaboration keeps documents out of its own scope: its notes stay light, and be
 9. [Order and delivery](#9-order-and-delivery)
 10. [Open questions](#10-open-questions)
 11. [Not doing](#11-not-doing)
-12. [Side finding](#12-side-finding)
+12. [Side finding (resolved)](#12-side-finding-resolved)
 
 ## 1. What MJ already has, and what it lacks
 
@@ -42,17 +44,17 @@ Collaboration keeps documents out of its own scope: its notes stay light, and be
 
 | Piece | Where | What it gives this plan |
 |---|---|---|
-| Artifacts and their versions | `MJ: Artifacts`; `MJ: Artifact Versions` (`Content`, `Configuration`, `ContentHash`, `ContentMode` `Text` or `File`, `FileID`) | The document record and its saved versions |
+| Artifacts and their versions | `MJ: Artifacts`; `MJ: Artifact Versions` (`Content`, `Configuration`, `ContentHash`, `ContentMode` `Text` or `File`, `FileID`) | The document record, its saved versions, and the persistence layer for embedded "OLE" Artifact blocks (§ 3.4) |
 | Sharing | `MJ: Artifact Permissions` (`CanRead`, `CanEdit`, `CanDelete`, `CanShare`, per user) | A starting point; see § 3.3 |
 | Folders | `MJ: Collections` (a tree, with permissions); browser and share dialog in `Angular/Generic/conversations/src/lib/components/collection/` | Where documents live in Explorer |
-| Artifact types | `metadata/artifact-types`: Markdown Document, Word Document, PDF, Excel Spreadsheet, CSV, Data Snapshot, Whiteboard | The types this plan upgrades (D4) |
+| Artifact types & viewer plugins | `metadata/artifact-types`: Markdown Document, Word Document, PDF, Excel Spreadsheet, CSV, Data Snapshot, Whiteboard, Component, SVG, Media; `Angular/Generic/artifacts` (`BaseArtifactViewerPluginComponent`, `ArtifactTypePluginViewerComponent`, `GetCurrentStateSnapshot()`) | Both the top-level document types this plan upgrades (D4) and the pluggable "OLE" object types that embed inside Docs, Slides, and Sheets (D12, § 3.4) |
 | Type inheritance | `AI/Agents/src/ArtifactToolManager.ts` walks a type's `ParentID` chain for its tools; `artifact-viewer-panel.component.ts` does the same for viewers | A child type inherits until it overrides |
 | Agent tools per type | `AI/CorePlus/src/artifact-tool-library.ts` (`BaseArtifactToolLibrary`); `AI/Agents/src/artifact-tools/` | The seam the write tools plug into (§ 3.6) |
-| Whiteboard | `Angular/Generic/whiteboard`: stable item ids, a change journal, `BuildSceneDelta` (what changed since a token), `ApplyWhiteboardAgentTool` | The pattern for granular agent edits. Single-user and client-side today |
-| Conversations | `MJ: Conversations` (`LinkedEntityID`, `LinkedRecordID`, `AdditionalData`) | Comment threads (D6) |
-| Block renderers | `Angular/Generic/` `query-viewer`, `entity-viewer`, `entity-card`, `dashboard-viewer`, `charts`, `react` (interactive components), `artifacts` | Most blocks are wiring, not new UI |
+| Whiteboard | `Angular/Generic/whiteboard` (`WhiteboardState`, `<mj-realtime-whiteboard-host [ShowFocusToggle]="false">`, `<mj-whiteboard-snapshot>`, focus-scoped keyboard shortcuts, `BuildSceneDelta`, `BuildSceneSummary`, `ApplyWhiteboardAgentTool`, `BuildWhiteboardExportSvg`/`Html`) + `WhiteboardArtifactViewerPlugin` in `Angular/Generic/conversations` | Both the pattern for granular agent edits and the flagship embeddable "OLE" Artifact block inside Docs and Slides (§ 3.4.1) |
+| Anchored Conversations & Record Comments | `MJ: Conversations` (`LinkedEntityID`, `LinkedRecordID`, `AnchorType` `CHECK` already including `'DocBlock'`, `'SlideRegion'`, and `'SheetRange'`, `AnchorKey`, `AnchorMetadata` typed as `IConversationAnchorMetadata`, `IsResolved`, `ResolvedByUserID`, `ResolvedAt`); RLS/FLS read & write hooks (`AnchoredConversationSecurity`, `RestrictedFieldCommentClassifier`) and `@mention` notification dispatch (`DispatchConversationMentionNotifications`) — **shipped in [#6281](https://github.com/MemberJunction/MJ/pull/6281)** | Comment threads schema, RLS/FLS security, and `@mention` notifications already on `next` (D6, § 3.5) |
+| Block renderers | `Angular/Generic/` `query-viewer`, `entity-viewer`, `entity-card`, `dashboard-viewer`, `charts`, `react` (interactive components), `artifacts` (`<mj-artifact-type-plugin-viewer>`) | Most blocks are wiring, not new UI |
 | Text | `MarkdownCore` (marked, custom extensions, a token AST); `Angular/Generic/markdown`; `Angular/Generic/composer` (@mentions) | Saved form, rendering, mentions |
-| Files, import, export | `MJStorage` drivers (Google Drive, SharePoint, Box, Dropbox, AWS, Azure, Google Cloud); `DocumentParsing` (PDF, Word, spreadsheets to text); `mammoth`, `turndown` and `docx` (in `Actions/CoreActions`); `exceljs` 4.4; `papaparse`; `pdfkit` | Import, export, linked documents |
+| Files, import, export | `MJStorage` drivers (Google Drive, SharePoint, Box, Dropbox, AWS, Azure, Google Cloud); `DocumentParsing` (PDF, Word, spreadsheets to text); `mammoth`, `turndown` and `docx` (in `Actions/CoreActions`, with ordered-list decimal numbering fixed in [#6388](https://github.com/MemberJunction/MJ/pull/6388)); `exceljs` 4.4; `papaparse`; `pdfkit` | Import, export, linked documents |
 | History | `VersionHistory` (labels, restore); Record Changes; `@codemirror/merge` | Restore and diff |
 | Theme | `ThemeEngine`: the full `--mj-*` token set from a few brand seeds | Slide themes (§ 5) |
 | Transport | MJServer's `ws` and `graphql-ws`; routes through `ApiRoute()`; REST in `MJServer/src/rest/RESTEndpointHandler.ts` (`POST /views/:entityName`, `POST /views/batch`, `POST /queries/run`, `GET /metadata/entities`) | The sync endpoint (§ 3.1) and the data API (§ 3.7) |
@@ -68,8 +70,8 @@ Collaboration keeps documents out of its own scope: its notes stay light, and be
 
 1. **A rich-text editor.** None in MJ or any BizApps repo; CodeMirror is there for code.
 2. **Live multi-user editing.** No shared real-time model anywhere. The whiteboard is single-user.
-3. **Agent write tools.** Every artifact tool library is read-only: `TextToolLibrary` has `get_lines` and `grep`; `DocxToolLibrary` has `get_text`, `get_sections`, `get_lines`, `get_html` and `search_text`; `ExcelToolLibrary` has `get_sheets`, `get_sheet_data`, `get_formulas`, `aggregate_column` and `search_cells`. An agent can only write a whole new version.
-4. **Comments anchored to a passage, a slide or a cell.**
+3. **Agent write tools for artifacts.** Every `BaseArtifactToolLibrary` is read-only today: `TextToolLibrary` has `get_lines` and `grep`; `DocxToolLibrary` has `get_text`, `get_sections`, `get_lines`, `get_html` and `search_text`; `ExcelToolLibrary` has `get_sheets`, `get_sheet_data`, `get_formulas`, `aggregate_column` and `search_cells`. (Whiteboard already has `ApplyWhiteboardAgentTool` in `@memberjunction/ng-whiteboard`, which needs a `WhiteboardToolLibrary` server wrapper so document agents can invoke it on embedded whiteboards.)
+4. **Editor-side comment anchor binding.** The database schema (`AnchorType` in `'DocBlock' | 'SlideRegion' | 'SheetRange'`, `AnchorKey`, `AnchorMetadata`), RLS/FLS security, and `@mention` notifications shipped in [#6281](https://github.com/MemberJunction/MJ/pull/6281); what remains is binding Yjs relative positions, slide regions, and sheet cell ranges to those columns in the editors and comment rail.
 5. **Drafts.** Every save is a new version, so autosave would bury the history.
 6. **Sharing beyond named people,** and letting another record decide (a Collaboration space).
 7. **Slides:** no type, no layout model, no PPTX writer.
@@ -93,9 +95,9 @@ Search, vector sync, export, diff and every existing reader of an artifact use t
 
 **D5. Agents edit the live document on the server, as participants.** People see an agent's edits arrive under its name. Tools address stable ids, each call carries the revision it read, and a version is saved before and after every agent run, so "undo what the agent did" is one restore (§ 3.6).
 
-**D6. A comment thread is a conversation.** A thread is a `MJ: Conversations` row linked to the artifact through `LinkedEntityID` and `LinkedRecordID`, with an anchor. @-mentioning an agent in a thread runs it with the anchored content as context.
+**D6. A comment thread is a conversation.** *(Schema & RLS/FLS foundation shipped in [#6281](https://github.com/MemberJunction/MJ/pull/6281).)* A thread is an `MJ: Conversations` row linked to the artifact through `LinkedEntityID` and `LinkedRecordID`, using `AnchorType` (`'DocBlock'`, `'SlideRegion'`, or `'SheetRange'`), `AnchorKey`, `AnchorMetadata` (`IConversationAnchorMetadata`), and `IsResolved`. @-mentioning an agent in a thread runs it with the anchored content as context.
 
-**D7. Blocks reference; they never copy.** A block names its source and how to show it, renders live for each reader under that reader's permissions, and can be frozen as of a moment on purpose. Blocks register through ClassFactory, so any Open App adds its own. The same blocks work in docs, slides and sheets.
+**D7. Blocks reference; they never copy.** A block names its source and how to show it, renders live for each reader under that reader's permissions, and can be frozen as of a moment on purpose. Blocks register through ClassFactory (`@RegisterClass(BaseDocumentBlock, '<Kind>')`), so any Open App adds its own. The same blocks work in docs, slides and sheets.
 
 **D8. Word and Google Docs: import, export and link. No two-way sync.**
 
@@ -104,6 +106,8 @@ Search, vector sync, export, diff and every existing reader of an artifact use t
 **D10. One data API for every consumer.** Blocks, sheet ranges, the add-ins and generated files all fetch rows the same way: a query (with parameters) or a view, run as the caller, through the field-level output projection, with server-set parameters taken only from the server. Phase 1 builds it, because blocks need it.
 
 **D11. The Excel add-in signs in through a Generic Office connect panel (served by MJ Explorer at `office/connect`) and holds a scoped API key.** *(Revised 2026-10-30; shipped in [#6214](https://github.com/MemberJunction/MJ/pull/6214).)* The add-in's sign-in window opens a standalone `office/connect` page in Explorer (a thin route wrapper around router-free `<mj-office-connect-panel>` in `@memberjunction/ng-export-service`, so any non-Explorer MJ Angular app can mount the same connect page alongside the Generic grids), where the person signs in exactly as they always do with whatever identity provider the host uses. Approving there mints an MJ API key for that person that can only run views and queries (`view:run`, `query:run`) and expires (90 days by default). That is everything the add-in needs, with no new table, no new OAuth server and no identity-provider redirect to register. The key is revocable on the API Keys page, is refused once its user is deactivated, and can't change data. It is handed back encrypted to a key pair the add-in made for that sign-in (either relayed through the Office Dialog window or copied as an encrypted connection code when connecting to a different MJ server in an external browser), so it never sits in a URL or clipboard in plain text. The add-in calls GraphQL, where API-key scopes are enforced, not REST, where they aren't.
+
+**D12. Artifacts are the "OLE" plugin model for stateful blocks; `BaseDocumentBlock` handles live MJ data.** *(Added 2026-11-08.)* Rather than inventing a second persistence and plugin architecture for rich embedded objects (whiteboards, interactive components, diagrams, media, or custom Open App canvases), **any `MJ: Artifact` is already a full-stack embeddable plugin**: it has its own persistence and version history (`MJ: Artifacts` + `MJ: Artifact Versions`), permissions (`MJ: Artifact Permissions` + § 3.3 delegate), pluggable UI (`MJ: Artifact Types.DriverClass` → `@RegisterClass(BaseArtifactViewerPluginComponent, '<DriverClass>')`), state summary (`GetCurrentStateSnapshot()`), and agent tools (`BaseArtifactToolLibrary`). The `Artifact` block kind bridges any `MJ: Artifact Types` plugin into Docs, Slides, and Sheets with both **OLE Linking** (referencing an existing `ArtifactID`) and **OLE Embedding** (creating a child `MJ: Artifacts` row inline, e.g. `/whiteboard`, whose access delegates to the host document), plus **in-place activation** (`[readonly]="false"` on the viewer plugin when the user clicks to edit the embedded canvas). `BaseDocumentBlock` subclasses (`Query`, `View`, `Record`, `Chart`, `Dashboard`, `SheetRange`) stay focused on live, stateless references into MJ data.
 
 ## 3. The shared core
 
@@ -127,21 +131,47 @@ Built in Phase 1 with the docs editor; slides and sheets reuse all of it.
 
 `MJ: Artifact Permissions` grants named users. This plan adds:
 - **Role grants,** for "the finance team can edit".
-- **A delegate:** an artifact can name an owning record whose driver decides who reads and edits, so a document in a Collaboration space follows the space's roster and bands. Collaboration's plan already expects to propose the shape of a linked document before its migration, so the two are designed together (O4).
+- **A delegate:** an artifact can name an owning record whose driver decides who reads and edits, so a document in a Collaboration space follows the space's roster and bands — and an inline-created Artifact block (e.g. a Whiteboard created inside a doc or slide) automatically delegates its read/edit permissions to its host document artifact. Collaboration's plan already expects to propose the shape of a linked document before its migration, so the two are designed together (O4).
 
-### 3.4 Blocks
+### 3.4 Blocks (Live MJ Data + "OLE" Artifact Plugins)
 
-- **Shape:** a kind, a source reference, display settings, and an optional freeze (when, and the captured result).
-- **Kinds in Phase 1:** Artifact (the latest version, or a pinned one), Query (with parameters), View, Record (entity and key), Chart (a query or view plus chart settings), Interactive Component, Dashboard. Sheet ranges join in Phase 3.
-- **Registry:** `@RegisterClass(BaseDocumentBlock, '<Kind>')`. The server half fetches data through D10, summarizes the block for agents and renders the frozen form for export. The browser half renders with the existing viewers.
-- **Live for the reader:** a reader without access to the source sees a placeholder that names nothing about it. Interactive components run in their existing sandbox.
-- **Frozen:** minutes keep the numbers as they were at the meeting. Freezing is an explicit, recorded act, because it publishes the author's view of the data to the document's readers (O5).
-- **Agents** see each block as its source plus a short text summary, and insert or configure blocks with a tool (§ 3.6).
+- **Shape:** a `kind`, a `source` reference, `display` settings (height, aspect ratio, caption, view mode), and an optional `freeze` (timestamp, actor, and the captured snapshot).
+- **Registry (`@RegisterClass(BaseDocumentBlock, '<Kind>')`):**
+  - **Live MJ Data Blocks:** `Query` (with parameters), `View`, `Record` (entity and key), `Chart` (a query or view plus chart settings), `Dashboard`, and (in Phase 3) `SheetRange`. The server half fetches data through D10, summarizes the block for agents, and renders the frozen form for export. The browser half renders with the existing Generic viewers (`query-viewer`, `entity-viewer`, `entity-card`, `charts`, `dashboard-viewer`).
+  - **The `Artifact` Block (the "OLE" plugin bridge):** `Artifact` (referencing an `ArtifactID` at its latest version, or pinned to an `ArtifactVersionID`). Renders through `<mj-artifact-type-plugin-viewer>` (`BaseArtifactViewerPluginComponent`), so **every existing and future `MJ: Artifact Types` plugin is automatically a block plugin** in Docs, Slides, and Sheets without registering a separate `BaseDocumentBlock` subclass. First-class slash-menu shortcuts (`/whiteboard`, `/component`, `/diagram`, `/artifact`) create or link the corresponding artifact type directly.
+  - **Open App extensibility:** an Open App can extend blocks in two ways:
+    1. *Stateful canvas / object (recommended when the block owns persisted content):* register an `MJ: Artifact Types` row + `@RegisterClass(BaseArtifactViewerPluginComponent, ...)` + `BaseArtifactToolLibrary`. It works standalone in Collections/Chat *and* embeds in Docs, Slides, and Sheets via the `Artifact` block.
+    2. *Stateless live-data view:* register `@RegisterClass(BaseDocumentBlock, '<AppPrefix>.<Kind>')` when the block is a custom live projection over the Open App's entities.
+- **Live for the reader:** a reader without access to the source (or referenced artifact) sees a placeholder that names nothing about it. Interactive components run in their existing sandbox.
+- **Frozen:** minutes keep the numbers or diagram as they were at the meeting. Freezing is an explicit, recorded act, because it publishes the author's view of the data to the document's readers (O5).
+- **Agents** see each block as its source plus a structured summary (for `Artifact` blocks, via `GetCurrentStateSnapshot()` / `BaseArtifactToolLibrary`), and can insert, configure, or edit embedded artifacts with a tool (§ 3.6).
+
+#### 3.4.1 How "OLE" Artifact Blocks Work (Example: Whiteboard in a Doc or Slide)
+
+Embedding a **Whiteboard** (or Interactive Component, SVG diagram, etc.) inside a document or slide uses the `Artifact` block kind end-to-end:
+
+1. **Create inline ("OLE Embed") or link existing ("OLE Link"):**
+   - Typing `/whiteboard` (or **Insert → New Whiteboard**) creates a new `MJ: Artifacts` row (`Type = 'Whiteboard'`) whose permissions delegate (§ 3.3) to the host document, writes an initial empty `MJ: Artifact Versions` row, and inserts an `Artifact` block pointing to that `ArtifactID`.
+   - Choosing **Insert → Existing Whiteboard / Artifact** inserts an `Artifact` block pointing to an existing `ArtifactID` (either tracking latest or pinned to a version), so multiple docs and slide decks can share one live architecture diagram.
+2. **Read mode vs. In-Place Edit ("OLE Activate"):**
+   - **Default (inactive / reading):** `<mj-artifact-type-plugin-viewer [readonly]="true">` renders the plugin's clean snapshot surface — for Whiteboard, `<mj-whiteboard-snapshot>`, with no floating toolbars or stray keyboard capture.
+   - **In-place edit (activated):** when a user with `CanEdit` on the artifact double-clicks the block or clicks **Edit on canvas** in the block header (or expands it to a focus drawer), the block flips `[readonly]="false"`. `WhiteboardArtifactViewerComponent` mounts `<mj-realtime-whiteboard-host [ShowFocusToggle]="false">` directly in the block (its single-key tool shortcuts `v`, `h`, `p`, `r`, `s`, `t`, `m`, `w`, `i`, `c`, `e` and `Cmd/Ctrl+Z` are already focus-scoped to the host element in `@memberjunction/ng-whiteboard`, so typing in the surrounding document never collides with board shortcuts).
+   - **Persistence:** leaving edit mode (or clicking **Done** / after a quiet period) saves a new `MJ: Artifact Versions` checkpoint on the Whiteboard artifact and updates the block's rendered snapshot.
+3. **Small upgrade to `BaseArtifactViewerPluginComponent`:**
+   - `BaseArtifactViewerPluginComponent` already has `@Input() readonly: boolean = true` and abstract `GetCurrentStateSnapshot(): DataSnapshot | null`. We add `public get SupportsInlineEdit(): boolean` (default `false`; `true` on `WhiteboardArtifactViewerComponent` and editable plugins) and `@Output() ContentCommitted = new EventEmitter<string>()` so the host `Artifact` block knows when an in-place edit produced a new version to checkpoint.
+4. **Agents & Export on embedded Whiteboards:**
+   - When an agent reads a Doc or Slide containing a Whiteboard block, the server includes `WhiteboardState.BuildSceneSummary()` (from `GetCurrentStateSnapshot()`) at that block's position.
+   - A server-side `WhiteboardToolLibrary` (wrapping `@memberjunction/ng-whiteboard`'s pure `WhiteboardState` + `ApplyWhiteboardAgentTool` operations) lets an agent in the document thread add notes, shapes, connectors, or widgets to the embedded Whiteboard artifact by `ArtifactID` — with the same before/after version checkpointing as doc edits (§ 3.6).
+   - When the Doc or Slide exports to `.docx`, `.pptx`, or PDF (§ 3.8), the Whiteboard block exports via `BuildWhiteboardExportSvg(state)` (rasterized to PNG where `.docx`/`.pptx` require it).
 
 ### 3.5 Comments as conversations
 
-- **A thread** is a `MJ: Conversations` row with `LinkedEntityID` = `MJ: Artifacts` and `LinkedRecordID` = the artifact. Its anchor (Yjs relative positions, the block id and the quoted text) and its resolved state live beside it.
-- **Mentions:** @-mentioning a person notifies them. @-mentioning an agent runs it with the document and the anchored range; it answers in the thread, or edits the range when asked (§ 3.6).
+- **Schema & security foundation (shipped in [#6281](https://github.com/MemberJunction/MJ/pull/6281)):**
+  - `MJ: Conversations` already carries `LinkedEntityID`, `LinkedRecordID`, `AnchorType` (`CHECK` includes `'DocBlock'`, `'SlideRegion'`, and `'SheetRange'`), `AnchorKey`, `AnchorMetadata` (typed via `IConversationAnchorMetadata`), `IsResolved`, `ResolvedByUserID`, and `ResolvedAt`, indexed by `IDX_Conversation_LinkedRecord_Anchor`.
+  - Server-side RLS/FLS read and write hooks (`AnchoredConversationSecurity`, `ConversationWriteAccess`, `RestrictedFieldCommentClassifier`) and `@mention` notifications (`DispatchConversationMentionNotifications`) are live on `next`.
+- **Editor binding (Phase 1–3):**
+  - A thread on a Doc, Slide, or Sheet sets `LinkedEntityID` = `MJ: Artifacts`, `LinkedRecordID` = the artifact ID, `AnchorType` = `'DocBlock'` / `'SlideRegion'` / `'SheetRange'`, `AnchorKey` = the block, slide-region, or sheet-range ID, and stores the serialized Yjs relative positions and quoted text in `AnchorMetadata`.
+- **Mentions:** @-mentioning a person notifies them (suppressing notifications if the user lacks read access). @-mentioning an agent runs it with the document and the anchored range; it answers in the thread, or edits the range when asked (§ 3.6).
 - **Who sees a thread:** whoever can read the document. In a shared document, an agent answers only from what every reader of the thread can read; in Collaboration, that is its audience rule.
 
 ### 3.6 Agent edits
@@ -153,13 +183,13 @@ Built in Phase 1 with the docs editor; slides and sheets reuse all of it.
 |---|---|---|---|
 | Read | outline, blocks in a range, search, changes since a revision | deck outline, one slide, notes | sheet list, a range (values and formulas), search |
 | Write | insert after, replace a range of blocks, replace characters in a block, delete, move | add, remove or move a slide; set its layout; edit a region; set notes | set a range, write a formula, insert or delete rows and columns, add a chart |
-| Blocks | insert or configure a block | the same, in a region | bind a range to a query or view |
+| Blocks & Embedded Artifacts | insert or configure a block; create or link an `Artifact` block (e.g. Whiteboard) and delegate to that artifact's own `BaseArtifactToolLibrary` (e.g. `WhiteboardToolLibrary` wrapping `ApplyWhiteboardAgentTool`) | the same, in a region | bind a range to a query or view; embed a chart or artifact block on the sheet canvas |
 | Talk | comment, reply, resolve | the same | the same |
 | Suggest | any write as a proposal a person accepts | the same | the same |
 
 - **Addressing:** stable block, slide, region, row and column ids, and character ids for ranges inside a block. New text is written as Markdown fragments.
 - **Revision check:** each write names the revision the agent read. If its target changed since, the write is refused and returns the current content.
-- **Undo:** the checkpoints around an agent run make "undo everything the agent did" one restore.
+- **Undo:** the checkpoints around an agent run make "undo everything the agent did" one restore (including when an agent run edits an embedded Artifact block such as a Whiteboard).
 - **Provenance:** every edit records the agent and the run, the way `MJ: AI Agent Notes` record `SourceAIAgentRunID`.
 - **Later:** the same write tools for other artifact types (JSON, CSV), which are read-only today.
 
@@ -171,11 +201,11 @@ Built in Phase 1 with the docs editor; slides and sheets reuse all of it.
 
 ### 3.8 Import, export and links
 
-- **Docs:** import `.docx` (`mammoth` to HTML, `turndown` to Markdown) and Markdown; export `.docx` (`docx`), PDF and Markdown.
+- **Docs:** import `.docx` (`mammoth` to HTML, `turndown` to Markdown) and Markdown; export `.docx` (`docx`, with decimal ordered-list numbering shipped in [#6388](https://github.com/MemberJunction/MJ/pull/6388)), PDF and Markdown.
 - **Slides:** export PPTX (`pptxgenjs`, a new MIT dependency) and PDF. PPTX import is later.
 - **Sheets:** import and export `.xlsx` (`exceljs`) and CSV (`papaparse`).
 - **Linked documents:** a pointer to a file in Google Drive, SharePoint, Box or Dropbox through MJStorage. Its text is pulled in for search and agents, and it opens in its own tool.
-- **Blocks export frozen,** as a table or an image.
+- **Blocks export frozen,** as a table or an image (e.g. `BuildWhiteboardExportSvg` rasterized for `.docx`/`.pptx` when exporting a Whiteboard block).
 
 ## 4. Phase 1: Docs
 
@@ -184,8 +214,8 @@ Built in Phase 1 with the docs editor; slides and sheets reuse all of it.
   - headings, paragraphs, bold, italic, underline, strike, links
   - bulleted, numbered and checklist lists; tables; images (stored in MJStorage); code blocks; quotes; dividers
   - @mentions of people and records
-  - blocks (§ 3.4)
-  - comments (§ 3.5), presence and cursors
+  - blocks (§ 3.4), including live MJ data blocks (`Query`, `View`, `Record`, `Chart`, `Dashboard`) and "OLE" `Artifact` blocks (with first-class `/whiteboard` and `/component` slash commands for creating or linking a Whiteboard or Interactive Component and editing it in place, § 3.4.1)
+  - comments (§ 3.5, wired to `MJ: Conversations.AnchorType = 'DocBlock'` from [#6281](https://github.com/MemberJunction/MJ/pull/6281)), presence and cursors
   - version history, with diff and restore
   - templates: start from a document marked as a template
   - a share dialog
@@ -204,11 +234,12 @@ Built in Phase 1 with the docs editor; slides and sheets reuse all of it.
 1. Two people and an agent edit one document at the same time, everyone sees each edit within about a second, and nothing is lost.
 2. An agent replaces one paragraph by id: nothing else changes, a person typing elsewhere is unaffected, and a write against a stale revision is refused.
 3. A query block shows each reader only the rows that reader may read; a reader without access sees a placeholder.
-4. In a comment thread, @-mentioning an agent gets an answer in the thread, and "edit this" changes only the anchored range.
-5. Restoring a version brings back its text and its comment anchors.
-6. A `.docx` imports with headings, lists, tables and images, and an export opens in Word.
-7. A Markdown artifact an agent wrote in a conversation opens as a live doc with no conversion step.
-8. A host with more than one MJAPI instance co-edits correctly (O3).
+4. Typing `/whiteboard` embeds a new Whiteboard `Artifact` block (delegating access to the doc); clicking **Edit** activates `<mj-realtime-whiteboard-host>` in place without hijacking document keyboard shortcuts when unfocused, saves a new `MJ: Artifact Versions` checkpoint on commit, and lets a document agent read `BuildSceneSummary()` or apply `Whiteboard_*` tools to it.
+5. In a comment thread, @-mentioning an agent gets an answer in the thread, and "edit this" changes only the anchored range.
+6. Restoring a version brings back its text and its comment anchors.
+7. A `.docx` imports with headings, lists, tables and images, and an export opens in Word (with embedded Whiteboard blocks exported as images).
+8. A Markdown artifact an agent wrote in a conversation opens as a live doc with no conversion step.
+9. A host with more than one MJAPI instance co-edits correctly (O3).
 
 ## 5. Phase 2: Slides
 
@@ -216,7 +247,7 @@ Built in Phase 1 with the docs editor; slides and sheets reuse all of it.
 
 - **A deck** is an ordered list of slides plus a theme.
 - **A slide** is a layout whose regions hold the docs editor's content, blocks included, plus speaker notes. The canvas is fixed at 16:9.
-- **Layouts, not a free canvas:** title, title and body, two columns, chart and text, full-bleed image, section break, quote, big number. Free-form boards are the whiteboard's job.
+- **Layouts, not a free canvas:** title, title and body, two columns, chart and text, full-bleed image, section break, quote, big number. When a slide needs a free-form diagram or sketch, a region embeds a Whiteboard `Artifact` block (§ 3.4.1).
 - **Theme:** `ThemeEngine` derives the deck's tokens from an organization's brand colors, with a default per host.
 - **Live form:** one Yjs document per deck (slide order plus each slide's regions). **Saved form:** the deck JSON (slides, layouts, each region as Markdown with block markers, a theme reference).
 - **Artifact type:** a new "Presentation".
@@ -353,10 +384,11 @@ The Excel design (D11) carries over if an Apps Script sidebar can receive the ke
 ## 9. Order and delivery
 
 1. ~~**Track A, first pull request:**~~ **Done ([#6214](https://github.com/MemberJunction/MJ/pull/6214))** — the Excel add-in's Open in Excel, in-pane browse & insert, multi-server switcher, and Generic `<mj-office-connect-panel>` sign-in (§ 7.1).
-2. **Phase 1 (next up):** the shared core (§ 3) and the docs editor, built together because the editor is what proves the core. Then the Collaboration integration.
-3. **Phase 2:** slides.
-4. **Phase 3:** sheets. The engine spike (§ 6.1) runs during Phase 1.
-5. **Track A, the rest:** Excel `=MJ.QUERY(...)` / `=MJ.VIEW(...)` custom functions and AppSource packaging, then the Google add-on (§ 7.2, § 7.3).
+2. ~~**Anchored conversation schema & security foundation (§ 3.5 / D6):**~~ **Done ([#6281](https://github.com/MemberJunction/MJ/pull/6281))** — `MJ: Conversations` columns (`AnchorType` including `'DocBlock'`, `'SlideRegion'`, `'SheetRange'`, `AnchorKey`, `AnchorMetadata`, `IsResolved`, `ResolvedByUserID`, `ResolvedAt`), RLS/FLS read/write hooks, and `@mention` notifications.
+3. **Phase 1 (next up):** the shared core (§ 3) and the docs editor, built together because the editor is what proves the core (including live MJ data blocks and "OLE" `Artifact` blocks such as Whiteboard, § 3.4). Then the Collaboration integration.
+4. **Phase 2:** slides.
+5. **Phase 3:** sheets. The engine spike (§ 6.1) runs during Phase 1.
+6. **Track A, the rest:** Excel `=MJ.QUERY(...)` / `=MJ.VIEW(...)` custom functions and AppSource packaging, then the Google add-on (§ 7.2, § 7.3).
 
 Each phase lands as pull requests into `next`. Migrations ship T-SQL with a `minor` changeset, and each phase adds its checks to the deterministic integration tier.
 
@@ -377,11 +409,11 @@ Each phase lands as pull requests into `next`. Migrations ship T-SQL with a `min
 
 - Two-way sync with Word or Google Docs.
 - Offline editing.
-- Free-form slides; that's the whiteboard.
+- Free-form slide layouts as the slide deck's own canvas model (slide layouts stay structured; when a slide needs a free-form board or diagram, embed a Whiteboard `Artifact` block in a slide region per § 3.4.1).
 - Pivot tables, macros or conditional formatting in v1.
 - A formula engine of our own.
 - Replacing Word, PowerPoint, Excel or Google's tools. MJ links to them and exports to them.
 
-## 12. Side finding
+## 12. Side finding (resolved)
 
-MJExplorer, `@memberjunction/ng-artifacts` and the mobile app depend on `xlsx` 0.18.5, the copy of SheetJS on npm, which SheetJS no longer updates. That version has a prototype-pollution bug when reading crafted files (CVE-2023-30533) and a regular-expression denial of service (CVE-2024-22363). Sheets import uses `exceljs`. Replacing `xlsx` is tracked separately.
+~~MJExplorer, `@memberjunction/ng-artifacts` and the mobile app depend on `xlsx` 0.18.5, the copy of SheetJS on npm, which SheetJS no longer updates. That version has a prototype-pollution bug when reading crafted files (CVE-2023-30533) and a regular-expression denial of service (CVE-2024-22363). Sheets import uses `exceljs`. Replacing `xlsx` is tracked separately.~~ **Resolved in [#6301](https://github.com/MemberJunction/MJ/pull/6301):** `@memberjunction/ng-artifacts` and `MobileApp` now pin `xlsx` `0.20.3`, and `MJExplorer` dropped its unused direct `xlsx` dependency. Sheets import/export still uses `exceljs`.
