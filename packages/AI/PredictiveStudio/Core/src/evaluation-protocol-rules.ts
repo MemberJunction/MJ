@@ -33,6 +33,8 @@ export type ProtocolRefusal =
   | { readonly Kind: 'horizon-mismatch'; readonly ProtocolHorizonPeriods: number; readonly UnitHorizonPeriods: number }
   | { readonly Kind: 'inner-gap-below-horizon'; readonly GapPeriods: number; readonly HorizonPeriods: number }
   | { readonly Kind: 'group-key-mismatch'; readonly ProtocolGroupKey: string; readonly UnitGroupKey: string | null }
+  | { readonly Kind: 'inner-validation-ungrouped'; readonly UnitGroupKey: string; readonly InnerKind: InnerValidation['kind'] }
+  | { readonly Kind: 'intervals-not-clustered'; readonly UnitGroupKey: string; readonly Method: IntervalSpec['method'] }
   | { readonly Kind: 'new-entity-group-key-mismatch'; readonly ReportGroupKey: string; readonly UnitGroupKey: string | null }
   | { readonly Kind: 'primary-score-family-mismatch'; readonly Declared: ProperScore['family']; readonly UnitTask: TaskKind }
   | { readonly Kind: 'calibration-not-applicable-for-probability-task'; readonly UnitTask: TaskKind }
@@ -128,6 +130,7 @@ export class EvaluationProtocolRules {
       ...EvaluationProtocolRules.checkHoldout(p.holdout, unit),
       ...EvaluationProtocolRules.checkInnerGap(p.innerValidation, p.holdout, unit),
       ...EvaluationProtocolRules.checkGroupKey(p.innerValidation, unit),
+      ...EvaluationProtocolRules.checkIntervalsGrouping(p.intervals, unit),
       ...EvaluationProtocolRules.checkNewEntityGroupKey(p.holdout, unit),
       ...EvaluationProtocolRules.checkFamily(p.primaryScore, unit.label.outcome),
       ...EvaluationProtocolRules.checkCalibration(p.calibration, unit.label.outcome),
@@ -154,6 +157,10 @@ export class EvaluationProtocolRules {
         return `Blocked-time inner folds need a gap of at least the horizon (${r.HorizonPeriods} periods); this protocol declares ${r.GapPeriods}.`;
       case 'group-key-mismatch':
         return `The protocol groups its inner validation by "${r.ProtocolGroupKey}", but the Prediction Unit ${EvaluationProtocolRules.unitGrouping(r.UnitGroupKey)}; the folds would not be grouped the way the protocol says.`;
+      case 'inner-validation-ungrouped':
+        return `The Prediction Unit groups its rows by "${r.UnitGroupKey}", but the protocol's inner validation (${r.InnerKind}) does not group; rows of one group would fall on both sides of an inner fold.`;
+      case 'intervals-not-clustered':
+        return `The Prediction Unit groups its rows by "${r.UnitGroupKey}", but the protocol's intervals resample rows (${r.Method}) rather than whole groups; use cluster-bootstrap.`;
       case 'new-entity-group-key-mismatch':
         return `The new-entity report holds out whole groups by "${r.ReportGroupKey}", but the Prediction Unit ${EvaluationProtocolRules.unitGrouping(r.UnitGroupKey)}; the report would not hold out the groups the protocol names.`;
       case 'primary-score-family-mismatch':
@@ -304,12 +311,23 @@ export class EvaluationProtocolRules {
 
   /**
    * The manifest's group of each row is the unit's group key, so inner folds grouped by any other key would not be
-   * grouped the way the protocol says. Field names compare without case, as the database resolves them.
+   * grouped the way the protocol says. Field names compare without case, as the database resolves them. A grouped
+   * unit's inner folds must group (S2.6): stratified folds ignore groups and are refused; blocked-time without a key
+   * is time-blocked, which keeps a group's rows together within a period.
    */
   private static checkGroupKey(inner: InnerValidation, unit: PredictionUnitSpec): ProtocolRefusal[] {
+    if (unit.groupKey !== null && inner.kind === 'repeated-stratified-kfold') {
+      return [{ Kind: 'inner-validation-ungrouped', UnitGroupKey: unit.groupKey, InnerKind: inner.kind }];
+    }
     const protocolKey = inner.kind === 'repeated-stratified-kfold' ? null : inner.groupKey;
     if (protocolKey === null || EvaluationProtocolRules.isUnitGroupKey(unit, protocolKey)) return [];
     return [{ Kind: 'group-key-mismatch', ProtocolGroupKey: protocolKey, UnitGroupKey: unit.groupKey }];
+  }
+
+  /** A grouped unit's intervals resample whole groups (S2.6); plain bootstrap resamples rows. */
+  private static checkIntervalsGrouping(intervals: IntervalSpec, unit: PredictionUnitSpec): ProtocolRefusal[] {
+    if (unit.groupKey === null || intervals.method !== 'bootstrap') return [];
+    return [{ Kind: 'intervals-not-clustered', UnitGroupKey: unit.groupKey, Method: intervals.method }];
   }
 
   /**

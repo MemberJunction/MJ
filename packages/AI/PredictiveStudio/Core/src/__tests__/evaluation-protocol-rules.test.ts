@@ -190,6 +190,29 @@ describe('ValidateProtocolForUnit', () => {
     ]);
   });
 
+  it('refuses ungrouped inner folds and row-resampling intervals on a grouped unit, and keeps both for an ungrouped unit', () => {
+    const grouped = unit(binary, null, columnRows, 'HouseholdID');
+    const stratified = protocol({ ...draftFor(grouped), innerValidation: { kind: 'repeated-stratified-kfold', folds: 5, repeats: 3 } });
+    const refusals = EvaluationProtocolRules.ValidateProtocolForUnit(stratified, grouped);
+    expect(refusals).toEqual([{ Kind: 'inner-validation-ungrouped', UnitGroupKey: 'HouseholdID', InnerKind: 'repeated-stratified-kfold' }]);
+    expect(EvaluationProtocolRules.DescribeProtocolRefusal(refusals[0])).toBe(
+      'The Prediction Unit groups its rows by "HouseholdID", but the protocol\'s inner validation (repeated-stratified-kfold) does not group; rows of one group would fall on both sides of an inner fold.',
+    );
+    const rowBootstrap = protocol({ ...draftFor(grouped), intervals: { ...draftFor(grouped).intervals, method: 'bootstrap' } });
+    const intervalRefusals = EvaluationProtocolRules.ValidateProtocolForUnit(rowBootstrap, grouped);
+    expect(intervalRefusals).toEqual([{ Kind: 'intervals-not-clustered', UnitGroupKey: 'HouseholdID', Method: 'bootstrap' }]);
+    expect(EvaluationProtocolRules.DescribeProtocolRefusal(intervalRefusals[0])).toBe(
+      'The Prediction Unit groups its rows by "HouseholdID", but the protocol\'s intervals resample rows (bootstrap) rather than whole groups; use cluster-bootstrap.',
+    );
+    // Blocked-time folds without a group key keep a group's rows in one block per period, which S2.6 permits.
+    const groupedSeries = unit(forecastTask, monthly, columnRows, 'HouseholdID');
+    const blocked = protocol({ ...draftFor(groupedSeries, rolling(5)), innerValidation: { kind: 'blocked-time', folds: 5, gapPeriods: 3, groupKey: null } });
+    expect(EvaluationProtocolRules.ValidateProtocolForUnit(blocked, groupedSeries).filter((r) => r.Kind === 'inner-validation-ungrouped')).toEqual([]);
+    // An ungrouped unit's rows are their own groups.
+    const plain = unit(binary);
+    expect(EvaluationProtocolRules.ValidateProtocolForUnit(protocol({ ...draftFor(plain), innerValidation: { kind: 'repeated-stratified-kfold', folds: 5, repeats: 3 }, intervals: { ...draftFor(plain).intervals, method: 'bootstrap' } }), plain)).toEqual([]);
+  });
+
   it('refuses a new-entity report grouped by a key other than the unit\'s group key, compared without case', () => {
     const grouped = unit(binary, null, columnRows, 'HouseholdID');
     const report = (groupKey: string): HoldoutSplit => ({ ...dateCarved, newEntityReport: { groupKey, holdoutFraction: 0.2 } });

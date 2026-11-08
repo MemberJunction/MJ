@@ -89,6 +89,7 @@ export class MJMLEvaluationProtocolEntityServer extends MJMLEvaluationProtocolEn
         return 'Holdout';
       case 'inner-gap-below-horizon':
       case 'group-key-mismatch':
+      case 'inner-validation-ungrouped':
         return 'InnerValidation';
       case 'primary-score-family-mismatch':
         return 'PrimaryScore';
@@ -102,6 +103,7 @@ export class MJMLEvaluationProtocolEntityServer extends MJMLEvaluationProtocolEn
       case 'forecast-slices':
         return 'Slices';
       case 'forecast-interval-method':
+      case 'intervals-not-clustered':
         return 'Intervals';
       case 'guard-field-edited-by-disallowed-author':
         return 'AuthoredBy';
