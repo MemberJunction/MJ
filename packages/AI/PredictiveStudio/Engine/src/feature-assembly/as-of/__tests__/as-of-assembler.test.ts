@@ -813,6 +813,14 @@ describe('AsOfFeatureAssembler — a stored value changed after the decision by 
     const out = await new AsOfFeatureAssembler().Assemble(input([replayed], { Rows: onAssemblyDay, Tables: withoutP1, Changes: noCreate, Unit: { ...unit, history: { ...unit.history, onUncoveredRow: 'exclude-and-count' } } }));
     expect(out.Status === 'assembled' ? out.UncoveredRowsExcluded : out).toEqual([{ entity: 'People', field: 'Status', rows: 1 }]);
   });
+  it('uncovers a row on the assembly day whose parent has a current row but an unanchored history ending in a Delete', async () => {
+    // The Delete in force reads as deleted before the stored-value read: the current row does not make it covered.
+    const replayed: FeatureColumnSpec = { ...stored, source: { kind: 'record-changes', entity: 'People', field: 'Status', keyField: 'PersonID' } };
+    const onAssemblyDay: AssemblyRowRef[] = [{ RowID: 'y1', EntityKey: 'y1', DecisionDate: new Date('2026-10-12T00:00:00Z'), Period: null }];
+    const noCreate = { People: [rc('u0', 'P1', 'Update', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }, ['Status']), rc('d1', 'P1', 'Delete', '2022-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' })] };
+    const out = await new AsOfFeatureAssembler().Assemble(input([replayed], { Rows: onAssemblyDay, Tables: data, Changes: noCreate, Unit: { ...unit, history: { ...unit.history, onUncoveredRow: 'exclude-and-count' } } }));
+    expect(out.Status === 'assembled' ? out.UncoveredRowsExcluded : out).toEqual([{ entity: 'People', field: 'Status', rows: 1 }]);
+  });
   it('excludes, under exclude-and-count, a stored read of a parent whose only history is an Update and a Delete before the decision date', async () => {
     const past: AssemblyRowRef[] = [{ RowID: 'y1', EntityKey: 'y1', DecisionDate: new Date('2023-06-01T00:00:00Z'), Period: null }];
     const withoutP1 = { ...data, People: data.People.filter((p) => p.ID !== 'P1') };

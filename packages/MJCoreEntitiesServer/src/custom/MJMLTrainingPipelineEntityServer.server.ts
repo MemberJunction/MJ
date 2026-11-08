@@ -240,7 +240,9 @@ export class MJMLTrainingPipelineEntityServer extends MJMLTrainingPipelineEntity
     /**
      * Why the bound protocol cannot be used with the unit: the protocol rules that need a unit (the primary score's
      * family is the unit's task, the holdout kind fits the unit, lags and windows and blocked-time gaps cover the
-     * horizon, grouping keys are the unit's, and what a forecast can be evaluated with), each as its sentence; or why
+     * horizon, grouping keys are the unit's, a grouped unit's inner folds group (`inner-validation-ungrouped`), a grouped
+     * non-forecast unit's intervals are cluster-bootstrap (`intervals-not-clustered`), and what a forecast can be
+     * evaluated with), each as its sentence; or why
      * the protocol row does not parse. Empty when the protocol fits. Pure.
      */
     public static GetProtocolUnitProblems(protocol: EvaluationProtocolColumns, unit: PredictionUnitSpec): string[] {

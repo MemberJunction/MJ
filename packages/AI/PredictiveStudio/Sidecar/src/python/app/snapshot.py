@@ -477,7 +477,7 @@ MAX_NAMED_ROW_IDS: Final = 5
 
 
 def _refuse_missing_scores(scores: Optional[FArr], keys: Sequence[_RowKey], problem: SnapshotProblem, column: str,
-                           role: str) -> None:
+                           role: Literal["incumbent", "reference"]) -> None:
     """Refuse a snapshot whose `role` score column holds no score on some row, development or holdout, before any
     fitting. The message names the count and the first five row ids from the manifest."""
     if scores is None:

@@ -198,8 +198,8 @@ describe('BuildEntityHistory — a hard-deleted record', () => {
     expect(h.ValueAt('P1', 'Status', new Date('2023-01-01T00:00:00Z'))).toEqual({ Status: 'uncovered', Reason: 'deleted' });
     expect(h.ValueAt('P1', 'Status', new Date('2021-06-01T00:00:00Z'))).toEqual({ Status: 'uncovered', Reason: 'no-history' });
   });
-  it('reads a re-created record as deleted between its Delete and its second Create, not as before its history start', () => {
-    const recreated = [rc('c1', 'P1', 'Create', '2019-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' }), rc('d1', 'P1', 'Delete', '2020-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' }), rc('c2', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' })];
+  it('reads a Delete in force as deleted before any history-start check, even when the history anchors only after it (re-created record)', () => {
+    const recreated = [rc('d1', 'P1', 'Delete', '2020-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' }), rc('c2', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' })];
     const h = RecordHistory.BuildEntityHistory(PEOPLE, recreated, new Map([['p1', { ID: 'P1', Status: 'Lapsed' }]]), ['Status'], policy, now);
     expect(h.ValueAt('P1', 'Status', new Date('2020-06-01T00:00:00Z'))).toEqual({ Status: 'uncovered', Reason: 'deleted' });
     expect(h.ValueAt('P1', 'Status', new Date('2022-01-01T00:00:00Z'))).toMatchObject({ Status: 'value', Value: 'Lapsed', ChangeID: 'c2' });

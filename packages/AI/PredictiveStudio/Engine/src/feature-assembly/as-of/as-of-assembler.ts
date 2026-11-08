@@ -19,7 +19,8 @@
  * Both refusals count distinct unit rows. One rule covers a row whose decision day is on or after the assembly's own
  * UTC day (`AssembledAt`, the clock training and scoring are run with), for a field read directly, replayed, as a join
  * key or as a child row's field: on a tracked entity the history is consulted first, and only where it does not reach
- * that day (no history, or one that starts after it) is the stored value read, as covered; a covering history replays
+ * that day (no history, or one that starts after it) is the stored value read, as covered — except that a history
+ * whose rows in force end in a Delete reads as deleted even with a current row and no anchor; a covering history replays
  * (or, read directly, refuses an update dated after the day, exactly as for a past day). On an untracked entity
  * nothing can be consulted, so the stored value is read for such a row. A record created after the decision day still
  * reads as missing. Rows with a past decision day keep the rule above. On any decision day, past or later, a record
