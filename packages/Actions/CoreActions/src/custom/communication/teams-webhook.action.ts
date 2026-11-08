@@ -71,6 +71,20 @@ import { JSONParamHelper } from "../utilities/json-param-helper";
  * });
  * ```
  */
+/**
+ * True when the URL is an https Teams incoming webhook: host `webhook.office.com` or a subdomain
+ * of it. Compares the parsed hostname, so the domain appearing in a path or query does not count.
+ */
+export function IsTeamsWebhookUrl(url: string): boolean {
+    try {
+        const parsed = new URL(url);
+        const host = parsed.hostname.toLowerCase();
+        return parsed.protocol === 'https:' && (host === 'webhook.office.com' || host.endsWith('.webhook.office.com'));
+    } catch {
+        return false;
+    }
+}
+
 @RegisterClass(BaseAction, "Teams Webhook")
 export class TeamsWebhookAction extends BaseAction {
     
@@ -109,7 +123,7 @@ export class TeamsWebhookAction extends BaseAction {
                 };
             }
 
-            if (!webhookURL.includes('webhook.office.com')) {
+            if (!IsTeamsWebhookUrl(webhookURL)) {
                 return {
                     Success: false,
                     Message: "Invalid Teams webhook URL format",
