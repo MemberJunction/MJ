@@ -213,10 +213,15 @@ describe('ValidateProtocolForUnit', () => {
     const groupedForecast = unit(forecastTask, monthly, columnRows, 'HouseholdID');
     const forecastProtocol = protocol({ ...draftFor(groupedForecast, rolling(5)), intervals: { ...draftFor(groupedForecast, rolling(5)).intervals, method: 'block-bootstrap' } });
     expect(EvaluationProtocolRules.ValidateProtocolForUnit(forecastProtocol, groupedForecast).filter((r) => r.Kind === 'intervals-not-clustered')).toEqual([]);
-    // Blocked-time folds without a group key keep a group's rows in one block per period, which S2.6 permits.
+    // Blocked-time folds without a group key make every row its own group, so a group's early rows train the fold
+    // that validates its late rows; keyed by the unit's group key they keep each group together.
     const groupedSeries = unit(forecastTask, monthly, columnRows, 'HouseholdID');
     const blocked = protocol({ ...draftFor(groupedSeries, rolling(5)), innerValidation: { kind: 'blocked-time', folds: 5, gapPeriods: 3, groupKey: null } });
-    expect(EvaluationProtocolRules.ValidateProtocolForUnit(blocked, groupedSeries).filter((r) => r.Kind === 'inner-validation-ungrouped')).toEqual([]);
+    expect(EvaluationProtocolRules.ValidateProtocolForUnit(blocked, groupedSeries).filter((r) => r.Kind === 'inner-validation-ungrouped')).toEqual([
+      { Kind: 'inner-validation-ungrouped', UnitGroupKey: 'HouseholdID', InnerKind: 'blocked-time' },
+    ]);
+    const keyed = protocol({ ...draftFor(groupedSeries, rolling(5)), innerValidation: { kind: 'blocked-time', folds: 5, gapPeriods: 3, groupKey: 'HouseholdID' } });
+    expect(EvaluationProtocolRules.ValidateProtocolForUnit(keyed, groupedSeries).filter((r) => r.Kind === 'inner-validation-ungrouped' || r.Kind === 'group-key-mismatch')).toEqual([]);
     // An ungrouped unit's rows are their own groups.
     const plain = unit(binary);
     expect(EvaluationProtocolRules.ValidateProtocolForUnit(protocol({ ...draftFor(plain), innerValidation: { kind: 'repeated-stratified-kfold', folds: 5, repeats: 3 }, intervals: { ...draftFor(plain).intervals, method: 'bootstrap' } }), plain)).toEqual([]);

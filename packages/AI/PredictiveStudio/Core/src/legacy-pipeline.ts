@@ -392,9 +392,14 @@ export class LegacyPipelines {
     return { ...draft, exclusions: inputs.Exclusions, innerValidation: inner };
   }
 
-  /** Stratified folds on a grouped unit become grouped folds of the same size by the unit's group key. */
+  /**
+   * On a grouped unit, stratified folds become grouped folds of the same size by the unit's group key, and blocked-time
+   * folds without a key take the unit's key (without one every row is its own group).
+   */
   private static groupedForUnit(inner: InnerValidation, unit: PredictionUnitSpec): InnerValidation {
-    if (unit.groupKey === null || inner.kind !== 'repeated-stratified-kfold') return inner;
+    if (unit.groupKey === null) return inner;
+    if (inner.kind === 'blocked-time' && inner.groupKey === null) return { ...inner, groupKey: unit.groupKey };
+    if (inner.kind !== 'repeated-stratified-kfold') return inner;
     return { kind: 'grouped-kfold', folds: inner.folds, repeats: inner.repeats, groupKey: unit.groupKey };
   }
 

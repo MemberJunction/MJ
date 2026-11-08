@@ -312,14 +312,15 @@ export class EvaluationProtocolRules {
   /**
    * The manifest's group of each row is the unit's group key, so inner folds grouped by any other key would not be
    * grouped the way the protocol says. Field names compare without case, as the database resolves them. A grouped
-   * unit's inner folds must group (S2.6): stratified folds ignore groups and are refused; blocked-time without a key
-   * is time-blocked, which keeps a group's rows together within a period.
+   * unit's inner validation must carry the unit's group key whatever its kind (S2.6: all rows of one entity stay
+   * together across any inner split): stratified folds ignore groups, and blocked-time without a key makes every row
+   * its own group, so a group's early rows train the fold that validates its late rows. Both are refused.
    */
   private static checkGroupKey(inner: InnerValidation, unit: PredictionUnitSpec): ProtocolRefusal[] {
-    if (unit.groupKey !== null && inner.kind === 'repeated-stratified-kfold') {
+    const protocolKey = inner.kind === 'repeated-stratified-kfold' ? null : inner.groupKey;
+    if (unit.groupKey !== null && protocolKey === null) {
       return [{ Kind: 'inner-validation-ungrouped', UnitGroupKey: unit.groupKey, InnerKind: inner.kind }];
     }
-    const protocolKey = inner.kind === 'repeated-stratified-kfold' ? null : inner.groupKey;
     if (protocolKey === null || EvaluationProtocolRules.isUnitGroupKey(unit, protocolKey)) return [];
     return [{ Kind: 'group-key-mismatch', ProtocolGroupKey: protocolKey, UnitGroupKey: unit.groupKey }];
   }
