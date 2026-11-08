@@ -42,8 +42,9 @@ import {
     ParsedPathWithOperations,
     ParsePathWithOperations, 
     ParsePathsWithOperations,
-    isOperationAllowed 
+    isOperationAllowed
 } from './types/payload-operations';
+import { IsUnsafeObjectKey, StripUnsafeObjectKeys } from './unsafe-object-keys';
 
 
 /**
@@ -1117,7 +1118,7 @@ export class PayloadManager {
         const result: Record<string, unknown> = {};
 
         for (const key of Object.keys(destObj)) {
-            if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+            if (IsUnsafeObjectKey(key)) continue;
             if (!Object.prototype.hasOwnProperty.call(srcObj, key)) {
                 result[key] = this.fastCloneDeep(destObj[key]);
             } else {
@@ -1126,10 +1127,7 @@ export class PayloadManager {
         }
 
         for (const key of Object.keys(srcObj)) {
-            // Skip keys whose assignment reaches a prototype instead of creating an own property:
-            // `JSON.parse('{"__proto__":{}}')` yields an own `__proto__` key, and writing it here
-            // would call Object.setPrototypeOf on the result.
-            if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+            if (IsUnsafeObjectKey(key)) continue;
             const srcVal = srcObj[key];
             const destVal = destObj[key];
             // Only plain objects merge key by key. A Date or class instance has no own keys to merge,
@@ -1185,9 +1183,8 @@ export class PayloadManager {
             const keys = Object.keys(value);
             for (let i = 0; i < keys.length; i++) {
                 const k = keys[i];
-                // Same prototype-key skip as DeepMerge: DeepMerge clones a source subtree through here
-                // when the destination lacks the key.
-                if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+                // Assigning `__proto__` on the copy would replace its prototype instead of copying data.
+                if (IsUnsafeObjectKey(k)) continue;
                 const val = (value as Record<string, unknown>)[k];
                 copy[k] = (val !== null && typeof val === 'object') ? this.fastCloneDeep(val) : val;
             }
@@ -1248,6 +1245,12 @@ export class PayloadManager {
             reason: string;
             timestamp: string;
         }> = [];
+
+        // The change request is model-written JSON. A `__proto__` key in it would lead the key walk
+        // below into Object.prototype and write there, so those keys are dropped before anything runs.
+        for (const removedPath of StripUnsafeObjectKeys(changeRequest)) {
+            warnings.push(`Ignored unsafe key '${removedPath}' in payloadChangeRequest`);
+        }
 
         // Auto-correct stray keys in the changeRequest unless ignoreStrayKeys is true.
         // LLMs sometimes place payload properties (e.g. changeRequest, dataRequirements) as
@@ -1936,7 +1939,7 @@ export class PayloadManager {
         
         const addKeysFromObject = (obj: unknown) => {
             if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
-                Object.keys(obj).forEach(k => keys.add(k));
+                Object.keys(obj).filter(k => !IsUnsafeObjectKey(k)).forEach(k => keys.add(k));
             }
         };
         
