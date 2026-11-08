@@ -121,6 +121,7 @@ vi.mock('@memberjunction/ai', () => {
 });
 
 import { GeminiLLM, GEMINI_USER_TURN_SEPARATOR_TEXT } from '../index';
+import { WithoutCacheAnchor } from './cache-anchor-test-helpers';
 
 /* ------------------------------------------------------------------ */
 /*  Tests                                                              */
@@ -561,7 +562,7 @@ describe('GeminiLLM — native tool calling', () => {
 
   /** The history the driver handed chats.create(). */
   let create: Mock;
-  const sentHistory = (): Array<Record<string, unknown>> => create.mock.calls[0][0].history;
+  const sentHistory = (): Array<Record<string, unknown>> => WithoutCacheAnchor(create.mock.calls[0][0].history as Array<Record<string, unknown>>);
 
   /**
    * The parts of the CURRENT turn. Gemini splits the conversation: everything but the last turn is
