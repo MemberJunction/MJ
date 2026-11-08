@@ -247,8 +247,8 @@ export class AgentAuditService {
       agentName: runEntity.Agent || 'Unknown',
       agentId: runEntity.AgentID!,
       status: runEntity.Status || 'Unknown',
-      startedAt: runEntity.StartedAt?.toISOString() || '',
-      completedAt: runEntity.CompletedAt?.toISOString(),
+      startedAt: this.toIsoString(runEntity.StartedAt) || '',
+      completedAt: this.toIsoString(runEntity.CompletedAt),
       duration,
       totalTokens,
       estimatedCost: this.analyzer.estimateCost(totalTokens),
@@ -326,8 +326,8 @@ export class AgentAuditService {
       stepName: step.StepName || `Step ${stepNumber}`,
       stepType: step.StepType || 'Unknown',
       status: step.Status || 'Unknown',
-      startedAt: step.StartedAt?.toISOString() || '',
-      completedAt: step.CompletedAt?.toISOString(),
+      startedAt: this.toIsoString(step.StartedAt) || '',
+      completedAt: this.toIsoString(step.CompletedAt),
       duration: this.analyzer.calculateStepDuration(step),
       input: {
         raw: this.analyzer.truncateField(inputRaw, truncationRules.inputMaxChars),
@@ -502,6 +502,16 @@ export class AgentAuditService {
   /** @deprecated Use {@link FormatErrorAnalysis}. */
   formatErrorAnalysis(analysis: ErrorAnalysis, format: AuditOutputFormat): string {
     return this.FormatErrorAnalysis(analysis, format);
+  }
+
+  private toIsoString(val: Date | string | null | undefined): string | undefined {
+    if (val instanceof Date) {
+      return val.toISOString();
+    }
+    if (typeof val === 'string' && val.length > 0) {
+      return new Date(val).toISOString();
+    }
+    return undefined;
   }
 
   private async getContextUser(): Promise<UserInfo> {

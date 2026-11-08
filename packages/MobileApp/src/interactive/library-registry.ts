@@ -116,7 +116,7 @@ export const MOBILE_LIBRARIES: readonly MobileLibraryEntry[] = [
     { Name: 'marked', GlobalVariable: 'marked', Version: '11.1.1', Shape: 'namespace', Import: () => import('marked') },
 
     { Name: 'topojson-client', GlobalVariable: 'topojson', Version: '3.1.0', Shape: 'object', Import: () => import('topojson-client') },
-    { Name: 'xlsx', GlobalVariable: 'XLSX', Version: '0.18.5', Shape: 'object', Import: () => import('xlsx') },
+    { Name: 'xlsx', GlobalVariable: 'XLSX', Version: '0.20.3', Shape: 'object', Import: () => import('xlsx') },
 ];
 
 /**
