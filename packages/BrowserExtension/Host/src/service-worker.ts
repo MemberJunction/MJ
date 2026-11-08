@@ -20,6 +20,7 @@ import {
     IChromeDebuggerTransport,
 } from '@memberjunction/browser-extension-core';
 import { ExtensionOffscreenAudioDaemon } from './offscreen-audio.js';
+import { WebExtensionBrowserBridge } from './web-extension-bridge.js';
 
 /**
  * External message sent by MJ Central / MJ Explorer over `chrome.runtime.sendMessage(extensionId, msg)`.
@@ -214,6 +215,7 @@ export class ExtensionServiceWorkerRuntime extends BaseSingleton<ExtensionServic
             message.Type === 'MJ_EXT_START_SHARED_DAEMON' ||
             payload.Topology === 'topology-a-shared-daemon'
         ) {
+            await WebExtensionBrowserBridge.EnsureAudioDaemonHost();
             ExtensionOffscreenAudioDaemon.Instance.StartOrAttachSession({
                 SessionID: payload.SessionID,
                 ConversationID: payload.ConversationID,
@@ -231,35 +233,11 @@ export class ExtensionServiceWorkerRuntime extends BaseSingleton<ExtensionServic
     }
 
     private configureSidePanelBehavior(): void {
-        const globalObj = globalThis as Record<string, unknown>;
-        const chromeObj = globalObj['chrome'] as
-            | {
-                  sidePanel?: {
-                      setPanelBehavior?: (opts: { openPanelOnActionClick: boolean }) => Promise<void>;
-                  };
-              }
-            | undefined;
-
-        try {
-            void chromeObj?.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: true });
-        } catch {
-            // Ignore in test environments without chrome.sidePanel
-        }
+        void WebExtensionBrowserBridge.ConfigureSidePanelBehavior('sidepanel.html');
     }
 
     private async openBrowserSidePanel(windowId?: number): Promise<boolean> {
-        const globalObj = globalThis as Record<string, unknown>;
-        const chromeObj = globalObj['chrome'] as
-            | {
-                  sidePanel?: {
-                      open?: (opts: { windowId?: number }) => Promise<void>;
-                  };
-              }
-            | undefined;
-
-        if (chromeObj?.sidePanel?.open) {
-            await chromeObj.sidePanel.open({ windowId });
-        }
+        await WebExtensionBrowserBridge.OpenSidePanel({ WindowId: windowId, PanelPath: 'sidepanel.html' });
         return true;
     }
 }

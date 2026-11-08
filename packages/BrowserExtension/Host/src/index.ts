@@ -15,3 +15,4 @@ export * from './content-script.js';
 export * from './offscreen-audio.js';
 export * from './service-worker.js';
 export * from './sidepanel-bootstrap.js';
+export * from './web-extension-bridge.js';

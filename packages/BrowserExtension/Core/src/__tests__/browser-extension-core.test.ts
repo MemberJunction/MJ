@@ -183,6 +183,30 @@ describe('@memberjunction/browser-extension-core', () => {
             expect(escalatedAuto.ActiveBackend).toBe('debugger-cdp');
             expect(escalatedAuto.EscalatedFromAuto).toBe(true);
         });
+
+        it('enforces Browser Runtime Capability Gate when RuntimeSupportsDebuggerCDP is false (Firefox / Safari)', () => {
+            const cascade = new ControlModeCascade();
+
+            expect(ControlModeCascade.DetectRuntimeDebuggerSupport({ chrome: { debugger: {} } })).toBe(true);
+            expect(ControlModeCascade.DetectRuntimeDebuggerSupport({ browser: {} })).toBe(false);
+
+            const firefoxRes = cascade.Resolve({
+                BrandDefaultBackend: 'debugger-cdp',
+                AgentDefaultBackend: 'auto',
+                UserRuntimeOverride: 'debugger-cdp',
+                AgentAllowDebuggerCDP: true,
+                RuntimeSupportsDebuggerCDP: false,
+            });
+
+            expect(firefoxRes.EffectiveMode).toBe('content-script');
+            expect(firefoxRes.ConfiguredMode).toBe('content-script');
+            expect(firefoxRes.ActiveBackend).toBe('content-script');
+            expect(firefoxRes.AllowSwitchToDebuggerCDP).toBe(false);
+            expect(firefoxRes.DebuggerPermitted).toBe(false);
+            expect(firefoxRes.LockedByLayer).toBe('browser-runtime');
+            expect(firefoxRes.WinningLayer).toBe('browser-runtime');
+            expect(firefoxRes.Reason).toContain('chrome.debugger');
+        });
     });
 
     describe('Dual-Mode & Auto Browser Control Adapters + Coach-Mark Renderer', () => {

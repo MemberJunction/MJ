@@ -30,7 +30,109 @@ import {
 } from '@memberjunction/browser-extension-core';
 import { ExtensionBrandBuilder } from '../ExtensionBrandBuilder.js';
 
-const BRANDS_DIR = path.resolve(__dirname, '../../../Brands');
+const REPO_METADATA_DIR = path.resolve(__dirname, '../../../../../metadata');
+
+function createDownstreamMetadataFixture(baseDir: string): string {
+    const metadataDir = path.join(baseDir, 'downstream-metadata');
+    const brandKitsDir = path.join(metadataDir, 'brand-kits');
+    const appSettingsDir = path.join(metadataDir, 'app-agent-settings');
+    fs.mkdirSync(brandKitsDir, { recursive: true });
+    fs.mkdirSync(appSettingsDir, { recursive: true });
+
+    fs.writeFileSync(
+        path.join(brandKitsDir, '.brand-kits.json'),
+        JSON.stringify(
+            [
+                {
+                    fields: {
+                        Name: 'Betty Association Brand',
+                        Description: 'Association & Community Intelligence Sidekick.',
+                        Style: {
+                            Palette: [
+                                { Name: 'Primary', Value: '#7c3aed' },
+                                { Name: 'Accent', Value: '#ec4899' },
+                            ],
+                            Typography: [{ Role: 'Body', FontFamily: 'Plus Jakarta Sans, sans-serif' }],
+                        },
+                    },
+                    primaryKey: { ID: '11111111-2222-4333-8444-555555555555' },
+                },
+                {
+                    fields: {
+                        Name: 'Sidecar Learning Brand',
+                        Description: 'Continuous Learning & Workflow Companion.',
+                        Style: {
+                            Palette: [
+                                { Name: 'Primary', Value: '#0ea5e9' },
+                                { Name: 'Accent', Value: '#10b981' },
+                            ],
+                            Typography: [{ Role: 'Body', FontFamily: 'DM Sans, sans-serif' }],
+                        },
+                    },
+                    primaryKey: { ID: '66666666-7777-4888-9999-aaaaaaaaaaaa' },
+                },
+            ],
+            null,
+            2
+        ),
+        'utf8'
+    );
+
+    fs.writeFileSync(
+        path.join(appSettingsDir, '.downstream-apps.json'),
+        JSON.stringify(
+            [
+                {
+                    fields: {
+                        Name: 'Betty',
+                        AgentSettings: {
+                            BrowserExtension: {
+                                BrandSlug: 'betty',
+                                ExtensionName: 'Betty — Association Intelligence Sidekick',
+                                ShortName: 'Betty',
+                                Description:
+                                    'Association & Community Intelligence Sidekick for member engagement and committee workflows.',
+                                Version: '6.2.0',
+                                AssistantDisplayName: 'Betty',
+                                SidePanelHeaderTitle: 'Betty — Association Sidekick',
+                                DefaultControlBackend: 'content-script',
+                                AllowDebuggerCDP: false,
+                                BrandKitID: '@lookup:MJ: Brand Kits.Name=Betty Association Brand',
+                            },
+                        },
+                    },
+                    primaryKey: { ID: '@lookup:MJ: Applications.Name=Betty' },
+                },
+                {
+                    fields: {
+                        Name: 'Sidecar',
+                        AgentSettings: {
+                            BrowserExtension: {
+                                BrandSlug: 'sidecar',
+                                ExtensionName: 'Sidecar — Continuous Learning Companion',
+                                ShortName: 'Sidecar',
+                                Description:
+                                    'Continuous Learning & Workflow Companion delivering contextual micro-learning and playbooks.',
+                                Version: '6.2.0',
+                                AssistantDisplayName: 'Sidecar',
+                                SidePanelHeaderTitle: 'Sidecar — Learning Companion',
+                                DefaultControlBackend: 'auto',
+                                AllowDebuggerCDP: true,
+                                BrandKitID: '@lookup:MJ: Brand Kits.Name=Sidecar Learning Brand',
+                            },
+                        },
+                    },
+                    primaryKey: { ID: '@lookup:MJ: Applications.Name=Sidecar' },
+                },
+            ],
+            null,
+            2
+        ),
+        'utf8'
+    );
+
+    return metadataDir;
+}
 
 const hasPlaywrightChromium = (() => {
     try {
@@ -42,22 +144,26 @@ const hasPlaywrightChromium = (() => {
 })();
 
 describe('White-Label Brand Stamping & Bundle Verification (mj-copilot, betty, sidecar)', () => {
-    it('stamps unpacked MV3 directories, manifests, theme stylesheets, and unified content scripts for all 3 reference brands', () => {
+    it('stamps unpacked MV3 directories, manifests, theme stylesheets, and unified content scripts from metadata rows', () => {
         const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-ext-brand-verify-'));
         try {
+            const downstreamMetaDir = createDownstreamMetadataFixture(outDir);
             const builder = new ExtensionBrandBuilder();
-            const copilotRes = builder.BuildBrandedExtension({
-                BrandSource: path.join(BRANDS_DIR, 'mj-copilot/mj-extension-brand.json'),
+            const copilotRes = builder.BuildFromMetadata({
+                MetadataDir: REPO_METADATA_DIR,
+                ApplicationName: 'Data Explorer',
                 OutputRootDir: outDir,
-            });
-            const bettyRes = builder.BuildBrandedExtension({
-                BrandSource: path.join(BRANDS_DIR, 'betty/mj-extension-brand.json'),
+            }).PrimaryResult;
+            const bettyRes = builder.BuildFromMetadata({
+                MetadataDir: downstreamMetaDir,
+                ApplicationName: 'Betty',
                 OutputRootDir: outDir,
-            });
-            const sidecarRes = builder.BuildBrandedExtension({
-                BrandSource: path.join(BRANDS_DIR, 'sidecar/mj-extension-brand.json'),
+            }).PrimaryResult;
+            const sidecarRes = builder.BuildFromMetadata({
+                MetadataDir: downstreamMetaDir,
+                ApplicationName: 'Sidecar',
                 OutputRootDir: outDir,
-            });
+            }).PrimaryResult;
 
             expect(copilotRes.Manifest.optional_permissions).toContain('debugger');
             expect(bettyRes.Manifest.optional_permissions).toBeUndefined();
@@ -121,21 +227,25 @@ describe.runIf(hasPlaywrightChromium)('Headless Playwright E2E Proof — Live Wi
 
     beforeAll(async () => {
         buildOutDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-ext-e2e-live-'));
+        const downstreamMetaDir = createDownstreamMetadataFixture(buildOutDir);
         const builder = new ExtensionBrandBuilder();
 
-        // Build all 3 white-label brands (mj-copilot, betty, sidecar)
-        const copilotRes = builder.BuildBrandedExtension({
-            BrandSource: path.join(BRANDS_DIR, 'mj-copilot/mj-extension-brand.json'),
+        // Build all 3 white-label brands from metadata rows (mj-copilot from repo metadata/, betty & sidecar from downstream metadata/)
+        const copilotRes = builder.BuildFromMetadata({
+            MetadataDir: REPO_METADATA_DIR,
+            ApplicationName: 'Data Explorer',
             OutputRootDir: buildOutDir,
-        });
-        const bettyRes = builder.BuildBrandedExtension({
-            BrandSource: path.join(BRANDS_DIR, 'betty/mj-extension-brand.json'),
+        }).PrimaryResult;
+        const bettyRes = builder.BuildFromMetadata({
+            MetadataDir: downstreamMetaDir,
+            ApplicationName: 'Betty',
             OutputRootDir: buildOutDir,
-        });
-        const sidecarRes = builder.BuildBrandedExtension({
-            BrandSource: path.join(BRANDS_DIR, 'sidecar/mj-extension-brand.json'),
+        }).PrimaryResult;
+        const sidecarRes = builder.BuildFromMetadata({
+            MetadataDir: downstreamMetaDir,
+            ApplicationName: 'Sidecar',
             OutputRootDir: buildOutDir,
-        });
+        }).PrimaryResult;
 
         unpackedCopilotDir = copilotRes.UnpackedDir;
         unpackedBettyDir = bettyRes.UnpackedDir;

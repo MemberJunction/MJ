@@ -43,12 +43,18 @@ export type ExtensionBrowserControlMode = 'ObserveOnly' | 'GuideOnly' | 'Collabo
  * Input layers to the 4-layer configuration cascade for browser control mode and exposure.
  */
 export interface BrowserControlCascadeInput {
-    /** Layer 2: Brand Default (`mj-extension-brand.json`). */
+    /** Layer 2: Brand Default (`mj-extension-brand.json` / `Application.AgentSettings.BrowserExtension`). */
     BrandDefaultBackend?: BrowserControlBackendMode;
     /** Layer 2b: Agent / Application Default (`IAgentSettings.BrowserExtension.DefaultControlBackend`). */
     AgentDefaultBackend?: BrowserControlBackendMode;
     /** Enterprise Safety Ceiling (`IAgentSettings.BrowserExtension.AllowDebuggerCDP`). When `false`, locks runtime to `'content-script'`. */
     AgentAllowDebuggerCDP?: boolean;
+    /**
+     * Browser Runtime Capability Gate: whether the active browser runtime exposes `chrome.debugger` CDP.
+     * Defaults to `true` when undefined; when `false` (e.g. on Firefox or Safari), immediately locks
+     * `EffectiveMode` / `ConfiguredMode` to `'content-script'` with `LockedByLayer: 'browser-runtime'`.
+     */
+    RuntimeSupportsDebuggerCDP?: boolean;
     /** Layer 3: Domain rule or Playbook preferred backend. */
     DomainRuleBackend?: BrowserControlBackendMode;
     /** Layer 3b: Whether the current Playbook step explicitly requires `isTrusted: true` CDP input. */
@@ -60,11 +66,18 @@ export interface BrowserControlCascadeInput {
 }
 
 /**
+ * Alias for {@link BrowserControlCascadeInput}.
+ */
+export type ControlModeCascadeInput = BrowserControlCascadeInput;
+
+/**
  * Resolved output of the 4-layer browser control configuration cascade.
  */
 export interface BrowserControlCascadeResolution {
-    /** Configured mode after applying layers 1-4 and the `AllowDebuggerCDP` enterprise safety ceiling. */
+    /** Configured mode after applying layers 1-4 and the `AllowDebuggerCDP` / `RuntimeSupportsDebuggerCDP` gates. */
     ConfiguredMode: BrowserControlBackendMode;
+    /** Effective mode after applying all runtime and enterprise safety gates (synonym of `ConfiguredMode`). */
+    EffectiveMode: BrowserControlBackendMode;
     /** Concrete backend that will execute the current step (`'content-script'` or `'debugger-cdp'`). */
     ActiveBackend: ConcreteBrowserControlBackend;
     /** Which layer determined `ConfiguredMode`. */
@@ -74,12 +87,24 @@ export interface BrowserControlCascadeResolution {
         | 'agent-default'
         | 'domain-or-playbook-rule'
         | 'user-runtime-override'
-        | 'enterprise-safety-ceiling';
-    /** Whether `chrome.debugger` CDP attachment is permitted by enterprise policy. */
+        | 'enterprise-safety-ceiling'
+        | 'browser-runtime';
+    /** When locked by a non-overridable ceiling (`'browser-runtime'` or `'enterprise-safety-ceiling'`), identifies that ceiling. */
+    LockedByLayer?: 'browser-runtime' | 'enterprise-safety-ceiling' | null;
+    /** Whether `chrome.debugger` CDP attachment is permitted by both browser runtime and enterprise policy. */
     DebuggerPermitted: boolean;
+    /** Whether the user or agent may switch to `'debugger-cdp'` in the current runtime and enterprise context. */
+    AllowSwitchToDebuggerCDP: boolean;
     /** True when `ConfiguredMode === 'auto'` escalated `ActiveBackend` to `'debugger-cdp'` for this step. */
     EscalatedFromAuto: boolean;
+    /** Human-readable explanation of the resolution or safety lock. */
+    Reason: string;
 }
+
+/**
+ * Alias for {@link BrowserControlCascadeResolution}.
+ */
+export type ControlModeCascadeResolution = BrowserControlCascadeResolution;
 
 /**
  * Per-domain user preferences persisted in `MJ: User Settings` under `mj.browserExtension.domainPolicy.v1` via `UserInfoEngine`.
@@ -557,33 +582,59 @@ export interface ModelBlindSecretVaultResult {
     ErrorMessage?: string;
 }
 
-// ─── 6. White-Label Brand Stamping (`ExtensionBrandProfile`) ─────────────────
+// ─── 6. White-Label Brand Stamping (`ExtensionBrandProfile`) & Multi-Browser ──
 
 /**
- * Declarative White-Label Brand Profile (`mj-extension-brand.json`) consumed by
- * `@memberjunction/browser-extension-builder` (`mj-ext-build`) and hydrated at runtime
+ * Supported browser targets for MemberJunction Browser Extension builds:
+ * - `'chrome'`: Google Chrome (Chromium MV3 `side_panel` + `service_worker` + `offscreen` + optional `debugger`)
+ * - `'edge'`: Microsoft Edge (Chromium MV3 `side_panel` + `service_worker` + `offscreen` + optional `debugger`)
+ * - `'firefox'`: Mozilla Firefox 128+ (WebExtensions MV3 `sidebar_action` + `background.scripts` + `browser_specific_settings.gecko`)
+ * - `'safari'`: Apple Safari 17+ (WebExtensions MV3 `action.default_popup` + `service_worker` + `safari-extension-metadata.json`)
+ */
+export type BrowserTarget = 'chrome' | 'edge' | 'firefox' | 'safari';
+
+/**
+ * Declarative White-Label Brand Profile consumed by `@memberjunction/browser-extension-builder`
+ * (`mj-ext-build`) — hydrated either from `MJ: Brand Kits` + `MJ: Applications.AgentSettings.BrowserExtension`
+ * metadata rows via `BuildFromMetadata()` or from a brand profile object/file, and hydrated at runtime
  * by `RuntimeBrandKitHydrator`.
  */
 export interface ExtensionBrandProfile {
     /** Unique brand slug (`'mj-copilot'`, `'betty'`, `'sidecar'`). */
     BrandSlug: string;
-    /** Chrome Web Store display name (max 45 chars). */
+    /** Store/package display name (max 45 chars). */
     BrandName: string;
     /** Short name for toolbar/launcher (max 12 chars). */
     ShortName: string;
     /** Semver version string (e.g. `'6.2.0'`). */
     Version: string;
-    /** Chrome Web Store description (max 132 chars). */
+    /** Store/package description (max 132 chars). */
     Description: string;
     /** Assistant persona display name (e.g. `'MJ Co-Pilot'`, `'Betty'`, `'Sidecar'`). */
     AssistantDisplayName: string;
+    /** Optional header title rendered in the Side Panel chrome (defaults to `BrandName`). */
+    SidePanelHeaderTitle?: string;
     /** Welcome tagline displayed in the Side Panel header. */
     Tagline: string;
+    /** Default MemberJunction GraphQL API URL pre-populated in onboarding (e.g. `'http://localhost:4000/graphql'`). */
+    DefaultServerUrl?: string;
+    /** Default OAuth/OIDC provider key (`'msal' | 'auth0' | 'okta' | 'cognito' | 'custom-oidc'`). */
+    DefaultAuthProvider?: 'msal' | 'auth0' | 'okta' | 'cognito' | 'custom-oidc';
+    /** Optional keyboard shortcut for toggling the Side Panel (e.g. `'Ctrl+Shift+M'`). */
+    KeyboardShortcut?: string;
+    /** Optional Firefox Gecko add-on ID (e.g. `'mj-copilot@memberjunction.org'`). */
+    FirefoxExtensionID?: string;
+    /** Optional macOS/iOS Safari Web Extension bundle identifier (e.g. `'org.memberjunction.copilot.extension'`). */
+    SafariBundleIdentifier?: string;
+    /** Target browsers supported by this brand build (`['chrome', 'edge', 'firefox', 'safari']`). */
+    SupportedBrowsers?: BrowserTarget[];
+    /** Optional resolved `MJ: Brand Kits` ID when built from MJ metadata rows. */
+    BrandKitID?: string;
     /** Default control backend for this brand (`'content-script'` recommended default). */
     DefaultControlBackend: BrowserControlBackendMode;
     /**
      * When `false`, `"debugger"` is omitted from `manifest.json` completely.
-     * When `true`, `"debugger"` is placed in `optional_permissions` so Mode 1 installs cleanly with zero banner.
+     * When `true`, `"debugger"` is placed in `optional_permissions` on Chromium targets so Mode 1 installs cleanly with zero banner.
      */
     IncludeDebuggerPermission: boolean;
     /** Host permissions placed in `manifest.json`. */

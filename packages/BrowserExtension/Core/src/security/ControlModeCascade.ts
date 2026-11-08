@@ -36,46 +36,88 @@ import type {
 export const BROWSER_EXTENSION_DOMAIN_POLICY_SETTING_KEY = 'mj.browserExtension.domainPolicy.v1';
 
 /**
- * 4-Layer Configuration Cascade resolver for Browser Control Mode (`content-script`, `debugger-cdp`, `auto`).
+ * 4-Layer Configuration Cascade resolver for Browser Control Mode (`content-script`, `debugger-cdp`, `auto`),
+ * enforcing both the Browser Runtime Capability Gate (`RuntimeSupportsDebuggerCDP`) and the Enterprise
+ * Safety Ceiling (`AgentAllowDebuggerCDP`).
  */
 export class ControlModeCascade {
     /**
-     * Evaluates the 4-layer configuration cascade and enterprise safety ceiling (`AllowDebuggerCDP`).
+     * Detects whether a given browser runtime global exposes the Chromium `chrome.debugger` CDP namespace.
+     * Returns `false` on Firefox and Safari runtimes where `chrome.debugger` is absent.
+     */
+    public static DetectRuntimeDebuggerSupport(runtimeGlobal?: Record<string, unknown>): boolean {
+        const g = runtimeGlobal ?? (globalThis as Record<string, unknown>);
+        const chromeNamespace = g['chrome'] as Record<string, unknown> | undefined;
+        return Boolean(chromeNamespace && chromeNamespace['debugger']);
+    }
+
+    /**
+     * Evaluates the 4-layer configuration cascade, Browser Runtime Capability Gate (`RuntimeSupportsDebuggerCDP`),
+     * and Enterprise Safety Ceiling (`AllowDebuggerCDP`).
      */
     public Resolve(input: BrowserControlCascadeInput): BrowserControlCascadeResolution {
+        const runtimeSupportsDebugger = input.RuntimeSupportsDebuggerCDP !== false;
+
+        // Browser Runtime Capability Gate: when running on Firefox or Safari (where chrome.debugger CDP is absent),
+        // immediately lock to 'content-script' and forbid switching to debugger-cdp.
+        if (!runtimeSupportsDebugger) {
+            return {
+                ConfiguredMode: 'content-script',
+                EffectiveMode: 'content-script',
+                ActiveBackend: 'content-script',
+                WinningLayer: 'browser-runtime',
+                LockedByLayer: 'browser-runtime',
+                DebuggerPermitted: false,
+                AllowSwitchToDebuggerCDP: false,
+                EscalatedFromAuto: false,
+                Reason: 'Current browser runtime does not expose chrome.debugger CDP (e.g. Firefox or Safari); locked to content-script mode.',
+            };
+        }
+
         const debuggerPermitted = input.AgentAllowDebuggerCDP !== false;
 
         let configuredMode: BrowserControlBackendMode = 'content-script';
         let winningLayer: BrowserControlCascadeResolution['WinningLayer'] = 'code-default';
+        let lockedByLayer: BrowserControlCascadeResolution['LockedByLayer'] = null;
+        let reason = 'Defaulted to Mode 1 (content-script) browser control.';
 
         // Layer 2a: Brand Default
         if (input.BrandDefaultBackend) {
             configuredMode = input.BrandDefaultBackend;
             winningLayer = 'brand-default';
+            reason = `Resolved from Brand default (${configuredMode}).`;
         }
 
         // Layer 2b: Agent / Application Default
         if (input.AgentDefaultBackend) {
             configuredMode = input.AgentDefaultBackend;
             winningLayer = 'agent-default';
+            reason = `Resolved from Application/Agent default (${configuredMode}).`;
         }
 
         // Layer 3: Domain or Playbook Rule
         if (input.DomainRuleBackend) {
             configuredMode = input.DomainRuleBackend;
             winningLayer = 'domain-or-playbook-rule';
+            reason = `Resolved from Domain or Playbook rule (${configuredMode}).`;
         }
 
         // Layer 4: User Runtime Override in Trust Bar
         if (input.UserRuntimeOverride) {
             configuredMode = input.UserRuntimeOverride;
             winningLayer = 'user-runtime-override';
+            reason = `Resolved from User runtime override (${configuredMode}).`;
         }
 
         // Enterprise Safety Ceiling: AllowDebuggerCDP === false clamps to 'content-script'
-        if (!debuggerPermitted && (configuredMode === 'debugger-cdp' || configuredMode === 'auto')) {
-            configuredMode = 'content-script';
-            winningLayer = 'enterprise-safety-ceiling';
+        if (!debuggerPermitted) {
+            lockedByLayer = 'enterprise-safety-ceiling';
+            if (configuredMode === 'debugger-cdp' || configuredMode === 'auto') {
+                configuredMode = 'content-script';
+                winningLayer = 'enterprise-safety-ceiling';
+                reason =
+                    'Enterprise policy (AllowDebuggerCDP: false) forbids chrome.debugger CDP attach; locked to content-script mode.';
+            }
         }
 
         // Resolve Concrete Active Backend ('content-script' vs 'debugger-cdp')
@@ -99,10 +141,14 @@ export class ControlModeCascade {
 
         return {
             ConfiguredMode: configuredMode,
+            EffectiveMode: configuredMode,
             ActiveBackend: activeBackend,
             WinningLayer: winningLayer,
+            LockedByLayer: lockedByLayer,
             DebuggerPermitted: debuggerPermitted,
+            AllowSwitchToDebuggerCDP: debuggerPermitted,
             EscalatedFromAuto: escalatedFromAuto,
+            Reason: reason,
         };
     }
 }

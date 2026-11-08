@@ -5,6 +5,7 @@ import {
     ExtensionOffscreenAudioDaemon,
     ExtensionServiceWorkerRuntime,
     ExtensionSidePanelController,
+    WebExtensionBrowserBridge,
 } from '../index.js';
 import type { ExtensionBrandProfile } from '@memberjunction/browser-extension-core';
 
@@ -156,5 +157,87 @@ describe('@memberjunction/browser-extension-host', () => {
 
         expect(controller.SetExposure('state')).toBe('state');
         expect(controller.SetControlMode('auto')).toBe('auto');
+    });
+
+    it('normalizes WebExtensionBrowserBridge across Chrome/Edge, Firefox, and Safari', async () => {
+        // 1. Chromium (Chrome / Edge): sidePanel + offscreen + debugger
+        let chromeSidePanelOpened = false;
+        let chromeOffscreenCreated = false;
+        const chromeRuntime: Record<string, unknown> = {
+            chrome: {
+                sidePanel: {
+                    open: async () => {
+                        chromeSidePanelOpened = true;
+                    },
+                    setPanelBehavior: async () => undefined,
+                },
+                offscreen: {
+                    hasDocument: async () => false,
+                    createDocument: async () => {
+                        chromeOffscreenCreated = true;
+                    },
+                },
+                debugger: {
+                    attach: async () => undefined,
+                },
+            },
+        };
+
+        expect(WebExtensionBrowserBridge.DetectBrowserTarget(chromeRuntime)).toBe('chrome');
+        expect(WebExtensionBrowserBridge.SupportsDebuggerCDP(chromeRuntime)).toBe(true);
+        expect(WebExtensionBrowserBridge.SupportsOffscreenDocument(chromeRuntime)).toBe(true);
+        const chromeOpen = await WebExtensionBrowserBridge.OpenSidePanel({ WindowId: 1 }, chromeRuntime);
+        expect(chromeOpen.OpenedVia).toBe('sidePanel');
+        expect(chromeSidePanelOpened).toBe(true);
+        const chromeAudio = await WebExtensionBrowserBridge.EnsureAudioDaemonHost('offscreen.html', chromeRuntime);
+        expect(chromeAudio.HostMode).toBe('offscreen-document');
+        expect(chromeOffscreenCreated).toBe(true);
+
+        // 2. Firefox: browser.sidebarAction, no offscreen, no debugger
+        let firefoxSidebarOpened = false;
+        const firefoxRuntime: Record<string, unknown> = {
+            browser: {
+                sidebarAction: {
+                    open: async () => {
+                        firefoxSidebarOpened = true;
+                    },
+                    setPanel: async () => undefined,
+                },
+            },
+        };
+
+        expect(WebExtensionBrowserBridge.DetectBrowserTarget(firefoxRuntime)).toBe('firefox');
+        expect(WebExtensionBrowserBridge.SupportsDebuggerCDP(firefoxRuntime)).toBe(false);
+        expect(WebExtensionBrowserBridge.SupportsOffscreenDocument(firefoxRuntime)).toBe(false);
+        const firefoxOpen = await WebExtensionBrowserBridge.OpenSidePanel({}, firefoxRuntime);
+        expect(firefoxOpen.OpenedVia).toBe('sidebarAction');
+        expect(firefoxSidebarOpened).toBe(true);
+        const firefoxAudio = await WebExtensionBrowserBridge.EnsureAudioDaemonHost('offscreen.html', firefoxRuntime);
+        expect(firefoxAudio.HostMode).toBe('inline-event-page');
+
+        // 3. Safari: action.openPopup with fallback to tabs.create
+        let safariTabCreatedUrl = '';
+        const safariRuntime: Record<string, unknown> = {
+            browser: {
+                action: {
+                    openPopup: async () => {
+                        throw new Error('User gesture required');
+                    },
+                },
+                runtime: {
+                    getURL: (p: string) => `safari-web-extension://abc/${p}`,
+                },
+                tabs: {
+                    create: async (opts: { url: string }) => {
+                        safariTabCreatedUrl = opts.url;
+                    },
+                },
+            },
+        };
+
+        expect(WebExtensionBrowserBridge.DetectBrowserTarget(safariRuntime)).toBe('safari');
+        const safariOpen = await WebExtensionBrowserBridge.OpenSidePanel({}, safariRuntime);
+        expect(safariOpen.OpenedVia).toBe('tabFallback');
+        expect(safariTabCreatedUrl).toBe('safari-web-extension://abc/sidepanel.html');
     });
 });

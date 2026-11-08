@@ -139,16 +139,34 @@ During OAuth app setup playbooks (`HUBSPOT_OAUTH_PLAYBOOK`, `ENTRA_ID_OAUTH_PLAY
 
 ---
 
-## 5. Building White-Label Branded Extensions (`mj-copilot`, `betty`, `sidecar`)
+## 5. Metadata-Row-Driven Extension Brands (`MJ: Brand Kits` + `MJ: Applications`)
 
-Use `@memberjunction/browser-extension-builder` (`mj-ext-build`) to stamp unpacked MV3 directories and Chrome Web Store `.zip` packages from declarative `mj-extension-brand.json` profiles:
+Extension brands are defined natively as `mj-sync` metadata rows rather than static brand folders:
+1. **`MJ: Brand Kits` (`metadata/brand-kits/`):** Stores the brand's color palette (`Style.Palette`: `Primary`, `Navy`, `Accent`, `Cyan`, `White`) and typography (`Style.Typography`: `Headline`, `Body`, `Data`).
+2. **`MJ: Applications` (`metadata/app-agent-settings/`):** Stores `AgentSettings.BrowserExtension`, linking `"BrandKitID": "@lookup:MJ: Brand Kits.Name=MemberJunction"` alongside package metadata (`BrandSlug`, `ExtensionName`, `ShortName`, `Description`, `Version`, `AssistantDisplayName`, `SidePanelHeaderTitle`, `DefaultServerUrl`, `DefaultAuthProvider`, `FirefoxExtensionID`, `SafariBundleIdentifier`, `SupportedBrowsers`, `DefaultControlBackend`, `AllowDebuggerCDP`, `ContextRules`, and `EntityFacets`).
+
+- **In MJ Core (`metadata/`):** Ships the canonical **MemberJunction Co-Pilot** (`mj-copilot`) configuration in `metadata/app-agent-settings/.data-explorer-agent-settings.json` linked to the `MemberJunction` brand kit (`ID: DBBE8BC2-8FEF-4DA9-B24A-C6038129B696`).
+- **In Downstream Repositories (`Betty`, `Sidecar`, custom Open Apps):** Each downstream repository defines its own `MJ: Brand Kits` row and `MJ: Applications` (`AgentSettings.BrowserExtension`) row in its own `metadata/` directory and invokes `mj-ext-build --metadata-dir ./metadata --app-name "Betty"`.
+
+---
+
+## 6. Multi-Browser Compilation (`chrome`, `edge`, `firefox`, `safari`)
+
+Use `@memberjunction/browser-extension-builder` (`mj-ext-build`) to compile unpacked WebExtensions directories and store-ready `.zip` archives directly from `metadata/` across **Chrome**, **Microsoft Edge**, **Firefox**, and **Safari**:
 
 ```bash
+# Build MemberJunction Co-Pilot across all 4 browser targets from MJ Core metadata/
 npx mj-ext-build \
-  --brand packages/BrowserExtension/Brands/mj-copilot/mj-extension-brand.json \
-  --brand packages/BrowserExtension/Brands/betty/mj-extension-brand.json \
-  --brand packages/BrowserExtension/Brands/sidecar/mj-extension-brand.json \
+  --metadata-dir ./metadata \
+  --app-name "Data Explorer" \
+  --browser all \
   --out dist/extensions
 ```
 
-At runtime, `RuntimeBrandKitHydrator` also hydrates tenant-specific `MJ: Brand Kits` records via `@memberjunction/theme-engine` (`Derive` + `EmitOverlayCss`), updating `--mj-*` CSS design tokens dynamically without rebuilding the extension binary.
+| Browser Target (`BrowserTarget`) | Manifest Surface | Background Runtime | Debugger / Offscreen |
+|---|---|---|---|
+| **`chrome` & `edge`** | `side_panel: { default_path: "sidepanel.html" }` | `background: { service_worker: "service-worker.js", type: "module" }` | `offscreen` enabled; `"debugger"` in `optional_permissions` when `AllowDebuggerCDP: true` |
+| **`firefox`** | `sidebar_action: { default_panel: "sidepanel.html", ... }` + `browser_specific_settings.gecko` | `background: { scripts: ["service-worker.js"], type: "module" }` | `RuntimeSupportsDebuggerCDP: false` locks `ControlModeCascade` to `'content-script'`; inline audio fallback |
+| **`safari`** | `action: { default_popup: "sidepanel.html", ... }` + emits `safari-extension-metadata.json` (`xcrun safari-web-extension-converter .`) | `background: { service_worker: "service-worker.js", type: "module" }` | `RuntimeSupportsDebuggerCDP: false` locks `ControlModeCascade` to `'content-script'`; inline audio fallback |
+
+At runtime, `WebExtensionBrowserBridge` (`@memberjunction/browser-extension-host`) normalizes `globalThis.browser ?? globalThis.chrome`, and `RuntimeBrandKitHydrator` hydrates tenant-specific `MJ: Brand Kits` records via `@memberjunction/theme-engine` (`Derive` + `EmitOverlayCss`), updating `--mj-*` CSS design tokens dynamically without rebuilding the extension binary.

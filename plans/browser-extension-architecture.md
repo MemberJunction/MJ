@@ -600,16 +600,15 @@ Following the pattern established in [Channels v2 §4.2](realtime/channels-v2/RE
   - Implement Guided Playbook runner supporting `HighlightElement` coach marks, `WaitForUserAction` on login/OAuth consent pages, and model-blind secret capture (`CopySecretToMJVault` without LLM exposure).
   - Ship reference playbooks for **MJ Central OAuth Connector Setup** (HubSpot / Entra ID App Registration).
 
-### Phase 4: White-Label Brand Stamping Factory ("Betty", "Sidecar", Custom Brands)
-- **T4.1 — `@memberjunction/browser-extension-builder` (`mj-ext-build`):**
-  - Build CLI that reads `mj-extension-brand.json`, validates it with Zod, derives initial theme CSS via `@memberjunction/theme-engine`, stamps `manifest.json` (including conditional `debugger` permission), bundles assets, and outputs a store-ready `.zip`.
-- **T4.2 — Runtime `BrandKit` + `ThemeEngine` Synchronization:**
+### Phase 4: Metadata-Row-Driven White-Label Brand Factory & Multi-Browser Targets (`chrome`, `edge`, `firefox`, `safari`)
+- **T4.1 — `@memberjunction/browser-extension-builder` (`mj-ext-build`) & Metadata-Row-Driven Brands:**
+  - Build CLI (`mj-ext-build`) supporting both `--metadata-dir <dir> --app-name <name>` (`BuildFromMetadata`) and `--brand <path>`, validating with Zod, deriving initial theme CSS via `@memberjunction/theme-engine`, stamping browser-specific `manifest.json` across `chrome`, `edge`, `firefox`, and `safari` (`--browser all`), and outputting store-ready `.zip` archives.
+- **T4.2 — Runtime `BrandKit` + `ThemeEngine` Synchronization & Cross-Browser Polyfill (`WebExtensionBrowserBridge`):**
   - Hydrate tenant `MJ: Brand Kits` and `ThemeEngine` seeds on login so a single installed extension dynamically adopts the tenant's colors, dark/light ramps, logo, and agent persona.
-- **T4.3 — Reference Brand Profiles:**
-  - Ship ready-to-build brand configurations in `packages/BrowserExtension/Brands/`:
-    1. `mj-copilot` (MemberJunction Co-Pilot)
-    2. `betty` (Betty — Association & Community Intelligence Sidekick)
-    3. `sidecar` (Sidecar — Continuous Learning & Workflow Companion)
+  - Normalize `globalThis.browser ?? globalThis.chrome` across Chromium (`sidePanel` + `offscreen`), Firefox (`sidebarAction` + inline audio fallback), and Safari (`action.openPopup` / `tabs.create` + inline audio fallback), and gate `ControlModeCascade` with `RuntimeSupportsDebuggerCDP`.
+- **T4.3 — Canonical `MemberJunction Co-Pilot` Metadata Row & Downstream Brand Extensibility:**
+  - Define the canonical **MemberJunction Co-Pilot** (`mj-copilot`) brand in MJ Core's `metadata/app-agent-settings/.data-explorer-agent-settings.json` linked to `metadata/brand-kits/.brand-kits.json` (`@lookup:MJ: Brand Kits.Name=MemberJunction`).
+  - Downstream Open App repositories (**Betty**, **Sidecar**, custom enterprise brands) define their own `MJ: Brand Kits` and `MJ: Applications` (`AgentSettings.BrowserExtension`) metadata rows in their own `metadata/` directories.
 
 ---
 

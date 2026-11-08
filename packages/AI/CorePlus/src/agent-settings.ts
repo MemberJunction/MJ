@@ -102,6 +102,32 @@ export interface IAgentSettings {
      * enterprise debugger ceiling (`AllowDebuggerCDP`), and optional runtime `BrandKitID`.
      */
     BrowserExtension?: {
+        /** URL-safe slug for build output directories and extension IDs (e.g. `'mj-copilot'`). */
+        BrandSlug?: string | null;
+        /** Full extension package name (max 45 chars, e.g. `'MemberJunction Co-Pilot'`). */
+        ExtensionName?: string | null;
+        /** Short toolbar/launcher name (max 12 chars, e.g. `'MJ Co-Pilot'`). */
+        ShortName?: string | null;
+        /** Store/package description for the extension. */
+        Description?: string | null;
+        /** Semantic version string for the extension manifest (e.g. `'6.2.0'`). */
+        Version?: string | null;
+        /** Assistant persona display name in the Side Panel and Coach-Mark badges (e.g. `'MJ Co-Pilot'`). */
+        AssistantDisplayName?: string | null;
+        /** Header title rendered in the Side Panel chrome (e.g. `'MemberJunction Co-Pilot'`). */
+        SidePanelHeaderTitle?: string | null;
+        /** Default MemberJunction GraphQL API URL pre-populated in onboarding. */
+        DefaultServerUrl?: string | null;
+        /** Default OAuth/OIDC provider key (`'msal' | 'auth0' | 'okta' | 'cognito' | 'custom-oidc'`). */
+        DefaultAuthProvider?: 'msal' | 'auth0' | 'okta' | 'cognito' | 'custom-oidc' | null;
+        /** Optional keyboard shortcut for toggling the Side Panel (e.g. `'Ctrl+Shift+M'`). */
+        KeyboardShortcut?: string | null;
+        /** Optional Firefox Gecko add-on ID (e.g. `'mj-copilot@memberjunction.org'`). */
+        FirefoxExtensionID?: string | null;
+        /** Optional macOS/iOS Safari Web Extension bundle identifier (e.g. `'org.memberjunction.copilot.extension'`). */
+        SafariBundleIdentifier?: string | null;
+        /** Target browsers supported by this brand build (`['chrome', 'edge', 'firefox', 'safari']`). */
+        SupportedBrowsers?: Array<'chrome' | 'edge' | 'firefox' | 'safari'> | null;
         /** Default browser control backend for this app (`'content-script'` default, `'debugger-cdp'`, or `'auto'`). */
         DefaultControlBackend?: 'content-script' | 'debugger-cdp' | 'auto' | null;
         /** Enterprise safety ceiling: when `false`, forbids `chrome.debugger` CDP attach and locks to `'content-script'`. */
@@ -110,6 +136,10 @@ export interface IAgentSettings {
         BrandKitID?: string | null;
         /** Optional blocked domain wildcards (e.g. `['*.1password.com', '*.okta.com']`) that force exposure to `'none'`. */
         BlockedDomains?: string[] | null;
+        /** Optional host permissions for the extension manifest (defaults to `['<all_urls>']`). */
+        HostPermissions?: string[] | null;
+        /** Optional externally connectable origin patterns for zero-login MJ web app session handoff. */
+        ExternallyConnectableMatches?: string[] | null;
         /** URL & DOM → MJ Entity anchor resolution rules contributed by this application. */
         ContextRules?: Array<{
             /** Unique rule key, e.g. `'common.organization.by-domain'` or `'common.person.linkedin'`. */

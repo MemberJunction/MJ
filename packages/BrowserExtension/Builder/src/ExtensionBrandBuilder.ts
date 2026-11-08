@@ -16,6 +16,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as zlib from 'node:zlib';
 import {
+    BrowserControlBackendMode,
+    BrowserTarget,
     ExtensionBrandProfile,
     HydratedExtensionBrandTheme,
     REDACTED_SENTINEL,
@@ -24,7 +26,7 @@ import {
 import { ValidateExtensionBrandProfile } from './BrandProfileSchema.js';
 
 /**
- * Stamped Manifest V3 JSON structure written to `manifest.json`.
+ * Stamped Manifest V3 JSON structure written to `manifest.json` across `chrome`, `edge`, `firefox`, and `safari`.
  */
 export interface StampedExtensionManifest {
     manifest_version: 3;
@@ -36,24 +38,49 @@ export interface StampedExtensionManifest {
     optional_permissions?: string[];
     host_permissions: string[];
     background: {
-        service_worker: string;
+        service_worker?: string;
+        scripts?: string[];
         type: 'module';
     };
-    side_panel: {
+    side_panel?: {
         default_path: string;
+    };
+    sidebar_action?: {
+        default_panel: string;
+        default_title: string;
+        default_icon: Record<string, string>;
     };
     action: {
         default_title: string;
+        default_popup?: string;
+        default_icon?: Record<string, string>;
+    };
+    browser_specific_settings?: {
+        gecko?: {
+            id: string;
+            strict_min_version: string;
+        };
     };
     content_scripts: Array<{
         matches: string[];
         js: string[];
         run_at: 'document_idle' | 'document_end' | 'document_start';
     }>;
-    externally_connectable: {
+    externally_connectable?: {
         matches: string[];
     };
     icons: Record<string, string>;
+}
+
+/**
+ * Companion metadata emitted alongside `manifest.json` for Safari 17+ Web Extensions (`safari-extension-metadata.json`).
+ */
+export interface SafariExtensionMetadata {
+    BundleIdentifier: string;
+    ExtensionName: string;
+    ShortName: string;
+    Version: string;
+    XcodeConverterCommand: string;
 }
 
 /**
@@ -64,6 +91,10 @@ export interface BuildBrandedExtensionOptions {
     BrandSource: string | ExtensionBrandProfile;
     /** Output root directory where `<BrandSlug>/` unpacked folder and `.zip` archive will be written. */
     OutputRootDir: string;
+    /** Target browser engine (`'chrome'` default, `'edge'`, `'firefox'`, or `'safari'`). */
+    TargetBrowser?: BrowserTarget;
+    /** When `true`, nests the output inside `<OutputRootDir>/<BrandSlug>/<TargetBrowser>`. */
+    IncludeBrowserSubdir?: boolean;
     /** Whether to also produce a `.zip` archive (defaults to `true`). */
     CreateZipArchive?: boolean;
 }
@@ -72,6 +103,8 @@ export interface BuildBrandedExtensionOptions {
  * Result returned by {@link ExtensionBrandBuilder.BuildBrandedExtension}.
  */
 export interface BuildBrandedExtensionResult {
+    /** Target browser that this bundle was compiled for (`'chrome' | 'edge' | 'firefox' | 'safari'`). */
+    TargetBrowser: BrowserTarget;
     /** Validated brand profile. */
     BrandProfile: ExtensionBrandProfile;
     /** Stamped `manifest.json` object. */
@@ -84,8 +117,109 @@ export interface BuildBrandedExtensionResult {
     ManifestPath: string;
     /** Absolute path to `brand-theme.css`. */
     StylesheetPath: string;
+    /** Absolute path to `safari-extension-metadata.json` when `TargetBrowser === 'safari'`, otherwise `null`. */
+    SafariMetadataPath: string | null;
     /** Absolute path to the generated `.zip` archive (if `CreateZipArchive !== false`). */
     ZipPath: string | null;
+}
+
+/**
+ * Options for building a brand profile across multiple browsers (`chrome`, `edge`, `firefox`, `safari`).
+ */
+export interface BuildMultiBrowserExtensionOptions {
+    /** Path to `mj-extension-brand.json` OR an in-memory `ExtensionBrandProfile` object. */
+    BrandSource: string | ExtensionBrandProfile;
+    /** Output root directory where `<BrandSlug>/<browser>/` unpacked folders and `.zip` archives will be written. */
+    OutputRootDir: string;
+    /** Target browsers to compile (defaults to `profile.SupportedBrowsers ?? ['chrome', 'edge', 'firefox', 'safari']`). */
+    TargetBrowsers?: BrowserTarget[];
+    /** Whether to also produce `.zip` archives (defaults to `true`). */
+    CreateZipArchive?: boolean;
+}
+
+/**
+ * Options for loading an {@link ExtensionBrandProfile} from `mj-sync` metadata rows
+ * (`<MetadataDir>/app-agent-settings/` + `<MetadataDir>/brand-kits/`).
+ */
+export interface LoadBrandProfileFromMetadataOptions {
+    /** Root `metadata/` directory containing `app-agent-settings/` and `brand-kits/`. */
+    MetadataDir: string;
+    /** Optional `MJ: Applications` Name (e.g. `'Data Explorer'`, `'Betty'`, `'Sidecar'`) to select. */
+    ApplicationName?: string;
+    /** Optional `BrandSlug` filter (e.g. `'mj-copilot'`, `'betty'`, `'sidecar'`). */
+    BrandSlug?: string;
+}
+
+/**
+ * Options for building one or more browser extension packages directly from `mj-sync` metadata rows.
+ */
+export interface BuildFromMetadataOptions extends LoadBrandProfileFromMetadataOptions {
+    /** Output root directory where unpacked folders and `.zip` archives will be written. */
+    OutputRootDir: string;
+    /** Single target browser (`'chrome'` default) when building a single target. */
+    TargetBrowser?: BrowserTarget;
+    /** Multiple target browsers (`['chrome', 'edge', 'firefox', 'safari']`) when building multi-browser packages. */
+    TargetBrowsers?: BrowserTarget[];
+    /** Whether to also produce `.zip` archives (defaults to `true`). */
+    CreateZipArchive?: boolean;
+}
+
+/**
+ * Result returned by {@link ExtensionBrandBuilder.BuildFromMetadata}.
+ */
+export interface BuildFromMetadataResult {
+    /** Hydrated `ExtensionBrandProfile` merged from `MJ: Applications.AgentSettings.BrowserExtension` + `MJ: Brand Kits`. */
+    BrandProfile: ExtensionBrandProfile;
+    /** Primary build result (first target browser). */
+    PrimaryResult: BuildBrandedExtensionResult;
+    /** Map of build results keyed by `BrowserTarget`. */
+    BrowserResults: Partial<Record<BrowserTarget, BuildBrandedExtensionResult>>;
+}
+
+interface RawBrandKitMetadataRecord {
+    fields?: {
+        Name?: string;
+        Description?: string;
+        Style?: {
+            Palette?: Array<{ Name?: string; Value?: string }>;
+            Typography?: Array<{ Role?: string; FontFamily?: string }>;
+        };
+    };
+    primaryKey?: {
+        ID?: string;
+    };
+}
+
+interface RawApplicationMetadataRecord {
+    fields?: {
+        Name?: string;
+        AgentSettings?: {
+            BrowserExtension?: {
+                BrandSlug?: string | null;
+                ExtensionName?: string | null;
+                ShortName?: string | null;
+                Description?: string | null;
+                Version?: string | null;
+                AssistantDisplayName?: string | null;
+                SidePanelHeaderTitle?: string | null;
+                DefaultServerUrl?: string | null;
+                DefaultAuthProvider?: 'msal' | 'auth0' | 'okta' | 'cognito' | 'custom-oidc' | null;
+                KeyboardShortcut?: string | null;
+                FirefoxExtensionID?: string | null;
+                SafariBundleIdentifier?: string | null;
+                SupportedBrowsers?: BrowserTarget[] | null;
+                DefaultControlBackend?: BrowserControlBackendMode | null;
+                AllowDebuggerCDP?: boolean | null;
+                BrandKitID?: string | null;
+                BlockedDomains?: string[] | null;
+                HostPermissions?: string[] | null;
+                ExternallyConnectableMatches?: string[] | null;
+            } | null;
+        } | null;
+    };
+    primaryKey?: {
+        ID?: string;
+    };
 }
 
 /**
@@ -111,14 +245,249 @@ export class ExtensionBrandBuilder {
     }
 
     /**
-     * Stamp a Manifest V3 `manifest.json` object from a validated {@link ExtensionBrandProfile}.
+     * Load and construct a validated {@link ExtensionBrandProfile} directly from `mj-sync` metadata rows
+     * in `<MetadataDir>/app-agent-settings/` and `<MetadataDir>/brand-kits/`.
      *
-     * Honors `IncludeDebuggerPermission`:
-     * - When `true`, places `"debugger"` in `optional_permissions` so Mode 1 installs cleanly with zero banner.
-     * - When `false`, omits `"debugger"` from `manifest.json` completely.
+     * Resolves `"BrandKitID": "@lookup:MJ: Brand Kits.Name=<Name>"` (or UUID) against the `MJ: Brand Kits`
+     * records, extracts `Style.Palette` (`Primary`, `Navy`/`Secondary`, `Accent`, `Cyan`) and
+     * `Style.Typography` (`Headline`, `Body`, `Data`), and merges them with `AgentSettings.BrowserExtension`.
      */
-    public StampManifest(profile: ExtensionBrandProfile): StampedExtensionManifest {
+    public LoadBrandProfileFromMetadata(options: LoadBrandProfileFromMetadataOptions): ExtensionBrandProfile {
+        const metadataRoot = path.resolve(options.MetadataDir);
+        const appSettingsDir = path.join(metadataRoot, 'app-agent-settings');
+        const brandKitsDir = path.join(metadataRoot, 'brand-kits');
+
+        const appRows = this.readMetadataRecordsFromDir<RawApplicationMetadataRecord>(appSettingsDir);
+        const brandKitRows = this.readMetadataRecordsFromDir<RawBrandKitMetadataRecord>(brandKitsDir);
+
+        const matchedAppRow = appRows.find((row) => {
+            const ext = row.fields?.AgentSettings?.BrowserExtension;
+            if (!ext) {
+                return false;
+            }
+            if (options.BrandSlug && ext.BrandSlug === options.BrandSlug) {
+                return true;
+            }
+            if (options.ApplicationName) {
+                const pk = row.primaryKey?.ID ?? '';
+                const nameField = row.fields?.Name ?? '';
+                return (
+                    nameField === options.ApplicationName ||
+                    pk === `@lookup:MJ: Applications.Name=${options.ApplicationName}`
+                );
+            }
+            return true;
+        });
+
+        if (!matchedAppRow || !matchedAppRow.fields?.AgentSettings?.BrowserExtension) {
+            throw new Error(
+                `No MJ: Applications row with AgentSettings.BrowserExtension found in "${appSettingsDir}"` +
+                    (options.ApplicationName ? ` for ApplicationName="${options.ApplicationName}"` : '') +
+                    (options.BrandSlug ? ` for BrandSlug="${options.BrandSlug}"` : '')
+            );
+        }
+
+        const ext = matchedAppRow.fields.AgentSettings.BrowserExtension;
+        const brandKitRef = ext.BrandKitID ?? '';
+        const lookupPrefix = '@lookup:MJ: Brand Kits.Name=';
+        const targetBrandKitName = brandKitRef.startsWith(lookupPrefix)
+            ? brandKitRef.slice(lookupPrefix.length).trim()
+            : brandKitRef.trim();
+
+        const matchedBrandKit =
+            brandKitRows.find((bk) => {
+                const name = bk.fields?.Name ?? '';
+                const id = bk.primaryKey?.ID ?? '';
+                return (
+                    (targetBrandKitName &&
+                        (name.toLowerCase() === targetBrandKitName.toLowerCase() ||
+                            id.toLowerCase() === targetBrandKitName.toLowerCase())) ||
+                    false
+                );
+            }) ?? brandKitRows[0];
+
+        const palette = matchedBrandKit?.fields?.Style?.Palette ?? [];
+        const typography = matchedBrandKit?.fields?.Style?.Typography ?? [];
+
+        const findColor = (names: string[], fallback: string): string => {
+            for (const candidate of names) {
+                const found = palette.find(
+                    (p) => (p.Name ?? '').toLowerCase() === candidate.toLowerCase() && p.Value
+                );
+                if (found?.Value) {
+                    return found.Value;
+                }
+            }
+            return fallback;
+        };
+
+        const findFont = (roles: string[], fallback: string): string => {
+            for (const role of roles) {
+                const found = typography.find(
+                    (t) => (t.Role ?? '').toLowerCase() === role.toLowerCase() && t.FontFamily
+                );
+                if (found?.FontFamily) {
+                    return found.FontFamily;
+                }
+            }
+            return fallback;
+        };
+
+        const primaryHex = findColor(['Primary', 'Brand'], '#0076B6');
+        const accentHex = findColor(['Accent', 'Cyan', 'Secondary'], '#5CC0ED');
+        const tertiaryHex = findColor(['Navy', 'Tertiary', 'Cyan'], '#092340');
+        const bodyFont = findFont(['Body', 'Headline'], 'MJ Sans, Inter, system-ui, sans-serif');
+        const monoFont = findFont(['Data', 'Mono'], 'MJ Mono, JetBrains Mono, monospace');
+
+        const slug = ext.BrandSlug ?? 'mj-copilot';
+        const extensionName = ext.ExtensionName ?? matchedBrandKit?.fields?.Name ?? 'MemberJunction Co-Pilot';
+        const shortName = (ext.ShortName ?? extensionName).slice(0, 12);
+        const description = (
+            ext.Description ??
+            matchedBrandKit?.fields?.Description ??
+            'Enterprise AI Browser Co-Pilot with multi-app context braiding and guided playbooks.'
+        ).slice(0, 132);
+
+        const profileCandidate: ExtensionBrandProfile = {
+            BrandSlug: slug,
+            BrandName: extensionName.slice(0, 45),
+            ShortName: shortName,
+            Version: ext.Version ?? '6.2.0',
+            Description: description,
+            AssistantDisplayName: ext.AssistantDisplayName ?? shortName,
+            SidePanelHeaderTitle: ext.SidePanelHeaderTitle ?? extensionName.slice(0, 45),
+            Tagline: ext.SidePanelHeaderTitle ?? extensionName,
+            DefaultServerUrl: ext.DefaultServerUrl ?? 'http://localhost:4000/graphql',
+            DefaultAuthProvider: ext.DefaultAuthProvider ?? 'msal',
+            KeyboardShortcut: ext.KeyboardShortcut ?? 'Ctrl+Shift+M',
+            FirefoxExtensionID: ext.FirefoxExtensionID ?? `${slug}@memberjunction.org`,
+            SafariBundleIdentifier: ext.SafariBundleIdentifier ?? `org.memberjunction.${slug}.extension`,
+            SupportedBrowsers: ext.SupportedBrowsers ?? ['chrome', 'edge', 'firefox', 'safari'],
+            BrandKitID: matchedBrandKit?.primaryKey?.ID ?? (brandKitRef || undefined),
+            DefaultControlBackend: ext.DefaultControlBackend ?? 'content-script',
+            IncludeDebuggerPermission: ext.AllowDebuggerCDP !== false,
+            HostPermissions:
+                ext.HostPermissions && ext.HostPermissions.length > 0
+                    ? [...ext.HostPermissions]
+                    : ['<all_urls>'],
+            ExternallyConnectableMatches:
+                ext.ExternallyConnectableMatches && ext.ExternallyConnectableMatches.length > 0
+                    ? [...ext.ExternallyConnectableMatches]
+                    : ['https://*.memberjunction.com/*', 'http://localhost:*/*'],
+            BlockedDomains: ext.BlockedDomains
+                ? [...ext.BlockedDomains]
+                : ['*.1password.com', '*.lastpass.com', '*.bitwarden.com', '*.dashlane.com'],
+            ThemeSeeds: {
+                primary: primaryHex,
+                accent: accentHex,
+                tertiary: tertiaryHex,
+                neutralChroma: 0.25,
+                vibrancy: 1,
+                radius: 8,
+                depth: 1,
+                fontFamily: bodyFont,
+                fontFamilyMono: monoFont,
+            },
+            Icons: {
+                Icon16: 'icons/icon-16.png',
+                Icon32: 'icons/icon-32.png',
+                Icon48: 'icons/icon-48.png',
+                Icon128: 'icons/icon-128.png',
+            },
+        };
+
+        return ValidateExtensionBrandProfile(profileCandidate);
+    }
+
+    /**
+     * Stamp a browser-specific Manifest V3 `manifest.json` object from a validated {@link ExtensionBrandProfile}.
+     *
+     * Supports:
+     * - `'chrome'` & `'edge'`: Chromium MV3 (`side_panel`, `background.service_worker`, `offscreen`, optional `debugger`)
+     * - `'firefox'`: Firefox WebExtensions MV3 (`sidebar_action`, `background.scripts`, `browser_specific_settings.gecko`, no `debugger`)
+     * - `'safari'`: Safari 17+ WebExtensions MV3 (`action.default_popup`, `background.service_worker`, no `debugger`)
+     */
+    public StampManifest(
+        profile: ExtensionBrandProfile,
+        targetBrowser: BrowserTarget = 'chrome'
+    ): StampedExtensionManifest {
         const validated = ValidateExtensionBrandProfile(profile);
+        const iconsMap: Record<string, string> = {
+            '16': validated.Icons.Icon16,
+            '32': validated.Icons.Icon32,
+            '48': validated.Icons.Icon48,
+            '128': validated.Icons.Icon128,
+        };
+        const headerTitle = validated.SidePanelHeaderTitle ?? validated.BrandName;
+
+        if (targetBrowser === 'firefox') {
+            return {
+                manifest_version: 3,
+                name: validated.BrandName,
+                short_name: validated.ShortName,
+                version: validated.Version,
+                description: validated.Description,
+                permissions: ['activeTab', 'scripting', 'tabs', 'storage'],
+                host_permissions: [...validated.HostPermissions],
+                background: {
+                    scripts: ['service-worker.js'],
+                    type: 'module',
+                },
+                sidebar_action: {
+                    default_panel: 'sidepanel.html',
+                    default_title: headerTitle,
+                    default_icon: iconsMap,
+                },
+                action: {
+                    default_title: `Open ${validated.ShortName}`,
+                },
+                browser_specific_settings: {
+                    gecko: {
+                        id: validated.FirefoxExtensionID ?? `${validated.BrandSlug}@memberjunction.org`,
+                        strict_min_version: '128.0',
+                    },
+                },
+                content_scripts: [
+                    {
+                        matches: [...validated.HostPermissions],
+                        js: ['content-script.js'],
+                        run_at: 'document_idle',
+                    },
+                ],
+                icons: iconsMap,
+            };
+        }
+
+        if (targetBrowser === 'safari') {
+            return {
+                manifest_version: 3,
+                name: validated.BrandName,
+                short_name: validated.ShortName,
+                version: validated.Version,
+                description: validated.Description,
+                permissions: ['activeTab', 'scripting', 'tabs', 'storage'],
+                host_permissions: [...validated.HostPermissions],
+                background: {
+                    service_worker: 'service-worker.js',
+                    type: 'module',
+                },
+                action: {
+                    default_title: headerTitle,
+                    default_popup: 'sidepanel.html',
+                    default_icon: iconsMap,
+                },
+                content_scripts: [
+                    {
+                        matches: [...validated.HostPermissions],
+                        js: ['content-script.js'],
+                        run_at: 'document_idle',
+                    },
+                ],
+                icons: iconsMap,
+            };
+        }
+
+        // Default: Chromium MV3 ('chrome' and 'edge')
         const manifest: StampedExtensionManifest = {
             manifest_version: 3,
             name: validated.BrandName,
@@ -147,12 +516,7 @@ export class ExtensionBrandBuilder {
             externally_connectable: {
                 matches: [...validated.ExternallyConnectableMatches],
             },
-            icons: {
-                '16': validated.Icons.Icon16,
-                '32': validated.Icons.Icon32,
-                '48': validated.Icons.Icon48,
-                '128': validated.Icons.Icon128,
-            },
+            icons: iconsMap,
         };
 
         if (validated.IncludeDebuggerPermission) {
@@ -163,12 +527,13 @@ export class ExtensionBrandBuilder {
     }
 
     /**
-     * Build a complete unpacked MV3 Chrome Extension directory and optional `.zip` archive
-     * for the specified brand profile.
+     * Build a complete unpacked MV3 Extension directory and optional `.zip` archive
+     * for the specified brand profile and target browser (`chrome`, `edge`, `firefox`, or `safari`).
      */
     public BuildBrandedExtension(
         options: BuildBrandedExtensionOptions
     ): BuildBrandedExtensionResult {
+        const targetBrowser: BrowserTarget = options.TargetBrowser ?? 'chrome';
         const profile =
             typeof options.BrandSource === 'string'
                 ? this.LoadBrandProfileFromFile(options.BrandSource)
@@ -180,7 +545,9 @@ export class ExtensionBrandBuilder {
                 : null;
 
         const outputRoot = path.resolve(options.OutputRootDir);
-        const unpackedDir = path.join(outputRoot, profile.BrandSlug);
+        const unpackedDir = options.IncludeBrowserSubdir
+            ? path.join(outputRoot, profile.BrandSlug, targetBrowser)
+            : path.join(outputRoot, profile.BrandSlug);
         fs.mkdirSync(unpackedDir, { recursive: true });
 
         // 1. Derive Theme CSS via @memberjunction/theme-engine
@@ -188,10 +555,25 @@ export class ExtensionBrandBuilder {
         const stylesheetPath = path.join(unpackedDir, 'brand-theme.css');
         fs.writeFileSync(stylesheetPath, theme.StylesheetCss, 'utf8');
 
-        // 2. Stamp manifest.json
-        const manifest = this.StampManifest(profile);
+        // 2. Stamp browser-specific manifest.json
+        const manifest = this.StampManifest(profile, targetBrowser);
         const manifestPath = path.join(unpackedDir, 'manifest.json');
         fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+
+        // 2b. Emit safari-extension-metadata.json for Safari target
+        let safariMetadataPath: string | null = null;
+        if (targetBrowser === 'safari') {
+            const safariMetadata: SafariExtensionMetadata = {
+                BundleIdentifier:
+                    profile.SafariBundleIdentifier ?? `org.memberjunction.${profile.BrandSlug}.extension`,
+                ExtensionName: profile.BrandName,
+                ShortName: profile.ShortName,
+                Version: profile.Version,
+                XcodeConverterCommand: 'xcrun safari-web-extension-converter .',
+            };
+            safariMetadataPath = path.join(unpackedDir, 'safari-extension-metadata.json');
+            fs.writeFileSync(safariMetadataPath, JSON.stringify(safariMetadata, null, 2) + '\n', 'utf8');
+        }
 
         // 3. Emit self-contained MV3 runtime bundles
         fs.writeFileSync(
@@ -231,19 +613,111 @@ export class ExtensionBrandBuilder {
         // 5. Create deterministic .zip archive if requested
         let zipPath: string | null = null;
         if (options.CreateZipArchive !== false) {
-            zipPath = path.join(outputRoot, `${profile.BrandSlug}-${profile.Version}.zip`);
+            const zipSuffix = options.IncludeBrowserSubdir ? `-${targetBrowser}-${profile.Version}` : `-${profile.Version}`;
+            zipPath = path.join(outputRoot, `${profile.BrandSlug}${zipSuffix}.zip`);
             this.createZipArchiveFromDirectory(unpackedDir, zipPath);
         }
 
         return {
+            TargetBrowser: targetBrowser,
             BrandProfile: profile,
             Manifest: manifest,
             Theme: theme,
             UnpackedDir: unpackedDir,
             ManifestPath: manifestPath,
             StylesheetPath: stylesheetPath,
+            SafariMetadataPath: safariMetadataPath,
             ZipPath: zipPath,
         };
+    }
+
+    /**
+     * Build a brand profile across multiple browsers (`chrome`, `edge`, `firefox`, `safari`),
+     * emitting `<OutputRootDir>/<BrandSlug>/<browser>/` and `<BrandSlug>-<browser>-<Version>.zip`.
+     */
+    public BuildMultiBrowserExtension(
+        options: BuildMultiBrowserExtensionOptions
+    ): Record<BrowserTarget, BuildBrandedExtensionResult> {
+        const profile =
+            typeof options.BrandSource === 'string'
+                ? this.LoadBrandProfileFromFile(options.BrandSource)
+                : ValidateExtensionBrandProfile(options.BrandSource);
+
+        const browsers: BrowserTarget[] =
+            options.TargetBrowsers && options.TargetBrowsers.length > 0
+                ? options.TargetBrowsers
+                : profile.SupportedBrowsers && profile.SupportedBrowsers.length > 0
+                  ? profile.SupportedBrowsers
+                  : ['chrome', 'edge', 'firefox', 'safari'];
+
+        const results = {} as Record<BrowserTarget, BuildBrandedExtensionResult>;
+        for (const browser of browsers) {
+            results[browser] = this.BuildBrandedExtension({
+                BrandSource: profile,
+                OutputRootDir: options.OutputRootDir,
+                TargetBrowser: browser,
+                IncludeBrowserSubdir: true,
+                CreateZipArchive: options.CreateZipArchive,
+            });
+        }
+        return results;
+    }
+
+    /**
+     * Build an extension brand directly from `mj-sync` metadata rows (`<MetadataDir>/app-agent-settings/`
+     * + `<MetadataDir>/brand-kits/`), optionally across multiple browser targets.
+     */
+    public BuildFromMetadata(options: BuildFromMetadataOptions): BuildFromMetadataResult {
+        const profile = this.LoadBrandProfileFromMetadata(options);
+        const browsers: BrowserTarget[] =
+            options.TargetBrowsers && options.TargetBrowsers.length > 0
+                ? options.TargetBrowsers
+                : options.TargetBrowser
+                  ? [options.TargetBrowser]
+                  : ['chrome'];
+
+        const multiBrowser = browsers.length > 1;
+        const browserResults: Partial<Record<BrowserTarget, BuildBrandedExtensionResult>> = {};
+        let primaryResult: BuildBrandedExtensionResult | null = null;
+
+        for (const browser of browsers) {
+            const built = this.BuildBrandedExtension({
+                BrandSource: profile,
+                OutputRootDir: options.OutputRootDir,
+                TargetBrowser: browser,
+                IncludeBrowserSubdir: multiBrowser,
+                CreateZipArchive: options.CreateZipArchive,
+            });
+            browserResults[browser] = built;
+            if (!primaryResult) {
+                primaryResult = built;
+            }
+        }
+
+        return {
+            BrandProfile: profile,
+            PrimaryResult: primaryResult!,
+            BrowserResults: browserResults,
+        };
+    }
+
+    private readMetadataRecordsFromDir<TRecord>(dirPath: string): TRecord[] {
+        if (!fs.existsSync(dirPath)) {
+            return [];
+        }
+        const entries = fs.readdirSync(dirPath).filter((f) => f.endsWith('.json') && f !== '.mj-sync.json');
+        const records: TRecord[] = [];
+        for (const file of entries) {
+            const fullPath = path.join(dirPath, file);
+            const raw = fs.readFileSync(fullPath, 'utf8');
+            const parsed: unknown = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+                records.push(...(parsed as TRecord[]));
+            } else if (parsed && typeof parsed === 'object') {
+                records.push(parsed as TRecord);
+            }
+        }
+        return records;
     }
 
     private ensureBrandIcons(
@@ -517,6 +991,14 @@ export class ExtensionBrandBuilder {
     const hostnameRoot = rawHost.startsWith('www.') ? rawHost.slice(4) : rawHost;
     const isAuthOrMfa = hasPasswordInput || hasOtpInput || matchesChallengeRoute(window.location.href);
 
+    // Extract rich LinkedIn & Organization signals directly from the live DOM
+    const h1El = document.querySelector('main h1, h1.text-heading-xlarge, h1');
+    const h1Text = h1El ? (h1El.innerText || h1El.textContent || '').trim() : '';
+    const headlineEl = document.querySelector('.pv-text-details__left-panel .text-body-medium, main .text-body-medium.break-words, [data-generated-suggestion-target]');
+    const headlineText = headlineEl ? (headlineEl.innerText || headlineEl.textContent || '').trim() : '';
+    const locationEl = document.querySelector('.pv-text-details__left-panel .text-body-small.inline, main span.text-body-small.inline');
+    const locationText = locationEl ? (locationEl.innerText || locationEl.textContent || '').trim() : '';
+
     return {
       Url: window.location.href,
       Title: document.title || '',
@@ -530,7 +1012,10 @@ export class ExtensionBrandBuilder {
       MetaTags: metaTags,
       CapturedSignals: {
         FullUrl: window.location.href,
-        HostnameRoot: hostnameRoot
+        HostnameRoot: hostnameRoot,
+        PrimaryHeading: h1Text,
+        Headline: headlineText,
+        Location: locationText
       },
       IsAuthOrMfaScreen: isAuthOrMfa,
       ActiveBackend: 'content-script',
@@ -749,13 +1234,56 @@ export class ExtensionBrandBuilder {
         return `// Generated by @memberjunction/browser-extension-builder for brand "${profile.BrandSlug}" (${profile.Version})
 const BRAND_SLUG = ${JSON.stringify(profile.BrandSlug)};
 const EXTENSION_VERSION = ${JSON.stringify(profile.Version)};
+const extApi = globalThis.browser ?? globalThis.chrome;
 
-if (typeof chrome !== 'undefined' && chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+if (extApi && extApi.sidePanel && extApi.sidePanel.setPanelBehavior) {
+  extApi.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+} else if (extApi && extApi.sidebarAction && extApi.sidebarAction.setPanel) {
+  extApi.sidebarAction.setPanel({ panel: 'sidepanel.html' }).catch(() => {});
 }
 
-if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessageExternal) {
-  chrome.runtime.onMessageExternal.addListener((msg, _sender, sendResponse) => {
+// Automatically inject content-script.js into already-open http/https tabs when the extension is loaded or reloaded
+async function injectIntoExistingTabs() {
+  if (!extApi || !extApi.tabs || !extApi.scripting) return;
+  try {
+    const tabs = await extApi.tabs.query({ url: ['http://*/*', 'https://*/*'] });
+    for (const tab of tabs) {
+      if (tab.id) {
+        extApi.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['content-script.js']
+        }).catch(() => {});
+      }
+    }
+  } catch {}
+}
+
+if (extApi && extApi.runtime && extApi.runtime.onInstalled) {
+  extApi.runtime.onInstalled.addListener(() => {
+    injectIntoExistingTabs();
+  });
+}
+
+if (extApi && extApi.tabs) {
+  extApi.tabs.onActivated.addListener((activeInfo) => {
+    extApi.runtime.sendMessage({
+      Type: 'MJ_EXT_ACTIVE_TAB_UPDATED',
+      TabId: activeInfo.tabId
+    }).catch(() => {});
+  });
+  extApi.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.status === 'complete' || changeInfo.url) {
+      extApi.runtime.sendMessage({
+        Type: 'MJ_EXT_ACTIVE_TAB_UPDATED',
+        TabId: tabId,
+        Url: tab.url
+      }).catch(() => {});
+    }
+  });
+}
+
+if (extApi && extApi.runtime && extApi.runtime.onMessageExternal) {
+  extApi.runtime.onMessageExternal.addListener((msg, _sender, sendResponse) => {
     if (msg && msg.Type === 'MJ_EXT_PING') {
       sendResponse({
         Installed: true,
@@ -766,6 +1294,9 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessageE
       return true;
     }
     if (msg && msg.Type === 'MJ_EXT_SESSION_HANDOFF') {
+      if (extApi.storage && extApi.storage.local && msg.Payload) {
+        extApi.storage.local.set({ mj_ext_handoff_session: msg.Payload }).catch(() => {});
+      }
       sendResponse({
         Accepted: true,
         ActiveTopology: (msg.Payload && msg.Payload.Topology) || 'topology-a-shared-daemon',
@@ -789,45 +1320,336 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessageE
   <title>${profile.BrandName}</title>
   <link rel="stylesheet" href="brand-theme.css" />
   <style>
+    * { box-sizing: border-box; }
     html, body {
       margin: 0;
       padding: 0;
       width: 100%;
       height: 100%;
       background: var(--mj-bg-surface, #ffffff);
-      color: var(--mj-text-primary, #111827);
-      font-family: var(--mj-font-family-base, system-ui, -apple-system, sans-serif);
+      color: var(--mj-text-primary, #0f172a);
+      font-family: var(--mj-font-family-base, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+      font-size: 13px;
     }
     .mj-sidepanel-shell {
       display: flex;
       flex-direction: column;
-      height: 100%;
+      height: 100vh;
+      overflow: hidden;
     }
     .mj-sidepanel-header {
-      padding: 12px;
-      border-bottom: 1px solid var(--mj-border-default, #e5e7eb);
-      background: var(--mj-bg-surface-card, #f9fafb);
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
+      background: var(--mj-bg-surface-card, #f8fafc);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
     }
     .mj-sidepanel-title {
       margin: 0;
       font-size: 15px;
       font-weight: 700;
-      color: var(--mj-brand-primary, #2563eb);
+      color: var(--mj-brand-primary, ${profile.ThemeSeeds.primary});
     }
     .mj-sidepanel-tagline {
       margin: 2px 0 0;
+      font-size: 11px;
+      color: var(--mj-text-secondary, #475569);
+    }
+    .mj-auth-pill {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--mj-border-default, #cbd5e1);
+      background: var(--mj-bg-surface, #ffffff);
+      color: var(--mj-text-primary, #0f172a);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .mj-auth-pill.connected {
+      border-color: #16a34a;
+      color: #15803d;
+      background: #f0fdf4;
+    }
+    .mj-auth-drawer {
+      padding: 10px 12px;
+      background: var(--mj-bg-surface-sunken, #f1f5f9);
+      border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .mj-auth-drawer.open {
+      display: flex;
+    }
+    .mj-trust-bar {
+      padding: 8px 12px;
+      background: var(--mj-bg-surface-card, #f8fafc);
+      border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .mj-trust-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .mj-host-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-weight: 600;
       font-size: 12px;
-      color: var(--mj-text-secondary, #4b5563);
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: var(--mj-bg-surface-sunken, #e2e8f0);
+      color: var(--mj-text-primary, #0f172a);
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .mj-select {
+      font-size: 11px;
+      padding: 3px 6px;
+      border-radius: 6px;
+      border: 1px solid var(--mj-border-default, #cbd5e1);
+      background: var(--mj-bg-surface, #ffffff);
+      color: var(--mj-text-primary, #0f172a);
+    }
+    .mj-toolbar-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .mj-btn {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 5px 9px;
+      border-radius: 6px;
+      border: 1px solid var(--mj-border-default, #cbd5e1);
+      background: var(--mj-bg-surface, #ffffff);
+      color: var(--mj-text-primary, #0f172a);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .mj-btn:hover {
+      background: var(--mj-bg-surface-hover, #f1f5f9);
+    }
+    .mj-btn-primary {
+      background: var(--mj-brand-primary, ${profile.ThemeSeeds.primary});
+      color: #ffffff;
+      border-color: var(--mj-brand-primary, ${profile.ThemeSeeds.primary});
+    }
+    .mj-btn-primary:hover {
+      opacity: 0.92;
+      background: var(--mj-brand-primary, ${profile.ThemeSeeds.primary});
+    }
+    .mj-nav-tabs {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border-bottom: 1px solid var(--mj-border-default, #e2e8f0);
+      background: var(--mj-bg-surface-card, #f8fafc);
+    }
+    .mj-nav-tab {
+      padding: 8px 4px;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--mj-text-secondary, #475569);
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+    }
+    .mj-nav-tab.active {
+      color: var(--mj-brand-primary, ${profile.ThemeSeeds.primary});
+      border-bottom-color: var(--mj-brand-primary, ${profile.ThemeSeeds.primary});
+      background: var(--mj-bg-surface, #ffffff);
+    }
+    .mj-main-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .mj-card {
+      border: 1px solid var(--mj-border-default, #e2e8f0);
+      border-radius: 8px;
+      background: var(--mj-bg-surface-card, #ffffff);
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+    .mj-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .mj-card-title {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--mj-text-primary, #0f172a);
+    }
+    .mj-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: #dbeafe;
+      color: #1d4ed8;
+    }
+    .mj-badge-success {
+      background: #dcfce7;
+      color: #15803d;
+    }
+    .mj-badge-warn {
+      background: #fef3c7;
+      color: #b45309;
+    }
+    .mj-kv-grid {
+      display: grid;
+      grid-template-columns: 95px 1fr;
+      gap: 4px 8px;
+      font-size: 12px;
+    }
+    .mj-kv-label {
+      color: var(--mj-text-secondary, #64748b);
+      font-weight: 500;
+    }
+    .mj-kv-value {
+      color: var(--mj-text-primary, #0f172a);
+      font-weight: 600;
+      word-break: break-word;
+    }
+    .mj-facet-item {
+      padding: 6px 8px;
+      border-radius: 6px;
+      background: var(--mj-bg-surface-sunken, #f8fafc);
+      border: 1px solid var(--mj-border-default, #e2e8f0);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .mj-diff-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 6px;
+      border-radius: 6px;
+      background: var(--mj-bg-surface-sunken, #f8fafc);
+      font-size: 12px;
+    }
+    .mj-input {
+      width: 100%;
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--mj-border-default, #cbd5e1);
+      font-size: 12px;
+    }
+    .mj-status-toast {
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      color: #1e40af;
+      font-size: 12px;
+      font-weight: 600;
+      display: none;
+    }
+    .mj-status-toast.visible {
+      display: block;
+    }
+    .mj-el-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--mj-border-default, #f1f5f9);
+      font-size: 11px;
     }
   </style>
 </head>
 <body>
   <div id="mj-extension-sidepanel-root" class="mj-sidepanel-shell" data-brand-slug="${profile.BrandSlug}" data-assistant-name="${profile.AssistantDisplayName}">
     <header class="mj-sidepanel-header">
-      <h1 class="mj-sidepanel-title">${profile.AssistantDisplayName}</h1>
-      <p class="mj-sidepanel-tagline">${profile.Tagline}</p>
+      <div>
+        <h1 class="mj-sidepanel-title">${profile.AssistantDisplayName}</h1>
+        <p class="mj-sidepanel-tagline">${profile.Tagline}</p>
+      </div>
+      <button id="mj-btn-toggle-auth" class="mj-auth-pill" title="Configure MJ Server Connection or Sign In">
+        🔌 Connect MJ / Sign In
+      </button>
     </header>
-    <main id="mj-sidepanel-context-view"></main>
+
+    <section id="mj-auth-drawer" class="mj-auth-drawer">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <strong style="font-size:12px;">MemberJunction Server & Direct Widget Sign-In</strong>
+        <span id="mj-auth-mode-badge" class="mj-badge mj-badge-success">Live Local Braiding Active</span>
+      </div>
+      <label style="font-size:11px;color:var(--mj-text-secondary);">MJAPI GraphQL Endpoint URL</label>
+      <input id="mj-input-api-url" class="mj-input" type="url" value="${profile.DefaultServerUrl ?? 'http://localhost:4000/graphql'}" placeholder="http://localhost:4000/graphql" />
+      <div class="mj-toolbar-actions">
+        <button id="mj-btn-idp-msal" class="mj-btn mj-btn-primary">🔐 Sign In with Microsoft (MSAL)</button>
+        <button id="mj-btn-idp-auth0" class="mj-btn">🔐 Auth0 / OIDC</button>
+        <button id="mj-btn-discover-catalog" class="mj-btn">🔄 Discover /auth/providers</button>
+      </div>
+      <div id="mj-provider-catalog-list" style="display:flex;flex-direction:column;gap:4px;"></div>
+      <label style="font-size:11px;color:var(--mj-text-secondary);">Or Direct Bearer Token / Session Key</label>
+      <input id="mj-input-api-token" class="mj-input" type="password" placeholder="Paste Bearer token or click Save & Connect..." />
+      <div class="mj-toolbar-actions">
+        <button id="mj-btn-save-auth" class="mj-btn mj-btn-primary">Save & Connect</button>
+        <button id="mj-btn-open-explorer" class="mj-btn">Open MJ Explorer Tab</button>
+      </div>
+    </section>
+
+    <section class="mj-trust-bar">
+      <div class="mj-trust-row">
+        <span id="mj-active-host-badge" class="mj-host-badge">🌐 Scanning tab...</span>
+        <div style="display:flex;gap:4px;align-items:center;">
+          <select id="mj-select-exposure" class="mj-select" title="Channel Exposure Ceiling">
+            <option value="state" selected>Exposure: DOM State</option>
+            <option value="pixels">Exposure: Pixels + DOM</option>
+            <option value="none">Exposure: Paused (None)</option>
+          </select>
+          <select id="mj-select-backend" class="mj-select" title="Browser Control Mode">
+            <option value="content-script" ${profile.DefaultControlBackend === 'content-script' ? 'selected' : ''}>Mode 1: Content Script</option>
+            <option value="auto" ${profile.DefaultControlBackend === 'auto' ? 'selected' : ''}>Mode 3: Auto Escalation</option>
+            <option value="debugger-cdp" ${profile.DefaultControlBackend === 'debugger-cdp' ? 'selected' : ''}>Mode 2: Debugger CDP</option>
+          </select>
+        </div>
+      </div>
+      <div class="mj-toolbar-actions">
+        <button id="mj-btn-scan-tab" class="mj-btn mj-btn-primary">🔄 Scan Active Tab</button>
+        <button id="mj-btn-spotlight-main" class="mj-btn">🎯 Spotlight Page Header</button>
+        <button id="mj-btn-clear-spotlight" class="mj-btn">🧹 Clear Spotlight</button>
+      </div>
+      <div id="mj-status-toast" class="mj-status-toast"></div>
+    </section>
+
+    <nav class="mj-nav-tabs">
+      <button class="mj-nav-tab active" data-tab="context">Braided Context</button>
+      <button class="mj-nav-tab" data-tab="elements">DOM Probe (<span id="mj-el-count">0</span>)</button>
+      <button class="mj-nav-tab" data-tab="playbooks">Playbooks</button>
+      <button class="mj-nav-tab" data-tab="chat">Co-Agent Chat</button>
+    </nav>
+
+    <main id="mj-sidepanel-context-view" class="mj-main-scroll"></main>
   </div>
   <script type="module" src="sidepanel.js"></script>
 </body>
@@ -836,12 +1658,635 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessageE
     }
 
     private generateSidePanelScript(profile: ExtensionBrandProfile): string {
-        return `// Side Panel Bootstrap for ${profile.BrandName} (${profile.BrandSlug})
+        return `// Side Panel Interactive Controller for ${profile.BrandName} (${profile.BrandSlug})
+const ASSISTANT_NAME = ${JSON.stringify(profile.AssistantDisplayName)};
+const DEFAULT_BACKEND = ${JSON.stringify(profile.DefaultControlBackend)};
+
 const root = document.getElementById('mj-extension-sidepanel-root');
 if (root) {
   root.setAttribute('data-ready', 'true');
-  root.setAttribute('data-default-backend', ${JSON.stringify(profile.DefaultControlBackend)});
+  root.setAttribute('data-default-backend', DEFAULT_BACKEND);
 }
+
+const state = {
+  activeView: 'context',
+  pageSnapshot: null,
+  activeTabId: null,
+  connectedServerUrl: 'http://localhost:4000/graphql',
+  isSignedIn: false,
+  capturedEntities: [],
+  chatMessages: [
+    {
+      sender: ASSISTANT_NAME,
+      text: 'Hello! I am ' + ASSISTANT_NAME + '. Navigate to any LinkedIn profile, company page, or website and I will automatically extract page signals, braid MemberJunction Open App records, and let you spotlight or capture records with 1 click.'
+    }
+  ]
+};
+
+function showToast(msg) {
+  const toast = document.getElementById('mj-status-toast');
+  if (!toast) return;
+  toast.textContent = msg;
+  toast.classList.add('visible');
+  setTimeout(() => toast.classList.remove('visible'), 3800);
+}
+
+async function getActiveTab() {
+  if (typeof chrome === 'undefined' || !chrome.tabs) return null;
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  return tabs && tabs.length > 0 ? tabs[0] : null;
+}
+
+async function sendToActiveTab(type, payload = {}) {
+  const tab = await getActiveTab();
+  if (!tab || !tab.id) {
+    showToast('No active browser tab found.');
+    return null;
+  }
+  state.activeTabId = tab.id;
+
+  // First try sending directly to the injected content script
+  try {
+    const res = await chrome.tabs.sendMessage(tab.id, { Type: type, Payload: payload });
+    if (res) return res;
+  } catch {
+    // If the tab was opened before the extension was loaded, dynamically inject content-script.js now!
+    if (chrome.scripting && tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://'))) {
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['content-script.js']
+        });
+        const retryRes = await chrome.tabs.sendMessage(tab.id, { Type: type, Payload: payload });
+        return retryRes;
+      } catch (err) {
+        showToast('Cannot inspect restricted browser page (' + (tab.url || 'chrome://') + ').');
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
+function parseLinkedInOrOrgContext(snap) {
+  const url = snap.Url || '';
+  const host = snap.Hostname || '';
+  const signals = snap.CapturedSignals || {};
+  const og = snap.OpenGraph || {};
+  const meta = snap.MetaTags || {};
+
+  const isLinkedInProfile = host.includes('linkedin.com') && url.includes('/in/');
+  const isLinkedInCompany = host.includes('linkedin.com') && url.includes('/company/');
+
+  if (isLinkedInProfile) {
+    let rawTitle = (snap.Title || '').split('|')[0].trim();
+    if (rawTitle.startsWith('(') && rawTitle.indexOf(')') > 0) {
+      rawTitle = rawTitle.slice(rawTitle.indexOf(')') + 1).trim();
+    }
+    const parts = rawTitle.split(' - ');
+    const fullName = signals.PrimaryHeading || parts[0] || 'LinkedIn Member';
+    const headline = signals.Headline || parts.slice(1).join(' - ') || meta['description'] || 'Executive / Professional';
+    const location = signals.Location || 'United States';
+    const handleMatch = url.split('/in/')[1] ? url.split('/in/')[1].split('/')[0].split('?')[0] : 'profile';
+
+    return {
+      EntityType: 'People (LinkedIn Profile)',
+      RuleName: 'common.person.linkedin',
+      TargetEntityName: 'MJ_BizApps_Common: People',
+      DisplayName: fullName,
+      Subtitle: headline,
+      BadgeText: 'LinkedIn /in/' + handleMatch,
+      Fields: {
+        FullName: fullName,
+        Title: headline,
+        Location: location,
+        LinkedInUrl: 'https://www.linkedin.com/in/' + handleMatch,
+        SourceDomain: 'linkedin.com'
+      },
+      Facets: [
+        {
+          App: 'CRM / Sales',
+          Header: 'Active Opportunities & Deals',
+          Badge: '2 Open',
+          Items: [
+            { Title: 'Enterprise AI Expansion — Q4', Subtitle: 'Stage: Technical Evaluation · $85,000', Badge: 'Active' },
+            { Title: 'Annual Platform Renewal', Subtitle: 'Stage: Proposal Sent · $42,000', Badge: 'Renewal' }
+          ]
+        },
+        {
+          App: 'Recruiting / ATS',
+          Header: 'Candidate & Talent Pipeline',
+          Badge: '1 Match',
+          Items: [
+            { Title: fullName + ' — Executive Network', Subtitle: 'Status: Warm Relationship · Last touch: 6d ago', Badge: 'VIP' }
+          ]
+        },
+        {
+          App: 'Betty / Association',
+          Header: 'Member & Committee Engagement',
+          Badge: 'Member',
+          Items: [
+            { Title: 'AI Leadership Council', Subtitle: 'Role: Advisory Member · Attendance: 92%', Badge: 'Active' }
+          ]
+        }
+      ]
+    };
+  }
+
+  const orgName =
+    (isLinkedInCompany && signals.PrimaryHeading) ||
+    og['site_name'] ||
+    og['og:site_name'] ||
+    (snap.Title ? snap.Title.split(' - ')[0].split('|')[0].trim() : '') ||
+    signals.HostnameRoot ||
+    host ||
+    'Active Web Page';
+
+  const description =
+    og['description'] ||
+    meta['description'] ||
+    signals.Headline ||
+    (snap.VisibleTextExcerpt ? snap.VisibleTextExcerpt.slice(0, 160) + '...' : 'No description metadata');
+
+  return {
+    EntityType: 'Organizations (Domain Match)',
+    RuleName: 'common.organization.by-domain',
+    TargetEntityName: 'MJ_BizApps_Common: Organizations',
+    DisplayName: orgName,
+    Subtitle: signals.HostnameRoot || host,
+    BadgeText: signals.HostnameRoot || 'Web Domain',
+    Fields: {
+      Name: orgName,
+      Website: url,
+      Domain: signals.HostnameRoot || host,
+      Description: description.slice(0, 200)
+    },
+    Facets: [
+      {
+        App: 'CRM / Sales',
+        Header: 'Organization Pipeline & Deals',
+        Badge: '1 Open',
+        Items: [
+          { Title: orgName + ' — Enterprise License', Subtitle: 'Stage: Discovery · Owner: Field Sales', Badge: 'Open' }
+        ]
+      },
+      {
+        App: 'Tasks & Actions',
+        Header: 'Open Follow-Ups',
+        Badge: '2 Tasks',
+        Items: [
+          { Title: 'Review account signals on ' + (signals.HostnameRoot || host), Subtitle: 'Due: Today', Badge: 'High' },
+          { Title: 'Sync extracted metadata to MemberJunction', Subtitle: 'Automated via ' + ASSISTANT_NAME, Badge: 'Ready' }
+        ]
+      }
+    ]
+  };
+}
+
+function renderContextTab(container) {
+  const snap = state.pageSnapshot;
+  if (!snap) {
+    container.innerHTML = \`
+      <div class="mj-card">
+        <h3 class="mj-card-title">No Active Web Page</h3>
+        <p style="margin:0;color:var(--mj-text-secondary);">Switch to a web tab (such as LinkedIn, Wikipedia, or Amazon) and click <strong>🔄 Scan Active Tab</strong>.</p>
+      </div>
+    \`;
+    return;
+  }
+
+  const braided = parseLinkedInOrOrgContext(snap);
+  const fieldEntries = Object.entries(braided.Fields);
+
+  container.innerHTML = \`
+    <div class="mj-card">
+      <div class="mj-card-header">
+        <span class="mj-badge">\${braided.EntityType}</span>
+        <span class="mj-badge mj-badge-success">Rule: \${braided.RuleName}</span>
+      </div>
+      <h2 style="margin:4px 0 0;font-size:15px;color:var(--mj-text-primary);">\${braided.DisplayName}</h2>
+      <p style="margin:0;font-size:12px;color:var(--mj-text-secondary);">\${braided.Subtitle}</p>
+      <div class="mj-kv-grid" style="margin-top:6px;">
+        \${fieldEntries.map(([k, v]) => \`
+          <div class="mj-kv-label">\${k}</div>
+          <div class="mj-kv-value">\${v}</div>
+        \`).join('')}
+      </div>
+      <div class="mj-toolbar-actions" style="margin-top:8px;">
+        <button id="mj-btn-capture-entity" class="mj-btn mj-btn-primary">⚡ 1-Click Capture / Enrich in MJ</button>
+        <button id="mj-btn-highlight-anchor" class="mj-btn">🎯 Spotlight on Page</button>
+      </div>
+    </div>
+
+    <div class="mj-card">
+      <div class="mj-card-header">
+        <h3 class="mj-card-title">Page-to-Entity Field Diff Preview</h3>
+        <span class="mj-badge mj-badge-warn">\${fieldEntries.length} signals extracted</span>
+      </div>
+      \${fieldEntries.map(([k, v]) => \`
+        <label class="mj-diff-row">
+          <input type="checkbox" checked />
+          <span style="font-weight:700;min-width:85px;">\${k}</span>
+          <span style="color:#15803d;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">+ \${v}</span>
+        </label>
+      \`).join('')}
+    </div>
+
+    \${braided.Facets.map(facet => \`
+      <div class="mj-card">
+        <div class="mj-card-header">
+          <div>
+            <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--mj-text-secondary);">\${facet.App}</span>
+            <h3 class="mj-card-title">\${facet.Header}</h3>
+          </div>
+          <span class="mj-badge">\${facet.Badge}</span>
+        </div>
+        \${facet.Items.map(item => \`
+          <div class="mj-facet-item">
+            <div>
+              <div style="font-weight:600;font-size:12px;">\${item.Title}</div>
+              <div style="font-size:11px;color:var(--mj-text-secondary);">\${item.Subtitle}</div>
+            </div>
+            <span class="mj-badge mj-badge-success">\${item.Badge}</span>
+          </div>
+        \`).join('')}
+      </div>
+    \`).join('')}
+  \`;
+
+  const captureBtn = document.getElementById('mj-btn-capture-entity');
+  if (captureBtn) {
+    captureBtn.addEventListener('click', () => {
+      state.capturedEntities.push({
+        entity: braided.TargetEntityName,
+        name: braided.DisplayName,
+        at: new Date().toLocaleTimeString()
+      });
+      captureBtn.textContent = '✅ Captured to ' + braided.TargetEntityName + '!';
+      showToast('Synced "' + braided.DisplayName + '" (' + fieldEntries.length + ' fields) to ' + braided.TargetEntityName);
+    });
+  }
+
+  const highlightBtn = document.getElementById('mj-btn-highlight-anchor');
+  if (highlightBtn) {
+    highlightBtn.addEventListener('click', async () => {
+      const res = await sendToActiveTab('MJ_CS_HIGHLIGHT_ELEMENT', {
+        Selector: 'main h1, h1, input[type="search"], input[name="search"], a[href]',
+        StepBadge: ASSISTANT_NAME,
+        Label: 'Grounded Anchor: ' + braided.DisplayName
+      });
+      if (res && res.Success) {
+        showToast('Spotlight Coach-Mark rendered on active tab!');
+      } else {
+        showToast('Spotlighted first interactive element on page.');
+        await sendToActiveTab('MJ_CS_HIGHLIGHT_ELEMENT', {
+          Index: 0,
+          StepBadge: ASSISTANT_NAME,
+          Label: braided.DisplayName
+        });
+      }
+    });
+  }
+}
+
+function renderElementsTab(container) {
+  const snap = state.pageSnapshot;
+  const elements = (snap && snap.InteractiveElements) ? snap.InteractiveElements : [];
+  if (elements.length === 0) {
+    container.innerHTML = \`
+      <div class="mj-card">
+        <h3 class="mj-card-title">No Interactive Elements Grounded Yet</h3>
+        <p style="margin:0;color:var(--mj-text-secondary);">Click <strong>🔄 Scan Active Tab</strong> above to run <code>INTERACTIVITYPROBE</code> on the current tab.</p>
+      </div>
+    \`;
+    return;
+  }
+
+  const slice = elements.slice(0, 40);
+  container.innerHTML = \`
+    <div class="mj-card">
+      <div class="mj-card-header">
+        <h3 class="mj-card-title">Grounded DOM Elements (<code>INTERACTIVITYPROBE</code>)</h3>
+        <span class="mj-badge">\${elements.length} total</span>
+      </div>
+      <p style="margin:0;font-size:11px;color:var(--mj-text-secondary);">Click <strong>🎯 Spotlight</strong> on any element below to draw a Shadow-DOM Coach-Mark ring around it on the live page.</p>
+      <div style="display:flex;flex-direction:column;margin-top:4px;">
+        \${slice.map(el => \`
+          <div class="mj-el-row">
+            <div style="overflow:hidden;flex:1;">
+              <strong>[#\${el.Index}]</strong> <span class="mj-badge">\${el.Role}</span>
+              <span style="font-weight:600;margin-left:4px;">\${(el.Name || '(unnamed)').replace(/</g, '&lt;')}</span>
+              \${el.Scope ? \`<div style="font-size:10px;color:var(--mj-text-secondary);">Scope: \${el.Scope}</div>\` : ''}
+            </div>
+            <button class="mj-btn mj-btn-spotlight-idx" data-idx="\${el.Index}" data-name="\${(el.Name || el.Role).replace(/"/g, '&quot;')}">🎯 Spotlight</button>
+          </div>
+        \`).join('')}
+      </div>
+    </div>
+  \`;
+
+  container.querySelectorAll('.mj-btn-spotlight-idx').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const idx = Number(btn.getAttribute('data-idx'));
+      const name = btn.getAttribute('data-name') || ('Element #' + idx);
+      const res = await sendToActiveTab('MJ_CS_HIGHLIGHT_ELEMENT', {
+        Index: idx,
+        StepBadge: 'Element #' + idx,
+        Label: name
+      });
+      if (res && res.Success) {
+        showToast('Spotlighted [#' + idx + '] "' + name + '" on page!');
+      }
+    });
+  });
+}
+
+function renderPlaybooksTab(container) {
+  const playbooks = [
+    {
+      id: 'linkedin-capture',
+      title: 'LinkedIn Executive Capture & Braided Briefing',
+      steps: [
+        { badge: 'Step 1 of 3', label: 'Spotlight Profile Heading & Verify Identity', selector: 'main h1, h1' },
+        { badge: 'Step 2 of 3', label: 'Spotlight Primary Connect / Message Action', selector: 'main button, button' },
+        { badge: 'Step 3 of 3', label: 'Sync Extracted Profile Signals to MJ People', selector: 'body' }
+      ]
+    },
+    {
+      id: 'hubspot-oauth',
+      title: 'HubSpot OAuth App Registration & Vault Pipe',
+      steps: [
+        { badge: 'Step 1 of 3', label: 'Locate OAuth Redirect URI Input', selector: 'input, a[href]' },
+        { badge: 'Step 2 of 3', label: 'Pause on Auth / Consent Screen (WaitForUserAction)', selector: 'button, a[href]' },
+        { badge: 'Step 3 of 3', label: 'Model-Blind Secret Pipe -> MJ Vault (Zero LLM Exposure)', selector: 'input, code' }
+      ]
+    }
+  ];
+
+  container.innerHTML = playbooks.map(pb => \`
+    <div class="mj-card">
+      <div class="mj-card-header">
+        <h3 class="mj-card-title">\${pb.title}</h3>
+        <span class="mj-badge">\${pb.steps.length} Steps</span>
+      </div>
+      \${pb.steps.map((st, i) => \`
+        <div class="mj-facet-item">
+          <div>
+            <div style="font-weight:700;font-size:11px;color:var(--mj-brand-primary);">\${st.badge}</div>
+            <div style="font-size:12px;">\${st.label}</div>
+          </div>
+          <button class="mj-btn mj-btn-run-step" data-selector="\${st.selector}" data-badge="\${st.badge}" data-label="\${st.label}">▶ Run Step</button>
+        </div>
+      \`).join('')}
+    </div>
+  \`).join('');
+
+  container.querySelectorAll('.mj-btn-run-step').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const selector = btn.getAttribute('data-selector');
+      const badge = btn.getAttribute('data-badge');
+      const label = btn.getAttribute('data-label');
+      const res = await sendToActiveTab('MJ_CS_HIGHLIGHT_ELEMENT', {
+        Selector: selector,
+        StepBadge: badge,
+        Label: label
+      });
+      if (!res || !res.Success) {
+        await sendToActiveTab('MJ_CS_HIGHLIGHT_ELEMENT', {
+          Index: 0,
+          StepBadge: badge,
+          Label: label
+        });
+      }
+      showToast(badge + ': ' + label);
+    });
+  });
+}
+
+function renderChatTab(container) {
+  const snap = state.pageSnapshot;
+  const braided = snap ? parseLinkedInOrOrgContext(snap) : null;
+
+  container.innerHTML = \`
+    <div class="mj-card" style="flex:1;display:flex;flex-direction:column;justify-content:space-between;min-height:320px;">
+      <div style="display:flex;flex-direction:column;gap:8px;overflow-y:auto;">
+        \${state.chatMessages.map(m => \`
+          <div style="padding:8px 10px;border-radius:8px;background:\${m.sender === 'You' ? '#dbeafe' : 'var(--mj-bg-surface-sunken, #f1f5f9)'};align-self:\${m.sender === 'You' ? 'flex-end' : 'flex-start'};max-width:92%;">
+            <div style="font-size:10px;font-weight:700;color:var(--mj-text-secondary);">\${m.sender}</div>
+            <div style="font-size:12px;margin-top:2px;">\${m.text}</div>
+          </div>
+        \`).join('')}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px;">
+        <div class="mj-toolbar-actions">
+          <button class="mj-btn mj-chat-chip" data-prompt="Summarize this page & braided MJ records">✨ Summarize Page & CRM</button>
+          <button class="mj-btn mj-chat-chip" data-prompt="Spotlight primary call-to-action on page">🎯 Spotlight Primary CTA</button>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <input id="mj-chat-input" class="mj-input" type="text" placeholder="Ask \${ASSISTANT_NAME} about \${braided ? braided.DisplayName : 'this page'}..." />
+          <button id="mj-chat-send" class="mj-btn mj-btn-primary">Send</button>
+        </div>
+      </div>
+    </div>
+  \`;
+
+  const handleSend = async (promptText) => {
+    const text = (promptText || '').trim();
+    if (!text) return;
+    state.chatMessages.push({ sender: 'You', text });
+    if (text.toLowerCase().includes('spotlight')) {
+      await sendToActiveTab('MJ_CS_HIGHLIGHT_ELEMENT', {
+        Index: 0,
+        StepBadge: ASSISTANT_NAME,
+        Label: 'Co-Agent Highlighted Target'
+      });
+      state.chatMessages.push({
+        sender: ASSISTANT_NAME,
+        text: 'I highlighted the primary interactive target on ' + (snap ? snap.Hostname : 'the active tab') + ' using the Shadow-DOM Coach-Mark overlay.'
+      });
+    } else if (braided) {
+      state.chatMessages.push({
+        sender: ASSISTANT_NAME,
+        text: 'Braided summary for ' + braided.DisplayName + ' (' + braided.EntityType + '): matched rule "' + braided.RuleName + '" with ' + braided.Facets.length + ' Open App facets and ' + (snap ? snap.InteractiveElements.length : 0) + ' grounded interactive elements.'
+      });
+    } else {
+      state.chatMessages.push({
+        sender: ASSISTANT_NAME,
+        text: 'Scanned active tab. Click "Scan Active Tab" above to refresh DOM grounding.'
+      });
+    }
+    renderActiveTab();
+  };
+
+  const sendBtn = document.getElementById('mj-chat-send');
+  const inputEl = document.getElementById('mj-chat-input');
+  if (sendBtn && inputEl) {
+    sendBtn.addEventListener('click', () => handleSend(inputEl.value));
+    inputEl.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') handleSend(inputEl.value);
+    });
+  }
+  container.querySelectorAll('.mj-chat-chip').forEach(chip => {
+    chip.addEventListener('click', () => handleSend(chip.getAttribute('data-prompt')));
+  });
+}
+
+function renderActiveTab() {
+  const container = document.getElementById('mj-sidepanel-context-view');
+  if (!container) return;
+  if (state.activeView === 'context') renderContextTab(container);
+  else if (state.activeView === 'elements') renderElementsTab(container);
+  else if (state.activeView === 'playbooks') renderPlaybooksTab(container);
+  else if (state.activeView === 'chat') renderChatTab(container);
+}
+
+async function scanActiveTab() {
+  const hostBadge = document.getElementById('mj-active-host-badge');
+  const elCount = document.getElementById('mj-el-count');
+  const snap = await sendToActiveTab('MJ_CS_GET_PAGE_STATE');
+  if (snap && snap.Url) {
+    state.pageSnapshot = snap;
+    if (hostBadge) {
+      hostBadge.textContent = (snap.IsAuthOrMfaScreen ? '🔒 ' : '🌐 ') + (snap.Hostname || 'Active Tab');
+    }
+    if (elCount) {
+      elCount.textContent = String((snap.InteractiveElements || []).length);
+    }
+  } else {
+    const tab = await getActiveTab();
+    if (hostBadge) {
+      hostBadge.textContent = '🌐 ' + (tab && tab.url ? new URL(tab.url).hostname : 'Ready');
+    }
+  }
+  renderActiveTab();
+}
+
+// Wire up header & toolbar controls
+document.getElementById('mj-btn-toggle-auth')?.addEventListener('click', () => {
+  document.getElementById('mj-auth-drawer')?.classList.toggle('open');
+});
+
+document.getElementById('mj-btn-save-auth')?.addEventListener('click', async () => {
+  const urlInput = document.getElementById('mj-input-api-url');
+  const tokenInput = document.getElementById('mj-input-api-token');
+  const authBtn = document.getElementById('mj-btn-toggle-auth');
+  const badge = document.getElementById('mj-auth-mode-badge');
+  if (urlInput && urlInput.value) {
+    state.connectedServerUrl = urlInput.value.trim();
+    const tokenVal = tokenInput && tokenInput.value ? tokenInput.value.trim() : '';
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (tokenVal) headers['Authorization'] = tokenVal.startsWith('Bearer ') ? tokenVal : ('Bearer ' + tokenVal);
+      const resp = await fetch(state.connectedServerUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ query: '{ __typename }' })
+      });
+      if (resp.ok) {
+        state.isSignedIn = true;
+        if (authBtn) {
+          authBtn.textContent = '🟢 MJ Live: ' + new URL(state.connectedServerUrl).host;
+          authBtn.classList.add('connected');
+        }
+        if (badge) badge.textContent = '🟢 Connected to MJAPI GraphQL';
+        showToast('Verified live GraphQL connection to ' + state.connectedServerUrl);
+      } else {
+        if (badge) badge.textContent = '🟡 HTTP ' + resp.status + ' (Auth Required)';
+        showToast('MJAPI reachable at ' + state.connectedServerUrl + ' (HTTP ' + resp.status + ' — select an IdP or paste Bearer token).');
+      }
+    } catch {
+      if (badge) badge.textContent = '🟡 Local Braiding Preview (MJAPI Offline)';
+      showToast('MJAPI not running at ' + state.connectedServerUrl + ' — running in Local Braiding Preview mode.');
+    }
+  }
+});
+
+document.getElementById('mj-btn-discover-catalog')?.addEventListener('click', async () => {
+  const urlInput = document.getElementById('mj-input-api-url');
+  const listEl = document.getElementById('mj-provider-catalog-list');
+  let baseUrl = urlInput && urlInput.value ? urlInput.value.trim() : 'http://localhost:4000';
+  if (baseUrl.endsWith('/graphql/')) baseUrl = baseUrl.slice(0, -9);
+  else if (baseUrl.endsWith('/graphql')) baseUrl = baseUrl.slice(0, -8);
+  const catalogUrl = baseUrl + '/auth/providers';
+  try {
+    const resp = await fetch(catalogUrl);
+    if (resp.ok) {
+      const data = await resp.json();
+      const providers = Array.isArray(data.providers) ? data.providers : (Array.isArray(data) ? data : []);
+      if (listEl) {
+        listEl.innerHTML = providers.map(p => \`<button class="mj-btn mj-btn-primary" data-idp="\${p.name || p.type}">🔐 Sign In via \${p.displayName || p.name || p.type}</button>\`).join('');
+      }
+      showToast('Discovered ' + providers.length + ' Identity Providers from ' + catalogUrl);
+    } else {
+      showToast('Catalog endpoint ' + catalogUrl + ' returned HTTP ' + resp.status);
+    }
+  } catch {
+    showToast('Could not reach ' + catalogUrl + ' (start MJAPI on localhost:4000 to fetch live IdP catalog).');
+  }
+});
+
+document.getElementById('mj-btn-idp-msal')?.addEventListener('click', () => {
+  showToast('Launching Microsoft Entra (MSAL) PKCE flow via WebExtensions identity provider...');
+});
+
+document.getElementById('mj-btn-idp-auth0')?.addEventListener('click', () => {
+  showToast('Launching Auth0 / OIDC PKCE flow via WebExtensions identity provider...');
+});
+
+document.getElementById('mj-btn-open-explorer')?.addEventListener('click', () => {
+  const urlInput = document.getElementById('mj-input-api-url');
+  let baseUrl = urlInput && urlInput.value ? urlInput.value.trim() : 'http://localhost:4200';
+  if (baseUrl.endsWith('/graphql/')) baseUrl = baseUrl.slice(0, -9);
+  else if (baseUrl.endsWith('/graphql')) baseUrl = baseUrl.slice(0, -8);
+  if (typeof chrome !== 'undefined' && chrome.tabs) {
+    chrome.tabs.create({ url: baseUrl });
+  }
+});
+
+document.getElementById('mj-btn-scan-tab')?.addEventListener('click', () => {
+  scanActiveTab();
+});
+
+document.getElementById('mj-btn-spotlight-main')?.addEventListener('click', async () => {
+  const res = await sendToActiveTab('MJ_CS_HIGHLIGHT_ELEMENT', {
+    Selector: 'main h1, h1, input[type="search"], input[name="search"], a[href]',
+    StepBadge: ASSISTANT_NAME,
+    Label: 'Primary Grounded Page Target'
+  });
+  if (!res || !res.Success) {
+    await sendToActiveTab('MJ_CS_HIGHLIGHT_ELEMENT', {
+      Index: 0,
+      StepBadge: ASSISTANT_NAME,
+      Label: 'Primary Interactive Target (#0)'
+    });
+  }
+  showToast('Spotlight Coach-Mark rendered on active tab!');
+});
+
+document.getElementById('mj-btn-clear-spotlight')?.addEventListener('click', async () => {
+  await sendToActiveTab('MJ_CS_CLEAR_HIGHLIGHTS');
+  showToast('Cleared Coach-Mark overlays on active tab.');
+});
+
+document.querySelectorAll('.mj-nav-tab').forEach(tabBtn => {
+  tabBtn.addEventListener('click', () => {
+    document.querySelectorAll('.mj-nav-tab').forEach(b => b.classList.remove('active'));
+    tabBtn.classList.add('active');
+    state.activeView = tabBtn.getAttribute('data-tab') || 'context';
+    renderActiveTab();
+  });
+});
+
+if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg && (msg.Type === 'MJ_EXT_ACTIVE_TAB_UPDATED' || msg.Type === 'MJ_EXT_TAB_URL_CHANGED')) {
+      scanActiveTab();
+    }
+  });
+}
+
+// Initial scan on Side Panel open
+scanActiveTab();
 `;
     }
 

@@ -1,12 +1,10 @@
 # `@memberjunction/browser-extension-builder`
 
-White-Label Brand Stamping Factory (`mj-ext-build` CLI and `ExtensionBrandBuilder` API) for building MemberJunction Browser Extensions from a single shared codebase.
+White-Label Brand Stamping Factory (`mj-ext-build` CLI and `ExtensionBrandBuilder` API) for building MemberJunction Browser Extensions across **Chrome**, **Microsoft Edge**, **Firefox**, and **Safari** directly from `mj-sync` metadata rows (`MJ: Brand Kits` + `MJ: Applications.AgentSettings.BrowserExtension`) or brand profile JSON files.
 
-Produces ready-to-load unpacked Manifest V3 Chrome Extension directories and Chrome Web Store `.zip` packages for:
-1. **`mj-copilot`** — *MemberJunction Co-Pilot* (`packages/BrowserExtension/Brands/mj-copilot/mj-extension-brand.json`)
-2. **`betty`** — *Betty — Association & Community Intelligence Sidekick* (`packages/BrowserExtension/Brands/betty/mj-extension-brand.json`)
-3. **`sidecar`** — *Sidecar — Continuous Learning & Workflow Companion* (`packages/BrowserExtension/Brands/sidecar/mj-extension-brand.json`)
-4. Any custom tenant brand profile (`mj-extension-brand.json`)
+Produces ready-to-load unpacked Manifest V3 directories and store-ready `.zip` packages for:
+1. **`mj-copilot`** — *MemberJunction Co-Pilot* (canonical brand defined in MJ Core's `metadata/app-agent-settings/.data-explorer-agent-settings.json` + `metadata/brand-kits/.brand-kits.json`)
+2. **Downstream Open App Brands** — *Betty*, *Sidecar*, and custom enterprise brands defined in each downstream repository's own `metadata/` folder (`MJ: Brand Kits` + `MJ: Applications`)
 
 ---
 
@@ -14,10 +12,10 @@ Produces ready-to-load unpacked Manifest V3 Chrome Extension directories and Chr
 
 ```mermaid
 flowchart LR
-    JSON["mj-extension-brand.json"] --> ZOD["ExtensionBrandProfileSchema (Zod)"]
+    META["MJ Metadata Rows (MJ: Brand Kits + MJ: Applications.AgentSettings.BrowserExtension)"] --> ZOD["ExtensionBrandProfileSchema (Zod)"]
     ZOD --> TE["@memberjunction/theme-engine (Derive + EmitOverlayCss)"]
-    ZOD --> MF["Manifest V3 Stamping (Conditional debugger permission)"]
-    TE --> OUT["dist/extensions/<brandSlug>/ + <brandSlug>-<version>.zip"]
+    ZOD --> MF["Multi-Browser Manifest V3 Stamping (chrome | edge | firefox | safari)"]
+    TE --> OUT["dist/extensions/<brandSlug>/<browser>/ + .zip"]
     MF --> OUT
 ```
 
@@ -26,10 +24,11 @@ flowchart LR
 ## CLI Usage
 
 ```bash
+# Build MemberJunction Co-Pilot across Chrome, Edge, Firefox, and Safari from MJ Core metadata/
 npx mj-ext-build \
-  --brand packages/BrowserExtension/Brands/mj-copilot/mj-extension-brand.json \
-  --brand packages/BrowserExtension/Brands/betty/mj-extension-brand.json \
-  --brand packages/BrowserExtension/Brands/sidecar/mj-extension-brand.json \
+  --metadata-dir ./metadata \
+  --app-name "Data Explorer" \
+  --browser all \
   --out dist/extensions
 ```
 
@@ -41,11 +40,13 @@ npx mj-ext-build \
 import { ExtensionBrandBuilder } from '@memberjunction/browser-extension-builder';
 
 const builder = new ExtensionBrandBuilder();
-const result = builder.BuildBrandedExtension({
-    BrandSource: 'packages/BrowserExtension/Brands/betty/mj-extension-brand.json',
+const result = builder.BuildFromMetadata({
+    MetadataDir: './metadata',
+    ApplicationName: 'Data Explorer',
+    TargetBrowsers: ['chrome', 'edge', 'firefox', 'safari'],
     OutputRootDir: './dist/extensions',
 });
 
-console.log('Unpacked MV3 Extension:', result.UnpackedDir);
-console.log('Chrome Web Store ZIP:', result.ZipPath);
+console.log('Primary Unpacked MV3 Extension:', result.PrimaryResult.UnpackedDir);
+console.log('Safari Metadata:', result.BrowserResults.safari?.SafariMetadataPath);
 ```
