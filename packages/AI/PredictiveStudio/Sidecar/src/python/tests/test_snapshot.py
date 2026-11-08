@@ -18,6 +18,7 @@ import pytest
 from app import snapshot as SN
 from app.encoding import MISSING_TOKEN, CategoricalEncoding, MissingPolicy, NumericEncoding
 from app.failures import RunClock, SnapshotLoadFailure, TrainerFailure
+from app.snapshot_format import REFERENCE_SCORE_COLUMN
 from app.trainer_schemas import TrainerRequest
 from tests.tools.gate_parity import CORE_ENTRY, SIDECAR_ROOT
 from tests.tools.trainer_fixture import FileServer, JsonObject, JsonValue, candidates, protocol, request, snapshot_files
@@ -223,6 +224,23 @@ def test_an_infinite_numeric_cell_is_refused_by_name() -> None:
     lines[4] = json.dumps(row).replace("123456.789", "1e400")
     failure = _refusal(_join(lines), n)
     assert failure.problem == "infinite" and failure.column == "x2"
+
+
+def test_a_null_reference_score_on_any_row_is_refused_by_name() -> None:
+    """The fixture-only reference score feeds the leak audit's paired DeLong test, which sorts NaN last and passes
+    silently; a missing value is refused at load, as the incumbent score is, naming the row."""
+    df = binary_frame(60)
+    truth = 1 / (1 + np.exp(-df["x2"].to_numpy(dtype=np.float64)))
+    truth[7] = np.nan
+    m, n = snapshot_files(df.assign(Truth=truth), FEATS, ["r0", "r1", "r2"], reference_col="Truth")
+    failure = _refusal(m, n)
+    assert failure.problem == "reference-score-missing" and failure.column == REFERENCE_SCORE_COLUMN
+    assert "1 row" in failure.message and str(df["ID"][7]) in failure.message
+
+
+def test_a_snapshot_without_a_reference_score_column_is_not_refused() -> None:
+    m, n = _files()
+    assert SN.parse_snapshot(m, n, HASH).reference_score is None
 
 
 def test_an_unknown_header_key_is_malformed() -> None:

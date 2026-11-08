@@ -24,10 +24,11 @@ class TrainerFailure(Exception):
         self.message = message
 
 
-# `incumbent-score-missing` mirrors the engine's refusal of that kind (Core `assembly-contract.ts`): the snapshot declares
-# an incumbent-score column and some row holds no score in it.
+# Both score walls refuse a snapshot that declares a score column some row leaves empty. `incumbent-score-missing`
+# mirrors the engine's refusal of that kind (Core `assembly-contract.ts`); `reference-score-missing` has no engine twin,
+# because only fixtures write the reference-score column.
 SnapshotProblem = Literal["expired-url", "download-failed", "hash-mismatch", "malformed", "non-numeric", "infinite",
-                          "incumbent-score-missing"]
+                          "incumbent-score-missing", "reference-score-missing"]
 
 
 class SnapshotLoadFailure(TrainerFailure):
