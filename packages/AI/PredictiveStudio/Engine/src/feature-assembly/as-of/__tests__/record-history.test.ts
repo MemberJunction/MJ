@@ -127,6 +127,25 @@ describe('BuildEntityHistory — rows at one instant', () => {
       }
     }
   });
+  it('orders a Create before a Delete at an instant a later Create follows, so a record re-created later reads deleted in between, whatever the IDs and input order', () => {
+    const mid = '2022-07-01T00:00:00Z';
+    for (const [c, d] of [['aa', 'zz'], ['zz', 'aa']]) {
+      const rows = [
+        rc('c0', 'P1', 'Create', '2020-01-01T00:00:00Z', { Status: 'Active' }),
+        rc('d0', 'P1', 'Delete', '2021-01-01T00:00:00Z', { Status: 'Active' }),
+        rc(c, 'P1', 'Create', mid, { Status: 'Lapsed' }),
+        rc(d, 'P1', 'Delete', mid, { Status: 'Lapsed' }),
+        rc('c9', 'P1', 'Create', '2024-01-01T00:00:00Z', { Status: 'Reborn' }),
+      ];
+      for (const order of permutations(rows)) {
+        const h = RecordHistory.BuildEntityHistory(PEOPLE, order, new Map([['p1', { Status: 'Reborn' }]]), ['Status'], policy, now);
+        expect(h.ValueAt('P1', 'Status', new Date('2023-06-01T00:00:00Z'))).toEqual({ Status: 'uncovered', Reason: 'deleted' });
+        expect(h.ValueAt('P1', 'Status', new Date('2024-06-01T00:00:00Z'))).toMatchObject({ Status: 'value', Value: 'Reborn', ChangeID: 'c9' });
+        expect(h.Coverage.continuity).toMatchObject({ recordsReplayed: 1, recordsMismatched: 0 });
+        expect(h.DeletedRecordAt('P1', new Date('2023-06-01T00:00:00Z'))).toBeNull();
+      }
+    }
+  });
 });
 
 /** The fields of a saved Record Change the snapshot writer sets. */

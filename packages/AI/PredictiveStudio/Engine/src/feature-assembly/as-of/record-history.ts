@@ -153,7 +153,7 @@ export class RecordHistory {
   /**
    * The lower-cased keys whose latest change row is a Delete: records the history says were deleted, so a missing
    * current row is explained rather than a short read. Asked only about keys with no current row, so each key's last
-   * instant is gone after it (a Delete there ends it) and earlier instants rank by the later rows (see `indexByKey`).
+   * instant is gone after it (a Delete there ends it) and earlier instants rank by the row that follows (see `indexByKey`).
    */
   public static KeysDeletedByHistory(changes: readonly RecordChangeRow[]): ReadonlySet<string> {
     return RecordHistory.endingInDelete(RecordHistory.indexByKey(changes));
@@ -309,8 +309,10 @@ export class RecordHistory {
    *   the earlier incarnation and the Create re-created it);
    * - a Delete at the instant, and the record is gone after it: Create, Snapshot, Update, Delete (the Delete ends the
    *   instant).
-   * The record continues after an instant when the key has a row at a later instant, or, at its last instant, when it
-   * has a current row; so the current row decides only the last instant. `hasCurrentRow` takes the lower-cased key;
+   * The record continues after an instant when the first row after it (the next instant's first row, so ordered) is not
+   * a Create, or, at its last instant, when it has a current row; it is gone after the instant when that row is a Create
+   * (a later Create proves it was gone) or, at its last instant, when it has no current row. So the current row decides
+   * only the last instant. `hasCurrentRow` takes the lower-cased key;
    * without it every key is read as having no current row (its last instant is gone), the order
    * {@link KeysDeletedByHistory} and {@link DeletedChildren} need, since they are asked only about such keys.
    */
@@ -334,12 +336,18 @@ export class RecordHistory {
       at.push(c);
       byInstant.set(c.ChangedAt.getTime(), at);
     }
-    const instants = [...byInstant.entries()].sort((a, b) => a[0] - b[0]);
-    return instants.flatMap(([, rows], i) => {
-      const continues = i < instants.length - 1 || hasCurrentRow;
+    // Ranked from the last instant back, so each instant sees the first row that follows it once that row is ordered.
+    const instants = [...byInstant.entries()].sort((a, b) => b[0] - a[0]);
+    const ordered: RecordChangeRow[][] = [];
+    let next: RecordChangeRow | null = null;
+    for (const [, rows] of instants) {
+      const continues = next === null ? hasCurrentRow : next.Type !== 'Create';
       const rank = !rows.some((c) => c.Type === 'Delete') ? SAME_INSTANT_RANK.NoDelete : continues ? SAME_INSTANT_RANK.Continues : SAME_INSTANT_RANK.Gone;
-      return [...rows].sort((a, b) => rank[a.Type] - rank[b.Type] || OrdinalCompare(a.ID, b.ID));
-    });
+      const sorted = [...rows].sort((a, b) => rank[a.Type] - rank[b.Type] || OrdinalCompare(a.ID, b.ID));
+      ordered.unshift(sorted);
+      next = sorted[0];
+    }
+    return ordered.flat();
   }
 
   /** The keys of `byKey` whose last row is a Delete. */

@@ -1077,6 +1077,33 @@ describe('AsOfFeatureAssembler — a windowed aggregate over hard-deleted child 
       }
     }
   });
+  it('reads a present child created and deleted at one instant and re-created later as deleted in between, as when the two rows are apart, and counts it after the re-creation (either ID order)', async () => {
+    // e2 stood in January 2022, was deleted, created and deleted again at 2023-01-01, and re-created in 2024.
+    const days: AssemblyRowRef[] = [
+      { RowID: 'y1', EntityKey: 'P1', DecisionDate: new Date('2023-06-01T00:00:00Z'), Period: null },
+      { RowID: 'y2', EntityKey: 'P1', DecisionDate: new Date('2024-06-01T00:00:00Z'), Period: null }];
+    const mirror = (createAt: string, createId: string, deleteId: string): Record<string, RecordChangeRow[]> => ({ Events: [
+      rc('ec-1', 'e1', 'Create', '2021-09-01T00:00:00Z', e1),
+      rc('ec-2', 'e2', 'Create', '2022-01-01T00:00:00Z', e2),
+      rc('ed-2', 'e2', 'Delete', '2022-02-01T00:00:00Z', e2),
+      rc(createId, 'e2', 'Create', createAt, e2),
+      rc(deleteId, 'e2', 'Delete', '2023-01-01T00:00:00Z', e2),
+      rc('er-2', 'e2', 'Create', '2024-01-01T00:00:00Z', e2),
+    ] });
+    for (const onUncoveredRow of ['refuse', 'exclude-and-count'] as const) {
+      const run = (changes: Record<string, RecordChangeRow[]>) => new AsOfFeatureAssembler().Assemble(input([count], { Rows: days, Tables: { ...data, Events: [e1, e2] }, Changes: changes, Unit: { ...unit, history: { onUncoveredRow, externalSourceRows: 'ineligible' } } }));
+      // The control: the same rows with the Create a day before the Delete.
+      const apart = await run(mirror('2022-12-31T00:00:00Z', 'ec-3', 'ed-3'));
+      // y1 is decided while e2 was deleted, so the child's owner that day is excluded (refused under refuse); y2 counts it.
+      expect(apart).toEqual(onUncoveredRow === 'refuse'
+        ? { Status: 'refused', Refusal: { kind: 'decision-date-before-change-history', entity: 'Events', field: 'PersonID', historyStart: '2022-01-01T00:00:00.000Z', rowsAffected: 1 } }
+        : expect.objectContaining({ Status: 'assembled', UncoveredRowsExcluded: [{ entity: 'Events', field: 'PersonID', rows: 1 }] }));
+      if (apart.Status === 'assembled') expect(apart.Rows.map((r) => [r.RowID, r.Values[0]])).toEqual([['y2', 2]]);
+      for (const [createId, deleteId] of [['aa', 'zz'], ['zz', 'aa']]) {
+        expect(JSON.stringify(await run(mirror('2023-01-01T00:00:00Z', createId, deleteId)))).toBe(JSON.stringify(apart));
+      }
+    }
+  });
   for (const ownerNow of ['P1', 'P9']) {
     it(`counts a child deleted and re-created after the decision day as the incarnation that stood then, from the Delete row that ended it (re-created under ${ownerNow})`, async () => {
       // e2 stood from March 2022 dated 2022-03-01, was deleted in January 2023 and re-created in February dated 2025-01-01.
