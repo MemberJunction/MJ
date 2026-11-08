@@ -1,5 +1,5 @@
 import { BaseSingleton } from '@memberjunction/global';
-import { ClampSessionSecondsValue, type RealtimeSessionParams } from './baseRealtime';
+import { ClampSessionSecondsValue, RealtimeDiagLog, type RealtimeSessionParams } from './baseRealtime';
 
 /**
  * The URL path MJAPI's realtime proxy listens on for websocket upgrades, and that provider drivers
@@ -220,6 +220,16 @@ export type RealtimeRelayRefusal = 'unknown' | 'expired' | 'connection-cap' | 'f
 /** The outcome of {@link RealtimeProxyRegistry.OpenRelaySession}. */
 export type RealtimeRelayOpenResult = { Granted: RealtimeRelayGrant } | { Refused: RealtimeRelayRefusal };
 
+/** Options for {@link RealtimeProxyRegistry.ExtendRelaySession}. */
+export interface RealtimeRelayExtendOptions {
+    /**
+     * When `true` and no live tunnel is currently open (`ExpiresAtListeners.size === 0`), re-arms
+     * a single fresh open within {@link REALTIME_RELAY_OPEN_WINDOW_SECONDS} without resetting
+     * `FreshOpened`. Used when the client explicitly asks for a handle-less reopen (seed fallback / ZDR).
+     */
+    AllowFreshReopen?: boolean;
+}
+
 /** A relay session's server-side state. */
 interface RelaySessionRecord {
     UpstreamUrl: string;
@@ -235,6 +245,11 @@ interface RelaySessionRecord {
     Connections: number;
     /** The one fresh connection has been granted. */
     FreshOpened: boolean;
+    /**
+     * Epoch ms until which a handle-less reopen is permitted (0 when none has been requested or
+     * after the re-armed fresh open has been consumed).
+     */
+    FreshReopenAllowedUntilMs: number;
     /** Handles the relay forwarded to this session, oldest first, at most {@link RELAY_HANDLE_MEMORY}. */
     Handles: string[];
     /** Active tunnel listeners notified when the relay session's expiry is extended in place. */
@@ -452,6 +467,7 @@ export class RealtimeProxyRegistry extends BaseSingleton<RealtimeProxyRegistry> 
             MaxConnections: RealtimeProxyRegistry.relayMaxConnections(params.MaxConnections),
             Connections: 0,
             FreshOpened: false,
+            FreshReopenAllowedUntilMs: 0,
             Handles: [],
             ExpiresAtListeners: new Set(),
         });
@@ -459,15 +475,17 @@ export class RealtimeProxyRegistry extends BaseSingleton<RealtimeProxyRegistry> 
     }
 
     /**
-     * Extends an existing relay session in place without invalidating its forwarded resumption handles (`Handles`).
-     * Advances `ExpiresAtMs`, increments `MaxConnections`, re-arms the fresh-open window (`FreshOpened = false` and
-     * `OpenByMs = now + OpenWithinSeconds`) so either a handle-based resume or a seed-fallback fresh open is accepted,
-     * and notifies any live tunnel via `OnExpiresAtExtended`.
+     * Extends an existing relay session in place without invalidating its forwarded resumption handles (`Handles`)
+     * or resetting `FreshOpened` (which would otherwise cause `pruneRelaySessions` to prune a live session after
+     * the initial open window). Advances `ExpiresAtMs`, increments `MaxConnections`, optionally re-arms a single
+     * fresh reopen when `options.AllowFreshReopen` is true and no tunnel is currently open, and notifies any live
+     * tunnel via `OnExpiresAtExtended`.
      */
     public ExtendRelaySession(
         id: string,
         additionalSeconds: number = REALTIME_RELAY_SESSION_LIFETIME_SECONDS,
         maxConnectionsIncrement: number = REALTIME_RELAY_MAX_CONNECTIONS,
+        options?: RealtimeRelayExtendOptions
     ): { ExpiresAt: string } | null {
         const now = Date.now();
         this.pruneRelaySessions(now);
@@ -479,13 +497,21 @@ export class RealtimeProxyRegistry extends BaseSingleton<RealtimeProxyRegistry> 
         const newExpiresAtMs = Math.max(entry.ExpiresAtMs, now + deltaSeconds * 1000);
         entry.ExpiresAtMs = newExpiresAtMs;
         entry.MaxConnections += RealtimeProxyRegistry.relayMaxConnections(maxConnectionsIncrement);
-        entry.FreshOpened = false;
-        entry.OpenByMs = Math.min(newExpiresAtMs, now + REALTIME_RELAY_OPEN_WINDOW_SECONDS * 1000);
+        if (!entry.FreshOpened) {
+            entry.OpenByMs = Math.min(newExpiresAtMs, now + REALTIME_RELAY_OPEN_WINDOW_SECONDS * 1000);
+        } else if (options?.AllowFreshReopen && entry.ExpiresAtListeners.size === 0) {
+            entry.FreshReopenAllowedUntilMs = Math.min(
+                newExpiresAtMs,
+                now + REALTIME_RELAY_OPEN_WINDOW_SECONDS * 1000
+            );
+        }
         for (const listener of entry.ExpiresAtListeners) {
             try {
                 listener(newExpiresAtMs);
-            } catch {
-                /* ignore listener errors */
+            } catch (err) {
+                RealtimeDiagLog(
+                    `[RealtimeProxyRegistry] Relay ExpiresAt listener error: ${err instanceof Error ? err.message : String(err)}`
+                );
             }
         }
         return { ExpiresAt: new Date(newExpiresAtMs).toISOString() };
@@ -508,9 +534,9 @@ export class RealtimeProxyRegistry extends BaseSingleton<RealtimeProxyRegistry> 
 
     /**
      * Decides one connection from what its first frame asks for. A fresh intent opens only the session's first
-     * connection, within its open window; a resume opens only with a handle the relay forwarded to this session. Either
-     * way the session must not have ended or reached its connection limit. A granted connection counts toward the limit;
-     * a refused one does not.
+     * connection, within its open window (or a single explicitly re-armed fresh reopen when no tunnel was open);
+     * a resume opens only with a handle the relay forwarded to this session. Either way the session must not have
+     * ended or reached its connection limit. A granted connection counts toward the limit; a refused one does not.
      */
     public OpenRelaySession(id: string, intent: RealtimeRelayOpenIntent): RealtimeRelayOpenResult {
         const now = Date.now();
@@ -522,6 +548,7 @@ export class RealtimeProxyRegistry extends BaseSingleton<RealtimeProxyRegistry> 
         }
         if (intent.ResumeHandle === null) {
             entry.FreshOpened = true;
+            entry.FreshReopenAllowedUntilMs = 0;
         }
         entry.Connections += 1;
         return {
@@ -578,10 +605,13 @@ export class RealtimeProxyRegistry extends BaseSingleton<RealtimeProxyRegistry> 
             return 'connection-cap';
         }
         if (intent.ResumeHandle === null) {
-            if (entry.FreshOpened) {
-                return 'fresh-used';
+            if (!entry.FreshOpened) {
+                return now > entry.OpenByMs ? 'fresh-window' : null;
             }
-            return now > entry.OpenByMs ? 'fresh-window' : null;
+            if (entry.FreshReopenAllowedUntilMs > 0) {
+                return now > entry.FreshReopenAllowedUntilMs ? 'fresh-window' : null;
+            }
+            return 'fresh-used';
         }
         return entry.Handles.includes(intent.ResumeHandle) ? null : 'unknown-handle';
     }
@@ -591,7 +621,10 @@ export class RealtimeProxyRegistry extends BaseSingleton<RealtimeProxyRegistry> 
         if (entry.ExpiresAtMs <= now || entry.Connections >= entry.MaxConnections) {
             return false;
         }
-        return entry.FreshOpened ? entry.Handles.length > 0 : now <= entry.OpenByMs;
+        if (!entry.FreshOpened) {
+            return now <= entry.OpenByMs;
+        }
+        return entry.Handles.length > 0 || (entry.FreshReopenAllowedUntilMs > 0 && now <= entry.FreshReopenAllowedUntilMs);
     }
 
     /** Drops relay sessions that have ended, and those whose fresh connection never opened within its window. */

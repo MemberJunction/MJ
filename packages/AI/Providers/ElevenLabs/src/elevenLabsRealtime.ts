@@ -3,10 +3,13 @@ import { ElevenLabs, ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 
 // MemberJunction AI core contract
 import {
+    AsConfigRecord,
     BaseRealtimeModel,
     BaseRealtimeSession,
+    ResolveRealtimeTiming,
     RealtimeDroppedInputReporter,
     RenderRealtimeMemorySeedAsContextNote,
+    RenderLateToolResultNote,
     type ClientRealtimeSessionConfig,
     type IRealtimeSession,
     type RealtimeReconnectContext,
@@ -465,7 +468,7 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
     };
 
     public override get DefaultCallDurationSeconds(): number | undefined {
-        return undefined;
+        return 600;
     }
 
     public override get TrustsNativeResumption(): boolean {
@@ -509,21 +512,39 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
         const signedUrl = await this.mintSignedUrl(agentId);
         const session = new ElevenLabsRealtimeSession(this, params);
         session.SetConnectTimeTools(params.Tools ?? []);
-        const socket = await this.connectConversation({
-            SignedUrl: signedUrl,
-            OnMessage: (event) => session.HandleServerEvent(event),
-            OnError: (message) => session.HandleTransportError(message),
-            OnClose: (code, reason) => session.HandleTransportClose(code, reason),
-        });
+        const connectWithGuards = async (url: string): Promise<ElevenLabsRealtimeSocket> => {
+            let boundSocket: ElevenLabsRealtimeSocket | null = null;
+            let activeAttempt = true;
+            try {
+                const created = await this.connectConversation({
+                    SignedUrl: url,
+                    OnMessage: (event) => {
+                        if (boundSocket ? session.IsActiveOrPendingSocket(boundSocket) : activeAttempt) {
+                            session.HandleServerEvent(event);
+                        }
+                    },
+                    OnError: (message) => {
+                        if (boundSocket ? session.IsActiveOrPendingSocket(boundSocket) : activeAttempt) {
+                            session.HandleTransportError(message);
+                        }
+                    },
+                    OnClose: (code, reason) => {
+                        if (boundSocket ? session.IsActiveOrPendingSocket(boundSocket) : activeAttempt) {
+                            session.HandleTransportClose(code, reason);
+                        }
+                    },
+                });
+                boundSocket = created;
+                return created;
+            } finally {
+                activeAttempt = false;
+            }
+        };
+        const socket = await connectWithGuards(signedUrl);
         session.AttachSocket(socket);
         session.SetReconnectFactory(async () => {
             const nextSignedUrl = await this.mintSignedUrl(agentId);
-            return this.connectConversation({
-                SignedUrl: nextSignedUrl,
-                OnMessage: (event) => session.HandleServerEvent(event),
-                OnError: (message) => session.HandleTransportError(message),
-                OnClose: (code, reason) => session.HandleTransportClose(code, reason),
-            });
+            return connectWithGuards(nextSignedUrl);
         });
         session.SendInitiation(
             ElevenLabsRealtime.BuildSessionOverrides(params.SystemPrompt, params.Config),
@@ -565,9 +586,16 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
         const resolvedModel = (reasoning?.Remote?.Ref && reasoning.Remote.Ref.length > 0)
             ? reasoning.Remote.Ref
             : (params.Model && params.Model.length > 0 ? params.Model : 'MJ Realtime Co-Agent');
-        const connectionMaxSeconds = this.ResolveConnectionDurationSeconds(params.Config);
-        const reconnectBufferSeconds = this.ResolveReconnectBufferSeconds(params.Config);
-        const trustNativeResumption = this.ResolveTrustsNativeResumption(params.Config);
+        const timing = ResolveRealtimeTiming({
+            Config: params.Config,
+            DriverDefaultConnectionSeconds: this.DefaultCallDurationSeconds,
+            DriverDefaultBufferSeconds: this.ReconnectBufferSeconds,
+            DefaultTrustNativeResumption: this.ClientSessionTrustsNativeResumption('direct'),
+            ZeroDataRetention: params.ZeroDataRetention,
+        });
+        const nativeMaxDuration = resolvedModel.startsWith(ELEVENLABS_AGENT_ID_PREFIX)
+            ? undefined
+            : this.resolveNativeMaxDuration(params);
         return {
             Provider: 'elevenlabs',
             Model: resolvedModel,
@@ -581,10 +609,38 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
             // The cap actually put on the agent. With no host cap (or a verbatim agent id MJ does not manage) the agent's
             // own max_duration_seconds applies — ElevenLabs creates agents with 600 s, not the 7200 s ceiling — and it
             // is not known here, so none is reported.
-            MaxSessionSeconds: resolvedModel.startsWith(ELEVENLABS_AGENT_ID_PREFIX) ? undefined : this.resolveNativeMaxDuration(params),
-            ...(connectionMaxSeconds !== undefined ? { ConnectionMaxSeconds: connectionMaxSeconds } : {}),
-            ReconnectBufferSeconds: reconnectBufferSeconds,
-            TrustNativeResumption: trustNativeResumption,
+            MaxSessionSeconds: nativeMaxDuration,
+            ...(timing.ConnectionMaxSeconds !== undefined ? { ConnectionMaxSeconds: timing.ConnectionMaxSeconds } : {}),
+            ReconnectBufferSeconds: timing.ReconnectBufferSeconds,
+            TrustNativeResumption: timing.TrustNativeResumption,
+        };
+    }
+
+    /**
+     * Mints a fresh signed URL for an existing ElevenLabs client session without re-running
+     * {@link ensureAgent} with a mutated remaining-duration cap (which would rename and create
+     * a new managed agent on every refresh).
+     */
+    public override async RefreshClientSessionCredential(
+        params: RealtimeSessionParams,
+        existingSessionConfig?: JSONObject
+    ): Promise<ClientRealtimeSessionConfig> {
+        const existingAgentId =
+            typeof existingSessionConfig?.['agentId'] === 'string' && existingSessionConfig['agentId'].trim().length > 0
+                ? existingSessionConfig['agentId'].trim()
+                : undefined;
+        const agentId = existingAgentId ?? (await this.ensureAgent({ ...params, MaxSessionSeconds: undefined }));
+        const signedUrl = await this.mintSignedUrl(agentId);
+        return {
+            Provider: 'elevenlabs',
+            Model: params.Model || 'MJ Realtime Co-Agent',
+            EphemeralToken: signedUrl,
+            ExpiresAt: new Date(Date.now() + ELEVENLABS_SIGNED_URL_TTL_MS).toISOString(),
+            SessionConfig: existingSessionConfig ?? {
+                agentId,
+                overrides: ElevenLabsRealtime.BuildSessionOverrides(params.SystemPrompt, params.Config),
+                config: params.Config ?? {},
+            },
         };
     }
 
@@ -1115,7 +1171,16 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
             let opened = false;
             ws.onopen = () => {
                 opened = true;
-                resolve({ send: (data) => ws.send(data), close: () => ws.close() });
+                resolve({
+                    send: (data) => ws.send(data),
+                    close: () => {
+                        ws.onopen = null;
+                        ws.onmessage = null;
+                        ws.onerror = null;
+                        ws.onclose = null;
+                        ws.close();
+                    },
+                });
             };
             ws.onmessage = (event) => {
                 try {
@@ -1173,6 +1238,7 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
  */
 export class ElevenLabsRealtimeSession extends BaseRealtimeSession implements IRealtimeSession {
     private socket: ElevenLabsRealtimeSocket | null = null;
+    private pendingSocket: ElevenLabsRealtimeSocket | null = null;
     private reconnectFactory?: () => Promise<ElevenLabsRealtimeSocket>;
     private initialOverrides?: JSONObject;
 
@@ -1236,6 +1302,11 @@ export class ElevenLabsRealtimeSession extends BaseRealtimeSession implements IR
         this.socket = socket;
     }
 
+    /** Returns true when `candidate` is the active or currently-handshaking replacement socket. */
+    public IsActiveOrPendingSocket(candidate: ElevenLabsRealtimeSocket): boolean {
+        return this.socket === candidate || this.pendingSocket === candidate;
+    }
+
     /** Registers the factory used to mint a fresh signed URL and open a replacement conversation socket. */
     public SetReconnectFactory(factory: () => Promise<ElevenLabsRealtimeSocket>): void {
         this.reconnectFactory = factory;
@@ -1254,16 +1325,20 @@ export class ElevenLabsRealtimeSession extends BaseRealtimeSession implements IR
      *
      * @param overrides The wire-shaped `conversation_config_override` for this session.
      * @param initialContext Optional prior context to inject once the session is confirmed.
+     * @param targetSocket Optional socket to send the initiation frame on (used during reconnect handshake).
      */
-    public SendInitiation(overrides: JSONObject, initialContext?: string): void {
+    public SendInitiation(overrides: JSONObject, initialContext?: string, targetSocket?: ElevenLabsRealtimeSocket): void {
         this.initialOverrides = overrides;
         this.pendingInitialContext = initialContext && initialContext.trim().length > 0 ? initialContext : null;
-        this.sendFrame({
-            type: 'conversation_initiation_client_data',
-            conversation_config_override: overrides,
-        });
+        this.sendFrame(
+            {
+                type: 'conversation_initiation_client_data',
+                conversation_config_override: overrides,
+            },
+            targetSocket
+        );
         if (this.metadataReceived && this.pendingInitialContext) {
-            this.sendFrame({ type: 'contextual_update', text: this.pendingInitialContext });
+            this.sendFrame({ type: 'contextual_update', text: this.pendingInitialContext }, targetSocket);
             this.pendingInitialContext = null;
         }
     }
@@ -1358,6 +1433,9 @@ export class ElevenLabsRealtimeSession extends BaseRealtimeSession implements IR
      */
     public HandleTransportError(message: string): void {
         this.failMetadataWait(message);
+        if (this.IsReconnecting) {
+            return;
+        }
         this.errorHandler?.({ Message: message, Fatal: true });
     }
 
@@ -1394,7 +1472,7 @@ export class ElevenLabsRealtimeSession extends BaseRealtimeSession implements IR
         });
         this.pendingToolCallNames.delete(callID);
         if (this.callsFromBeforeReseed.delete(callID)) {
-            this.sendFrame({ type: 'contextual_update', text: `[Tool result for ${name}: ${output}]` });
+            this.sendFrame({ type: 'contextual_update', text: RenderLateToolResultNote(name, output) });
             this.RequestSpokenUpdate(`Please continue with the tool result for ${name}.`);
             return;
         }
@@ -1441,10 +1519,15 @@ export class ElevenLabsRealtimeSession extends BaseRealtimeSession implements IR
 
     /**
      * Reconnects the ElevenLabs conversation websocket by minting a fresh signed URL, opening a
-     * replacement socket, sending initiation overrides, and injecting accumulated conversation
-     * history as a `contextual_update` once metadata is confirmed.
+     * replacement socket, sending initiation overrides (with `first_message` stripped so the
+     * greeting is not repeated), and injecting accumulated conversation history as a
+     * `contextual_update` once metadata is confirmed — promoting `this.socket` only after the
+     * replacement handshake completes.
      */
     protected override async Reconnect(context: RealtimeReconnectContext): Promise<void> {
+        if (context.Abandoned) {
+            return;
+        }
         if (!this.reconnectFactory) {
             throw new Error('ElevenLabsRealtimeSession: No reconnect factory available for Reconnect');
         }
@@ -1456,21 +1539,72 @@ export class ElevenLabsRealtimeSession extends BaseRealtimeSession implements IR
         this.metadataPromise.catch(() => undefined);
 
         const nextSocket = await this.reconnectFactory();
+        if (context.Abandoned) {
+            try {
+                nextSocket.close();
+            } catch {
+                // ignore close error on abandoned socket
+            }
+            return;
+        }
+
+        this.pendingSocket = nextSocket;
+        const onAbort = (): void => {
+            if (this.pendingSocket === nextSocket) {
+                this.pendingSocket = null;
+            }
+            this.failMetadataWait('ElevenLabs reconnect attempt timed out');
+            try {
+                nextSocket.close();
+            } catch {
+                // ignore close error on timed-out socket
+            }
+        };
+        context.Signal.addEventListener('abort', onAbort, { once: true });
+
+        try {
+            const seedNote =
+                context.ConversationSeed && context.ConversationSeed.Entries.length > 0
+                    ? RenderRealtimeMemorySeedAsContextNote(context.ConversationSeed)
+                    : undefined;
+            const reconnectOverrides = ElevenLabsRealtimeSession.stripFirstMessageFromOverrides(this.initialOverrides ?? {});
+            this.SendInitiation(reconnectOverrides, seedNote, nextSocket);
+            await this.WaitForMetadata();
+        } finally {
+            context.Signal.removeEventListener('abort', onAbort);
+            if (this.pendingSocket === nextSocket) {
+                this.pendingSocket = null;
+            }
+        }
+
+        if (context.Abandoned) {
+            try {
+                nextSocket.close();
+            } catch {
+                // ignore close error on abandoned socket
+            }
+            return;
+        }
+
         const prevSocket = this.socket;
         this.socket = nextSocket;
-
-        const seedNote =
-            context.ConversationSeed && context.ConversationSeed.Entries.length > 0
-                ? RenderRealtimeMemorySeedAsContextNote(context.ConversationSeed)
-                : undefined;
-        this.SendInitiation(this.initialOverrides ?? {}, seedNote);
-        await this.WaitForMetadata();
         this.responseActive = false;
         try {
             prevSocket?.close();
         } catch {
             // ignore close error on replaced socket
         }
+    }
+
+    /** Strips `agent.first_message` from initiation overrides so reconnects do not replay the initial greeting. */
+    private static stripFirstMessageFromOverrides(overrides: JSONObject): JSONObject {
+        const clone: JSONObject = { ...overrides };
+        const agentObj = AsConfigRecord(clone.agent);
+        if (agentObj && 'first_message' in agentObj) {
+            const { first_message: _dropped, ...restAgent } = agentObj;
+            clone.agent = restAgent as JSONObject;
+        }
+        return clone;
     }
 
     protected override onReconnectFailed(error: Error): void {
@@ -1484,6 +1618,8 @@ export class ElevenLabsRealtimeSession extends BaseRealtimeSession implements IR
     public async Close(): Promise<void> {
         this.DisposeReconnectTimers();
         this.failMetadataWait('session closed by consumer before initiation completed');
+        this.pendingSocket?.close();
+        this.pendingSocket = null;
         this.socket?.close();
         this.socket = null;
         this.clearHandlers();
@@ -1530,7 +1666,7 @@ export class ElevenLabsRealtimeSession extends BaseRealtimeSession implements IR
                 this.completeResponse();
                 break;
             case 'ping':
-                this.sendFrame({ type: 'pong', event_id: event.ping_event?.event_id ?? 0 });
+                this.sendFrame({ type: 'pong', event_id: event.ping_event?.event_id ?? 0 }, this.pendingSocket ?? undefined);
                 break;
             case 'vad_score':
                 break; // continuous voice-activity telemetry — deliberately ignored
@@ -1544,11 +1680,12 @@ export class ElevenLabsRealtimeSession extends BaseRealtimeSession implements IR
 
     /** Marks the session configured, releases {@link WaitForMetadata}, injects initial context. */
     private handleInitiationMetadata(): void {
+        const target = this.pendingSocket ?? this.socket ?? undefined;
         this.metadataReceived = true;
         this.ArmConnectionDurationTimer();
         this.resolveMetadata?.();
         if (this.pendingInitialContext) {
-            this.sendFrame({ type: 'contextual_update', text: this.pendingInitialContext });
+            this.sendFrame({ type: 'contextual_update', text: this.pendingInitialContext }, target);
             this.pendingInitialContext = null;
         }
     }
@@ -1623,11 +1760,12 @@ export class ElevenLabsRealtimeSession extends BaseRealtimeSession implements IR
     }
 
     /** JSON-serializes and sends one client frame (throws if the socket was never attached). */
-    private sendFrame(frame: JSONObject): void {
-        if (!this.socket) {
+    private sendFrame(frame: JSONObject, targetSocket?: ElevenLabsRealtimeSocket): void {
+        const active = targetSocket ?? this.socket;
+        if (!active) {
             throw new Error('ElevenLabs realtime session is not open (no socket attached or it was closed).');
         }
-        this.socket.send(JSON.stringify(frame));
+        active.send(JSON.stringify(frame));
     }
 
     /** Rejects a still-pending metadata wait (transport death / consumer close during startup). */

@@ -20,6 +20,7 @@ import {
     RealtimeProxyRegistry,
     REALTIME_PROXY_PATH,
     ResolveRealtimeProxyBaseWsUrl,
+    ResolveRealtimeTiming,
     type ClientRealtimeSessionConfig,
     type IRealtimeSession,
     type RealtimeSessionParams,
@@ -218,9 +219,17 @@ export class HuggingFaceRealtime extends OpenAIRealtime {
             TTLSeconds: HUGGINGFACE_PROXY_TICKET_TTL_SECONDS,
         });
         const proxyUrl = `${this.resolveProxyBaseWsUrl(params)}${REALTIME_PROXY_PATH}?ticket=${encodeURIComponent(ticket.ID)}`;
-        const connectionMaxSeconds = this.ResolveConnectionDurationSeconds(params.Config);
-        const reconnectBufferSeconds = this.ResolveReconnectBufferSeconds(params.Config);
-        const trustNativeResumption = this.ResolveTrustsNativeResumption(params.Config);
+        const timing = ResolveRealtimeTiming({
+            Config: params.Config,
+            DriverDefaultConnectionSeconds: this.DefaultCallDurationSeconds,
+            DriverDefaultBufferSeconds: this.ReconnectBufferSeconds,
+            DefaultTrustNativeResumption: this.ClientSessionTrustsNativeResumption('direct'),
+            ZeroDataRetention: params.ZeroDataRetention,
+        });
+        const maxSessionSeconds = this.ClampSessionSeconds(
+            RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds,
+            params.MaxSessionSeconds
+        );
         return {
             Provider: 'huggingface',
             Model: params.Model,
@@ -230,10 +239,10 @@ export class HuggingFaceRealtime extends OpenAIRealtime {
                 session: HuggingFaceRealtime.BuildSessionObject(params),
                 sampleRate: HuggingFaceRealtime.ResolveSampleRate(params),
             },
-            MaxSessionSeconds: this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds),
-            ...(connectionMaxSeconds !== undefined ? { ConnectionMaxSeconds: connectionMaxSeconds } : {}),
-            ReconnectBufferSeconds: reconnectBufferSeconds,
-            TrustNativeResumption: trustNativeResumption,
+            MaxSessionSeconds: maxSessionSeconds,
+            ...(timing.ConnectionMaxSeconds !== undefined ? { ConnectionMaxSeconds: timing.ConnectionMaxSeconds } : {}),
+            ReconnectBufferSeconds: timing.ReconnectBufferSeconds,
+            TrustNativeResumption: timing.TrustNativeResumption,
         };
     }
 

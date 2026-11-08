@@ -4595,23 +4595,30 @@ describe('RealtimeClientSessionResolver.RefreshRealtimeClientSessionToken', () =
         expect(refreshClientSessionCredentialMock).not.toHaveBeenCalled();
     });
 
-    it('re-checks CanRun on targetAgentID, verifies CoAgentRunStepID, passes remaining seconds, and heartbeats on success', async () => {
+    it('re-checks CanRun on targetAgentID, forwards persisted mint snapshot, passes remaining seconds, and heartbeats on success', async () => {
         const futureIso = new Date(Date.now() + 900_000).toISOString();
-        const stepId = 'c0c0c0c0-0000-4000-8000-0000000000a1';
         const sessionId = '22222222-0000-4000-8000-000000000002';
+        const mintSnapshot = {
+            coAgentID: 'co-agent-1',
+            modelID: 'm-1',
+            driverClass: 'OpenAIRealtime',
+            credentialScope: 'Any' as const,
+            sessionParams: { Model: 'gpt-realtime', SystemPrompt: 'prompt' },
+        };
         const session = makeSessionEntity({
             ID: sessionId,
             AgentID: 'co-agent-1',
             Config_: JSON.stringify({
                 targetAgentID: 'target-1',
                 coAgentRunID: CO_RUN_ID,
-                coAgentRunStepID: stepId,
                 maxSessionDeadlineIso: futureIso,
+                realtimeMintSnapshot: mintSnapshot,
             }),
         });
         currentProvider = makeProvider(() => session, sessionRunLookups([CO_RUN_ID], PROMPT_RUN_ID));
         refreshClientSessionCredentialMock.mockResolvedValue({
             Success: true,
+            Kind: 'token',
             EphemeralToken: 'ek_fresh_123',
             ExpiresAt: '2026-12-01T00:00:00Z',
             SessionConfigJson: '{"voice":"alloy"}',
@@ -4622,22 +4629,28 @@ describe('RealtimeClientSessionResolver.RefreshRealtimeClientSessionToken', () =
         expect(hasPermissionMock).toHaveBeenCalledWith('target-1', USER, 'run');
         expect(refreshClientSessionCredentialMock).toHaveBeenCalledTimes(1);
         const [refreshInput] = refreshClientSessionCredentialMock.mock.calls[0] as [
-            { AgentSessionID: string; CoAgentID: string; CoAgentRunStepID?: string; RemainingSessionSeconds?: number },
+            {
+                AgentSessionID: string;
+                CoAgentID: string;
+                PersistedMintSnapshot?: unknown;
+                RemainingSessionSeconds?: number;
+            },
         ];
         expect(refreshInput.AgentSessionID).toBe(sessionId);
         expect(refreshInput.CoAgentID).toBe('co-agent-1');
-        expect(refreshInput.CoAgentRunStepID).toBe(stepId);
+        expect(refreshInput.PersistedMintSnapshot).toEqual(mintSnapshot);
         expect(refreshInput.RemainingSessionSeconds).toBeGreaterThan(800);
         expect(heartbeatMock).toHaveBeenCalledWith(sessionId, USER, currentProvider);
         expect(result).toEqual({
             Success: true,
+            Kind: 'token',
             EphemeralToken: 'ek_fresh_123',
             ExpiresAt: '2026-12-01T00:00:00Z',
             SessionConfigJson: '{"voice":"alloy"}',
         });
     });
 
-    it('enforces the per-session rate limit (max 6 calls per 10-minute window)', async () => {
+    it('enforces the per-session rate limit (default 6 calls per 10m window, scaled upward for short ConnectionMaxSeconds)', async () => {
         const sessionId = '33333333-0000-4000-8000-000000000003';
         const session = makeSessionEntity({
             ID: sessionId,
@@ -4661,6 +4674,29 @@ describe('RealtimeClientSessionResolver.RefreshRealtimeClientSessionToken', () =
         expect(seventh.Success).toBe(false);
         expect(seventh.ErrorMessage).toMatch(/rate limit/i);
         expect(refreshClientSessionCredentialMock).toHaveBeenCalledTimes(6);
+
+        // With a 45 s ConnectionMaxSeconds test override, 10 refreshes within 10 minutes are allowed (#10):
+        const shortSessionId = '33333333-0000-4000-8000-000000000045';
+        const shortSession = makeSessionEntity({
+            ID: shortSessionId,
+            AgentID: 'co-agent-1',
+            Config_: JSON.stringify({
+                targetAgentID: 'target-1',
+                realtimeMintSnapshot: {
+                    coAgentID: 'co-agent-1',
+                    modelID: 'm-1',
+                    driverClass: 'OpenAIRealtime',
+                    credentialScope: 'Any',
+                    connectionMaxSeconds: 45,
+                    sessionParams: { Model: 'gpt-realtime', SystemPrompt: 'prompt' },
+                },
+            }),
+        });
+        currentProvider = makeProvider(() => shortSession);
+        for (let i = 0; i < 10; i++) {
+            const ok = await resolver.RefreshRealtimeClientSessionToken(shortSessionId, makeCtx());
+            expect(ok.Success).toBe(true);
+        }
     });
 
     it('Caliber zero-change compatibility: preserves a single stable AgentSessionId across multiple token refreshes and transcript/tool relays', async () => {

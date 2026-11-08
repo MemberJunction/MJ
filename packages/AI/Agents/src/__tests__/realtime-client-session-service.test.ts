@@ -157,6 +157,11 @@ class TestableService extends RealtimeClientSessionService {
             Description: name === 'Sales Agent' ? 'Closes deals.' : `${name} agent.`,
         } as unknown as MJAIAgentEntityExtended;
     }
+    protected override resolveCoAgent(input: PrepareClientSessionInput): MJAIAgentEntityExtended | null {
+        if (input.CoAgent) return input.CoAgent;
+        if (input.CoAgentID) return makeCoAgent({ ID: input.CoAgentID });
+        return null;
+    }
     /** Public passthrough to exercise the multi-target delegation routing decision directly. */
     public ExposeResolveDelegationTarget(requested: string | undefined, input: ExecuteRelayedToolInput) {
         return this.resolveDelegationTarget(requested, input);
@@ -3575,15 +3580,20 @@ describe('RealtimeClientSessionService: the deprecated realtime.video provider k
 });
 
 describe('RealtimeClientSessionService.RefreshClientSessionCredential', () => {
-    it('stamps model catalog timing onto ClientConfig.SessionConfig during PrepareClientSession and caches the mint snapshot', async () => {
+    it('stamps model catalog timing onto typed ClientConfig fields without polluting SessionConfig and caches the mint snapshot', async () => {
         const svc = new TestableService();
         const sessionId = '44444444-0000-4000-8000-000000000004';
         const prep = await svc.PrepareClientSession(
-            makePrepInput({ AgentSessionID: sessionId }),
+            makePrepInput({ AgentSessionID: sessionId, Config: { connectionMaxSeconds: 1800 } }),
             contextUser,
             provider,
         );
         expect(prep.Success).toBe(true);
+        expect(prep.ClientConfig?.ConnectionMaxSeconds).toBe(1800);
+        // Framework timing keys are NEVER written into the provider-facing SessionConfig bag (#5):
+        expect(prep.ClientConfig?.SessionConfig?.['connectionMaxSeconds']).toBeUndefined();
+        expect(prep.ClientConfig?.SessionConfig?.['reconnectBufferSeconds']).toBeUndefined();
+        expect(prep.ClientConfig?.SessionConfig?.['trustNativeResumption']).toBeUndefined();
 
         const refreshed = await svc.RefreshClientSessionCredential(
             { AgentSessionID: sessionId, CoAgentID: 'co-1', RemainingSessionSeconds: 900 },
@@ -3591,13 +3601,19 @@ describe('RealtimeClientSessionService.RefreshClientSessionCredential', () => {
             provider,
         );
         expect(refreshed.Success).toBe(true);
+        expect(refreshed.Kind).toBe('token');
+        expect(refreshed.Credential).toEqual({
+            Kind: 'token',
+            EphemeralToken: 'ephemeral-123',
+            ExpiresAt: '2099-01-01T00:00:00.000Z',
+        });
         expect(refreshed.EphemeralToken).toBe('ephemeral-123');
         expect(refreshed.ExpiresAt).toBe('2099-01-01T00:00:00.000Z');
         // Direct session config had MaxSessionSeconds narrowed to RemainingSessionSeconds (900):
         expect(svc.Model.LastParams?.MaxSessionSeconds).toBe(900);
     });
 
-    it('extends an active MJAPI relay ticket via RealtimeProxyRegistry.ExtendRelaySession without re-running prompt rendering', async () => {
+    it('extends an active MJAPI relay ticket via RealtimeProxyRegistry.ExtendRelaySession and returns Kind: relay without re-running prompt rendering', async () => {
         const { RealtimeProxyRegistry } = await import('@memberjunction/ai');
         const grant = RealtimeProxyRegistry.Instance.IssueRelaySession({
             UpstreamUrl: 'wss://aiplatform.googleapis.com/ws',
@@ -3623,7 +3639,7 @@ describe('RealtimeClientSessionService.RefreshClientSessionCredential', () => {
                     ExpiresAt: grant.ExpiresAt,
                     Transport: 'relay',
                     RelayUrl: relayUrl,
-                    SessionConfig: { model: params.Model, connectionMaxSeconds: 600 },
+                    SessionConfig: { model: params.Model },
                 };
             }
         }
@@ -3645,50 +3661,70 @@ describe('RealtimeClientSessionService.RefreshClientSessionCredential', () => {
             provider,
         );
         expect(refreshed.Success).toBe(true);
+        expect(refreshed.Kind).toBe('relay');
+        expect(refreshed.Credential?.Kind).toBe('relay');
         expect(refreshed.RelayUrl).toBe(relayUrl);
-        expect(refreshed.EphemeralToken).toBe('');
         expect(Date.parse(refreshed.ExpiresAt!)).toBeGreaterThan(Date.parse(grant.ExpiresAt));
     });
 
-    it('hydrates from MJAIAgentRunStepEntity.InputData on L1 cache miss (multi-instance failover)', async () => {
-        const persistedPayload = {
-            version: 1,
-            modelID: 'model-realtime-1',
-            vendorID: 'vendor-openai',
+    it('hydrates from MJ: AI Agent Sessions.Config_.realtimeMintSnapshot on L1 cache miss and fails closed on missing credentialScope (#3)', async () => {
+        const persistedSnapshot = {
+            coAgentID: 'co-1',
+            modelID: 'm1',
             driverClass: 'OpenAIRealtime',
-            apiName: 'gpt-realtime',
-            transport: 'direct',
+            credentialScope: 'Any' as const,
             connectionMaxSeconds: 3600,
             sessionParams: {
                 Model: 'gpt-realtime',
-                SystemPrompt: 'Hydrated system prompt from DB step',
+                SystemPrompt: 'Hydrated system prompt from trusted session config',
                 Tools: [{ Name: 'invoke-target-agent', Description: 'd', ParametersSchema: { type: 'object' } }],
             },
         };
-        const stepId = '66666666-0000-4000-8000-000000000006';
-        const stepEntity = {
-            ID: stepId,
-            InputData: JSON.stringify(persistedPayload),
+        const sessionId = '77777777-0000-4000-8000-000000000007';
+        const sessionEntity = {
+            ID: sessionId,
+            AgentID: 'co-1',
+            Config_: JSON.stringify({ targetAgentID: 'target-1', realtimeMintSnapshot: persistedSnapshot }),
             Load: vi.fn(async () => true),
         };
-        const stepProvider = {
-            GetEntityObject: vi.fn(async () => stepEntity),
+        const sessionProvider = {
+            GetEntityObject: vi.fn(async () => sessionEntity),
         } as unknown as IMetadataProvider;
 
         const svc = new TestableService();
         const refreshed = await svc.RefreshClientSessionCredential(
             {
-                AgentSessionID: '77777777-0000-4000-8000-000000000007',
+                AgentSessionID: sessionId,
                 CoAgentID: 'co-1',
-                CoAgentRunStepID: stepId,
             },
             contextUser,
-            stepProvider,
+            sessionProvider,
         );
 
         expect(refreshed.Success).toBe(true);
-        expect(stepEntity.Load).toHaveBeenCalledWith(stepId);
-        expect(svc.Model.LastParams?.SystemPrompt).toBe('Hydrated system prompt from DB step');
+        expect(sessionEntity.Load).toHaveBeenCalledWith(sessionId);
+        expect(svc.Model.LastParams?.SystemPrompt).toBe('Hydrated system prompt from trusted session config');
+
+        // Fails closed when credentialScope is missing or invalid:
+        const invalidSessionId = '88888888-0000-4000-8000-000000000008';
+        const invalidEntity = {
+            ID: invalidSessionId,
+            AgentID: 'co-1',
+            Config_: JSON.stringify({
+                targetAgentID: 'target-1',
+                realtimeMintSnapshot: { ...persistedSnapshot, credentialScope: undefined },
+            }),
+            Load: vi.fn(async () => true),
+        };
+        const invalidProvider = {
+            GetEntityObject: vi.fn(async () => invalidEntity),
+        } as unknown as IMetadataProvider;
+        const rejected = await svc.RefreshClientSessionCredential(
+            { AgentSessionID: invalidSessionId, CoAgentID: 'co-1' },
+            contextUser,
+            invalidProvider,
+        );
+        expect(rejected.Success).toBe(false);
     });
 });
 

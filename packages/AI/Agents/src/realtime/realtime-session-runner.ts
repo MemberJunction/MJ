@@ -613,7 +613,12 @@ export class RealtimeSessionRunner {
      * @param transcript The transcript event (partial or final) emitted by the model.
      */
     private async handleTranscript(transcript: RealtimeTranscript): Promise<void> {
-        if (transcript.IsFinal && transcript.Text?.trim()) {
+        if (
+            transcript.IsFinal &&
+            !transcript.IsThought &&
+            transcript.Kind !== 'narration' &&
+            transcript.Text?.trim()
+        ) {
             this.conversationMemory.Record({
                 Kind: transcript.Role === 'user' ? 'user' : 'assistant',
                 Text: transcript.Text,

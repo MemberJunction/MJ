@@ -1,19 +1,19 @@
 import {
     ClampSessionSecondsValue,
     ClientRealtimeSessionConfig,
+    DEFAULT_CREDENTIAL_REFRESH_LEAD_MS,
     DEFAULT_REALTIME_AUDIO_TRACKS,
     DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS,
     DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS,
     ExtractRealtimeTimingConfig,
     JSONObject,
-    MAX_REALTIME_RAPID_RECONNECTS,
-    REALTIME_RAPID_RECONNECT_WINDOW_MS,
-    REALTIME_RESUMPTION_ATTEMPT_TIMEOUT_MS,
-    REALTIME_RESUMPTION_RETRY_DELAYS_MS,
+    REALTIME_SHARED_CONFIG_KEYS,
     RealtimeConversationMemory,
     RealtimeDiagLog,
     RealtimeMemorySeed,
     RealtimeReconnectContext,
+    RealtimeReconnectController,
+    RealtimeReconnectFailureCode,
     RealtimeReconnectReason,
     RealtimeTrack,
     RealtimeTrackDescriptor,
@@ -21,6 +21,7 @@ import {
     RealtimeTrackKey,
     ResolveRequestedTracks,
     RealtimeUsageModalityDetail,
+    ScrubRealtimeTimingConfigKeys,
 } from '@memberjunction/ai';
 import { IRealtimeAudioMeter, REALTIME_AUDIO_BIN_COUNT } from '../audio/audioMeter';
 import type { MediaVideoSource } from '../media/model';
@@ -33,22 +34,29 @@ import type { MediaVideoSource } from '../media/model';
 export const REQUESTED_TRACKS_SESSION_KEY = 'requestedTracks';
 
 /**
- * Shared catalog/timing session-config keys projected onto `ClientRealtimeSessionConfig.SessionConfig`
- * for `BaseRealtimeClient.ApplySessionConfigTiming`. Must be stripped by `ToProviderSessionConfig` before
+ * Shared catalog/timing session-config keys stripped by `ToProviderSessionConfig` before
  * forwarding to strict wire protocols (e.g. OpenAI Realtime `session.update`).
  */
-export const REALTIME_SHARED_SESSION_CONFIG_KEYS = [
-    'connectionMaxSeconds',
-    'sessionMaxSeconds',
-    'reconnectBufferSeconds',
-    'trustNativeResumption',
-] as const;
+export const REALTIME_SHARED_SESSION_CONFIG_KEYS = REALTIME_SHARED_CONFIG_KEYS;
+
+/** Minimum microphone RMS level treated as active user speech when holding soft-window reconnects. */
+export const DEFAULT_USER_SPEECH_ACTIVE_LEVEL_THRESHOLD = 0.02;
+
+/** Options passed to `RealtimeClientTokenRefreshCallback`. */
+export interface RealtimeClientTokenRefreshOptions {
+    /**
+     * When `true` on a relay session, requests that `ExtendRelaySession` re-arm a single handle-less
+     * reopen window so a seed-fallback reconnect can open a fresh upstream connection.
+     */
+    readonly AllowFreshReopen?: boolean;
+}
 
 /**
  * Fresh credential + session config returned by `RefreshRealtimeClientSessionToken`
- * when a browser client performs a mid-call reconnect.
+ * when a browser client performs a mid-call credential refresh or reconnect.
  */
 export interface RefreshedRealtimeClientCredential {
+    readonly Kind?: 'token' | 'relay';
     readonly EphemeralToken: string;
     readonly ExpiresAt: string;
     readonly RelayUrl?: string;
@@ -58,16 +66,18 @@ export interface RefreshedRealtimeClientCredential {
 
 /**
  * Callback registered by `RealtimeSessionRuntime` so `BaseRealtimeClient` drivers
- * can mint a fresh single-use credential or extend a relay grant before reconnecting.
+ * can mint a fresh single-use credential or extend a relay grant before expiry or reconnect.
  */
-export type RealtimeClientTokenRefreshCallback = () => Promise<RefreshedRealtimeClientCredential>;
+export type RealtimeClientTokenRefreshCallback = (
+    options?: RealtimeClientTokenRefreshOptions
+) => Promise<RefreshedRealtimeClientCredential>;
 
 /**
  * Context passed to `BaseRealtimeClient.Reconnect(context)` on a scheduled or error-recovery
  * mid-call reconnect.
  */
 export interface RealtimeClientReconnectContext extends RealtimeReconnectContext {
-    readonly RefreshCredential: () => Promise<RefreshedRealtimeClientCredential>;
+    readonly RefreshCredential: (options?: RealtimeClientTokenRefreshOptions) => Promise<RefreshedRealtimeClientCredential>;
     readonly Credential: RefreshedRealtimeClientCredential;
     readonly Seed: RealtimeMemorySeed;
 }
@@ -80,12 +90,7 @@ export interface RealtimeClientReconnectContext extends RealtimeReconnectContext
  * instructions and every tool.
  */
 export function ToProviderSessionConfig(sessionConfig: JSONObject): JSONObject {
-    const providerConfig: JSONObject = { ...sessionConfig };
-    delete providerConfig[REQUESTED_TRACKS_SESSION_KEY];
-    for (const key of REALTIME_SHARED_SESSION_CONFIG_KEYS) {
-        delete providerConfig[key];
-    }
-    return providerConfig;
+    return ScrubRealtimeTimingConfigKeys(sessionConfig, [REQUESTED_TRACKS_SESSION_KEY]);
 }
 
 /**
@@ -766,10 +771,29 @@ export abstract class BaseRealtimeClient {
      * queued behind the in-flight response (e.g. a progress narration) so the trigger is
      * never dropped by the provider.
      *
+     * Template method: dispatches to {@link doSendToolResult} first (so the wire send happens
+     * before soft-window reconnect evaluation and rejected/unknown call IDs can return `false`),
+     * then records the result into {@link conversationMemory} via {@link recordToolResult}.
+     *
      * @param callID The `CallID` from the originating {@link RealtimeClientToolCall}.
      * @param outputJson The tool's result as a JSON-stringified string.
      */
-    public abstract SendToolResult(callID: string, outputJson: string): void;
+    public SendToolResult(callID: string, outputJson: string): void {
+        const accepted = this.doSendToolResult(callID, outputJson);
+        if (accepted === false) {
+            return;
+        }
+        this.recordToolResult(callID, outputJson);
+    }
+
+    /**
+     * Concrete driver implementation for sending a tool result on the wire.
+     * Return `false` if the `callID` was rejected/ignored (e.g. unknown or duplicate call ID)
+     * so {@link SendToolResult} skips recording it into conversation memory.
+     */
+    protected doSendToolResult(_callID: string, _outputJson: string): boolean | void {
+        throw new Error(`${this.constructor.name} must implement doSendToolResult(callID, outputJson)`);
+    }
 
     /**
      * Mutes / unmutes the microphone (implementations toggle the mic tracks' `enabled` flag —
@@ -942,62 +966,74 @@ export abstract class BaseRealtimeClient {
      */
     public SendVideoFrame?(base64Image: string, mimeType?: string, sourceId?: string): boolean;
 
-    // ── Conversation memory, resumption, and turn-aware reconnect timer ──────
+    // ── Conversation memory, resumption, and unified reconnect controller ────
 
     /** Rolling conversation memory used to re-seed provider context on reconnect. */
     protected readonly conversationMemory = new RealtimeConversationMemory({ Log: RealtimeDiagLog });
-    /** Duration of a single provider connection in seconds from `ClientRealtimeSessionConfig`. */
+    /** Duration of a single provider connection in seconds from `ClientRealtimeSessionConfig.ConnectionMaxSeconds`. */
     protected configuredCallDurationSeconds: number | undefined;
+    /** Credential/session token lifetime in seconds from `ClientRealtimeSessionConfig.MaxSessionSeconds`. */
+    protected configuredSessionMaxSeconds: number | undefined;
     /** Buffer in seconds before `CallDurationSeconds` expiry at which `Reconnect` is triggered. */
     protected configuredReconnectBufferSeconds: number = DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS;
     /** Optional metadata override for whether native resumption is trusted on this endpoint. */
     protected configuredTrustNativeResumption: boolean | undefined;
     /** Optional callback installed by `RealtimeSessionRuntime` to refresh the provider token mid-call. */
     protected tokenRefreshCallback: RealtimeClientTokenRefreshCallback | null = null;
-    /** Latest recorded provider resumption handle or conversation ID. */
-    protected recordedResumptionHandle: string | null = null;
     /** Tool call IDs that were in flight when a non-native seed reconnect occurred. */
     protected callsFromBeforeReseed = new Set<string>();
 
     private readonly toolCallNamesById = new Map<string, string>();
     private readonly inFlightToolCallIds = new Set<string>();
+    private readonly recordedToolCallIds = new Set<string>();
     private currentCredential: RefreshedRealtimeClientCredential = {
+        Kind: 'token',
         EphemeralToken: '',
         ExpiresAt: '',
         SessionConfig: {},
     };
-    private connectionOpenedAtMs: number = Date.now();
-    private callDurationSoftTimer: ReturnType<typeof setTimeout> | null = null;
-    private callDurationHardTimer: ReturnType<typeof setTimeout> | null = null;
-    private retryTimer: ReturnType<typeof setTimeout> | null = null;
-    private inSoftWindow = false;
-    private pendingBoundaryReason: RealtimeReconnectReason = 'duration-expiry';
-    private reconnectInFlight = false;
-    private reconnectDisposed = false;
-    private rapidReconnectTimestamps: number[] = [];
-    private reconnectPromise: Promise<boolean> | null = null;
+    private refreshedInActiveCycle = false;
+
+    /** Unified I/O-free reconnect controller shared with server-side `BaseRealtimeSession`. */
+    protected readonly reconnectController: RealtimeReconnectController = new RealtimeReconnectController({
+        Reconnect: (context) => this.executeClientReconnectAttempt(context),
+        OnReconnectFailed: (error, code) => this.onReconnectFailed(error, code),
+        OnReconnecting: (reason) => this.onReconnecting(reason),
+        OnReconnected: (usedNativeResumption) => this.onReconnected(usedNativeResumption),
+        BuildSeed: () => {
+            const seed = this.conversationMemory.Seed();
+            return seed.Entries.length > 0 ? seed : null;
+        },
+        IsIdle: () => !this.isTurnActiveForReconnect(),
+        TrustsNativeResumption: () => this.TrustsNativeResumption,
+        RequiresPostTurnHandle: () => this.RequiresPostTurnResumptionHandle,
+        Log: (msg) => RealtimeDiagLog(msg),
+    });
 
     /**
      * Reads catalog-stamped timing and resumption settings from `config` and `config.SessionConfig`
-     * (`connectionMaxSeconds`, `sessionMaxSeconds`, `reconnectBufferSeconds`, `trustNativeResumption`)
-     * and records the initial credential snapshot.
+     * (`connectionMaxSeconds`, `sessionMaxSeconds`, `reconnectBufferSeconds`, `trustNativeResumption`),
+     * records the initial credential snapshot, and schedules proactive credential/relay refresh.
      */
     public ApplySessionConfigTiming(config: ClientRealtimeSessionConfig): void {
-        this.reconnectDisposed = false;
+        if (!this.IsReconnecting) {
+            this.reconnectController.Reset();
+        }
         this.currentCredential = {
+            Kind: config.Transport === 'relay' ? 'relay' : 'token',
             EphemeralToken: config.EphemeralToken,
             ExpiresAt: config.ExpiresAt,
             ...(config.RelayUrl ? { RelayUrl: config.RelayUrl } : {}),
             SessionConfig: config.SessionConfig,
         };
         const fromSessionConfig = ExtractRealtimeTimingConfig(config.SessionConfig);
-        const configuredDuration =
-            config.ConnectionMaxSeconds ??
-            fromSessionConfig.ConnectionMaxSeconds ??
-            config.MaxSessionSeconds ??
-            fromSessionConfig.SessionMaxSeconds;
+        const configuredDuration = config.ConnectionMaxSeconds ?? fromSessionConfig.ConnectionMaxSeconds;
         if (configuredDuration !== undefined) {
             this.configuredCallDurationSeconds = configuredDuration;
+        }
+        const configuredSessionMax = config.MaxSessionSeconds ?? fromSessionConfig.SessionMaxSeconds;
+        if (configuredSessionMax !== undefined) {
+            this.configuredSessionMaxSeconds = configuredSessionMax;
         }
         const buf = config.ReconnectBufferSeconds ?? fromSessionConfig.ReconnectBufferSeconds;
         if (buf !== undefined) {
@@ -1007,11 +1043,12 @@ export abstract class BaseRealtimeClient {
         if (trust !== undefined) {
             this.configuredTrustNativeResumption = trust;
         }
+        this.scheduleCredentialRefresh();
     }
 
     /**
      * Optional runtime ceiling override (e.g. Gemini's 120s ceiling when uncompressed video is active).
-     * Clamped with `configuredCallDurationSeconds` via `ClampSessionSecondsValue`.
+     * Narrowed against `DefaultCallDurationSeconds` and `configuredCallDurationSeconds` via `ClampSessionSecondsValue`.
      */
     protected get RuntimeCallDurationSeconds(): number | undefined {
         return undefined;
@@ -1022,11 +1059,16 @@ export abstract class BaseRealtimeClient {
         return undefined;
     }
 
-    /** Effective connection ceiling in seconds (`ClampSessionSecondsValue(RuntimeCallDurationSeconds, configuredCallDurationSeconds) ?? DefaultCallDurationSeconds`). */
+    /**
+     * Effective connection ceiling in seconds. Metadata and runtime caps narrow the driver's
+     * provider ceiling (`ClampSessionSecondsValue(DefaultCallDurationSeconds, RuntimeCallDurationSeconds, configuredCallDurationSeconds)`),
+     * never widen it.
+     */
     public get CallDurationSeconds(): number | undefined {
-        return (
-            ClampSessionSecondsValue(this.RuntimeCallDurationSeconds, this.configuredCallDurationSeconds) ??
-            this.DefaultCallDurationSeconds
+        return ClampSessionSecondsValue(
+            this.DefaultCallDurationSeconds,
+            this.RuntimeCallDurationSeconds,
+            this.configuredCallDurationSeconds
         );
     }
 
@@ -1044,9 +1086,22 @@ export abstract class BaseRealtimeClient {
         return false;
     }
 
+    /**
+     * Whether this driver's provider emits a fresh resumable handle shortly after each `turnComplete`
+     * (Gemini / Vertex AI Live), so planned moves wait for that post-turn handle.
+     */
+    protected get RequiresPostTurnResumptionHandle(): boolean {
+        return false;
+    }
+
     /** Whether this driver requires a freshly minted single-use credential on each reconnect. */
     protected get RequiresFreshTokenPerReconnect(): boolean {
         return true;
+    }
+
+    /** Whether this concrete client subclass implements mid-call `Reconnect`. */
+    protected get SupportsMidCallReconnect(): boolean {
+        return this.Reconnect !== BaseRealtimeClient.prototype.Reconnect;
     }
 
     /** Accessor for the client's rolling conversation memory ledger. */
@@ -1056,37 +1111,72 @@ export abstract class BaseRealtimeClient {
 
     /** True while a mid-call reconnect is actively in flight. */
     protected get IsReconnecting(): boolean {
-        return this.reconnectInFlight;
+        return this.reconnectController.IsReconnecting;
     }
 
     /** Latest recorded provider resumption handle or conversation ID. */
     public get ResumptionHandle(): string | null {
-        return this.recordedResumptionHandle;
+        return this.reconnectController.Handle;
     }
 
-    /** Records a provider resumption handle or conversation ID. */
-    public RecordResumptionHandle(handle: string | null | undefined): void {
-        if (typeof handle === 'string' && handle.trim().length > 0) {
-            this.recordedResumptionHandle = handle.trim();
-        }
+    /** Records a provider resumption handle or conversation ID, along with whether it is resumable now. */
+    public RecordResumptionHandle(handle: string | null | undefined, resumable = true): void {
+        this.reconnectController.RecordHandle(handle, resumable);
     }
 
-    /** Registers the host callback used to mint a fresh credential before reconnecting. */
+    /** Registers the host callback used to mint a fresh credential before expiry or reconnect. */
     public SetTokenRefreshCallback(callback: RealtimeClientTokenRefreshCallback | null): void {
         this.tokenRefreshCallback = callback;
+        this.scheduleCredentialRefresh();
     }
 
-    /** Mints a fresh credential via the registered host callback and updates `currentCredential`. */
-    protected async refreshCredentialForReconnect(): Promise<RefreshedRealtimeClientCredential> {
+    /** Mints a fresh credential via the registered host callback, updates `currentCredential`, and re-arms the refresh timer. */
+    protected async refreshCredentialForReconnect(
+        options?: RealtimeClientTokenRefreshOptions
+    ): Promise<RefreshedRealtimeClientCredential> {
         if (!this.tokenRefreshCallback) {
             return this.currentCredential;
         }
-        const refreshed = await this.tokenRefreshCallback();
-        this.currentCredential = refreshed;
-        return refreshed;
+        const refreshed = await this.tokenRefreshCallback(options);
+        this.currentCredential = {
+            ...refreshed,
+            EphemeralToken: refreshed.EphemeralToken || this.currentCredential.EphemeralToken,
+            ...(refreshed.RelayUrl || this.currentCredential.RelayUrl
+                ? { RelayUrl: refreshed.RelayUrl || this.currentCredential.RelayUrl }
+                : {}),
+        };
+        this.scheduleCredentialRefresh();
+        return this.currentCredential;
     }
 
-    /** Returns true when the current credential is expired or within 60 seconds of expiry. */
+    private scheduleCredentialRefresh(): void {
+        if (!this.SupportsMidCallReconnect || !this.tokenRefreshCallback || this.reconnectController.IsDisposed) {
+            return;
+        }
+        this.reconnectController.ScheduleCredentialRefresh(
+            this.currentCredential.ExpiresAt,
+            () => {
+                void this.refreshCredentialProactively();
+            },
+            DEFAULT_CREDENTIAL_REFRESH_LEAD_MS,
+            this.configuredSessionMaxSeconds
+        );
+    }
+
+    private async refreshCredentialProactively(): Promise<void> {
+        if (this.reconnectController.IsDisposed || !this.tokenRefreshCallback) {
+            return;
+        }
+        try {
+            await this.refreshCredentialForReconnect();
+        } catch (err) {
+            RealtimeDiagLog(
+                `[${this.constructor.name}] proactive credential refresh failed: ${err instanceof Error ? err.message : String(err)}`
+            );
+        }
+    }
+
+    /** Returns true when the current credential is expired or within `marginSeconds` of expiry. */
     protected isCredentialNearExpiry(marginSeconds = 60): boolean {
         if (!this.currentCredential.ExpiresAt) {
             return false;
@@ -1104,49 +1194,14 @@ export abstract class BaseRealtimeClient {
      * - Hard timer fires at `CallDurationSeconds - ReconnectBufferSeconds` and forces a reconnect.
      */
     public ArmConnectionDurationTimer(): void {
-        this.clearCallDurationTimer();
-        if (this.reconnectDisposed) {
+        if (!this.SupportsMidCallReconnect || this.reconnectController.IsDisposed) {
             return;
         }
-        this.connectionOpenedAtMs = Date.now();
-        this.inSoftWindow = false;
-
-        const durationSec = this.CallDurationSeconds;
-        if (typeof durationSec !== 'number' || !Number.isFinite(durationSec) || durationSec <= 0) {
-            return;
-        }
-
-        const bufferSec = Math.min(this.ReconnectBufferSeconds, Math.max(1, Math.floor(durationSec / 2)));
-        const hardDelayMs = Math.max(100, (durationSec - bufferSec) * 1000);
-        const softLeadSec = Math.min(
-            DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS,
-            Math.max(0, Math.floor(durationSec * 0.15))
+        this.reconnectController.ArmDurationTimers(
+            this.CallDurationSeconds,
+            this.ReconnectBufferSeconds,
+            DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS
         );
-        const softWindowSec = Math.min(Math.floor(durationSec * 0.5), bufferSec + softLeadSec);
-        const softDelayMs = Math.max(50, (durationSec - softWindowSec) * 1000);
-
-        if (softDelayMs < hardDelayMs) {
-            this.callDurationSoftTimer = setTimeout(() => {
-                this.callDurationSoftTimer = null;
-                if (this.reconnectDisposed || this.reconnectInFlight) {
-                    return;
-                }
-                this.inSoftWindow = true;
-                this.pendingBoundaryReason = 'duration-expiry';
-                if (!this.isTurnActiveForReconnect()) {
-                    void this.TriggerReconnect('duration-expiry');
-                }
-            }, softDelayMs);
-        }
-
-        this.callDurationHardTimer = setTimeout(() => {
-            this.callDurationHardTimer = null;
-            if (this.reconnectDisposed || this.reconnectInFlight) {
-                return;
-            }
-            this.inSoftWindow = false;
-            void this.TriggerReconnect('duration-expiry');
-        }, hardDelayMs);
     }
 
     protected armCallDurationTimer(): void {
@@ -1155,26 +1210,13 @@ export abstract class BaseRealtimeClient {
 
     /** Clears both soft and hard call-duration timers and any pending boundary flag. */
     protected clearCallDurationTimer(): void {
-        if (this.callDurationSoftTimer !== null) {
-            clearTimeout(this.callDurationSoftTimer);
-            this.callDurationSoftTimer = null;
-        }
-        if (this.callDurationHardTimer !== null) {
-            clearTimeout(this.callDurationHardTimer);
-            this.callDurationHardTimer = null;
-        }
-        this.inSoftWindow = false;
+        this.reconnectController.ArmDurationTimers(undefined, this.ReconnectBufferSeconds);
     }
 
     /** Cancels all reconnect and duration timers when the session is disconnected. */
     protected DisposeReconnectTimers(): void {
-        this.reconnectDisposed = true;
-        this.recordedResumptionHandle = null;
-        this.clearCallDurationTimer();
-        if (this.retryTimer !== null) {
-            clearTimeout(this.retryTimer);
-            this.retryTimer = null;
-        }
+        this.reconnectController.InvalidateHandle();
+        this.reconnectController.Dispose();
     }
 
     /**
@@ -1182,42 +1224,32 @@ export abstract class BaseRealtimeClient {
      * Runs immediately if the session is idle at a turn boundary, or defers until the active turn ends.
      */
     public NotifyConnectionEnding(timeLeftMs?: number): void {
-        if (this.reconnectDisposed || this.reconnectInFlight) {
-            return;
-        }
-        if (!this.isTurnActiveForReconnect()) {
-            void this.TriggerReconnect('connection-ending');
-            return;
-        }
-        this.inSoftWindow = true;
-        this.pendingBoundaryReason = 'connection-ending';
-        if (typeof timeLeftMs === 'number' && timeLeftMs > 0) {
-            const hardWaitMs = Math.max(100, Math.floor(timeLeftMs * 0.66));
-            if (this.callDurationHardTimer !== null) {
-                clearTimeout(this.callDurationHardTimer);
-            }
-            this.callDurationHardTimer = setTimeout(() => {
-                this.callDurationHardTimer = null;
-                if (!this.reconnectDisposed && !this.reconnectInFlight) {
-                    this.inSoftWindow = false;
-                    void this.TriggerReconnect('connection-ending');
-                }
-            }, hardWaitMs);
-        }
+        this.reconnectController.ConnectionEnding(timeLeftMs);
     }
 
     protected scheduleSoftReconnect(reason: RealtimeReconnectReason = 'connection-ending'): void {
+        if (reason === 'connection-ending') {
+            this.reconnectController.ConnectionEnding();
+            return;
+        }
         if (this.isTurnActiveForReconnect()) {
-            this.inSoftWindow = true;
-            this.pendingBoundaryReason = reason;
+            this.reconnectController.ConnectionEnding();
             return;
         }
         void this.TriggerReconnect(reason);
     }
 
-    private isTurnActiveForReconnect(): boolean {
-        const userSpeaking = this.inputAudioMeter !== null && (this.inputAudioMeter.Level() ?? 0) >= 0.02;
-        return this.IsBusy || this.IsAudioPlaying || userSpeaking || this.inFlightToolCallIds.size > 0;
+    protected isTurnActiveForReconnect(): boolean {
+        const userSpeaking =
+            this.inputAudioMeter !== null &&
+            (this.inputAudioMeter.Level() ?? 0) >= DEFAULT_USER_SPEECH_ACTIVE_LEVEL_THRESHOLD;
+        return (
+            this.reconnectController.IsTurnOpen ||
+            this.IsBusy ||
+            this.IsAudioPlaying ||
+            userSpeaking ||
+            this.inFlightToolCallIds.size > 0
+        );
     }
 
     /**
@@ -1225,163 +1257,102 @@ export abstract class BaseRealtimeClient {
      * rapid-reconnect circuit breaker, and Attempt-2 fallback from native handle to history seeding.
      */
     public TriggerReconnect(reason: RealtimeReconnectReason): Promise<boolean> {
-        if (this.reconnectDisposed) {
-            return Promise.resolve(false);
-        }
-        if (this.reconnectPromise) {
-            return this.reconnectPromise;
-        }
-
-        const now = Date.now();
-        this.rapidReconnectTimestamps = this.rapidReconnectTimestamps.filter(
-            (ts) => now - ts < REALTIME_RAPID_RECONNECT_WINDOW_MS
-        );
-        if (this.rapidReconnectTimestamps.length >= MAX_REALTIME_RAPID_RECONNECTS) {
-            const breakerMessage = `Realtime client reconnect circuit breaker tripped (${MAX_REALTIME_RAPID_RECONNECTS} reconnects within ${REALTIME_RAPID_RECONNECT_WINDOW_MS}ms)`;
-            this.emitError({ Message: breakerMessage, Code: 'reconnect-loop-breaker', Fatal: true });
-            this.emitStateChange('error');
-            return Promise.resolve(false);
-        }
-        this.rapidReconnectTimestamps.push(now);
-
-        this.reconnectInFlight = true;
-        this.clearCallDurationTimer();
-        const elapsedSeconds = Math.max(0, Math.round((now - this.connectionOpenedAtMs) / 1000));
-        const promise = this.runClientReconnectLoop(reason, elapsedSeconds).finally(() => {
-            this.reconnectPromise = null;
-        });
-        this.reconnectPromise = promise;
-        return promise;
+        return this.reconnectController.TriggerReconnect(reason);
     }
 
-    private async runClientReconnectLoop(reason: RealtimeReconnectReason, elapsedSeconds: number): Promise<boolean> {
-        const delays = REALTIME_RESUMPTION_RETRY_DELAYS_MS;
-        const maxAttempts = delays.length;
-        let lastError: Error = new Error('Realtime client reconnect failed');
-        let forceSeedFallback = false;
-
-        this.emitStateChange('connecting');
-
-        for (let i = 0; i < maxAttempts; i++) {
-            if (this.reconnectDisposed) {
-                this.reconnectInFlight = false;
-                return false;
-            }
-            const delayMs = delays[i] ?? 0;
-            if (delayMs > 0) {
-                await new Promise<void>((resolve) => {
-                    this.retryTimer = setTimeout(() => {
-                        this.retryTimer = null;
-                        resolve();
-                    }, delayMs);
-                });
-                if (this.reconnectDisposed) {
-                    this.reconnectInFlight = false;
-                    return false;
-                }
-            }
-
-            if (this.tokenRefreshCallback && (this.RequiresFreshTokenPerReconnect || this.isCredentialNearExpiry())) {
-                try {
-                    await this.refreshCredentialForReconnect();
-                } catch (refreshErr) {
-                    lastError = refreshErr instanceof Error ? refreshErr : new Error(String(refreshErr));
-                    continue;
-                }
-            }
-
-            const handle = this.ResumptionHandle;
-            const canUseNative = !forceSeedFallback && this.TrustsNativeResumption && handle !== null;
-            const seed = this.conversationMemory.Seed();
-            const context: RealtimeClientReconnectContext = {
-                Reason: reason,
-                Attempt: i + 1,
-                MaxAttempts: maxAttempts,
-                ElapsedConnectionSeconds: elapsedSeconds,
-                ResumptionHandle: canUseNative ? handle : null,
-                UseNativeResumption: canUseNative,
-                ConversationSeed: !canUseNative && seed.Entries.length > 0 ? seed : null,
-                Seed: seed,
-                RefreshCredential: () => this.refreshCredentialForReconnect(),
-                Credential: this.currentCredential,
-            };
-
+    private async executeClientReconnectAttempt(context: RealtimeReconnectContext): Promise<void> {
+        if (
+            !this.refreshedInActiveCycle &&
+            this.tokenRefreshCallback &&
+            (this.RequiresFreshTokenPerReconnect || this.isCredentialNearExpiry())
+        ) {
             try {
-                await this.withReconnectAttemptTimeout(this.Reconnect(context));
-                if (this.reconnectDisposed) {
-                    this.reconnectInFlight = false;
-                    return false;
+                await this.refreshCredentialForReconnect();
+                this.refreshedInActiveCycle = true;
+            } catch (refreshErr) {
+                if (this.RequiresFreshTokenPerReconnect || this.isCredentialNearExpiry(0)) {
+                    throw refreshErr instanceof Error ? refreshErr : new Error(String(refreshErr));
                 }
-                if (!canUseNative && this.inFlightToolCallIds.size > 0) {
-                    for (const callID of this.inFlightToolCallIds) {
-                        this.callsFromBeforeReseed.add(callID);
-                    }
-                }
-                this.reconnectInFlight = false;
-                this.inSoftWindow = false;
-                this.ArmConnectionDurationTimer();
-                return true;
-            } catch (err) {
-                lastError = err instanceof Error ? err : new Error(String(err));
                 RealtimeDiagLog(
-                    `[${this.constructor.name}] reconnect attempt ${i + 1}/${maxAttempts} failed (${reason}): ${lastError.message}`
+                    `[${this.constructor.name}] credential refresh failed during reconnect, continuing with unexpired credential: ${
+                        refreshErr instanceof Error ? refreshErr.message : String(refreshErr)
+                    }`
                 );
-                if (canUseNative) {
-                    forceSeedFallback = true;
-                }
+                this.refreshedInActiveCycle = true;
             }
         }
 
-        this.reconnectInFlight = false;
-        if (!this.reconnectDisposed) {
-            this.emitError({ Message: lastError.message, Code: 'reconnect-failed', Fatal: true });
-            this.emitStateChange('error');
-        }
-        return false;
+        const seed = context.ConversationSeed ?? this.conversationMemory.Seed();
+        const clientContext: RealtimeClientReconnectContext = {
+            Reason: context.Reason,
+            Attempt: context.Attempt,
+            MaxAttempts: context.MaxAttempts,
+            ElapsedConnectionSeconds: context.ElapsedConnectionSeconds,
+            ResumptionHandle: context.ResumptionHandle,
+            UseNativeResumption: context.UseNativeResumption,
+            ConversationSeed: context.ConversationSeed,
+            get Abandoned(): boolean {
+                return context.Abandoned;
+            },
+            Signal: context.Signal,
+            Seed: seed,
+            RefreshCredential: (options?: RealtimeClientTokenRefreshOptions) =>
+                this.refreshCredentialForReconnect(options),
+            Credential: this.currentCredential,
+        };
+
+        await this.Reconnect(clientContext);
     }
 
-    private withReconnectAttemptTimeout(work: Promise<void>): Promise<void> {
-        const timeoutMs = REALTIME_RESUMPTION_ATTEMPT_TIMEOUT_MS;
-        work.catch(() => undefined);
-        let timer: ReturnType<typeof setTimeout> | null = null;
-        const timeout = new Promise<never>((_resolve, reject) => {
-            timer = setTimeout(() => {
-                reject(new Error(`reconnect attempt timed out after ${timeoutMs} ms`));
-            }, timeoutMs);
-        });
-        return Promise.race([work, timeout]).finally(() => {
-            if (timer) {
-                clearTimeout(timer);
+    protected onReconnecting(_reason: RealtimeReconnectReason): void {
+        this.refreshedInActiveCycle = false;
+        this.emitStateChange('connecting');
+    }
+
+    protected onReconnected(usedNativeResumption: boolean): void {
+        if (!usedNativeResumption && this.inFlightToolCallIds.size > 0) {
+            for (const callID of this.inFlightToolCallIds) {
+                this.callsFromBeforeReseed.add(callID);
             }
-        });
+        }
+        this.ArmConnectionDurationTimer();
+    }
+
+    protected onReconnectFailed(error: Error, code: RealtimeReconnectFailureCode): void {
+        this.emitError({ Message: error.message, Code: code, Fatal: true });
+        this.emitStateChange('error');
     }
 
     /**
      * Re-establishes the underlying provider connection mid-call, either via native session
-     * resumption or by re-seeding from `context.ConversationSeed`. Concrete drivers override this method.
+     * resumption or by re-seeding from `context.ConversationSeed`. Concrete drivers MUST override this method.
      */
     protected Reconnect(_context: RealtimeClientReconnectContext): Promise<void> {
-        return Promise.resolve();
+        return Promise.reject(new Error(`${this.constructor.name} does not implement mid-call Reconnect()`));
+    }
+
+    /** Resolves the tool name recorded when `callID` was emitted, or `fallbackName ?? callID`. */
+    protected resolveToolName(callID: string, fallbackName?: string): string {
+        return fallbackName || this.toolCallNamesById.get(callID) || callID;
     }
 
     /**
      * Records a completed tool result into {@link conversationMemory} and clears its in-flight guard.
-     * Concrete drivers should call this at the top of {@link SendToolResult}.
+     * Invoked automatically by the {@link SendToolResult} template method after {@link doSendToolResult} succeeds.
      */
     protected recordToolResult(callID: string, outputJson: string, toolName?: string): string {
         this.inFlightToolCallIds.delete(callID);
         const resolvedName = toolName ?? this.toolCallNamesById.get(callID) ?? callID;
         this.toolCallNamesById.delete(callID);
-        this.conversationMemory.Record({
-            Kind: 'toolResult',
-            Name: resolvedName,
-            OutputJson: outputJson,
-        });
-        if (this.inSoftWindow && !this.isTurnActiveForReconnect()) {
-            const reason = this.pendingBoundaryReason;
-            this.inSoftWindow = false;
-            void this.TriggerReconnect(reason);
+        if (!this.recordedToolCallIds.has(callID)) {
+            this.recordedToolCallIds.add(callID);
+            this.conversationMemory.Record({
+                Kind: 'toolResult',
+                Name: resolvedName,
+                OutputJson: outputJson,
+            });
         }
+        this.reconnectController.NotifyIdleStateChanged();
         return resolvedName;
     }
 
@@ -1407,6 +1378,7 @@ export abstract class BaseRealtimeClient {
     /** Emits a tool-call request to the registered handler (if any) and records it in memory. */
     protected emitToolCall(call: RealtimeClientToolCall): void {
         this.inFlightToolCallIds.add(call.CallID);
+        this.recordedToolCallIds.delete(call.CallID);
         this.toolCallNamesById.set(call.CallID, call.ToolName);
         this.conversationMemory.Record({
             Kind: 'toolCall',
@@ -1421,20 +1393,19 @@ export abstract class BaseRealtimeClient {
         if (state === 'closed' || state === 'error') {
             this.DisposeReconnectTimers();
             this.inFlightToolCallIds.clear();
+            this.recordedToolCallIds.clear();
             this.toolCallNamesById.clear();
         } else if (
             state === 'listening' &&
-            this.callDurationSoftTimer === null &&
-            this.callDurationHardTimer === null &&
-            !this.reconnectInFlight
+            !this.reconnectController.HasDurationTimersArmed &&
+            !this.reconnectController.IsReconnecting &&
+            !this.reconnectController.IsInSoftWindow
         ) {
             this.ArmConnectionDurationTimer();
         }
         this.stateChangeHandler?.(state);
-        if (state === 'listening' && this.inSoftWindow && !this.isTurnActiveForReconnect()) {
-            const reason = this.pendingBoundaryReason;
-            this.inSoftWindow = false;
-            void this.TriggerReconnect(reason);
+        if (state === 'listening') {
+            this.reconnectController.NotifyIdleStateChanged();
         }
     }
 

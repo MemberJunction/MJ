@@ -1,4 +1,4 @@
-import { ClientRealtimeSessionConfig, JSONObject, MapRealtimeUsageModalityDetail, RealtimeMemorySeed, RenderRealtimeMemorySeed, ResolveResponseDoneUsage } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, JSONObject, MapRealtimeUsageModalityDetail, RealtimeMemorySeed, RenderLateToolResultNote, RenderRealtimeMemorySeed, ResolveResponseDoneUsage } from '@memberjunction/ai';
 import { BaseRealtimeClient, RealtimeClientReconnectContext, RealtimeClientState, ToProviderSessionConfig } from './baseRealtimeClient';
 import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
@@ -564,18 +564,18 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
      * would collide with an in-flight narration and be dropped, leaving the model silent when
      * delegated work comes back.
      */
-    public SendToolResult(callID: string, outputJson: string): void {
-        const name = this.recordToolResult(callID, outputJson);
+    protected override doSendToolResult(callID: string, outputJson: string): boolean | void {
         if (!this.canSendEvents()) {
-            return;
+            return false;
         }
+        const name = this.resolveToolName(callID);
         if (this.callsFromBeforeReseed.delete(callID)) {
             this.sendEvent({
                 type: 'conversation.item.create',
                 item: {
                     type: 'message',
                     role: 'user',
-                    content: [{ type: 'input_text', text: `[Tool result for ${name}: ${outputJson}]` }],
+                    content: [{ type: 'input_text', text: RenderLateToolResultNote(name, outputJson) }],
                 },
             });
             this.requestResultResponse();
@@ -1198,6 +1198,9 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
         if (!this.activeConfig) {
             throw new Error(`${this.providerDebugLabel}: cannot reconnect before Connect`);
         }
+        if (context.Abandoned) {
+            throw new Error(`${this.providerDebugLabel}: reconnect attempt abandoned`);
+        }
         const refreshedConfig: ClientRealtimeSessionConfig = {
             ...this.activeConfig,
             EphemeralToken: context.Credential.EphemeralToken || this.activeConfig.EphemeralToken,
@@ -1228,43 +1231,89 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
             refreshedConfig,
             context.UseNativeResumption ? context.ResumptionHandle : null
         );
-        this.socket = nextSocket;
-        this.socketOpen = false;
+        let nextSocketOpen = false;
+        const onAbort = () => {
+            failReconnect?.(new Error(`${this.providerDebugLabel}: reconnect attempt aborted`));
+            try { nextSocket.close(); } catch { /* ignore */ }
+        };
+        if (context.Signal.aborted) {
+            onAbort();
+            throw new Error(`${this.providerDebugLabel}: reconnect attempt aborted`);
+        }
+        context.Signal.addEventListener('abort', onAbort, { once: true });
+
         nextSocket.onopen = () => {
-            if (this.socket !== nextSocket) { return; }
-            this.socketOpen = true;
+            nextSocketOpen = true;
             openSocket?.();
         };
         nextSocket.onmessage = (data) => {
-            if (this.socket !== nextSocket) { return; }
-            this.handleProtocolMessage(data);
+            if (this.socket === nextSocket) {
+                this.handleProtocolMessage(data);
+                return;
+            }
+            try {
+                const event = JSON.parse(data) as OpenAIProtocolServerEvent;
+                if (event && typeof event === 'object' && event.type === 'session.created') {
+                    this.onSessionCreatedFrame();
+                } else if (event && typeof event === 'object' && event.type === 'conversation.created') {
+                    const conv = (event as { conversation?: { id?: unknown } }).conversation;
+                    if (typeof conv?.id === 'string' && conv.id.trim().length > 0) {
+                        this.RecordResumptionHandle(conv.id);
+                    }
+                }
+            } catch {
+                /* ignore non-JSON during handshake */
+            }
         };
         nextSocket.onerror = (message) => {
-            if (this.socket !== nextSocket) { return; }
-            this.socketOpen = false;
+            nextSocketOpen = false;
             failReconnect?.(new Error(message));
-            if (!this.IsReconnecting) {
+            if (this.socket === nextSocket && !this.IsReconnecting) {
+                this.socketOpen = false;
                 this.handleSocketError(message);
             }
         };
         nextSocket.onclose = () => {
-            if (this.socket !== nextSocket) { return; }
-            this.socketOpen = false;
+            nextSocketOpen = false;
             failReconnect?.(new Error(`${this.providerDebugLabel} socket closed during reconnect`));
-            if (!this.IsReconnecting) {
+            if (this.socket === nextSocket && !this.IsReconnecting) {
+                this.socketOpen = false;
                 this.handleSocketClose();
             }
         };
 
         try {
             await Promise.race([opened, failure]);
+            if (context.Abandoned) {
+                throw new Error(`${this.providerDebugLabel}: reconnect attempt abandoned after open`);
+            }
             if (created) {
                 await Promise.race([created, failure]);
             }
+            if (context.Abandoned) {
+                throw new Error(`${this.providerDebugLabel}: reconnect attempt abandoned after session.created`);
+            }
+        } catch (err) {
+            nextSocket.onopen = null;
+            nextSocket.onmessage = null;
+            nextSocket.onerror = null;
+            nextSocket.onclose = null;
+            try { nextSocket.close(); } catch { /* ignore */ }
+            throw err;
         } finally {
+            context.Signal.removeEventListener('abort', onAbort);
             failReconnect = null;
             this.sessionCreatedResolver = null;
         }
+
+        if (prevSocket) {
+            prevSocket.onopen = null;
+            prevSocket.onmessage = null;
+            prevSocket.onerror = null;
+            prevSocket.onclose = null;
+        }
+        this.socket = nextSocket;
+        this.socketOpen = nextSocketOpen;
 
         try {
             prevSocket?.close();
@@ -1275,7 +1324,9 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
         this.responseActive = false;
         this.confirmedResponseActive = false;
         this.applySessionConfig();
-        this.seedConversationHistory(context.ConversationSeed);
+        if (!context.UseNativeResumption || !context.ResumptionHandle) {
+            this.seedConversationHistory(context.ConversationSeed);
+        }
         this.setState('listening');
     }
 

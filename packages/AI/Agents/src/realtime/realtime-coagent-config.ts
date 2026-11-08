@@ -46,7 +46,7 @@
 // import is the dependency-free turn-detection normalizer, so the module keeps its framework-free /
 // pure-transformation contract.
 import type { AIModelConfiguration, RealtimeTurnDetectionSettings } from '@memberjunction/ai';
-import { NormalizeTurnDetectionSettings } from '@memberjunction/ai';
+import { ExtractRealtimeTimingConfig, NormalizeTurnDetectionSettings } from '@memberjunction/ai';
 import {
     AccumulateRealtimeChannelsConfig,
     type RealtimeChannelDisplayPolicy,
@@ -486,17 +486,21 @@ export function GetModelCatalogSessionSettings(config: AIModelConfiguration | nu
     if (isPlainObject(tooling)) {
         bag['tooling'] = { ...tooling } as JSONObjectLike;
     }
-    if (typeof rt?.ConnectionMaxSeconds === 'number' && Number.isFinite(rt.ConnectionMaxSeconds) && rt.ConnectionMaxSeconds > 0) {
-        bag['connectionMaxSeconds'] = Math.floor(rt.ConnectionMaxSeconds);
+    const timing = ExtractRealtimeTimingConfig(rt ? (rt as Record<string, unknown>) : undefined);
+    if (timing.ConnectionMaxSeconds !== undefined) {
+        bag['connectionMaxSeconds'] = timing.ConnectionMaxSeconds;
     }
-    if (typeof rt?.SessionMaxSeconds === 'number' && Number.isFinite(rt.SessionMaxSeconds) && rt.SessionMaxSeconds > 0) {
-        bag['sessionMaxSeconds'] = Math.floor(rt.SessionMaxSeconds);
+    if (timing.SessionMaxSeconds !== undefined) {
+        bag['sessionMaxSeconds'] = timing.SessionMaxSeconds;
     }
-    if (typeof rt?.ReconnectBufferSeconds === 'number' && Number.isFinite(rt.ReconnectBufferSeconds) && rt.ReconnectBufferSeconds > 0) {
-        bag['reconnectBufferSeconds'] = Math.floor(rt.ReconnectBufferSeconds);
+    if (timing.ReconnectBufferSeconds !== undefined) {
+        bag['reconnectBufferSeconds'] = timing.ReconnectBufferSeconds;
     }
-    if (typeof rt?.TrustNativeResumption === 'boolean') {
-        bag['trustNativeResumption'] = rt.TrustNativeResumption;
+    if (timing.TrustNativeResumption !== undefined) {
+        bag['trustNativeResumption'] = timing.TrustNativeResumption;
+    }
+    if (config?.Privacy?.ZeroDataRetention === true) {
+        bag['zeroDataRetention'] = true;
     }
     return Object.keys(bag).length > 0 ? bag : null;
 }

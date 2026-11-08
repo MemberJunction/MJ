@@ -278,11 +278,7 @@ export const DefaultRtmsLoader: RtmsModuleLoader = async (): Promise<RtmsModule>
         // The optional dep ships no types we depend on here (the ambient declaration types it as
         // `unknown`); narrow the resolved value structurally through RtmsModule at this boundary,
         // covering both CJS `.default` and ESM namespace interop forms.
-        // Keep the literal in a local const so `check-dynamic-imports` still verifies `@zoom/rtms`
-        // against package.json while `vite:import-analysis` honors `@vite-ignore` when the native
-        // prebuild binary is absent on a CI runner.
-        const rtmsSpecifier = '@zoom/rtms';
-        const mod: unknown = await import(/* @vite-ignore */ rtmsSpecifier);
+        const mod: unknown = await import(/* @vite-ignore */ '@zoom/rtms');
         const resolved = unwrapDefault(mod);
         if (!isRtmsModule(resolved)) {
             throw new Error('resolved module has no Client constructor');

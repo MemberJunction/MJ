@@ -6,8 +6,9 @@ vi.mock('@memberjunction/global', () => ({
 }));
 vi.mock('@memberjunction/ai', async () => {
   const { BaseModel } = await import('../../../../Core/src/generic/baseModel');
-  const { BaseRealtimeModel, BaseRealtimeSession, RealtimeDriverFactsOf, DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS, DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS, MAX_REALTIME_RAPID_RECONNECTS, REALTIME_RAPID_RECONNECT_WINDOW_MS } = await import('../../../../Core/src/generic/baseRealtime');
-  const { RealtimeConversationMemory, RenderRealtimeMemorySeed, RenderRealtimeMemorySeedAsContextNote, REALTIME_MEMORY_CONTINUITY_PREAMBLE } = await import('../../../../Core/src/generic/realtimeConversationMemory');
+  const baseRealtime = await import('../../../../Core/src/generic/baseRealtime');
+  const realtimeMemory = await import('../../../../Core/src/generic/realtimeConversationMemory');
+  const realtimeConnectionSetup = await import('../../../../Core/src/generic/realtimeConnectionSetup');
   const RealtimeDiagLog = () => { /* no-op in tests */ };
   const { IsTranscriptContinuation } = await import('../../../../Core/src/generic/transcriptContinuation');
   const { ResolveResponseDoneUsage, MapRealtimeUsageModalityDetail } = await import('../../../../Core/src/generic/realtimeUsage');
@@ -17,23 +18,15 @@ vi.mock('@memberjunction/ai', async () => {
   const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
   return {
     BaseModel,
-    BaseRealtimeModel,
-    BaseRealtimeSession,
-    RealtimeConversationMemory,
-    RenderRealtimeMemorySeed,
-    RenderRealtimeMemorySeedAsContextNote,
-    REALTIME_MEMORY_CONTINUITY_PREAMBLE,
-    DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS,
-    DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS,
-    MAX_REALTIME_RAPID_RECONNECTS,
-    REALTIME_RAPID_RECONNECT_WINDOW_MS,
+    ...baseRealtime,
+    ...realtimeMemory,
+    ...realtimeConnectionSetup,
     RealtimeDiagLog,
     IsTranscriptContinuation,
     ResolveResponseDoneUsage,
     MapRealtimeUsageModalityDetail,
     NormalizeTurnDetectionSettings,
     RealtimeDroppedInputReporter,
-    RealtimeDriverFactsOf,
   };
 });
 vi.mock('openai/realtime/websocket', () => ({ OpenAIRealtimeWebSocket: vi.fn() }));

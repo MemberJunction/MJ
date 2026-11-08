@@ -729,4 +729,28 @@ describe('AssemblyAIRealtimeSession guard rails', () => {
         const session = new AssemblyAIRealtimeSession({ system_prompt: 'p' });
         expect(() => session.SendInput({ Data: new Uint8Array([1]).buffer, Kind: 'audio' })).toThrow('not open');
     });
+
+    it('reconnects in place with a fresh socket and injects memory seed into system_prompt (#21)', async () => {
+        const driver = new TestAssemblyAIRealtime('fake-api-key');
+        const session = (await startSession(driver, { SystemPrompt: 'Base prompt.' })) as AssemblyAIRealtimeSession;
+        const socket1 = driver.Socket;
+
+        driver.Emit({ type: 'transcript.user', text: 'Hello agent', item_id: 'u1' });
+        driver.Emit({ type: 'transcript.agent', text: 'Hi caller', reply_id: 'r1', item_id: 'a1', interrupted: false });
+
+        const socket2 = new FakeSocket();
+        driver.Socket = socket2;
+        const reconnectPromise = session.TriggerReconnect('soft_deadline');
+        await flushAsync();
+        driver.Emit(readyEvent());
+        expect(await reconnectPromise).toBe(true);
+
+        expect(socket1.Closed).toBe(true);
+        const updateFrame = socket2.SentFrames().find((f) => f.type === 'session.update');
+        expect(updateFrame?.session?.system_prompt).toContain('Base prompt.');
+        expect(updateFrame?.session?.system_prompt).toContain('Hello agent');
+        expect(updateFrame?.session?.system_prompt).toContain('Hi caller');
+    });
 });
+
+

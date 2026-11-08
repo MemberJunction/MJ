@@ -1186,4 +1186,39 @@ describe('OpenAILiveRealtime turn detection', () => {
         expect(clientConfig.SessionConfig).not.toHaveProperty('turnDetection');
         expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Turn-detection setting(s) not applied'));
     });
+
+    it('reconnects in place with a fresh WebSocket and seeds memory via session.thinking.append (#21)', async () => {
+        const driver = new TestableOpenAILiveRealtime('test-key');
+        const sessionPromise = driver.StartSession({ Model: 'gpt-live-1', SystemPrompt: 'Live base prompt.' });
+        const socket1 = driver.lastMockSocket!;
+        socket1.triggerOpen();
+        socket1.triggerMessage(JSON.stringify({ type: 'session.started', session_id: 'live-1' }));
+        const session = (await sessionPromise) as OpenAILiveSession;
+
+        socket1.triggerMessage(JSON.stringify({
+            type: 'session.input_transcript.delta',
+            delta: 'Remember this detail',
+        }));
+        socket1.triggerMessage(JSON.stringify({
+            type: 'response.event',
+            event: { type: 'response.completed' },
+        }));
+
+        const reconnectPromise = session.TriggerReconnect('soft_deadline');
+        await new Promise((r) => setTimeout(r, 0));
+        const socket2 = driver.lastMockSocket!;
+        expect(socket2).not.toBe(socket1);
+        socket2.triggerOpen();
+        socket2.triggerMessage(JSON.stringify({ type: 'session.started', session_id: 'live-2' }));
+        expect(await reconnectPromise).toBe(true);
+
+        expect(socket1.isClosed).toBe(true);
+        const startFrame = JSON.parse(socket2.sentFrames[0]);
+        expect(startFrame.type).toBe('session.start');
+        expect(startFrame.session.instructions).toContain('Live base prompt.');
+        const thinkingFrame = socket2.sentFrames.map((f) => JSON.parse(f)).find((f) => f.type === 'session.thinking.append');
+        expect(thinkingFrame).toBeDefined();
+        expect(thinkingFrame.content).toContain('Remember this detail');
+    });
 });
+

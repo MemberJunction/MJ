@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, JSONObject, RenderRealtimeMemorySeedAsContextNote } from '@memberjunction/ai';
+import { AsConfigRecord, ClientRealtimeSessionConfig, JSONObject, RenderLateToolResultNote, RenderRealtimeMemorySeedAsContextNote } from '@memberjunction/ai';
 import { BaseRealtimeClient, RealtimeClientReconnectContext, RealtimeClientState } from '../generic/baseRealtimeClient';
 import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
@@ -13,6 +13,7 @@ import { CreatePcmMicCapture, IPcmMicCapture } from '../audio/micCapture';
  * parseable `pcm_<rate>` format (the platform default for both directions is `pcm_16000`).
  */
 const ELEVENLABS_DEFAULT_SAMPLE_RATE = 16000;
+const ELEVENLABS_DEFAULT_CALL_DURATION_SECONDS = 600;
 
 // ── Wire-event shapes (snake_case, exactly as the Agents websocket emits) ──────
 
@@ -125,6 +126,7 @@ interface NativeWebSocketLike {
 export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
     // ── Transport / audio resources ────────────────────────────────────────────
     private socket: IElevenLabsClientSocket | null = null;
+    private socketOpen = false;
     private micStream: MediaStream | null = null;
     private micCapture: IPcmMicCapture | null = null;
     private playback: IRealtimePcmPlayback | null = null;
@@ -161,7 +163,7 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
     private currentState: RealtimeClientState = 'closed';
 
     protected override get DefaultCallDurationSeconds(): number | undefined {
-        return undefined;
+        return ELEVENLABS_DEFAULT_CALL_DURATION_SECONDS;
     }
 
     // ── BaseRealtimeClient: connection lifecycle ───────────────────────────────
@@ -178,6 +180,7 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
         this.activeConfig = config;
         this.micStream = micStream;
         this.closedByConsumer = false;
+        this.socketOpen = false;
         this.setState('connecting');
         const overrides = this.parseOverrides(config);
 
@@ -204,15 +207,38 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
 
         const socket = this.createSocket(config.EphemeralToken);
         this.socket = socket;
-        socket.onopen = () => openSocket?.();
-        socket.onmessage = (data) => this.handleSocketMessage(data);
+        socket.onopen = () => {
+            if (this.socket !== socket) {
+                return;
+            }
+            this.socketOpen = true;
+            openSocket?.();
+        };
+        socket.onmessage = (data) => {
+            if (this.socket !== socket) {
+                return;
+            }
+            this.handleSocketMessage(data);
+        };
         socket.onerror = (message) => {
+            if (this.socket !== socket) {
+                return;
+            }
+            this.socketOpen = false;
             failConnect(new Error(message));
-            this.handleSocketError(message);
+            if (!this.IsReconnecting) {
+                this.handleSocketError(message);
+            }
         };
         socket.onclose = () => {
+            if (this.socket !== socket) {
+                return;
+            }
+            this.socketOpen = false;
             failConnect(new Error('ElevenLabs conversation socket closed during connect'));
-            this.handleSocketClose();
+            if (!this.IsReconnecting) {
+                this.handleSocketClose();
+            }
         };
 
         await opened;
@@ -251,6 +277,7 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
      */
     public async Disconnect(): Promise<void> {
         this.closedByConsumer = true;
+        this.socketOpen = false;
         this.DisposeReconnectTimers();
         this.cancelToolResultNudge();
         this.closeAudioMeters();
@@ -262,12 +289,17 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
         this.playback = null;
         this.clearRemoteMediaStream();
         if (this.socket) {
+            const s = this.socket;
+            this.socket = null;
+            s.onopen = null;
+            s.onmessage = null;
+            s.onerror = null;
+            s.onclose = null;
             try {
-                this.socket.close();
+                s.close();
             } catch {
                 /* already closing */
             }
-            this.socket = null;
         }
         this.activeConfig = null;
         this.resetResponseState();
@@ -280,6 +312,9 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
         if (!this.activeConfig) {
             throw new Error('ElevenLabsRealtimeClient: cannot reconnect before Connect');
         }
+        if (context.Abandoned) {
+            throw new Error('ElevenLabsRealtimeClient: reconnect attempt abandoned');
+        }
         const refreshedConfig: ClientRealtimeSessionConfig = {
             ...this.activeConfig,
             EphemeralToken: context.Credential.EphemeralToken || this.activeConfig.EphemeralToken,
@@ -287,7 +322,7 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
             ...(context.Credential.SessionConfig !== undefined ? { SessionConfig: context.Credential.SessionConfig } : {}),
         };
         this.activeConfig = refreshedConfig;
-        const overrides = this.parseOverrides(refreshedConfig);
+        const overrides = this.stripFirstMessageOverride(this.parseOverrides(refreshedConfig));
 
         const prevSocket = this.socket;
         let openSocket: (() => void) | null = null;
@@ -303,36 +338,90 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
             failMetadata = reject;
         });
         metadata.catch(() => undefined);
-        this.onInitiationMetadata = confirmMetadata;
         const failConnect = (error: Error) => {
             failOpen?.(error);
             failMetadata?.(error);
         };
 
         const nextSocket = this.createSocket(refreshedConfig.EphemeralToken);
-        this.socket = nextSocket;
-        nextSocket.onopen = () => openSocket?.();
+        let nextSocketOpen = false;
+        const onAbort = () => {
+            failConnect(new Error('ElevenLabsRealtimeClient: reconnect attempt aborted'));
+            try { nextSocket.close(); } catch { /* ignore */ }
+        };
+        if (context.Signal.aborted) {
+            onAbort();
+            throw new Error('ElevenLabsRealtimeClient: reconnect attempt aborted');
+        }
+        context.Signal.addEventListener('abort', onAbort, { once: true });
+
+        nextSocket.onopen = () => {
+            nextSocketOpen = true;
+            openSocket?.();
+        };
         nextSocket.onmessage = (data) => {
             if (this.socket === nextSocket) {
                 this.handleSocketMessage(data);
+                return;
+            }
+            try {
+                const event = JSON.parse(data) as ElevenLabsServerEvent;
+                if (event.type === 'conversation_initiation_metadata') {
+                    confirmMetadata?.(event);
+                    confirmMetadata = null;
+                }
+            } catch {
+                /* ignore non-JSON during handshake */
             }
         };
         nextSocket.onerror = (message) => {
+            nextSocketOpen = false;
             failConnect(new Error(message));
             if (this.socket === nextSocket && !this.IsReconnecting) {
+                this.socketOpen = false;
                 this.handleSocketError(message);
             }
         };
         nextSocket.onclose = () => {
+            nextSocketOpen = false;
             failConnect(new Error('ElevenLabs conversation socket closed during reconnect'));
             if (this.socket === nextSocket && !this.IsReconnecting) {
+                this.socketOpen = false;
                 this.handleSocketClose();
             }
         };
 
-        await opened;
-        this.sendFrame({ type: 'conversation_initiation_client_data', conversation_config_override: overrides });
-        const metadataEvent = await metadata;
+        let metadataEvent: ElevenLabsServerEvent;
+        try {
+            await opened;
+            if (context.Abandoned) {
+                throw new Error('ElevenLabsRealtimeClient: reconnect attempt abandoned after open');
+            }
+            nextSocket.send(JSON.stringify({ type: 'conversation_initiation_client_data', conversation_config_override: overrides }));
+            metadataEvent = await metadata;
+            if (context.Abandoned) {
+                throw new Error('ElevenLabsRealtimeClient: reconnect attempt abandoned after metadata');
+            }
+        } catch (err) {
+            nextSocket.onopen = null;
+            nextSocket.onmessage = null;
+            nextSocket.onerror = null;
+            nextSocket.onclose = null;
+            try { nextSocket.close(); } catch { /* ignore */ }
+            throw err;
+        } finally {
+            context.Signal.removeEventListener('abort', onAbort);
+        }
+
+        if (prevSocket) {
+            prevSocket.onopen = null;
+            prevSocket.onmessage = null;
+            prevSocket.onerror = null;
+            prevSocket.onclose = null;
+        }
+        this.socket = nextSocket;
+        this.socketOpen = nextSocketOpen;
+
         const formats = metadataEvent.conversation_initiation_metadata_event;
         if (formats?.conversation_id) {
             this.RecordResumptionHandle(formats.conversation_id);
@@ -355,6 +444,18 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
         this.setState('listening');
     }
 
+    private stripFirstMessageOverride(overrides: JSONObject): JSONObject {
+        const agentObj = AsConfigRecord(overrides['agent']);
+        if (!agentObj || agentObj['first_message'] === undefined) {
+            return overrides;
+        }
+        const { first_message: _dropped, ...restAgent } = agentObj;
+        return {
+            ...overrides,
+            agent: restAgent as JSONObject,
+        };
+    }
+
     // ── BaseRealtimeClient: outbound actions ──────────────────────────────────
 
     /**
@@ -369,7 +470,7 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
      * turn takes the floor on its own; no explicit cancel frame exists or is needed.
      */
     public SendText(text: string): void {
-        if (!this.socket) {
+        if (!this.socket || !this.socketOpen) {
             return;
         }
         this.CancelActiveResponse();
@@ -387,7 +488,7 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
      * `interruption`). No-op when nothing is active.
      */
     public CancelActiveResponse(): void {
-        if (!this.socket) {
+        if (!this.socket || !this.socketOpen) {
             return;
         }
         if (!this.responseActive && !this.IsAudioPlaying) {
@@ -410,7 +511,7 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
      */
     public SendContextNote(text: string): void {
         this.ConversationMemory.Record({ Kind: 'note', Text: text });
-        if (!this.socket) {
+        if (!this.socket || !this.socketOpen) {
             return;
         }
         this.sendFrame({ type: 'contextual_update', text });
@@ -424,7 +525,7 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
      * the base contract's collision rule.
      */
     public RequestSpokenUpdate(instructions: string): void {
-        if (!this.socket) {
+        if (!this.socket || !this.socketOpen) {
             return;
         }
         this.enqueueOrRun(() => this.sendUserMessage(instructions, 'narration', false));
@@ -432,7 +533,7 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
 
     /** A spoken TURN: the same `user_message` trigger as the update, with the reply kept `normal` (MJ#4591). */
     public RequestSpokenTurn(instructions: string): void {
-        if (!this.socket) {
+        if (!this.socket || !this.socketOpen) {
             return;
         }
         this.enqueueOrRun(() => this.sendUserMessage(instructions, 'normal', false));
@@ -446,20 +547,20 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
      * otherwise queued behind the in-flight response (e.g. a progress narration) so the
      * trigger is never lost.
      */
-    public SendToolResult(callID: string, outputJson: string): void {
-        if (!this.socket) {
-            return;
+    protected override doSendToolResult(callID: string, outputJson: string): boolean | void {
+        if (!this.socket || !this.socketOpen) {
+            return false;
         }
         if (!this.pendingToolCallIds.has(callID)) {
             console.warn(
                 `ElevenLabsRealtimeClient.SendToolResult: no pending tool call '${callID}' — duplicate or unknown result dropped.`
             );
-            return;
+            return false;
         }
         this.pendingToolCallIds.delete(callID);
-        const name = this.recordToolResult(callID, outputJson);
+        const name = this.resolveToolName(callID);
         if (this.callsFromBeforeReseed.delete(callID)) {
-            this.sendFrame({ type: 'contextual_update', text: `[Tool result for ${name}: ${outputJson}]` });
+            this.sendFrame({ type: 'contextual_update', text: RenderLateToolResultNote(name, outputJson) });
             this.enqueueOrRun(() => this.sendUserMessage(`Please continue with the tool result for ${name}.`, 'normal', false));
             return;
         }
@@ -593,14 +694,14 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
 
     /** Streams one base64 PCM16 mic chunk as a bare-key `user_audio_chunk` frame. */
     private sendMicChunk(base64Pcm16: string): void {
-        if (this.socket) {
+        if (this.socket && this.socketOpen) {
             this.sendFrame({ user_audio_chunk: base64Pcm16 });
         }
     }
 
     /** Surfaces a fatal socket error and marks the session unusable (obligation #6). */
     private handleSocketError(message: string): void {
-        if (this.currentState === 'error' || this.currentState === 'closed') {
+        if (this.IsReconnecting || this.currentState === 'error' || this.currentState === 'closed') {
             return;
         }
         this.emitError({ Message: `ElevenLabs realtime transport error: ${message}`, Fatal: true });
@@ -613,7 +714,7 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
      * credential / conversation death reaches the host (obligation #6).
      */
     private handleSocketClose(): void {
-        if (this.closedByConsumer || this.currentState === 'error' || this.currentState === 'closed') {
+        if (this.closedByConsumer || this.IsReconnecting || this.currentState === 'error' || this.currentState === 'closed') {
             return;
         }
         this.emitError({ Message: 'ElevenLabs conversation closed unexpectedly', Fatal: true });

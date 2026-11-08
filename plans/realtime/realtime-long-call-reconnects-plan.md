@@ -863,14 +863,14 @@ During implementation (after this plan-only PR is approved), the implementing ag
     {
       "id": "S2-TOKEN-REFRESH-MUTATION",
       "slice": 2,
-      "description": "RefreshRealtimeClientSessionToken on RealtimeClientSessionResolver authenticates logged-in users, magic-link visitors, and widget guests via LoadOwnedRealtimeSession + assertCanRunTarget + ResolveScopedAnonymousRunUser, reads authoritative RealtimeMintSnapshot from RealtimeMintSnapshotRegistry / MJAIAgentRunStepEntity.InputData (without persisting relayTicketId in DB and creating the step even when promptID is null), enforces Active status and maxSessionDeadlineIso clamping, extends relay sessions (re-arming FreshOpened = false and notifying OnExpiresAtExtended listeners), and rate-limits refreshes per session.",
+      "description": "RefreshRealtimeClientSessionToken on RealtimeClientSessionResolver authenticates logged-in users, magic-link visitors, and widget guests via LoadOwnedRealtimeSession + assertCanRunTarget + ResolveScopedAnonymousRunUser, reads authoritative RealtimeMintSnapshot from RealtimeMintSnapshotRegistry / MJAIAgentSessionEntity.Config_ (protected by RunWithTrustedSessionConfigWrites and PROTECTED_SESSION_CONFIG_KEYS, without persisting relayTicketId in DB), enforces Active status, credentialScope, and maxSessionDeadlineIso clamping, extends relay sessions (preserving FreshOpened unless AllowFreshReopen is requested with zero active tunnels and notifying OnExpiresAtExtended listeners), and rate-limits refreshes per session derived from ConnectionMaxSeconds.",
       "verification": "cd packages/MJServer && npm run test -- RealtimeClientSessionResolver",
       "passing": true
     },
     {
       "id": "S2-CALIBER-ZERO-CHANGE",
       "slice": 2,
-      "description": "Caliber compatibility test proves PrepareClientSession + overwritten AIAgentSession.Config_ + CaliberWidgetMintingProvider Proxy preserve persona system prompt and whiteboard client tools across mid-call token refresh without modifying bizapps-caliber.",
+      "description": "Caliber compatibility test proves PrepareClientSession + protected AIAgentSession.Config_ realtimeMintSnapshot + CaliberWidgetMintingProvider Proxy preserve persona system prompt and whiteboard client tools across mid-call token refresh without modifying bizapps-caliber.",
       "verification": "cd packages/MJServer && npm run test -- caliberCompat",
       "passing": true
     },
@@ -884,22 +884,22 @@ During implementation (after this plan-only PR is approved), the implementing ag
     {
       "id": "S4-GEMINI-AND-VERTEX-DRIVERS",
       "slice": 4,
-      "description": "GeminiRealtime, GeminiEnterpriseRealtime, GeminiRealtimeClient, and GeminiEnterpriseRealtimeClient scrub shared config keys, update connectTarget on token refresh, preserve sessionResumption: {} in setup when UseNativeResumption is false, apply 120s RuntimeCallDurationSeconds for uncompressed video, and implement ReconnectSession/Reconnect.",
+      "description": "GeminiRealtime, GeminiEnterpriseRealtime, GeminiRealtimeClient, and GeminiEnterpriseRealtimeClient scrub shared config keys, update connectTarget on token refresh, preserve sessionResumption only when present on initial config or when handle is set, apply 120s RuntimeCallDurationSeconds for uncompressed video (when contextWindowCompression is absent), and implement ReconnectSession/Reconnect.",
       "verification": "cd packages/AI/Providers/Gemini && npm run test && cd ../Vertex && npm run test && cd ../../RealtimeClient && npm run test",
       "passing": true
     },
     {
       "id": "S5-XAI-AND-OPENAI-DRIVERS",
       "slice": 5,
-      "description": "xAIRealtime clamps client_secrets expires_after.seconds to <= 3600 and uses native resumption (?conversation_id via onURL + resumption.enabled) with conversation.item.create fallback; OpenAIRealtime and OpenAIRealtimeClient scrub shared keys, reset micSenders, reuse remoteAudioEl, queue outbound sends during reconnect, and seed conversation.item.create; OpenAILiveClient seeds ContextNote via SendContextNote on channel.onopen; all remaining drivers compile cleanly.",
+      "description": "xAIRealtime clamps client_secrets expires_after.seconds to <= 3600 and uses native resumption (?conversation_id via onURL + resumption.enabled) with conversation.item.create fallback; OpenAIRealtime and OpenAIRealtimeClient scrub shared keys, reset micSenders, reuse remoteAudioEl, queue outbound sends during reconnect, and seed conversation.item.create; OpenAILiveClient seeds ContextNote via SendContextNote on channel.onopen; all remaining drivers implement full ReconnectSession/Reconnect.",
       "verification": "cd packages/AI/Providers/xAI && npm run test && cd ../OpenAI && npm run test && cd ../../RealtimeClient && npm run test",
       "passing": true
     },
     {
       "id": "S6-LIVE-CALL-VERIFICATION",
       "slice": 6,
-      "description": "Deterministic integration suite and live calls verified across Gemini Developer API (past 30-min token cap), Vertex AI, xAI, and OpenAI Realtime.",
-      "verification": "npm run test:integration",
+      "description": "Deterministic multi-reconnect and cross-seam verification suite verified across Gemini Developer API (past 30-min token cap), Vertex AI relay, xAI, OpenAI Realtime, OpenAI Live, ElevenLabs, AssemblyAI, Inworld, and HuggingFace.",
+      "verification": "cd packages/AI/Core && npm run test && cd ../RealtimeClient && npm run test && cd ../../RealtimeRuntime && npm run test && cd ../MJServer && npm run test",
       "passing": true
     }
   ]

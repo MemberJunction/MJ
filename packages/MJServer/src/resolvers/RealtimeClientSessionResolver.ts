@@ -51,6 +51,8 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { AIAgentPermissionHelper, AIEngineBase, HasRealtimeUsage, ParseRealtimeUsageRecord, type RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
 import {
     RealtimeClientSessionService,
+    RealtimeMintSnapshotRegistry,
+    type PersistedRealtimeMintSnapshot,
     DelegatedRunArtifact,
     RealtimeChannelServerHost,
     RealtimeCoAgentConfig,
@@ -79,7 +81,7 @@ import {
     type RealtimeChannelCandidate,
     type RealtimeSessionClientPolicy
 } from '@memberjunction/ai-core-plus';
-import { ChatMessage, RealtimeToolDefinition } from '@memberjunction/ai';
+import { ChatMessage, ExtractRealtimeTimingConfig, RealtimeToolDefinition } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { GetReadWriteProvider } from '../util.js';
@@ -241,6 +243,12 @@ interface RealtimeSessionConfig {
      * (an unscoped session: a client that reported no channel candidates) ⇒ no channel check.
      */
     channels?: string[];
+    /**
+     * Server-authoritative mint snapshot persisted at session start for cross-instance credential
+     * refresh (`RefreshRealtimeClientSessionToken`). Protected from owner writes by
+     * `MJAIAgentSessionEntityServer` (`PROTECTED_SESSION_CONFIG_KEYS`).
+     */
+    realtimeMintSnapshot?: PersistedRealtimeMintSnapshot;
 }
 
 /**
@@ -454,6 +462,10 @@ export class UploadRealtimeRecordingResult {
 export class RefreshRealtimeClientSessionTokenResult {
     @Field(() => Boolean)
     Success: boolean;
+
+    /** Discriminator for the refreshed credential: `'token'` or `'relay'`. */
+    @Field(() => String, { nullable: true })
+    Kind?: 'token' | 'relay';
 
     @Field(() => String, { nullable: true })
     EphemeralToken?: string;
@@ -676,16 +688,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     async RefreshRealtimeClientSessionToken(
         @Arg('agentSessionId', () => String) agentSessionId: string,
         @Ctx() { userPayload, providers }: AppContext,
+        @Arg('allowFreshReopen', () => Boolean, { nullable: true }) allowFreshReopen?: boolean,
     ): Promise<RefreshRealtimeClientSessionTokenResult> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
         const session = await this.loadOwnedActiveSession(agentSessionId, contextUser, provider);
-
-        if (!this.allowRefreshUnderRateLimit(session.ID)) {
-            return {
-                Success: false,
-                ErrorMessage: 'Rate limit exceeded: too many token refreshes for this session.',
-            };
-        }
 
         if (IsMaxSessionDeadlineElapsed(session.Config_)) {
             await this.sessionManager.CloseSession(session.ID, contextUser, provider, 'TimeLimit');
@@ -696,23 +702,25 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         }
 
         const config = this.readSessionConfig(session);
+        const maxCalls = this.resolveRefreshRateLimit(session.ID, config);
+        if (!this.allowRefreshUnderRateLimit(session.ID, maxCalls)) {
+            return {
+                Success: false,
+                ErrorMessage: 'Rate limit exceeded: too many token refreshes for this session.',
+            };
+        }
+
         await this.assertCanRunTarget(config.targetAgentID, contextUser, provider);
 
         const runUser = ResolveScopedAnonymousRunUser(contextUser);
-        const verified = await this.runIDVerifier.Verify(
-            session.ID,
-            { CoAgentRunID: config.coAgentRunID, CoAgentRunStepID: config.coAgentRunStepID },
-            runUser,
-            provider,
-        );
-
         const remainingSeconds = RemainingSessionSeconds(session.Config_);
         const refreshed = await this.clientSessionService.RefreshClientSessionCredential(
             {
                 AgentSessionID: session.ID,
                 CoAgentID: session.AgentID,
-                CoAgentRunStepID: verified.CoAgentRunStepID,
+                ...(config.realtimeMintSnapshot ? { PersistedMintSnapshot: config.realtimeMintSnapshot } : {}),
                 RemainingSessionSeconds: remainingSeconds,
+                ...(allowFreshReopen === true ? { AllowFreshReopen: true } : {}),
             },
             runUser,
             provider,
@@ -722,18 +730,47 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             await this.sessionManager.Heartbeat(agentSessionId, contextUser, provider);
         }
 
-        return refreshed;
+        return {
+            Success: refreshed.Success,
+            ...(refreshed.Kind ? { Kind: refreshed.Kind } : {}),
+            ...(refreshed.EphemeralToken !== undefined ? { EphemeralToken: refreshed.EphemeralToken } : {}),
+            ...(refreshed.ExpiresAt !== undefined ? { ExpiresAt: refreshed.ExpiresAt } : {}),
+            ...(refreshed.RelayUrl !== undefined ? { RelayUrl: refreshed.RelayUrl } : {}),
+            ...(refreshed.SessionConfigJson !== undefined ? { SessionConfigJson: refreshed.SessionConfigJson } : {}),
+            ...(refreshed.ErrorMessage !== undefined ? { ErrorMessage: refreshed.ErrorMessage } : {}),
+        };
     }
 
     /**
-     * Enforces a rolling 10-minute window rate limit of at most 6 credential refreshes per session.
+     * Derives the per-window refresh rate limit from the session's effective `ConnectionMaxSeconds`
+     * so short connection durations (e.g. a 45 s test override) do not trip the default 6-call ceiling.
      */
-    private allowRefreshUnderRateLimit(sessionID: string, nowMs: number = Date.now()): boolean {
+    private resolveRefreshRateLimit(sessionID: string, config: RealtimeSessionConfig): number {
+        const snapshot = RealtimeMintSnapshotRegistry.Instance.Get(sessionID) ?? config.realtimeMintSnapshot;
+        const connectionMaxSeconds =
+            snapshot?.connectionMaxSeconds ??
+            ExtractRealtimeTimingConfig(snapshot?.sessionParams?.Config).ConnectionMaxSeconds;
+        if (!connectionMaxSeconds || connectionMaxSeconds <= 0) {
+            return REFRESH_RATE_LIMIT_MAX_CALLS;
+        }
+        const windowSeconds = REFRESH_RATE_LIMIT_WINDOW_MS / 1000;
+        const expectedCycles = Math.ceil(windowSeconds / connectionMaxSeconds);
+        return Math.max(REFRESH_RATE_LIMIT_MAX_CALLS, expectedCycles + 4);
+    }
+
+    /**
+     * Enforces a rolling 10-minute window rate limit of credential refreshes per session.
+     */
+    private allowRefreshUnderRateLimit(
+        sessionID: string,
+        maxCalls: number = REFRESH_RATE_LIMIT_MAX_CALLS,
+        nowMs: number = Date.now(),
+    ): boolean {
         const key = NormalizeUUID(sessionID);
         const existing = refreshRateLimitBuckets.Get(key) ?? [];
         const cutoff = nowMs - REFRESH_RATE_LIMIT_WINDOW_MS;
         const recent = existing.filter((ts) => ts > cutoff);
-        if (recent.length >= REFRESH_RATE_LIMIT_MAX_CALLS) {
+        if (recent.length >= maxCalls) {
             refreshRateLimitBuckets.Set(key, recent);
             return false;
         }
@@ -1987,6 +2024,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             prep.EffectiveConfig?.realtime?.directActions,
             prep.ClientPolicy?.Channels.map((c) => c.Key),
             appContext,
+            prep.MintSnapshot,
         );
         this.pruneExcludedServerChannels(session.ID, prep.ClientPolicy);
 
@@ -2047,6 +2085,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         directActions?: RealtimeDirectActionsConfig,
         channels?: string[],
         appContext?: AppContextSnapshot,
+        realtimeMintSnapshot?: PersistedRealtimeMintSnapshot,
     ): Promise<void> {
         // Start from the RAW stored config so every key set at session start survives — the
         // server-authoritative voice deadline (`maxSessionDeadlineIso`) and the per-session media-kit
@@ -2062,6 +2101,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             allowedAgents: allowedAgents && allowedAgents.length > 0 ? allowedAgents : undefined,
             directActions,
             channels,
+            ...(realtimeMintSnapshot ? { realtimeMintSnapshot } : {}),
         };
         session.Config_ = JSON.stringify(config);
         // Every value written here is server-decided (run ids, the resolved target, the in-scope channel
@@ -2977,6 +3017,12 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                         conversationBranchID: typeof parsed.conversationBranchID === 'string' ? parsed.conversationBranchID : undefined,
                         mediaCollectionID: typeof parsed.mediaCollectionID === 'string' ? parsed.mediaCollectionID : undefined,
                         channels: Array.isArray(parsed.channels) ? parsed.channels.filter((k): k is string => typeof k === 'string') : undefined,
+                        realtimeMintSnapshot:
+                            parsed.realtimeMintSnapshot &&
+                            typeof parsed.realtimeMintSnapshot === 'object' &&
+                            !Array.isArray(parsed.realtimeMintSnapshot)
+                                ? parsed.realtimeMintSnapshot
+                                : undefined,
                     };
                 }
             } catch {

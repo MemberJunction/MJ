@@ -130,6 +130,19 @@ const UNSUPPORTED_EXTENSION_WARNINGS: Readonly<Record<keyof MintExtensions, stri
 };
 
 /**
+ * Returns true when `error` is a GraphQL schema validation rejection for `fieldOrArgument`
+ * (e.g. `"Cannot query field \"<name>\"..."` or `"Unknown argument \"<name>\"..."`),
+ * used by rolling-upgrade fallbacks when a newer client talks to an older MJServer.
+ */
+export function IsUnsupportedGraphQLExtension(error: unknown, fieldOrArgument: string): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    (message.includes('Cannot query field') || message.includes('Unknown argument')) &&
+    message.includes(fieldOrArgument)
+  );
+}
+
+/**
  * The extension a mint failure rejects, when the failure is a GraphQL validation rejection of one the mint asked for —
  * the signature of a server that predates it ("Unknown argument "channelCandidatesJson"…", "Cannot query field
  * "ClientPolicyJson"…", "Cannot query field "AvatarStatusJson"…", "Cannot query field "Transport"…", "Unknown argument

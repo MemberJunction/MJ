@@ -496,7 +496,7 @@ describe('Realtime.Pricing as seeded for Gemini 3.8 Live (metadata/ai-models)', 
         expect(Pricing).toBeDefined();
         expect(vertexTurns?.Coverage, 'Vertex AI refuses TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO at session setup').toBe('audioActivityOnly');
         expect(vertexTrust).toBe(true);
-        expect(googleTrust).toBe(false);
+        expect(googleTrust).toBeUndefined();
         expect(vertexKnobs).toEqual(googleKnobs);
         expect({ ...vertexTurns, Coverage: undefined }).toEqual({ ...googleTurns, Coverage: undefined });
     });
@@ -511,7 +511,7 @@ describe('Realtime.Pricing as seeded for Gemini 3.8 Live (metadata/ai-models)', 
         expect(googleEffective?.ConnectionMaxSeconds).toBe(600);
         expect(googleEffective?.SessionMaxSeconds).toBe(1800);
         expect(googleEffective?.ReconnectBufferSeconds).toBe(10);
-        expect(googleEffective?.TrustNativeResumption).toBe(false);
+        expect(googleEffective?.TrustNativeResumption).toBeUndefined();
 
         expect(vertexEffective?.ConnectionMaxSeconds).toBe(600);
         expect(vertexEffective?.SessionMaxSeconds).toBe(1800);

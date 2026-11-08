@@ -7,7 +7,7 @@ import {
 } from '@memberjunction/core-entities';
 import { RunWithTrustedSessionConfigWrites } from '@memberjunction/core-entities-server';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
-import { RealtimeClientSessionService, RealtimeChannelServerHost } from '@memberjunction/ai-agents';
+import { RealtimeClientSessionService, RealtimeChannelServerHost, RealtimeMintSnapshotRegistry } from '@memberjunction/ai-agents';
 import type { BridgeDisconnectReason } from '@memberjunction/ai-bridge-base';
 import { ParseSessionDeadlineMs, VerifyTimeLimitClaim } from './sessionDeadline.js';
 import { GetHostInstanceID } from './HostInstance.js';
@@ -213,6 +213,7 @@ export class SessionManager {
             return false;
         }
         this.heartbeatLastWrite.Delete(agentSessionID.toLowerCase());
+        RealtimeMintSnapshotRegistry.Instance.Delete(agentSessionID);
 
         if (session.Status === 'Closed') {
             // Idempotent — already terminal. Still notify the channel-plugin host so a session

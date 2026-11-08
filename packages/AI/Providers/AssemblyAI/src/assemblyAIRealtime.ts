@@ -7,7 +7,10 @@ import {
     RealtimeDroppedInputReporter,
     ReadRealtimeTurnDetection,
     DescribeUnappliedTurnDetection,
+    RenderLateToolResultNote,
     RenderRealtimeMemorySeedAsContextNote,
+    RealtimeDriverFactsOf,
+    ResolveRealtimeTiming,
     type ClientRealtimeSessionConfig,
     type IRealtimeSession,
     type RealtimeReconnectContext,
@@ -22,7 +25,6 @@ import {
     type RealtimeVoiceOption,
     type RealtimeInputFrame,
     type RealtimeDriverFacts,
-    RealtimeDriverFactsOf,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -978,11 +980,12 @@ export class AssemblyAIRealtimeSession extends BaseRealtimeSession implements IR
     }
 
     /** JSON-serializes and sends one client frame (throws if the socket was never attached). */
-    private sendFrame(frame: JSONObject): void {
-        if (!this.socket) {
+    private sendFrame(frame: JSONObject, targetSocket?: AssemblyAIRealtimeSocket): void {
+        const active = targetSocket ?? this.socket;
+        if (!active) {
             throw new Error('AssemblyAI realtime session is not open (no socket attached or it was closed).');
         }
-        this.socket.send(JSON.stringify(frame));
+        active.send(JSON.stringify(frame));
     }
 
     /** Rejects a still-pending ready wait (transport death / consumer close during startup). */

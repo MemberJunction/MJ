@@ -8,15 +8,17 @@ import {
     IsPcmAudioMimeType,
     ParseDurationToMs,
     RealtimeConnectionSetup,
-    RealtimeSessionResumption,
     RealtimeToolBatchBarrier,
     RealtimeTrackDescriptor,
     ExtractToolSchedulingHint,
     REALTIME_RELAY_TIME_LIMIT_CLOSE_CODE,
+    RenderLateToolResultNote,
     RenderRealtimeMemorySeed,
+    RenderRealtimeMemorySeedAsContextNote,
     type RealtimeAvatarUnavailableReason,
     type RealtimeClientTransport,
-    type RealtimeResumeAttempt,
+    type RealtimeReconnectFailureCode,
+    type RealtimeReconnectReason,
 } from '@memberjunction/ai';
 import {
     GoogleGenAI,
@@ -155,6 +157,7 @@ interface GeminiParsedSessionConfig {
     supportsInboundVideo?: boolean;
     maxInboundVideoRate?: number;
     maxInboundVideoStreams?: number;
+    uncompressedVideoConnectionMaxSeconds?: number;
     requestedTracks?: readonly RealtimeTrackDescriptor[];
     /** The avatar the server granted this session, or `null` when it granted none. */
     avatar: GeminiAvatarGrant | null;
@@ -275,32 +278,61 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     public static readonly GEMINI_LIVE_CONNECTION_SECONDS = 600;
     public static readonly GEMINI_LIVE_UNCOMPRESSED_VIDEO_CONNECTION_SECONDS = 120;
 
+    private uncompressedVideoConnectionSeconds =
+        GeminiRealtimeClient.GEMINI_LIVE_UNCOMPRESSED_VIDEO_CONNECTION_SECONDS;
+
     protected override get DefaultCallDurationSeconds(): number | undefined {
         return GeminiRealtimeClient.GEMINI_LIVE_CONNECTION_SECONDS;
     }
 
+    /**
+     * Applies the 120 s uncompressed-video connection cap only when inbound video is active,
+     * at least one frame has been sent, AND `contextWindowCompression` is absent on the connect
+     * config (sliding-window compression lifts the 2-minute audio+video limit).
+     */
     protected override get RuntimeCallDurationSeconds(): number | undefined {
-        if (this.IsTrackEstablished('video', 'inbound') && this.videoFramesSent > 0) {
-            return GeminiRealtimeClient.GEMINI_LIVE_UNCOMPRESSED_VIDEO_CONNECTION_SECONDS;
+        const hasContextCompression = Boolean(this.connectTarget?.Config?.contextWindowCompression);
+        if (!hasContextCompression && this.IsTrackEstablished('video', 'inbound') && this.videoFramesSent > 0) {
+            return this.uncompressedVideoConnectionSeconds;
         }
         return undefined;
     }
 
     /**
-     * Developer API client-direct sessions default to `false` because Google's `v1alpha` ephemeral
-     * tokens reject `BidiGenerateContentSetup.sessionResumption.handle` (`1008/1007` invalid field
-     * mask), so `GeminiRealtimeClient` reconnects with a freshly minted token and history seeding.
-     * `GeminiEnterpriseRealtimeClient` overrides this to `true`.
+     * When `TrustNativeResumption` is not explicitly set on `ClientRealtimeSessionConfig` (e.g. direct
+     * Developer API sessions where the server stamps `TrustNativeResumption: false`), defaults to `true`
+     * so Vertex AI relay sessions and direct sessions with resumption handles resume natively unless
+     * `TrustNativeResumption: false` was explicitly configured.
      */
     protected override get DefaultTrustsNativeResumption(): boolean {
+        return true;
+    }
+
+    /** Gemini / Vertex AI Live emits a fresh resumable handle shortly after each `turnComplete`. */
+    protected override get RequiresPostTurnResumptionHandle(): boolean {
+        return true;
+    }
+
+    /**
+     * Gemini ephemeral tokens allow `ceil(cap/600)+3` uses until `ExpiresAt`, and relay tickets allow
+     * multiple opens until `ExpiresAt`, so refreshes are driven by `ScheduleCredentialRefresh` / `ExpiresAt`
+     * rather than minting a new token on every reconnect attempt.
+     */
+    protected override get RequiresFreshTokenPerReconnect(): boolean {
         return false;
     }
 
-    protected override get RequiresFreshTokenPerReconnect(): boolean {
-        if (this.connectTarget?.Transport === 'relay') {
-            return this.isCredentialNearExpiry();
+    public override RemoveTrack(descriptor: Pick<RealtimeTrackDescriptor, 'Modality' | 'Direction' | 'SourceID'>): boolean {
+        const removed = super.RemoveTrack(descriptor);
+        if (removed && !this.IsTrackEstablished('video', 'inbound') && this.videoFramesSent > 0) {
+            this.videoFramesSent = 0;
+            this.firstVideoSendTimestamp = 0;
+            this.lastVideoSendTimestamp = 0;
+            if (this.connectionReady && !this.IsReconnecting) {
+                this.ArmConnectionDurationTimer();
+            }
         }
-        return !this.TrustsNativeResumption || this.isCredentialNearExpiry();
+        return removed;
     }
 
     // ── Transport / audio resources ────────────────────────────────────────────
@@ -318,13 +350,6 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private firstVideoSendTimestamp = 0;
     private lastVideoSendTimestamp = 0;
     protected videoFramesSent = 0;
-    /**
-     * Moves the session to a new connection with Google's resumption handle: when Google
-     * announces the connection is ending (`goAway`, with the time left; on Vertex AI it came about
-     * 9 minutes into a connection, with 30 s left) and after an unexpected drop. A planned move
-     * waits until no turn is in progress ({@link IsTurnOpen}). Created per {@link Connect}.
-     */
-    private resumption: RealtimeSessionResumption | null = null;
     /**
      * Whether input can go out: the connection in use has confirmed its setup (`setupComplete`) and
      * no move to a new connection is in progress. Google drops input that reaches a connection
@@ -351,11 +376,6 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * the session that replaced it. `0` while no connection is in use.
      */
     private currentConnection = 0;
-
-    /** Returns the latest session resumption handle reported by the server, if any. */
-    public override get ResumptionHandle(): string | null {
-        return this.resumption?.Handle ?? super.ResumptionHandle;
-    }
 
     /**
      * Whether a turn is in progress. A turn opens at its first sign: the user's first transcribed words, a turn this
@@ -477,6 +497,9 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.idleSignal = session.idleSignal;
         this.supportsScheduling = session.supportsScheduling;
         this.supportsBlocking = session.supportsBlocking;
+        this.uncompressedVideoConnectionSeconds =
+            session.uncompressedVideoConnectionMaxSeconds ??
+            GeminiRealtimeClient.GEMINI_LIVE_UNCOMPRESSED_VIDEO_CONNECTION_SECONDS;
         this.negotiateSessionTracks(session);
         const playback = this.createPlayback();
         this.playback = playback;
@@ -484,8 +507,6 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         // it in (issue #5153). Null for playbacks with no output stream (fakes, no WebAudio).
         this.publishRemoteMediaStream(playback.GetOutputStream?.() ?? null);
         const liveConfig = this.prepareAvatar(session, playback);
-        this.resumption?.Dispose();
-        this.resumption = this.createResumption();
         const target: GeminiConnectTarget = {
             Model: session.model,
             Config: liveConfig,
@@ -711,9 +732,6 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.disposeAvatarOutput();
         this.playback?.Close();
         this.playback = null;
-        // Stop resuming before the socket closes, and drop events still in flight from it.
-        this.resumption?.Dispose();
-        this.resumption = null;
         this.connectTarget = null;
         this.currentConnection = 0;
         this.resetConnectionState();
@@ -898,12 +916,11 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
      * — without it the server keeps waiting for more client input and NEVER starts the spoken
      * reply (observed live as the model staying silent after a delegated agent's result).
      */
-    public SendToolResult(callID: string, outputJson: string): void {
+    protected override doSendToolResult(callID: string, outputJson: string): boolean | void {
         if (!this.session) {
-            return;
+            return false;
         }
         const name = this.pendingToolCallNames.get(callID) ?? '';
-        this.recordToolResult(callID, outputJson, name);
         // Non-blocking results go out while the model talks; blocking ones wait for the turn in flight. Both wait while
         // the session moves to a new connection.
         this.enqueueOrRun(() => this.sendToolResponseTurn(callID, name, outputJson), !this.isNonBlocking);
@@ -1058,9 +1075,15 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         const rawMaxStreams = sessionConfig['maxInboundVideoStreams'];
         const maxInboundVideoStreams =
             typeof rawMaxStreams === 'number' && Number.isInteger(rawMaxStreams) && rawMaxStreams >= 0 ? rawMaxStreams : undefined;
+        const rawUncompressedVideoSec = sessionConfig['uncompressedVideoConnectionMaxSeconds'];
+        const uncompressedVideoConnectionMaxSeconds =
+            typeof rawUncompressedVideoSec === 'number' && Number.isInteger(rawUncompressedVideoSec) && rawUncompressedVideoSec > 0
+                ? rawUncompressedVideoSec
+                : undefined;
         return {
             model, liveConfig, idleSignal, supportsScheduling, supportsBlocking, supportsInboundVideo, maxInboundVideoRate,
             maxInboundVideoStreams,
+            uncompressedVideoConnectionMaxSeconds,
             requestedTracks: GeminiRealtimeClient.readRequestedTracks(sessionConfig[REQUESTED_TRACKS_SESSION_KEY]),
             avatar: GeminiRealtimeClient.readAvatarGrant(sessionConfig['avatar']),
         };
@@ -1154,6 +1177,14 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     }
 
     /**
+     * Whether an unexpected close or `goAway` can be recovered via `TriggerReconnect` / `NotifyConnectionEnding`:
+     * either native resumption has a recorded handle, or history seeding is active (`TrustsNativeResumption === false`).
+     */
+    private canRecoverConnection(): boolean {
+        return this.ResumptionHandle !== null || !this.TrustsNativeResumption;
+    }
+
+    /**
      * Surfaces a fatal websocket error and marks the session unusable. When the session can be
      * resumed, the error is only logged: a websocket `error` is always followed by a `close`,
      * and {@link handleTransportClose} resumes from there.
@@ -1161,7 +1192,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private handleTransportError(event: ErrorEvent): void {
         const detail = GeminiRealtimeClient.transportErrorDetail(event);
         RealtimeDiagLog(`[GeminiRealtimeClient] Transport error: ${detail}`);
-        if (this.resumption?.Handle) {
+        if (this.canRecoverConnection()) {
             return;
         }
         this.emitError({ Message: `Gemini Live transport error: ${detail}`, Fatal: true });
@@ -1171,8 +1202,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     /**
      * Handles a close of the current connection that the consumer did not ask for. MJAPI's relay
      * closing at the session's time limit ends the call with a `time-limit` error. Otherwise, when
-     * Google issued a resumption handle, the session reconnects with it; else the close ends the
-     * session, as an error when it was abnormal.
+     * Google issued a resumption handle (or history seeding is active), the session reconnects;
+     * else the close ends the session, as an error when it was abnormal.
      */
     private handleTransportClose(event?: CloseEvent): void {
         const code = event?.code;
@@ -1192,11 +1223,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             this.setState('error');
             return;
         }
-        if (this.configuredTrustNativeResumption === false) {
+        if (this.canRecoverConnection()) {
             void this.TriggerReconnect('connection-lost');
-            return;
-        }
-        if (this.resumption?.ConnectionLost()) {
             return;
         }
         const isAbnormal = (code !== undefined && code !== 0 && code !== 1000 && code !== 1005) || (wasClean === false && code !== 1000 && code !== 0 && code !== 1005 && code !== undefined);
@@ -1224,17 +1252,12 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         // handle; an update without the flag is treated as resumable.
         if (message.sessionResumptionUpdate) {
             const update = message.sessionResumptionUpdate;
-            if (update.resumable !== false && update.newHandle) {
-                this.RecordResumptionHandle(update.newHandle);
-            }
-            this.resumption?.RecordHandle(update.newHandle, update.resumable !== false);
+            this.RecordResumptionHandle(update.newHandle, update.resumable !== false);
         }
         if (message.goAway) {
             const timeLeftMs = ParseDurationToMs(message.goAway.timeLeft);
-            if (this.configuredTrustNativeResumption === false) {
+            if (this.canRecoverConnection()) {
                 this.NotifyConnectionEnding(timeLeftMs);
-            } else {
-                this.resumption?.ConnectionEnding(timeLeftMs);
             }
         }
 
@@ -1249,15 +1272,21 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         }
     }
 
+    protected override onReconnecting(reason: RealtimeReconnectReason): void {
+        RealtimeDiagLog(`[GeminiRealtimeClient] Resuming the session on a new connection (${reason})`);
+        this.connectionReady = false;
+        super.onReconnecting(reason);
+    }
+
     /**
-     * Re-establishes the underlying Gemini Live WebSocket mid-call via `BaseRealtimeClient.TriggerReconnect`
-     * (proactive connection-duration timer, `goAway` / unexpected close when `TrustNativeResumption === false`,
-     * or Attempt 2 seed fallback after a native resumption failure).
+     * Re-establishes the underlying Gemini Live WebSocket mid-call via `BaseRealtimeClient.reconnectController`
+     * (proactive connection-duration timer, `goAway`, unexpected close, or Attempt 2 seed fallback).
      *
-     * When `context.UseNativeResumption` is `false`, `sessionResumption: {}` is preserved on the connect config
-     * (with any prior `handle` stripped) so the key set matches the ephemeral token's `liveConnectConstraints`
-     * field mask, and accumulated turns from `context.ConversationSeed` are re-seeded via
-     * `sendClientContent({ turns, turnComplete: false })`.
+     * - Preserves `sessionResumption` only when present on the initial connect config or when `handle` is set
+     *   (never adding `sessionResumption: {}` on ZDR sessions that omitted it).
+     * - On a relay session falling back to history seeding (`!handle && target.Transport === 'relay'`), closes the
+     *   old tunnel first, requests `context.RefreshCredential({ AllowFreshReopen: true })` so the relay resets
+     *   `FreshOpened` once `ExpiresAtListeners.size === 0`, and seeds via `RenderRealtimeMemorySeedAsContextNote`.
      */
     protected override async Reconnect(context: RealtimeClientReconnectContext): Promise<void> {
         const target = this.connectTarget;
@@ -1265,36 +1294,64 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             throw new Error('there is no Gemini Live session to reconnect');
         }
         this.connectionReady = false;
-        const refreshedToken = context.Credential.EphemeralToken || target.EphemeralToken;
-        const refreshedRelayUrl = context.Credential.RelayUrl || target.RelayUrl;
         const handle = context.UseNativeResumption && context.ResumptionHandle ? context.ResumptionHandle : undefined;
         if (!handle) {
             for (const callID of this.pendingToolCallNames.keys()) {
                 this.callsFromBeforeReseed.add(callID);
             }
         }
-        const existingResumption = target.Config.sessionResumption;
-        let nextSessionResumption: LiveConnectConfig['sessionResumption'];
-        if (handle) {
-            nextSessionResumption = { ...existingResumption, handle };
-        } else if (existingResumption) {
-            const { handle: _omitted, ...withoutHandle } = existingResumption;
-            nextSessionResumption = withoutHandle;
-        } else {
-            nextSessionResumption = {};
+
+        let refreshedRelayUrl = context.Credential.RelayUrl || target.RelayUrl;
+        if (!handle && target.Transport === 'relay') {
+            if (this.session) {
+                GeminiRealtimeClient.closeQuietly(this.session);
+                this.session = null;
+            }
+            const freshRelayCred = await context.RefreshCredential({ AllowFreshReopen: true });
+            if (freshRelayCred.RelayUrl) {
+                refreshedRelayUrl = freshRelayCred.RelayUrl;
+            }
         }
+
+        const refreshedToken = context.Credential.EphemeralToken || target.EphemeralToken;
+        const existingResumption = target.Config.sessionResumption;
+        let nextConfig: LiveConnectConfig;
+        if (handle) {
+            nextConfig = {
+                ...target.Config,
+                sessionResumption: { ...existingResumption, handle },
+            };
+        } else if (existingResumption !== undefined) {
+            const { handle: _omitted, ...withoutHandle } = existingResumption;
+            nextConfig = {
+                ...target.Config,
+                sessionResumption: withoutHandle,
+            };
+        } else {
+            nextConfig = { ...target.Config };
+        }
+
         const reconnectTarget: GeminiConnectTarget = {
             ...target,
             EphemeralToken: refreshedToken,
             ...(refreshedRelayUrl ? { RelayUrl: refreshedRelayUrl } : {}),
-            Config: {
-                ...target.Config,
-                sessionResumption: nextSessionResumption,
-            },
+            Config: nextConfig,
         };
         const opened = await this.openConnection(reconnectTarget);
-        await GeminiRealtimeClient.awaitSetup(opened);
-        if (this.connectTarget !== target) {
+        const onAbort = () => {
+            GeminiRealtimeClient.closeQuietly(opened.Session);
+        };
+        if (context.Signal.aborted) {
+            onAbort();
+            throw new Error('GeminiRealtimeClient: reconnect attempt aborted');
+        }
+        context.Signal.addEventListener('abort', onAbort, { once: true });
+        try {
+            await GeminiRealtimeClient.awaitSetup(opened);
+        } finally {
+            context.Signal.removeEventListener('abort', onAbort);
+        }
+        if (context.Abandoned || this.connectTarget !== target) {
             GeminiRealtimeClient.closeQuietly(opened.Session);
             return;
         }
@@ -1305,55 +1362,26 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             GeminiRealtimeClient.closeQuietly(previous);
         }
         if (!handle && context.ConversationSeed && context.ConversationSeed.Entries.length > 0) {
-            const seedTurns = RenderRealtimeMemorySeed(context.ConversationSeed);
-            if (seedTurns.length > 0) {
-                const turns: Content[] = seedTurns.map((t) => ({
-                    role: t.Role,
-                    parts: t.Texts.map((text) => ({ text })),
-                }));
-                this.session?.sendClientContent({ turns, turnComplete: false });
+            if (target.Transport === 'relay') {
+                const note = RenderRealtimeMemorySeedAsContextNote(context.ConversationSeed);
+                if (note) {
+                    this.session?.sendClientContent({
+                        turns: [{ role: 'user', parts: [{ text: note }] }],
+                        turnComplete: false,
+                    });
+                }
+            } else {
+                const seedTurns = RenderRealtimeMemorySeed(context.ConversationSeed);
+                if (seedTurns.length > 0) {
+                    const turns: Content[] = seedTurns.map((t) => ({
+                        role: t.Role,
+                        parts: t.Texts.map((text) => ({ text })),
+                    }));
+                    this.session?.sendClientContent({ turns, turnComplete: false });
+                }
             }
         }
         this.handleResumed();
-    }
-
-    /**
-     * Opens a replacement connection that resumes the session from `handle`, switches to it once
-     * Google confirms its setup, and closes the old one. Until then the old connection stays in
-     * use, so what it still sends (the rest of a turn the deadline cut, its usage) is handled.
-     * Mic capture and playout carry over untouched. Rejects when the connection can't be opened or
-     * its setup fails, so {@link RealtimeSessionResumption} can retry.
-     *
-     * The resume reuses the session's ephemeral token. Google counts a resume as a new session, so
-     * the server driver mints the token to open several connections until its `expireTime`
-     * (30 minutes). After that, or once those connections are spent, every attempt fails and the
-     * session ends with a fatal error.
-     *
-     * @param handle The resumption handle Google issued.
-     * @param attempt Marks the attempt abandoned after a timeout or a consumer close; a
-     *                connection that opens after that is closed instead of used.
-     */
-    protected async resumeSession(handle: string, attempt: RealtimeResumeAttempt): Promise<void> {
-        const target = this.connectTarget;
-        if (!target) {
-            throw new Error('there is no Gemini Live session to resume');
-        }
-        const resumeTarget: GeminiConnectTarget = {
-            ...target,
-            Config: { ...target.Config, sessionResumption: { ...target.Config.sessionResumption, handle } },
-        };
-        const opened = await this.openConnection(resumeTarget);
-        await GeminiRealtimeClient.awaitSetup(opened);
-        if (attempt.Abandoned || this.connectTarget !== target) {
-            GeminiRealtimeClient.closeQuietly(opened.Session);
-            return;
-        }
-        const previous = this.session;
-        this.useConnection(opened);
-        this.connectTarget = resumeTarget;
-        if (previous) {
-            GeminiRealtimeClient.closeQuietly(previous);
-        }
     }
 
     /**
@@ -1415,24 +1443,6 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     }
 
     /**
-     * Builds the resumption helper for a newly connected session; see {@link resumption}. From the
-     * moment a move starts, input waits for the new connection ({@link connectionReady}).
-     */
-    private createResumption(): RealtimeSessionResumption {
-        return new RealtimeSessionResumption({
-            Reconnect: (handle, attempt) => this.resumeSession(handle, attempt),
-            OnReconnecting: (reason) => {
-                RealtimeDiagLog(`[GeminiRealtimeClient] Resuming the session on a new connection (${reason})`);
-                this.connectionReady = false;
-                this.setState('connecting');
-            },
-            OnReconnected: () => this.handleResumed(),
-            OnReconnectFailed: (error) => this.handleResumeFailed(error),
-            Log: (message) => RealtimeDiagLog(message),
-        });
-    }
-
-    /**
      * The session continues on a new connection, whose setup Google has confirmed. A turn cut off
      * by a drop or the deadline never completes there, so the turn state is reset (its partial
      * transcripts are emitted as final). The mic audio held during the move goes out, then the
@@ -1456,11 +1466,15 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     }
 
     /** Every resume attempt failed: the session ends with a fatal error. */
-    private handleResumeFailed(error: Error): void {
+    protected override onReconnectFailed(error: Error, code?: RealtimeReconnectFailureCode): void {
         if (this.currentState === 'closed' || this.currentState === 'error') {
             return;
         }
-        this.emitError({ Message: `Gemini Live connection was lost and could not be resumed: ${error.message}`, Fatal: true });
+        this.emitError({
+            Message: `Gemini Live connection was lost and could not be resumed: ${error.message}`,
+            ...(code ? { Code: code } : {}),
+            Fatal: true,
+        });
         this.setState('error');
     }
 
@@ -1932,7 +1946,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private markTurnOpen(): void {
         this.turnOpen = true;
         this.turnEndAwaitsToolResults = false;
-        this.resumption?.TurnStarted();
+        this.reconnectController.TurnStarted();
     }
 
     /** The turn's `turnComplete` (or true idle): it ends now, or once the results of the tool calls still pending go out. */
@@ -1955,7 +1969,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private endTurn(): void {
         this.turnOpen = false;
         this.turnEndAwaitsToolResults = false;
-        this.resumption?.TurnEnded();
+        this.reconnectController.TurnEnded();
     }
 
     // ── Collision-safe send machinery ──────────────────────────────────────────
@@ -2075,15 +2089,14 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         }
         this.toolBatchBarrier.RecordResult(callID);
         if (this.callsFromBeforeReseed.delete(callID)) {
-            session.sendClientContent({
-                turns: [{ role: 'user', parts: [{ text: `[Tool result for ${name || callID}: ${outputJson}]` }] }],
-                turnComplete: true,
+            session.sendRealtimeInput({
+                text: RenderLateToolResultNote(name || callID, outputJson),
             });
-            this.openClientTurn = false;
-            this.toolResponseAwaitsCommit = false;
-            this.responseActive = true;
-            this.activeResponseKind = 'normal';
-            this.setState('speaking');
+            if (!this.isNonBlocking) {
+                this.responseActive = true;
+                this.activeResponseKind = 'normal';
+                this.setState('speaking');
+            }
             this.pendingToolCallNames.delete(callID);
             this.endTurnIfToolResultsIn();
             return;

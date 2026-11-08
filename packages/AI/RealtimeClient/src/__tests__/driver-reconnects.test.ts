@@ -18,6 +18,8 @@ import {
     AssemblyAIRealtimeClient,
     IAssemblyAIClientSocket,
 } from '../drivers/assemblyAIRealtimeClient';
+import { HuggingFaceRealtimeClient } from '../drivers/huggingFaceRealtimeClient';
+import { IRealtimeLivePeerConnection, OpenAILiveClient } from '../drivers/openAILiveClient';
 import { FakeMediaStream, FakeMicCapture, FakeRtpSender, FakeTrack } from './helpers/realtime-fakes';
 
 // ── Shared fakes ───────────────────────────────────────────────────────────────
@@ -651,6 +653,183 @@ describe('Slice 5 — Client driver long-call reconnects and history seeding', (
         expect(client.PeerConnections).toHaveLength(3);
         await vi.advanceTimersByTimeAsync(95_000);
         expect(client.PeerConnections).toHaveLength(4);
+
+        await client.Disconnect();
+    });
+
+    it('HuggingFaceRealtimeClient reconnects before ConnectionMaxSeconds expiry, waits for session.created, and seeds turns', async () => {
+        class ReconnectableHuggingFaceClient extends HuggingFaceRealtimeClient {
+            public Sockets: FakeProtocolSocket[] = [];
+            public Urls: string[] = [];
+            protected override createSocket(url: string): IOpenAIProtocolClientSocket {
+                this.Urls.push(url);
+                const sock = new FakeProtocolSocket();
+                this.Sockets.push(sock);
+                queueMicrotask(() => {
+                    sock.onopen?.();
+                    queueMicrotask(() => {
+                        sock.onmessage?.(JSON.stringify({ type: 'session.created' }));
+                    });
+                });
+                return sock;
+            }
+            protected override async createMicCapture(): Promise<IPcmMicCapture> {
+                return new FakeMicCapture();
+            }
+            protected override createPlayback(): IRealtimePcmPlayback {
+                return new FakePlayback();
+            }
+        }
+
+        const client = new ReconnectableHuggingFaceClient();
+        const refreshMock = vi.fn().mockResolvedValue({
+            EphemeralToken: 'wss://proxy.example/realtime-proxy?ticket=hf-ticket-2',
+            ExpiresAt: new Date(Date.now() + 600_000).toISOString(),
+            SessionConfig: {
+                session: { instructions: 'HuggingFace assistant' },
+                sampleRate: 16000,
+                connectionMaxSeconds: 120,
+                reconnectBufferSeconds: 10,
+            } satisfies JSONObject,
+        });
+        client.SetTokenRefreshCallback(refreshMock);
+
+        const mic = new FakeMediaStream([new FakeTrack()]) as unknown as MediaStream;
+        const connectPromise = client.Connect(
+            {
+                Provider: 'huggingface',
+                Model: 'hf-s2s',
+                EphemeralToken: 'wss://proxy.example/realtime-proxy?ticket=hf-ticket-1',
+                ExpiresAt: new Date(Date.now() + 600_000).toISOString(),
+                ConnectionMaxSeconds: 120,
+                ReconnectBufferSeconds: 10,
+                SessionConfig: {
+                    session: { instructions: 'HuggingFace assistant' },
+                    sampleRate: 16000,
+                },
+            },
+            mic
+        );
+        await vi.advanceTimersByTimeAsync(1);
+        await connectPromise;
+
+        expect(client.Sockets).toHaveLength(1);
+        client.Sockets[0].onmessage?.(
+            JSON.stringify({
+                type: 'conversation.item.input_audio_transcription.completed',
+                transcript: 'Check server status.',
+            })
+        );
+        client.Sockets[0].onmessage?.(
+            JSON.stringify({
+                type: 'response.output_audio_transcript.done',
+                transcript: 'All systems operational.',
+            })
+        );
+
+        await vi.advanceTimersByTimeAsync(95_000);
+
+        expect(refreshMock).toHaveBeenCalledTimes(1);
+        expect(client.Sockets).toHaveLength(2);
+        expect(client.Urls[1]).toContain('hf-ticket-2');
+        const secondEvents = client.Sockets[1].SentEvents();
+        expect(secondEvents[0]?.type).toBe('session.update');
+        const itemCreates = secondEvents.filter((e) => e.type === 'conversation.item.create');
+        expect(itemCreates.length).toBeGreaterThanOrEqual(2);
+
+        await client.Disconnect();
+    });
+
+    it('OpenAILiveClient reconnects WebRTC before ConnectionMaxSeconds expiry, waits for session.started, and seeds turns', async () => {
+        class ReconnectableOpenAILiveClient extends OpenAILiveClient {
+            public PeerConnections: Array<FakePeerConnection & IRealtimeLivePeerConnection> = [];
+            public Tokens: string[] = [];
+            protected override createPeerConnection(): IRealtimeLivePeerConnection {
+                const pc: FakePeerConnection & IRealtimeLivePeerConnection = Object.assign(
+                    new FakePeerConnection(),
+                    { iceGatheringState: 'complete' as RTCIceGatheringState }
+                );
+                this.PeerConnections.push(pc);
+                return pc;
+            }
+            protected override createAudioSink(): IRealtimeAudioSink {
+                return { srcObject: null, remove: () => {} };
+            }
+            protected override async postSdpOffer(
+                _offerSdp: string,
+                config: ClientRealtimeSessionConfig
+            ): Promise<string> {
+                this.Tokens.push(config.EphemeralToken);
+                const latest = this.PeerConnections[this.PeerConnections.length - 1];
+                queueMicrotask(() => {
+                    latest.Channel.Open();
+                    queueMicrotask(() => {
+                        latest.Channel.EmitServer({
+                            type: 'session.started',
+                            session: { id: `live_sess_${this.PeerConnections.length}` },
+                        });
+                    });
+                });
+                return 'v=0\r\n';
+            }
+        }
+
+        const client = new ReconnectableOpenAILiveClient();
+        const refreshMock = vi.fn().mockResolvedValue({
+            EphemeralToken: 'live-tok-2',
+            ExpiresAt: new Date(Date.now() + 600_000).toISOString(),
+            SessionConfig: {
+                instructions: 'Live prompt',
+                connectionMaxSeconds: 120,
+                reconnectBufferSeconds: 10,
+            } satisfies JSONObject,
+        });
+        client.SetTokenRefreshCallback(refreshMock);
+
+        const mic = new FakeMediaStream([new FakeTrack()]) as unknown as MediaStream;
+        const connectPromise = client.Connect(
+            {
+                Provider: 'openai-live',
+                Model: 'gpt-live-1',
+                EphemeralToken: 'live-tok-1',
+                ExpiresAt: new Date(Date.now() + 600_000).toISOString(),
+                ConnectionMaxSeconds: 120,
+                ReconnectBufferSeconds: 10,
+                SessionConfig: {
+                    instructions: 'Live prompt',
+                },
+            },
+            mic
+        );
+        await vi.advanceTimersByTimeAsync(1);
+        await connectPromise;
+
+        expect(client.PeerConnections).toHaveLength(1);
+        client.PeerConnections[0].Channel.EmitServer({
+            type: 'session.input_transcript.delta',
+            delta: 'Remind me about the deployment.',
+        });
+        client.PeerConnections[0].Channel.EmitServer({
+            type: 'session.output_transcript.delta',
+            delta: 'Deployment is set for Friday.',
+        });
+        client.PeerConnections[0].Channel.EmitServer({
+            type: 'response.event',
+            event: { type: 'response.completed' },
+        });
+
+        await vi.advanceTimersByTimeAsync(95_000);
+
+        expect(refreshMock).toHaveBeenCalledTimes(1);
+        expect(client.PeerConnections).toHaveLength(2);
+        expect(client.Tokens).toEqual(['live-tok-1', 'live-tok-2']);
+        expect(client.PeerConnections[0].Closed).toBe(true);
+
+        const secondEvents = client.PeerConnections[1].Channel.SentEvents();
+        const seedFrames = secondEvents.filter((e) => e.type === 'session.thinking.append');
+        expect(seedFrames).toHaveLength(1);
+        expect(JSON.stringify(seedFrames[0])).toContain('Remind me about the deployment.');
+        expect(JSON.stringify(seedFrames[0])).toContain('Deployment is set for Friday.');
 
         await client.Disconnect();
     });

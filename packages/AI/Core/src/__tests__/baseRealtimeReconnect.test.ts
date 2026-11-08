@@ -224,7 +224,7 @@ describe('BaseRealtimeModel & BaseRealtimeSession — long-call reconnect contra
         expect(session.Errors[0].Code).toBe('reconnect-failed');
     });
 
-    it('ExtractRealtimeTimingConfig extracts camelCase and PascalCase keys cleanly', () => {
+    it('ExtractRealtimeTimingConfig extracts camelCase and PascalCase keys and rejects non-integer fractions (#15)', () => {
         expect(
             ExtractRealtimeTimingConfig({
                 connectionMaxSeconds: 600,
@@ -238,5 +238,106 @@ describe('BaseRealtimeModel & BaseRealtimeSession — long-call reconnect contra
             ReconnectBufferSeconds: 10,
             TrustNativeResumption: false,
         });
+        expect(
+            ExtractRealtimeTimingConfig({
+                connectionMaxSeconds: 0.5,
+                sessionMaxSeconds: 12.7,
+                reconnectBufferSeconds: -3,
+            })
+        ).toEqual({});
+    });
+
+    it('narrows CallDurationSeconds with metadata and never widens past DriverFacts.ProviderMaxSessionSeconds (#15)', async () => {
+        const model = new TestRealtimeModel('test-key');
+        const session = (await model.StartSession({
+            Model: 'test',
+            SystemPrompt: 'sys',
+            Config: { connectionMaxSeconds: 7200 },
+        })) as TestRealtimeSession;
+        // Driver ceiling is 600s; metadata 7200s must not widen past 600s
+        expect(session.CallDurationSeconds).toBe(600);
+        expect(model.ResolveConnectionDurationSeconds({ connectionMaxSeconds: 7200 })).toBe(600);
+        expect(model.ResolveConnectionDurationSeconds({ connectionMaxSeconds: 300 })).toBe(300);
+        await session.Close();
+    });
+
+    it('marks timed-out reconnect attempt as Abandoned and aborts its Signal before starting Attempt 2 (#7, #21)', async () => {
+        const model = new TestRealtimeModel('test-key');
+        const session = (await model.StartSession({
+            Model: 'test',
+            SystemPrompt: 'sys',
+        })) as TestRealtimeSession;
+
+        let attempt1Context: RealtimeReconnectContext | undefined;
+        let attempt1LateFinishedWhileAbandoned = false;
+
+        session.ReconnectBehavior = async (ctx) => {
+            if (ctx.Attempt === 1) {
+                attempt1Context = ctx;
+                await new Promise<void>((resolve) => setTimeout(resolve, 20_000));
+                attempt1LateFinishedWhileAbandoned = ctx.Abandoned;
+                return;
+            }
+        };
+
+        const promise = session.TriggerReconnect('connection-lost');
+        // Advance past the 15s attempt 1 timeout + 1s retry delay
+        await vi.advanceTimersByTimeAsync(16_500);
+        const ok = await promise;
+
+        expect(ok).toBe(true);
+        expect(session.ReconnectContexts).toHaveLength(2);
+        expect(attempt1Context?.Abandoned).toBe(true);
+        expect(attempt1Context?.Signal.aborted).toBe(true);
+
+        // Advance the remaining 4s of attempt 1's late timer and verify it saw Abandoned = true
+        await vi.advanceTimersByTimeAsync(5_000);
+        expect(attempt1LateFinishedWhileAbandoned).toBe(true);
+        await session.Close();
+    });
+
+    it('marks in-flight reconnect attempt as Abandoned when Close() is called during reconnect (#21)', async () => {
+        const model = new TestRealtimeModel('test-key');
+        const session = (await model.StartSession({
+            Model: 'test',
+            SystemPrompt: 'sys',
+        })) as TestRealtimeSession;
+
+        let capturedContext: RealtimeReconnectContext | undefined;
+        session.ReconnectBehavior = async (ctx) => {
+            capturedContext = ctx;
+            await new Promise<void>((resolve) => setTimeout(resolve, 5_000));
+        };
+
+        const promise = session.TriggerReconnect('connection-lost');
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(capturedContext?.Abandoned).toBe(false);
+
+        await session.Close();
+        expect(capturedContext?.Abandoned).toBe(true);
+        expect(capturedContext?.Signal.aborted).toBe(true);
+
+        await vi.advanceTimersByTimeAsync(5_000);
+        expect(await promise).toBe(false);
+        expect(session.Errors).toHaveLength(0);
+    });
+
+    it('trips the rapid-reconnect circuit breaker with code reconnect-loop-breaker (#18, #21)', async () => {
+        const model = new TestRealtimeModel('test-key');
+        const session = (await model.StartSession({
+            Model: 'test',
+            SystemPrompt: 'sys',
+        })) as TestRealtimeSession;
+
+        for (let i = 0; i < 5; i++) {
+            const ok = await session.TriggerReconnect('connection-lost');
+            expect(ok).toBe(true);
+        }
+        const sixthOk = await session.TriggerReconnect('connection-lost');
+        expect(sixthOk).toBe(false);
+        expect(session.Errors).toHaveLength(1);
+        expect(session.Errors[0].Code).toBe('reconnect-loop-breaker');
+        expect(session.Errors[0].Error.Fatal).toBe(true);
+        await session.Close();
     });
 });

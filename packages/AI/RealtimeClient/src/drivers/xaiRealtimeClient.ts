@@ -105,7 +105,31 @@ export class xAIRealtimeClient extends OpenAIProtocolWebSocketRealtimeClient {  
         return 1800;
     }
 
+    protected override get DefaultTrustsNativeResumption(): boolean {
+        return true;
+    }
+
     // ── Transport hooks ────────────────────────────────────────────────────────
+
+    protected override resolveSessionObject(config: ClientRealtimeSessionConfig): ReturnType<OpenAIProtocolWebSocketRealtimeClient['resolveSessionObject']> {
+        const sessionObj = super.resolveSessionObject(config);
+        const explicitlyTrusted =
+            config.TrustNativeResumption === true ||
+            config.SessionConfig?.['trustNativeResumption'] === true ||
+            config.SessionConfig?.['TrustNativeResumption'] === true;
+        if (
+            explicitlyTrusted &&
+            this.TrustsNativeResumption &&
+            Object.keys(sessionObj).length > 0 &&
+            sessionObj['resumption'] === undefined
+        ) {
+            return {
+                ...sessionObj,
+                resumption: { enabled: true },
+            };
+        }
+        return sessionObj;
+    }
 
     /** @inheritdoc — model on the URL, ephemeral secret as the subprotocol. */
     protected openProviderSocket(

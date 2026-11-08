@@ -84,6 +84,7 @@ export const XAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     supportsVoiceOutput: false,
     supportsLiveReconfigure: true,
     supportsDynamicToolSet: true,
+    supportsNativeResumption: true,
     unexpectedCloseMessage: 'xAI Grok Voice realtime connection closed unexpectedly',
     // server_vad is the only turn mode xAI documents on Grok Voice today. When xAI ships a
     // native full-duplex / smarter turn mode (the Grok Voice Think Fast family reasons while
@@ -185,11 +186,11 @@ export class xAIRealtime extends OpenAIRealtime {  // case-violation-ok-legacy-b
     public static override readonly SupportsDynamicToolSet = XAI_REALTIME_PROFILE.supportsDynamicToolSet;
 
     public override get DefaultCallDurationSeconds(): number | undefined {
-        return 1800;
+        return 7200;
     }
 
     public override get TrustsNativeResumption(): boolean {
-        return false;
+        return true;
     }
 
     /**
@@ -245,6 +246,6 @@ export class xAIRealtimeSession extends OpenAIRealtimeSession {  // case-violati
     }
 
     protected override get DefaultCallDurationSeconds(): number | undefined {
-        return this.model?.DefaultCallDurationSeconds ?? 1800;
+        return this.model?.DefaultCallDurationSeconds ?? 7200;
     }
 }

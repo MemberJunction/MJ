@@ -1836,8 +1836,35 @@ describe('one slot, one owner on the mint path (StartRealtimeSession) and when a
         expect(fallback.EphemeralToken).toBe('initial-tok');
         expect(fallback.SessionConfig).toEqual({ voice: 'shimmer' });
 
+        // Relay refresh path: Kind === 'relay' accepts an empty EphemeralToken without rejecting (#5, #21):
+        provider.ExecuteGQL = async (query: string, variables?: Record<string, unknown>) => {
+            if (query.includes('RefreshRealtimeClientSessionToken')) {
+                return {
+                    RefreshRealtimeClientSessionToken: {
+                        Success: true,
+                        Kind: 'relay',
+                        EphemeralToken: '',
+                        ExpiresAt: '2030-01-01T00:20:00Z',
+                        RelayUrl: 'wss://mjapi.example.test/realtime/relay/ticket-99',
+                        SessionConfigJson: '{"model":"gemini-live-2.5-flash-native-audio"}',
+                    },
+                };
+            }
+            return origExecute(query, variables);
+        };
+
+        const relayRefreshed = await refreshFn({
+            AgentSessionId: 'minted-1',
+            EphemeralToken: '',
+            ExpiresAt: '2030-01-01T00:05:00Z',
+            SessionConfigJson: '{}',
+        });
+        expect(relayRefreshed.EphemeralToken).toBe('');
+        expect(relayRefreshed.SessionConfig).toEqual({ model: 'gemini-live-2.5-flash-native-audio' });
+
         await runtime.EndRealtimeSession();
     });
 });
+
 
 

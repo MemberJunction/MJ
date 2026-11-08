@@ -42,6 +42,7 @@ import {
   RealtimeClientToolCall,
   RealtimeClientTranscript,
   RealtimeClientUsage,
+  type RealtimeClientTokenRefreshOptions,
   type RefreshedRealtimeClientCredential,
   VideoSourceArbiter,
   type DisplayCaptureOptions,
@@ -49,7 +50,7 @@ import {
   type VideoSourceState,
   REQUESTED_TRACKS_SESSION_KEY
 } from '@memberjunction/ai-realtime-client';
-import { DefaultRealtimeSessionLauncher, HasClientCredential, type IRealtimeSessionLauncher } from './session-launcher';
+import { DefaultRealtimeSessionLauncher, HasClientCredential, IsUnsupportedGraphQLExtension, type IRealtimeSessionLauncher } from './session-launcher';
 import { RequestsAgentVideo, ResolveAvatarNotice, type RealtimeAvatarNotice } from './avatar-notice';
 import { ClientSessionDeadline, type SessionDeadlineOptions } from './client-session-deadline';
 import {
@@ -4295,18 +4296,35 @@ export class RealtimeSessionRuntime {
 
   /**
    * Mints a fresh single-use ephemeral credential (or extends the relay grant) for an active
-   * browser realtime session via `RefreshRealtimeClientSessionToken(agentSessionId)`.
+   * browser realtime session via `RefreshRealtimeClientSessionToken(agentSessionId, allowFreshReopen)`.
    * During rolling upgrades where an older MJServer does not expose `RefreshRealtimeClientSessionToken`
    * yet, falls back once to the initial credential if its `ExpiresAt` is still in the future.
    */
   private async refreshClientSessionCredential(
-    initialSession: StartRealtimeClientSessionResult
+    initialSession: StartRealtimeClientSessionResult,
+    options?: RealtimeClientTokenRefreshOptions
   ): Promise<RefreshedRealtimeClientCredential> {
     const agentSessionId = this.agentSessionId ?? initialSession.AgentSessionId;
     if (!agentSessionId) {
       throw new Error('Cannot refresh realtime session credential: no active agentSessionId');
     }
-    const mutation = `
+    const allowFreshReopen = options?.AllowFreshReopen === true;
+    const buildMutation = (includeKindAndReopen: boolean): string =>
+      includeKindAndReopen && allowFreshReopen
+        ? `
+      mutation RefreshRealtimeClientSessionToken($agentSessionId: String!, $allowFreshReopen: Boolean) {
+        RefreshRealtimeClientSessionToken(agentSessionId: $agentSessionId, allowFreshReopen: $allowFreshReopen) {
+          Success
+          ErrorMessage
+          Kind
+          EphemeralToken
+          ExpiresAt
+          RelayUrl
+          SessionConfigJson
+        }
+      }
+    `
+        : `
       mutation RefreshRealtimeClientSessionToken($agentSessionId: String!) {
         RefreshRealtimeClientSessionToken(agentSessionId: $agentSessionId) {
           Success
@@ -4319,33 +4337,70 @@ export class RealtimeSessionRuntime {
       }
     `;
     try {
-      const response = (await this.gql().ExecuteGQL(mutation, { agentSessionId })) as {
+      type RefreshGraphQLPayload = {
         RefreshRealtimeClientSessionToken?: {
           Success: boolean;
           ErrorMessage?: string;
+          Kind?: string | null;
           EphemeralToken?: string;
           ExpiresAt?: string;
           RelayUrl?: string | null;
           SessionConfigJson?: string | null;
         };
       };
+      let response: RefreshGraphQLPayload;
+      if (allowFreshReopen) {
+        try {
+          response = (await this.gql().ExecuteGQL(buildMutation(true), {
+            agentSessionId,
+            allowFreshReopen: true,
+          })) as RefreshGraphQLPayload;
+        } catch (err) {
+          if (
+            IsUnsupportedGraphQLExtension(err, 'allowFreshReopen') ||
+            IsUnsupportedGraphQLExtension(err, 'Kind')
+          ) {
+            response = (await this.gql().ExecuteGQL(buildMutation(false), {
+              agentSessionId,
+            })) as RefreshGraphQLPayload;
+          } else {
+            throw err;
+          }
+        }
+      } else {
+        response = (await this.gql().ExecuteGQL(buildMutation(false), {
+          agentSessionId,
+        })) as RefreshGraphQLPayload;
+      }
       const result = response?.RefreshRealtimeClientSessionToken;
-      if (!result?.Success || !result.EphemeralToken) {
+      if (!result?.Success) {
         throw new Error(result?.ErrorMessage ?? 'RefreshRealtimeClientSessionToken failed');
       }
+      const effectiveRelayUrl = result.RelayUrl || initialSession.RelayUrl;
+      const isRelayRefresh =
+        result.Kind === 'relay' ||
+        initialSession.Transport === 'relay' ||
+        (!result.EphemeralToken && Boolean(effectiveRelayUrl));
+      if (!isRelayRefresh && !result.EphemeralToken) {
+        throw new Error(result?.ErrorMessage ?? 'RefreshRealtimeClientSessionToken returned no token');
+      }
       return {
-        EphemeralToken: result.EphemeralToken,
+        Kind: isRelayRefresh ? 'relay' : 'token',
+        EphemeralToken: result.EphemeralToken ?? '',
         ExpiresAt: result.ExpiresAt ?? initialSession.ExpiresAt,
-        ...(result.RelayUrl ? { RelayUrl: result.RelayUrl } : {}),
+        ...(effectiveRelayUrl ? { RelayUrl: effectiveRelayUrl } : {}),
         SessionConfig: this.parseSessionConfig(result.SessionConfigJson ?? initialSession.SessionConfigJson),
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const isUnknownSchemaField =
-        message.includes('Cannot query field') && message.includes('RefreshRealtimeClientSessionToken');
       const initialExpiryMs = Date.parse(initialSession.ExpiresAt);
-      if (isUnknownSchemaField && Number.isFinite(initialExpiryMs) && initialExpiryMs > Date.now()) {
+      if (
+        IsUnsupportedGraphQLExtension(error, 'RefreshRealtimeClientSessionToken') &&
+        Number.isFinite(initialExpiryMs) &&
+        initialExpiryMs > Date.now()
+      ) {
+        const isRelay = initialSession.Transport === 'relay' || (!initialSession.EphemeralToken && Boolean(initialSession.RelayUrl));
         return {
+          Kind: isRelay ? 'relay' : 'token',
           EphemeralToken: initialSession.EphemeralToken,
           ExpiresAt: initialSession.ExpiresAt,
           ...(initialSession.RelayUrl ? { RelayUrl: initialSession.RelayUrl } : {}),

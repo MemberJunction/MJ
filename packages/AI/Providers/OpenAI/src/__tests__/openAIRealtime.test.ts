@@ -9,45 +9,26 @@ vi.mock('@memberjunction/global', () => ({
 // type aliases (RealtimeSessionParams, etc.) are compile-time interfaces and need no runtime mock.
 vi.mock('@memberjunction/ai', async () => {
     const { BaseModel } = await import('../../../../Core/src/generic/baseModel');
-    const { BaseRealtimeModel, BaseRealtimeSession, RealtimeDriverFactsOf, DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS, DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS, MAX_REALTIME_RAPID_RECONNECTS, REALTIME_RAPID_RECONNECT_WINDOW_MS, REALTIME_CONNECTION_SETUP_TIMEOUT_MS } = await import('../../../../Core/src/generic/baseRealtime');
-    const { RealtimeConversationMemory, RenderRealtimeMemorySeed, RenderRealtimeMemorySeedAsContextNote, REALTIME_MEMORY_CONTINUITY_PREAMBLE } = await import('../../../../Core/src/generic/realtimeConversationMemory');
+    const baseRealtime = await import('../../../../Core/src/generic/baseRealtime');
+    const realtimeMemory = await import('../../../../Core/src/generic/realtimeConversationMemory');
     // RealtimeDiagLog is a verbose-gated console logger used by the realtime session; a no-op suffices.
     const RealtimeDiagLog = () => { /* no-op in tests */ };
-    // IsTranscriptContinuation is a PURE, dependency-free helper — pull in the REAL implementation
-    // rather than stubbing it, so this driver test asserts against shipped behavior. It lives in its
-    // own module precisely so importing it here can't cascade into other mocked packages.
     const { IsTranscriptContinuation } = await import('../../../../Core/src/generic/transcriptContinuation');
-    // Same reasoning for ResolveResponseDoneUsage — it is PURE and dependency-free, and it encodes
-    // the provider-specific rule for WHERE usage lives on a response.done frame. Stubbing it would
-    // let this test restate that rule and drift from reality, which is exactly how the xAI
-    // top-level-usage bug survived: the sibling xAI test asserted against a hand-written
-    // OpenAI-shaped frame and passed while real Grok sessions recorded nothing.
     const { ResolveResponseDoneUsage, MapRealtimeUsageModalityDetail } = await import('../../../../Core/src/generic/realtimeUsage');
-    // NormalizeTurnDetectionSettings is the single shared normalizer — run the real one so tests cannot drift from it.
-    // turnDetectionSettings.ts is dependency-free BY DESIGN and must stay so: it is loaded from source here, under mocks.
     const { NormalizeTurnDetectionSettings } = await import('../../../../Core/src/generic/turnDetectionSettings');
-    // Same for RealtimeDroppedInputReporter: dependency-free, and the drop tests assert its real once-per-type report.
     const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
+    const realtimeConnectionSetup = await import('../../../../Core/src/generic/realtimeConnectionSetup');
     return {
         BaseModel,
-        BaseRealtimeModel,
-        BaseRealtimeSession,
-        RealtimeConversationMemory,
-        RenderRealtimeMemorySeed,
-        RenderRealtimeMemorySeedAsContextNote,
-        REALTIME_MEMORY_CONTINUITY_PREAMBLE,
-        DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS,
-        DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS,
-        MAX_REALTIME_RAPID_RECONNECTS,
-        REALTIME_RAPID_RECONNECT_WINDOW_MS,
-        REALTIME_CONNECTION_SETUP_TIMEOUT_MS,
+        ...baseRealtime,
+        ...realtimeMemory,
+        ...realtimeConnectionSetup,
         RealtimeDiagLog,
         IsTranscriptContinuation,
         ResolveResponseDoneUsage,
         MapRealtimeUsageModalityDetail,
         NormalizeTurnDetectionSettings,
         RealtimeDroppedInputReporter,
-        RealtimeDriverFactsOf,
     };
 });
 

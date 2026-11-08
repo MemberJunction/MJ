@@ -9,8 +9,9 @@ vi.mock('@memberjunction/global', () => ({
 // type aliases (RealtimeSessionParams, etc.) are compile-time interfaces and need no runtime mock.
 vi.mock('@memberjunction/ai', async () => {
     const { BaseModel } = await import('../../../../Core/src/generic/baseModel');
-    const { BaseRealtimeModel, BaseRealtimeSession, RealtimeDriverFactsOf, DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS, DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS, MAX_REALTIME_RAPID_RECONNECTS, REALTIME_RAPID_RECONNECT_WINDOW_MS } = await import('../../../../Core/src/generic/baseRealtime');
-    const { RealtimeConversationMemory, RenderRealtimeMemorySeed, RenderRealtimeMemorySeedAsContextNote, REALTIME_MEMORY_CONTINUITY_PREAMBLE } = await import('../../../../Core/src/generic/realtimeConversationMemory');
+    const baseRealtime = await import('../../../../Core/src/generic/baseRealtime');
+    const realtimeMemory = await import('../../../../Core/src/generic/realtimeConversationMemory');
+    const realtimeConnectionSetup = await import('../../../../Core/src/generic/realtimeConnectionSetup');
     const REALTIME_SHARED_CONFIG_KEYS = ['voice', 'firstMessage', 'reasoningEffort', 'mcpTools', 'turnDetection'];
     // The dropped-input reporter is dependency-free, so the REAL implementation loads from its own
     // module without the barrel: the drop tests below assert against shipped behavior.
@@ -19,17 +20,9 @@ vi.mock('@memberjunction/ai', async () => {
     const { ReadRealtimeTurnDetection, DescribeUnappliedTurnDetection } = await import('../../../../Core/src/generic/realtimeTurnDetection');
     return {
         BaseModel,
-        BaseRealtimeModel,
-        BaseRealtimeSession,
-        RealtimeConversationMemory,
-        RenderRealtimeMemorySeed,
-        RenderRealtimeMemorySeedAsContextNote,
-        REALTIME_MEMORY_CONTINUITY_PREAMBLE,
-        DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS,
-        DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS,
-        MAX_REALTIME_RAPID_RECONNECTS,
-        REALTIME_RAPID_RECONNECT_WINDOW_MS,
-        RealtimeDriverFactsOf,
+        ...baseRealtime,
+        ...realtimeMemory,
+        ...realtimeConnectionSetup,
         REALTIME_SHARED_CONFIG_KEYS,
         RealtimeDroppedInputReporter,
         ReadRealtimeTurnDetection,
@@ -821,6 +814,26 @@ describe('InworldRealtime', () => {
             };
             await expect(session.Close()).resolves.toBeUndefined();
             expect(driver.Fake.Closed).toBe(true);
+        });
+
+        it('reconnects in place with a fresh socket and seeds prior conversation turns (#21)', async () => {
+            const session = await startReadySession(driver, { SystemPrompt: 'Inworld base prompt.' });
+            const socket1 = driver.Fake;
+            driver.Fire({ type: 'input_audio_transcription.completed', text: 'Caller turn 1' });
+            driver.Fire({ type: 'output_audio_transcript.done', text: 'Agent turn 1' });
+
+            const socket2 = new FakeSocket();
+            driver.Fake = socket2;
+            const reconnectPromise = session.TriggerReconnect('soft_deadline');
+            await new Promise((r) => setTimeout(r, 0));
+            driver.Fire({ type: 'session.created' });
+            expect(await reconnectPromise).toBe(true);
+
+            expect(socket1.Closed).toBe(true);
+            const updateFrame = socket2.Find('session.update') as { session?: { instructions?: string } } | undefined;
+            expect(updateFrame?.session?.instructions).toContain('Inworld base prompt.');
+            expect(updateFrame?.session?.instructions).toContain('Caller turn 1');
+            expect(updateFrame?.session?.instructions).toContain('Agent turn 1');
         });
     });
 });

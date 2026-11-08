@@ -2,6 +2,9 @@ import { RegisterClass } from '@memberjunction/global';
 import {
     BaseRealtimeModel,
     BaseRealtimeSession,
+    AsConfigRecord,
+    ResolveRealtimeTiming,
+    ScrubRealtimeSharedConfigKeys,
     RealtimeDiagLog,
     IRealtimeSession,
     RealtimeSessionCapabilities,
@@ -22,6 +25,7 @@ import {
     RealtimeDriverFactsOf,
     RenderRealtimeMemorySeed,
     RenderRealtimeMemorySeedAsContextNote,
+    RenderLateToolResultNote,
     REALTIME_CONNECTION_SETUP_TIMEOUT_MS,
     type RealtimeDriverFacts,
     type RealtimeInputFrame,
@@ -115,6 +119,8 @@ interface RealtimeSessionGAFields {
     reasoning?: { effort: string };
     /** Whether the model may call multiple tools in one turn (GA default: true). */
     parallel_tool_calls?: boolean;
+    /** Whether server-side session/conversation resumption is enabled (`resumption.enabled`). */
+    resumption?: { enabled: boolean };
 }
 
 /** The SDK session-create request widened with the GA fields the SDK typings don't declare yet. */
@@ -176,6 +182,11 @@ export interface OpenAIRealtimeProfile {
      * session (e.g. per-agent direct action invocation).
      */
     supportsDynamicToolSet: boolean;
+    /**
+     * Whether this provider supports native server-side session/conversation resumption
+     * (`resumption: { enabled: true }` in `session.update` and `?conversation_id=<handle>` on reconnect).
+     */
+    supportsNativeResumption?: boolean;
     /** The fatal-error message surfaced when the socket closes unexpectedly. */
     unexpectedCloseMessage: string;
     /**
@@ -432,14 +443,13 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
     // Per-session transcription-model override + MJ-side transport settings. All scrubbed
     // unconditionally — none of these are wire fields on ANY provider in the family.
     const bag = rest as JSONObject & {
-        inputTranscriptionModel?: unknown; transcriptionLanguages?: unknown; endpoint?: unknown; sampleRate?: unknown; proxyBaseUrl?: unknown;
+        inputTranscriptionModel?: unknown;
+        transcriptionLanguages?: unknown;
+        endpoint?: unknown;
+        sampleRate?: unknown;
+        proxyBaseUrl?: unknown;
         brokerBaseUrl?: unknown;
-        connectionMaxSeconds?: unknown; sessionMaxSeconds?: unknown; reconnectBufferSeconds?: unknown; trustNativeResumption?: unknown;
     };
-    delete bag.connectionMaxSeconds;
-    delete bag.sessionMaxSeconds;
-    delete bag.reconnectBufferSeconds;
-    delete bag.trustNativeResumption;
     const rawItm = bag.inputTranscriptionModel;
     delete bag.inputTranscriptionModel;
     const inputTranscriptionModel = typeof rawItm === 'string' && rawItm.trim().length > 0 ? rawItm.trim() : undefined;
@@ -459,7 +469,9 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
     delete bag.brokerBaseUrl;
     const brokerBaseUrl = typeof rawBroker === 'string' && rawBroker.trim().length > 0 ? rawBroker.trim() : undefined;
 
-    return { effortLevel, parallelToolCalls, mcpTools, voice, disableAutoResponse, turnDetection, inputTranscriptionModel, endpoint, sampleRate, proxyBaseUrl, brokerBaseUrl, rest };
+    const scrubbedRest = ScrubRealtimeSharedConfigKeys(rest) as JSONObject;
+
+    return { effortLevel, parallelToolCalls, mcpTools, voice, disableAutoResponse, turnDetection, inputTranscriptionModel, endpoint, sampleRate, proxyBaseUrl, brokerBaseUrl, rest: scrubbedRest };
 }
 
 /**
@@ -849,10 +861,16 @@ export class OpenAIRealtime extends BaseRealtimeModel {
      * fake {@link IOpenAIRealtimeConnection} that emits OpenAI-shaped events and captures sends.
      *
      * @param model The provider realtime model id (e.g. `gpt-realtime-2.1`).
+     * @param resumptionHandle Optional provider session/conversation handle to resume (`?conversation_id=`).
      * @returns A connection implementing {@link IOpenAIRealtimeConnection}.
      */
-    protected createConnection(model: string): IOpenAIRealtimeConnection {
-        return new OpenAIRealtimeWebSocket({ model }, this._openAI);
+    protected createConnection(model: string, resumptionHandle?: string): IOpenAIRealtimeConnection {
+        return new OpenAIRealtimeWebSocket(
+            resumptionHandle
+                ? { model, onURL: (url) => url.searchParams.set('conversation_id', resumptionHandle) }
+                : { model },
+            this._openAI,
+        );
     }
 
     /**
@@ -875,7 +893,7 @@ export class OpenAIRealtime extends BaseRealtimeModel {
     public async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
         const connection = this.createConnection(params.Model);
         const session = this.createSessionInstance(connection);
-        session.SetConnectionFactory(() => this.createConnection(params.Model));
+        session.SetConnectionFactory((handle) => this.createConnection(params.Model, handle));
         session.applyInitialConfig(params);
         return session;
     }
@@ -937,6 +955,17 @@ export class OpenAIRealtime extends BaseRealtimeModel {
     public override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
         const profile = this.Profile;
         const features = ExtractRealtimeFeatures(params.Config);
+        const timing = ResolveRealtimeTiming({
+            Config: params.Config,
+            DriverDefaultConnectionSeconds: this.DefaultCallDurationSeconds,
+            DriverDefaultBufferSeconds: this.ReconnectBufferSeconds,
+            DefaultTrustNativeResumption: this.ClientSessionTrustsNativeResumption('direct'),
+            ZeroDataRetention: params.ZeroDataRetention,
+        });
+        const maxSessionSeconds = this.ClampSessionSeconds(
+            RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds,
+            params.MaxSessionSeconds
+        );
         // Enable transcription of the user's mic input so BOTH sides of the conversation are
         // captured (live captions + persisted ConversationDetail turns). Realtime models accept
         // audio natively, so input transcription is a separate ASR pass that must be opted into.
@@ -949,10 +978,10 @@ export class OpenAIRealtime extends BaseRealtimeModel {
             session.tools = mapRealtimeTools(params.Tools);
         }
         applyGAFeatures(session, features, profile);
+        if (profile.supportsNativeResumption && timing.TrustNativeResumption && !params.ZeroDataRetention) {
+            session.resumption = { enabled: true };
+        }
         const response = await this.mintClientSecret({ session });
-        const connectionMaxSeconds = this.ResolveConnectionDurationSeconds(params.Config);
-        const reconnectBufferSeconds = this.ResolveReconnectBufferSeconds(params.Config);
-        const trustNativeResumption = this.ResolveTrustsNativeResumption(params.Config);
         return {
             Provider: profile.providerKey,
             Model: params.Model,
@@ -960,10 +989,10 @@ export class OpenAIRealtime extends BaseRealtimeModel {
             ExpiresAt: new Date(response.expires_at * 1000).toISOString(),
             // The provider-native session config the browser applies verbatim (plain JSON).
             SessionConfig: JSON.parse(JSON.stringify(session)) as JSONObject,
-            MaxSessionSeconds: this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds),
-            ...(connectionMaxSeconds !== undefined ? { ConnectionMaxSeconds: connectionMaxSeconds } : {}),
-            ReconnectBufferSeconds: reconnectBufferSeconds,
-            TrustNativeResumption: trustNativeResumption,
+            ...(maxSessionSeconds !== undefined ? { MaxSessionSeconds: maxSessionSeconds } : {}),
+            ...(timing.ConnectionMaxSeconds !== undefined ? { ConnectionMaxSeconds: timing.ConnectionMaxSeconds } : {}),
+            ReconnectBufferSeconds: timing.ReconnectBufferSeconds,
+            TrustNativeResumption: timing.TrustNativeResumption,
         };
     }
 }
@@ -979,11 +1008,13 @@ export class OpenAIRealtime extends BaseRealtimeModel {
  */
 export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealtimeSession {
     private connection: IOpenAIRealtimeConnection;
-    private connectionFactory?: () => IOpenAIRealtimeConnection | Promise<IOpenAIRealtimeConnection>;
+    private connectionFactory?: (resumptionHandle?: string) => IOpenAIRealtimeConnection | Promise<IOpenAIRealtimeConnection>;
     private profile: OpenAIRealtimeProfile;
     private readonly driverFacts: Readonly<RealtimeDriverFacts>;
     private initialParams?: RealtimeSessionParams;
     private currentTools?: RealtimeToolDefinition[];
+    private lastReconfigureDisableAutoResponse?: boolean;
+    private zeroDataRetention = false;
     private outputHandler?: (chunk: ArrayBuffer) => void;
     private transcriptHandler?: (t: RealtimeTranscript) => void;
     private toolCallHandler?: (call: RealtimeToolCall) => void;
@@ -1096,11 +1127,15 @@ export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealt
     }
 
     protected override get DefaultTrustsNativeResumption(): boolean {
-        return false;
+        return (this.profile.supportsNativeResumption ?? false) && !this.zeroDataRetention;
+    }
+
+    public override get TrustsNativeResumption(): boolean {
+        return !this.zeroDataRetention && super.TrustsNativeResumption;
     }
 
     /** Registers the factory used to open replacement connections on duration expiry. */
-    public SetConnectionFactory(factory: () => IOpenAIRealtimeConnection | Promise<IOpenAIRealtimeConnection>): void {
+    public SetConnectionFactory(factory: (resumptionHandle?: string) => IOpenAIRealtimeConnection | Promise<IOpenAIRealtimeConnection>): void {
         this.connectionFactory = factory;
     }
 
@@ -1132,7 +1167,8 @@ export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealt
     public applyInitialConfig(params: RealtimeSessionParams): void {
         this.initialParams = params;
         this.currentTools = params.Tools;
-        this.ApplySessionTimingConfig(params.Config as Record<string, unknown> | undefined);
+        this.zeroDataRetention = params.ZeroDataRetention === true || AsConfigRecord(params.Config)?.zeroDataRetention === true;
+        this.ApplySessionTimingConfig(AsConfigRecord(params.Config));
         // Compat endpoints with no history-seeding channel fold the prior context into the system
         // prompt instead of seeding a separate user message (profile-driven).
         const fold = this.profile.foldInitialContextIntoPrompt;
@@ -1292,7 +1328,7 @@ export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealt
             const item: RealtimeConversationItemUserMessage = {
                 type: 'message',
                 role: 'user',
-                content: [{ type: 'input_text', text: `[Tool result for ${name}: ${output}]` }],
+                content: [{ type: 'input_text', text: RenderLateToolResultNote(name, output) }],
             };
             this.connection.send({ type: 'conversation.item.create', item });
             this.connection.send({ type: 'response.create' });
@@ -1422,6 +1458,7 @@ export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealt
             return;
         }
         const disable = params.DisableAutoResponse === true;
+        this.lastReconfigureDisableAutoResponse = disable;
         // Before any start there are no remembered features: fall back to the profile's transcription
         // model only (a partial update must not fabricate `transcription: { model: undefined }` for
         // natively-transcribing providers — BuildAudioBlock omits it when no model is set).
@@ -1507,17 +1544,26 @@ export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealt
     }
 
     /**
-     * Reconnects the underlying OpenAI-protocol WebSocket before connection expiry and seeds
+     * Reconnects the underlying OpenAI-protocol WebSocket before connection expiry and either
+     * resumes natively via `context.ResumptionHandle` (`?conversation_id=<handle>`) or seeds
      * accumulated conversation history (`ConversationSeed`) onto the replacement connection.
      */
     protected override async Reconnect(context: RealtimeReconnectContext): Promise<void> {
         if (!this.connectionFactory) {
             throw new Error(`[${this.profile.providerKey}Realtime] No connection factory available for Reconnect`);
         }
-        const factoryResult = this.connectionFactory();
+        const factoryResult = this.connectionFactory(context.ResumptionHandle);
         const nextConn = factoryResult instanceof Promise ? await factoryResult : factoryResult;
         if (this.profile.deferInitialConfigUntilSessionCreated) {
             await this.awaitConnectionCreated(nextConn);
+        }
+        if (context.Abandoned) {
+            try {
+                nextConn.close();
+            } catch {
+                // ignore
+            }
+            return;
         }
 
         const prevConn = this.connection;
@@ -1533,7 +1579,10 @@ export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealt
         if (params) {
             const fold = this.profile.foldInitialContextIntoPrompt;
             const initialCtx = params.InitialContext?.trim();
-            const seedNote = fold && context.ConversationSeed ? RenderRealtimeMemorySeedAsContextNote(context.ConversationSeed) : null;
+            const seedNote =
+                fold && !context.ResumptionHandle && context.ConversationSeed
+                    ? RenderRealtimeMemorySeedAsContextNote(context.ConversationSeed)
+                    : null;
             const combinedFoldCtx = [initialCtx, seedNote].filter((s): s is string => !!s && s.length > 0).join('\n\n');
             const systemPrompt =
                 fold && combinedFoldCtx.length > 0
@@ -1541,12 +1590,20 @@ export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealt
                     : params.SystemPrompt;
 
             this.sendSessionUpdate(systemPrompt, this.currentTools ?? params.Tools, params.Config);
-            if (!fold && initialCtx && initialCtx.length > 0) {
+            if (this.lastReconfigureDisableAutoResponse !== undefined) {
+                this.Reconfigure({ DisableAutoResponse: this.lastReconfigureDisableAutoResponse });
+            }
+            if (!fold && !context.ResumptionHandle && initialCtx && initialCtx.length > 0) {
                 this.sendInitialContext(initialCtx);
             }
         }
 
-        if (!this.profile.foldInitialContextIntoPrompt && context.ConversationSeed && context.ConversationSeed.Entries.length > 0) {
+        if (
+            !this.profile.foldInitialContextIntoPrompt &&
+            !context.ResumptionHandle &&
+            context.ConversationSeed &&
+            context.ConversationSeed.Entries.length > 0
+        ) {
             const turns = RenderRealtimeMemorySeed(context.ConversationSeed);
             for (const turn of turns) {
                 if (turn.Role === 'user') {
@@ -1605,6 +1662,10 @@ export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealt
                 clearTimeout(timer);
                 conn.off('event', onEvent);
                 conn.off('error', onError);
+                const createdId = (event as { session?: { id?: string } }).session?.id;
+                if (this.profile.supportsNativeResumption && createdId) {
+                    this.RecordResumptionHandle(createdId);
+                }
                 resolve();
             };
 
@@ -1665,6 +1726,17 @@ export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealt
         if (rawType === 'session.going_away' || rawType === 'go_away') {
             this.NotifyConnectionEnding();
             return;
+        }
+        if (
+            this.profile.supportsNativeResumption &&
+            (rawType === 'conversation.created' || rawType === 'session.created' || rawType === 'session.updated')
+        ) {
+            const handle =
+                (event as { conversation?: { id?: string } }).conversation?.id ??
+                (event as { session?: { id?: string } }).session?.id;
+            if (typeof handle === 'string' && handle.trim().length > 0) {
+                this.RecordResumptionHandle(handle.trim());
+            }
         }
         switch (event.type) {
             case 'response.output_audio.delta':
@@ -1914,6 +1986,9 @@ export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealt
             session.tools = this.mapTools(tools);
         }
         applyGAFeatures(session, features, this.profile);
+        if (this.profile.supportsNativeResumption && this.TrustsNativeResumption && !this.zeroDataRetention) {
+            session.resumption = { enabled: true };
+        }
         this.connection.send({ type: 'session.update', session });
     }
 

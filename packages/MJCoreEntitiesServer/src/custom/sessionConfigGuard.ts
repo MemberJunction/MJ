@@ -45,7 +45,12 @@ import { MJGlobal } from '@memberjunction/global';
  * The `Config` keys only trusted server code may add, change or remove.
  * New server-authoritative session keys belong here (and nowhere else).
  */
-export const PROTECTED_SESSION_CONFIG_KEYS: readonly string[] = ['maxSessionDeadlineIso', 'identityVerification', 'channels'];
+export const PROTECTED_SESSION_CONFIG_KEYS: readonly string[] = [
+    'maxSessionDeadlineIso',
+    'identityVerification',
+    'channels',
+    'realtimeMintSnapshot',
+];
 
 /** Global-object-store key holding the one process-wide trusted-write scope. */
 const TRUSTED_SCOPE_STORE_KEY = '___MJCoreEntitiesServer___TrustedSessionConfigWriteScope';

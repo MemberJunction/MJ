@@ -180,6 +180,9 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
         if (!this.micStream) {
             throw new Error('OpenAIRealtimeClient: cannot reconnect without an active microphone stream');
         }
+        if (context.Abandoned) {
+            throw new Error('OpenAIRealtimeClient: reconnect attempt abandoned');
+        }
         if (context.Credential.SessionConfig !== undefined) {
             this.sessionConfig = context.Credential.SessionConfig;
         }
@@ -193,7 +196,7 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
             this.remoteAudioEl = this.createAudioSink();
         }
         nextPc.ontrack = (e: RTCTrackEvent) => {
-            if (this.remoteAudioEl && e.streams[0]) {
+            if (this.peerConnection === nextPc && this.remoteAudioEl && e.streams[0]) {
                 this.remoteAudioEl.srcObject = e.streams[0];
                 this.publishRemoteMediaStream(e.streams[0]);
                 this.attachOutputAudioMeter(RealtimeAudioMeter.ForStream(e.streams[0]));
@@ -208,6 +211,17 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
             failDc = reject;
         });
         dcOpened.catch(() => undefined);
+
+        const onAbort = () => {
+            failDc?.(new Error('OpenAIRealtimeClient: reconnect attempt aborted'));
+            try { nextDc.close(); } catch { /* ignore */ }
+            try { nextPc.close(); } catch { /* ignore */ }
+        };
+        if (context.Signal.aborted) {
+            onAbort();
+            throw new Error('OpenAIRealtimeClient: reconnect attempt aborted');
+        }
+        context.Signal.addEventListener('abort', onAbort, { once: true });
 
         nextDc.onopen = () => {
             openDc?.();
@@ -231,9 +245,35 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
             }
         };
 
-        await this.performSdpHandshake(nextPc, context.Credential.EphemeralToken);
-        if (nextDc.readyState !== 'open') {
-            await dcOpened;
+        try {
+            await this.performSdpHandshake(nextPc, context.Credential.EphemeralToken);
+            if (nextDc.readyState !== 'open') {
+                await dcOpened;
+            }
+            if (context.Abandoned) {
+                throw new Error('OpenAIRealtimeClient: reconnect attempt abandoned after open');
+            }
+        } catch (err) {
+            nextDc.onopen = null;
+            nextDc.onmessage = null;
+            nextDc.onerror = null;
+            nextDc.onclose = null;
+            nextPc.ontrack = null;
+            try { nextDc.close(); } catch { /* ignore */ }
+            try { nextPc.close(); } catch { /* ignore */ }
+            throw err;
+        } finally {
+            context.Signal.removeEventListener('abort', onAbort);
+        }
+
+        if (prevDc) {
+            prevDc.onopen = null;
+            prevDc.onmessage = null;
+            prevDc.onerror = null;
+            prevDc.onclose = null;
+        }
+        if (prevPc) {
+            prevPc.ontrack = null;
         }
 
         this.peerConnection = nextPc;

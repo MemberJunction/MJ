@@ -646,4 +646,23 @@ describe('HuggingFaceRealtime DriverFacts', () => {
     it('declares no SupportedTurnSettings: its profile maps no normalized turn field', () => {
         expect(HuggingFaceRealtime.DriverFacts.SupportedTurnSettings).toBeUndefined();
     });
+
+    it('reconnects in place by delegating to OpenAIRealtimeSession.Reconnect with a fresh raw connection (#21)', async () => {
+        const driver = new TestHuggingFaceRealtime('secret');
+        const session = await startSession(driver, makeParams({ SystemPrompt: 'HF base prompt.' }));
+        const conn1 = driver.Fake;
+        driver.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'HF user turn' });
+
+        const conn2 = new FakeConnection();
+        driver.Fake = conn2;
+        const reconnectPromise = session.TriggerReconnect('soft_deadline');
+        await new Promise((r) => setTimeout(r, 0));
+        conn2.Fire({ type: 'session.created' } as unknown as RealtimeServerEvent);
+        expect(await reconnectPromise).toBe(true);
+
+        expect(conn1.Closed).toBe(true);
+        const update = conn2.Sent.find((e) => e.type === 'session.update');
+        expect(update).toBeDefined();
+    });
 });
+

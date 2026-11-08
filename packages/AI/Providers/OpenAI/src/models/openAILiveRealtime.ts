@@ -3,10 +3,14 @@ import { RegisterClass } from '@memberjunction/global';
 import {
     BaseRealtimeModel,
     BaseRealtimeSession,
+    AsConfigRecord,
+    ResolveRealtimeTiming,
+    ScrubRealtimeSharedConfigKeys,
     RealtimeDiagLog,
     RealtimeDroppedInputReporter,
     RealtimeDriverFactsOf,
     RenderRealtimeMemorySeedAsContextNote,
+    RenderLateToolResultNote,
     type RealtimeDriverFacts,
     IRealtimeSession,
     RealtimeSessionCapabilities,
@@ -215,9 +219,14 @@ export class OpenAILiveSession extends BaseRealtimeSession implements IRealtimeS
     public Capabilities: RealtimeSessionCapabilities;
 
     private _socket: ILiveWebSocketLike;
+    private _pendingSocket: ILiveWebSocketLike | null = null;
+    private _resolvePendingStart: (() => void) | null = null;
+    private _rejectPendingStart: ((err: Error) => void) | null = null;
     private _socketFactory?: () => ILiveWebSocketLike;
     private _params: RealtimeSessionParams;
     private _options: OpenAILiveSessionOptions;
+    private _tools: RealtimeToolDefinition[];
+    private _appendedInstructions: string[] = [];
     private _active = false;
     private _closed = false;
     private _closeRequested = false;
@@ -256,6 +265,7 @@ export class OpenAILiveSession extends BaseRealtimeSession implements IRealtimeS
         this._socket = socket;
         this._params = params;
         this._options = options;
+        this._tools = [...(params.Tools ?? [])];
 
         const codec = options.audioCodec ?? 'pcm16';
         const rate = options.sampleRate ?? (codec === 'g711_ulaw' || codec === 'g711_alaw' ? 8000 : 24000);
@@ -323,12 +333,28 @@ export class OpenAILiveSession extends BaseRealtimeSession implements IRealtimeS
 
     private wireSocket(socket: ILiveWebSocketLike): void {
         socket.addEventListener('open', () => {
-            if (this._socket !== socket) return;
+            if (this._socket !== socket && this._pendingSocket !== socket) return;
             RealtimeDiagLog('[OpenAILiveSession][diag] Socket opened, sending session.start');
-            this.sendSessionStart();
+            this.sendSessionStart(socket);
         });
 
         socket.addEventListener('message', (event) => {
+            if (this._pendingSocket === socket) {
+                if (typeof event.data === 'string') {
+                    try {
+                        const parsed = JSON.parse(event.data) as LiveServerEvent;
+                        if (parsed.type === 'session.started') {
+                            RealtimeDiagLog(`[OpenAILiveSession][diag] Reconnect session.started (id: ${parsed.session_id})`);
+                            this._resolvePendingStart?.();
+                        } else if (parsed.type === 'error') {
+                            this._rejectPendingStart?.(new Error(parsed.error?.message || 'OpenAI Live reconnect error'));
+                        }
+                    } catch {
+                        // ignore non-JSON frame on pending socket
+                    }
+                }
+                return;
+            }
             if (this._socket !== socket) return;
             if (typeof event.data === 'string') {
                 this.handleMessage(event.data);
@@ -336,8 +362,12 @@ export class OpenAILiveSession extends BaseRealtimeSession implements IRealtimeS
         });
 
         socket.addEventListener('error', (event) => {
-            if (this._socket !== socket) return;
             const msg = event.message ?? 'OpenAI Live socket error';
+            if (this._pendingSocket === socket) {
+                this._rejectPendingStart?.(new Error(msg));
+                return;
+            }
+            if (this._socket !== socket) return;
             RealtimeDiagLog(`[OpenAILiveSession][diag] Socket error: ${msg}`);
             if (!this._active) {
                 this._rejectStart(new Error(msg));
@@ -349,8 +379,12 @@ export class OpenAILiveSession extends BaseRealtimeSession implements IRealtimeS
         });
 
         socket.addEventListener('close', (event) => {
-            if (this._socket !== socket) return;
             const reason = event.reason || 'Socket closed';
+            if (this._pendingSocket === socket) {
+                this._rejectPendingStart?.(new Error(`Socket closed before session.started: ${reason}`));
+                return;
+            }
+            if (this._socket !== socket) return;
             RealtimeDiagLog(`[OpenAILiveSession][diag] Socket closed: code=${event.code}, reason=${reason}`);
             this._closed = true;
 
@@ -372,7 +406,7 @@ export class OpenAILiveSession extends BaseRealtimeSession implements IRealtimeS
         });
     }
 
-    private sendSessionStart(): void {
+    private sendSessionStart(targetSocket: ILiveWebSocketLike = this._socket): void {
         const turnDetectionWarning = DescribeOpenAILiveTurnDetection(this._params.Config as Record<string, unknown> | undefined);
         if (turnDetectionWarning) {
             console.warn(turnDetectionWarning);
@@ -381,13 +415,13 @@ export class OpenAILiveSession extends BaseRealtimeSession implements IRealtimeS
         const wireAudioFormat = this.resolveWireAudioFormat();
         const plane = this._options.reasoningPlane ?? 'local';
 
-        const mappedTools = this._params.Tools?.map((t) => ({
+        const mappedTools = this._tools.map((t) => ({
             type: 'function' as const,
             name: t.Name,
             description: t.Description,
             parameters: t.ParametersSchema as Record<string, unknown> | undefined,
         }));
-        const hasTools = !!(mappedTools && mappedTools.length > 0);
+        const hasTools = mappedTools.length > 0;
 
         const rawParallelToolCalls = this._params.Config?.['parallelToolCalls'] ?? this._params.Config?.['parallel_tool_calls'];
         const parallelToolCalls = typeof rawParallelToolCalls === 'boolean' ? rawParallelToolCalls : undefined;
@@ -431,7 +465,7 @@ export class OpenAILiveSession extends BaseRealtimeSession implements IRealtimeS
                                             max_output_tokens: this._options.remoteSettings.MaxOutputTokens,
                                         }
                                       : {}),
-                                  ...(mappedTools && mappedTools.length > 0 ? { tools: mappedTools } : {}),
+                                  ...(hasTools ? { tools: mappedTools } : {}),
                               },
                           }
                         : {}),
@@ -439,7 +473,11 @@ export class OpenAILiveSession extends BaseRealtimeSession implements IRealtimeS
             },
         };
 
-        this.sendFrame(startFrame);
+        try {
+            targetSocket.send(JSON.stringify(startFrame));
+        } catch (err) {
+            RealtimeDiagLog(`[OpenAILiveSession][diag] Failed to send session.start frame: ${err}`);
+        }
     }
 
     private resolveWireAudioFormat(): { type: string; rate?: number } {
@@ -849,6 +887,8 @@ export class OpenAILiveSession extends BaseRealtimeSession implements IRealtimeS
     }
 
     public async RegisterTools(tools: RealtimeToolDefinition[]): Promise<void> {
+        this._tools = [...tools];
+        this._params = { ...this._params, Tools: this._tools };
         const policy = this.compileDelegationPolicy(tools);
         if (this._active) {
             await this.SendInstructions(policy);
@@ -887,7 +927,7 @@ export class OpenAILiveSession extends BaseRealtimeSession implements IRealtimeS
             this.sendFrame({
                 event_id: randomUUID(),
                 type: 'session.commentary.append',
-                content: `[Tool result for ${name}: ${output}]`,
+                content: RenderLateToolResultNote(name, output),
                 delegation_id: null,
             });
             return;
@@ -948,6 +988,7 @@ export class OpenAILiveSession extends BaseRealtimeSession implements IRealtimeS
     }
 
     public async SendInstructions(instructions: string): Promise<void> {
+        this._appendedInstructions.push(instructions);
         this.sendFrame({
             event_id: randomUUID(),
             type: 'session.instructions.append',
@@ -956,21 +997,80 @@ export class OpenAILiveSession extends BaseRealtimeSession implements IRealtimeS
     }
 
     protected override async Reconnect(context: RealtimeReconnectContext): Promise<void> {
+        if (context.Abandoned) {
+            throw new Error('[OpenAILiveSession] Reconnect attempt abandoned');
+        }
         this.flushPendingTranscript();
         if (!this._socketFactory) {
             throw new Error('[OpenAILiveSession] No socket factory available for Reconnect');
         }
         const prevSocket = this._socket;
         const nextSocket = this._socketFactory();
+        this._pendingSocket = nextSocket;
+        const pendingStartPromise = new Promise<void>((resolve, reject) => {
+            this._resolvePendingStart = resolve;
+            this._rejectPendingStart = reject;
+        });
+        const onAbort = () => {
+            if (this._pendingSocket === nextSocket) {
+                this._pendingSocket = null;
+                this._resolvePendingStart = null;
+                this._rejectPendingStart = null;
+            }
+            try {
+                nextSocket.close(1000, 'Reconnect timed out');
+            } catch {
+                // ignore
+            }
+        };
+        context.Signal.addEventListener('abort', onAbort, { once: true });
+        this.wireSocket(nextSocket);
+        try {
+            await pendingStartPromise;
+        } catch (err) {
+            context.Signal.removeEventListener('abort', onAbort);
+            if (this._pendingSocket === nextSocket) {
+                this._pendingSocket = null;
+                this._resolvePendingStart = null;
+                this._rejectPendingStart = null;
+            }
+            try {
+                nextSocket.close(1000, 'Reconnect failed');
+            } catch {
+                // ignore
+            }
+            throw err;
+        }
+        context.Signal.removeEventListener('abort', onAbort);
+        if (context.Abandoned || this.closedByConsumer) {
+            if (this._pendingSocket === nextSocket) {
+                this._pendingSocket = null;
+                this._resolvePendingStart = null;
+                this._rejectPendingStart = null;
+            }
+            try {
+                nextSocket.close(1000, 'Reconnect abandoned');
+            } catch {
+                // ignore
+            }
+            throw new Error('[OpenAILiveSession] Reconnect attempt abandoned after handshake');
+        }
+
+        this._pendingSocket = null;
+        this._resolvePendingStart = null;
+        this._rejectPendingStart = null;
         this._socket = nextSocket;
         this._closed = false;
-        this._active = false;
-        this._startPromise = new Promise<void>((resolve, reject) => {
-            this._resolveStart = resolve;
-            this._rejectStart = reject;
-        });
-        this.wireSocket(nextSocket);
-        await this._startPromise;
+        this._active = true;
+        this.ArmConnectionDurationTimer();
+
+        for (const instructions of this._appendedInstructions) {
+            this.sendFrame({
+                event_id: randomUUID(),
+                type: 'session.instructions.append',
+                instructions,
+            });
+        }
 
         if (context.ConversationSeed && context.ConversationSeed.Entries.length > 0) {
             const note = RenderRealtimeMemorySeedAsContextNote(context.ConversationSeed);
@@ -1146,7 +1246,7 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
     public override async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
         const socket = this.createSocket(this._endpoint, this.apiKey);
 
-        const config = params.Config as Record<string, unknown> | undefined;
+        const config = AsConfigRecord(params.Config);
         const reasoningConfig = config?.Reasoning as
             | {
                   Plane?: RealtimeReasoningPlane;
@@ -1271,7 +1371,7 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
      * WebRTC omits audio.format entirely (negotiated via SDP).
      */
     public override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
-        const config = params.Config as Record<string, unknown> | undefined;
+        const config = AsConfigRecord(params.Config);
         const reasoningConfig = config?.Reasoning as
             | {
                   Plane?: RealtimeReasoningPlane;
@@ -1373,25 +1473,33 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
             UpstreamAuthHeader: this.apiKey,
             DriverClass: 'OpenAILiveRealtime',
             UserID: params.UserID,
-            SessionConfig: sessionPayload,
+            SessionConfig: { ...sessionPayload },
             TTLSeconds: 60,
         });
 
         const brokerUrl = this.resolveBrokerUrl(params, ticket.ID);
-        const connectionMaxSeconds = this.ResolveConnectionDurationSeconds(params.Config);
-        const reconnectBufferSeconds = this.ResolveReconnectBufferSeconds(params.Config);
-        const trustNativeResumption = this.ResolveTrustsNativeResumption(params.Config);
+        const timing = ResolveRealtimeTiming({
+            Config: params.Config,
+            DriverDefaultConnectionSeconds: this.DefaultCallDurationSeconds,
+            DriverDefaultBufferSeconds: this.ReconnectBufferSeconds,
+            DefaultTrustNativeResumption: this.ClientSessionTrustsNativeResumption('direct'),
+            ZeroDataRetention: params.ZeroDataRetention,
+        });
+        const maxSessionSeconds = this.ClampSessionSeconds(
+            RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds,
+            params.MaxSessionSeconds
+        );
 
         return {
             Provider: 'openai-live',
             Model: params.Model || 'gpt-live-1',
             EphemeralToken: brokerUrl,
             ExpiresAt: ticket.ExpiresAt,
-            SessionConfig: sessionPayload as JSONObject,
-            MaxSessionSeconds: this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds),
-            ...(connectionMaxSeconds !== undefined ? { ConnectionMaxSeconds: connectionMaxSeconds } : {}),
-            ReconnectBufferSeconds: reconnectBufferSeconds,
-            TrustNativeResumption: trustNativeResumption,
+            SessionConfig: { ...sessionPayload } as JSONObject,
+            MaxSessionSeconds: maxSessionSeconds,
+            ...(timing.ConnectionMaxSeconds !== undefined ? { ConnectionMaxSeconds: timing.ConnectionMaxSeconds } : {}),
+            ReconnectBufferSeconds: timing.ReconnectBufferSeconds,
+            TrustNativeResumption: timing.TrustNativeResumption,
         };
     }
 
@@ -1438,8 +1546,13 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
         offerSdp: string,
         sessionConfig?: Record<string, unknown>
     ): Promise<{ answerSdp: string; sessionId: string; prebillSeconds: number }> {
+        let scrubbedSessionConfig: Record<string, unknown> | undefined;
+        if (sessionConfig) {
+            scrubbedSessionConfig = { ...sessionConfig };
+            ScrubRealtimeSharedConfigKeys(scrubbedSessionConfig);
+        }
         const payload = {
-            session: sessionConfig ?? { model: 'gpt-live-1' },
+            session: scrubbedSessionConfig ?? { model: 'gpt-live-1' },
             transport: {
                 type: 'webrtc',
                 sdp: offerSdp,

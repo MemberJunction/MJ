@@ -382,7 +382,7 @@ describe('BaseRealtimeClient', () => {
             const ok = await promise;
 
             expect(ok).toBe(true);
-            expect(refreshCount).toBe(2);
+            expect(refreshCount).toBe(1);
             expect(client.ReconnectContexts).toHaveLength(2);
             expect(client.ReconnectContexts[0].UseNativeResumption).toBe(true);
             expect(client.ReconnectContexts[0].ResumptionHandle).toBe('handle-abc');

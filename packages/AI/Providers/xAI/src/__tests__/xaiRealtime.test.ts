@@ -14,44 +14,33 @@ vi.mock('@memberjunction/global', () => ({
 // (RealtimeSessionParams, etc.) are compile-time interfaces and need no runtime mock.
 vi.mock('@memberjunction/ai', async () => {
     const { BaseModel } = await import('../../../../Core/src/generic/baseModel');
-    const { BaseRealtimeModel, BaseRealtimeSession, RealtimeDriverFactsOf, DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS, DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS, MAX_REALTIME_RAPID_RECONNECTS, REALTIME_RAPID_RECONNECT_WINDOW_MS } = await import('../../../../Core/src/generic/baseRealtime');
-    const { RealtimeConversationMemory, RenderRealtimeMemorySeed, RenderRealtimeMemorySeedAsContextNote, REALTIME_MEMORY_CONTINUITY_PREAMBLE } = await import('../../../../Core/src/generic/realtimeConversationMemory');
+    const baseRealtime = await import('../../../../Core/src/generic/baseRealtime');
+    const realtimeMemory = await import('../../../../Core/src/generic/realtimeConversationMemory');
     // Base classes the OpenAI provider's other modules extend during module evaluation.
     class BaseLLM extends BaseModel {}
     class BaseEmbeddings extends BaseModel {}
     class BaseAudioGenerator extends BaseModel {}
-    // The OpenAI audio driver also registers against the split TTS and STT bases, so its
-    // decorators read these at module evaluation.
     class BaseTextToSpeech extends BaseModel {}
     class BaseSpeechToText extends BaseModel {}
     class BaseImageGenerator extends BaseModel {}
-    // The OpenAI Decisions driver extends BaseSystemOneDecision and registers against BaseDecision.
     class BaseDecision extends BaseModel {}
     class BaseSystemOneDecision extends BaseDecision {}
-    // Static-method error helper referenced by those modules' method bodies.
     class ErrorAnalyzer {
         public static analyzeError(): Record<string, never> {
             return {};
         }
     }
-    // RealtimeDiagLog is a verbose-gated console logger used by the realtime session; a no-op suffices.
     const RealtimeDiagLog = () => { /* no-op in tests */ };
     const { IsTranscriptContinuation } = await import('../../../../Core/src/generic/transcriptContinuation');
     const { ResolveResponseDoneUsage, MapRealtimeUsageModalityDetail } = await import('../../../../Core/src/generic/realtimeUsage');
     const { NormalizeTurnDetectionSettings } = await import('../../../../Core/src/generic/turnDetectionSettings');
     const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
+    const realtimeConnectionSetup = await import('../../../../Core/src/generic/realtimeConnectionSetup');
     return {
         BaseModel,
-        BaseRealtimeModel,
-        BaseRealtimeSession,
-        RealtimeConversationMemory,
-        RenderRealtimeMemorySeed,
-        RenderRealtimeMemorySeedAsContextNote,
-        REALTIME_MEMORY_CONTINUITY_PREAMBLE,
-        DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS,
-        DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS,
-        MAX_REALTIME_RAPID_RECONNECTS,
-        REALTIME_RAPID_RECONNECT_WINDOW_MS,
+        ...baseRealtime,
+        ...realtimeMemory,
+        ...realtimeConnectionSetup,
         BaseLLM,
         BaseEmbeddings,
         BaseAudioGenerator,
@@ -67,7 +56,6 @@ vi.mock('@memberjunction/ai', async () => {
         MapRealtimeUsageModalityDetail,
         NormalizeTurnDetectionSettings,
         RealtimeDroppedInputReporter,
-        RealtimeDriverFactsOf,
     };
 });
 
