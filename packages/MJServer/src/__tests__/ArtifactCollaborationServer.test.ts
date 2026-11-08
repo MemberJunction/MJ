@@ -703,5 +703,86 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         );
         expect(allowedCommit.Success).toBe(true);
         expect(allowedCommit.VersionNumber).toBe(2);
+
+        // 4. ExecuteDocumentLiveBlock & FreezeDocumentLiveBlock enforce hostArtifactId permissions
+        const deniedFreezeOnHost = await resolver.FreezeDocumentLiveBlock(
+            specJson,
+            true,
+            viewerCtx,
+            artifactId
+        );
+        expect(deniedFreezeOnHost.Success).toBe(false);
+
+        permissionTable.set(viewerUser.ID, { CanRead: false, CanEdit: false });
+        const deniedExecOnHost = await resolver.ExecuteDocumentLiveBlock(
+            specJson,
+            viewerCtx,
+            artifactId
+        );
+        expect(deniedExecOnHost.Success).toBe(false);
+        expect(deniedExecOnHost.AccessDenied).toBe(true);
+    });
+
+    it('rejects direct ApplyServerContentMutation and CompactRoomToArtifactVersion calls from a read-only user', async () => {
+        const mutationRes = await ArtifactCollaborationServer.Instance.ApplyServerContentMutation(
+            artifactId,
+            '# Unauthorized direct server mutation',
+            viewerUser,
+            true
+        );
+        expect(mutationRes.Success).toBe(false);
+
+        const compactRes = await ArtifactCollaborationServer.Instance.CompactRoomToArtifactVersion(
+            artifactId,
+            viewerUser
+        );
+        expect(compactRes.Saved).toBe(false);
+    });
+
+    it('publishes permission-revoked over IYjsRoomRelay and downgrades/closes sockets across server instances', async () => {
+        const bus = new InMemoryYjsRelayBus();
+        const relayServerB = new InMemoryYjsRoomRelay(bus);
+        const relayServerA = new InMemoryYjsRoomRelay(bus);
+
+        // Attach Server B to the shared relay bus and connect editorUser
+        ArtifactCollaborationServer.Instance.SetRoomRelay(relayServerB);
+        const clientOnB = await connectYjsClient(editorUser.ID);
+        await clientOnB.waitForText('# Initial Strategy Document');
+        expect(clientOnB.permissionFrames[0]).toMatchObject({ canRead: true, canEdit: true });
+
+        // Simulate Server A publishing permission-revoked across the shared relay bus
+        permissionTable.set(editorUser.ID, { CanRead: true, CanEdit: false });
+        await relayServerA.PublishToRoom({
+            ArtifactID: artifactId,
+            MessageType: 'permission-revoked',
+            PayloadBase64: '',
+            TargetUserID: editorUser.ID
+        });
+
+        await vi.waitFor(() => {
+            const latest = clientOnB.permissionFrames[clientOnB.permissionFrames.length - 1];
+            expect(latest).toMatchObject({ canRead: true, canEdit: false });
+        });
+
+        // Also verify that local NotifyPermissionsChanged publishes 'permission-revoked' to the relay bus
+        const receivedOnPeer: YjsRelayMessage[] = [];
+        const unsubPeer = await relayServerA.SubscribeRoom(artifactId, (msg) => {
+            receivedOnPeer.push(msg);
+        });
+
+        await ArtifactPermissionEngine.Instance.NotifyPermissionsChanged({
+            ArtifactID: artifactId,
+            TargetUserID: editorUser.ID
+        });
+
+        expect(
+            receivedOnPeer.some(
+                (m) => m.MessageType === 'permission-revoked' && m.TargetUserID === editorUser.ID
+            )
+        ).toBe(true);
+
+        unsubPeer();
+        await relayServerA.Shutdown();
+        clientOnB.ws.close();
     });
 });

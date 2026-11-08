@@ -21,7 +21,6 @@ import {
     MJArtifactVersionEntity,
     MJArtifactWorkingStateEntity
 } from '@memberjunction/core-entities';
-import { UserCache } from '@memberjunction/generic-database-provider';
 import { getUserPayload } from '../context.js';
 import { InMemoryYjsRoomRelay, type IYjsRoomRelay, type YjsRelayMessage } from './YjsRoomRelay.js';
 
@@ -140,7 +139,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     protected constructor() {
         super();
         this._unsubscribePermissionEngine = ArtifactPermissionEngine.Instance.OnPermissionsChanged(async (evt) => {
-            await this.ReevaluateRoomPermissions(evt.ArtifactID, evt.TargetUserID);
+            await this.ReevaluateRoomPermissions(evt.ArtifactID, evt.TargetUserID, true);
         });
     }
 
@@ -204,9 +203,23 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     /**
      * Re-evaluates permissions for all active connections in `artifactId`'s room (or only `targetUserId`
      * when specified). Immediately disconnects clients who lost `CanRead` and downgrades clients
-     * who lost `CanEdit` to read-only mode.
+     * who lost `CanEdit` to read-only mode. When `publishRelay` is `true`, also broadcasts a
+     * `'permission-revoked'` message across {@link IYjsRoomRelay} so peer MJServer instances
+     * re-evaluate their active sockets for the same artifact room (`O3`).
      */
-    public async ReevaluateRoomPermissions(artifactId: string, targetUserId?: string): Promise<void> {
+    public async ReevaluateRoomPermissions(
+        artifactId: string,
+        targetUserId?: string,
+        publishRelay: boolean = false
+    ): Promise<void> {
+        if (publishRelay) {
+            await this._relay.PublishToRoom({
+                ArtifactID: artifactId,
+                MessageType: 'permission-revoked',
+                PayloadBase64: '',
+                TargetUserID: targetUserId
+            });
+        }
         const room = this._rooms.get(artifactId.trim().toLowerCase());
         if (!room) {
             return;
@@ -250,7 +263,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
      * Flushes the room's current Yjs state vector (`Y.encodeStateAsUpdate(room.Doc)`) to
      * `MJ: Artifact Working States` (`YjsState VARBINARY(MAX)`).
      */
-    public async FlushWorkingState(artifactId: string, contextUser?: UserInfo): Promise<boolean> {
+    public async FlushWorkingState(artifactId: string, contextUser: UserInfo): Promise<boolean> {
         const room = this._rooms.get(artifactId.trim().toLowerCase());
         if (!room) {
             return false;
@@ -316,17 +329,26 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
      */
     public async CompactRoomToArtifactVersion(
         artifactId: string,
-        contextUser?: UserInfo
+        contextUser: UserInfo
     ): Promise<{ Saved: boolean; VersionID?: string; VersionNumber?: number }> {
+        const provider = this.activeProvider();
+        if (!provider || !contextUser) {
+            return { Saved: false };
+        }
+        const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+            provider,
+            artifactId,
+            contextUser
+        );
+        if (!perms.CanEdit) {
+            return { Saved: false };
+        }
+
         const room = await this.GetOrCreateRoom(artifactId, contextUser);
         if (!room) {
             return { Saved: false };
         }
-        const provider = this.activeProvider();
-        const user = contextUser ?? room.LastModifiedByUser;
-        if (!provider || !user) {
-            return { Saved: false };
-        }
+        const user = contextUser;
 
         await this.FlushWorkingState(artifactId, user);
 
@@ -409,6 +431,19 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         user: UserInfo,
         saveVersion: boolean = true
     ): Promise<{ Success: boolean; VersionID?: string; VersionNumber?: number }> {
+        const provider = this.activeProvider();
+        if (!provider || !user) {
+            return { Success: false };
+        }
+        const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+            provider,
+            artifactId,
+            user
+        );
+        if (!perms.CanEdit) {
+            return { Success: false };
+        }
+
         const room = await this.GetOrCreateRoom(artifactId, user);
         if (!room) {
             return { Success: false };
@@ -447,9 +482,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
      * Returns the current in-memory room for `artifactId`, hydrating it from `MJ: Artifact Working States`
      * or `MJ: Artifact Versions` if not yet loaded.
      */
-    public async GetOrCreateRoom(artifactId: string, contextUser?: UserInfo): Promise<CollaborationRoom | null> {
+    public async GetOrCreateRoom(artifactId: string, contextUser: UserInfo): Promise<CollaborationRoom | null> {
         const key = (artifactId ?? '').trim().toLowerCase();
-        if (!key) {
+        if (!key || !contextUser) {
             return null;
         }
         const existing = this._rooms.get(key);
@@ -471,7 +506,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
      * Returns the current collaborative string content for `artifactId` from its active Yjs room
      * (or hydrates the room first).
      */
-    public async GetRoomContent(artifactId: string, contextUser?: UserInfo): Promise<string> {
+    public async GetRoomContent(artifactId: string, contextUser: UserInfo): Promise<string> {
         const room = await this.GetOrCreateRoom(artifactId, contextUser);
         return room ? room.Doc.getText('content').toString() : '';
     }
@@ -553,8 +588,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         const apiKeyHeader = req.headers['x-api-key'];
         const apiKey =
             typeof apiKeyHeader === 'string'
-                ? apiKeyHeader
-                : parsedUrl.searchParams.get('apiKey') ?? undefined;
+                ? apiKeyHeader.trim()
+                : parsedUrl.searchParams.get('apiKey')?.trim() || undefined;
+
+        if (!bearerToken && !apiKey) {
+            return null;
+        }
 
         try {
             const payload = await getUserPayload(
@@ -567,16 +606,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 undefined,
                 req
             );
-            if (!payload?.userRecord) {
+            if (!payload?.userRecord || payload.userRecord.IsActive !== true) {
                 return null;
             }
             return payload.userRecord;
         } catch {
-            // Fallback for system user lookup when UserCache is populated and x-user-id is passed in test environments
-            const testUserEmail = parsedUrl.searchParams.get('userEmail');
-            if (testUserEmail && process.env.NODE_ENV === 'test') {
-                return UserCache.Instance.UserByName(testUserEmail, false) ?? null;
-            }
             return null;
         }
     }
@@ -617,7 +651,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         });
     }
 
-    private async createAndHydrateRoom(artifactId: string, contextUser?: UserInfo): Promise<CollaborationRoom> {
+    private async createAndHydrateRoom(artifactId: string, contextUser: UserInfo): Promise<CollaborationRoom> {
         const key = artifactId.trim().toLowerCase();
         const doc = new Y.Doc();
         const awareness = new awarenessProtocol.Awareness(doc);
@@ -629,7 +663,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             Connections: new Set(),
             DirtyWorkingState: false,
             DirtyVersion: false,
-            LastModifiedByUser: contextUser ?? null,
+            LastModifiedByUser: contextUser,
             WorkingStateTimer: null,
             UnsubscribeRelay: null,
             DocUpdateListener: (update: Uint8Array, origin: unknown) => {
@@ -654,12 +688,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         return room;
     }
 
-    private async hydrateRoomStateFromDatabase(room: CollaborationRoom, contextUser?: UserInfo): Promise<void> {
+    private async hydrateRoomStateFromDatabase(room: CollaborationRoom, contextUser: UserInfo): Promise<void> {
         const provider = this.activeProvider();
-        const user = contextUser ?? UserCache.Instance.GetSystemUser();
-        if (!provider || !user) {
+        if (!provider || !contextUser) {
             return;
         }
+        const user = contextUser;
 
         try {
             const rv = RunView.FromMetadataProvider(provider);
@@ -938,7 +972,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 awarenessProtocol.applyAwarenessUpdate(room.Awareness, awarenessBytes, 'relay');
             }
         } else if (msg.MessageType === 'permission-revoked') {
-            await this.ReevaluateRoomPermissions(room.ArtifactID, msg.TargetUserID);
+            await this.ReevaluateRoomPermissions(room.ArtifactID, msg.TargetUserID, false);
         }
     }
 

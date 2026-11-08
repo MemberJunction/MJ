@@ -178,6 +178,14 @@ export class WhiteboardArtifactViewerComponent extends BaseArtifactViewerPluginC
   private parsedState: WhiteboardState | null = null;
   private editableState: WhiteboardState | null = null;
   private stateChangeSub: Subscription | null = null;
+  private commitDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private hasUncommittedChanges = false;
+  private suppressStateChangeTracking = false;
+
+  /** Whether the inline editable board has unsaved changes waiting to be committed. */
+  public get IsDirty(): boolean {
+    return this.hasUncommittedChanges;
+  }
 
   /** Declares that WhiteboardArtifactViewerComponent supports inline OLE canvas editing when `[readonly]="false"`. */
   public override get SupportsInlineEdit(): boolean {
@@ -221,7 +229,28 @@ export class WhiteboardArtifactViewerComponent extends BaseArtifactViewerPluginC
   }
 
   public ngOnDestroy(): void {
+    if (this.hasUncommittedChanges && !this.readonly) {
+      this.CommitCurrentState();
+    }
     this.teardownStateSub();
+  }
+
+  /**
+   * Immediately flushes and emits the current serialized `WhiteboardState.ToJSON()` payload on `ContentCommitted`
+   * so the host (OLE block host or artifact viewer panel) persists a new `MJ: Artifact Versions` record.
+   */
+  public CommitCurrentState(): void {
+    if (this.commitDebounceTimer !== null) {
+      clearTimeout(this.commitDebounceTimer);
+      this.commitDebounceTimer = null;
+    }
+    const state = this.editableState ?? this.BoardState;
+    if (!state) {
+      return;
+    }
+    this.hasUncommittedChanges = false;
+    const serialized = state.ToJSON();
+    this.ContentCommitted.emit(serialized);
   }
 
   /**
@@ -229,12 +258,7 @@ export class WhiteboardArtifactViewerComponent extends BaseArtifactViewerPluginC
    * so the host (OLE block host or artifact viewer panel) persists a new `MJ: Artifact Versions` record.
    */
   public OnCommitInlineChanges(): void {
-    const state = this.editableState ?? this.BoardState;
-    if (!state) {
-      return;
-    }
-    const serialized = state.ToJSON();
-    this.ContentCommitted.emit(serialized);
+    this.CommitCurrentState();
   }
 
   public override GetCurrentStateSnapshot(): DataSnapshot | null {
@@ -293,10 +317,36 @@ export class WhiteboardArtifactViewerComponent extends BaseArtifactViewerPluginC
 
   private syncEditableState(parsed: WhiteboardState | null): void {
     this.teardownStateSub();
+    this.suppressStateChangeTracking = true;
     this.editableState = parsed ?? new WhiteboardState();
+    this.hasUncommittedChanges = false;
+    this.stateChangeSub = this.editableState.Changed$.subscribe(() => {
+      if (this.suppressStateChangeTracking || this.readonly) {
+        return;
+      }
+      this.hasUncommittedChanges = true;
+      this.scheduleAutoCommit();
+    });
+    this.suppressStateChangeTracking = false;
+  }
+
+  private scheduleAutoCommit(): void {
+    if (this.commitDebounceTimer !== null) {
+      clearTimeout(this.commitDebounceTimer);
+    }
+    this.commitDebounceTimer = setTimeout(() => {
+      this.commitDebounceTimer = null;
+      if (this.hasUncommittedChanges && !this.readonly) {
+        this.CommitCurrentState();
+      }
+    }, 600);
   }
 
   private teardownStateSub(): void {
+    if (this.commitDebounceTimer !== null) {
+      clearTimeout(this.commitDebounceTimer);
+      this.commitDebounceTimer = null;
+    }
     if (this.stateChangeSub) {
       this.stateChangeSub.unsubscribe();
       this.stateChangeSub = null;

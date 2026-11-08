@@ -289,6 +289,7 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
     }
     if (changes['readonly'] && this.componentRef) {
       this.componentRef.setInput('readonly', this.readonly);
+      this.componentRef.changeDetectorRef.detectChanges();
     }
   }
 

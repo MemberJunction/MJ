@@ -167,7 +167,7 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
     expect(afterSeg.Descriptor?.FrozenSnapshot?.SecurityWarningAcknowledged).toBe(true);
   });
 
-  it('toggles inline OLE editing on an embedded Whiteboard block and updates VersionID on ContentCommitted', () => {
+  it('toggles inline OLE editing on an embedded Whiteboard block, tracks latest when unpinned, and advances VersionID when pinned (§ 3.4.1)', () => {
     const f = renderDocsViewer();
     const wbSeg = f.componentInstance.DocumentSegments.find((s) => s.SegmentID === 'blk-wb-1')!;
 
@@ -176,14 +176,79 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
     f.detectChanges();
     expect(f.componentInstance.IsInlineEditingBlock('blk-wb-1')).toBe(true);
 
+    // 1. When VersionID is omitted (unpinned), ContentCommitted advances the child version to v2 while keeping VersionID undefined
     f.componentInstance.OnEmbeddedArtifactContentCommitted(
       wbSeg.Descriptor!,
       JSON.stringify({ version: 2, pages: [{ id: 'page-1', name: 'Updated', items: [] }] }),
     );
     f.detectChanges();
 
+    const unpinnedSeg = f.componentInstance.DocumentSegments.find((s) => s.SegmentID === 'blk-wb-1')!;
+    expect(unpinnedSeg.Descriptor?.VersionID).toBeUndefined();
+    expect(f.componentInstance.GetEmbeddedArtifactVersion(unpinnedSeg.Descriptor!).VersionNumber).toBe(2);
+
+    // 2. Pin the block to v2, then commit another inline edit -> VersionID advances to v3
+    f.componentInstance.TogglePinArtifactVersion(unpinnedSeg.Descriptor!);
+    f.detectChanges();
+    const pinnedSeg = f.componentInstance.DocumentSegments.find((s) => s.SegmentID === 'blk-wb-1')!;
+    expect(pinnedSeg.Descriptor?.VersionID).toBe('ver-wb-inline-1-2');
+
+    f.componentInstance.OnEmbeddedArtifactContentCommitted(
+      pinnedSeg.Descriptor!,
+      JSON.stringify({ version: 2, pages: [{ id: 'page-1', name: 'Updated v3', items: [] }] }),
+    );
+    f.detectChanges();
+
     const updatedWbSeg = f.componentInstance.DocumentSegments.find((s) => s.SegmentID === 'blk-wb-1')!;
-    expect(updatedWbSeg.Descriptor?.VersionID).toBe('ver-wb-inline-1-2');
+    expect(updatedWbSeg.Descriptor?.VersionID).toBe('ver-wb-inline-1-3');
+  });
+
+  it('renders in-place WYSIWYG editable blocks in Edit mode (headings, paragraphs, task lists, tables) without a top raw textarea', () => {
+    const richDoc = [
+      '# Interactive Heading',
+      '',
+      'Editable prose paragraph.',
+      '',
+      '- [ ] First task item',
+      '- [x] Completed task item',
+      '',
+      '| Metric | Target |',
+      '| --- | --- |',
+      '| Latency | 25ms |',
+    ].join('\n');
+
+    const f = renderDocsViewer(richDoc, false);
+    const root = f.nativeElement as HTMLElement;
+
+    // Default mode when editable is 'edit', with no top raw textarea in the page canvas
+    expect(f.componentInstance.ViewMode).toBe('edit');
+    expect(root.querySelector('[data-testid="docs-editor-textarea"]')).toBeNull();
+
+    // Heading is rendered as an in-place contenteditable block
+    const headingSeg = f.componentInstance.DocumentSegments[0];
+    const headingEl = root.querySelector<HTMLElement>(`[data-testid="editable-heading-${headingSeg.SegmentID}"]`);
+    expect(headingEl).not.toBeNull();
+    expect(headingEl?.getAttribute('contenteditable')).toBe('true');
+
+    // Task list checkboxes toggle - [ ] <-> - [x] directly in the document
+    const listSeg = f.componentInstance.DocumentSegments.find((s) => s.BlockKind === 'list')!;
+    const firstCheckbox = root.querySelector<HTMLInputElement>(
+      `[data-testid="task-checkbox-${listSeg.SegmentID}-0"]`,
+    )!;
+    expect(firstCheckbox).not.toBeNull();
+    expect(firstCheckbox.checked).toBe(false);
+
+    firstCheckbox.checked = true;
+    f.componentInstance.ToggleTaskListItem(listSeg, 0, { target: firstCheckbox } as unknown as Event);
+    f.detectChanges();
+    expect(f.componentInstance.MarkdownContent).toContain('- [x] First task item');
+
+    // Interactive table supports adding a row and editing cells in place
+    const tableSeg = f.componentInstance.DocumentSegments.find((s) => s.BlockKind === 'table')!;
+    f.componentInstance.AddTableRow(tableSeg);
+    f.detectChanges();
+    const updatedTableSeg = f.componentInstance.DocumentSegments.find((s) => s.BlockKind === 'table')!;
+    expect(f.componentInstance.GetParsedTable(updatedTableSeg).Rows).toHaveLength(2);
   });
 
   it('supports Suggest Mode tracked changes, Anchored DocBlock comments with @mention agent reply, and Version Diff view', async () => {

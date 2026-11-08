@@ -962,6 +962,19 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
 
 function buildFrozenExecutionResult(spec: DocumentBlockSpec): DocumentBlockExecutionResult {
     const snap = spec.FrozenSnapshot!;
+    if (snap.SecurityWarningAcknowledged !== true) {
+        return {
+            BlockID: spec.BlockID,
+            Kind: spec.Kind,
+            Mode: 'Frozen',
+            Success: false,
+            ErrorMessage:
+                'Security violation: Frozen block snapshots require explicit acknowledgement of the RLS/FLS security warning (SecurityWarningAcknowledged: true).',
+            Columns: [],
+            Rows: [],
+            TotalRowCount: 0
+        };
+    }
     return {
         BlockID: spec.BlockID,
         Kind: spec.Kind,

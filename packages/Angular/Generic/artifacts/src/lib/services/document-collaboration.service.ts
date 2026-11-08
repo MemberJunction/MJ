@@ -144,10 +144,13 @@ export class DocumentCollaborationSession {
   private status: CollaborationConnectionStatus = 'local';
   private canEdit: boolean;
   private applyingRemote = false;
+  private readonly initialSeedContent: string;
+  private seededInDoc = false;
 
   private readonly contentChanged$ = new Subject<string>();
   private readonly statusChanged$ = new Subject<CollaborationConnectionStatus>();
   private readonly collaboratorsChanged$ = new Subject<CollaboratorPresence[]>();
+  private readonly versionSaved$ = new Subject<{ versionId: string; versionNumber: number }>();
 
   public get ContentChanged$(): Observable<string> {
     return this.contentChanged$.asObservable();
@@ -159,6 +162,10 @@ export class DocumentCollaborationSession {
 
   public get CollaboratorsChanged$(): Observable<CollaboratorPresence[]> {
     return this.collaboratorsChanged$.asObservable();
+  }
+
+  public get VersionSaved$(): Observable<{ versionId: string; versionNumber: number }> {
+    return this.versionSaved$.asObservable();
   }
 
   public get Status(): CollaborationConnectionStatus {
@@ -173,7 +180,11 @@ export class DocumentCollaborationSession {
    * Returns the current string content of the shared Yjs `Y.Text('content')` CRDT.
    */
   public GetContent(): string {
-    return this.ContentText.toString();
+    const yText = this.ContentText.toString();
+    if (yText.length === 0 && !this.seededInDoc && this.initialSeedContent.length > 0) {
+      return this.initialSeedContent;
+    }
+    return yText;
   }
 
   constructor(
@@ -181,15 +192,18 @@ export class DocumentCollaborationSession {
     initialContent: string,
     user: { id: string; name: string; email?: string; color?: string },
     canEdit = true,
+    deferInitialSeedForRemoteSync = false,
   ) {
     this.ArtifactID = artifactId;
     this.canEdit = canEdit;
+    this.initialSeedContent = initialContent ?? '';
     this.Doc = new Y.Doc();
     this.ContentText = this.Doc.getText('content');
-    if (initialContent) {
+    if (initialContent && !deferInitialSeedForRemoteSync) {
       this.Doc.transact(() => {
         this.ContentText.insert(0, initialContent);
       }, 'init');
+      this.seededInDoc = true;
     }
 
     this.Awareness = new awarenessProtocol.Awareness(this.Doc);
@@ -280,6 +294,7 @@ export class DocumentCollaborationSession {
     if (current === newMarkdown) {
       return;
     }
+    this.seededInDoc = true;
 
     let prefixLen = 0;
     const minLen = Math.min(current.length, newMarkdown.length);
@@ -309,6 +324,21 @@ export class DocumentCollaborationSession {
         this.ContentText.insert(prefixLen, insertText);
       }
     }, 'local');
+  }
+
+  /**
+   * Sends a `save-version` control frame (`MSG_CONTROL = 2`) to the collaboration server
+   * to compact the active room into a new immutable `MJ: Artifact Versions` record.
+   */
+  public RequestSaveVersion(): boolean {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN || !this.canEdit) {
+      return false;
+    }
+    const encoder = encoding.createEncoder();
+    encoding.writeVarUint(encoder, MSG_CONTROL);
+    encoding.writeVarString(encoder, JSON.stringify({ action: 'save-version' }));
+    this.socket.send(encoding.toUint8Array(encoder));
+    return true;
   }
 
   /**
@@ -360,6 +390,7 @@ export class DocumentCollaborationSession {
     this.contentChanged$.complete();
     this.statusChanged$.complete();
     this.collaboratorsChanged$.complete();
+    this.versionSaved$.complete();
     this.Awareness.destroy();
     this.Doc.destroy();
   }
@@ -373,6 +404,8 @@ export class DocumentCollaborationSession {
     const msgType = decoding.readVarUint(decoder);
 
     if (msgType === MSG_SYNC) {
+      const subDecoder = decoding.clone(decoder);
+      const syncMsgType = decoding.readVarUint(subDecoder);
       const encoder = encoding.createEncoder();
       encoding.writeVarUint(encoder, MSG_SYNC);
       this.applyingRemote = true;
@@ -384,6 +417,21 @@ export class DocumentCollaborationSession {
       if (encoding.length(encoder) > 1 && this.socket?.readyState === WebSocket.OPEN) {
         this.socket.send(encoding.toUint8Array(encoder));
       }
+      // If we deferred initial seed for remote sync and server SyncStep2 was empty, seed once
+      if (
+        syncMsgType === syncProtocol.messageYjsSyncStep2 &&
+        !this.seededInDoc &&
+        this.ContentText.length === 0 &&
+        this.initialSeedContent.length > 0 &&
+        this.canEdit
+      ) {
+        this.seededInDoc = true;
+        this.Doc.transact(() => {
+          this.ContentText.insert(0, this.initialSeedContent);
+        }, 'local');
+      } else if (this.ContentText.length > 0) {
+        this.seededInDoc = true;
+      }
     } else if (msgType === MSG_AWARENESS) {
       const update = decoding.readVarUint8Array(decoder);
       awarenessProtocol.applyAwarenessUpdate(this.Awareness, update, 'remote');
@@ -394,7 +442,16 @@ export class DocumentCollaborationSession {
           action?: string;
           canEdit?: boolean;
           canRead?: boolean;
+          versionId?: string;
+          versionNumber?: number;
         };
+        if (parsed.action === 'version-saved' && typeof parsed.versionNumber === 'number') {
+          this.versionSaved$.next({
+            versionId: parsed.versionId ?? '',
+            versionNumber: parsed.versionNumber,
+          });
+          return;
+        }
         if (parsed.action === 'readonly-rejected') {
           this.canEdit = false;
           this.setStatus('readonly');
@@ -553,8 +610,15 @@ export class DocumentCollaborationService {
     initialContent: string,
     user: { id: string; name: string; email?: string; color?: string },
     canEdit = true,
+    deferInitialSeedForRemoteSync = false,
   ): DocumentCollaborationSession {
-    return new DocumentCollaborationSession(artifactId, initialContent, user, canEdit);
+    return new DocumentCollaborationSession(
+      artifactId,
+      initialContent,
+      user,
+      canEdit,
+      deferInitialSeedForRemoteSync,
+    );
   }
 
   /**
@@ -563,7 +627,20 @@ export class DocumentCollaborationService {
   public ResolveCollaborationWebSocketUrl(artifactId: string, baseUrlOverride?: string): string {
     if (baseUrlOverride) {
       const wsBase = baseUrlOverride.replace(/^http/i, 'ws').replace(/\/graphql\/?$/i, '');
-      return `${wsBase}/collaboration/yjs?artifactId=${encodeURIComponent(artifactId)}`;
+      try {
+        const parsed = new URL(wsBase);
+        if (!parsed.pathname || parsed.pathname === '/') {
+          parsed.pathname = '/collaboration/yjs';
+        }
+        if (!parsed.searchParams.has('artifactId')) {
+          parsed.searchParams.set('artifactId', artifactId);
+        }
+        return parsed.toString();
+      } catch {
+        const sep = wsBase.includes('?') ? '&' : '?';
+        const path = wsBase.includes('/collaboration/yjs') ? wsBase : `${wsBase.replace(/\/$/, '')}/collaboration/yjs`;
+        return `${path}${sep}artifactId=${encodeURIComponent(artifactId)}`;
+      }
     }
     if (typeof window !== 'undefined' && window.location) {
       const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';

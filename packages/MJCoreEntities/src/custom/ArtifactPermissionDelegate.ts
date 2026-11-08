@@ -583,6 +583,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                     EntityName: 'MJ: Artifact Permissions',
                     ExtraFilter: `ArtifactID='${safeArtifactId}' AND UserID='${safeUserId}'`,
                     Fields: ['ID', 'ArtifactID', 'UserID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
+                    MaxRows: 500,
                     SkipTotalRowCount: true,
                     ResultType: 'simple'
                 },
@@ -611,6 +612,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                     EntityName: 'MJ: Collection Artifacts',
                     ExtraFilter: `ArtifactID='${safeArtifactId}'`,
                     Fields: ['CollectionID'],
+                    MaxRows: 500,
                     SkipTotalRowCount: true,
                     ResultType: 'simple'
                 },
@@ -628,6 +630,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                     EntityName: 'MJ: Collection Permissions',
                     ExtraFilter: `CollectionID IN (${inList}) AND UserID='${safeUserId}'`,
                     Fields: ['CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
+                    MaxRows: 500,
                     SkipTotalRowCount: true,
                     ResultType: 'simple'
                 },

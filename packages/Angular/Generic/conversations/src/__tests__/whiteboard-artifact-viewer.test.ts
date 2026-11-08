@@ -138,12 +138,19 @@ describe('WhiteboardArtifactViewerComponent — plugin contract', () => {
     viewer.ContentCommitted.subscribe((json: string) => committedPayloads.push(json));
 
     viewer.EditableBoardState.AddItem({ Kind: 'sticky', X: 220, Y: 140, Text: 'Inline OLE edit' }, 'user');
+    expect(viewer.IsDirty).toBe(true);
     viewer.OnCommitInlineChanges();
+    expect(viewer.IsDirty).toBe(false);
 
     expect(committedPayloads).toHaveLength(1);
     const rehydrated = ParseBoardStateJson(committedPayloads[0]);
     expect(rehydrated?.ElementCount).toBe(3);
 
+    // Further mutation flushes automatically on ngOnDestroy if uncommitted
+    viewer.EditableBoardState.AddItem({ Kind: 'sticky', X: 300, Y: 180, Text: 'Flush on destroy' }, 'user');
+    expect(viewer.IsDirty).toBe(true);
     viewer.ngOnDestroy();
+    expect(committedPayloads).toHaveLength(2);
+    expect(ParseBoardStateJson(committedPayloads[1])?.ElementCount).toBe(4);
   });
 });

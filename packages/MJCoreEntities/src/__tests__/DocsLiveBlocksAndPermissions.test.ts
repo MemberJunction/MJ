@@ -450,6 +450,22 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
     expect(frozenExec.Mode).toBe('Frozen');
     expect(frozenExec.Rows).toEqual([{ ID: 'p1', Name: 'Project Apollo' }]);
 
+    // Executing a Frozen block whose SecurityWarningAcknowledged is false fails closed
+    const tamperedFrozen: DocumentBlockSpec = {
+      ...frozen,
+      FrozenSnapshot: {
+        ...frozen.FrozenSnapshot!,
+        SecurityWarningAcknowledged: false,
+      },
+    };
+    const tamperedExec = await DocumentLiveBlockEngine.Instance.ExecuteBlock(
+      tamperedFrozen,
+      viewerUser,
+      provider,
+    );
+    expect(tamperedExec.Success).toBe(false);
+    expect(tamperedExec.ErrorMessage).toContain('SecurityWarningAcknowledged: true');
+
     // Unfreezing restores Live mode
     const unfrozen = DocumentLiveBlockEngine.Instance.UnfreezeBlock(frozen);
     expect(unfrozen.Mode).toBe('Live');

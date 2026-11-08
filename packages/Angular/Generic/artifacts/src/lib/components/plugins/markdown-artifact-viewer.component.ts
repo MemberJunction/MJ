@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, OnChanges, SimpleChanges, ChangeDetectorRef, ViewChild, ElementRef, inject } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, OnChanges, SimpleChanges, ChangeDetectorRef, ViewChild, ElementRef, inject } from '@angular/core';
 import { DataSnapshot, RunView } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
@@ -7,6 +7,7 @@ import {
   type DocumentBlockSpec,
   type DocumentBlockExecutionResult,
   type DocumentBlockKind,
+  type MJArtifactEntity,
   type MJArtifactVersionEntity,
   type MJConversationEntity,
   type MJConversationDetailEntity,
@@ -444,35 +445,19 @@ export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
             </div>
           } @else {
             <!-- Collaborative Rich Editor / Suggest / Preview Canvas -->
-            <div class="mj-docs-page">
-              @if (CanUserEdit && (ViewMode === 'edit' || ViewMode === 'suggest')) {
-                <!-- Collaborative Quick-Compose Editor Bar -->
-                <div class="mj-docs-compose-box" data-testid="docs-collaborative-editor-box">
-                  <div class="mj-docs-compose-box__header">
-                    <span>
-                      <i class="fas" [ngClass]="ViewMode === 'suggest' ? 'fa-code-pull-request' : 'fa-pen-nib'"></i>
-                      {{
-                        ViewMode === 'suggest'
-                          ? 'Suggest Mode — Edits create tracked suggestion cards'
-                          : 'Collaborative Document Editor (Type / for commands)'
-                      }}
-                    </span>
-                    <span class="mj-docs-compose-box__hint">
-                      Supports GFM Markdown &amp; <code>:::mj-block</code> directives
-                    </span>
-                  </div>
-                  <textarea
-                    class="mj-docs-editor-textarea"
-                    data-testid="docs-editor-textarea"
-                    rows="6"
-                    [ngModel]="MarkdownContent"
-                    (ngModelChange)="OnEditorTextareaInput($event)"
-                    placeholder="Write content, type / to insert live MJ blocks or an inline Whiteboard…"
-                  ></textarea>
+            <div class="mj-docs-page" [class.mj-docs-page--interactive]="IsInteractiveCanvasMode">
+              @if (ViewMode === 'suggest' && CanUserEdit) {
+                <div class="mj-docs-suggest-banner" data-testid="docs-suggest-mode-banner">
+                  <i class="fas fa-code-pull-request"></i>
+                  <span>
+                    <strong>Suggest Mode Active:</strong> Edit any heading, paragraph, list item, callout, or table cell
+                    directly in place below — your changes will be queued as tracked Suggestion Cards without altering
+                    baseline text until accepted.
+                  </span>
                 </div>
               }
 
-              <!-- Segment-by-Segment Interactive Document Renderer -->
+              <!-- Segment-by-Segment Interactive Document Renderer & In-Place WYSIWYG Canvas -->
               <div class="mj-docs-segments" data-testid="docs-segments-list">
                 @for (seg of DocumentSegments; track seg.SegmentID) {
                   <div
@@ -482,6 +467,44 @@ export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
                   >
                     <!-- Hover Block Handle & Actions -->
                     <div class="mj-docs-segment__gutter">
+                      @if (IsInteractiveCanvasMode) {
+                        <button
+                          type="button"
+                          class="mj-docs-handle-btn"
+                          title="Move Block Up"
+                          [attr.data-testid]="'move-up-btn-' + seg.SegmentID"
+                          (click)="MoveSegment(seg, -1)"
+                        >
+                          <i class="fas fa-arrow-up"></i>
+                        </button>
+                        <button
+                          type="button"
+                          class="mj-docs-handle-btn"
+                          title="Move Block Down"
+                          [attr.data-testid]="'move-down-btn-' + seg.SegmentID"
+                          (click)="MoveSegment(seg, 1)"
+                        >
+                          <i class="fas fa-arrow-down"></i>
+                        </button>
+                        <button
+                          type="button"
+                          class="mj-docs-handle-btn"
+                          title="Insert Block Below (/)"
+                          [attr.data-testid]="'insert-below-btn-' + seg.SegmentID"
+                          (click)="OpenSlashMenuForSegment(seg)"
+                        >
+                          <i class="fas fa-plus"></i>
+                        </button>
+                        <button
+                          type="button"
+                          class="mj-docs-handle-btn"
+                          title="Delete Block"
+                          [attr.data-testid]="'delete-block-btn-' + seg.SegmentID"
+                          (click)="DeleteSegment(seg)"
+                        >
+                          <i class="fas fa-trash-can"></i>
+                        </button>
+                      }
                       <button
                         type="button"
                         class="mj-docs-handle-btn"
@@ -499,6 +522,7 @@ export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
                           type="button"
                           class="mj-docs-handle-btn"
                           title="Propose Tracked Suggestion on Block"
+                          [attr.data-testid]="'propose-suggestion-btn-' + seg.SegmentID"
                           (click)="OpenSuggestionModalForSegment(seg)"
                         >
                           <i class="fas fa-lightbulb"></i>
@@ -508,21 +532,227 @@ export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
 
                     <div class="mj-docs-segment__body">
                       @if (seg.Kind === 'markdown') {
-                        <!-- Rendered Markdown Block -->
-                        <div class="markdown-preview">
-                          <mj-markdown
-                            [data]="seg.RawMarkdown"
-                            [enableCollapsibleHeadings]="true"
-                            [enableLineNumbers]="false"
-                            [enableSmartypants]="true"
-                            [enableHtml]="true"
-                          ></mj-markdown>
-                        </div>
+                        @if (IsInteractiveCanvasMode) {
+                          <!-- In-Place Interactive WYSIWYG Block Surfaces (Edit & Suggest Modes, § 4.1) -->
+                          @switch (seg.BlockKind) {
+                            @case ('heading') {
+                              <div
+                                class="mj-docs-editable-heading"
+                                [ngClass]="'mj-docs-editable-heading--h' + (seg.HeadingLevel || 1)"
+                              >
+                                <button
+                                  type="button"
+                                  class="mj-docs-heading-level-pill"
+                                  title="Click to cycle heading level (H1–H4)"
+                                  (click)="CycleHeadingLevel(seg)"
+                                >
+                                  H{{ seg.HeadingLevel || 1 }}
+                                </button>
+                                <div
+                                  class="mj-docs-editable-surface mj-docs-editable-heading__text"
+                                  contenteditable="true"
+                                  role="textbox"
+                                  [attr.data-testid]="'editable-heading-' + seg.SegmentID"
+                                  [textContent]="seg.HeadingText || GetEditableHeadingText(seg)"
+                                  (input)="OnEditableBlockInput(seg, $event)"
+                                  (blur)="CommitEditableHeading(seg, $event)"
+                                  (keydown)="OnEditableBlockKeydown(seg, $event)"
+                                ></div>
+                              </div>
+                            }
+                            @case ('table') {
+                              @if (GetParsedTable(seg); as table) {
+                                <div
+                                  class="mj-docs-editable-table-wrap"
+                                  [attr.data-testid]="'editable-table-' + seg.SegmentID"
+                                >
+                                  <div class="mj-docs-editable-table__toolbar">
+                                    <span><i class="fas fa-table"></i> Interactive Table</span>
+                                    <div class="mj-docs-editable-table__actions">
+                                      <button
+                                        type="button"
+                                        class="mj-docs-btn"
+                                        [attr.data-testid]="'table-add-row-' + seg.SegmentID"
+                                        (click)="AddTableRow(seg)"
+                                      >
+                                        <i class="fas fa-plus"></i> Row
+                                      </button>
+                                      <button
+                                        type="button"
+                                        class="mj-docs-btn"
+                                        [attr.data-testid]="'table-add-col-' + seg.SegmentID"
+                                        (click)="AddTableColumn(seg)"
+                                      >
+                                        <i class="fas fa-plus"></i> Column
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <table class="mj-docs-data-table mj-docs-editable-table">
+                                    <thead>
+                                      <tr>
+                                        @for (hdr of table.Headers; track $index; let cIdx = $index) {
+                                          <th
+                                            contenteditable="true"
+                                            [attr.data-testid]="'table-header-' + seg.SegmentID + '-' + cIdx"
+                                            [textContent]="hdr"
+                                            (blur)="UpdateTableHeaderCell(seg, cIdx, $event)"
+                                          ></th>
+                                        }
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      @for (row of table.Rows; track $index; let rIdx = $index) {
+                                        <tr>
+                                          @for (cell of row; track $index; let cIdx = $index) {
+                                            <td
+                                              contenteditable="true"
+                                              [attr.data-testid]="'table-cell-' + seg.SegmentID + '-' + rIdx + '-' + cIdx"
+                                              [textContent]="cell"
+                                              (blur)="UpdateTableBodyCell(seg, rIdx, cIdx, $event)"
+                                            ></td>
+                                          }
+                                        </tr>
+                                      }
+                                    </tbody>
+                                  </table>
+                                </div>
+                              }
+                            }
+                            @case ('list') {
+                              <div
+                                class="mj-docs-editable-list-wrap"
+                                [attr.data-testid]="'editable-list-' + seg.SegmentID"
+                              >
+                                <ul class="mj-docs-editable-list">
+                                  @for (item of GetParsedListItems(seg); track item.Index) {
+                                    <li class="mj-docs-editable-list__item">
+                                      @if (item.IsTask) {
+                                        <input
+                                          type="checkbox"
+                                          class="mj-docs-task-checkbox"
+                                          [checked]="item.Checked"
+                                          [attr.data-testid]="'task-checkbox-' + seg.SegmentID + '-' + item.Index"
+                                          (change)="ToggleTaskListItem(seg, item.Index, $event)"
+                                        />
+                                      } @else {
+                                        <span class="mj-docs-list-bullet">{{ item.OrderedPrefix || '•' }}</span>
+                                      }
+                                      <span
+                                        class="mj-docs-editable-surface mj-docs-editable-list__text"
+                                        [class.mj-docs-editable-list__text--checked]="item.Checked"
+                                        contenteditable="true"
+                                        role="textbox"
+                                        [attr.data-testid]="'list-item-text-' + seg.SegmentID + '-' + item.Index"
+                                        [textContent]="item.Text"
+                                        (input)="OnEditableBlockInput(seg, $event)"
+                                        (blur)="UpdateListItemText(seg, item.Index, $event)"
+                                        (keydown)="OnListItemKeydown(seg, item.Index, $event)"
+                                      ></span>
+                                    </li>
+                                  }
+                                </ul>
+                                <button
+                                  type="button"
+                                  class="mj-docs-btn mj-docs-list-add-btn"
+                                  (click)="AddListItem(seg)"
+                                >
+                                  <i class="fas fa-plus"></i> Add Item
+                                </button>
+                              </div>
+                            }
+                            @case ('callout') {
+                              @if (GetParsedCallout(seg); as callout) {
+                                <div
+                                  class="mj-docs-editable-callout"
+                                  [ngClass]="'mj-docs-editable-callout--' + callout.CalloutType.toLowerCase()"
+                                  [attr.data-testid]="'editable-callout-' + seg.SegmentID"
+                                >
+                                  <div class="mj-docs-editable-callout__header">
+                                    <i class="fas fa-circle-info"></i>
+                                    <select
+                                      [ngModel]="callout.CalloutType"
+                                      (ngModelChange)="UpdateCalloutType(seg, $event)"
+                                      aria-label="Callout Type"
+                                    >
+                                      <option value="NOTE">NOTE</option>
+                                      <option value="TIP">TIP</option>
+                                      <option value="IMPORTANT">IMPORTANT</option>
+                                      <option value="WARNING">WARNING</option>
+                                      <option value="CAUTION">CAUTION</option>
+                                    </select>
+                                  </div>
+                                  <div
+                                    class="mj-docs-editable-surface mj-docs-editable-callout__body"
+                                    contenteditable="true"
+                                    role="textbox"
+                                    [attr.data-testid]="'editable-callout-body-' + seg.SegmentID"
+                                    [textContent]="callout.BodyText"
+                                    (input)="OnEditableBlockInput(seg, $event)"
+                                    (blur)="CommitEditableCallout(seg, $event)"
+                                    (keydown)="OnEditableBlockKeydown(seg, $event)"
+                                  ></div>
+                                </div>
+                              }
+                            }
+                            @case ('code') {
+                              @if (GetParsedCodeBlock(seg); as codeBlock) {
+                                <div
+                                  class="mj-docs-editable-code"
+                                  [attr.data-testid]="'editable-code-' + seg.SegmentID"
+                                >
+                                  <div class="mj-docs-editable-code__header">
+                                    <span><i class="fas fa-code"></i> Code Block</span>
+                                    <input
+                                      type="text"
+                                      class="mj-docs-code-lang-input"
+                                      [ngModel]="codeBlock.Language"
+                                      (ngModelChange)="UpdateCodeBlockLanguage(seg, $event)"
+                                      placeholder="language"
+                                    />
+                                  </div>
+                                  <pre
+                                    class="mj-docs-editable-surface mj-docs-editable-code__pre"
+                                    contenteditable="true"
+                                    role="textbox"
+                                    [attr.data-testid]="'editable-code-body-' + seg.SegmentID"
+                                    [textContent]="codeBlock.Code"
+                                    (blur)="CommitEditableCodeBlock(seg, $event)"
+                                  ></pre>
+                                </div>
+                              }
+                            }
+                            @default {
+                              <div
+                                class="mj-docs-editable-surface mj-docs-editable-paragraph"
+                                contenteditable="true"
+                                role="textbox"
+                                aria-multiline="true"
+                                [attr.data-testid]="'editable-paragraph-' + seg.SegmentID"
+                                [textContent]="seg.RawMarkdown"
+                                (input)="OnEditableBlockInput(seg, $event)"
+                                (blur)="CommitEditableParagraph(seg, $event)"
+                                (keydown)="OnEditableBlockKeydown(seg, $event)"
+                              ></div>
+                            }
+                          }
+                        } @else {
+                          <!-- Reader Preview Markdown Block -->
+                          <div class="markdown-preview">
+                            <mj-markdown
+                              [data]="seg.RawMarkdown"
+                              [enableCollapsibleHeadings]="true"
+                              [enableLineNumbers]="false"
+                              [enableSmartypants]="true"
+                              [enableHtml]="true"
+                            ></mj-markdown>
+                          </div>
+                        }
                       } @else if (seg.Descriptor && seg.Descriptor.Kind === 'Artifact') {
                         <!-- Embedded "MS OLE" Artifact Block (Whiteboard, Child Document, etc. per § 3.4.1 / D12) -->
                         <div
                           class="mj-docs-ole-block"
                           [class.mj-docs-ole-block--editing]="IsInlineEditingBlock(seg.Descriptor.BlockID)"
+                          [class.mj-docs-ole-block--expanded]="ExpandedOleBlockID === seg.Descriptor.BlockID"
                           [attr.data-testid]="'ole-artifact-block-' + seg.Descriptor.BlockID"
                         >
                           <div class="mj-docs-ole-block__header">
@@ -541,6 +771,7 @@ export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
                               </span>
                               <span class="mj-docs-badge">
                                 v{{ GetEmbeddedArtifactVersion(seg.Descriptor).VersionNumber || 1 }}
+                                {{ seg.Descriptor.VersionID ? '· Pinned' : '· Latest' }}
                               </span>
                             </div>
 
@@ -569,7 +800,32 @@ export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
                                     }}
                                   </span>
                                 </button>
+                                <button
+                                  type="button"
+                                  class="mj-docs-btn"
+                                  title="Toggle Version Pin (Pinned vs. Track Latest)"
+                                  [attr.data-testid]="'toggle-pin-ole-btn-' + seg.Descriptor.BlockID"
+                                  (click)="TogglePinArtifactVersion(seg.Descriptor)"
+                                >
+                                  <i class="fas fa-thumbtack"></i>
+                                  <span>{{ seg.Descriptor.VersionID ? 'Unpin' : 'Pin v' + (GetEmbeddedArtifactVersion(seg.Descriptor).VersionNumber || 1) }}</span>
+                                </button>
                               }
+                              <button
+                                type="button"
+                                class="mj-docs-btn"
+                                title="Expand / Collapse Full Screen OLE Modal"
+                                [attr.data-testid]="'expand-ole-fullscreen-btn-' + seg.Descriptor.BlockID"
+                                (click)="ToggleExpandOleBlock(seg.Descriptor)"
+                              >
+                                <i
+                                  class="fas"
+                                  [ngClass]="
+                                    ExpandedOleBlockID === seg.Descriptor.BlockID ? 'fa-compress' : 'fa-expand'
+                                  "
+                                ></i>
+                                <span>{{ ExpandedOleBlockID === seg.Descriptor.BlockID ? 'Exit Full Screen' : 'Full Screen' }}</span>
+                              </button>
                               <button
                                 type="button"
                                 class="mj-docs-btn"
@@ -581,7 +837,12 @@ export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
                             </div>
                           </div>
 
-                          <div class="mj-docs-ole-block__viewport" [style.height.px]="seg.Descriptor.HeightPx || 420">
+                          <div
+                            class="mj-docs-ole-block__viewport"
+                            [style.height.px]="
+                              ExpandedOleBlockID === seg.Descriptor.BlockID ? 680 : seg.Descriptor.HeightPx || 420
+                            "
+                          >
                             @if (GetEmbeddedArtifactVersion(seg.Descriptor); as embeddedVer) {
                               <mj-artifact-type-plugin-viewer
                                 [artifactVersion]="embeddedVer"
@@ -1386,36 +1647,221 @@ export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
       }
 
-      .mj-docs-compose-box {
-        margin-bottom: 20px;
-        border: 1px solid var(--mj-border-default);
+      .mj-docs-suggest-banner {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 16px;
+        padding: 8px 12px;
+        font-size: 12px;
+        border: 1px solid var(--mj-brand-primary);
         border-radius: 8px;
         background: var(--mj-bg-surface-card);
-        overflow: hidden;
+        color: var(--mj-text-primary);
       }
 
-      .mj-docs-compose-box__header {
+      .mj-docs-editable-surface {
+        outline: none;
+        border-radius: 4px;
+        transition: background 0.12s ease;
+        min-height: 22px;
+      }
+
+      .mj-docs-editable-surface:focus {
+        background: var(--mj-bg-surface-hover);
+        box-shadow: 0 0 0 1px var(--mj-brand-primary);
+      }
+
+      .mj-docs-editable-heading {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 0;
+      }
+
+      .mj-docs-heading-level-pill {
+        padding: 2px 6px;
+        font-size: 10px;
+        font-weight: 700;
+        border: 1px solid var(--mj-border-default);
+        border-radius: 4px;
+        background: var(--mj-bg-surface-card);
+        color: var(--mj-text-secondary);
+        cursor: pointer;
+      }
+
+      .mj-docs-editable-heading__text {
+        flex: 1;
+        font-weight: 700;
+        color: var(--mj-text-primary);
+        padding: 2px 6px;
+      }
+
+      .mj-docs-editable-heading--h1 .mj-docs-editable-heading__text {
+        font-size: 24px;
+        line-height: 1.25;
+      }
+
+      .mj-docs-editable-heading--h2 .mj-docs-editable-heading__text {
+        font-size: 19px;
+        line-height: 1.3;
+      }
+
+      .mj-docs-editable-heading--h3 .mj-docs-editable-heading__text {
+        font-size: 16px;
+        line-height: 1.35;
+      }
+
+      .mj-docs-editable-paragraph {
+        font-size: 14px;
+        line-height: 1.65;
+        padding: 4px 6px;
+        white-space: pre-wrap;
+        color: var(--mj-text-primary);
+      }
+
+      .mj-docs-editable-table-wrap {
+        border: 1px solid var(--mj-border-default);
+        border-radius: 8px;
+        overflow: hidden;
+        background: var(--mj-bg-surface);
+      }
+
+      .mj-docs-editable-table__toolbar {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 6px 12px;
+        padding: 6px 10px;
         font-size: 11px;
         font-weight: 600;
+        background: var(--mj-bg-surface-card);
+        border-bottom: 1px solid var(--mj-border-default);
         color: var(--mj-text-secondary);
+      }
+
+      .mj-docs-editable-table__actions {
+        display: flex;
+        gap: 6px;
+      }
+
+      .mj-docs-editable-table th[contenteditable='true']:focus,
+      .mj-docs-editable-table td[contenteditable='true']:focus {
+        outline: 1px solid var(--mj-brand-primary);
+        background: var(--mj-bg-surface-hover);
+      }
+
+      .mj-docs-editable-list-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .mj-docs-editable-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .mj-docs-editable-list__item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+      }
+
+      .mj-docs-task-checkbox {
+        width: 15px;
+        height: 15px;
+        cursor: pointer;
+      }
+
+      .mj-docs-list-bullet {
+        font-weight: 700;
+        color: var(--mj-text-secondary);
+        min-width: 16px;
+      }
+
+      .mj-docs-editable-list__text {
+        flex: 1;
+        padding: 2px 6px;
+      }
+
+      .mj-docs-editable-list__text--checked {
+        text-decoration: line-through;
+        color: var(--mj-text-muted);
+      }
+
+      .mj-docs-list-add-btn {
+        align-self: flex-start;
+      }
+
+      .mj-docs-editable-callout {
+        border: 1px solid var(--mj-border-default);
+        border-left: 4px solid var(--mj-brand-primary);
+        border-radius: 8px;
+        padding: 8px 12px;
+        background: var(--mj-bg-surface-card);
+      }
+
+      .mj-docs-editable-callout__header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 6px;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--mj-brand-primary);
+      }
+
+      .mj-docs-editable-callout__body {
+        font-size: 13px;
+        line-height: 1.55;
+        padding: 2px 4px;
+        white-space: pre-wrap;
+      }
+
+      .mj-docs-editable-code {
+        border: 1px solid var(--mj-border-default);
+        border-radius: 8px;
+        overflow: hidden;
+        background: var(--mj-bg-surface-card);
+      }
+
+      .mj-docs-editable-code__header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 10px;
+        font-size: 11px;
         border-bottom: 1px solid var(--mj-border-default);
       }
 
-      .mj-docs-editor-textarea {
-        width: 100%;
-        box-sizing: border-box;
-        padding: 10px 12px;
-        border: none;
-        resize: vertical;
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-        font-size: 13px;
-        line-height: 1.55;
+      .mj-docs-code-lang-input {
+        padding: 2px 6px;
+        font-size: 11px;
+        border: 1px solid var(--mj-border-default);
+        border-radius: 4px;
         background: var(--mj-bg-surface);
         color: var(--mj-text-primary);
+      }
+
+      .mj-docs-editable-code__pre {
+        margin: 0;
+        padding: 10px 12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        line-height: 1.5;
+        white-space: pre-wrap;
+      }
+
+      .mj-docs-ole-block--expanded {
+        position: fixed;
+        inset: 24px;
+        z-index: 80;
+        box-shadow: 0 20px 48px rgba(0, 0, 0, 0.35);
       }
 
       .mj-docs-segments {
@@ -1928,6 +2374,12 @@ export class MarkdownArtifactViewerComponent
   @ViewChild('fileImportInput') public FileImportInput?: ElementRef<HTMLInputElement>;
   @ViewChild('printableCanvas') public PrintableCanvas?: ElementRef<HTMLElement>;
 
+  /**
+   * Optional WebSocket URL (or base URL) for `/collaboration/yjs` real-time Yjs room sync (§ 3.2).
+   * When omitted, falls back to `globalThis.__MJ_COLLAB_WS_URL__` if configured.
+   */
+  @Input() public collaborationWsUrl: string | null = null;
+
   private readonly collabService = inject(DocumentCollaborationService);
   private readonly importExportService = inject(DocumentImportExportService);
   private readonly cdr = inject(ChangeDetectorRef);
@@ -1945,6 +2397,7 @@ export class MarkdownArtifactViewerComponent
   }
 
   public ViewMode: DocsViewerMode = 'preview';
+  private userExplicitlySelectedMode = false;
 
   /** @deprecated Use {@link ViewMode}. */
   public get viewMode(): DocsViewerMode {
@@ -1959,6 +2412,8 @@ export class MarkdownArtifactViewerComponent
   public ShowCommentsDrawer = false;
   public ShowSlashMenu = false;
   public SlashSearchQuery = '';
+  public ActiveSlashTargetSegmentID: string | null = null;
+  public ExpandedOleBlockID: string | null = null;
   public StatusBannerMessage = '';
   public IsSavingVersion = false;
 
@@ -2025,6 +2480,13 @@ export class MarkdownArtifactViewerComponent
     return !this.readonly && this.HasEditPermission && this.CollaborationStatus !== 'revoked';
   }
 
+  /**
+   * True when the document canvas renders in-place WYSIWYG editable blocks (`Edit` or `Suggest` mode).
+   */
+  public get IsInteractiveCanvasMode(): boolean {
+    return this.CanUserEdit && (this.ViewMode === 'edit' || this.ViewMode === 'suggest');
+  }
+
   public get FilteredSlashCommands(): DocumentSlashCommand[] {
     return this.collabService.GetSlashCommands(this.SlashSearchQuery);
   }
@@ -2055,7 +2517,15 @@ export class MarkdownArtifactViewerComponent
     if (changes['artifactVersion'] && !changes['artifactVersion'].firstChange) {
       this.initializeDocument();
     }
+    if (changes['collaborationWsUrl'] && !changes['collaborationWsUrl'].firstChange) {
+      this.setupCollaborationSession();
+    }
     if (changes['readonly']) {
+      if (this.readonly && (this.ViewMode === 'edit' || this.ViewMode === 'suggest')) {
+        this.ViewMode = 'preview';
+      } else if (!this.readonly && !this.userExplicitlySelectedMode && this.ViewMode === 'preview') {
+        this.ViewMode = 'edit';
+      }
       this.cdr.markForCheck();
     }
   }
@@ -2080,6 +2550,7 @@ export class MarkdownArtifactViewerComponent
     if ((mode === 'edit' || mode === 'suggest') && !this.CanUserEdit) {
       return;
     }
+    this.userExplicitlySelectedMode = true;
     this.ViewMode = mode;
     if (mode === 'diff') {
       this.RecomputeDiff();
@@ -2107,7 +2578,472 @@ export class MarkdownArtifactViewerComponent
 
   public CloseSlashMenu(): void {
     this.ShowSlashMenu = false;
+    this.ActiveSlashTargetSegmentID = null;
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Opens the `/` Slash Command Palette anchored to a specific document segment.
+   */
+  public OpenSlashMenuForSegment(seg: DocumentRenderSegment): void {
+    this.ActiveSlashTargetSegmentID = seg.SegmentID;
+    this.SelectedAnchorKey = seg.SegmentID;
+    this.SlashSearchQuery = '';
+    this.ShowSlashMenu = true;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Handles live input inside an in-place `contenteditable` block (`Edit` / `Suggest` modes),
+   * opening the `/` Slash Command Palette when `/` is typed at the start of a block or after whitespace.
+   */
+  public OnEditableBlockInput(seg: DocumentRenderSegment, event: Event): void {
+    const el = event.target as HTMLElement | null;
+    const text = el?.textContent ?? '';
+    const trimmed = text.trim();
+    if (trimmed === '/' || /(?:^|\s)\/$/.test(text)) {
+      this.ActiveSlashTargetSegmentID = seg.SegmentID;
+      this.SelectedAnchorKey = seg.SegmentID;
+      this.SlashSearchQuery = '';
+      this.ShowSlashMenu = true;
+      this.cdr.markForCheck();
+    } else if (trimmed.startsWith('/') && trimmed.length > 1 && !trimmed.includes(' ')) {
+      this.ActiveSlashTargetSegmentID = seg.SegmentID;
+      this.SelectedAnchorKey = seg.SegmentID;
+      this.SlashSearchQuery = trimmed.slice(1);
+      this.ShowSlashMenu = true;
+      this.cdr.markForCheck();
+    }
+  }
+
+  public OnEditableBlockKeydown(seg: DocumentRenderSegment, event: KeyboardEvent): void {
+    if (event.key === 'Escape' && this.ShowSlashMenu) {
+      event.preventDefault();
+      this.CloseSlashMenu();
+      return;
+    }
+    if (event.key === '/' && !event.ctrlKey && !event.metaKey) {
+      this.ActiveSlashTargetSegmentID = seg.SegmentID;
+      this.SelectedAnchorKey = seg.SegmentID;
+    }
+  }
+
+  public GetEditableHeadingText(seg: DocumentRenderSegment): string {
+    return seg.RawMarkdown.replace(/^#{1,6}\s+/, '').trim();
+  }
+
+  public CycleHeadingLevel(seg: DocumentRenderSegment): void {
+    if (!this.CanUserEdit) {
+      return;
+    }
+    const currentLevel = seg.HeadingLevel ?? 1;
+    const nextLevel = currentLevel >= 4 ? 1 : currentLevel + 1;
+    const text = seg.HeadingText || this.GetEditableHeadingText(seg);
+    const nextMd = `${'#'.repeat(nextLevel)} ${text}`;
+    this.ApplyInPlaceSegmentChange(seg, nextMd, `Changed heading level to H${nextLevel}`);
+  }
+
+  public CommitEditableHeading(seg: DocumentRenderSegment, event: Event): void {
+    const el = event.target as HTMLElement | null;
+    const rawText = (el?.textContent ?? '').replace(/\n+/g, ' ').trim();
+    if (!rawText || rawText === '/') {
+      return;
+    }
+    const level = seg.HeadingLevel ?? 1;
+    const nextMd = `${'#'.repeat(level)} ${rawText}`;
+    if (nextMd !== seg.RawMarkdown) {
+      this.ApplyInPlaceSegmentChange(seg, nextMd, `Edited heading H${level}`);
+    }
+  }
+
+  public CommitEditableParagraph(seg: DocumentRenderSegment, event: Event): void {
+    const el = event.target as HTMLElement | null;
+    const nextText = (el?.textContent ?? '').trim();
+    if (!nextText || nextText === '/' || (this.ShowSlashMenu && this.ActiveSlashTargetSegmentID === seg.SegmentID)) {
+      return;
+    }
+    if (nextText !== seg.RawMarkdown.trim()) {
+      this.ApplyInPlaceSegmentChange(seg, nextText, 'Edited paragraph in place');
+    }
+  }
+
+  public GetParsedTable(seg: DocumentRenderSegment): { Headers: string[]; Rows: string[][] } {
+    const lines = seg.RawMarkdown
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+    const parseCells = (line: string): string[] =>
+      line
+        .replace(/^\||\|$/g, '')
+        .split('|')
+        .map((c) => c.trim());
+
+    const headers = lines.length > 0 ? parseCells(lines[0]) : ['Column 1', 'Column 2'];
+    const rows: string[][] = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cells = parseCells(lines[i]);
+      // Skip GFM separator row (| --- | --- |)
+      if (cells.every((c) => /^:?-{2,}:?$/.test(c))) {
+        continue;
+      }
+      while (cells.length < headers.length) {
+        cells.push('');
+      }
+      rows.push(cells.slice(0, headers.length));
+    }
+    return { Headers: headers, Rows: rows };
+  }
+
+  private serializeParsedTable(headers: string[], rows: string[][]): string {
+    const headerLine = `| ${headers.join(' | ')} |`;
+    const sepLine = `| ${headers.map(() => '---').join(' | ')} |`;
+    const bodyLines = rows.map((r) => `| ${headers.map((_, idx) => r[idx] ?? '').join(' | ')} |`);
+    return [headerLine, sepLine, ...bodyLines].join('\n');
+  }
+
+  public UpdateTableHeaderCell(seg: DocumentRenderSegment, colIndex: number, event: Event): void {
+    const el = event.target as HTMLElement | null;
+    const nextVal = (el?.textContent ?? '').replace(/\|/g, '/').trim();
+    const parsed = this.GetParsedTable(seg);
+    if (parsed.Headers[colIndex] === nextVal) {
+      return;
+    }
+    parsed.Headers[colIndex] = nextVal;
+    this.ApplyInPlaceSegmentChange(
+      seg,
+      this.serializeParsedTable(parsed.Headers, parsed.Rows),
+      `Updated table header column ${colIndex + 1}`,
+    );
+  }
+
+  public UpdateTableBodyCell(seg: DocumentRenderSegment, rowIndex: number, colIndex: number, event: Event): void {
+    const el = event.target as HTMLElement | null;
+    const nextVal = (el?.textContent ?? '').replace(/\|/g, '/').trim();
+    const parsed = this.GetParsedTable(seg);
+    if (!parsed.Rows[rowIndex] || parsed.Rows[rowIndex][colIndex] === nextVal) {
+      return;
+    }
+    parsed.Rows[rowIndex][colIndex] = nextVal;
+    this.ApplyInPlaceSegmentChange(
+      seg,
+      this.serializeParsedTable(parsed.Headers, parsed.Rows),
+      `Updated table cell (${rowIndex + 1}, ${colIndex + 1})`,
+    );
+  }
+
+  public AddTableRow(seg: DocumentRenderSegment): void {
+    const parsed = this.GetParsedTable(seg);
+    parsed.Rows.push(parsed.Headers.map((_, idx) => `Value ${idx + 1}`));
+    this.ApplyInPlaceSegmentChange(
+      seg,
+      this.serializeParsedTable(parsed.Headers, parsed.Rows),
+      'Added table row',
+    );
+  }
+
+  public AddTableColumn(seg: DocumentRenderSegment): void {
+    const parsed = this.GetParsedTable(seg);
+    const colNum = parsed.Headers.length + 1;
+    parsed.Headers.push(`Column ${colNum}`);
+    for (const row of parsed.Rows) {
+      row.push('—');
+    }
+    this.ApplyInPlaceSegmentChange(
+      seg,
+      this.serializeParsedTable(parsed.Headers, parsed.Rows),
+      'Added table column',
+    );
+  }
+
+  public GetParsedListItems(seg: DocumentRenderSegment): Array<{
+    Index: number;
+    IsTask: boolean;
+    Checked: boolean;
+    OrderedPrefix?: string;
+    Text: string;
+  }> {
+    const lines = seg.RawMarkdown.split('\n').filter((l) => l.trim().length > 0);
+    return lines.map((line, idx) => {
+      const taskMatch = /^(\s*[-*+]\s+)\[([ xX])\]\s*(.*)$/.exec(line);
+      if (taskMatch) {
+        return {
+          Index: idx,
+          IsTask: true,
+          Checked: taskMatch[2].toLowerCase() === 'x',
+          Text: taskMatch[3],
+        };
+      }
+      const orderedMatch = /^(\s*\d+\.)\s+(.*)$/.exec(line);
+      if (orderedMatch) {
+        return {
+          Index: idx,
+          IsTask: false,
+          Checked: false,
+          OrderedPrefix: orderedMatch[1].trim(),
+          Text: orderedMatch[2],
+        };
+      }
+      const bulletMatch = /^(\s*[-*+])\s+(.*)$/.exec(line);
+      return {
+        Index: idx,
+        IsTask: false,
+        Checked: false,
+        Text: bulletMatch ? bulletMatch[2] : line.trim(),
+      };
+    });
+  }
+
+  private serializeParsedListItems(
+    items: Array<{ IsTask: boolean; Checked: boolean; OrderedPrefix?: string; Text: string }>,
+  ): string {
+    return items
+      .map((item) => {
+        if (item.IsTask) {
+          return `- [${item.Checked ? 'x' : ' '}] ${item.Text}`;
+        }
+        if (item.OrderedPrefix) {
+          return `${item.OrderedPrefix} ${item.Text}`;
+        }
+        return `- ${item.Text}`;
+      })
+      .join('\n');
+  }
+
+  public ToggleTaskListItem(seg: DocumentRenderSegment, itemIndex: number, event: Event): void {
+    const checkbox = event.target as HTMLInputElement | null;
+    const items = this.GetParsedListItems(seg);
+    if (!items[itemIndex]) {
+      return;
+    }
+    items[itemIndex].Checked = checkbox ? checkbox.checked : !items[itemIndex].Checked;
+    this.ApplyInPlaceSegmentChange(
+      seg,
+      this.serializeParsedListItems(items),
+      `Toggled task item "${items[itemIndex].Text}"`,
+    );
+  }
+
+  public UpdateListItemText(seg: DocumentRenderSegment, itemIndex: number, event: Event): void {
+    const el = event.target as HTMLElement | null;
+    const nextText = (el?.textContent ?? '').replace(/\n+/g, ' ').trim();
+    const items = this.GetParsedListItems(seg);
+    if (!items[itemIndex] || items[itemIndex].Text === nextText) {
+      return;
+    }
+    items[itemIndex].Text = nextText;
+    this.ApplyInPlaceSegmentChange(
+      seg,
+      this.serializeParsedListItems(items),
+      'Updated list item text',
+    );
+  }
+
+  public OnListItemKeydown(seg: DocumentRenderSegment, itemIndex: number, event: KeyboardEvent): void {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      const el = event.target as HTMLElement | null;
+      const currentText = (el?.textContent ?? '').replace(/\n+/g, ' ').trim();
+      const items = this.GetParsedListItems(seg);
+      if (items[itemIndex]) {
+        items[itemIndex].Text = currentText;
+      }
+      const template = items[itemIndex] ?? { IsTask: false, Checked: false, Text: 'New item' };
+      items.splice(itemIndex + 1, 0, {
+        Index: itemIndex + 1,
+        IsTask: template.IsTask,
+        Checked: false,
+        OrderedPrefix: template.OrderedPrefix ? `${items.length + 1}.` : undefined,
+        Text: 'New item',
+      });
+      this.ApplyInPlaceSegmentChange(seg, this.serializeParsedListItems(items), 'Inserted list item');
+      return;
+    }
+    this.OnEditableBlockKeydown(seg, event);
+  }
+
+  public AddListItem(seg: DocumentRenderSegment): void {
+    const items = this.GetParsedListItems(seg);
+    const first = items[0];
+    items.push({
+      Index: items.length,
+      IsTask: first?.IsTask ?? false,
+      Checked: false,
+      OrderedPrefix: first?.OrderedPrefix ? `${items.length + 1}.` : undefined,
+      Text: first?.IsTask ? 'New action item' : 'New list item',
+    });
+    this.ApplyInPlaceSegmentChange(seg, this.serializeParsedListItems(items), 'Added list item');
+  }
+
+  public GetParsedCallout(seg: DocumentRenderSegment): {
+    CalloutType: 'NOTE' | 'TIP' | 'IMPORTANT' | 'WARNING' | 'CAUTION';
+    BodyText: string;
+  } {
+    const lines = seg.RawMarkdown.split('\n').map((l) => l.replace(/^>\s?/, ''));
+    const first = lines[0]?.trim() ?? '';
+    const match = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*)$/i.exec(first);
+    if (match) {
+      const kind = match[1].toUpperCase() as 'NOTE' | 'TIP' | 'IMPORTANT' | 'WARNING' | 'CAUTION';
+      const restFirst = match[2] ? [match[2]] : [];
+      const body = [...restFirst, ...lines.slice(1)].join('\n').trim();
+      return { CalloutType: kind, BodyText: body || 'Callout details…' };
+    }
+    return {
+      CalloutType: 'NOTE',
+      BodyText: lines.join('\n').trim() || 'Callout details…',
+    };
+  }
+
+  public UpdateCalloutType(
+    seg: DocumentRenderSegment,
+    nextType: 'NOTE' | 'TIP' | 'IMPORTANT' | 'WARNING' | 'CAUTION',
+  ): void {
+    const parsed = this.GetParsedCallout(seg);
+    const bodyLines = parsed.BodyText.split('\n').map((l) => `> ${l}`);
+    const nextMd = [`> [!${nextType}]`, ...bodyLines].join('\n');
+    this.ApplyInPlaceSegmentChange(seg, nextMd, `Changed callout type to ${nextType}`);
+  }
+
+  public CommitEditableCallout(seg: DocumentRenderSegment, event: Event): void {
+    const el = event.target as HTMLElement | null;
+    const nextBody = (el?.textContent ?? '').trim();
+    if (!nextBody) {
+      return;
+    }
+    const parsed = this.GetParsedCallout(seg);
+    if (nextBody === parsed.BodyText) {
+      return;
+    }
+    const bodyLines = nextBody.split('\n').map((l) => `> ${l}`);
+    const nextMd = [`> [!${parsed.CalloutType}]`, ...bodyLines].join('\n');
+    this.ApplyInPlaceSegmentChange(seg, nextMd, 'Updated callout content');
+  }
+
+  public GetParsedCodeBlock(seg: DocumentRenderSegment): { Language: string; Code: string } {
+    const lines = seg.RawMarkdown.split('\n');
+    const first = lines[0]?.trim() ?? '```';
+    const lang = first.replace(/^```/, '').trim() || 'typescript';
+    const innerLines =
+      lines.length >= 2 && lines[lines.length - 1].trim().startsWith('```')
+        ? lines.slice(1, -1)
+        : lines.slice(1);
+    return {
+      Language: lang,
+      Code: innerLines.join('\n'),
+    };
+  }
+
+  public UpdateCodeBlockLanguage(seg: DocumentRenderSegment, nextLang: string): void {
+    const parsed = this.GetParsedCodeBlock(seg);
+    const nextMd = ['```' + (nextLang || '').trim(), parsed.Code, '```'].join('\n');
+    this.ApplyInPlaceSegmentChange(seg, nextMd, `Changed code block language to ${nextLang}`);
+  }
+
+  public CommitEditableCodeBlock(seg: DocumentRenderSegment, event: Event): void {
+    const el = event.target as HTMLElement | null;
+    const nextCode = el?.textContent ?? '';
+    const parsed = this.GetParsedCodeBlock(seg);
+    if (nextCode === parsed.Code) {
+      return;
+    }
+    const nextMd = ['```' + parsed.Language, nextCode, '```'].join('\n');
+    this.ApplyInPlaceSegmentChange(seg, nextMd, 'Updated code block');
+  }
+
+  /**
+   * Applies an in-place block edit either as a direct collaborative edit (`ViewMode === 'edit'`)
+   * or as a tracked Suggestion Card attached to that block (`ViewMode === 'suggest'`).
+   */
+  public ApplyInPlaceSegmentChange(
+    seg: DocumentRenderSegment,
+    nextBlockMarkdown: string,
+    rationale = 'In-place block edit',
+  ): void {
+    if (!this.CanUserEdit || nextBlockMarkdown === seg.RawMarkdown) {
+      return;
+    }
+    if (this.ViewMode === 'suggest') {
+      this.CreateOrUpdatePendingSuggestion(
+        seg.SegmentID,
+        seg.RawMarkdown,
+        nextBlockMarkdown,
+        rationale,
+      );
+      this.StatusBannerMessage = `Queued tracked suggestion on block (${rationale}).`;
+      return;
+    }
+    this.ReplaceSegmentMarkdown(seg, nextBlockMarkdown);
+  }
+
+  /**
+   * Replaces a single segment's Markdown in the document and broadcasts the minimal diff via Yjs.
+   */
+  public ReplaceSegmentMarkdown(seg: DocumentRenderSegment, nextBlockMarkdown: string): void {
+    const updatedSegments = this.DocumentSegments.map((s) =>
+      s.SegmentID === seg.SegmentID ? nextBlockMarkdown : s.RawMarkdown,
+    );
+    this.OnMarkdownChanged(updatedSegments.join('\n\n'));
+  }
+
+  /**
+   * Moves a segment up (`direction = -1`) or down (`direction = 1`) in the document flow.
+   */
+  public MoveSegment(seg: DocumentRenderSegment, direction: -1 | 1): void {
+    if (!this.CanUserEdit) {
+      return;
+    }
+    const idx = this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID);
+    const targetIdx = idx + direction;
+    if (idx < 0 || targetIdx < 0 || targetIdx >= this.DocumentSegments.length) {
+      return;
+    }
+    const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+    const [moved] = blocks.splice(idx, 1);
+    blocks.splice(targetIdx, 0, moved);
+    this.OnMarkdownChanged(blocks.join('\n\n'));
+  }
+
+  /**
+   * Deletes a segment from the document.
+   */
+  public DeleteSegment(seg: DocumentRenderSegment): void {
+    if (!this.CanUserEdit || this.DocumentSegments.length <= 1) {
+      return;
+    }
+    const remaining = this.DocumentSegments.filter((s) => s.SegmentID !== seg.SegmentID).map(
+      (s) => s.RawMarkdown,
+    );
+    this.OnMarkdownChanged(remaining.join('\n\n'));
+  }
+
+  /**
+   * Toggles full-screen modal view for an embedded OLE `Artifact` block (§ 3.4.1).
+   */
+  public ToggleExpandOleBlock(block: DocumentBlockSpec): void {
+    this.ExpandedOleBlockID = this.ExpandedOleBlockID === block.BlockID ? null : block.BlockID;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Toggles whether an embedded OLE `Artifact` block pins a specific `VersionID` or tracks the latest version (§ 3.4.1).
+   */
+  public TogglePinArtifactVersion(block: DocumentBlockSpec): void {
+    if (!this.CanUserEdit) {
+      return;
+    }
+    const currentVer = this.GetEmbeddedArtifactVersion(block);
+    const updatedDescriptor: DocumentBlockSpec = {
+      ...block,
+      VersionID: block.VersionID ? undefined : currentVer.ID,
+    };
+    const updatedRes = DocumentLiveBlockEngine.Instance.UpdateBlockInMarkdown(
+      this.MarkdownContent,
+      block.BlockID,
+      updatedDescriptor,
+    );
+    this.OnMarkdownChanged(updatedRes.Markdown);
+    this.StatusBannerMessage = updatedDescriptor.VersionID
+      ? `Pinned ${block.Title || 'embedded artifact'} to v${currentVer.VersionNumber || 1}.`
+      : `Unpinned ${block.Title || 'embedded artifact'} (now tracking latest version).`;
   }
 
   /**
@@ -2142,16 +3078,39 @@ export class MarkdownArtifactViewerComponent
   }
 
   /**
-   * Appends or wraps a Markdown snippet in the active document.
+   * Appends or wraps a Markdown snippet in the active document (or after the selected segment).
    */
   public InsertFormattingSnippet(prefix: string, suffix: string): void {
     if (!this.CanUserEdit) {
       return;
     }
     const insertion = `${prefix}${suffix ? 'text' + suffix : ''}`;
-    const separator = this.MarkdownContent.endsWith('\n') || this.MarkdownContent.length === 0 ? '' : '\n';
-    const updated = `${this.MarkdownContent}${separator}${insertion}`;
-    this.OnMarkdownChanged(updated);
+    this.insertMarkdownAtTargetSegment(insertion);
+  }
+
+  private insertMarkdownAtTargetSegment(snippet: string): void {
+    const targetId = this.ActiveSlashTargetSegmentID;
+    this.ActiveSlashTargetSegmentID = null;
+
+    if (targetId) {
+      const idx = this.DocumentSegments.findIndex((s) => s.SegmentID === targetId);
+      if (idx >= 0) {
+        const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+        const cleanedTarget = blocks[idx].replace(/(?:^|\s)\/[A-Za-z0-9_-]*$/, '').trim();
+        if (cleanedTarget.length === 0) {
+          blocks[idx] = snippet.trim();
+        } else {
+          blocks[idx] = cleanedTarget;
+          blocks.splice(idx + 1, 0, snippet.trim());
+        }
+        this.OnMarkdownChanged(blocks.join('\n\n'));
+        return;
+      }
+    }
+
+    const cleanedBase = this.MarkdownContent.replace(/(?:^|\n)\/[A-Za-z0-9_-]*$/, '');
+    const sep = cleanedBase.endsWith('\n') || cleanedBase.length === 0 ? '' : '\n\n';
+    this.OnMarkdownChanged(`${cleanedBase}${sep}${snippet}`);
   }
 
   /**
@@ -2159,14 +3118,9 @@ export class MarkdownArtifactViewerComponent
    */
   public ExecuteSlashCommand(cmd: DocumentSlashCommand): void {
     this.ShowSlashMenu = false;
-    const cleanedBase = this.MarkdownContent.replace(/(?:^|\n)\/$/, '');
-    if (cleanedBase !== this.MarkdownContent) {
-      this.MarkdownContent = cleanedBase;
-    }
 
     if (cmd.Snippet) {
-      const sep = this.MarkdownContent.endsWith('\n') || this.MarkdownContent.length === 0 ? '' : '\n\n';
-      this.OnMarkdownChanged(`${this.MarkdownContent}${sep}${cmd.Snippet}`);
+      this.insertMarkdownAtTargetSegment(cmd.Snippet);
       return;
     }
 
@@ -2196,12 +3150,13 @@ export class MarkdownArtifactViewerComponent
   public CancelBlockInsertModal(): void {
     this.PendingBlockInsertType = null;
     this.PendingBlockIsWhiteboard = false;
+    this.ActiveSlashTargetSegmentID = null;
     this.cdr.markForCheck();
   }
 
   /**
    * Inserts a configured `:::mj-block` directive into the document (and creates an inline
-   * Whiteboard state when `PendingBlockIsWhiteboard === true`).
+   * Whiteboard child artifact when `PendingBlockIsWhiteboard === true`, § 3.4.1 / O4).
    */
   public ConfirmBlockInsertModal(): void {
     if (!this.PendingBlockInsertType) {
@@ -2305,14 +3260,112 @@ export class MarkdownArtifactViewerComponent
         } as unknown as MJArtifactVersionEntity,
       );
       this.inlineEditingBlockIds.add(blockId);
+
+      // When connected to a live provider and host artifact is a persisted UUID, also create the delegated child MJ: Artifacts row (O4)
+      void this.persistInlineDelegatedArtifactIfConnected(descriptor, defaultWbJson);
     }
 
     const directiveText = DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(descriptor);
-    const sep = this.MarkdownContent.endsWith('\n') || this.MarkdownContent.length === 0 ? '' : '\n\n';
     this.PendingBlockInsertType = null;
     this.PendingBlockIsWhiteboard = false;
-    this.OnMarkdownChanged(`${this.MarkdownContent}${sep}${directiveText}\n`);
+    this.insertMarkdownAtTargetSegment(`${directiveText}\n`);
     this.StatusBannerMessage = `Inserted ${descriptor.Title} block into document.`;
+  }
+
+  private isUuid(value: string | undefined | null): value is string {
+    return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.trim());
+  }
+
+  private escapeSql(value: string): string {
+    return value.replace(/'/g, "''");
+  }
+
+  private async persistInlineDelegatedArtifactIfConnected(
+    descriptor: DocumentBlockSpec,
+    initialContent: string,
+  ): Promise<void> {
+    const hostArtifactId = this.artifactVersion?.ArtifactID;
+    const user = this.getSafeCurrentUser();
+    if (!this.isUuid(hostArtifactId) || !user || !this.ProviderToUse) {
+      return;
+    }
+
+    try {
+      const provider = this.ProviderToUse;
+      const artifactsEntityId = provider.Entities?.find((e) => e.Name === 'MJ: Artifacts')?.ID;
+      if (!artifactsEntityId) {
+        return;
+      }
+
+      const rv = RunView.FromMetadataProvider(provider);
+      const [hostArtRes, typeRes] = await Promise.all([
+        rv.RunView<{ ID: string; EnvironmentID: string }>(
+          {
+            EntityName: 'MJ: Artifacts',
+            ExtraFilter: `ID='${this.escapeSql(hostArtifactId)}'`,
+            Fields: ['ID', 'EnvironmentID'],
+            MaxRows: 1,
+            ResultType: 'simple',
+          },
+          user,
+        ),
+        rv.RunView<{ ID: string }>(
+          {
+            EntityName: 'MJ: Artifact Types',
+            ExtraFilter: `Name='${this.escapeSql(descriptor.ArtifactType || 'Whiteboard')}'`,
+            Fields: ['ID'],
+            MaxRows: 1,
+            ResultType: 'simple',
+          },
+          user,
+        ),
+      ]);
+
+      const hostEnvId = hostArtRes.Results?.[0]?.EnvironmentID;
+      const typeId = typeRes.Results?.[0]?.ID ?? 'D37C0785-C5FD-42B4-9442-D48B076E2BA4';
+
+      const childArt = await provider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', user);
+      childArt.NewRecord();
+      childArt.Name = descriptor.Title || 'Embedded Whiteboard';
+      childArt.TypeID = typeId;
+      childArt.UserID = user.ID;
+      if (hostEnvId) {
+        childArt.EnvironmentID = hostEnvId;
+      }
+      childArt.DelegateEntityID = artifactsEntityId;
+      childArt.DelegateRecordID = hostArtifactId;
+
+      const artSaved = await childArt.Save();
+      if (!artSaved) {
+        return;
+      }
+
+      const childVer = await provider.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', user);
+      childVer.NewRecord();
+      childVer.ArtifactID = childArt.ID;
+      childVer.VersionNumber = 1;
+      childVer.Name = childArt.Name;
+      childVer.UserID = user.ID;
+      childVer.Content = initialContent;
+      const verSaved = await childVer.Save();
+      if (!verSaved) {
+        return;
+      }
+
+      this.embeddedArtifactVersions.set(childArt.ID, childVer);
+      const updatedDescriptor: DocumentBlockSpec = {
+        ...descriptor,
+        ArtifactID: childArt.ID,
+      };
+      const updatedRes = DocumentLiveBlockEngine.Instance.UpdateBlockInMarkdown(
+        this.MarkdownContent,
+        descriptor.BlockID,
+        updatedDescriptor,
+      );
+      this.OnMarkdownChanged(updatedRes.Markdown);
+    } catch {
+      // Keep local synthetic version when offline
+    }
   }
 
   /**
@@ -2588,7 +3641,7 @@ export class MarkdownArtifactViewerComponent
 
   /**
    * Handles `ContentCommitted` emitted by an inline-edited OLE child artifact (e.g. `WhiteboardArtifactViewerComponent`).
-   * Creates a new version of the child artifact and updates the parent block's `VersionID`.
+   * Creates a new version of the child artifact and advances `VersionID` only when the parent block had pinned `VersionID` (§ 3.4.1).
    */
   public OnEmbeddedArtifactContentCommitted(block: DocumentBlockSpec, serializedContent: string): void {
     const key = block.ArtifactID || block.BlockID;
@@ -2606,17 +3659,65 @@ export class MarkdownArtifactViewerComponent
       } as unknown as MJArtifactVersionEntity,
     );
 
-    const updatedDescriptor: DocumentBlockSpec = {
-      ...block,
-      VersionID: nextVerId,
-    };
-    const updatedRes = DocumentLiveBlockEngine.Instance.UpdateBlockInMarkdown(
-      this.MarkdownContent,
-      block.BlockID,
-      updatedDescriptor,
-    );
-    this.OnMarkdownChanged(updatedRes.Markdown);
+    // Per § 3.4.1: Only advance VersionID on the block descriptor when VersionID was already pinned.
+    // When VersionID was omitted (undefined), the block tracks the latest version without pinning.
+    if (block.VersionID) {
+      const updatedDescriptor: DocumentBlockSpec = {
+        ...block,
+        VersionID: nextVerId,
+      };
+      const updatedRes = DocumentLiveBlockEngine.Instance.UpdateBlockInMarkdown(
+        this.MarkdownContent,
+        block.BlockID,
+        updatedDescriptor,
+      );
+      this.OnMarkdownChanged(updatedRes.Markdown);
+    } else {
+      this.cdr.markForCheck();
+    }
+
+    void this.persistEmbeddedArtifactVersionIfConnected(block, nextVersionNumber, serializedContent);
     this.StatusBannerMessage = `Committed inline edits to ${block.Title || 'embedded artifact'} (v${nextVersionNumber}).`;
+  }
+
+  private async persistEmbeddedArtifactVersionIfConnected(
+    block: DocumentBlockSpec,
+    nextVersionNumber: number,
+    serializedContent: string,
+  ): Promise<void> {
+    const childArtifactId = block.ArtifactID;
+    const user = this.getSafeCurrentUser();
+    if (!this.isUuid(childArtifactId) || !user || !this.ProviderToUse) {
+      return;
+    }
+
+    try {
+      const ver = await this.ProviderToUse.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', user);
+      ver.NewRecord();
+      ver.ArtifactID = childArtifactId;
+      ver.VersionNumber = nextVersionNumber;
+      ver.Name = block.Title || 'Embedded Artifact';
+      ver.UserID = user.ID;
+      ver.Content = serializedContent;
+      const saved = await ver.Save();
+      if (saved) {
+        this.embeddedArtifactVersions.set(childArtifactId, ver);
+        if (block.VersionID) {
+          const updatedDescriptor: DocumentBlockSpec = {
+            ...block,
+            VersionID: ver.ID,
+          };
+          const updatedRes = DocumentLiveBlockEngine.Instance.UpdateBlockInMarkdown(
+            this.MarkdownContent,
+            block.BlockID,
+            updatedDescriptor,
+          );
+          this.OnMarkdownChanged(updatedRes.Markdown);
+        }
+      }
+    } catch {
+      // Keep in-memory version when offline
+    }
   }
 
   /**
@@ -2665,7 +3766,7 @@ export class MarkdownArtifactViewerComponent
   public AcceptSuggestion(sug: DocumentSuggestionItem): void {
     sug.Status = 'Accepted';
     if (this.MarkdownContent.includes(sug.OriginalMarkdown)) {
-      this.OnMarkdownChanged(this.MarkdownContent.replace(sug.OriginalMarkdown, sug.ProposedMarkdown));
+      this.OnMarkdownChanged(this.MarkdownContent.replace(sug.OriginalMarkdown, () => sug.ProposedMarkdown));
     } else {
       this.OnMarkdownChanged(sug.ProposedMarkdown);
     }
@@ -2757,7 +3858,7 @@ export class MarkdownArtifactViewerComponent
         });
       } else if (targetSeg) {
         const updatedText = `${targetSeg.RawMarkdown}\n\n> [!IMPORTANT]\n> **@${agentHandle} Synthesis:** ${message.replace(/@[A-Za-z0-9_-]+\s*/, '')}`;
-        this.OnMarkdownChanged(this.MarkdownContent.replace(targetSeg.RawMarkdown, updatedText));
+        this.OnMarkdownChanged(this.MarkdownContent.replace(targetSeg.RawMarkdown, () => updatedText));
         newThread.Messages.push({
           DetailID: `msg-${Date.now()}-2`,
           UserName: `@${agentHandle}`,
@@ -2777,7 +3878,31 @@ export class MarkdownArtifactViewerComponent
 
   public ToggleResolveThread(thread: DocumentAnchoredThread): void {
     thread.Status = thread.Status === 'Resolved' ? 'Open' : 'Resolved';
+    void this.persistThreadResolutionStatus(thread);
     this.cdr.markForCheck();
+  }
+
+  private async persistThreadResolutionStatus(thread: DocumentAnchoredThread): Promise<void> {
+    const user = this.getSafeCurrentUser();
+    if (!this.isUuid(thread.ConversationID) || !user || !this.ProviderToUse) {
+      return;
+    }
+
+    try {
+      const conv = await this.ProviderToUse.GetEntityObject<MJConversationEntity>('MJ: Conversations', user);
+      const loaded = await conv.Load(thread.ConversationID);
+      if (loaded) {
+        conv.AnchorMetadata = JSON.stringify({
+          label: thread.AnchorLabel,
+          quote: thread.QuotedText,
+          agentMode: thread.AgentMode,
+          status: thread.Status,
+        });
+        await conv.Save();
+      }
+    } catch {
+      // Keep local thread status when offline
+    }
   }
 
   public GetThreadCountForAnchor(anchorKey: string): number {
@@ -2836,7 +3961,8 @@ export class MarkdownArtifactViewerComponent
   }
 
   /**
-   * Saves a new `MJArtifactVersionEntity` snapshot and emits `ContentCommitted`.
+   * Saves a new `MJArtifactVersionEntity` snapshot, triggers room compaction when connected via WebSocket,
+   * persists to `MJ: Artifact Versions` when connected to a provider, and emits `ContentCommitted`.
    */
   public async OnSaveDocumentVersion(): Promise<void> {
     if (!this.CanUserEdit || this.IsSavingVersion) {
@@ -2851,6 +3977,11 @@ export class MarkdownArtifactViewerComponent
           ...this.SavedVersionSnapshots.map((s) => s.VersionNumber),
         ) + 1;
 
+      const sentViaSocket = this.session?.RequestSaveVersion() ?? false;
+      if (!sentViaSocket) {
+        await this.persistDocumentVersionToProvider(nextVerNum, this.MarkdownContent);
+      }
+
       this.SavedVersionSnapshots.push({
         VersionNumber: nextVerNum,
         Content: this.MarkdownContent,
@@ -2862,6 +3993,27 @@ export class MarkdownArtifactViewerComponent
     } finally {
       this.IsSavingVersion = false;
       this.cdr.markForCheck();
+    }
+  }
+
+  private async persistDocumentVersionToProvider(versionNumber: number, content: string): Promise<void> {
+    const artifactId = this.artifactVersion?.ArtifactID;
+    const user = this.getSafeCurrentUser();
+    if (!this.isUuid(artifactId) || !user || !this.ProviderToUse) {
+      return;
+    }
+
+    try {
+      const ver = await this.ProviderToUse.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', user);
+      ver.NewRecord();
+      ver.ArtifactID = artifactId;
+      ver.VersionNumber = versionNumber;
+      ver.Name = this.getDisplayTitle() || 'Document';
+      ver.UserID = user.ID;
+      ver.Content = content;
+      await ver.Save();
+    } catch {
+      // Keep snapshot in memory when offline
     }
   }
 
@@ -2978,6 +4130,9 @@ export class MarkdownArtifactViewerComponent
     const raw = this.getContent();
     this.MarkdownContent = raw;
     this.initialLoadedMarkdown = raw;
+    if (!this.userExplicitlySelectedMode) {
+      this.ViewMode = this.CanUserEdit ? 'edit' : 'preview';
+    }
     this.SavedVersionSnapshots = [
       {
         VersionNumber: this.artifactVersion?.VersionNumber ?? 1,
@@ -3016,10 +4171,20 @@ export class MarkdownArtifactViewerComponent
     }
   }
 
+  private resolveConfiguredWsUrl(artifactId: string): string {
+    const globalWsUrl = (globalThis as { __MJ_COLLAB_WS_URL__?: string }).__MJ_COLLAB_WS_URL__;
+    const candidate = this.collaborationWsUrl || globalWsUrl;
+    if (!candidate) {
+      return '';
+    }
+    return this.collabService.ResolveCollaborationWebSocketUrl(artifactId, candidate);
+  }
+
   private setupCollaborationSession(): void {
     this.destroyCollaborationSession();
     const artifactId = this.artifactVersion?.ArtifactID || this.artifactVersion?.ID || 'local-doc';
     const user = this.getSafeCurrentUser();
+    const wsUrl = this.resolveConfiguredWsUrl(artifactId);
 
     this.session = this.collabService.CreateSession(
       artifactId,
@@ -3030,6 +4195,7 @@ export class MarkdownArtifactViewerComponent
         email: user?.Email,
       },
       !this.readonly,
+      Boolean(wsUrl),
     );
 
     this.sessionSubs.push(
@@ -3040,13 +4206,35 @@ export class MarkdownArtifactViewerComponent
       }),
       this.session.StatusChanged$.subscribe((status) => {
         this.CollaborationStatus = status;
+        if (status === 'readonly' || status === 'revoked') {
+          this.HasEditPermission = false;
+          if (this.ViewMode === 'edit' || this.ViewMode === 'suggest') {
+            this.ViewMode = 'preview';
+          }
+        }
         this.cdr.markForCheck();
       }),
       this.session.CollaboratorsChanged$.subscribe((peers) => {
         this.Collaborators = peers;
         this.cdr.markForCheck();
       }),
+      this.session.VersionSaved$.subscribe((savedEvt) => {
+        const exists = this.SavedVersionSnapshots.some((s) => s.VersionNumber === savedEvt.versionNumber);
+        if (!exists) {
+          this.SavedVersionSnapshots.push({
+            VersionNumber: savedEvt.versionNumber,
+            Content: this.MarkdownContent,
+            Timestamp: new Date().toLocaleTimeString(),
+          });
+        }
+        this.StatusBannerMessage = `Saved document version v${savedEvt.versionNumber}.`;
+        this.cdr.markForCheck();
+      }),
     );
+
+    if (wsUrl) {
+      this.session.Connect(wsUrl);
+    }
 
     this.Collaborators = this.session.GetCollaborators();
   }
@@ -3078,10 +4266,15 @@ export class MarkdownArtifactViewerComponent
       this.HasEditPermission = perms.CanEdit;
       if (!perms.CanRead) {
         this.CollaborationStatus = 'revoked';
+        this.ViewMode = 'preview';
+      } else if (!perms.CanEdit && (this.ViewMode === 'edit' || this.ViewMode === 'suggest')) {
+        this.ViewMode = 'preview';
       }
     } catch {
       // Keep default permission state when offline
     }
+
+    await this.hydrateAnchoredThreadsFromServer(artifactId, user);
 
     // Subscribe to live permission changes
     this.permissionUnsub = ArtifactPermissionEngine.Instance.OnPermissionsChanged(async (evt) => {
@@ -3094,6 +4287,7 @@ export class MarkdownArtifactViewerComponent
         this.HasEditPermission = updated.CanEdit;
         if (!updated.CanRead) {
           this.CollaborationStatus = 'revoked';
+          this.ViewMode = 'preview';
         } else if (!updated.CanEdit) {
           this.CollaborationStatus = 'readonly';
           if (this.ViewMode === 'edit' || this.ViewMode === 'suggest') {
@@ -3105,23 +4299,119 @@ export class MarkdownArtifactViewerComponent
     });
   }
 
-  private async persistAnchoredThreadToServer(thread: DocumentAnchoredThread): Promise<void> {
-    const artifactId = this.artifactVersion?.ArtifactID;
-    const user = this.getSafeCurrentUser();
-    if (!artifactId || !user) {
+  private async hydrateAnchoredThreadsFromServer(
+    artifactId: string,
+    user: NonNullable<ReturnType<MarkdownArtifactViewerComponent['getSafeCurrentUser']>>,
+  ): Promise<void> {
+    if (!this.isUuid(artifactId) || !this.ProviderToUse) {
       return;
     }
 
     try {
       const provider = this.ProviderToUse;
+      const artifactEntityId = provider.Entities?.find((e) => e.Name === 'MJ: Artifacts')?.ID;
+      if (!artifactEntityId) {
+        return;
+      }
+
       const rv = RunView.FromMetadataProvider(provider);
-      const entityRes = await rv.RunView<{ ID: string }>({
-        EntityName: 'MJ: Entities',
-        ExtraFilter: `Name = 'MJ: Artifacts'`,
-        Fields: ['ID'],
-        ResultType: 'simple',
+      const convRes = await rv.RunView<{
+        ID: string;
+        Name: string;
+        AnchorKey?: string | null;
+        AnchorMetadata?: string | null;
+        __mj_CreatedAt?: string;
+      }>(
+        {
+          EntityName: 'MJ: Conversations',
+          ExtraFilter: `LinkedEntityID='${this.escapeSql(artifactEntityId)}' AND LinkedRecordID='${this.escapeSql(artifactId)}' AND AnchorType='DocBlock'`,
+          OrderBy: '__mj_CreatedAt DESC',
+          MaxRows: 200,
+          ResultType: 'simple',
+        },
+        user,
+      );
+
+      const convRows = convRes.Success ? convRes.Results ?? [] : [];
+      if (convRows.length === 0) {
+        return;
+      }
+
+      const convIds = convRows.filter((c) => this.isUuid(c.ID)).map((c) => `'${this.escapeSql(c.ID)}'`);
+      const detailsByConv = new Map<
+        string,
+        Array<{ ID: string; ConversationID: string; Role: string; Message: string; __mj_CreatedAt?: string }>
+      >();
+
+      if (convIds.length > 0) {
+        const detailRes = await rv.RunView<{
+          ID: string;
+          ConversationID: string;
+          Role: string;
+          Message: string;
+          __mj_CreatedAt?: string;
+        }>(
+          {
+            EntityName: 'MJ: Conversation Details',
+            ExtraFilter: `ConversationID IN (${convIds.join(',')})`,
+            OrderBy: '__mj_CreatedAt ASC',
+            MaxRows: 500,
+            ResultType: 'simple',
+          },
+          user,
+        );
+        for (const d of detailRes.Results ?? []) {
+          const list = detailsByConv.get(d.ConversationID) ?? [];
+          list.push(d);
+          detailsByConv.set(d.ConversationID, list);
+        }
+      }
+
+      this.AnchoredThreads = convRows.map((c) => {
+        let meta: { label?: string; quote?: string; agentMode?: 'suggest' | 'edit'; status?: 'Open' | 'Resolved' } = {};
+        if (c.AnchorMetadata) {
+          try {
+            meta = JSON.parse(c.AnchorMetadata) as typeof meta;
+          } catch {
+            meta = {};
+          }
+        }
+        const msgs = (detailsByConv.get(c.ID) ?? []).map((d) => ({
+          DetailID: d.ID,
+          UserName: d.Role === 'AI' ? '@DocsAgent' : user.Name || 'Collaborator',
+          Role: (d.Role === 'AI' ? 'Agent' : 'User') as 'User' | 'Agent',
+          Message: d.Message,
+          CreatedAt: d.__mj_CreatedAt ?? new Date().toISOString(),
+          Mentions: Array.from((d.Message ?? '').matchAll(/@([A-Za-z0-9_-]+)/g)).map((m) => m[1]),
+        }));
+
+        return {
+          ConversationID: c.ID,
+          AnchorKey: c.AnchorKey || 'doc-root',
+          AnchorLabel: meta.label || c.Name.replace(/^DocComment:\s*/i, '') || c.AnchorKey || 'Document Block',
+          QuotedText: meta.quote || '',
+          Status: meta.status === 'Resolved' ? 'Resolved' : 'Open',
+          AgentMode: meta.agentMode === 'edit' ? 'edit' : 'suggest',
+          CreatedAt: c.__mj_CreatedAt ?? new Date().toISOString(),
+          Messages: msgs,
+        };
       });
-      const artifactEntityId = entityRes.Results?.[0]?.ID;
+      this.cdr.markForCheck();
+    } catch {
+      // Keep local threads when offline
+    }
+  }
+
+  private async persistAnchoredThreadToServer(thread: DocumentAnchoredThread): Promise<void> {
+    const artifactId = this.artifactVersion?.ArtifactID;
+    const user = this.getSafeCurrentUser();
+    if (!this.isUuid(artifactId) || !user || !this.ProviderToUse) {
+      return;
+    }
+
+    try {
+      const provider = this.ProviderToUse;
+      const artifactEntityId = provider.Entities?.find((e) => e.Name === 'MJ: Artifacts')?.ID;
       if (!artifactEntityId) {
         return;
       }
@@ -3137,6 +4427,7 @@ export class MarkdownArtifactViewerComponent
         label: thread.AnchorLabel,
         quote: thread.QuotedText,
         agentMode: thread.AgentMode,
+        status: thread.Status,
       });
       const saved = await conv.Save();
       if (saved) {

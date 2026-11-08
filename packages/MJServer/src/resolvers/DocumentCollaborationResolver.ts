@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Resolver, Query, Mutation, Arg, Ctx, ObjectType, Field, Int } from 'type-graphql';
-import { IMetadataProvider, Metadata } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, RunView } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import {
     ArtifactMetadataEngine,
     ArtifactPermissionEngine,
@@ -131,7 +132,8 @@ export class DocumentCollaborationResolver extends ResolverBase {
     @Query(() => DocumentLiveBlockResultOutput)
     async ExecuteDocumentLiveBlock(
         @Arg('specJson') specJson: string,
-        @Ctx() context: AppContext
+        @Ctx() context: AppContext,
+        @Arg('hostArtifactId', () => String, { nullable: true }) hostArtifactId?: string
     ): Promise<DocumentLiveBlockResultOutput> {
         const user = this.GetUserFromPayload(context.userPayload);
         if (!user) {
@@ -143,8 +145,23 @@ export class DocumentCollaborationResolver extends ResolverBase {
             };
         }
         try {
-            const spec = JSON.parse(specJson) as DocumentBlockSpec;
             const provider = this.resolveProvider(context);
+            if (hostArtifactId && hostArtifactId.trim().length > 0) {
+                const hostPerms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+                    provider,
+                    hostArtifactId.trim(),
+                    user
+                );
+                if (!hostPerms.CanRead) {
+                    return {
+                        Success: false,
+                        AccessDenied: true,
+                        ErrorMessage: hostPerms.Reason || 'You do not have permission to read the host artifact.',
+                        ResultJSON: '{}'
+                    };
+                }
+            }
+            const spec = JSON.parse(specJson) as DocumentBlockSpec;
             const execResult = await DocumentLiveBlockEngine.Instance.ExecuteBlock(spec, user, provider);
             return {
                 Success: execResult.Success,
@@ -165,15 +182,30 @@ export class DocumentCollaborationResolver extends ResolverBase {
     async FreezeDocumentLiveBlock(
         @Arg('specJson') specJson: string,
         @Arg('acknowledgeSecurityWarning') acknowledgeSecurityWarning: boolean,
-        @Ctx() context: AppContext
+        @Ctx() context: AppContext,
+        @Arg('hostArtifactId', () => String, { nullable: true }) hostArtifactId?: string
     ): Promise<FreezeDocumentBlockResultOutput> {
         const user = this.GetUserFromPayload(context.userPayload);
         if (!user) {
             return { Success: false, ErrorMessage: 'Authentication required.' };
         }
         try {
-            const spec = JSON.parse(specJson) as DocumentBlockSpec;
             const provider = this.resolveProvider(context);
+            if (hostArtifactId && hostArtifactId.trim().length > 0) {
+                const hostPerms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+                    provider,
+                    hostArtifactId.trim(),
+                    user
+                );
+                if (!hostPerms.CanEdit) {
+                    return {
+                        Success: false,
+                        ErrorMessage:
+                            hostPerms.Reason || 'You must have Edit permission on the host artifact to freeze a block.'
+                    };
+                }
+            }
+            const spec = JSON.parse(specJson) as DocumentBlockSpec;
             const res = await DocumentLiveBlockEngine.Instance.FreezeBlock(
                 spec,
                 user,
@@ -269,12 +301,28 @@ export class DocumentCollaborationResolver extends ResolverBase {
             };
         }
 
+        const rv = RunView.FromMetadataProvider(provider);
+        const hostRes = await rv.RunView<{ ID: string; EnvironmentID?: string }>(
+            {
+                EntityName: 'MJ: Artifacts',
+                ExtraFilter: `ID='${EscapeSQLString(hostArtifactId.trim())}'`,
+                Fields: ['ID', 'EnvironmentID'],
+                MaxRows: 1,
+                SkipTotalRowCount: true,
+                ResultType: 'simple'
+            },
+            user
+        );
+        const hostEnvironmentId =
+            (hostRes.Success ? hostRes.Results?.[0]?.EnvironmentID : undefined) ||
+            'F51358F3-9447-4176-B313-BF8025FD8D09';
+
         const childArtifact = await provider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', user);
         childArtifact.NewRecord();
         childArtifact.Name = name.trim() || `Embedded ${artifactTypeName}`;
         childArtifact.TypeID = artType.ID;
         childArtifact.UserID = user.ID;
-        childArtifact.EnvironmentID = 'F51358F3-9447-4176-B313-BF8025FD8D09';
+        childArtifact.EnvironmentID = hostEnvironmentId;
         childArtifact.DelegateEntityID = artifactsEntityInfo.ID;
         childArtifact.DelegateRecordID = hostArtifactId;
 
