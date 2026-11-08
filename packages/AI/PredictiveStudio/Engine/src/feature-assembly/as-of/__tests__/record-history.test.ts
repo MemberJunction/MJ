@@ -167,6 +167,29 @@ describe('RunViewRecordHistoryReader', () => {
     await expect(new RunViewRecordHistoryReader(data, { mode: 'complete' }).Load(people, ['P1'], ['Status'], { onUncoveredRow: 'exclude-and-count', externalSourceRows: 'ineligible' }, new Date('2026-10-12T00:00:00Z')))
       .rejects.toMatchObject({ Refusal: { kind: 'truncated-read', entity: 'People', rowsExpected: 1, rowsRead: 0 } });
   });
+
+  describe('BuildEntityHistory — scope', () => {
+    const policy = { onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' } as const;
+    const now = new Date('2026-10-12T00:00:00Z');
+    it('counts only the requested keys: an unrequested deleted record moves neither the continuity counts nor the history start', async () => {
+      const unrelated = [rc('c9', 'P9', 'Create', '2020-01-01T00:00:00Z', { ID: 'P9', Status: 'Active' }), rc('d9', 'P9', 'Delete', '2025-06-01T00:00:00Z', { ID: 'P9', Status: 'Lapsed' })];
+      const unanchored = [rc('u1', 'P1', 'Update', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' }, ['Status']), rc('d1', 'P1', 'Delete', '2025-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' })];
+      const data = new CountingTables({ People: [], 'MJ: Record Changes': [...unanchored, ...unrelated].map(changeRow) });
+      const h = await new RunViewRecordHistoryReader(data, { mode: 'complete' }).Load(people, ['P1'], ['Status'], policy, now);
+      expect(h.Coverage).toMatchObject({ historyStart: null, continuity: { recordsReplayed: 0, recordsMismatched: 0 } });
+      expect(h.DeletedRecordAt('P1', new Date('2026-01-01T00:00:00Z'))).toMatchObject({ Status: 'deleted', ChangeID: 'd1' });
+    });
+    it('a hard-deleted requested key with no anchor leaves the history start null even when it is the only key', () => {
+      const h = RecordHistory.BuildEntityHistory(PEOPLE, [rc('u1', 'P1', 'Update', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' }, ['Status']), rc('d1', 'P1', 'Delete', '2025-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' })], new Map(), ['Status'], policy, now);
+      expect(h.Coverage.historyStart).toBeNull();
+    });
+    it('dates creation only from a history whose first row is the Create: a re-created record keeps its first creation, and a Delete-first history has none', () => {
+      const recreated = [rc('c1', 'P1', 'Create', '2019-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' }), rc('d1', 'P1', 'Delete', '2020-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' }), rc('c2', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' })];
+      expect(RecordHistory.BuildEntityHistory(PEOPLE, recreated, new Map([['p1', { ID: 'P1', Status: 'Lapsed' }]]), ['Status'], policy, now).CreatedAt('P1')).toEqual(new Date('2019-01-01T00:00:00Z'));
+      const deleteFirst = recreated.slice(1);
+      expect(RecordHistory.BuildEntityHistory(PEOPLE, deleteFirst, new Map([['p1', { ID: 'P1', Status: 'Lapsed' }]]), ['Status'], policy, now).CreatedAt('P1')).toBeNull();
+    });
+  });
 });
 
 describe('BuildEntityHistory — a hard-deleted record', () => {

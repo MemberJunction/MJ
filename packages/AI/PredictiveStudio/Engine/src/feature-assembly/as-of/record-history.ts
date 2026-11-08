@@ -63,7 +63,8 @@ export interface EntityHistory {
   RowsBefore(recordKey: string, before: Date): number;
   /**
    * When the record's history starts with its own Create row, the instant of that row: the record did not exist before
-   * it. Null when the history starts with a Snapshot (the record is older than its history) or there is no history.
+   * it. Null when the history starts with any other row (a Snapshot: the record is older than its history; an Update or a
+   * Delete: it was created before tracking) or there is no history. A re-created record keeps its first creation.
    */
   CreatedAt(recordKey: string): Date | null;
   /**
@@ -121,7 +122,8 @@ export class RecordHistory {
 
   /**
    * Pure: index the change rows, run the continuity check against the current values, and expose replay.
-   * `current` is keyed by the lower-cased record key, as `KeyedReader.ReadPresentByKeys` produces it; a hard-deleted
+   * `changes` is the history of the requested keys, and coverage and continuity are computed over exactly those keys: a
+   * caller holding an entity-wide read hands in only the requested keys' rows. `current` is keyed by the lower-cased record key, as `KeyedReader.ReadPresentByKeys` produces it; a hard-deleted
    * record has no current row, so its Delete row stands in for it in the continuity check. The entity's field types
    * decide how two values of a field compare (see {@link comparable}).
    */
@@ -139,7 +141,7 @@ export class RecordHistory {
     const created = RecordHistory.creationInstants(byKey);
     const hardDeleted = new Set([...RecordHistory.endingInDelete(byKey)].filter((k) => !current.has(k)));
     const continuity = RecordHistory.checkContinuity(scope, byKey, start, current, hardDeleted, fields);
-    const allCovered = [...current.keys()].every((k) => start.has(k));
+    const allCovered = [...current.keys(), ...hardDeleted].every((k) => start.has(k));
     const historyStart = allCovered && start.size > 0 ? new Date(Math.max(...[...start.values()].map((d) => d.getTime()))).toISOString() : null;
     return {
       Coverage: {
@@ -270,13 +272,14 @@ export class RecordHistory {
     return start;
   }
 
-  /** The Create instant of every record whose history starts with its own Create row (not a Snapshot). */
+  /**
+   * The Create instant of every record whose history starts with its own Create row: the first row in ChangedAt order
+   * is the Create (not a Snapshot, an Update or a Delete). A re-created record keeps its first creation; a history that
+   * opens with any other row has no known creation instant.
+   */
   private static creationInstants(byKey: ReadonlyMap<string, readonly RecordChangeRow[]>): Map<string, Date> {
     const created = new Map<string, Date>();
-    for (const [k, list] of byKey) {
-      const first = list.find((c) => c.Type === 'Create' || c.Type === 'Snapshot');
-      if (first && first.Type === 'Create') created.set(k, first.ChangedAt);
-    }
+    for (const [k, list] of byKey) if (list[0].Type === 'Create') created.set(k, list[0].ChangedAt);
     return created;
   }
 
@@ -460,7 +463,8 @@ export class RunViewRecordHistoryReader implements IRecordHistoryReader {
    * Delete, or a short read of the change rows, ends the assembly with its refusal.
    */
   public async Load(entity: AssemblyEntityInfo, keys: readonly string[], fields: readonly string[], policy: ChangeHistoryPolicy, now: Date): Promise<EntityHistory> {
-    const changes = await this.changeRowsOf(entity);
+    const requested = new Set(keys.map((k) => k.toLowerCase()));
+    const changes = (await this.changeRowsOf(entity)).filter((c) => requested.has(RecordHistory.KeyOfRecordID(c.RecordID)));
     const current = await KeyedReader.ReadPresentByKeys(this.dataAccess, entity.Name, entity.PrimaryKey, keys, fields);
     const history = RecordHistory.BuildEntityHistory(entity, changes, current.Rows, fields, policy, now);
     if (current.MissingKeys.some((k) => history.DeletedRecordAt(k, now) === null)) {
