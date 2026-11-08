@@ -20,7 +20,7 @@
  * @module @memberjunction/browser-extension-core
  */
 
-import { BaseEntity, CompositeKey, KeyValuePair, Metadata, RunView, type RunViewParams } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, type IMetadataProvider, Metadata, RunView, type RunViewParams } from '@memberjunction/core';
 import { BaseSingleton, MJGlobal } from '@memberjunction/global';
 import type {
     BraidedEntityContextMatch,
@@ -109,12 +109,18 @@ export class MJRunViewBatchAdapter implements IBrowserEntityViewRunner {
  * and `BaseEntity.SetMany()` / `Save()` for 1-click Page-to-Entity creation and field enrichment.
  */
 export class MJMetadataPersistenceAdapter implements IBrowserEntityPersistenceAdapter {
+    private readonly provider?: IMetadataProvider;
+
+    public constructor(provider?: IMetadataProvider) {
+        this.provider = provider;
+    }
+
     public async CreateRecord(
         entityName: string,
         fields: Record<string, string>
     ): Promise<{ Success: boolean; RecordID?: string; ErrorMessage?: string }> {
         try {
-            const md = new Metadata();
+            const md = this.provider ?? new Metadata();
             const entity = await md.GetEntityObject<BaseEntity>(entityName);
             entity.NewRecord();
             entity.SetMany(fields, true);
@@ -146,11 +152,9 @@ export class MJMetadataPersistenceAdapter implements IBrowserEntityPersistenceAd
         fields: Record<string, string>
     ): Promise<{ Success: boolean; ErrorMessage?: string }> {
         try {
-            const md = new Metadata();
+            const md = this.provider ?? new Metadata();
             const entity = await md.GetEntityObject<BaseEntity>(entityName);
-            const key = new CompositeKey();
-            const pkFieldName = entity.EntityInfo?.FirstPrimaryKey?.Name ?? 'ID';
-            key.KeyValuePairs.push(new KeyValuePair(pkFieldName, recordId));
+            const key = CompositeKey.FromRecordID(entity.EntityInfo, recordId);
             const loaded = await entity.InnerLoad(key);
             if (!loaded) {
                 return {
