@@ -82,7 +82,7 @@ describe('ProtocolSearchGuard.ProtocolPrecedesRun and CheckProtocolForUnit', () 
     expect(ProtocolSearchGuard.CheckProtocolForUnit(loaded, unit)).toBeNull();
   });
   it('refuses inner folds grouped by a key other than the unit group key', () => {
-    const grouped: LoadedProtocol = { ...loaded, Protocol: { ...loaded.Protocol, innerValidation: { kind: 'grouped-kfold', folds: 5, repeats: 1, groupKey: 'PersonID' } } };
+    const grouped: LoadedProtocol = { ...loaded, Protocol: { ...loaded.Protocol, innerValidation: { kind: 'grouped-kfold', folds: 5, repeats: 1, groupKey: 'PersonID' }, intervals: { ...loaded.Protocol.intervals, method: 'cluster-bootstrap' } } };
     expect(ProtocolSearchGuard.CheckProtocolForUnit(grouped, unit)).toEqual({
       kind: 'protocol-unit-mismatch', protocolId: 'P1',
       problems: ['The protocol groups its inner validation by "PersonID", but the Prediction Unit has no group key (its rows are grouped by their entity key); the folds would not be grouped the way the protocol says.'],
