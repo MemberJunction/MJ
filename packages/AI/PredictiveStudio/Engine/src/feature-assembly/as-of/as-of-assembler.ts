@@ -34,8 +34,9 @@
  * whose history reaches the day but cannot be replayed (a continuity mismatch, a deletion, an ineligible external row)
  * makes the rows reading it uncovered, read directly or replayed alike; it never reads the stored value, except for a
  * field declared not updatable read directly, which reads its stored value through a continuity mismatch, an
- * ineligible external row and an unreached history by the not-updatable rule above (only a deletion and the creation
- * instant are consulted for it). Child rows are judged for the whole batch, against the earliest decision day: a child row re-owned or re-dated
+ * ineligible external row and an unreached history by the not-updatable rule above (only a deletion, the creation
+ * instant and an earlier incarnation are consulted for it: a record re-created after the decision day reads the
+ * incarnation that stood then, from the Delete row that ended it). Child rows are judged for the whole batch, against the earliest decision day: a child row re-owned or re-dated
  * after a decision day can move between owners, so every child row read passes the rule for its owner key, date, value
  * and filter fields (void and end dates are compared with the decision day and need no check), and one the rule
  * excludes makes every unit row uncovered. On a child entity that tracks Record Changes, the child rows include every
@@ -669,7 +670,9 @@ export class AsOfFeatureAssembler {
    * creation rule, `creationInstant`) reads as missing, never as its stored value; a record the rule excludes makes its
    * row uncovered. The provenance carries the creation instant when it is known. A hard-deleted record (no stored row)
    * is read from its Delete row: the value that row recorded when the Delete is not before the row's as-of instant
-   * (provenance naming the Delete row), uncovered (`deleted`) when it is.
+   * (provenance naming the Delete row), uncovered (`deleted`) when it is. A field declared not updatable of a record
+   * re-created after a row's as-of instant reads the incarnation that stood then: the Delete row that ended it
+   * ({@link EntityHistory.EarlierIncarnationEnd}), provenance naming that row.
    */
   private async currentValueReader(spec: FeatureColumnSpec, source: FieldSource, entity: AssemblyEntityInfo, keyOf: KeyOf, input: AsOfAssemblyInput, state: AssemblyState): Promise<FeatureReader> {
     const reads = AsOfFeatureAssembler.rowReads(input.Rows, keyOf);
@@ -686,12 +689,14 @@ export class AsOfFeatureAssembler {
     const storedCreatedAt = (key: string): CellValue => (hasCreatedAt ? AsOfFeatureAssembler.storedFieldOf(current, history, key, '__mj_CreatedAt', input) : null);
     const stable = await this.assertStableCurrentValue(entity, source.field, reads, storedCreatedAt, input, state);
     const outcomes = AsOfFeatureAssembler.outcomesByRow(reads, stable);
+    const notUpdatable = entity.Fields.some((f) => f.Name === source.field && f.AllowUpdateAPI === false);
     return (row) => {
       const key = keyOf(row);
       if (outcomes.get(row.RowID) === 'excluded') return { Uncovered: true, Entity: entity.Name, Field: source.field, HistoryStart: stable.HistoryStart };
       const asOf = AsOfFeatureAssembler.asOfInstant(row.DecisionDate);
-      const rec = key === null ? undefined : current.get(key.toLowerCase());
-      const deleted = key === null || rec !== undefined || stable.History === null ? null : stable.History.DeletedRecordAt(key, asOf);
+      const ended = key === null || !notUpdatable || stable.History === null ? null : stable.History.EarlierIncarnationEnd(key, asOf);
+      const rec = key === null || ended !== null ? undefined : current.get(key.toLowerCase());
+      const deleted = ended ?? (key === null || rec !== undefined || stable.History === null ? null : stable.History.DeletedRecordAt(key, asOf));
       if (deleted?.Status === 'deleted') return { Uncovered: true, Entity: entity.Name, Field: source.field, HistoryStart: stable.HistoryStart };
       const created = key === null ? null : AsOfFeatureAssembler.creationInstant(stable.History, key, storedCreatedAt(key));
       const createdAfter = !AsOfFeatureAssembler.existedBefore(created, asOf);
@@ -725,7 +730,8 @@ export class AsOfFeatureAssembler {
    * affected. A Delete in force at an instant is `excluded` before any other verdict, a field declared not updatable
    * included. An updatable field of an untracked entity cannot be known on a past day and refuses for every unit row.
    * On a tracked entity the history is read for every field, a field declared not updatable included: its stored value
-   * is the value since creation, so only the creation instant is consulted for it. Creation follows the one creation
+   * is the value since creation, so only the creation instant is consulted for it (the reader reads an earlier
+   * incarnation's value from the Delete row that ended it, see `currentValueReader`). Creation follows the one creation
    * rule, so a record whose history starts with a Snapshot after the decision day but whose `__mj_CreatedAt`
    * (`storedCreatedAt`, null when the entity does not list it) is after it too did not exist then, and is not uncovered.
    */

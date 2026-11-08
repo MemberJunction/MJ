@@ -86,6 +86,14 @@ export interface EntityHistory {
    * no current row for a key with a null here has a short read.
    */
   DeletedRecordAt(recordKey: string, before: Date): DeletedRecordRead | null;
+  /**
+   * The Delete row that ended an earlier incarnation of a re-created record: the first Delete at or after `before`
+   * (not in force before `before`, as {@link ValueAt} reads an instant) when a later change row follows it. The
+   * record as that row recorded it is the incarnation that stood at `before` (status `held`). Null when no such Delete
+   * exists: the record was not re-created after `before` (a final Delete of a hard-deleted record is
+   * {@link DeletedRecordAt}'s).
+   */
+  EarlierIncarnationEnd(recordKey: string, before: Date): DeletedRecordRead | null;
 }
 
 export interface IRecordHistoryReader {
@@ -194,6 +202,7 @@ export class RecordHistory {
       RowsBefore: (recordKey, before) => RecordHistory.rowsBefore(byKey.get(recordKey.toLowerCase()) || [], before),
       CreatedAt: (recordKey) => created.get(recordKey.toLowerCase()) || null,
       DeletedRecordAt: (recordKey, before) => RecordHistory.deletedRecordAt(byKey, hardDeleted, recordKey, before),
+      EarlierIncarnationEnd: (recordKey, before) => RecordHistory.earlierIncarnationEnd(byKey.get(recordKey.toLowerCase()) || [], before),
     };
   }
 
@@ -390,6 +399,14 @@ export class RecordHistory {
       ChangeID: del.ID,
       ChangedAt: del.ChangedAt,
     };
+  }
+
+  /** See {@link EntityHistory.EarlierIncarnationEnd}; `list` is one record's rows in ChangedAt order. */
+  private static earlierIncarnationEnd(list: readonly RecordChangeRow[], before: Date): DeletedRecordRead | null {
+    const end = list.findIndex((c, i) => i >= RecordHistory.rowsBefore(list, before) && c.Type === 'Delete');
+    if (end < 0 || end === list.length - 1) return null;
+    const del = list[end];
+    return { Status: 'held', Row: RecordHistory.recordOf(del.FullRecordJSON), ChangeID: del.ID, ChangedAt: del.ChangedAt };
   }
 
   /** The number of rows of `list` (ChangedAt order) strictly before `before`, by binary search. */

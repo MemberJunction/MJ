@@ -189,6 +189,17 @@ const storedOf = (s: Shape): string => {
   return del.Status;
 };
 
+/**
+ * What a field declared not updatable reads: the value of the incarnation in force on the day. An earlier incarnation —
+ * one ended by a Delete at or after the as-of instant that a later row follows (a re-creation) — reads that Delete
+ * row's `Status`; otherwise the stored value.
+ */
+const notUpdatableOf = (s: Shape, day: Day): string => {
+  const asOf = asOfOf(day);
+  const end = s.History.findIndex((r) => r.Type === 'Delete' && at(r.Year).getTime() >= asOf.getTime());
+  return end >= 0 && end < s.History.length - 1 ? s.History[end].Status : storedOf(s);
+};
+
 /** The replayed value: the `Status` of the last row in force. */
 const replayedOf = (s: Shape, day: Day): string => {
   const last = lastOf(inForceOf(s, asOfOf(day)));
@@ -201,10 +212,10 @@ const expected = (s: Shape, day: Day, reader: Reader): Expected => {
   switch (classify(s, day, reader)) {
     case 'DELETED': return 'excluded';
     case 'CREATED_AFTER': return { value: null };
-    case 'MISMATCH': return notUpdatable ? { value: storedOf(s) } : 'excluded';
-    case 'CHANGED_AFTER': return notUpdatable ? { value: storedOf(s) } : { refused: 'select-changes-after-decision-date' };
-    case 'UNREACHED': return notUpdatable || day === ASSEMBLED_AT ? { value: storedOf(s) } : 'excluded';
-    case 'VALUE': return reader === 'record-changes' ? { value: replayedOf(s, day) } : { value: storedOf(s) };
+    case 'MISMATCH': return notUpdatable ? { value: notUpdatableOf(s, day) } : 'excluded';
+    case 'CHANGED_AFTER': return notUpdatable ? { value: notUpdatableOf(s, day) } : { refused: 'select-changes-after-decision-date' };
+    case 'UNREACHED': return notUpdatable ? { value: notUpdatableOf(s, day) } : day === ASSEMBLED_AT ? { value: storedOf(s) } : 'excluded';
+    case 'VALUE': return reader === 'record-changes' ? { value: replayedOf(s, day) } : notUpdatable ? { value: notUpdatableOf(s, day) } : { value: storedOf(s) };
   }
 };
 

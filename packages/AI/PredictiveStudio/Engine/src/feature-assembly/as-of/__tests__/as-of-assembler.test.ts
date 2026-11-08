@@ -872,6 +872,26 @@ describe('AsOfFeatureAssembler — a stored value changed after the decision by 
     });
     expect(out.Status === 'assembled' ? out.UncoveredRowsExcluded : out).toEqual([{ entity: 'People', field: 'Status', rows: 1 }]);
   });
+  it('reads a field declared not updatable of an earlier incarnation from the Delete row that ended it, and the current incarnation\'s stored value after its re-creation', async () => {
+    const notUpdatable: AssemblyEntityInfo = { ...entities.People, Fields: entities.People.Fields.map((f) => (f.Name === 'Status' ? { ...f, AllowUpdateAPI: false } : f)) };
+    const days: AssemblyRowRef[] = [
+      { RowID: 'y1', EntityKey: 'y1', DecisionDate: new Date('2019-06-01T00:00:00Z'), Period: null },
+      { RowID: 'y2', EntityKey: 'y2', DecisionDate: new Date('2023-06-01T00:00:00Z'), Period: null },
+    ];
+    const recreated = { People: [
+      rc('d1', 'P1', 'Delete', '2020-07-01T00:00:00Z', { ID: 'P1', Status: 'Active' }),
+      rc('c2', 'P1', 'Create', '2021-07-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }),
+    ] };
+    const out = await new AsOfFeatureAssembler().Assemble({
+      ...input([stored], { Rows: days, Tables: { ...data, Years: [{ ID: 'y1', PersonID: 'P1' }, { ID: 'y2', PersonID: 'P1' }] }, Changes: recreated }),
+      Metadata: { Entity: (n) => (n === 'People' ? notUpdatable : metadata.Entity(n)) },
+    });
+    expect(out.Status).toBe('assembled');
+    if (out.Status !== 'assembled') return;
+    expect(out.Rows.map((r) => [r.RowID, r.Values[0]])).toEqual([['y1', 'Active'], ['y2', 'Lapsed']]);
+    expect(out.Rows[0].Provenance[0]).toMatchObject({ source: 'immutable-field', sourceRef: 'People/p1/Status', sourceVersion: 'd1', computedAt: '2020-07-01T00:00:00.000Z' });
+    expect(out.Rows[1].Provenance[0]).toMatchObject({ sourceVersion: 'immutable-after-create' });
+  });
   it('excludes, under exclude-and-count, a stored read whose history does not reach a past decision day, as the replay reader does, and refuses it under refuse', async () => {
     const past: AssemblyRowRef[] = [{ RowID: 'y1', EntityKey: 'y1', DecisionDate: new Date('2021-06-01T00:00:00Z'), Period: null }];
     const unanchored = { People: [rc('u0', 'P1', 'Update', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }, ['Status'])] };
