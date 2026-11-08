@@ -10,7 +10,7 @@
 
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
-import { existsSync, readdirSync, statSync, readFileSync, unlinkSync } from 'node:fs';
+import { existsSync, readdirSync, statSync, readFileSync, unlinkSync, mkdtempSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
@@ -211,7 +211,8 @@ export async function getLatestReport(afterTimestamp = 0) {
 
 export async function checkWarmTwice({ noAI = false, skipFirstRun = false }) {
   log('Starting stage: warm-twice');
-  const tmpDir = os.tmpdir();
+  // A fresh private directory: a fixed name under the shared temp dir could be pre-created by another user.
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'mj-codegen-idempotency-'));
   const run1PatchPath = path.join(tmpDir, 'run1.patch');
   const run2PatchPath = path.join(tmpDir, 'run2.patch');
 
