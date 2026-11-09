@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Model Development Agent - Main Prompt",
-      "Description": "System prompt for the Model Development Agent — the conversational Loop orchestrator that collaborates with a business user to build a strongly-typed ModelingPlanSpec, gates on approval, drives the deterministic experiment session, enforces the leakage warn/sign-off rule, and authors the ML Experiment Results artifact.",
+      "Description": "System prompt for the Model Development Agent — the conversational Loop orchestrator that collaborates with a business user to build a strongly-typed ModelingPlanSpec, gates on approval, hands the approved plan to the deterministic Pipeline Builder, enforces the leakage warn/sign-off rule, and authors the ML Experiment Results artifact.",
       "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
       "TemplateText": "@file:templates/model-development-agent/model-development-agent.template.md",
       "Status": "Active",
@@ -36,8 +36,8 @@
       "ID": "44F868D2-20ED-407E-ACB0-0720344B1BDE"
     },
     "sync": {
-      "lastModified": "2026-09-22T16:25:00.474Z",
-      "checksum": "7ee42508eba302a3b57a79f3ff535a9ecac9ebbb4746f31a16cec336b75ddcba"
+      "lastModified": "2026-10-28T00:35:23.198Z",
+      "checksum": "98b52a412fbf79cdd4b1def437eccfff88c3f487159c04ebf62ad1bc1a982a24"
     }
   },
   {
@@ -77,8 +77,8 @@
       "ID": "4F1D56B0-7D1B-4C69-B282-341C830A6A1C"
     },
     "sync": {
-      "lastModified": "2026-07-01T17:33:37.909Z",
-      "checksum": "50e599a53c8186f912c820e1ba8ff94c9db525ac31bbadfdb789965409a37da7"
+      "lastModified": "2026-10-28T00:35:23.240Z",
+      "checksum": "8cd6d9bb4fb806d6127bc5cc3a2d09dcde79a4c570e53f649f67129dc19cb3c7"
     }
   },
   {
@@ -118,8 +118,8 @@
       "ID": "D8DF8DC9-87EB-4E4C-939A-7CBD2F8813C7"
     },
     "sync": {
-      "lastModified": "2026-09-22T16:25:00.520Z",
-      "checksum": "336d0f4212af6f73bfd29b066bf6cc919dfe427e57b7af8a29abddde48d1d242"
+      "lastModified": "2026-10-28T00:35:23.275Z",
+      "checksum": "42d12b1f916ac75a7b547909bd4687472b9314c5cd0fcb967a7a0d41bb5b8208"
     }
   },
   {
@@ -159,8 +159,8 @@
       "ID": "E97FE2BB-C7E5-458E-B80D-02A90531FADA"
     },
     "sync": {
-      "lastModified": "2026-07-01T17:33:37.945Z",
-      "checksum": "c347a11bee439a507e51eaa00e4d731f99f94db0b4c6b278a4f4bbd3670e3188"
+      "lastModified": "2026-10-28T00:35:23.312Z",
+      "checksum": "9f3d07bb7e3cc890fef928ffd45442a01e67c944fea319d9aa62a9123aa509d0"
     }
   }
 ]

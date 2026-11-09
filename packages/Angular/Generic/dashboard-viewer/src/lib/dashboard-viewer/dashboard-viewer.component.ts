@@ -17,7 +17,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { Metadata, RunView } from '@memberjunction/core';
+import { GetLocalTimeZone, Metadata, PropertyResolutionContext, PropertyValue, RunView } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual, EscapeHTML } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DashboardEngine, MJDashboardEntity, MJDashboardPartTypeEntity, MJDashboardCategoryEntity } from '@memberjunction/core-entities';
@@ -39,6 +39,20 @@ import {
 import { GoldenLayoutWrapperService, StackActionEvent } from '../services/golden-layout-wrapper.service';
 import { InsertPanel, FindPanelPath, DescribePath, type PanelPosition } from '../models/dashboard-layout-editor';
 import { BaseDashboardPart } from '../parts/base-dashboard-part';
+import {
+    DashboardPartContext,
+    DashboardPartEventArgs,
+    DashboardPartInterface,
+    DashboardProperty,
+    DashboardPropertyResolver,
+    DashboardWire,
+    GetInputMappings,
+    NormalizeEventValue,
+    RECORD_SELECTED_EVENT,
+    ROW_SELECTED_EVENT,
+} from '../models/dashboard-properties';
+import { ValidateDashboardBindings } from '../models/dashboard-config-validator';
+import { LoadPartInterface } from '../models/dashboard-part-interfaces';
 
 export type DashboardLayoutReadyState =
     | 'pending-dashboard'
@@ -234,6 +248,29 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
 
     /** All categories for breadcrumb path resolution */
     @Input() Categories: MJDashboardCategoryEntity[] = [];
+
+    /**
+     * Values for the dashboard's properties, keyed by property name, set once by the host (for
+     * example a chapter space's chapter). Each part takes them through its own input mappings. A host
+     * value always wins over a wired event's value and over the property's default; null or undefined
+     * counts as not set. Unset (the default) on a dashboard without properties changes nothing.
+     */
+    @Input()
+    set Properties(value: Record<string, PropertyValue> | null) {
+        this._hostProperties = value;
+        this.propertyResolver?.SetHostValues(value);
+        this.pushPropertyContexts();
+    }
+    get Properties(): Record<string, PropertyValue> | null {
+        return this._hostProperties;
+    }
+    private _hostProperties: Record<string, PropertyValue> | null = null;
+
+    /** Works out the dashboard's property values: host, then wired events, then defaults. */
+    private propertyResolver: DashboardPropertyResolver | null = null;
+
+    /** Why the last save was refused (a broken mapping or wire), or null. */
+    public LastSaveError: string | null = null;
 
     /**
      * Computed: Should the toolbar be visible?
@@ -596,6 +633,10 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
                 }
             }
 
+            if (await this.refuseBrokenBindings()) {
+                return false;
+            }
+
             // Save to UIConfigDetails
             this._dashboard.UIConfigDetails = JSON.stringify(this.config);
             const saved = await this._dashboard.Save();
@@ -715,6 +756,53 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
      */
     public getConfig(): DashboardConfig | null {
         return this.config;
+    }
+
+    /** The dashboard's properties (empty when it has none). */
+    public GetDashboardProperties(): DashboardProperty[] {
+        return this.config?.Properties ?? [];
+    }
+
+    /** The dashboard's wires (empty when it has none). */
+    public GetWires(): DashboardWire[] {
+        return this.config?.Wires ?? [];
+    }
+
+    /**
+     * Replaces the dashboard's properties and wires (the designer's Properties panel and Wires list).
+     * An empty list removes its key, so a dashboard without them saves exactly as before. Rebuilds the
+     * parts so they take the new properties, marks the dashboard changed and emits a `settings` change.
+     * The save checks the mappings and wires against them.
+     */
+    public async SetPropertiesAndWires(properties: DashboardProperty[], wires: DashboardWire[]): Promise<void> {
+        if (!this.config) return;
+        const layout = this._glService?.getLayoutConfig();
+        if (layout) this.config.layout = layout;
+        setOrRemoveList(this.config, 'Properties', properties);
+        setOrRemoveList(this.config, 'Wires', wires);
+        this.propertyResolver = this.createPropertyResolver();
+        try {
+            if (this._glService) await this.initializeLayout();
+        } finally {
+            this.markDirty();
+        }
+        this.configChanged.emit({ config: this.config, changeType: 'settings' });
+    }
+
+    /**
+     * Loads what each part with mappings or wires declares, for the designer and the save check.
+     * A part whose interface can't load maps to null.
+     */
+    public async LoadPartInterfaces(panels: DashboardPanel[] = ExtractPanelsFromLayout(this.config?.layout ?? null)): Promise<Map<string, DashboardPartInterface | null>> {
+        const interfaces = new Map<string, DashboardPartInterface | null>();
+        await Promise.all(panels.map(async panel => {
+            try {
+                interfaces.set(panel.id, await LoadPartInterface(panel.config, this.ProviderToUse));
+            } catch {
+                interfaces.set(panel.id, null);
+            }
+        }));
+        return interfaces;
     }
 
     /**
@@ -922,6 +1010,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
             // Parse or create config
             this.config = this.parseOrCreateConfig();
             this._loadedConfigDetails = this._dashboard.UIConfigDetails ?? null;
+            this.propertyResolver = this.createPropertyResolver();
 
             // Wait for part types to be loaded before initializing layout
             // This ensures partTypes array is populated when createPanelComponent is called
@@ -997,8 +1086,9 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         this.cancelDeferredLayoutInit();
         this.emitLayoutLifecycle('initializing');
 
-        // Destroy existing layout
+        // Destroy existing layout. The new parts start with no selection, so no event value stands.
         this.destroyLayout();
+        this.propertyResolver?.ClearEventValues();
 
         // Create new Golden Layout service
         const glService = new GoldenLayoutWrapperService();
@@ -1366,11 +1456,17 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
                 elementInjector: this.injector
             });
 
-            // Set inputs on the component
+            // Set inputs on the component. The property context goes first, so the part's first load uses it.
             const instance = componentRef.instance;
+            this.bindPartToProperties(instance, panel);
             instance.Panel = panel;
             instance.PartType = partType;
             instance.IsEditing = this.IsEditing;
+            // The part reads and runs data through the viewer's provider. Without one, the part keeps
+            // its own default (the global provider), exactly as before.
+            if (this.Provider) {
+                instance.Provider = this.Provider;
+            }
 
             // Subscribe to events
             instance.ConfigureRequested.subscribe(() => {
@@ -1381,6 +1477,9 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
             });
             instance.NavigationRequested.subscribe((event: DashboardNavRequestEvent) => {
                 this.NavigationRequested.emit(event);
+            });
+            instance.PartEvent.subscribe((event: DashboardPartEventArgs) => {
+                this.onPartEvent(panel.id, event);
             });
 
             // Attach component to DOM
@@ -1574,6 +1673,101 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         `;
     }
 
+    // ========================================
+    // Private Methods - Properties, mappings and wires
+    // ========================================
+
+    private createPropertyResolver(): DashboardPropertyResolver {
+        const resolver = new DashboardPropertyResolver(this.config?.Properties ?? [], () => this.resolutionContext());
+        resolver.SetHostValues(this._hostProperties);
+        return resolver;
+    }
+
+    /** Token defaults are worked out in the browser, for the provider's user, in the browser's zone. */
+    private resolutionContext(): PropertyResolutionContext {
+        const user = this.ProviderToUse?.CurrentUser;
+        return { User: user ? { ID: user.ID, Email: user.Email, Name: user.Name } : undefined, TimeZone: GetLocalTimeZone() };
+    }
+
+    /** True when the part takes a property context: the dashboard has properties, or the part has mappings. */
+    private takesPropertyContext(panel: DashboardPanel | null): boolean {
+        return !!panel && ((this.config?.Properties?.length ?? 0) > 0 || GetInputMappings(panel.config).length > 0);
+    }
+
+    /** The properties and their values as one panel sees them (without its own events' values). */
+    private contextFor(panelId: string): DashboardPartContext {
+        return { Properties: this.config?.Properties ?? [], Values: this.propertyResolver?.ValuesFor(panelId) ?? {} };
+    }
+
+    /** Hands a new part its property context and wired events. A dashboard without them sets neither. */
+    private bindPartToProperties(instance: BaseDashboardPart, panel: DashboardPanel): void {
+        if (this.takesPropertyContext(panel)) {
+            instance.PropertyContext = this.contextFor(panel.id);
+        }
+        const wired = [...new Set(this.GetWires().filter(w => w.Panel === panel.id).map(w => w.Event))];
+        if (wired.length > 0) {
+            instance.WiredEvents = wired;
+        }
+    }
+
+    /** Hands every part its current context. A part reloads only when the values it runs with changed. */
+    private pushPropertyContexts(): void {
+        this._panelComponents.forEach((entry, panelId) => {
+            const instance = entry.componentRef?.instance;
+            if (instance && this.takesPropertyContext(instance.Panel)) {
+                instance.PropertyContext = this.contextFor(panelId);
+            }
+        });
+    }
+
+    /**
+     * A part raised an event. A View or Query selection reaches the host as `record-select`. Each wire
+     * from the event sets its property (a cleared selection removes the value it set), and the parts get
+     * the new values; the part that raised it doesn't see its own value, so it isn't refreshed by it.
+     */
+    private onPartEvent(panelId: string, event: DashboardPartEventArgs): void {
+        if (event.Values && (event.Event === RECORD_SELECTED_EVENT || event.Event === ROW_SELECTED_EVENT)) {
+            this.PanelInteraction.emit({ panelId, interactionType: 'record-select', payload: { event: event.Event, values: event.Values } });
+        }
+        const wires = this.GetWires().filter(w => w.Panel === panelId && w.Event === event.Event);
+        if (wires.length === 0 || !this.propertyResolver) return;
+        for (const wire of wires) {
+            const value = event.Values ? NormalizeEventValue(event.Values[wire.Value]) : null;
+            this.propertyResolver.SetEventValue(wire.Property, value, panelId);
+        }
+        this.pushPropertyContexts();
+    }
+
+    /** True when the dashboard has properties, wires or any part mapping: only then does a save check them. */
+    private hasBindings(): boolean {
+        const panels = ExtractPanelsFromLayout(this.config?.layout ?? null);
+        return this.GetDashboardProperties().length > 0 || this.GetWires().length > 0
+            || panels.some(p => GetInputMappings(p.config).length > 0);
+    }
+
+    /**
+     * Checks the properties, mappings and wires before a save. Returns true, with LastSaveError and an
+     * `error` event saying why, when the save must be refused. A dashboard without them is not checked.
+     */
+    private async refuseBrokenBindings(): Promise<boolean> {
+        const problems = await this.validateBindings();
+        this.LastSaveError = problems.length > 0 ? problems.join(' ') : null;
+        if (this.LastSaveError) {
+            this.error.emit({ message: `The dashboard can't be saved: ${this.LastSaveError}` });
+        }
+        return this.LastSaveError !== null;
+    }
+
+    /** The problems a save refuses. Loads the interfaces of the parts with mappings or wires. */
+    private async validateBindings(): Promise<string[]> {
+        if (!this.config || !this.hasBindings()) return [];
+        const panels = ExtractPanelsFromLayout(this.config.layout);
+        const wiredPanels = new Set(this.GetWires().map(w => w.Panel));
+        const toLoad = panels.filter(p => GetInputMappings(p.config).length > 0 || wiredPanels.has(p.id));
+        const interfaces = await this.LoadPartInterfaces(toLoad);
+        return ValidateDashboardBindings({ Properties: this.GetDashboardProperties(), Wires: this.GetWires(), Panels: panels, Interfaces: interfaces });
+    }
+
     private onConfigurePart(panelId: string): void {
         // Emit event for parent to handle configuration
         this.PanelInteraction.emit({
@@ -1658,5 +1852,14 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         if (this.AutoSave && this.config) {
             this.save();
         }
+    }
+}
+
+/** Sets a list on the config, or removes its key when the list is empty, so an unused feature leaves no trace. */
+function setOrRemoveList<K extends 'Properties' | 'Wires'>(config: DashboardConfig, key: K, list: NonNullable<DashboardConfig[K]>): void {
+    if (list.length > 0) {
+        config[key] = list;
+    } else {
+        delete config[key];
     }
 }

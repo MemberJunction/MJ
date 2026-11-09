@@ -15,6 +15,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { ExpectConsoleLines } from '@memberjunction/ng-test-utils/expected-console';
 
 // ── Angular and MJ mocks, so the component file can be imported without the runtime ──
 // Follows the node-preset pattern already used by database-preview-pane.test.ts and
@@ -213,12 +214,18 @@ import {
     CapSelectedFields,
     EntityDocumentTypeForUseCase,
     IsVectorizableEntity,
+    SuggestedMatchThresholds,
     SuggestionUseCaseForDocumentType,
     TemplateFieldCapRefusal,
     TemplateFieldNames,
 } from '../AI/components/vectors/vector-document-rules';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { VectorManagementResourceComponent } from '../AI/components/vectors/vector-management-resource.component';
+
+/** The lines these tests log on purpose: the failed and refused saves the save-path tests drive. Any other line fails its test. */
+ExpectConsoleLines({
+  error: [/^\[VectorManagement\] (Failed to save entity document: simulated failure|Error saving entity document: An Entity Document named "Members - search" already exists for Orders)/],
+});
 
 const RECORD_DUPLICATE_ID = 'type-record-duplicate';
 
@@ -519,6 +526,29 @@ describe('the save path writes what the user chose', () => {
         expect(activeStore.saves.filter((s) => s.entityName === 'MJ: Templates')).toHaveLength(0);
     });
 
+    it('stores the suggestion\'s match thresholds instead of the defaults', async () => {
+        component.SuggestUseCase = 'duplicate detection';
+        component.SuggestionResult = { ...component.SuggestionResult!, potentialMatchThreshold: 0.75, absoluteMatchThreshold: 0.92 };
+        await component.SaveAsEntityDocument();
+
+        const [doc] = table(activeStore, 'MJ: Entity Documents');
+        expect(doc['PotentialMatchThreshold']).toBe(0.75);
+        expect(doc['AbsoluteMatchThreshold']).toBe(0.92);
+    });
+
+    it('never stores an index from another database than the one shown', async () => {
+        // The reported case: an index pre-selected or picked earlier, then the database dropdown moved.
+        component.SuggestUseCase = 'duplicate detection';
+        component.AvailableVectorIndexes = [{ ID: 'idx-other-db', Name: 'Shared', VectorDatabaseID: 'vdb-2', EmbeddingModelID: 'model-2' }];
+        component.SelectedVectorIndexID = 'idx-other-db';
+        const doc = makeRow(activeStore, 'MJ: Entity Documents');
+        await component['populateEntityDocumentFKs'](doc as never);
+
+        expect(doc['VectorDatabaseID']).toBe('vdb-1');
+        expect(doc['AIModelID']).toBe('model-1');
+        expect(doc['VectorIndexID']).not.toBe('idx-other-db');
+    });
+
     it('a retry after a mid-flow failure leaves one set of rows, not two', async () => {
         component.SuggestUseCase = 'search';
 
@@ -798,5 +828,31 @@ describe('the template offers what the rules support', () => {
     it('the edit panel shows the type read-only, not as an input', () => {
         expect(HTML).toMatch(/<span class="edit-readonly-value">\{\{\s*EditDocType\s*\}\}<\/span>/);
         expect(HTML).not.toMatch(/\[\(ngModel\)\]="EditDocType"/);
+    });
+});
+
+describe('SuggestedMatchThresholds', () => {
+    it('keeps the model\'s thresholds when they are usable fractions', () => {
+        expect(SuggestedMatchThresholds(0.75, 0.92)).toEqual({ Potential: 0.75, Absolute: 0.92 });
+    });
+
+    it('allows potential and absolute to be equal, and absolute to be exactly 1', () => {
+        expect(SuggestedMatchThresholds(0.9, 0.9)).toEqual({ Potential: 0.9, Absolute: 0.9 });
+        expect(SuggestedMatchThresholds(0.8, 1)).toEqual({ Potential: 0.8, Absolute: 1 });
+    });
+
+    it('refuses values that are not fractions of 1', () => {
+        expect(SuggestedMatchThresholds(75, 92)).toBeNull();
+        expect(SuggestedMatchThresholds(0, 0.9)).toBeNull();
+        expect(SuggestedMatchThresholds(Number.NaN, 0.9)).toBeNull();
+    });
+
+    it('refuses a potential threshold above the absolute one', () => {
+        expect(SuggestedMatchThresholds(0.95, 0.9)).toBeNull();
+    });
+
+    it('refuses missing values', () => {
+        expect(SuggestedMatchThresholds(undefined, 0.9)).toBeNull();
+        expect(SuggestedMatchThresholds(0.7, null)).toBeNull();
     });
 });

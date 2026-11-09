@@ -71,6 +71,7 @@ class ViewWorkspaceStub {
   @Input() Entity: EntityInfo | null = null;
   @Input() AutoSaveView = false;
   @Input() SelectedView: MJUserViewEntityExtended | null = null;
+  @Input() AlternateBaseView: string | null = null;
   @Input() FilterText = '';
   @Input() SelectedRecordId: string | null = null;
   @Input() ViewerConfig: Partial<EntityViewerConfig> | null = null;

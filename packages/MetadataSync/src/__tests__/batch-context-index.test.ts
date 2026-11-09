@@ -36,7 +36,6 @@ function makeStub(
     EntityInfo: {
       Name: entityName,
       PrimaryKeys: [{ Name: 'ID' }],
-      FirstPrimaryKey: { Name: 'ID' },
       Fields: fieldNames.map((n) => ({ Name: n })),
     },
     Get(field: string) {

@@ -4,11 +4,15 @@ import {
   ChangeDetectorRef,
   EventEmitter,
   Input,
+  OnDestroy,
   OnInit,
   Output,
   ViewEncapsulation,
 } from '@angular/core';
-import { Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, BaseEntityEvent, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
+import { Subscription } from 'rxjs';
+import { debounceTime, filter } from 'rxjs/operators';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import {
   AfterRecordRestoreEventArgs,
@@ -59,6 +63,7 @@ import {
       </button>
 
       <mj-recycle-bin
+        [Provider]="Provider"
         [Visible]="PanelVisible"
         [EntityName]="EntityName"
         [ContextUser]="ContextUser"
@@ -107,7 +112,7 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None,
 })
-export class RecycleBinChipComponent extends BaseAngularComponent implements OnInit  {
+export class RecycleBinChipComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   /**
    * Entity name whose deleted records will be surfaced. When null/empty,
    * the chip hides itself entirely.
@@ -148,6 +153,7 @@ export class RecycleBinChipComponent extends BaseAngularComponent implements OnI
   public TracksChanges = false;
 
   private isInitialized = false;
+  private deleteSub: Subscription | null = null;
 
   constructor(private cdr: ChangeDetectorRef) {
   super();}
@@ -155,6 +161,36 @@ export class RecycleBinChipComponent extends BaseAngularComponent implements OnI
   ngOnInit(): void {
     this.isInitialized = true;
     this.refreshCount();
+    // A record of this entity deleted anywhere — its form in another tab, a grid row, or
+    // another session — lands in the bin, so the badge recounts. Debounced: a burst of
+    // deletes recounts once.
+    this.deleteSub = MJGlobal.Instance.GetEventListener()
+      .pipe(filter(event => this.isDeleteOfThisEntity(event)), debounceTime(300))
+      .subscribe(() => this.refreshCount());
+  }
+
+  ngOnDestroy(): void {
+    this.deleteSub?.unsubscribe();
+    this.deleteSub = null;
+  }
+
+  /**
+   * True for a delete of this chip's entity: a local `delete` (raised once the delete has
+   * succeeded, so its Delete record change is already written) or a remote one (a
+   * `remote-invalidate` whose action is `delete`).
+   */
+  private isDeleteOfThisEntity(event: MJEvent): boolean {
+    if (!this._entityName || event.event !== MJEventType.ComponentEvent || event.eventCode !== BaseEntity.BaseEventCode) {
+      return false;
+    }
+    const entityEvent = event.args as BaseEntityEvent | undefined;
+    const isDelete = entityEvent?.type === 'delete'
+      || (entityEvent?.type === 'remote-invalidate' && (entityEvent.payload as { action?: string } | null)?.action === 'delete');
+    if (!isDelete) {
+      return false;
+    }
+    const entityName = entityEvent?.baseEntity?.EntityInfo?.Name ?? entityEvent?.entityName;
+    return !!entityName && entityName.trim().toLowerCase() === this._entityName.trim().toLowerCase();
   }
 
   public Toggle(): void {

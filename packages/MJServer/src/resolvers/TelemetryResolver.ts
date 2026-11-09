@@ -3,9 +3,12 @@ import { AppContext } from '../types.js';
 import {
     TelemetryManager,
     TelemetryCategory,
-    TelemetryInsightSeverity
+    TelemetryInsightSeverity,
+    AuthorizationEvaluator,
 } from '@memberjunction/core';
 import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
+import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
+import { GetReadOnlyProvider } from '../util.js';
 
 // ============================================================================
 // GraphQL Types for TelemetryEvent
@@ -321,11 +324,37 @@ export class TelemetryInsightFilterInput {
 @Resolver()
 export class TelemetryResolver {
     /**
+     * Enforces that the caller is an authenticated, non-scope-limited user who holds either
+     * Owner privileges or the `'Diagnostics: Run Sessions'` authorization.
+     */
+    private requireDiagnosticsAccess(context: AppContext): void {
+        const user = context?.userPayload?.userRecord;
+        if (!user || IsScopeLimitedPrincipal(user)) {
+            throw new Error('Access denied: server telemetry requires an authenticated non-scope-limited user.');
+        }
+        if (user.Type?.trim().toLowerCase() === 'owner') {
+            return;
+        }
+        const authorizations = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true })?.Authorizations ?? [];
+        const diagAuth = authorizations.find(
+            (a) => a.Name?.trim().toLowerCase() === 'diagnostics: run sessions'
+        );
+        if (diagAuth) {
+            const evaluator = new AuthorizationEvaluator();
+            if (evaluator.UserCanExecuteWithAncestors(diagAuth, user, authorizations)) {
+                return;
+            }
+        }
+        throw new Error('Access denied: server telemetry requires Owner privileges or the "Diagnostics: Run Sessions" authorization.');
+    }
+
+    /**
      * Get telemetry settings
-     * Accessible to any authenticated user - telemetry data is not sensitive
+     * Requires Owner privileges or 'Diagnostics: Run Sessions' authorization
      */
     @Query(() => TelemetrySettingsGQL)
-    GetServerTelemetrySettings(@Ctx() _context: AppContext): TelemetrySettingsGQL {
+    GetServerTelemetrySettings(@Ctx() context: AppContext): TelemetrySettingsGQL {
+        this.requireDiagnosticsAccess(context);
         const tm = TelemetryManager.Instance;
         const settings = tm.Settings;
 
@@ -367,7 +396,8 @@ export class TelemetryResolver {
      * Get telemetry statistics
      */
     @Query(() => TelemetryStatsGQL)
-    GetServerTelemetryStats(@Ctx() _context: AppContext): TelemetryStatsGQL {
+    GetServerTelemetryStats(@Ctx() context: AppContext): TelemetryStatsGQL {
+        this.requireDiagnosticsAccess(context);
         const tm = TelemetryManager.Instance;
         const stats = tm.GetStats();
 
@@ -393,9 +423,10 @@ export class TelemetryResolver {
      */
     @Query(() => [TelemetryEventGQL])
     GetServerTelemetryEvents(
-        @Ctx() _context: AppContext,
+        @Ctx() context: AppContext,
         @Arg('filter', () => TelemetryEventFilterInput, { nullable: true }) filter?: TelemetryEventFilterInput
     ): TelemetryEventGQL[] {
+        this.requireDiagnosticsAccess(context);
         const tm = TelemetryManager.Instance;
 
         const events = tm.GetEvents({
@@ -429,9 +460,10 @@ export class TelemetryResolver {
      */
     @Query(() => [TelemetryPatternGQL])
     GetServerTelemetryPatterns(
-        @Ctx() _context: AppContext,
+        @Ctx() context: AppContext,
         @Arg('filter', () => TelemetryPatternFilterInput, { nullable: true }) filter?: TelemetryPatternFilterInput
     ): TelemetryPatternGQL[] {
+        this.requireDiagnosticsAccess(context);
         const tm = TelemetryManager.Instance;
 
         const patterns = tm.GetPatterns({
@@ -470,9 +502,10 @@ export class TelemetryResolver {
      */
     @Query(() => [TelemetryInsightGQL])
     GetServerTelemetryInsights(
-        @Ctx() _context: AppContext,
+        @Ctx() context: AppContext,
         @Arg('filter', () => TelemetryInsightFilterInput, { nullable: true }) filter?: TelemetryInsightFilterInput
     ): TelemetryInsightGQL[] {
+        this.requireDiagnosticsAccess(context);
         const tm = TelemetryManager.Instance;
 
         const insights = tm.GetInsights({
@@ -502,9 +535,10 @@ export class TelemetryResolver {
      */
     @Query(() => [TelemetryPatternGQL])
     GetServerTelemetryDuplicates(
-        @Ctx() _context: AppContext,
+        @Ctx() context: AppContext,
         @Arg('minCount', () => Int, { defaultValue: 2 }) minCount: number
     ): TelemetryPatternGQL[] {
+        this.requireDiagnosticsAccess(context);
         const tm = TelemetryManager.Instance;
         const patterns = tm.GetDuplicates(minCount);
 
@@ -536,7 +570,8 @@ export class TelemetryResolver {
      * Get currently active (in-progress) events
      */
     @Query(() => [TelemetryEventGQL])
-    GetServerTelemetryActiveEvents(@Ctx() _context: AppContext): TelemetryEventGQL[] {
+    GetServerTelemetryActiveEvents(@Ctx() context: AppContext): TelemetryEventGQL[] {
+        this.requireDiagnosticsAccess(context);
         const tm = TelemetryManager.Instance;
         const events = tm.GetActiveEvents();
 

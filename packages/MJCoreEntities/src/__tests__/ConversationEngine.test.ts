@@ -225,6 +225,7 @@ vi.mock('../custom/ResourcePermissions/ResourcePermissionEngine', () => ({
         Instance: {
             Config: vi.fn().mockResolvedValue(undefined),
             GetUserAvailableResources: vi.fn().mockReturnValue([]),
+            Permissions: [] as Array<Record<string, unknown>>,
         },
     },
 }));
@@ -246,7 +247,17 @@ vi.mock('../engines/artifacts', () => ({
 // ---------------------------------------------------------------------------
 // Import the module under test AFTER mocks
 // ---------------------------------------------------------------------------
-import { ConversationEngine, ConversationWindowFields, BuildProjectVisibilityFilter, ExplainProjectDeleteFailure } from '../engines/conversations';
+import {
+    ConversationEngine,
+    ConversationWindowFields,
+    BuildProjectVisibilityFilter,
+    ExplainProjectDeleteFailure,
+    ShouldReplaceDetailAgentRun,
+    PROJECTS_RESOURCE_TYPE_ID,
+    INHERIT_FOLDER_ACCESS_SQL_CLAUSE,
+    IsInheritingFolderAccess,
+    BuildUpdatedAdditionalDataForFolderInheritance,
+} from '../engines/conversations';
 import { ResourcePermissionEngine } from '../custom/ResourcePermissions/ResourcePermissionEngine';
 import { UserInfo } from '@memberjunction/core';
 
@@ -374,6 +385,7 @@ describe('ConversationEngine', () => {
         // Clear the call logs the windowed-read tests assert against
         runViewParamsLog = [];
         runViewsBatchLog = [];
+        (ResourcePermissionEngine.Instance as unknown as { Permissions: unknown[] }).Permissions = [];
     });
 
     // ========================================================================
@@ -542,14 +554,14 @@ describe('ConversationEngine', () => {
             runViewHook.firstSeen = false;
         });
 
-        it('filters to owned and shared, unarchived, Global/Both conversations in the environment', async () => {
+        it('filters to owned and shared, unarchived, unanchored, unlinked, Global/Both conversations in the environment', async () => {
             shareConversations('conv-s1');
             runViewResultQueue.push({ Success: true, Results: [] });
             await engine.LoadConversations('env-1', contextUser, true);
 
             const params = runViewParamsLog.filter(p => p['EntityName'] === 'MJ: Conversations').at(-1)!;
             expect(params['ExtraFilter']).toBe(
-                "EnvironmentID='env-1' AND (UserID='user-1' OR ID IN ('conv-s1')) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both')"
+                "EnvironmentID='env-1' AND (UserID='user-1' OR ID IN ('conv-s1')) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL AND LinkedEntityID IS NULL"
             );
         });
     });
@@ -564,7 +576,7 @@ describe('ConversationEngine', () => {
             const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser);
 
             expect(filter).toBe(
-                "EnvironmentID='env-1' AND (UserID='user-1' OR ID IN ('conv-s1','conv-s2')) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both')"
+                "EnvironmentID='env-1' AND (UserID='user-1' OR ID IN ('conv-s1','conv-s2')) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL AND LinkedEntityID IS NULL"
             );
         });
 
@@ -574,7 +586,7 @@ describe('ConversationEngine', () => {
             const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser);
 
             expect(filter).toBe(
-                "EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both')"
+                "EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL AND LinkedEntityID IS NULL"
             );
         });
 
@@ -583,7 +595,23 @@ describe('ConversationEngine', () => {
 
             const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser, { includeApplicationScoped: true });
 
-            expect(filter).toBe("EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0)");
+            expect(filter).toBe("EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND AnchorType IS NULL AND LinkedEntityID IS NULL");
+        });
+
+        it('includes anchored conversations only when asked to', async () => {
+            shareConversations();
+
+            const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser, { includeAnchored: true });
+
+            expect(filter).toBe("EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND LinkedEntityID IS NULL");
+        });
+
+        it('includes record-linked conversations only when asked to', async () => {
+            shareConversations();
+
+            const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser, { includeRecordLinked: true });
+
+            expect(filter).toBe("EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL");
         });
 
         it('asks the permission engine for the calling user, not a cached one', async () => {
@@ -613,6 +641,43 @@ describe('ConversationEngine', () => {
             expect(result).toBeDefined();
             expect(mockConversationEntity.Save).toHaveBeenCalled();
             expect(engine.Conversations).toHaveLength(1);
+        });
+
+        it('does not prepend record-linked conversations to the main chat list and loads them via LoadRecordConversations', async () => {
+            mockConversationEntity.Save.mockResolvedValue(true);
+
+            const result = await engine.CreateConversation(
+                'Record AI Chat',
+                'env-1',
+                contextUser,
+                undefined,
+                undefined,
+                {
+                    linkedEntityId: 'E0000001-0000-0000-0000-000000000001',
+                    linkedRecordId: 'R0000001-0000-0000-0000-000000000001'
+                }
+            );
+
+            expect(result.LinkedEntityID).toBe('E0000001-0000-0000-0000-000000000001');
+            expect(result.LinkedRecordID).toBe('R0000001-0000-0000-0000-000000000001');
+            expect(engine.Conversations).toHaveLength(0);
+            (mockConversationEntity as Record<string, unknown>).LinkedEntityID = null;
+            (mockConversationEntity as Record<string, unknown>).LinkedRecordID = null;
+
+            runViewResultQueue.push({
+                Success: true,
+                Results: [createMockConversation({ ID: 'rec-conv-1' })]
+            });
+            const recordConvos = await engine.LoadRecordConversations(
+                'E0000001-0000-0000-0000-000000000001',
+                'R0000001-0000-0000-0000-000000000001',
+                contextUser,
+                'env-1'
+            );
+            expect(recordConvos).toHaveLength(1);
+            const lastParams = runViewParamsLog.at(-1)!;
+            expect(lastParams['ExtraFilter']).toContain("LinkedEntityID='E0000001-0000-0000-0000-000000000001'");
+            expect(lastParams['ExtraFilter']).toContain("AnchorType IS NULL");
         });
 
         it('should throw when save fails', async () => {
@@ -1114,6 +1179,54 @@ describe('ConversationEngine', () => {
         it('should return undefined when no cache entry exists', () => {
             const result = engine.GetAgentRunForDetail('no-conv', 'no-detail');
             expect(result).toBeUndefined();
+        });
+
+        it('should honor ShouldReplaceDetailAgentRun and not overwrite a root primary run with a continuation or sub-agent run', async () => {
+            enqueueDetailsResults([
+                createMockDetail({ ID: 'd1', ConversationID: 'conv-1' }),
+            ]);
+            await engine.LoadConversationDetails('conv-1', contextUser);
+
+            const primaryRun = createMockAgentRun({
+                ID: 'run-primary',
+                ConversationDetailID: 'd1',
+                ParentRunID: null,
+                ContinuationDepth: 0,
+            });
+            const continuationRun = createMockAgentRun({
+                ID: 'run-continuation',
+                ConversationDetailID: 'd1',
+                ParentRunID: null,
+                ContinuationDepth: 1,
+            });
+            const subAgentRun = createMockAgentRun({
+                ID: 'run-child',
+                ConversationDetailID: 'd1',
+                ParentRunID: 'run-primary',
+                ContinuationDepth: 0,
+            });
+
+            engine.SetAgentRunForDetail('conv-1', 'd1', primaryRun as never);
+            expect((engine.GetAgentRunForDetail('conv-1', 'd1') as unknown as Record<string, unknown>)['ID']).toBe('run-primary');
+
+            // Continuation synthesis run must not replace the root primary orchestrating run
+            engine.SetAgentRunForDetail('conv-1', 'd1', continuationRun as never);
+            expect((engine.GetAgentRunForDetail('conv-1', 'd1') as unknown as Record<string, unknown>)['ID']).toBe('run-primary');
+
+            // Child sub-agent run must not replace the root primary orchestrating run
+            engine.SetAgentRunForDetail('conv-1', 'd1', subAgentRun as never);
+            expect((engine.GetAgentRunForDetail('conv-1', 'd1') as unknown as Record<string, unknown>)['ID']).toBe('run-primary');
+
+            // Same primary run ID (in-place update) IS allowed to replace
+            const updatedPrimaryRun = createMockAgentRun({
+                ID: 'run-primary',
+                ConversationDetailID: 'd1',
+                ParentRunID: null,
+                ContinuationDepth: 0,
+                Status: 'Completed',
+            });
+            engine.SetAgentRunForDetail('conv-1', 'd1', updatedPrimaryRun as never);
+            expect((engine.GetAgentRunForDetail('conv-1', 'd1') as unknown as Record<string, unknown>)['Status']).toBe('Completed');
         });
     });
 
@@ -1864,6 +1977,79 @@ describe('ConversationEngine', () => {
                 expect(window.map(m => m.content)).toEqual(['m1', 'm2']);
             });
         });
+
+        describe('speaker attribution (multi-user / multi-agent)', () => {
+            const ALICE_ID = 'AAAAAAAA-0000-0000-0000-000000000001';
+            const BOB_ID = 'BBBBBBBB-0000-0000-0000-000000000002';
+            const RESEARCH_ID = 'CCCCCCCC-0000-0000-0000-000000000001';
+            const WRITER_ID = 'DDDDDDDD-0000-0000-0000-000000000002';
+
+            it('single-user rows stay unprefixed by default (auto), even when multiple agents reply', () => {
+                const window = ConversationEngine.AssembleContextWindow([
+                    { ...row(1, 'User', 'Hello'), UserID: ALICE_ID, User: 'Alice Chen' },
+                    { ...row(2, 'AI', 'Hi there'), AgentID: RESEARCH_ID, Agent: 'Research', ParentID: 'detail-1' },
+                    { ...row(3, 'AI', 'Draft ready'), AgentID: WRITER_ID, Agent: 'Writer', ParentID: 'detail-1' },
+                ]);
+                expect(window.map(m => m.content)).toEqual(['Hello', 'Hi there', 'Draft ready']);
+                expect(window[0].metadata).toEqual({
+                    sequence: 1,
+                    conversationDetailId: 'detail-1',
+                    userId: ALICE_ID,
+                    userName: 'Alice Chen',
+                });
+                expect(window[1].metadata).toEqual({
+                    sequence: 2,
+                    conversationDetailId: 'detail-2',
+                    agentId: RESEARCH_ID,
+                    agentName: 'Research',
+                    parentId: 'detail-1',
+                });
+            });
+
+            it('prefixes speakers, reply targets, and preserves metadata.rawContent when multiple users participate (auto)', () => {
+                const window = ConversationEngine.AssembleContextWindow([
+                    { ...row(1, 'User', 'Can someone check Q3?'), UserID: ALICE_ID, User: 'Alice Chen' },
+                    { ...row(2, 'User', 'I have the spreadsheet'), UserID: BOB_ID, User: 'Bob Rivera', ParentID: 'detail-1' },
+                    { ...row(3, 'AI', 'Found 3 variances'), AgentID: RESEARCH_ID, Agent: 'Research', ParentID: 'detail-1' },
+                    { ...row(4, 'AI', 'Drafted executive summary'), AgentID: WRITER_ID, Agent: 'Writer', ParentID: 'detail-3' },
+                ]);
+                expect(window.map(m => m.content)).toEqual([
+                    '[Alice Chen]: Can someone check Q3?',
+                    '[Bob Rivera -> replying to Alice Chen]: I have the spreadsheet',
+                    '[Research -> replying to Alice Chen]: Found 3 variances',
+                    '[Writer -> replying to Research]: Drafted executive summary',
+                ]);
+                expect(window.map(m => m.metadata?.rawContent)).toEqual([
+                    'Can someone check Q3?',
+                    'I have the spreadsheet',
+                    'Found 3 variances',
+                    'Drafted executive summary',
+                ]);
+            });
+
+            it('uses speakerLabels (case-insensitive UUID match) and respects speakerAttribution off/always', () => {
+                const rows = [
+                    { ...row(1, 'User', 'Check the renewal clause'), UserID: ALICE_ID.toLowerCase(), User: 'Alice' },
+                    { ...row(2, 'AI', 'Clause 4.2 applies'), AgentID: RESEARCH_ID, Agent: 'Space Agent', ParentID: 'detail-1' },
+                ];
+                const labels = new Map<string, string>([[ALICE_ID, 'Alice Chen (Team)']]);
+
+                const withAlways = ConversationEngine.AssembleContextWindow(rows, {
+                    speakerAttribution: 'always',
+                    speakerLabels: labels,
+                });
+                expect(withAlways.map(m => m.content)).toEqual([
+                    '[Alice Chen (Team)]: Check the renewal clause',
+                    '[Space Agent -> replying to Alice Chen (Team)]: Clause 4.2 applies',
+                ]);
+
+                const withOff = ConversationEngine.AssembleContextWindow(rows, {
+                    speakerAttribution: 'off',
+                    speakerLabels: labels,
+                });
+                expect(withOff.map(m => m.content)).toEqual(['Check the renewal clause', 'Clause 4.2 applies']);
+            });
+        });
     });
 
     describe('LiveRowsFilter and IsReplacedRow', () => {
@@ -1879,8 +2065,11 @@ describe('ConversationEngine', () => {
             expect(ConversationEngine.IsReplacedRow({})).toBe(false);
         });
 
-        it('lists ReplacedAt among the window fields', () => {
+        it('lists ReplacedAt and speaker identity columns among the window fields', () => {
             expect(ConversationWindowFields).toContain('ReplacedAt');
+            expect(ConversationWindowFields).toEqual(
+                expect.arrayContaining(['UserID', 'User', 'AgentID', 'Agent', 'ParentID'])
+            );
         });
     });
 
@@ -2818,5 +3007,535 @@ describe('ConversationEngine', () => {
             sub.unsubscribe();
         });
     });
+
+    describe('ShouldReplaceDetailAgentRun (primary orchestrating run vs continuation synthesis run)', () => {
+        const primaryRun = {
+            ID: '05FCC2C8-6D72-416D-A774-0C7F15F4CA6E',
+            ParentRunID: null,
+            ContinuationDepth: 0,
+            __mj_CreatedAt: '2026-10-19T14:00:00.000Z',
+        };
+        const continuationRun = {
+            ID: '858AB1A5-20AD-425A-896E-58D34494FCF3',
+            ParentRunID: null,
+            ContinuationDepth: 1,
+            __mj_CreatedAt: '2026-10-19T14:06:00.000Z',
+        };
+        const childSubAgentRun = {
+            ID: '11111111-2222-3333-4444-555555555555',
+            ParentRunID: '05FCC2C8-6D72-416D-A774-0C7F15F4CA6E',
+            ContinuationDepth: 0,
+            __mj_CreatedAt: '2026-10-19T14:03:00.000Z',
+        };
+
+        it('keeps the primary orchestrating run (ContinuationDepth=0) over a newer post-workflow continuation synthesis run (ContinuationDepth=1)', () => {
+            expect(ShouldReplaceDetailAgentRun(primaryRun, continuationRun)).toBe(false);
+        });
+
+        it('replaces a continuation synthesis run (ContinuationDepth=1) when the primary orchestrating run (ContinuationDepth=0) is evaluated', () => {
+            expect(ShouldReplaceDetailAgentRun(continuationRun, primaryRun)).toBe(true);
+        });
+
+        it('keeps a root run (ParentRunID=null) over a child sub-agent run (ParentRunID!=null)', () => {
+            expect(ShouldReplaceDetailAgentRun(continuationRun, childSubAgentRun)).toBe(false);
+            expect(ShouldReplaceDetailAgentRun(childSubAgentRun, continuationRun)).toBe(true);
+        });
+
+        it('prefers the newer root primary run when a user retries a message (both ContinuationDepth=0)', () => {
+            const retriedPrimaryRun = {
+                ID: '99999999-8888-7777-6666-555555555555',
+                ParentRunID: null,
+                ContinuationDepth: 0,
+                __mj_CreatedAt: '2026-10-19T14:10:00.000Z',
+            };
+            expect(ShouldReplaceDetailAgentRun(primaryRun, retriedPrimaryRun)).toBe(true);
+            expect(ShouldReplaceDetailAgentRun(retriedPrimaryRun, primaryRun)).toBe(false);
+        });
+    });
+
+    describe('Shared folder automatic conversation sharing (View-only)', () => {
+        /** `AdditionalData` of a conversation whose owner turned on folder inheritance (it is off by default). */
+        const INHERITS = '{"inheritFolderAccess":true}';
+
+        function createSharedOrPersonalProject(overrides: Record<string, unknown> = {}) {
+            return {
+                ID: overrides['ID'] ?? 'proj-shared-1',
+                Name: overrides['Name'] ?? 'Team Shared Folder',
+                EnvironmentID: overrides['EnvironmentID'] ?? 'env-1',
+                ParentID: overrides['ParentID'] ?? null,
+                OwnerUserID: overrides['OwnerUserID'] ?? null,
+                IsArchived: overrides['IsArchived'] ?? false,
+                Save: vi.fn().mockResolvedValue(true),
+                Delete: vi.fn().mockResolvedValue(true),
+                GetAll: vi.fn().mockReturnValue({}),
+                LatestResult: { Success: true, CompleteMessage: '' },
+                ...overrides,
+            };
+        }
+
+        it('includes shared folder IDs in GetVisibleConversationsFilter and excludes personal folders', async () => {
+            runViewResultQueue.push({
+                Success: true,
+                Results: [
+                    createSharedOrPersonalProject({ ID: 'proj-shared-1', OwnerUserID: null }),
+                    createSharedOrPersonalProject({ ID: 'proj-personal-1', OwnerUserID: 'user-1' }),
+                    createSharedOrPersonalProject({ ID: 'proj-archived', OwnerUserID: null, IsArchived: true }),
+                ],
+            });
+            await engine.LoadProjects('env-1', contextUser);
+
+            const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser);
+            expect(filter).toBe(
+                `EnvironmentID='env-1' AND (UserID='user-1' OR (ProjectID IN ('proj-shared-1') AND (AdditionalData LIKE '%"inheritFolderAccess":true%' OR AdditionalData LIKE '%"inheritFolderAccess": true%'))) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL AND LinkedEntityID IS NULL`
+            );
+        });
+
+        it('automatically loads conversations in shared folders and marks non-owned ones as View-only', async () => {
+            const ownConvoInSharedFolder = createMockConversation({
+                ID: 'c-own',
+                UserID: 'user-1',
+                ProjectID: 'proj-shared-1',
+            });
+            const colleagueConvoInSharedFolder = createMockConversation({
+                ID: 'c-colleague',
+                UserID: 'user-2',
+                User: 'Colleague Two',
+                ProjectID: 'proj-shared-1',
+                AdditionalData: INHERITS,
+            });
+
+            // 1. Initial MJ: Conversations query (before LoadProjects runs)
+            runViewResultQueue.push({ Success: true, Results: [ownConvoInSharedFolder] });
+            // 2. LoadProjects discovers a shared folder (OwnerUserID: null)
+            runViewResultQueue.push({
+                Success: true,
+                Results: [createSharedOrPersonalProject({ ID: 'proj-shared-1', OwnerUserID: null })],
+            });
+            // 3. Re-query MJ: Conversations including OR (ProjectID IN ('proj-shared-1') AND ...)
+            runViewResultQueue.push({
+                Success: true,
+                Results: [ownConvoInSharedFolder, colleagueConvoInSharedFolder],
+            });
+            // 4. rebuildSharedByMap resolves grantor email from MJ: Users
+            runViewResultQueue.push({
+                Success: true,
+                Results: [{ ID: 'user-2', Email: 'colleague@example.com' }],
+            });
+
+            await engine.LoadConversations('env-1', contextUser, true);
+
+            expect(engine.Conversations).toHaveLength(2);
+
+            const updatedConvoQuery = runViewParamsLog
+                .filter((p) => p['EntityName'] === 'MJ: Conversations')
+                .at(-1)!;
+            expect(String(updatedConvoQuery['ExtraFilter'])).toContain(
+                `OR (ProjectID IN ('proj-shared-1') AND ${INHERIT_FOLDER_ACCESS_SQL_CLAUSE})`
+            );
+
+            // Colleague's conversation in the shared folder gets View-only access automatically
+            const sharedInfo = engine.GetSharedByInfo('c-colleague');
+            expect(sharedInfo).toEqual({
+                UserID: 'user-2',
+                Name: 'Colleague Two',
+                Email: 'colleague@example.com',
+                Level: 'View',
+            });
+            expect(engine.CanEditConversation(colleagueConvoInSharedFolder as never, 'user-1')).toBe(false);
+            expect(engine.CanShareConversation(colleagueConvoInSharedFolder as never, 'user-1')).toBe(false);
+
+            // Current user's own conversation in the shared folder stays editable and owned
+            expect(engine.GetSharedByInfo('c-own')).toBeNull();
+            expect(engine.CanEditConversation(ownConvoInSharedFolder as never, 'user-1')).toBe(true);
+            expect(engine.CanShareConversation(ownConvoInSharedFolder as never, 'user-1')).toBe(true);
+        });
+
+        it('preserves explicit Edit or Owner resource permission grants on conversations inside a shared folder', async () => {
+            runViewResultQueue.push({
+                Success: true,
+                Results: [createSharedOrPersonalProject({ ID: 'proj-shared-1', OwnerUserID: null })],
+            });
+            await engine.LoadProjects('env-1', contextUser);
+
+            vi.mocked(ResourcePermissionEngine.Instance.GetUserAvailableResources).mockReturnValueOnce([
+                {
+                    ResourceRecordID: 'c-colleague',
+                    SharedByUserID: 'user-2',
+                    SharedByUser: 'Colleague Two',
+                    PermissionLevel: 'Edit',
+                },
+            ] as unknown as ReturnType<typeof ResourcePermissionEngine.Instance.GetUserAvailableResources>);
+
+            const colleagueConvo = createMockConversation({
+                ID: 'c-colleague',
+                UserID: 'user-2',
+                User: 'Colleague Two',
+                ProjectID: 'proj-shared-1',
+                AdditionalData: INHERITS,
+            });
+            runViewResultQueue.push({ Success: true, Results: [colleagueConvo] });
+            runViewResultQueue.push({
+                Success: true,
+                Results: [{ ID: 'user-2', Email: 'colleague@example.com' }],
+            });
+
+            await engine.LoadConversations('env-1', contextUser);
+
+            expect(engine.GetSharedByInfo('c-colleague')?.Level).toBe('Edit');
+            expect(engine.CanEditConversation(colleagueConvo as never, 'user-1')).toBe(true);
+        });
+
+        it('drops another user\'s folder-shared conversation when it is moved out of the shared folder', async () => {
+            runViewResultQueue.push({
+                Success: true,
+                Results: [createSharedOrPersonalProject({ ID: 'proj-shared-1', OwnerUserID: null })],
+            });
+            await engine.LoadProjects('env-1', contextUser);
+
+            const colleagueConvo = createMockConversation({
+                ID: 'c-colleague',
+                UserID: 'user-2',
+                User: 'Colleague Two',
+                ProjectID: 'proj-shared-1',
+                AdditionalData: INHERITS,
+            });
+            runViewResultQueue.push({ Success: true, Results: [colleagueConvo] });
+            runViewResultQueue.push({ Success: true, Results: [] });
+
+            await engine.LoadConversations('env-1', contextUser);
+            expect(engine.Conversations).toHaveLength(1);
+            expect(engine.GetSharedByInfo('c-colleague')?.Level).toBe('View');
+
+            // Remote event: colleague moves their conversation out of the shared folder (ProjectID -> null)
+            await (engine as unknown as {
+                HandleIndividualBaseEntityEvent(e: Record<string, unknown>): Promise<boolean>;
+            }).HandleIndividualBaseEntityEvent({
+                type: 'remote-invalidate',
+                entityName: 'MJ: Conversations',
+                payload: {
+                    action: 'save',
+                    primaryKeyValues: JSON.stringify([{ FieldName: 'ID', Value: 'c-colleague' }]),
+                    recordData: JSON.stringify({
+                        ID: 'c-colleague',
+                        UserID: 'user-2',
+                        ProjectID: null,
+                        AdditionalData: INHERITS,
+                        EnvironmentID: 'env-1',
+                        IsArchived: false,
+                    }),
+                },
+            });
+
+            expect(engine.Conversations).toHaveLength(0);
+            expect(engine.GetSharedByInfo('c-colleague')).toBeNull();
+        });
+
+        it('keeps another user\'s folder-shared conversation when a save leaves it in the shared folder', async () => {
+            runViewResultQueue.push({
+                Success: true,
+                Results: [createSharedOrPersonalProject({ ID: 'proj-shared-1', OwnerUserID: null })],
+            });
+            await engine.LoadProjects('env-1', contextUser);
+
+            const colleagueConvo = createMockConversation({
+                ID: 'c-colleague',
+                UserID: 'user-2',
+                User: 'Colleague Two',
+                ProjectID: 'proj-shared-1',
+                AdditionalData: INHERITS,
+            });
+            runViewResultQueue.push({ Success: true, Results: [colleagueConvo] });
+            runViewResultQueue.push({ Success: true, Results: [] });
+
+            await engine.LoadConversations('env-1', contextUser);
+            expect(engine.Conversations).toHaveLength(1);
+
+            // Remote event: colleague renames the conversation; it stays in the shared folder
+            await (engine as unknown as {
+                HandleIndividualBaseEntityEvent(e: Record<string, unknown>): Promise<boolean>;
+            }).HandleIndividualBaseEntityEvent({
+                type: 'remote-invalidate',
+                entityName: 'MJ: Conversations',
+                payload: {
+                    action: 'save',
+                    primaryKeyValues: JSON.stringify([{ FieldName: 'ID', Value: 'c-colleague' }]),
+                    recordData: JSON.stringify({
+                        ID: 'c-colleague',
+                        Name: 'Renamed by colleague',
+                        UserID: 'user-2',
+                        ProjectID: 'proj-shared-1',
+                        AdditionalData: INHERITS,
+                        EnvironmentID: 'env-1',
+                        IsArchived: false,
+                    }),
+                },
+            });
+
+            expect(engine.Conversations.map((c) => c.ID)).toEqual(['c-colleague']);
+            expect(engine.GetSharedByInfo('c-colleague')?.Level).toBe('View');
+        });
+
+        it('drops another user\'s folder-shared conversation when its owner turns inheritance off', async () => {
+            runViewResultQueue.push({
+                Success: true,
+                Results: [createSharedOrPersonalProject({ ID: 'proj-shared-1', OwnerUserID: null })],
+            });
+            await engine.LoadProjects('env-1', contextUser);
+
+            const colleagueConvo = createMockConversation({
+                ID: 'c-colleague',
+                UserID: 'user-2',
+                User: 'Colleague Two',
+                ProjectID: 'proj-shared-1',
+                AdditionalData: INHERITS,
+            });
+            runViewResultQueue.push({ Success: true, Results: [colleagueConvo] });
+            runViewResultQueue.push({ Success: true, Results: [] });
+
+            await engine.LoadConversations('env-1', contextUser);
+            expect(engine.Conversations).toHaveLength(1);
+
+            // Remote event: the owner turns inheritance off; the conversation stays in the shared folder
+            await (engine as unknown as {
+                HandleIndividualBaseEntityEvent(e: Record<string, unknown>): Promise<boolean>;
+            }).HandleIndividualBaseEntityEvent({
+                type: 'remote-invalidate',
+                entityName: 'MJ: Conversations',
+                payload: {
+                    action: 'save',
+                    primaryKeyValues: JSON.stringify([{ FieldName: 'ID', Value: 'c-colleague' }]),
+                    recordData: JSON.stringify({
+                        ID: 'c-colleague',
+                        UserID: 'user-2',
+                        ProjectID: 'proj-shared-1',
+                        AdditionalData: null,
+                        EnvironmentID: 'env-1',
+                        IsArchived: false,
+                    }),
+                },
+            });
+
+            expect(engine.Conversations).toHaveLength(0);
+            expect(engine.GetSharedByInfo('c-colleague')).toBeNull();
+        });
+
+        describe('folders shared through a User or a Role grant', () => {
+            /** user-1, holding role-1, as LoadProjects/LoadConversations see them. */
+            const viewerWithRole = () => {
+                const viewer = new UserInfo();
+                viewer.ID = 'user-1';
+                (viewer as unknown as { UserRoles: unknown[] }).UserRoles = [{ RoleID: 'role-1' }];
+                return viewer;
+            };
+            const grant = (projectId: string, overrides: Record<string, unknown>) => ({
+                ResourceTypeID: PROJECTS_RESOURCE_TYPE_ID,
+                ResourceRecordID: projectId,
+                Status: 'Approved',
+                UserID: null,
+                RoleID: null,
+                PermissionLevel: 'View',
+                SharedByUserID: null,
+                SharedByUser: null,
+                ...overrides,
+            });
+            const engineHandlers = () =>
+                engine as unknown as {
+                    handleProjectEntityEvent(e: Record<string, unknown>, action: string, d: Record<string, unknown> | null): boolean;
+                    handleConversationEntityEvent(e: Record<string, unknown>, action: string, d: Record<string, unknown> | null): boolean;
+                };
+
+            it('keeps both folders, and their conversations, when another user saves them', async () => {
+                (ResourcePermissionEngine.Instance as unknown as { Permissions: unknown[] }).Permissions = [
+                    grant('proj-user', { Type: 'User', UserID: 'user-1' }),
+                    grant('proj-role', { Type: 'Role', RoleID: 'role-1' }),
+                ];
+                const viewer = viewerWithRole();
+                runViewResultQueue.push({
+                    Success: true,
+                    Results: [
+                        createSharedOrPersonalProject({ ID: 'proj-user', OwnerUserID: 'user-2' }),
+                        createSharedOrPersonalProject({ ID: 'proj-role', OwnerUserID: 'user-3' }),
+                    ],
+                });
+                await engine.LoadProjects('env-1', viewer);
+                runViewResultQueue.push({
+                    Success: true,
+                    Results: [
+                        createMockConversation({ ID: 'c-user', UserID: 'user-2', ProjectID: 'proj-user', AdditionalData: INHERITS }),
+                        createMockConversation({ ID: 'c-role', UserID: 'user-3', ProjectID: 'proj-role', AdditionalData: INHERITS }),
+                    ],
+                });
+                runViewResultQueue.push({ Success: true, Results: [] });
+                await engine.LoadConversations('env-1', viewer);
+                expect(engine.Conversations).toHaveLength(2);
+
+                // The owners rename their folders; each event re-checks whether this viewer still sees the folder.
+                for (const [id, owner] of [['proj-user', 'user-2'], ['proj-role', 'user-3']]) {
+                    const row = { ID: id, Name: 'Renamed', EnvironmentID: 'env-1', OwnerUserID: owner, IsArchived: false };
+                    engineHandlers().handleProjectEntityEvent({ baseEntity: null, payload: { recordData: JSON.stringify(row) } }, 'save', row);
+                }
+
+                expect(engine.Projects.map((p) => p.ID).sort()).toEqual(['proj-role', 'proj-user']);
+                expect(engine.Conversations.map((c) => c.ID).sort()).toEqual(['c-role', 'c-user']);
+            });
+
+            it('gives a conversation that arrives by event the Role grant\'s level, not View', async () => {
+                (ResourcePermissionEngine.Instance as unknown as { Permissions: unknown[] }).Permissions = [
+                    grant('proj-role', { Type: 'Role', RoleID: 'role-1', PermissionLevel: 'Edit' }),
+                ];
+                const viewer = viewerWithRole();
+                runViewResultQueue.push({
+                    Success: true,
+                    Results: [createSharedOrPersonalProject({ ID: 'proj-role', OwnerUserID: 'user-3' })],
+                });
+                await engine.LoadProjects('env-1', viewer);
+                runViewResultQueue.push({ Success: true, Results: [] });
+                await engine.LoadConversations('env-1', viewer);
+
+                const row = { ID: 'c-new', UserID: 'user-3', ProjectID: 'proj-role', AdditionalData: INHERITS, EnvironmentID: 'env-1', IsArchived: false };
+                const conversation = createMockConversation(row);
+                engineHandlers().handleConversationEntityEvent({ baseEntity: conversation }, 'save', row);
+
+                expect(engine.GetSharedByInfo('c-new')?.Level).toBe('Edit');
+            });
+
+            it('answers with the Role grant\'s level when no contextUser is passed after a load', async () => {
+                (ResourcePermissionEngine.Instance as unknown as { Permissions: unknown[] }).Permissions = [
+                    grant('proj-role', { Type: 'Role', RoleID: 'role-1', PermissionLevel: 'Edit' }),
+                ];
+                runViewResultQueue.push({
+                    Success: true,
+                    Results: [createSharedOrPersonalProject({ ID: 'proj-role', OwnerUserID: 'user-3' })],
+                });
+                await engine.LoadProjects('env-1', viewerWithRole());
+
+                expect(engine.GetEffectiveProjectPermission('proj-role')?.Level).toBe('Edit');
+            });
+        });
+
+        it('classifies folders into Private, Shared (ACL), and Public tiers from each folder\'s own grants, as the server does', async () => {
+            const privateProject = createSharedOrPersonalProject({ ID: 'proj-priv', OwnerUserID: 'user-1' });
+            const sharedProject = createSharedOrPersonalProject({ ID: 'proj-acl', OwnerUserID: 'user-2' });
+            const childSubfolder = createSharedOrPersonalProject({
+                ID: 'proj-sub',
+                OwnerUserID: 'user-2',
+                ParentID: 'proj-acl',
+            });
+            const publicProject = createSharedOrPersonalProject({ ID: 'proj-pub', OwnerUserID: null });
+
+            (ResourcePermissionEngine.Instance as unknown as { Permissions: unknown[] }).Permissions = [
+                {
+                    ResourceTypeID: PROJECTS_RESOURCE_TYPE_ID,
+                    ResourceRecordID: 'proj-acl',
+                    Status: 'Approved',
+                    Type: 'User',
+                    UserID: 'user-1',
+                    RoleID: null,
+                    PermissionLevel: 'Edit',
+                    SharedByUserID: 'user-2',
+                    SharedByUser: 'Colleague Two',
+                },
+            ];
+
+            runViewResultQueue.push({
+                Success: true,
+                Results: [privateProject, sharedProject, childSubfolder, publicProject],
+            });
+            await engine.LoadProjects('env-1', contextUser);
+
+            // LoadProjects query includes shared project IDs from ResourcePermissionEngine
+            const projectQuery = runViewParamsLog.find((p) => p['EntityName'] === 'MJ: Projects')!;
+            expect(String(projectQuery['ExtraFilter'])).toContain("OR ID IN ('proj-acl')");
+
+            expect(engine.GetProjectVisibilityTier(privateProject as never)).toBe('Private');
+            expect(engine.GetProjectVisibilityTier(sharedProject as never)).toBe('Shared');
+            expect(engine.GetProjectVisibilityTier(publicProject as never)).toBe('Public');
+
+            // The grant on 'proj-acl' gives Edit there...
+            expect(engine.GetEffectiveProjectPermission('proj-acl', contextUser)).toEqual({
+                Level: 'Edit',
+                SharedByUserID: 'user-2',
+                SharedByUser: 'Colleague Two',
+            });
+            // ...but not on its subfolder: the server's read filter and write check see each folder's own
+            // grants only, so the subfolder is Private and carries only the View any visible folder gives.
+            expect(engine.GetProjectVisibilityTier(childSubfolder as never)).toBe('Private');
+            expect(engine.GetEffectiveProjectPermission('proj-sub', contextUser)?.Level).toBe('View');
+
+            // A conversation directly in the Shared folder inherits its Edit access: it can be pinned,
+            // but only its owner can move it or change its folder inheritance.
+            const colleagueConvoInSharedFolder = createMockConversation({
+                ID: 'c-acl',
+                UserID: 'user-2',
+                User: 'Colleague Two',
+                ProjectID: 'proj-acl',
+                AdditionalData: INHERITS,
+            });
+            runViewResultQueue.push({ Success: true, Results: [colleagueConvoInSharedFolder] });
+            runViewResultQueue.push({
+                Success: true,
+                Results: [{ ID: 'user-2', Email: 'colleague@example.com' }],
+            });
+
+            await engine.LoadConversations('env-1', contextUser);
+
+            expect(engine.GetSharedByInfo('c-acl')?.Level).toBe('Edit');
+            expect(engine.CanEditConversation(colleagueConvoInSharedFolder as never, 'user-1')).toBe(true);
+            expect(engine.CanMoveConversation(colleagueConvoInSharedFolder as never, 'user-1')).toBe(false);
+            expect(engine.CanMoveConversation(colleagueConvoInSharedFolder as never, 'user-2')).toBe(true);
+        });
+
+        it('keeps a conversation in a Shared or Public folder private unless its owner turns on InheritFolderAccess', async () => {
+            expect(IsInheritingFolderAccess({ AdditionalData: null })).toBe(false);
+            expect(IsInheritingFolderAccess({ AdditionalData: '{"x":1}' })).toBe(false);
+            expect(IsInheritingFolderAccess({ AdditionalData: '{"inheritFolderAccess":false}' })).toBe(false);
+            expect(IsInheritingFolderAccess({ AdditionalData: '{"x":{"inheritFolderAccess":true}}' })).toBe(false);
+            expect(IsInheritingFolderAccess({ AdditionalData: INHERITS })).toBe(true);
+            expect(IsInheritingFolderAccess({ AdditionalData: '{"inheritFolderAccess": true}' })).toBe(true);
+            expect(IsInheritingFolderAccess({ AdditionalData: '{"inheritFolderAccess": true, broken' })).toBe(true);
+
+            // The SQL clause the conversation list and search filter on is pinned to the exact opt-in predicate
+            // and agrees with the parser on both spellings.
+            expect(INHERIT_FOLDER_ACCESS_SQL_CLAUSE).toBe(
+                `(AdditionalData LIKE '%"inheritFolderAccess":true%' OR AdditionalData LIKE '%"inheritFolderAccess": true%')`
+            );
+            const likePatterns = [...INHERIT_FOLDER_ACCESS_SQL_CLAUSE.matchAll(/LIKE '%([^%']+)%'/g)].map((m) => m[1]);
+            expect(likePatterns).toHaveLength(2);
+            const clauseInherits = (data: string) => likePatterns.some((pattern) => data.includes(pattern));
+            for (const data of [INHERITS, '{"x":1,"inheritFolderAccess": true}', '{"inheritFolderAccess":false}', '{"x":1}']) {
+                expect(clauseInherits(data)).toBe(IsInheritingFolderAccess({ AdditionalData: data }));
+            }
+
+            const enabledJson = BuildUpdatedAdditionalDataForFolderInheritance('{"customKey":1}', true);
+            expect(JSON.parse(enabledJson!)).toEqual({ customKey: 1, inheritFolderAccess: true });
+            const disabledJson = BuildUpdatedAdditionalDataForFolderInheritance(enabledJson, false);
+            expect(JSON.parse(disabledJson!)).toEqual({ customKey: 1 });
+            expect(BuildUpdatedAdditionalDataForFolderInheritance(INHERITS, false)).toBeNull();
+
+            runViewResultQueue.push({
+                Success: true,
+                Results: [createSharedOrPersonalProject({ ID: 'proj-pub', OwnerUserID: null })],
+            });
+            await engine.LoadProjects('env-1', contextUser);
+
+            const notInheriting = createMockConversation({
+                ID: 'c-private',
+                UserID: 'user-2',
+                User: 'Colleague Two',
+                ProjectID: 'proj-pub',
+                AdditionalData: null,
+            });
+            runViewResultQueue.push({ Success: true, Results: [notInheriting] });
+
+            await engine.LoadConversations('env-1', contextUser);
+
+            // Without the opt-in, a folder's audience gets no access, and the list drops the row.
+            expect(engine.Conversations).toHaveLength(0);
+            expect(engine.GetSharedByInfo('c-private')).toBeNull();
+            expect(engine.CanEditConversation(notInheriting as never, 'user-1')).toBe(false);
+        });
+    });
 });
+
+
 

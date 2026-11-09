@@ -19,6 +19,7 @@ import {
     DatasetItemFilterType,
     ILocalStorageProvider,
     EntityMergeOptions,
+    GetRecordDependenciesOptions,
     PotentialDuplicateResult
 } from '../../generic/interfaces';
 import { UserInfo } from '../../generic/securityInfo';
@@ -145,7 +146,7 @@ export class TestMetadataProvider extends ProviderBase {
         return user;
     }
 
-    public async GetRecordDependencies(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): Promise<RecordDependency[]> {
+    public async GetRecordDependencies(_entityName: string, _compositeKey: CompositeKey, _contextUser?: UserInfo | GetRecordDependenciesOptions, _options?: GetRecordDependenciesOptions): Promise<RecordDependency[]> {
         return [];
     }
 

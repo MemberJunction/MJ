@@ -5,12 +5,17 @@
  * Contract under test:
  *  - The save that creates the record returns as soon as the metadata row is written; provider
  *    provisioning runs detached, so the request that triggered it ("Auto" index creation from the
- *    UI) is never held while the provider works.
- *  - When the provider accepts the index, its metadata (ExternalID, Dimensions, Metric, spec) is
- *    written back onto the record (the MJ #4437 regression: without it every later embedding write
- *    fails on a dimension mismatch).
- *  - One provider call is bounded by CREATE_INDEX_TIMEOUT_MS. A provider that never answers is logged
- *    and released; it cannot pin the promise (and the provider client) forever.
+ *    UI) is never held while the provider works. Save() never throws over provisioning.
+ *  - The detached outcome is written onto the row's ProviderConfig (`provisionState`,
+ *    `provisionMessage`, `provisionCheckedAt`), so a row with no index behind it says so instead of
+ *    looking identical to one that has one:
+ *      provisioned    - the provider accepted; ExternalID/Dimensions/Metric are what it reported
+ *      failed         - the provider refused or the driver threw; the provider's message is kept
+ *      timed-out      - no answer within CREATE_INDEX_TIMEOUT_MS; not "failed", it may still finish
+ *      not-applicable - the driver owns no index objects (ManagesIndexes === false)
+ *      unprovisioned  - no driver instance could be built in this process
+ *  - One provider call is bounded by CREATE_INDEX_TIMEOUT_MS. A provider that never answers is
+ *    recorded and released; it cannot pin the promise (and the provider client) forever.
  *  - Saving an existing record does not touch the provider.
  *
  * Every collaborator is doubled: the generated base entity (settable fields + a Save spy), the
@@ -46,7 +51,9 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     };
 });
 
-const superSaveMock = vi.fn();
+/** Counts every `super.Save()` the subclass performs, and lets a test fail one. */
+const superSaveMock = vi.fn(async (): Promise<boolean> => true);
+const superDeleteMock = vi.fn(async (): Promise<boolean> => true);
 vi.mock('@memberjunction/core-entities', () => {
     class MockMJVectorIndexEntity {
         public ID = 'IDX00000-0000-0000-0000-000000000001';
@@ -68,9 +75,14 @@ vi.mock('@memberjunction/core-entities', () => {
             return {};
         }
         public async Save(): Promise<boolean> {
-            superSaveMock();
-            this.everSaved = true;
-            return true;
+            const ok = await superSaveMock();
+            if (ok) {
+                this.everSaved = true;
+            }
+            return ok;
+        }
+        public async Delete(): Promise<boolean> {
+            return superDeleteMock();
         }
     }
     return { MJVectorIndexEntity: MockMJVectorIndexEntity, MJVectorDatabaseEntity: class {} };
@@ -115,12 +127,16 @@ async function flushMicrotasks(rounds = 20): Promise<void> {
 }
 
 const createIndexMock = vi.fn();
-const fakeVectorDB = {
-    CreateIndex: (...args: unknown[]) => createIndexMock(...args),
-    TryWireColocatedHost: vi.fn(),
-    SupportsColocatedQuery: false,
-    RequiresAPIKey: true,
+const deleteIndexMock = vi.fn();
+type FakeVectorDB = {
+    ManagesIndexes: boolean;
+    CreateIndex: (...args: unknown[]) => unknown;
+    DeleteIndex: (...args: unknown[]) => unknown;
+    TryWireColocatedHost: ReturnType<typeof vi.fn>;
+    SupportsColocatedQuery: boolean;
+    RequiresAPIKey: boolean;
 };
+let fakeVectorDB: FakeVectorDB;
 
 function makeNewIndex(): MJVectorIndexEntityServer {
     return new MJVectorIndexEntityServer();
@@ -130,13 +146,32 @@ function logged(pattern: RegExp): boolean {
     return logErrorMock.mock.calls.some(call => call.some(arg => pattern.test(String(arg instanceof Error ? arg.message : arg))));
 }
 
+/** The ProviderConfig JSON bag, parsed; `{}` while nothing has been written. */
+function providerConfigOf(index: MJVectorIndexEntityServer): Record<string, unknown> {
+    return JSON.parse(index.ProviderConfig ?? '{}') as Record<string, unknown>;
+}
+
+function provisionStateOf(index: MJVectorIndexEntityServer): unknown {
+    return providerConfigOf(index)['provisionState'];
+}
+
 describe('MJVectorIndexEntityServer.Save', () => {
     beforeEach(() => {
-        createInstanceMock.mockReset().mockReturnValue(fakeVectorDB);
+        fakeVectorDB = {
+            ManagesIndexes: true,
+            CreateIndex: (...args: unknown[]) => createIndexMock(...args),
+            DeleteIndex: (...args: unknown[]) => deleteIndexMock(...args),
+            TryWireColocatedHost: vi.fn(),
+            SupportsColocatedQuery: false,
+            RequiresAPIKey: true,
+        };
+        createInstanceMock.mockReset().mockImplementation(() => fakeVectorDB);
         runViewMock.mockReset().mockResolvedValue({ Success: true, Results: [{ Name: 'Pinecone', ClassKey: 'PineconeDatabase' }] });
         createIndexMock.mockReset();
+        deleteIndexMock.mockReset().mockResolvedValue({ success: true, message: '' });
         runEmbeddingMock.mockReset().mockResolvedValue({ Success: false, Vectors: [], ErrorMessage: 'no credentials (test default)' });
-        superSaveMock.mockReset();
+        superSaveMock.mockReset().mockResolvedValue(true);
+        superDeleteMock.mockClear();
         logErrorMock.mockReset();
         logStatusMock.mockReset();
     });
@@ -159,7 +194,7 @@ describe('MJVectorIndexEntityServer.Save', () => {
         expect(createIndexMock.mock.calls[0][0]).toMatchObject({ id: 'my-index', dimension: 1536, metric: 'cosine' });
     });
 
-    it('writes the provider metadata back onto the record once the provider accepts the index', async () => {
+    it('writes the provider metadata back onto the record, stamped provisioned, once the provider accepts the index', async () => {
         createIndexMock.mockResolvedValue({ success: true, data: { host: 'my-index-abc.svc.pinecone.io', status: { ready: false } } });
         const index = makeNewIndex();
         index.Dimensions = 384;
@@ -170,10 +205,50 @@ describe('MJVectorIndexEntityServer.Save', () => {
         expect(index.ExternalID).toBe('my-index');
         expect(index.Dimensions).toBe(384);
         expect(index.Metric).toBe('cosine');
-        const config = JSON.parse(index.ProviderConfig ?? '{}');
-        expect(config.host).toBe('my-index-abc.svc.pinecone.io');
-        expect(config.spec).toEqual({ serverless: { cloud: 'aws', region: 'us-east-1' } });
+        const config = providerConfigOf(index);
+        expect(config['host']).toBe('my-index-abc.svc.pinecone.io');
+        expect(config['spec']).toEqual({ serverless: { cloud: 'aws', region: 'us-east-1' } });
+        expect(config['provisionState']).toBe('provisioned');
+        expect(typeof config['provisionCheckedAt']).toBe('string');
+        expect(config['provisionMessage']).toBeUndefined();
         expect(createIndexMock.mock.calls[0][0]).toMatchObject({ dimension: 384 });
+    });
+
+    it('writes back the provider\'s own dimension and metric, not the ones it asked for', async () => {
+        // Metric used to be hardcoded 'cosine' at the request site and then written straight back, so
+        // the column could only ever echo our own constant and never disagree with the provider.
+        createIndexMock.mockResolvedValue({ success: true, data: { dimension: 768, metric: 'dotproduct' } });
+        const index = makeNewIndex();
+        index.Dimensions = 1536;
+
+        await index.Save();
+        await vi.waitFor(() => expect(provisionStateOf(index)).toBe('provisioned'));
+
+        expect(createIndexMock.mock.calls[0][0]).toMatchObject({ dimension: 1536 });
+        expect(index.Dimensions).toBe(768);
+        expect(index.Metric).toBe('dotproduct');
+    });
+
+    it('requests the metric stated on the row rather than always cosine', async () => {
+        createIndexMock.mockResolvedValue({ success: true, data: {} });
+        const index = makeNewIndex();
+        index.Metric = 'Euclidean';
+
+        await index.Save();
+        await vi.waitFor(() => expect(createIndexMock).toHaveBeenCalledTimes(1));
+
+        expect(createIndexMock.mock.calls[0][0]).toMatchObject({ metric: 'euclidean' });
+    });
+
+    it('preserves driver-specific ProviderConfig keys when it stamps the outcome', async () => {
+        createIndexMock.mockResolvedValue({ success: true, data: {} });
+        const index = makeNewIndex();
+        index.ProviderConfig = JSON.stringify({ namespaceField: 'tenant' });
+
+        await index.Save();
+        await vi.waitFor(() => expect(provisionStateOf(index)).toBe('provisioned'));
+
+        expect(providerConfigOf(index)['namespaceField']).toBe('tenant');
     });
 
     it('clears its timer once the provider answers, so a fast create leaves nothing pending and never times out', async () => {
@@ -189,21 +264,39 @@ describe('MJVectorIndexEntityServer.Save', () => {
         await vi.advanceTimersByTimeAsync(MJVectorIndexEntityServer.CREATE_INDEX_TIMEOUT_MS + 1);
         expect(logged(/timed out/)).toBe(false);
         expect(index.ExternalID).toBe('my-index');
+        expect(provisionStateOf(index)).toBe('provisioned');
     });
 
-    it('does not write metadata back when the provider refuses the index', async () => {
-        createIndexMock.mockResolvedValue({ success: false, message: 'quota exceeded' });
+    it('records failed, with the provider\'s message, when the provider refuses the index; Save still resolves true', async () => {
+        createIndexMock.mockResolvedValue({ success: false, message: 'quota exceeded for project' });
         const index = makeNewIndex();
 
-        await index.Save();
-        await flushMicrotasks();
+        await expect(index.Save()).resolves.toBe(true);
+        await vi.waitFor(() => expect(provisionStateOf(index)).toBe('failed'));
 
-        expect(superSaveMock).toHaveBeenCalledTimes(1);
+        const config = providerConfigOf(index);
+        expect(config['provisionMessage']).toBe('quota exceeded for project');
+        expect(typeof config['provisionCheckedAt']).toBe('string');
+        // Nothing on the row claims an index exists.
         expect(index.ExternalID).toBeNull();
-        expect(logged(/quota exceeded/)).toBe(true);
+        expect(index.Dimensions).toBeNull();
+        // The log says what was recorded, not "marked unprovisioned".
+        expect(logged(/NOT created.*quota exceeded for project.*provisionState "failed"/)).toBe(true);
+        expect(logged(/unprovisioned/)).toBe(false);
     });
 
-    it('bounds a provider call that never answers: logs the timeout and skips the write-back', async () => {
+    it('records failed when the driver throws instead of reporting failure', async () => {
+        createIndexMock.mockRejectedValue(new Error('ECONNREFUSED api.pinecone.io'));
+        const index = makeNewIndex();
+
+        await expect(index.Save()).resolves.toBe(true);
+        await vi.waitFor(() => expect(provisionStateOf(index)).toBe('failed'));
+
+        expect(providerConfigOf(index)['provisionMessage']).toBe('ECONNREFUSED api.pinecone.io');
+        expect(index.ExternalID).toBeNull();
+    });
+
+    it('bounds a provider call that never answers, and records timed-out rather than failed', async () => {
         vi.useFakeTimers();
         createIndexMock.mockReturnValue(new Promise(() => undefined));
         const index = makeNewIndex();
@@ -214,13 +307,92 @@ describe('MJVectorIndexEntityServer.Save', () => {
 
         await vi.advanceTimersByTimeAsync(MJVectorIndexEntityServer.CREATE_INDEX_TIMEOUT_MS - 1);
         expect(logged(/timed out/)).toBe(false);
+        expect(provisionStateOf(index)).toBeUndefined();
 
         await vi.advanceTimersByTimeAsync(1);
         await flushMicrotasks();
 
         expect(logged(/timed out/)).toBe(true);
-        expect(superSaveMock).toHaveBeenCalledTimes(1);
+        expect(provisionStateOf(index)).toBe('timed-out');
+        expect(String(providerConfigOf(index)['provisionMessage'])).toMatch(/may still finish/);
         expect(index.ExternalID).toBeNull();
+        // The only write after the row save is the recorded state; nothing the provider might
+        // eventually return is written back.
+        expect(superSaveMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not call the provider, and records not-applicable, for a driver that owns no index objects', async () => {
+        // MJ ships a Vector Index row for SimpleVectorServiceProvider, whose CreateIndex correctly
+        // answers success:false; that is not a provisioning failure.
+        fakeVectorDB.ManagesIndexes = false;
+        const index = makeNewIndex();
+
+        await expect(index.Save()).resolves.toBe(true);
+        await vi.waitFor(() => expect(provisionStateOf(index)).toBe('not-applicable'));
+
+        expect(createIndexMock).not.toHaveBeenCalled();
+        expect(logged(/NOT created/)).toBe(false);
+    });
+
+    it('adopts the provider index a new record names through ExternalID, and creates nothing', async () => {
+        // An Open App ships its index row with ExternalID set (More Cheese: morecheese-duplicates).
+        // Creating one from Name would leave an empty index behind and repoint the row at it.
+        const index = makeNewIndex();
+        index.ExternalID = 'morecheese-duplicates';
+
+        await expect(index.Save()).resolves.toBe(true);
+        await vi.waitFor(() => expect(provisionStateOf(index)).toBe('adopted'));
+
+        expect(createIndexMock).not.toHaveBeenCalled();
+        expect(index.ExternalID).toBe('morecheese-duplicates');
+        expect(String(providerConfigOf(index)['provisionMessage'])).toMatch(/"morecheese-duplicates" names an existing provider index/);
+        expect(logged(/NOT created/)).toBe(false);
+    });
+
+    it('provisions as before when ExternalID is blank', async () => {
+        createIndexMock.mockResolvedValue({ success: true, data: {} });
+        const index = makeNewIndex();
+        index.ExternalID = '   ';
+
+        await expect(index.Save()).resolves.toBe(true);
+        await vi.waitFor(() => expect(provisionStateOf(index)).toBe('provisioned'));
+
+        expect(createIndexMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('records unprovisioned when no driver instance could be built in this process', async () => {
+        createInstanceMock.mockReturnValue(null);
+        const index = makeNewIndex();
+
+        await expect(index.Save()).resolves.toBe(true);
+        await vi.waitFor(() => expect(provisionStateOf(index)).toBe('unprovisioned'));
+
+        expect(String(providerConfigOf(index)['provisionMessage'])).toMatch(/No vector DB driver instance/);
+        expect(index.ExternalID).toBeNull();
+    });
+
+    it('records unprovisioned when the Vector Database row cannot be resolved', async () => {
+        runViewMock.mockResolvedValue({ Success: true, Results: [] });
+        const index = makeNewIndex();
+
+        await index.Save();
+        await vi.waitFor(() => expect(provisionStateOf(index)).toBe('unprovisioned'));
+
+        expect(createIndexMock).not.toHaveBeenCalled();
+        expect(logged(/not found/)).toBe(true);
+    });
+
+    it('says the index exists when the write-back after a successful create fails, without throwing', async () => {
+        createIndexMock.mockResolvedValue({ success: true, data: {} });
+        superSaveMock.mockReset().mockResolvedValueOnce(true).mockResolvedValue(false);
+        const index = makeNewIndex();
+        index.LatestResult = { CompleteMessage: 'deadlock victim' };
+
+        await expect(index.Save()).resolves.toBe(true);
+        await vi.waitFor(() => expect(superSaveMock).toHaveBeenCalledTimes(2));
+        await flushMicrotasks();
+
+        expect(logged(/WAS created.*deadlock victim.*ExternalID to "my-index"/)).toBe(true);
     });
 
     it('provisions an auto-generated (already slug-form) name unchanged, so the provider index is the one the sync targets', async () => {
@@ -305,7 +477,7 @@ describe('MJVectorIndexEntityServer.Save', () => {
             expect(logged(/fallback/)).toBe(true);
         });
 
-        it('falls back when the probe throws or hangs, without blocking the create', async () => {
+        it('falls back when the probe throws or hangs, without blocking the create or recording a timeout', async () => {
             vi.useFakeTimers();
             runEmbeddingMock.mockReturnValue(new Promise(() => undefined));
             createIndexMock.mockResolvedValue({ success: true, data: {} });
@@ -322,6 +494,8 @@ describe('MJVectorIndexEntityServer.Save', () => {
             expect(createIndexMock).toHaveBeenCalledTimes(1);
             expect(createIndexMock.mock.calls[0][0]).toMatchObject({ dimension: MJVectorIndexEntityServer.DEFAULT_DIMENSIONS });
             expect(logged(/timed out/)).toBe(true);
+            // A slow probe is not a slow provider: the create still ran and the row is provisioned.
+            expect(provisionStateOf(index)).toBe('provisioned');
         });
 
         it('skips the probe and falls back when the record names no embedding model', async () => {
@@ -348,16 +522,55 @@ describe('MJVectorIndexEntityServer.Save', () => {
 
         expect(superSaveMock).toHaveBeenCalledTimes(1);
         expect(createIndexMock).not.toHaveBeenCalled();
+        expect(index.ProviderConfig).toBeNull();
+    });
+});
+
+describe('MJVectorIndexEntityServer.Delete', () => {
+    beforeEach(() => {
+        fakeVectorDB = {
+            ManagesIndexes: true,
+            CreateIndex: (...args: unknown[]) => createIndexMock(...args),
+            DeleteIndex: (...args: unknown[]) => deleteIndexMock(...args),
+            TryWireColocatedHost: vi.fn(),
+            SupportsColocatedQuery: false,
+            RequiresAPIKey: true,
+        };
+        createInstanceMock.mockReset().mockImplementation(() => fakeVectorDB);
+        runViewMock.mockReset().mockResolvedValue({ Success: true, Results: [{ Name: 'Pinecone', ClassKey: 'PineconeDatabase' }] });
+        deleteIndexMock.mockReset().mockResolvedValue({ success: true, message: '' });
+        superDeleteMock.mockClear();
+        logErrorMock.mockReset();
     });
 
-    it('logs and gives up when the Vector Database row cannot be resolved', async () => {
-        runViewMock.mockResolvedValue({ Success: true, Results: [] });
+    it('deletes the provider index by its provider-side name', async () => {
+        const index = makeNewIndex();
+        index.ExternalID = 'my-index';
+
+        await expect(index.Delete()).resolves.toBe(true);
+
+        expect(deleteIndexMock).toHaveBeenCalledWith({ id: 'my-index' });
+        expect(superDeleteMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves an adopted provider index in place: MJ never created it', async () => {
+        const index = makeNewIndex();
+        index.ExternalID = 'morecheese-duplicates';
+        index.ProviderConfig = JSON.stringify({ provisionState: 'adopted' });
+
+        await expect(index.Delete()).resolves.toBe(true);
+
+        expect(deleteIndexMock).not.toHaveBeenCalled();
+        expect(superDeleteMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not ask a driver that owns no index objects to delete one', async () => {
+        fakeVectorDB.ManagesIndexes = false;
         const index = makeNewIndex();
 
-        await index.Save();
-        await flushMicrotasks();
+        await expect(index.Delete()).resolves.toBe(true);
 
-        expect(createIndexMock).not.toHaveBeenCalled();
-        expect(logged(/not found/)).toBe(true);
+        expect(deleteIndexMock).not.toHaveBeenCalled();
+        expect(superDeleteMock).toHaveBeenCalledTimes(1);
     });
 });

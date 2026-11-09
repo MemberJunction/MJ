@@ -11,7 +11,15 @@
  *
  * The single source of truth for the check and its wording, shared by the scoring
  * processor's run-level preflight and the promotion gate.
+ *
+ * A trained model is also refused when the sidecar's `/predict` does not serve its artifact: a forecast whose shipped
+ * artifact is a series forecaster (a series model or a series baseline) is refused there (`SeriesForecasterNotServedError`),
+ * so the promotion gate never publishes one and scoring refuses it up front ({@link ModelReadiness}).
  */
+
+import type { MJMLModelEntity } from '@memberjunction/core-entities';
+
+import { TrainerModelLineageReader } from '../training/trainer-model-lineage';
 
 /** The minimal model shape the readiness check reads. */
 export interface ModelArtifactRef {
@@ -68,5 +76,83 @@ export class ModelNeedsTrainingError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'ModelNeedsTrainingError';
+  }
+}
+
+/** The minimal model shape the `/predict` servability check reads. */
+export interface ModelServingRef {
+  /** The model's id (for the message). */
+  ID: string;
+  /** The model's `Lineage` JSON; its `shippedDriver` names the driver of the shipped artifact. */
+  Lineage: string | null | undefined;
+}
+
+/**
+ * Whether the sidecar's `/predict` serves a trained model's artifact. `/predict` scores rows with a trainer predictor
+ * only; a forecast's series model or series baseline is refused there (`load_v2_envelope` in the sidecar's
+ * `app/artifacts.py`), so such a model must never be published or bound to scoring. A forecast unit's tabular finalist
+ * is a trainer predictor and is served.
+ */
+export class ModelReadiness {
+  /**
+   * The driver keys whose artifact is a series forecaster: the sidecar's series algorithms (`SERIES_ALGOS`) and series
+   * baseline kinds (`BaselineKind`) in `app/temporal.py`. A test compares the two lists.
+   */
+  public static readonly SeriesForecasterDrivers: readonly string[] = ['ar1_const', 'trend_season_ols', 'trend_season_ar1', 'naive', 'seasonal-naive', 'mean'];
+
+  /**
+   * True unless the model's Lineage names a series forecaster as the driver of its shipped artifact. A model whose
+   * Lineage names no shipped driver (trained before the trainer recorded one) is served, as before.
+   *
+   * @param model the model's id and Lineage
+   */
+  public static IsServedByPredict(model: ModelServingRef): boolean {
+    const driver = TrainerModelLineageReader.ShippedDriverOf(model.Lineage);
+    return driver === null || !ModelReadiness.SeriesForecasterDrivers.includes(driver);
+  }
+
+  /**
+   * The plain-language refusal for a model whose artifact `/predict` does not serve.
+   *
+   * @param modelId the `MJ: ML Models` id
+   */
+  public static NotServedByPredictMessage(modelId: string): string {
+    return (
+      `ML Model '${modelId}' cannot be published or score records: forecast models are not served by /predict yet, ` +
+      `and this model's artifact is a forecast's series forecaster. Keep it for review in Predictive Studio, or train ` +
+      `the forecast with a tabular algorithm to get a model that scores.`
+    );
+  }
+}
+
+/**
+ * Thrown when a model's artifact is not served by the sidecar's `/predict` ({@link ModelReadiness.IsServedByPredict}).
+ * Distinct from "needs training" so auto-train never retrains for it (a retrain would ship the same kind of artifact).
+ */
+export class ModelNotServableError extends Error {
+  constructor(public readonly ModelID: string) {
+    super(`MLModelInferenceProcessor: ${ModelReadiness.NotServedByPredictMessage(ModelID)}`);
+    this.name = 'ModelNotServableError';
+  }
+}
+
+/**
+ * Thrown when a model's lifecycle status forbids scoring. Distinct from "needs training" so auto-train never reacts
+ * to it. Only Validated (preview) and Published models score (containment of F-SCO-1; the lifecycle gate's
+ * publish rules own the final rule).
+ */
+export class ModelNotScorableError extends Error {
+  constructor(public readonly ModelID: string, public readonly Status: MJMLModelEntity['Status']) {
+    super(`MLModelInferenceProcessor: ${ModelNotScorableError.Message(ModelID, Status)}`);
+    this.name = 'ModelNotScorableError';
+  }
+
+  /** The refusal message for a model whose status may not score. */
+  public static Message(modelId: string, status: MJMLModelEntity['Status']): string {
+    const next =
+      status === 'Draft'
+        ? 'Move it to Validated through the promotion gate first.'
+        : 'Score with a Published version of the pipeline, or un-archive this model through the promotion gate.';
+    return `ML Model '${modelId}' is ${status} and cannot score records: only Validated or Published models score. ${next}`;
   }
 }

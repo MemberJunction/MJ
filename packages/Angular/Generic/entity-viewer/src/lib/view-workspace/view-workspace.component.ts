@@ -17,7 +17,8 @@ import {
   MJUserViewEntity_IGridState,
   MJUserViewEntity_IGridColumnSetting,
   MJUserViewEntity_IGridSortSetting,
-  MJUserViewEntity_ISortStateItem
+  MJUserViewEntity_ISortStateItem,
+  MJUserViewEntity_IDisplayState
 } from '@memberjunction/core-entities';
 import { CompositeFilterDescriptor, FilterFieldInfo } from '@memberjunction/ng-filter-builder';
 import { ExportDialogConfig, ExportDialogResult } from '@memberjunction/ng-export-service';
@@ -243,6 +244,28 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   /** Partial {@link EntityViewerConfig} forwarded to the inner viewer (toolbar/pagination/etc.). */
   @Input() ViewerConfig: Partial<EntityViewerConfig> | null = null;
 
+  private _alternateBaseView: string | null = null;
+
+  /**
+   * Optional semantic name (`EntityAlternateBaseView.Name`) of an alternate base view to read from
+   * when no saved view is active or to override the active view's `AlternateBaseView`.
+   */
+  @Input()
+  get AlternateBaseView(): string | null {
+    return this._alternateBaseView;
+  }
+  set AlternateBaseView(value: string | null) {
+    this._alternateBaseView = value || null;
+  }
+
+  /**
+   * Effective alternate base view passed to `<mj-entity-viewer>`:
+   * explicit `@Input() AlternateBaseView` overrides the selected view's `AlternateBaseView`.
+   */
+  public get EffectiveAlternateBaseView(): string | null {
+    return this._alternateBaseView ?? this.CurrentViewEntity?.AlternateBaseView ?? null;
+  }
+
   // ========================================
   // OUTPUTS — routing / host concerns (this component never routes)
   // ========================================
@@ -284,6 +307,11 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
    * Two-way-binding companion for {@link SelectedView}.
    */
   @Output() SelectedViewChange = new EventEmitter<MJUserViewEntityExtended | null>();
+
+  /**
+   * Emitted when the active {@link AlternateBaseView} changes from the selector dropdown.
+   */
+  @Output() AlternateBaseViewChange = new EventEmitter<string | null>();
 
   // ----- Forwarded inner-viewer events (the generic, view-type-agnostic ones) -----
   //
@@ -366,6 +394,15 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
 
   /** Reference to the config panel (for building summaries + canEdit checks). */
   @ViewChild(ViewConfigPanelComponent) protected viewConfigPanelRef?: ViewConfigPanelComponent;
+
+  /**
+   * Reload the grid's rows without moving the user off their page or sort — for a
+   * host that learns its data changed elsewhere (e.g. a row was deleted from a form).
+   * See `EntityViewerComponent.RefreshInPlace`.
+   */
+  public RefreshInPlace(): void {
+    this.entityViewerRef?.RefreshInPlace();
+  }
 
   // ========================================
   // INTERNAL STATE (plain fields — no state service)
@@ -614,6 +651,9 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   /** Smart-filter prompt carried from quick-save dialog back into the config panel. */
   public PendingNewViewSmartFilterPrompt: string = '';
 
+  /** Alternate base view carried from quick-save dialog back into the config panel. */
+  public PendingNewViewAlternateBaseView: string | null = null;
+
   // ----- Filter dialog (rendered at workspace level for full width) -----
 
   /** Whether the full-width filter dialog is open. */
@@ -659,6 +699,22 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   /** Controls the workspace-level export dialog (the same generic dialog the grid uses). */
   public ShowExportDialog: boolean = false;
 
+  /**
+   * True only when the active view type does NOT provide its own toolbar Export button (e.g. Cards,
+   * Map, Timeline). When Grid is active, the grid toolbar already renders Export, so the top
+   * selector bar suppresses its duplicate Export icon.
+   */
+  public ShowFallbackExportButton: boolean = false;
+
+  /** Recomputes {@link ShowFallbackExportButton} when the inner viewer resolves or switches view types. */
+  public OnActiveViewTypeResolved(): void {
+    const next = !!this.entityViewerRef && !this.entityViewerRef.ActiveViewTypeHasOwnExport;
+    if (next !== this.ShowFallbackExportButton) {
+      this.ShowFallbackExportButton = next;
+      this.cdr.detectChanges();
+    }
+  }
+
   /** @deprecated Use {@link ShowExportDialog}. */
   public get showExportDialog(): boolean {
     return this.ShowExportDialog;
@@ -691,14 +747,14 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     const viewer = this.entityViewerRef;
     if (!viewer || !this._entity) {
       console.error('[ViewWorkspace] Export: viewer not ready', { hasViewer: !!viewer, hasEntity: !!this._entity });
-      MJNotificationService.Instance.CreateSimpleNotification('Export is not ready yet — try again in a moment.', 'error', 5000);
+      MJNotificationService.Instance?.CreateSimpleNotification('Export is not ready yet — try again in a moment.', 'error', 5000);
       return;
     }
-    MJNotificationService.Instance.CreateSimpleNotification('Preparing your export…', 'info', 2000);
+    MJNotificationService.Instance?.CreateSimpleNotification('Preparing your export…', 'info', 2000);
     try {
       const rows = await viewer.FetchAllRowsForExport();
       if (!rows || rows.length === 0) {
-        MJNotificationService.Instance.CreateSimpleNotification('Nothing to export — the view returned no records.', 'warning', 5000);
+        MJNotificationService.Instance?.CreateSimpleNotification('Nothing to export — the view returned no records.', 'warning', 5000);
         return;
       }
       this.ExportDialogConfig = {
@@ -714,7 +770,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       this.ShowExportDialog = true;
       this.cdr.detectChanges();
     } catch (e) {
-      MJNotificationService.Instance.CreateSimpleNotification('Error preparing export — see console for details.', 'error', 5000);
+      MJNotificationService.Instance?.CreateSimpleNotification('Error preparing export — see console for details.', 'error', 5000);
       console.error('[ViewWorkspace] Export error:', e);
     }
   }
@@ -888,12 +944,36 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     this.ViewModified = false;
     this.filterText = '';
 
+    if (this._alternateBaseView) {
+      this._alternateBaseView = null;
+      this.AlternateBaseViewChange.emit(null);
+    }
+
     this.CurrentGridState = event.View
       ? this.parseViewGridState(event.View)
       : this.loadUserDefaultGridState();
 
     this.ViewSelected.emit(event.View);
     this.SelectedViewChange.emit(event.View);
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Handle an Alternate Base View selection from the selector dropdown.
+   */
+  public OnAlternateBaseViewSelected(abvName: string | null): void {
+    this.entityViewerRef?.EnsurePendingChangesSaved();
+    this._alternateBaseView = abvName || null;
+    if (this.SelectedViewId || this.CurrentViewEntity) {
+      this.CurrentViewEntity = null;
+      this.SelectedViewId = null;
+      this.ViewModified = false;
+      this.filterText = '';
+      this.CurrentGridState = this.loadUserDefaultGridState();
+      this.ViewSelected.emit(null);
+      this.SelectedViewChange.emit(null);
+    }
+    this.AlternateBaseViewChange.emit(this._alternateBaseView);
     this.cdr.detectChanges();
   }
 
@@ -916,6 +996,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   /** Track loaded records so the config panel has sample data, and re-emit the full event. */
   public OnDataLoaded(event: DataLoadedEvent): void {
     this.LoadedRecords = event.records;
+    this.OnActiveViewTypeResolved();
     this.DataLoaded.emit(event);
   }
 
@@ -1018,6 +1099,9 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   /** Handle the selector's "configure view" request — open the config panel. */
   public OnConfigureViewRequested(): void {
     this.DefaultSaveAsNew = false;
+    if (!this.CurrentViewEntity && !this.PendingNewViewAlternateBaseView && this.EffectiveAlternateBaseView) {
+      this.PendingNewViewAlternateBaseView = this.EffectiveAlternateBaseView;
+    }
     this.IsConfigPanelOpen = true;
     this.cdr.detectChanges();
   }
@@ -1097,6 +1181,9 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   /** Handle the selector's "save view" request — open the config panel in the requested mode. */
   public OnSaveViewRequested(event: SaveViewRequestedEvent): void {
     this.DefaultSaveAsNew = event.SaveAsNew || false;
+    if (!this.PendingNewViewAlternateBaseView && this.EffectiveAlternateBaseView) {
+      this.PendingNewViewAlternateBaseView = this.EffectiveAlternateBaseView;
+    }
     this.IsConfigPanelOpen = true;
     this.cdr.detectChanges();
   }
@@ -1122,6 +1209,38 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     return this.OnCloseConfigPanel();
   }
 
+  /**
+   * Handle the config panel switching from "Save as New Named View" to "Personal Default Layout".
+   * Exits the new-view flow inside the open Studio session while deferring view deselection and
+   * `ViewSelected(null)` emission until the user commits "Save Default Layout" — so cancelling
+   * the Studio preserves the previously selected view, grid rows, and host URL deep link (#6037).
+   */
+  public OnSwitchToDefaultLayout(): void {
+    this.DefaultSaveAsNew = false;
+    this.PendingNewViewAlternateBaseView = null;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Commit deselection of any active saved view or ad-hoc alternate base view when saving the
+   * user's Personal Default Layout (#6037).
+   */
+  private deselectActiveViewForDefaultLayout(): void {
+    this.DefaultSaveAsNew = false;
+    this.PendingNewViewAlternateBaseView = null;
+    if (this._alternateBaseView) {
+      this._alternateBaseView = null;
+      this.AlternateBaseViewChange.emit(null);
+    }
+    if (this.CurrentViewEntity || this.SelectedViewId) {
+      this.CurrentViewEntity = null;
+      this.SelectedViewId = null;
+      this.ViewModified = false;
+      this.ViewSelected.emit(null);
+      this.SelectedViewChange.emit(null);
+    }
+  }
+
   /** Reset the carry-over state used when continuing a new-view flow into the config panel. */
   private clearPendingNewViewState(): void {
     this.PendingNewViewName = '';
@@ -1130,6 +1249,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     this.PendingNewViewFilterState = null;
     this.PendingNewViewSmartFilterEnabled = false;
     this.PendingNewViewSmartFilterPrompt = '';
+    this.PendingNewViewAlternateBaseView = null;
     this.DefaultSaveAsNew = false;
     this.pendingDefaultViewSave = null;
     this.QuickSaveSuggestedName = '';
@@ -1234,7 +1354,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     newView.EntityID = this._entity!.ID;
     newView.UserID = provider.CurrentUser.ID;
     newView.IsShared = event.IsShared;
-    newView.IsDefault = false;
+    newView.IsDefault = event.IsDefault ?? false;
 
     const gridState = this.buildGridState(event);
     if (gridState) {
@@ -1247,6 +1367,37 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     newView.SmartFilterEnabled = event.SmartFilterEnabled;
     newView.SmartFilterPrompt = event.SmartFilterPrompt;
     newView.FilterState = this.buildFilterStateJson(event);
+    newView.AlternateBaseView = event.AlternateBaseView || null;
+    if (this.CurrentViewEntity?.ViewTypeID) {
+      newView.ViewTypeID = this.CurrentViewEntity.ViewTypeID;
+    }
+    let strippedCustomWhereOnCopy = false;
+    if (event.CustomWhereClause !== undefined) {
+      const copyingExistingCustomWhereView =
+        !!this.CurrentViewEntity &&
+        (!UUIDsEqual(this.CurrentViewEntity.UserID, provider.CurrentUser?.ID) || Boolean(this.CurrentViewEntity.CustomWhereClause));
+      const isOwner = provider.CurrentUser?.Type?.trim().toLowerCase() === 'owner';
+      const canPersistCustomWhere =
+        !event.CustomWhereClause ||
+        isOwner ||
+        !copyingExistingCustomWhereView;
+      if (canPersistCustomWhere) {
+        newView.CustomWhereClause = event.CustomWhereClause;
+        if (event.CustomWhereClause && event.WhereClause !== undefined) {
+          newView.WhereClause = event.WhereClause;
+        }
+      } else {
+        strippedCustomWhereOnCopy = true;
+      }
+    }
+    const displayState = this.buildDisplayState(event, newView);
+    if (displayState) {
+      newView.DisplayStateObject = displayState;
+    }
+    if (event.CardDisplayState?.cardSize) {
+      newView.CardStateObject = { cardSize: event.CardDisplayState.cardSize };
+    }
+    this.applyProperties(newView, event);
 
     const before: WorkspaceCancelableEvent<ViewSaveOperation> = { Data: { View: newView, IsNew: true }, Cancel: false };
     this.BeforeViewSave.emit(before);
@@ -1256,18 +1407,44 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
 
     const saved = await newView.Save();
     if (!saved) {
-      LogError(`[ViewWorkspace] Failed to create view: ${newView.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+      const detail = newView.LatestResult?.CompleteMessage?.trim() || 'unknown error';
+      LogError(`[ViewWorkspace] Failed to create view: ${detail}`);
+      MJNotificationService.Instance?.CreateSimpleNotification(
+        `Failed to create view: ${detail}`,
+        'error',
+        5000
+      );
       return false;
+    }
+
+    if (strippedCustomWhereOnCopy) {
+      MJNotificationService.Instance?.CreateSimpleNotification(
+        'Saved copy without the custom SQL WHERE clause — only administrators (Owner-type users) can create views with custom SQL.',
+        'warning',
+        5000
+      );
+    }
+
+    if (newView.IsDefault) {
+      await this.clearOtherDefaultViewsForEntity(newView.ID);
     }
 
     this.CurrentViewEntity = newView;
     this.SelectedViewId = newView.ID;
+    this._alternateBaseView = null;
     this.ViewModified = false;
     this.CurrentGridState = this.parseViewGridState(newView);
     this.ViewSelected.emit(newView);
     this.SelectedViewChange.emit(newView);
     this.AfterViewSave.emit({ View: newView, IsNew: true });
     return true;
+  }
+
+  /** Copies the designer's properties onto the view; an empty list stores null, as a view without properties has. */
+  private applyProperties(view: MJUserViewEntityExtended, event: ViewSaveEvent): void {
+    if (event.Properties !== undefined) {
+      view.PropertiesObject = event.Properties.length > 0 ? event.Properties : null;
+    }
   }
 
   /**
@@ -1279,6 +1456,9 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     view.Name = event.Name;
     view.Description = event.Description;
     view.IsShared = event.IsShared;
+    if (event.IsDefault !== undefined) {
+      view.IsDefault = event.IsDefault;
+    }
 
     const gridState = this.buildGridState(event);
     if (gridState) {
@@ -1291,6 +1471,21 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     view.SmartFilterEnabled = event.SmartFilterEnabled;
     view.SmartFilterPrompt = event.SmartFilterPrompt;
     view.FilterState = this.buildFilterStateJson(event);
+    view.AlternateBaseView = event.AlternateBaseView || null;
+    if (event.CustomWhereClause !== undefined) {
+      view.CustomWhereClause = event.CustomWhereClause;
+      if (event.CustomWhereClause && event.WhereClause !== undefined) {
+        view.WhereClause = event.WhereClause;
+      }
+    }
+    const displayState = this.buildDisplayState(event, view);
+    if (displayState) {
+      view.DisplayStateObject = displayState;
+    }
+    if (event.CardDisplayState?.cardSize) {
+      view.CardStateObject = { ...(view.CardStateObject ?? {}), cardSize: event.CardDisplayState.cardSize };
+    }
+    this.applyProperties(view, event);
 
     const before: WorkspaceCancelableEvent<ViewSaveOperation> = { Data: { View: view, IsNew: false }, Cancel: false };
     this.BeforeViewSave.emit(before);
@@ -1300,14 +1495,37 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
 
     const saved = await view.Save();
     if (!saved) {
-      LogError(`[ViewWorkspace] Failed to update view: ${view.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+      const detail = view.LatestResult?.CompleteMessage?.trim() || 'unknown error';
+      LogError(`[ViewWorkspace] Failed to update view: ${detail}`);
+      MJNotificationService.Instance?.CreateSimpleNotification(
+        `Failed to update view: ${detail}`,
+        'error',
+        5000
+      );
       return false;
+    }
+
+    if (view.IsDefault) {
+      await this.clearOtherDefaultViewsForEntity(view.ID);
     }
 
     this.ViewModified = false;
     this.CurrentGridState = this.parseViewGridState(view);
     this.AfterViewSave.emit({ View: view, IsNew: false });
     return true;
+  }
+
+  /**
+   * Ensure at most one user-owned view for the current entity has `IsDefault = true`.
+   */
+  private async clearOtherDefaultViewsForEntity(keepViewId: string): Promise<void> {
+    const myViews = this.viewSelectorRef?.MyViews ?? [];
+    for (const item of myViews) {
+      if (item.entity && item.entity.IsDefault && !UUIDsEqual(item.entity.ID, keepViewId)) {
+        item.entity.IsDefault = false;
+        await item.entity.Save();
+      }
+    }
   }
 
   /**
@@ -1337,8 +1555,10 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     }
 
     if (!this.AutoSaveView) {
+      this.deselectActiveViewForDefaultLayout();
       this.SaveDefaultsRequested.emit(event);
       this.IsConfigPanelOpen = false;
+      this.clearPendingNewViewState();
       this.cdr.detectChanges();
       return;
     }
@@ -1352,19 +1572,28 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       const settingKey = `default-view-setting/${this._entity.Name}`;
       const saved = await UserInfoEngine.Instance.SetSetting(settingKey, JSON.stringify(gridState));
       if (saved) {
+        this.deselectActiveViewForDefaultLayout();
         this.CurrentGridState = {
           columnSettings: gridState.columnSettings as ViewGridState['columnSettings'],
           sortSettings: gridState.sortSettings as ViewGridState['sortSettings'],
           aggregates: gridState.aggregates
         };
+        this.IsConfigPanelOpen = false;
+        this.clearPendingNewViewState();
         this.cdr.detectChanges();
         this.entityViewerRef?.Refresh();
       } else {
         LogError('[ViewWorkspace] Failed to save default view settings');
+        MJNotificationService.Instance?.CreateSimpleNotification(
+          'Failed to save default view settings.',
+          'error',
+          5000
+        );
       }
+    } else {
+      this.IsConfigPanelOpen = false;
     }
 
-    this.IsConfigPanelOpen = false;
     this.IsSavingView = false;
     this.cdr.detectChanges();
   }
@@ -1407,7 +1636,13 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
 
     const deleted = await view.Delete();
     if (!deleted) {
-      LogError(`[ViewWorkspace] Failed to delete view: ${view.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+      const detail = view.LatestResult?.CompleteMessage?.trim() || 'unknown error';
+      LogError(`[ViewWorkspace] Failed to delete view: ${detail}`);
+      MJNotificationService.Instance?.CreateSimpleNotification(
+        `Failed to delete view: ${detail}`,
+        'error',
+        5000
+      );
       return;
     }
 
@@ -1496,10 +1731,13 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       SortField: staged?.SortField ?? null,
       SortDirection: staged?.SortDirection ?? 'asc',
       SortItems: staged?.SortItems ?? [],
-      SmartFilterEnabled: staged?.SmartFilterEnabled ?? false,
-      SmartFilterPrompt: staged?.SmartFilterPrompt ?? '',
-      FilterState: staged?.FilterState ?? this.FilterDialogState ?? null,
-      AggregatesConfig: staged?.AggregatesConfig ?? null
+      SmartFilterEnabled: staged?.SmartFilterEnabled ?? this.CurrentViewEntity?.SmartFilterEnabled ?? false,
+      SmartFilterPrompt: staged?.SmartFilterPrompt ?? this.CurrentViewEntity?.SmartFilterPrompt ?? '',
+      FilterState: staged?.FilterState ?? this.FilterDialogState ?? (this.CurrentViewEntity?.FilterStateObject as CompositeFilterDescriptor | undefined) ?? null,
+      AggregatesConfig: staged?.AggregatesConfig ?? null,
+      AlternateBaseView: staged?.AlternateBaseView !== undefined
+        ? staged.AlternateBaseView
+        : (this._alternateBaseView ?? this.EffectiveAlternateBaseView)
     };
     const saved = await this.OnSaveView(viewSaveEvent);
     if (!saved && staged) {
@@ -1570,6 +1808,9 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       this.PendingNewViewFilterState = staged.FilterState;
       this.PendingNewViewSmartFilterEnabled = staged.SmartFilterEnabled;
       this.PendingNewViewSmartFilterPrompt = staged.SmartFilterPrompt;
+      this.PendingNewViewAlternateBaseView = staged.AlternateBaseView ?? null;
+    } else if (this._alternateBaseView) {
+      this.PendingNewViewAlternateBaseView = this._alternateBaseView;
     }
 
     this.DefaultSaveAsNew = true;
@@ -1687,7 +1928,13 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     const sourceView = await provider.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', provider.CurrentUser);
     const loaded = await sourceView.Load(sourceViewId);
     if (!loaded) {
-      LogError(`[ViewWorkspace] Could not load view to duplicate: ${sourceView.LatestResult?.CompleteMessage ?? 'not found'}`);
+      const detail = sourceView.LatestResult?.CompleteMessage?.trim() || 'not found';
+      LogError(`[ViewWorkspace] Could not load view to duplicate: ${detail}`);
+      MJNotificationService.Instance?.CreateSimpleNotification(
+        `Could not load view to duplicate: ${detail}`,
+        'error',
+        5000
+      );
       return;
     }
 
@@ -1701,13 +1948,43 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     newView.GridState = sourceView.GridState;
     newView.FilterState = sourceView.FilterState;
     newView.SortState = sourceView.SortState;
+    newView.CardState = sourceView.CardState;
+    newView.DisplayState = sourceView.DisplayState;
+    newView.ViewTypeID = sourceView.ViewTypeID;
+    newView.AlternateBaseView = sourceView.AlternateBaseView;
     newView.SmartFilterEnabled = sourceView.SmartFilterEnabled || false;
     newView.SmartFilterPrompt = sourceView.SmartFilterPrompt || '';
+    newView.Properties = sourceView.Properties;
+
+    let strippedCustomWhereOnDuplicate = false;
+    if (Boolean(sourceView.CustomWhereClause)) {
+      const isOwner = provider.CurrentUser?.Type?.trim().toLowerCase() === 'owner';
+      if (isOwner) {
+        newView.CustomWhereClause = true;
+        newView.WhereClause = sourceView.WhereClause || '';
+      } else {
+        strippedCustomWhereOnDuplicate = true;
+      }
+    }
 
     const saved = await newView.Save();
     if (!saved) {
-      LogError(`[ViewWorkspace] Failed to duplicate view: ${newView.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+      const detail = newView.LatestResult?.CompleteMessage?.trim() || 'unknown error';
+      LogError(`[ViewWorkspace] Failed to duplicate view: ${detail}`);
+      MJNotificationService.Instance?.CreateSimpleNotification(
+        `Failed to duplicate view: ${detail}`,
+        'error',
+        5000
+      );
       return;
+    }
+
+    if (strippedCustomWhereOnDuplicate) {
+      MJNotificationService.Instance?.CreateSimpleNotification(
+        'Saved copy without the custom SQL WHERE clause — only administrators (Owner-type users) can create views with custom SQL.',
+        'warning',
+        5000
+      );
     }
 
     // The view selector re-derives its lists reactively from UserViewEngine's cache
@@ -1787,6 +2064,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
         hidden: false,
         width: col.width || undefined,
         orderIndex: idx,
+        pinned: col.pinned || undefined,
         format: col.format
       }));
     } else if (this.CurrentGridState?.columnSettings && this.CurrentGridState.columnSettings.length > 0) {
@@ -1851,6 +2129,29 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   }
 
   /**
+   * Build an `MJUserViewEntity_IDisplayState` merging existing display state with
+   * any grid, card, timeline, or alternate base view settings emitted by the Unified View Studio.
+   */
+  private buildDisplayState(
+    event: ViewSaveEvent,
+    view?: MJUserViewEntityExtended | null
+  ): MJUserViewEntity_IDisplayState | null {
+    const existing = view?.DisplayStateObject ?? (event.SaveAsNew ? this.CurrentViewEntity?.DisplayStateObject : undefined);
+    if (!event.GridDisplayState && !event.CardDisplayState && !event.TimelineState && !event.AlternateBaseView && !existing) {
+      return null;
+    }
+    return {
+      ...(existing ?? {}),
+      defaultMode: existing?.defaultMode ?? 'grid',
+      enabledModes: existing?.enabledModes,
+      alternateBaseView: event.AlternateBaseView || undefined,
+      timeline: event.TimelineState ?? existing?.timeline,
+      grid: event.GridDisplayState ?? existing?.grid,
+      cards: event.CardDisplayState ?? existing?.cards
+    };
+  }
+
+  /**
    * Whether a save event carries a filter the user would expect to be kept — a smart prompt with
    * actual text, or at least one traditional filter. Deliberately stricter than the config panel's
    * own `hasActiveFilters()`, which only looks at the traditional list.
@@ -1858,7 +2159,8 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   private eventHasFilter(event: ViewSaveEvent): boolean {
     const hasSmartFilter = event.SmartFilterEnabled && !!event.SmartFilterPrompt?.trim();
     const hasTraditionalFilter = (event.FilterState?.filters?.length ?? 0) > 0;
-    return hasSmartFilter || hasTraditionalFilter;
+    const hasAlternateBaseView = !!event.AlternateBaseView?.trim();
+    return hasSmartFilter || hasTraditionalFilter || hasAlternateBaseView;
   }
 
   /** Longest suggested name we will build before eliding the smart prompt. */
@@ -1873,6 +2175,10 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     const entityName = this._entity?.DisplayNameOrName ?? this._entity?.Name ?? 'View';
     const prompt = event.SmartFilterEnabled ? event.SmartFilterPrompt?.trim() : '';
     if (!prompt) {
+      if (event.AlternateBaseView?.trim()) {
+        const abv = this._entity?.GetAlternateBaseView(event.AlternateBaseView.trim());
+        return `${entityName} — ${abv?.EffectiveDisplayName ?? event.AlternateBaseView.trim()}`;
+      }
       return `${entityName} — Filtered`;
     }
 

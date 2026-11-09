@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { FlattenedRecord } from '../lib/sync-engine';
+import type { FlattenedRecord } from '../lib/record-dependency-analyzer';
 import type { PushOptions, PushCallbacks } from '../services/PushService';
 import type { BatchContext } from '../lib/sync-engine';
 import type { EntityConfig } from '../config';
@@ -146,12 +146,11 @@ describe('T17 — Push Sync Metadata Preservation (C7, §3.5, §6 T17)', () => {
       id: 'rec-1',
       record,
       entityName: 'TestEntity',
-      parentContext: null,
-      dependencies: new Set(),
-      isCircular: false,
-      dependencyLevel: 0,
+      depth: 0,
       path: 'test/path.json',
-      subDirectory: '',
+      dependencies: new Set(),
+      originalIndex: 0,
+      graphId: 'rec-1',
     };
 
     const batchContext = new Map();
@@ -192,12 +191,11 @@ describe('T17 — Push Sync Metadata Preservation (C7, §3.5, §6 T17)', () => {
       id: 'rec-1',
       record,
       entityName: 'TestEntity',
-      parentContext: null,
-      dependencies: new Set(),
-      isCircular: false,
-      dependencyLevel: 0,
+      depth: 0,
       path: 'test/path.json',
-      subDirectory: '',
+      dependencies: new Set(),
+      originalIndex: 0,
+      graphId: 'rec-1',
     };
 
     const batchContext = new Map();
@@ -235,12 +233,11 @@ describe('T17 — Push Sync Metadata Preservation (C7, §3.5, §6 T17)', () => {
       id: 'rec-1',
       record,
       entityName: 'TestEntity',
-      parentContext: null,
-      dependencies: new Set(),
-      isCircular: false,
-      dependencyLevel: 0,
+      depth: 0,
       path: 'test/path.json',
-      subDirectory: '',
+      dependencies: new Set(),
+      originalIndex: 0,
+      graphId: 'rec-1',
     };
 
     const entityConfig: EntityConfig = {
@@ -281,12 +278,11 @@ describe('T17 — Push Sync Metadata Preservation (C7, §3.5, §6 T17)', () => {
       id: 'rec-2',
       record,
       entityName: 'TestEntity',
-      parentContext: null,
-      dependencies: new Set(),
-      isCircular: false,
-      dependencyLevel: 0,
+      depth: 0,
       path: 'test/path.json',
-      subDirectory: '',
+      dependencies: new Set(),
+      originalIndex: 0,
+      graphId: 'rec-2',
     };
 
     const entityConfig: EntityConfig = {

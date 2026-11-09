@@ -7,15 +7,44 @@ import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { MJActionFormComponent } from '../../generated/Entities/MJAction/mjaction.form.component';
 import { MJDialogService, MJDialogRef } from '@memberjunction/ng-ui-components';
 import { ActionParamDialogComponent, ActionResultCodeDialogComponent } from '@memberjunction/ng-actions';
+import { JoinHeroSummary, CountLabel } from '../../shared/phone-hero';
+import { PhoneSectionsState } from '../../shared/phone-sections-state';
 
 @RegisterClass(BaseFormComponent, 'MJ: Actions')
 @Component({
   standalone: false,
     selector: 'mj-action-form',
     templateUrl: './action-form.component.html',
-    styleUrls: ['./action-form.component.css']
+    styleUrls: ['./action-form.component.css', '../../shared/phone-hero.css']
 })
 export class MJActionFormComponentExtended extends MJActionFormComponent implements OnInit {
+
+    /** Phone width shows the stacked accordions as sections behind one picker (design call 7A). */
+    public Phone = new PhoneSectionsState(() => this.cdr.markForCheck());
+
+    ngOnDestroy() {
+        super.ngOnDestroy();
+        this.Phone.Stop();
+    }
+
+    /** Phone hero (6A): whether the summary line is expanded to show the rest of the hero. */
+    public HeroDetailsOpen = false;
+
+    /** Toggles the phone hero between its compact identity row and the full hero. */
+    public ToggleHeroDetails(): void {
+        this.HeroDetailsOpen = !this.HeroDetailsOpen;
+        this.cdr.markForCheck();
+    }
+
+    /** The phone hero's one-line summary of what the compact hero leaves out. */
+    public get HeroSummary(): string {
+        return JoinHeroSummary([
+            this.category?.Name,
+            this.record.Type,
+            CountLabel(this.ActionParams.length, 'param'),
+            this.HasCodeApproval && this.record.CodeApprovalStatus ? `Code ${this.record.CodeApprovalStatus.toLowerCase()}` : null,
+        ]);
+    }
     public record!: MJActionEntity;
 
     // This form has a fully custom layout (header panel + accordion
@@ -32,6 +61,9 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
 
     /** Custom-layout Action form looks best full-width on first open. */
     public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
+
+    /** Custom-layout form owns its entire body; suppress auto-filled relationship sections. */
+    public override get OwnsEntireFormBody(): boolean { return true; }
 
     // Related entities
     public category: MJActionCategoryEntity | null = null;
@@ -471,7 +503,9 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
                 EntityName: 'MJ: Action Execution Logs',
                 ExtraFilter: `ActionID='${this.record.ID}'`,
                 OrderBy: 'StartedAt DESC',
-                MaxRows: 10 
+                MaxRows: 10,
+                Fields: ['ID', 'ActionID', 'StartedAt', 'EndedAt', 'UserID', 'User', 'ResultCode', 'Message'],
+                ResultType: 'simple'
             });
             
             if (result.Success) {
@@ -501,17 +535,28 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
             if (result.Success) {
                 this.ActionLibraries = result.Results || [];
             
-                // Load library details
+                // Load library details in a single batch query instead of N+1 sequential loads
                 if (this.ActionLibraries.length > 0) {
-                    const libraryIds = this.ActionLibraries.map(al => al.LibraryID).filter(id => id);
-                    const md = this.ProviderToUse;
+                    const libraryIds = this.ActionLibraries.map(al => al.LibraryID).filter((id): id is string => !!id);
                     this.libraries = [];
-                    
-                    for (const libId of libraryIds) {
-                        const lib = await md.GetEntityObject<MJLibraryEntity>('MJ: Libraries');
-                        if (lib && libId) {
-                            await lib.Load(libId);
-                            this.libraries.push(lib);
+                    if (libraryIds.length > 0) {
+                        const libFilter = libraryIds.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
+                        const libResult = await rv.RunView<MJLibraryEntity>({
+                            EntityName: 'MJ: Libraries',
+                            ExtraFilter: `ID IN (${libFilter})`,
+                            ResultType: 'entity_object'
+                        });
+                        if (libResult.Success && libResult.Results) {
+                            const byId = new Map<string, MJLibraryEntity>();
+                            for (const lib of libResult.Results) {
+                                byId.set(lib.ID.toLowerCase(), lib);
+                            }
+                            for (const libId of libraryIds) {
+                                const found = byId.get(libId.toLowerCase());
+                                if (found) {
+                                    this.libraries.push(found);
+                                }
+                            }
                         }
                     }
                 }
@@ -526,11 +571,13 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
     private async loadExecutionStats() {
         try {
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-            // Load ALL executions for accurate statistics
-            const result = await rv.RunView<MJActionExecutionLogEntity>({
+            // Project only lightweight scalar columns (excluding Params/ResultParams blobs) for stats calculation
+            const result = await rv.RunView<Pick<MJActionExecutionLogEntity, 'ID' | 'StartedAt' | 'EndedAt' | 'ResultCode'>>({
                 EntityName: 'MJ: Action Execution Logs',
                 ExtraFilter: `ActionID='${this.record.ID}'`,
-                OrderBy: 'StartedAt DESC' 
+                OrderBy: 'StartedAt DESC',
+                Fields: ['ID', 'StartedAt', 'EndedAt', 'ResultCode'],
+                ResultType: 'simple'
             });
             
             if (result.Success && result.Results && result.Results.length > 0) {

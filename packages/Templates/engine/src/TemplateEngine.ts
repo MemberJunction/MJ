@@ -5,7 +5,8 @@ import { BaseSingleton, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { TemplateExtensionBase } from "./extensions/TemplateExtensionBase";
 import { HardenNunjucksRuntime } from "./NunjucksSandbox";
 import { CollectReferencedVariables, ReferencedVariablesResult } from "./TemplateVariableAnalysis";
-import { TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templates-base-types'
+import { CurrentTemplateRenderUser, RunAsTemplateRenderUser } from "./TemplateRenderUser";
+import { TemplateRenderOptions, TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templates-base-types'
 
 // Stored templates are user-editable, so nunjucks is guarded as soon as the engine loads. The guard
 // is process-wide: it also covers nunjucks environments that other packages create.
@@ -82,11 +83,13 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
     /** Server-side context user, captured on Config() and settable directly (mirrors AIEngine). */
     private _contextUser?: UserInfo;
     private _oneTimeLoadingComplete: boolean = false;
+    private _configuredOnce: boolean = false;
 
     /**
      * Loads the single TemplateEngineBase metadata cache, then (re)initializes the render layer. The base
      * runs its own AdditionalLoading (associating content/params with each template) inside its Config();
-     * afterwards we drop any stale compiled templates and one-time-initialize the nunjucks environment.
+     * afterwards we drop any stale compiled templates when the base cache actually (re)loaded and
+     * one-time-initialize the nunjucks environment.
      *
      * NOTE: when this extended the base, the nunjucks setup lived in an AdditionalLoading() override that
      * the base's Load() invoked. Under composition the base's Load() calls the BASE's AdditionalLoading,
@@ -96,8 +99,16 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
         if (contextUser) {
             this._contextUser = contextUser;
         }
+        const shouldClearCache = !this._configuredOnce || Boolean(forceRefresh) || !this.base.Loaded;
         await this.base.Config(forceRefresh, contextUser, provider);
-        this.ClearTemplateCache(); // base templates (re)loaded — drop any stale compiled templates
+        this._configuredOnce = true;
+        if (shouldClearCache) {
+            this.ClearTemplateCache(); // base templates (re)loaded — drop any stale compiled templates
+        } else {
+            // Compiled templates check their own source text, but a variable analysis also follows embedded
+            // templates by name, so an in-place edit of an embedded template would leave it stale.
+            this._referencedVariablesCache.clear();
+        }
         this.ensureNunjucksInitialized(contextUser);
     }
 
@@ -111,20 +122,28 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
         this._templateLoader = new TemplateEntityLoader();
         this._nunjucksEnv = this.createConfiguredNunjucksEnv(true);
         this._nunjucksEnvNoAutoescape = undefined; // rebound lazily against the fresh loader on next no-autoescape render
+        this._nunjucksEnvRawTemplates = undefined;
+        this._registeredExtensions = this.registerExtensions(this._nunjucksEnv, contextUser);
+    }
 
-        // get all of the extensions that are registered and register them with nunjucks
-        this._registeredExtensions = [];
+    /**
+     * Registers every {@link TemplateExtensionBase} subclass with the given environment.
+     * @returns the extension instances registered on `env`
+     */
+    private registerExtensions(env: nunjucks.Environment, contextUser?: UserInfo): nunjucks.Extension[] {
+        const registered: nunjucks.Extension[] = [];
         const extensions = MJGlobal.Instance.ClassFactory.GetAllRegistrations(TemplateExtensionBase);
         if (extensions && extensions.length > 0) {
             for (const ext of extensions) {
                 const SubClassConstructor = ext.SubClass as new (contextUser: UserInfo) => TemplateExtensionBase;
                 const instance = new SubClassConstructor(contextUser!);
                 if (ext.Key) {
-                    this._nunjucksEnv.addExtension(ext.Key, instance);
-                    this._registeredExtensions.push(instance);
+                    env.addExtension(ext.Key, instance);
+                    registered.push(instance);
                 }
             }
         }
+        return registered;
     }
 
     /** True once the underlying TemplateEngineBase cache has loaded. */
@@ -145,6 +164,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
         this._templateLoader = new TemplateEntityLoader();
         this._nunjucksEnv = this.createConfiguredNunjucksEnv(true);
         this._nunjucksEnvNoAutoescape = undefined; // rebound lazily against the fresh loader on next no-autoescape render
+        this._nunjucksEnvRawTemplates = undefined;
         this._simpleTemplateCache.clear();
     }
 
@@ -157,6 +177,8 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * renders, not the stored-Template extension surface. Reset to `undefined` whenever the loader is rebuilt.
      */
     private _nunjucksEnvNoAutoescape?: nunjucks.Environment;
+    /** Environment with autoescape off and the registered extensions, for {@link RenderTemplate} with `autoescape: false`. Created lazily. */
+    private _nunjucksEnvRawTemplates?: nunjucks.Environment;
     private _templateLoader: TemplateEntityLoader;
     /** The extension instances registered on {@link _nunjucksEnv}. The variable analysis parses their custom tags. */
     private _registeredExtensions: nunjucks.Extension[] = [];
@@ -209,9 +231,10 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
     }
 
     /**
-     * Cache for templates that have been created by nunjucks so we don't have to create them over and over
+     * Compiled templates per environment, then per template content ID, so a raw compile is never served to an
+     * escaping render. Tracks `sourceText` so in-place `AutoRefresh` updates to `TemplateText` recompile automatically.
      */
-    private _templateCache: Map<string, any> = new Map<string, any>();
+    private _templateCache = new WeakMap<nunjucks.Environment, Map<string, { template: nunjucks.Template; sourceText: string }>>();
 
     /**
      * Bounded LRU cache for ad-hoc templates rendered via {@link RenderTemplateSimple}.
@@ -235,8 +258,10 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * @param data
      * @param SkipValidation if true, validation is skipped entirely (or reduced to warnings depending on SuppressWarnings)
      * @param SuppressWarnings if true AND SkipValidation is true, no validation warnings are logged. When SkipValidation is true but SuppressWarnings is false, validation issues are logged as non-fatal warnings. Defaults to false.
+     * @param options `autoescape` (default `true`) toggles HTML escaping; pass `false` when the output is plain text for
+     *   a model, where `Affineur & Owner` must not become `Affineur &amp; Owner`
      */
-    public async RenderTemplate(templateEntity: MJTemplateEntityExtended, templateContent: MJTemplateContentEntity, data: any, SkipValidation?: boolean, SuppressWarnings?: boolean): Promise<TemplateRenderResult> {
+    public async RenderTemplate(templateEntity: MJTemplateEntityExtended, templateContent: MJTemplateContentEntity, data: any, SkipValidation?: boolean, SuppressWarnings?: boolean, options?: TemplateRenderOptions): Promise<TemplateRenderResult> {
         try {
             if (!templateContent) {
                 return {
@@ -284,8 +309,9 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
             // Merge default values from parameters applicable to this content
             const mergedData = this.mergeDefaultValues(templateEntity, templateContent.ID, data);
      
-            const template = this.getNunjucksTemplate(templateContent.ID, templateContent.TemplateText, true);
-            const result = await this.renderTemplateAsync(template, mergedData); 
+            const env = options?.autoescape === false ? this.getRawTemplateEnv() : this._nunjucksEnv;
+            const template = this.getNunjucksTemplate(templateContent.ID, templateContent.TemplateText, true, env);
+            const result = await this.renderTemplateAsync(template, mergedData, this.resolveRenderUser(options));
             return {
                 Success: true,
                 Output: result,
@@ -311,7 +337,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      *   `false` for plain-text contexts such as email subject lines, where `Acme & Co` must not become `Acme &amp; Co`.
      * @returns
      */
-    public async RenderTemplateSimple(templateText: string, data: any, options?: { autoescape?: boolean }): Promise<TemplateRenderResult> {
+    public async RenderTemplateSimple(templateText: string, data: any, options?: TemplateRenderOptions): Promise<TemplateRenderResult> {
         try {
             const autoescape = options?.autoescape ?? true;
             const cacheKey = `${autoescape ? '1:' : '0:'}${templateText}`;
@@ -331,7 +357,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
                 }
                 this._simpleTemplateCache.set(cacheKey, template);
             }
-            const result = await this.renderTemplateAsync(template, data);
+            const result = await this.renderTemplateAsync(template, data, this.resolveRenderUser(options));
             return {
                 Success: true,
                 Output: result,
@@ -352,8 +378,8 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * Returns the top-level variable names a template's text reads, following stored templates it
      * pulls in by literal name (`{% include %}`, `{% import %}`, `{% from %}`, `{% extends %}`,
      * `{% template %}`). It sets up the Nunjucks environment first, so the registered extensions' tags
-     * parse before the first {@link Config} too. The result is frozen and cached per template text until
-     * {@link ClearTemplateCache}; a result whose text does not parse is not cached.
+     * parse before the first {@link Config} too. The result is frozen and cached per template text until the
+     * next {@link Config} or {@link ClearTemplateCache}; a result whose text does not parse is not cached.
      */
     public GetReferencedVariables(templateText: string): ReferencedVariablesResult {
         const cached = this._referencedVariablesCache.get(templateText);
@@ -380,20 +406,30 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * @param templateId - must be provided if you want to cache the template, if not provided the template will not be cached
      * @param templateText 
      * @param cacheTemplate - if true, the template will be cached, otherwise it will not be cached
+     * @param env the environment to compile against; defaults to the shared autoescape environment
      */
-    protected getNunjucksTemplate(templateContentId: string, templateText: string, cacheTemplate: boolean): any {
+    protected getNunjucksTemplate(templateContentId: string, templateText: string, cacheTemplate: boolean, env: nunjucks.Environment = this._nunjucksEnv): nunjucks.Template {
         if (templateContentId && cacheTemplate) {
-            let template = this._templateCache.get(templateContentId);
-            if (!template) {
-                template = this.createNunjucksTemplate(templateText);
-                this._templateCache.set(templateContentId, template);
+            let envCache = this._templateCache.get(env);
+            if (!envCache) {
+                envCache = new Map<string, { template: nunjucks.Template; sourceText: string }>();
+                this._templateCache.set(env, envCache);
             }
-            return template;    
+            const cached = envCache.get(templateContentId);
+            if (cached && cached.sourceText === templateText) {
+                return cached.template;
+            }
+            if (cached && cached.sourceText !== templateText) {
+                this._referencedVariablesCache.clear();
+            }
+            const template = this.createNunjucksTemplate(templateText, env);
+            envCache.set(templateContentId, { template, sourceText: templateText });
+            return template;
         }
         else {
             // we don't have a template ID which means this is a dyanmic template, and so we don't want to do
             // anything with the cache, we just create a new nunjucks template and return it
-            return this.createNunjucksTemplate(templateText);
+            return this.createNunjucksTemplate(templateText, env);
         }
     }
 
@@ -403,7 +439,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * @param env the environment to bind to; defaults to the shared autoescape environment
      * @returns
      */
-    protected createNunjucksTemplate(templateText: string, env: nunjucks.Environment = this._nunjucksEnv): any {
+    protected createNunjucksTemplate(templateText: string, env: nunjucks.Environment = this._nunjucksEnv): nunjucks.Template {
         return new nunjucks.Template(templateText, env);
     }
 
@@ -422,20 +458,46 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
         return this._nunjucksEnvNoAutoescape;
     }
 
+    /** The environment for {@link RenderTemplate} with `autoescape: false`, built on first use with the registered extensions. */
+    private getRawTemplateEnv(): nunjucks.Environment {
+        if (!this._nunjucksEnvRawTemplates) {
+            this._nunjucksEnvRawTemplates = this.createConfiguredNunjucksEnv(false);
+            this.registerExtensions(this._nunjucksEnvRawTemplates, this._contextUser);
+        }
+        return this._nunjucksEnvRawTemplates;
+    }
+
     /** Clears the compiled-template cache and the cached {@link GetReferencedVariables} results. */
     public ClearTemplateCache() {
-        this._templateCache.clear();
+        this._templateCache = new WeakMap<nunjucks.Environment, Map<string, { template: nunjucks.Template; sourceText: string }>>();
         this._simpleTemplateCache.clear();
         this._referencedVariablesCache.clear();
+    }
+
+    /**
+     * The user a render runs as: the one the caller passed, else the user of the render this one is
+     * nested in. There is no fallback to this engine's context user: that is whoever last configured
+     * the process-wide engine, so it may be another request's user. A render with no user runs its
+     * extensions with no user, and an extension that needs one fails the render with an error rather
+     * than run as nobody (an `{% AIPrompt %}` tag does). Every server caller should pass `ContextUser`.
+     */
+    private resolveRenderUser(options?: TemplateRenderOptions): UserInfo | undefined {
+        return options?.ContextUser ?? CurrentTemplateRenderUser();
     }
 
     /**
      * Promisifies the Nunjucks template rendering process.
      * @param template the Nunjucks template object
      * @param data the data to render the template with
+     * @param renderUser the user registered extensions act for during this render
      */
-    protected async renderTemplateAsync(template: nunjucks.Template, data: any): Promise<string> {
+    protected async renderTemplateAsync(template: nunjucks.Template, data: any, renderUser?: UserInfo): Promise<string> {
         HardenNunjucksRuntime(); // no-op unless something replaced a guarded nunjucks hook
+        return RunAsTemplateRenderUser(renderUser ?? this.resolveRenderUser(), () => this.renderInCurrentScope(template, data));
+    }
+
+    /** Renders `template` with `data`, inside the caller's render-user scope. */
+    private renderInCurrentScope(template: nunjucks.Template, data: any): Promise<string> {
         return new Promise((resolve, reject) => {
             template.render(data, (err, result) => {
                 if (err) {

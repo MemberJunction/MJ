@@ -121,7 +121,7 @@ Embedding products (white-labeled end-user apps, embedded widgets) can pare the 
 | `allowPlanMode` | The composer's Plan Mode toggle button |
 | `allowRealtime` | The composer's real-time voice (co-agent) launcher button |
 | `AllowForking` | Starting forks: Fork from here, and Edit or Regenerate as a fork. When `false`, Edit and Regenerate change the latest turn in place, as without the `Conversations: Fork` authorization. UI only; deny that authorization to a role to block forks on the server too |
-| `AllowStopRun` | Stopping and continuing agent runs: the composer's Stop and Stop all, the Stop pill on an in-progress reply, the Continue button on a stopped reply, and the "Continue, or tell {agent} what to do differently" placeholder. UI only: a run stopped from another client still shows as stopped, and the next message still continues it |
+| `AllowStopRun` | Stopping and continuing agent runs: the composer's Stop and Stop all, the Stop pill on an in-progress reply, the Continue button on a stopped reply, and the "Continue, or tell {agent} what to do differently" placeholder. UI only: a run stopped from another client still shows as stopped, and the next message still continues it. The composer's status line ("Sage is working, 0:41") is not part of this cap; it shows for any reply in flight |
 | `showEmptyFill` | The message list's built-in "No messages yet" filler |
 | `showLoadingState` | The centered loading spinner (loading still short-circuits rendering, so hiding it does not flash the empty state) |
 | `showAgentPicker` | The agent picker |
@@ -145,6 +145,7 @@ Unlike the gates above, these change *how* the surface behaves and default to to
 | Input | Default | Effect when set |
 |---|---|---|
 | `readReplyFromTop` | `false` | A finished turn — the reader's message plus the reply — is scrolled to the top of the pane if it is taller than the pane, so the run ends at the start of the answer instead of its end. A turn that fits stays where it is; a reader who scrolled up during the run is never moved. (Independent of this switch, an in-place message update — progress, status, streamed text — only follows the tail for a reader who is already at the bottom.) |
+| `OpenLinksInNewTab` | `true` | Inline markdown links in messages (external and relative/same-origin URLs, whether bare `https://...` autolinks or `[text](url)` links) open in a new browser tab (`target="_blank"` with `rel="noopener noreferrer"`). In-page fragment links (`#heading`), `mailto:` / `tel:` / `sms:` links, and raw HTML links with an explicit `target` keep their behaviour. Set `false` to open links in the current tab. |
 
 
 ```html
@@ -398,6 +399,12 @@ This package never navigates (no Router): developer links emit a `RealtimeNaviga
 </mj-export-modal>
 ```
 
+#### Conversation folders
+
+A folder (`MJ: Projects`) is Private (only its owner sees it, the default), Shared (with chosen users or roles, through `MJ: Resource Permissions`) or Public (`OwnerUserID` null, everyone in the environment). A conversation in a Shared or Public folder appears in the lists of the people the folder is shared with only when its owner turns on folder inheritance (off by default), at the folder's level (View for a Public folder). Each folder is shared on its own; a subfolder does not inherit its parent's grants. Only a conversation's owner can move it or change whether it inherits, and only a folder's owner can change its owner or parent; the server enforces both on save, except for the server itself and the system user (so system-user agent runs are exempt). The server also refuses moving a folder into itself or one of its subfolders.
+
+Folder sharing controls which conversations are listed, not who can read them. Core ships no UI-role row-level security on `MJ: Conversations` or `MJ: Conversation Details`, so a host that needs hard read isolation must add that RLS itself.
+
 ## Component Reference
 
 ### Messaging Components
@@ -539,6 +546,24 @@ When an agent turn completes in `ConversationChatAreaComponent`, the component c
 - **Panel Open + Currently Viewed Artifact Versioned (`action: 'refresh-current'`)**: Increments `artifactViewerRefreshTrigger` and updates `activeVersionNumber` in place so the open viewer immediately reflects the new version (e.g., `v1` → `v2`).
 - **Panel Open + Different Artifact Created or Versioned (`action: 'switch-artifact'`)**: Automatically switches the open Artifact Panel to display the newly created or newly versioned artifact (`activeArtifactId`, `activeVersionNumber`).
 - **Reconnected In-Flight Runs**: When reconnecting to an already-running turn on conversation open (`reconnectToInFlightAgentRuns`), the pre-turn baseline excludes any output artifacts attached to the in-progress message itself so a newly produced artifact still auto-opens when the reconnected turn finishes.
+
+### First-Class Inline Workflow Execution Card & Durable Task-Graph Continuation
+
+When an agent (such as `Sage`) dispatches a multi-step durable task graph associated with a `ConversationDetail` message:
+
+- **Inline Workflow Execution Card (`.msg-workflow-card` in `MessageItemComponent`)**: Renders directly inside `.message-body` (without requiring the user to open the developer gear menu). Deduplicates parent workflow container tasks (`ParentID == null`) from ordered step tasks (`WorkflowSteps`), displays an active shimmer progress bar, completed step ratio (`X/Y steps`), live elapsed duration, per-step specialist agent badges (`@Query Builder`, `@Research Report Writer`), and a one-click slide-over step inspector drawer (`mj-task-detail-panel`).
+- **Real-Time Multi-Tab Broadcast & Continuation (`ConversationChatAreaComponent`)**: `TaskGraphFrameBroadcaster` and `TaskGraphContinuationDeliverer` publish task-node progress and completion frames over `PUSH_STATUS_UPDATES_TOPIC` (`sessionId: '*'`, filtered by `ownerUserId` in `PushStatusResolver`). When a durable workflow finishes with `continuation: 'reinvoke'`, the server creates a new visible AI `ConversationDetail` reply row, runs the synthesizing agent, persists both step-level and continuation artifacts (`ProcessAgentArtifacts`), and notifies `ConversationChatAreaComponent` (`NewMessageCreated: true`) so the active conversation reloads messages, refreshes task statuses, and auto-opens any newly produced artifact.
+
+### AI Agent Workflows & Tasks Command Center (`TasksFullViewComponent`)
+
+`TasksFullViewComponent` (`<mj-tasks-full-view>`) provides the **AI Agent Workflows & Tasks Command Center** for inspecting and navigating agent-invoked workflows and standalone tasks across conversations:
+
+- **5-Card KPI Metric Ribbon**: Interactive filter cards for **Active Now**, **Completed**, **Needs Attention** (Failed/Cancelled), **Total Workflows**, and **Avg Execution Time** (plus completed-step throughput).
+- **Unified Filter & Search Bar**: Instant full-text search across workflow names, descriptions, and conversation names, status pill filters (`All`, `Active`, `Completed`, `Failed`), a dynamic **Specialist Agent** dropdown filter, and a scope toggle (**All Tasks** vs. **My Tasks**).
+- **3 Synchronized View Modes**:
+  1. **Workflow Cards View**: Hierarchy-aware cards showing workflow status, parent conversation deep-link pill, horizontal **Agent Pipeline** chips (`Step 1 -> Step 2`), progress bar, and expandable step rows with step numbers, agent badges, durations, and output previews.
+  2. **Execution Timeline & DAG View**: Custom second/minute-resolution **Execution Waterfall** bar chart for multi-step workflows (rendered automatically whenever tasks span `< 2 days` where day-level Gantt bars would collapse), paired with the full `mj-gantt-task-viewer` for multi-day schedules.
+  3. **Slide-Over Workflow & Step Inspector Drawer**: Selecting any workflow or step opens a contextual right-hand inspector drawer with step-switcher tabs, clickable telemetry pills for the **AI Agent** (`MJ: AI Agents`) and **AI Agent Run** (`MJ: AI Agent Runs`), separated **Task Instructions (Input)** vs. **Agent Output / Deliverable** (parsed cleanly around the `--- Output ---` delimiter), and a primary **Jump to Chat** action.
 
 ### MJ Entity Integration
 

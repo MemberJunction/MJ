@@ -259,6 +259,13 @@ export class AIModelSelectionInfo {
     model: MJAIModelEntityExtended;
     /** The vendor entity, if a specific vendor was considered */
     vendor?: MJAIVendorEntity;
+    /**
+     * The provider implementation this combination would run through (e.g. `OpenRouterLLM`).
+     * Optional because it is telemetry, not identity — a long candidate list is often a single
+     * driver class repeated, which is the difference between "the chain is misconfigured" and
+     * "one provider has no key".
+     */
+    driverClass?: string;
     /** Priority of this model/vendor combination */
     priority: number;
     /** Whether this model/vendor had an available API key */
@@ -273,6 +280,8 @@ export class AIModelSelectionInfo {
     model: MJAIModelEntityExtended;
     /** The vendor entity, if a specific vendor was considered */
     vendor?: MJAIVendorEntity;
+    /** See {@link ModelsConsidered}. */
+    driverClass?: string;
     /** Priority of this model/vendor combination */
     priority: number;
     /** Whether this model/vendor had an available API key */
@@ -288,6 +297,8 @@ export class AIModelSelectionInfo {
     model: MJAIModelEntityExtended;
     /** The vendor entity, if a specific vendor was considered */
     vendor?: MJAIVendorEntity;
+    /** See {@link ModelsConsidered}. */
+    driverClass?: string;
     /** Priority of this model/vendor combination */
     priority: number;
     /** Whether this model/vendor had an available API key */
@@ -420,6 +431,14 @@ export class AIPromptParams extends AIModelRunParams {
   PreRenderedChildTemplates?: Record<string, string>;
 
   /**
+   * The system-prompt-and-tools fingerprint of the previous request in this conversation, from
+   * `GetSentPrefixFingerprint`. Set by a caller that replays reasoning to a provider which binds it
+   * to an unchanged prefix. When this request's system prompt or tools differ, the runner sends
+   * it without any replayed reasoning, which that provider would otherwise reject.
+   */
+  ReplayedReasoningPrefix?: string;
+
+  /**
    * Optional callback for receiving execution progress updates
    * Provides real-time information about the execution progress
    */
@@ -501,6 +520,13 @@ export class AIPromptParams extends AIModelRunParams {
    * The AIPromptRunner will pass these through when building model-specific parameters.
    */
   additionalParameters?: Record<string, any>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+  /**
+   * When false, the prompt's template renders without HTML escaping: its output is plain text for a model, not HTML.
+   * Unset keeps the template engine's default (escaped), as every caller got before this member existed. Feature
+   * Pipeline drivers set it to false.
+   */
+  templateAutoescape?: boolean;  // case-violation-ok-legacy-back-compat: new member of shipped camelCase AIPromptParams keeps its casing
 
   /**
    * Optional prompt to use for model selection instead of the main prompt.

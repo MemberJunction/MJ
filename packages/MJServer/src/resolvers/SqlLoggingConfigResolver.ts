@@ -10,6 +10,7 @@ import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { UserCache, SqlLoggingOptions as ProviderSqlLoggingOptions } from '@memberjunction/generic-database-provider';
 import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
+import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 
 /**
  * Configuration options for SQL logging sessions.
@@ -254,6 +255,9 @@ export class SqlLoggingConfigResolver extends ResolverBase {
    * @private
    */
   private async checkOwnerAccess(context: AppContext): Promise<UserInfo> {
+    if (context?.userPayload?.userRecord && IsScopeLimitedPrincipal(context.userPayload.userRecord)) {
+      throw new Error('Access denied. Scope-limited principals cannot access SQL logging.');
+    }
     const userEmail = context.userPayload?.email;
     if (!userEmail) {
       throw new Error('User not authenticated');
@@ -265,15 +269,9 @@ export class SqlLoggingConfigResolver extends ResolverBase {
     if (!user) {
       throw new Error('User not found');
     }
-    
-    // Debug logging
-    console.log('SQL Logging access check:', {
-      email: user.Email,
-      type: user.Type,
-      typeLength: user.Type?.length,
-      typeTrimmed: user.Type?.trim(),
-      isOwner: user.Type?.trim().toLowerCase() === 'owner'
-    });
+    if (IsScopeLimitedPrincipal(user)) {
+      throw new Error('Access denied. Scope-limited principals cannot access SQL logging.');
+    }
     
     // Check if user has Type = 'Owner' (trim and case-insensitive for nchar fields)
     if (user.Type?.trim().toLowerCase() !== 'owner') {
@@ -672,10 +670,8 @@ export class SqlLoggingConfigResolver extends ResolverBase {
     }
 
     try {
-      // Check if file exists
-      await fs.access(session.filePath);
-      
-      // Read file content
+      // Read directly: a missing file surfaces as ENOENT below, so a separate existence check
+      // would only open a window for the file to change between the check and the read.
       const content = await fs.readFile(session.filePath, 'utf-8');
       
       // Apply line limit if specified

@@ -5,7 +5,6 @@ export * from './loopback-bridge';
 export * from './openai-sip-bridge';
 export * from './join-url-resolver';
 export * from './calendar-source';
-export * from './calendar-clients';
 export * from './calendar-watcher';
 export * from './scheduled-bridge-runner';
 export * from './identity-provisioner';

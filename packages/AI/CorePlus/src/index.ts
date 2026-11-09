@@ -4,6 +4,7 @@ export * from './prompt-run-messages.types';
 export * from './agent-types';
 export * from './agent-run-data-keys';
 export * from './agent-failure-message';
+export * from './agent-reply-text';
 export * from './agent-payload-change-request';
 export * from './prompt.system-placeholders';
 export * from './agent-spec';
@@ -57,6 +58,8 @@ export * from './task-graph/task-rows-to-spec';
 export * from './task-graph/task-graph-to-agent-spec';
 export * from './task-graph/workflow-spec';
 export * from './task-graph/workflow-spec-validator';
+export * from './task-graph/dag-similarity';
+export * from './task-graph/workflow-telemetry';
 
 // The conversation-attachment blob seam. Lives here rather than in `@memberjunction/aiengine`
 // because browser and React Native hosts implement it, and a package they can reach must not

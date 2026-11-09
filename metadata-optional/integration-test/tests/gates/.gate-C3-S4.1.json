@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C3 -> S4.1",
+    "Description": "Gate G2.18 (phase 2, dataset C3, criterion S4.1): on C3 (W9-multiclass s42 with the reference pipeline's holdout) a multiclass target ranks on multiclass log loss; what the gate ships scores at most 0.7427, and /predict returns a probability vector over the 3 declared classes, summing to 1, for 3,000 of 3,000 held-out rows. It fails when /predict drops the probabilities class vector (0 of 3,000 rows carry it).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.18\",\"owner:PR3\",\"phase:2\",\"dataset:C3\",\"criterion:S4.1\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Multiclass log loss is primary on C3 and at most 0.7427; /predict returns a 3-class probability vector for 3,000 of 3,000 rows (1 of 1 pytest case passes)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-c3-s4-1"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "A4728E40-6964-45BD-84FD-555724A66D37"
+  }
+}

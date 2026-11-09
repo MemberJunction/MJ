@@ -18,6 +18,10 @@ import { fileURLToPath } from 'node:url';
 import { transformRepoMarkdown, buildFrontmatter } from './lib/markdown.mjs';
 import { compareReleasesDesc, guideSlug, labelFromSlug, packageSlug, relativeSiteLink, releaseSlug, releaseVersion } from './lib/site-map.mjs';
 import { fetchEcosystem } from './lib/ecosystem.mjs';
+import { GUIDE_SLUG, GUIDE_SOURCE, RELATED_GUIDES, buildCatalog } from './lib/bizapps-catalog.mjs';
+import { loadBizAppsSource } from './lib/bizapps-source.mjs';
+import { resolveFontAwesome } from './lib/fa-icons.mjs';
+import { documentedMajor } from '../src/lib/documented-line.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, '../..');
@@ -57,6 +61,13 @@ const ROOT_DOCS = [
 /** Guides that are internal ops manuals for MJ maintainers — never rendered on the public site. */
 const INTERNAL_GUIDES = new Set(['RELEASE_ENGINEERING_RUNBOOK.md']);
 
+/**
+ * The BizApps page needs MJ 6: every app in the catalog declares an mjVersionRange
+ * that starts at 6.x, so the v5 documentation set has no page for it.
+ */
+const BIZAPPS_MIN_MAJOR = 6;
+const BIZAPPS_GUIDE_URL = `https://github.com/MemberJunction/MJ/blob/next/${GUIDE_SOURCE}`;
+
 main();
 
 async function main() {
@@ -65,15 +76,19 @@ async function main() {
   const sha = resolveBuildSha(warn);
 
   cleanGeneratedPaths();
-  const entries = [...rootDocEntries(), ...guideEntries(), ...packageEntries(warn), ...releaseEntries(warn)];
+  const bizapps = await prepareBizApps(warn);
+  const entries = [...rootDocEntries(), ...guideEntries(bizapps), ...packageEntries(warn), ...releaseEntries(warn)];
   const siteMap = new Map(entries.map((e) => [e.src, e.slug]));
+  // The live page is not a transformed repo file, but links to the guide must still land on it.
+  if (bizapps.mode === 'live') siteMap.set(GUIDE_SOURCE, GUIDE_SLUG);
 
   const written = new Map();
   for (const entry of entries) written.set(entry.slug, writeEntry(entry, siteMap, sha, warn));
+  if (bizapps.mode === 'live') writeBizAppsPage(bizapps.catalog, siteMap);
   writePackagesIndex(entries.filter((e) => e.package));
   writeReleasesIndex(entries.filter((e) => e.release), written);
   writeSkillsPage(sha, warn);
-  await writeEcosystemPage(warn);
+  await writeEcosystemPage(warn, bizapps.mode === 'off' ? null : relativeSiteLink('ecosystem', GUIDE_SLUG));
 
   report(entries.length, warnings);
 }
@@ -98,12 +113,19 @@ function rootDocEntries() {
   return ROOT_DOCS.filter((doc) => existsSync(path.join(REPO_ROOT, doc.src)));
 }
 
-function guideEntries() {
+function guideEntries(bizapps) {
   const guidesDir = path.join(REPO_ROOT, 'guides');
   const entries = [];
   for (const name of readdirSync(guidesDir)) {
     if (!name.endsWith('.md') || !statSync(path.join(guidesDir, name)).isFile()) continue;
     if (INTERNAL_GUIDES.has(name)) continue;
+    if (`guides/${name}` === GUIDE_SOURCE) {
+      // Rendered from the committed copy only when the live catalog is unavailable (see prepareBizApps).
+      if (bizapps.mode === 'snapshot') {
+        entries.push({ src: GUIDE_SOURCE, slug: GUIDE_SLUG, out: `${GUIDE_SLUG}.md`, fallbackTitle: 'MemberJunction BizApps', sidebarHidden: true, generated: true });
+      }
+      continue;
+    }
     if (name === 'README.md') {
       entries.push({ src: 'guides/README.md', slug: 'guides', out: 'guides/index.md', fallbackTitle: 'Developer Guides', sidebarLabel: 'All Guides', sidebarOrder: 0 });
     } else {
@@ -200,9 +222,11 @@ function writeEntry(entry, siteMap, sha, warn) {
   const frontmatter = buildFrontmatter({
     title: pageTitle,
     description,
-    editUrl: EDIT_BASE + entry.src,
+    // A generated file has no source worth editing; its header says how to regenerate it.
+    editUrl: entry.generated ? false : EDIT_BASE + entry.src,
     sidebarLabel: entry.sidebarLabel,
     sidebarOrder: entry.sidebarOrder,
+    sidebarHidden: entry.sidebarHidden,
   });
   writePage(entry.out, frontmatter + body);
   return { title: pageTitle, summary: title, description };
@@ -318,13 +342,98 @@ function parseSkillFrontmatter(source) {
   return result;
 }
 
-async function writeEcosystemPage(warn) {
+/**
+ * The BizApps catalog for this build:
+ *   live      read from GitHub (or BIZAPPS_SOURCE_FILE) — the normal case
+ *   snapshot  GitHub unavailable; render the committed guides/BIZAPPS_GUIDE.md instead
+ *   off       this documentation set predates Open Apps, or there is nothing to render
+ */
+async function prepareBizApps(warn) {
+  if (documentedMajor < BIZAPPS_MIN_MAJOR) return { mode: 'off' };
+  try {
+    const source = await loadBizAppsSource({ file: process.env.BIZAPPS_SOURCE_FILE, token: process.env.GITHUB_TOKEN, warn });
+    return { mode: 'live', catalog: withGlyphs(buildCatalog(source, warn), warn) };
+  } catch (error) {
+    const hasSnapshot = existsSync(path.join(REPO_ROOT, GUIDE_SOURCE));
+    warn(`bizapps: live catalog unavailable (${error.message}); ${hasSnapshot ? `rendering the committed ${GUIDE_SOURCE}` : 'no committed copy on this ref, so no BizApps page'}`);
+    return { mode: hasSnapshot ? 'snapshot' : 'off' };
+  }
+}
+
+/**
+ * Attach each app's icon as inline-SVG data (see lib/fa-icons.mjs). An icon that
+ * does not resolve falls back to the app's initial on the page, with a warning
+ * so the manifest can be fixed.
+ */
+function withGlyphs(catalog, warn) {
+  const glyph = (owner, icon) => {
+    if (!icon) return null;
+    const resolved = resolveFontAwesome(icon);
+    if (!resolved) warn(`bizapps: ${owner} declares icon "${icon}", which is not a Font Awesome 6 Free icon; showing its initial instead`);
+    return resolved;
+  };
+  return {
+    ...catalog,
+    apps: catalog.apps.map((app) => ({ ...app, glyph: glyph(app.repo, app.icon) })),
+    featured: catalog.featured.map((item) => ({ ...item, glyph: glyph(item.repo, item.icon) })),
+  };
+}
+
+/**
+ * guides/bizapps.mdx: the catalog embedded as data for the BizAppsCatalog
+ * component. The frontmatter title is the page H1; the edit link is off because
+ * the page has no single source file to edit.
+ */
+function writeBizAppsPage(catalog, siteMap) {
+  const related = RELATED_GUIDES.map(({ src, label, note }) => ({
+    label,
+    note: note ?? null,
+    href: siteMap.has(src) ? relativeSiteLink(GUIDE_SLUG, siteMap.get(src)) : `https://github.com/MemberJunction/MJ/blob/next/${src}`,
+  }));
+  const props = { catalog, related, builtAt: new Date().toISOString().slice(0, 10), guideUrl: BIZAPPS_GUIDE_URL };
+  const released = catalog.apps.filter((app) => app.status === 'released').length;
+  const frontmatter = [
+    '---',
+    `title: ${JSON.stringify('MemberJunction BizApps')}`,
+    `description: ${JSON.stringify(`The ${catalog.apps.length} business applications built on MemberJunction (${released} released): what each one does and how they build on each other.`)}`,
+    'editUrl: false',
+    'tableOfContents: false',
+    'sidebar:',
+    '  hidden: true',
+    '---',
+    '',
+  ].join('\n');
+  const body = [
+    "import BizAppsCatalog from '../../../components/BizAppsCatalog.astro';",
+    '',
+    `export const bizapps = ${JSON.stringify(props)};`,
+    '',
+    'The business applications built on MemberJunction. Each one is an MJ **Open App** — its own repository, database schema and npm packages — installed into any MJ instance with `mj app install`, which installs the apps it builds on first.',
+    '',
+    '<BizAppsCatalog {...bizapps} />',
+    '',
+  ].join('\n');
+  writePage(`${GUIDE_SLUG}.mdx`, frontmatter + body);
+}
+
+async function writeEcosystemPage(warn, bizappsLink) {
   const cards = await fetchEcosystem(process.env.GITHUB_TOKEN, warn);
   const lines = [
-    buildFrontmatter({ title: 'Ecosystem', description: 'Sibling MemberJunction repositories: Skyway, Forge, the VSCode extension, and BizApps.' }),
+    buildFrontmatter({
+      title: 'Ecosystem',
+      description: `Sibling MemberJunction repositories: Skyway, Forge, the VSCode extension${bizappsLink ? ', and BizApps' : ''}.`,
+    }),
     'MemberJunction is more than this monorepo. These sibling repositories are part of the same ecosystem — each card is fetched from GitHub at build time, so this page never goes stale.',
     '',
   ];
+  if (bizappsLink) {
+    lines.push(
+      '## BizApps',
+      '',
+      `The business applications built on MemberJunction (accounting, orders, sales, tasks, forms and more) each live in their own \`bizapps-*\` repository. See **[MemberJunction BizApps](${bizappsLink})** for the full catalog and a map of how they build on each other.`,
+      '',
+    );
+  }
   for (const card of cards) {
     lines.push(`## ${card.repo}`, '');
     if (card.description) lines.push(`> ${card.description}`, '');

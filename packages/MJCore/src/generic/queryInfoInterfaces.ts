@@ -69,6 +69,11 @@ export interface IQueryFieldInfoBase {
      * Description of the summary calculation
      */
     SummaryDescription: string;
+    /**
+     * Whether this output column is produced by every template branch variant of the query.
+     * Defaults to true; when false, the column is only present when a conditional branch is taken.
+     */
+    InAllBranchVariants?: boolean;
 }
 
 /**
@@ -132,9 +137,17 @@ export interface IQueryEntityInfoBase {
      */
     EntityID: string;
     /**
+     * Optional foreign key to the specific EntityAlternateBaseView referenced in the query SQL
+     */
+    AlternateBaseViewID?: string | null;
+    /**
      * Name of the referenced entity
      */
     Entity: string;
+    /**
+     * Name of the referenced alternate base view, when AlternateBaseViewID is set
+     */
+    AlternateBaseView?: string | null;
 }
 
 /**

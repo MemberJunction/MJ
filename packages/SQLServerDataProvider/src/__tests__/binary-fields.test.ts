@@ -13,7 +13,9 @@ vi.mock('mssql', async () => (await import('./helpers/mock-mssql')).createMockMs
 
 import { BaseEntity, EntityFieldInfo, EntityInfo, EntitySaveOptions } from '@memberjunction/core';
 import type { SaveCallBinding } from '@memberjunction/generic-database-provider';
+import mssql from 'mssql';
 import { SQLServerDataProvider } from '../SQLServerDataProvider';
+import { RenderSaveSQL, SQLServerSaveParameter } from '../saveParameters';
 import { mssqlState, MockConnectionPool } from './helpers/mock-mssql';
 import { TEST_USER, TestEntity } from './helpers/entity-fixtures';
 
@@ -186,11 +188,23 @@ describe('SQLServerDataProvider.RenderSaveCallBinding — binary fields', () => 
     provider = makeProvider(entityInfo);
   });
 
-  function binding(values: Array<[string, unknown]>): Extract<SaveCallBinding, { kind: 'mssql-declare-exec' }> {
+  type ExecutedBinding = Extract<SaveCallBinding, { kind: 'mssql-declare-exec' }> & {
+    parameters: readonly SQLServerSaveParameter[];
+    recordSuffix: string;
+  };
+
+  function executedBinding(values: Array<[string, unknown]>): ExecutedBinding {
     const map = new Map<EntityFieldInfo, unknown>(values.map(([n, v]) => [field(entityInfo, n), v]));
     const b = provider.RenderBindingForTest(newEntity(entityInfo), map, false);
     if (b.kind !== 'mssql-declare-exec') throw new Error(`unexpected binding kind ${b.kind}`);
-    return b;
+    return b as ExecutedBinding;
+  }
+
+  /** The binding in its literal form: the text the batch has always had, and what is logged. */
+  function binding(values: Array<[string, unknown]>): Extract<SaveCallBinding, { kind: 'mssql-declare-exec' }> {
+    const b = executedBinding(values);
+    const render = (text: string): string => RenderSaveSQL(text, b.parameters, b.recordSuffix);
+    return { ...b, preambleSQL: render(b.preambleSQL), setSQL: render(b.setSQL), callArgsSQL: render(b.callArgsSQL) };
   }
 
   it('SETs a binary variable from a hex literal, declared as VARBINARY(MAX)', () => {
@@ -198,6 +212,15 @@ describe('SQLServerDataProvider.RenderSaveCallBinding — binary fields', () => 
     expect(b.preambleSQL).toMatch(/@Content_[0-9a-f]+ VARBINARY\(MAX\)/);
     expect(b.setSQL).toMatch(/SET @Content_[0-9a-f]+ = 0x0102FF/);
     expect(b.setSQL).not.toContain("'AQL/'");
+  });
+
+  it('binds the bytes as a varbinary parameter of the column\'s length in the statement that runs', () => {
+    const b = executedBinding([['Name', 'Doc'], ['Content', 'AQL/']]);
+    expect(b.setSQL).toMatch(/SET @Content\$ = @p\$\d+/);
+    const content = b.parameters.find((p) => Buffer.isBuffer(p.Value));
+    expect(content?.Value).toEqual(Buffer.from([1, 2, 255]));
+    expect(content?.Type).toEqual(mssql.VarBinary(mssql.MAX));
+    expect(content?.Literal).toBe('0x0102FF');
   });
 
   it('renders the simple-params form of a binary field as a hex literal', () => {
@@ -278,9 +301,10 @@ describe('SQLServerDataProvider save path — binary round trip', () => {
     expect(result).not.toBe(false);
 
     expect(mssqlState.Queries).toHaveLength(1);
-    const sql = mssqlState.Queries[0].sql;
-    expect(sql).toMatch(/SET @Content_[0-9a-f]+ = 0x0102FF/);
-    expect(sql).toContain('EXEC [dbo].spCreateDocument');
+    const executed = mssqlState.Queries[0];
+    expect(executed.sql).toMatch(/SET @Content\$ = @p\$\d+/);
+    expect(executed.sql).toContain('EXEC [dbo].spCreateDocument');
+    expect(executed.inputs.find((i) => Buffer.isBuffer(i.value))?.value).toEqual(Buffer.from([1, 2, 255]));
 
     const saved = result as Record<string, unknown>;
     expect(saved.Content).toBe('AQL/');

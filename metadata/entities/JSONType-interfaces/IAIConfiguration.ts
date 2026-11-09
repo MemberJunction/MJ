@@ -5,7 +5,7 @@
  *
  * 1. **Shared modality sections** (`LLMConfigurationSettings`, `RealtimeConfigurationSettings`,
  *    `VisionConfigurationSettings`, `AudioConfigurationSettings`, `DecisionConfigurationSettings`,
- *    `PrivacyConfigurationSettings`) —
+ *    `PrivacyConfigurationSettings`, `EmbeddingConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`IAIModelConfiguration`, `IAIPromptConfiguration`,
@@ -152,11 +152,22 @@ export type RealtimeTurnCoverage = 'audioActivityOnly' | 'audioActivityAndAllVid
 export interface RealtimeTurnDetectionSettings {
     /** The normalized mode; absent = `'default'`. */
     Mode?: RealtimeTurnDetectionMode;
-    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    /**
+     * The cross-driver patient (`low`) / normal (`auto`) / eager (`high`) turn-taking dial; ignored without a mapping.
+     * OpenAI and Eleven Realtime: semantic-VAD `eagerness`, applied only with `Mode: 'semanticVad'`. xAI: an end-of-turn
+     * silence ladder. Gemini: end-of-speech sensitivity. ElevenLabs Agents: turn eagerness.
+     */
     Eagerness?: 'low' | 'auto' | 'high';
-    /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+    /**
+     * Server-VAD activation threshold (0–1); ignored without a mapping. Approximate on Gemini (two levels:
+     * < 0.5 → high start sensitivity, >= 0.5 → low).
+     */
     Threshold?: number;
-    /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+    /**
+     * Server-VAD trailing-silence duration in ms; ignored without a mapping. Setting it (in any layer,
+     * including the model-vendor catalog) turns the eagerness ladder off for drivers without a native
+     * eagerness knob (xAI).
+     */
     SilenceDurationMs?: number;
     /**
      * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
@@ -279,10 +290,11 @@ export interface RealtimeUnitPrice {
 }
 
 /**
- * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
- * their own; the cost rows stay the authority for token prices. A price belongs to the host that
- * charges it, so set this on the model-vendor row: a price on the model or the model type would
- * reach every vendor that serves the model.
+ * Prices for realtime usage that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own: avatar video, and audio tokens, which providers bill at a different rate from the
+ * text tokens a cost row prices. The cost rows stay the authority for every other token price. A
+ * price belongs to the host that charges it, so set this on the model-vendor row: a price on the
+ * model or the model type would reach every vendor that serves the model.
  */
 export interface RealtimePricingSettings {
     /**
@@ -296,6 +308,22 @@ export interface RealtimePricingSettings {
      * at 6,192 tokens per second.
      */
     AvatarVideoOutput?: RealtimeUnitPrice | null;
+    /**
+     * The price of audio input tokens, charged on a line of its own instead of at the cost row's
+     * input rate. Realtime providers bill audio tokens at a different rate from text tokens (GPT
+     * Realtime: several times the text rate), and a cost row holds one input rate. `'Per 1M Tokens'`
+     * only; any other unit is not applied. Cached audio input tokens are priced at the cost row's cache-read rate, not here. Without this
+     * price, audio input tokens are priced at the cost row's input rate and the run's default cost
+     * line is marked as blended.
+     */
+    AudioInput?: RealtimeUnitPrice | null;
+    /**
+     * The price of audio output tokens, charged on a line of its own instead of at the cost row's
+     * output rate. `'Per 1M Tokens'` only; any other unit is not applied. Without this price, audio
+     * output tokens are priced at the cost row's output rate and the run's default cost line is
+     * marked as blended.
+     */
+    AudioOutput?: RealtimeUnitPrice | null;
 }
 
 /** Realtime (speech-to-speech) knobs. */
@@ -371,6 +399,21 @@ export interface PrivacyConfigurationSettings {
 }
 
 /**
+ * Embedding knobs, read at call time by the embedding resolvers (`AIEngine.EmbedText`,
+ * `AIEmbeddingRunner`). Set them on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`).
+ * Asymmetric models such as EmbeddingGemma 2 or Gemini Embedding 2 are trained to read a different
+ * instruction prefix on a search query than on a stored document; the resolvers prepend the one that
+ * matches the call's `inputType`, so drivers and callers never hardcode model-specific strings.
+ * Providers with a native input-type parameter (Cohere) leave these unset.
+ */
+export interface EmbeddingConfigurationSettings {
+    /** Prepended to a text embedded as a search query (`inputType: 'query'`), e.g. `'task: search result | query: '`. */
+    QueryPrefix?: string | null;
+    /** Prepended to a text embedded as a stored document (`inputType: 'document'`, the default), e.g. `'title: none | text: '`. */
+    DocumentPrefix?: string | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -411,6 +454,8 @@ export interface IAIModelConfiguration {
     Decision?: DecisionConfigurationSettings | null;
     /** Privacy posture of the model deployment. Honored at the catalog layers. */
     Privacy?: PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Honored at the catalog layers. */
+    Embedding?: EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -433,6 +478,8 @@ export interface IAIPromptConfiguration {
     Decision?: DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -452,6 +499,8 @@ export interface IAIPromptModelConfiguration {
     Decision?: DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: EmbeddingConfigurationSettings | null;
 }
 
 /**

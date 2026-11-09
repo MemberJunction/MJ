@@ -21,6 +21,9 @@ export interface RecordChangeMetadataSource {
  */
 export const RecordChangesEntityName = 'MJ: Record Changes';
 
+/** {@link RecordChangesEntityName} folded once, for the case-insensitive comparison. */
+const RECORD_CHANGES_ENTITY_NAME_LOWER = RecordChangesEntityName.toLowerCase();
+
 /**
  * The Record Change column naming the entity a row is ABOUT. Everything in this module hangs off
  * it: it is what makes the denied set per-ROW rather than per-result.
@@ -189,7 +192,16 @@ export class RecordChangeFieldSecurityProjector {
      * constructing a projector, so nothing is paid on the other 99% of reads.
      */
     public static IsRecordChangesEntity(entity: EntityInfo | null | undefined): boolean {
-        return entity?.Name?.trim().toLowerCase() === RecordChangesEntityName.toLowerCase();
+        const name = entity?.Name;
+        if (!name) {
+            return false;
+        }
+        // Exact name first (the usual spelling), and a length test before folding any other name.
+        if (name === RecordChangesEntityName) {
+            return true;
+        }
+        return name.length >= RECORD_CHANGES_ENTITY_NAME_LOWER.length
+            && name.trim().toLowerCase() === RECORD_CHANGES_ENTITY_NAME_LOWER;
     }
 
     /**
@@ -243,7 +255,7 @@ export class RecordChangeFieldSecurityProjector {
     private callerCarriesDenials(): boolean {
         if (this.carriesDenials === null) {
             this.carriesDenials = this.provider.Entities.some(
-                (e) => e.EnableFieldLevelSecurity && e.GetDeniedReadFields(this.user).size > 0
+                (e) => e.FieldLevelSecurityApplies && e.GetDeniedReadFields(this.user).size > 0
             );
         }
         return this.carriesDenials;

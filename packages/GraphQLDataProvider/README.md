@@ -28,7 +28,7 @@ npm install @memberjunction/graphql-dataprovider
 - **Field Mapping**: Automatic mapping between client and server field names
 - **Session Management**: Persistent session IDs with automatic storage
 - **System User Client**: Specialized client for server-to-server communication
-- **Duplicate Detection**: Built-in support for finding and merging duplicate records
+- **Duplicate Detection & Merge**: Start duplicate detection runs, run the entry-time duplicate check, and merge records
 - **AI Operations**: Execute AI prompts and generate embeddings through GraphQL
 - **Simple Prompts**: Run ad-hoc AI prompts without stored configurations
 
@@ -777,9 +777,12 @@ Contracts worth knowing:
 - `CreateTransactionGroup()` - Create a new transaction group
 - `ExecuteTransaction(transaction: TransactionGroupBase)` - Execute a transaction group
 
-#### Duplicate Detection
-- `GetRecordDuplicates(request: PotentialDuplicateRequest)` - Find potential duplicate records
-- `MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo, options?: EntityMergeOptions)` - Merge duplicate records with optional transaction scope support
+#### Duplicate Detection & Merge
+- `GetRecordDuplicates(request: PotentialDuplicateRequest)` - Start a list-based duplicate detection run on the server. The server creates a `MJ: Duplicate Runs` record and detection runs asynchronously, so the call returns `Status: 'Inprogress'` with no results; read the run's `MJ: Duplicate Run Details` / `MJ: Duplicate Run Detail Matches` rows for the outcome. Only `EntityID`, `ListID`, `EntityDocumentID`, `RecordIDs` and `ProbabilityScore` are part of the GraphQL input.
+- `MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo, options?: EntityMergeOptions)` - Merge records into a surviving record in one server-side transaction: apply the optional `FieldMap`, re-point every dependent record, delete the merged records, and log the merge. The entity must have `AllowRecordMerge = true` (checked client-side before the call, and again on the server). `FieldMap` values are sent as strings. `EntityMergeOptions` is reserved and currently has no members.
+- `GraphQLAIClient.CheckDuplicateEntry({ EntityName, Values })` - Entry-time check: flags existing records that may duplicate the values a person is typing for a new record. Never throws; returns `Checked`, `NotConfigured`, `NotAuthorized` or `Failed`.
+
+See the [Duplicate Management Guide](../../guides/DUPLICATE_MANAGEMENT_GUIDE.md) for the full feature.
 
 #### Metadata Operations
 - `GetEntityRecordName(entityName: string, compositeKey: CompositeKey)` - Get display name for a record
@@ -828,6 +831,14 @@ For the warm-load smart-cache-check flow this matters a lot — the client reads
 `setupGraphQLClient` orchestrates a deterministic warm-load path: after `provider.Config(...)` loads the cached `AllMetadata` blob from IndexedDB (gzip-compressed, three keys read in a single batched call), it calls `provider.preValidateAndRefresh()` to confirm the cache is current via a single batched timestamp round-trip. If current, engines trust their local caches and route per-view requests through `RunViewsWithCacheCheck` — a fingerprint-only GraphQL call that returns either a "current" marker (use local cache) or fresh data for stale entries.
 
 For the full architecture — differential updates, Redis cross-server sync, session-based deduplication, and deployment topologies — see the [**Caching & Pub/Sub Guide**](../../guides/CACHING_AND_PUBSUB_GUIDE.md).
+
+### Sequenced Cache Invalidation & Delta Catch-Up
+
+`GraphQLDataProvider` tracks the server's monotonically increasing cache invalidation sequence number (`LastCacheInvalidationSequence` and `LastCacheServerProcessId`) delivered via both:
+- `X-MJ-Cache-Seq` and `X-MJ-Server-ID` HTTP response headers on GraphQL requests (`ProcessServerCacheSequenceHeader`), and
+- the `Sequence` field on `CacheInvalidation` WebSocket subscription events.
+
+When the client detects a sequence gap on the same server process (e.g., after a momentary WebSocket disconnect or background tab wake-up), it automatically calls `CatchUpCacheInvalidations(sinceSequence)` against the server's `GetCacheInvalidationsSince` query to replay missed invalidations in order without requiring a full cache flush. See the [**Server Scaling and Broadcast Architecture Guide**](../../guides/SERVER_SCALING_AND_BROADCAST_ARCHITECTURE.md).
 
 ## Dependencies
 

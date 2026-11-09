@@ -38,6 +38,23 @@ async function loadEngine() {
   return import('../index.js');
 }
 
+const MERGE_STRATEGIES = ['merge', 'overwrite', 'skip'] as const;
+
+function isMergeStrategy(value: string | undefined): value is (typeof MERGE_STRATEGIES)[number] {
+  return value !== undefined && (MERGE_STRATEGIES as readonly string[]).includes(value);
+}
+
+/** Splits repeated or comma-separated flag values into a list, or undefined when empty. */
+function splitListFlag(values: string[] | undefined): string[] | undefined {
+  const items = (values ?? []).flatMap((v) => v.split(',')).map((v) => v.trim()).filter((v) => v.length > 0);
+  return items.length > 0 ? items : undefined;
+}
+
+/** Warning text without a leading warning sign, used to find duplicates. */
+function warningKey(message: string): string {
+  return message.replace(/^\s*⚠️?\s*/u, '').trim();
+}
+
 /**
  * Flush stdout, then terminate. A buffered JSON result (e.g. piped to `jq`)
  * would be truncated by a bare `process.exit()`, so we exit from the flush
@@ -164,11 +181,18 @@ export class SyncPushPlugin extends BaseCLIPlugin {
     const {
       PushService, ValidationService, FormattingService,
       loadMJConfig, loadSyncConfig, initializeProvider,
-      getSyncEngine, getSystemUser, configManager, SyncStateManager,
+      getSyncEngine, getSystemUser, configManager, SyncStateManager, FindSyncRootDir,
     } = engine;
 
     const errors: MJCLIResultError[] = [];
     const warnings: string[] = [];
+    const warningKeys = new Set<string>();
+    const addWarning = (message: string): void => {
+      const key = warningKey(message);
+      if (warningKeys.has(key)) return;
+      warningKeys.add(key);
+      warnings.push(message);
+    };
 
     try {
     this.Host.StartStep('Loading configuration');
@@ -193,7 +217,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
     // ── Validation ────────────────────────────────────────────────────────────
     if (!flags['no-validate']) {
       this.Host.StartStep('Validating metadata');
-      const validator = new ValidationService({ verbose: this.Host.Verbose, include: includeFilter, exclude: excludeFilter });
+      const validator = new ValidationService({ verbose: this.Host.Verbose, include: includeFilter, exclude: excludeFilter, HonorPushWhen: true, ValidateChildFoldersOnly: !flags.dir });
       const targetDir = flags.dir ? path.resolve(baseDir, flags.dir) : baseDir;
       const validationResult = await validator.validateDirectory(targetDir);
 
@@ -222,7 +246,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
     // ── Push ────────────────────────────────────────────────────────────────��─
     const pushService = new PushService(await getSyncEngine(getSystemUser()), getSystemUser());
     if (flags.incremental) {
-      const stateDir = flags.dir ? path.resolve(baseDir, flags.dir) : baseDir;
+      const stateDir = flags.dir ? FindSyncRootDir(path.resolve(baseDir, flags.dir)) : baseDir;
       const stateManager = new SyncStateManager(stateDir);
       await stateManager.load();
       pushService.setStateManager(stateManager);
@@ -249,7 +273,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
         // via onRecordError (below), so errors[] stays clean (plan §1a/§6/D6).
         onError: (message) => {
           if (message.includes('Rolling back database') || message.includes('rolled back successfully')) {
-            warnings.push(message);
+            addWarning(message);
             this.Host.Log(message, 'warn');
           } else {
             this.Host.Log(message, 'error');
@@ -261,7 +285,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
           errors.push({ context, message });
         },
         onWarn: (message) => {
-          warnings.push(message);
+          addWarning(message);
           this.Host.Log(message, 'warn');
         },
         onLog: (message) => this.Host.Log(message),
@@ -270,7 +294,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
     );
 
     const endTime = Date.now();
-    for (const w of result.warnings) if (!warnings.includes(w)) warnings.push(w);
+    for (const w of result.warnings) addWarning(w);
 
     // A push that fails rolls back and throws (see the catch below), so a result with
     // errors only comes from a dry run. There is nothing to commit, so no prompt.
@@ -296,6 +320,10 @@ export class SyncPushPlugin extends BaseCLIPlugin {
         errorCount: result.errors,
         dryRun: !!flags['dry-run'],
         sqlLogPath: result.sqlLogPath,
+        skippedDirectories: (result.SkippedDirectories ?? []).map((s) => ({
+          directory: path.relative(baseDir, s.Directory) || path.basename(s.Directory),
+          reason: s.Reason,
+        })),
       },
       errors,
       warnings,
@@ -428,10 +456,10 @@ export class SyncPullPlugin extends BaseCLIPlugin {
     'dry-run': Flags.boolean({ description: 'Show what would be pulled without actually pulling' }),
     'multi-file': Flags.string({ description: 'Create a single file with multiple records (provide filename)' }),
     'no-validate': Flags.boolean({ description: 'Skip validation before pull' }),
-    'update-existing': Flags.boolean({ description: 'Update existing records during pull', default: true }),
-    'create-new': Flags.boolean({ description: 'Create new files for records not found locally', default: true }),
+    'update-existing': Flags.boolean({ description: 'Update existing records during pull (default: the folder config, else true)', allowNo: true }),
+    'create-new': Flags.boolean({ description: 'Create new files for records not found locally (default: the folder config, else true)', allowNo: true }),
     'backup-before-update': Flags.boolean({ description: 'Create backups before updating files', default: true }),
-    'merge-strategy': Flags.string({ description: 'Merge strategy for updates', options: ['merge', 'overwrite', 'skip'], default: 'merge' }),
+    'merge-strategy': Flags.string({ description: 'Merge strategy for updates (default: the folder config, else merge)', options: ['merge', 'overwrite', 'skip'] }),
     'backup-directory': Flags.string({ description: 'Custom backup directory (default: .backups)' }),
     'preserve-fields': Flags.string({ description: 'Comma-separated list of fields to preserve during updates', multiple: true }),
     'exclude-fields': Flags.string({ description: 'Comma-separated list of fields to exclude from pull', multiple: true }),
@@ -508,7 +536,7 @@ export class SyncPullPlugin extends BaseCLIPlugin {
       const formatter = new FormattingService();
       if (!flags['no-validate']) {
         this.Host.StartStep('Validating target directory');
-        const validator = new ValidationService({ verbose: this.Host.Verbose });
+        const validator = new ValidationService({ verbose: this.Host.Verbose, ValidateChildFoldersOnly: true });
         const validationResult = await validator.validateDirectory(targetDir);
         if (!validationResult.isValid || validationResult.warnings.length > 0) {
           this.Host.FailStep('Validation reported issues');
@@ -540,9 +568,7 @@ export class SyncPullPlugin extends BaseCLIPlugin {
         pullService.setStateManager(stateManager);
       }
 
-      // Only the fields PullService.pull() actually reads are forwarded; the
-      // backup/merge/preserve/exclude flags it ignores are kept for help/CLI
-      // compatibility but were no-ops in the original (passed via `any`).
+      // The backup flags are not forwarded; PullService takes its backup settings from the folder config.
       const pullOptions: PullOptions = { entity: flags.entity, targetDir, dryRun: flags['dry-run'], verbose: this.Host.Verbose, noValidate: flags['no-validate'] };
       if (flags.filter !== undefined) pullOptions.filter = flags.filter;
       if (flags['multi-file'] !== undefined) pullOptions.multiFile = flags['multi-file'];
@@ -550,6 +576,11 @@ export class SyncPullPlugin extends BaseCLIPlugin {
       if (flags['create-new'] !== undefined) pullOptions.createNewFileIfNotFound = flags['create-new'];
       if (flags.incremental) pullOptions.incremental = flags.incremental;
       if (flags.since !== undefined) pullOptions.since = flags.since;
+      if (isMergeStrategy(flags['merge-strategy'])) pullOptions.MergeStrategy = flags['merge-strategy'];
+      const preserveFields = splitListFlag(flags['preserve-fields']);
+      if (preserveFields) pullOptions.PreserveFields = preserveFields;
+      const excludeFields = splitListFlag(flags['exclude-fields']);
+      if (excludeFields) pullOptions.ExcludeFields = excludeFields;
 
       const result = await pullService.pull(pullOptions, {
         onProgress: (message) => this.Host.StartStep(message),

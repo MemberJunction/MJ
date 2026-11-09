@@ -8,6 +8,7 @@ import { RenderComponentFixture, CreateFakeProvider, Query, QueryAll, Text, Clic
 import type { MJDashboardPartTypeEntity } from '@memberjunction/core-entities';
 import { DashboardPartDialogComponent, type DashboardPartDialogResult } from './dashboard-part-dialog.component';
 import { WebURLConfigPanelComponent } from '../../config-panels/weburl-config-panel.component';
+import { PropertyDefaultEditorComponent } from '../property-default-editor/property-default-editor.component';
 import type { DashboardPanel } from '../../models/dashboard-types';
 
 /**
@@ -39,7 +40,7 @@ const REVENUE: DashboardPanel = { id: 'panel-1', title: 'Revenue', icon: 'fa-sol
 function render(inputs: Record<string, unknown>): ComponentFixture<DashboardPartDialogComponent> {
   return RenderComponentFixture(DashboardPartDialogComponent, {
     imports: [FormsModule, MJDialogComponent, MJDialogActionsComponent, MJButtonDirective, MJEmptyStateComponent, StubLoadingComponent],
-    declarations: [DashboardPartDialogComponent, WebURLConfigPanelComponent],
+    declarations: [DashboardPartDialogComponent, WebURLConfigPanelComponent, PropertyDefaultEditorComponent],
     inputs: { PartTypes: PART_TYPES, Visible: true, ...inputs },
   });
 }
@@ -318,5 +319,63 @@ describe('DashboardPartDialogComponent (DOM)', () => {
 
       expect(saved).toEqual([{ PartType: custom, Config: { type: 'Custom' }, Title: 'Custom', Icon: 'fa-solid fa-cube' }]);
     });
+  });
+});
+
+describe('DashboardPartDialogComponent Inputs list (DOM)', () => {
+  const PROPERTIES = [{ Name: 'Chapter', Type: 'string' }, { Name: 'Count', Type: 'number' }];
+  const chooseProperty = async (f: ComponentFixture<DashboardPartDialogComponent>, name: string) => {
+    const select = Query(f, '.part-dialog__input select') as HTMLSelectElement;
+    select.value = name;
+    select.dispatchEvent(new Event('change'));
+    await settle(f);
+  };
+
+  it("lists a URL's placeholders as the part's inputs, and saves an input mapped to a dashboard property", async () => {
+    const f = render({ Mode: 'add', PartTypes: [WEB_PAGE_TYPE], DashboardProperties: PROPERTIES });
+    await settle(f);
+    TypeInto(f, '#webUrl', 'https://example.com/chapters/{Chapter}');
+    await settle(f);
+    await settle(f);
+
+    expect(QueryAll(f, '.part-dialog__input-name').map(e => e.textContent?.replace(/\s+/g, ' ').trim())).toEqual(['Chapter any*']);
+    expect(Array.from((Query(f, '.part-dialog__input select') as HTMLSelectElement).options).map(o => o.textContent?.trim()))
+      .toEqual(['No dashboard property', 'Chapter', 'Count']);
+    await chooseProperty(f, 'Chapter');
+    const saved = Capture<DashboardPartDialogResult>(f.componentInstance.Saved);
+    Click(f, '.mj-dialog-actions button');
+
+    expect(saved[0].Config['inputMappings']).toEqual([{ Input: 'Chapter', Property: 'Chapter' }]);
+  });
+
+  it('saves no inputMappings key when no input is mapped', async () => {
+    const f = render({ Mode: 'add', PartTypes: [WEB_PAGE_TYPE], DashboardProperties: PROPERTIES });
+    await settle(f);
+    TypeInto(f, '#webUrl', 'https://example.com/chapters/{Chapter}');
+    await settle(f);
+    await settle(f);
+    const saved = Capture<DashboardPartDialogResult>(f.componentInstance.Saved);
+    Click(f, '.mj-dialog-actions button');
+    expect('inputMappings' in saved[0].Config).toBe(false);
+  });
+
+  it('shows a mapping to an input the part no longer declares, and refuses Apply until it is removed', async () => {
+    const page: DashboardPanel = { id: 'panel-3', title: 'Chapter page', partTypeId: 'pt-url',
+      config: { type: 'WebURL', url: 'https://example.com/{Chapter}', inputMappings: [{ Input: 'Chapter', Property: 'Chapter' }, { Input: 'OldName', Property: 'Chapter' }] } };
+    const f = render({ Mode: 'edit', PartTypes: [WEB_PAGE_TYPE], Panel: page, DashboardProperties: PROPERTIES });
+    await settle(f);
+    await settle(f);
+    expect(Text(f, '.part-dialog__input--broken')).toContain('"OldName" is mapped but is not an input of this part');
+    const saved = Capture<DashboardPartDialogResult>(f.componentInstance.Saved);
+
+    Click(f, '.mj-dialog-actions button');
+    await settle(f);
+    expect(saved).toHaveLength(0);
+    expect(Text(f, '.part-dialog__error')).toContain('Input "OldName" is not one the part declares.');
+
+    Click(f, '.part-dialog__input--broken button');
+    await settle(f);
+    Click(f, '.mj-dialog-actions button');
+    expect(saved[0].Config['inputMappings']).toEqual([{ Input: 'Chapter', Property: 'Chapter' }]);
   });
 });

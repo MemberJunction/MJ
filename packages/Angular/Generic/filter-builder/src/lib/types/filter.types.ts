@@ -27,7 +27,11 @@ export type FilterOperator =
   | 'isnull'       // is null
   | 'isnotnull'    // is not null
   | 'isempty'      // is empty (alias for isnull)
-  | 'isnotempty';  // is not empty (alias for isnotnull)
+  | 'isnotempty'   // is not empty (alias for isnotnull)
+  // Set / range operations
+  | 'in'           // value in array
+  | 'notin'        // value not in array
+  | 'between';     // value between [min, max] inclusive
 
 /**
  * Logical operators for combining filters
@@ -90,6 +94,10 @@ export interface FilterFieldInfo {
   displayName: string;
   /** The data type of the field */
   type: FilterFieldType;
+  /** Optional description shown as helper text in the field picker */
+  description?: string;
+  /** Optional underlying SQL or technical type badge shown in the field picker */
+  sqlType?: string;
   /** For lookup fields, the entity name to look up records from */
   lookupEntityName?: string;
   /** For fields with a fixed set of values, the available options */

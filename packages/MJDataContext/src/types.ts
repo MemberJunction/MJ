@@ -1,4 +1,4 @@
-import { BaseEntity, DataObjectRelatedEntityParam, EntityInfo, LogError, Metadata, KeyValuePair, RunQuery, RunView, RunViewParams, UserInfo, CompositeKey, IMetadataProvider } from "@memberjunction/core";
+import { BaseEntity, DataObjectRelatedEntityParam, EntityInfo, EntityPermissionType, LogError, Metadata, KeyValuePair, RunQuery, RunView, RunViewParams, UserInfo, CompositeKey, IMetadataProvider } from "@memberjunction/core";
 import { MJDataContextEntity, MJDataContextItemEntity, MJDataContextItemEntityType, MJUserViewEntityExtended, MJQueryEntityExtended, QueryEngine } from "@memberjunction/core-entities";
 import { MJGlobal, RegisterClass, UUIDsEqual } from "@memberjunction/global";
 
@@ -296,7 +296,25 @@ export class DataContextItem {
                     this.RecordName = v.Name;
                     this.EntityID = v.ViewEntityInfo.ID; // if we get here, we overwrite whateer we had above because we have the actual view metadata.
                     this.ViewEntity = v;
-                    this.SQL =  `SELECT * FROM [${v.ViewEntityInfo.SchemaName}].[${v.ViewEntityInfo.BaseView}]${v.WhereClause && v.WhereClause.length > 0 ? ' WHERE ' + v.WhereClause : ''}`;
+                    const pinnedAbvName = v.AlternateBaseView?.trim();
+                    let altView: ReturnType<typeof v.ViewEntityInfo.GetAlternateBaseView>;
+                    if (pinnedAbvName) {
+                        const candidateAltView = v.ViewEntityInfo.GetAlternateBaseView(pinnedAbvName);
+                        if (!candidateAltView) {
+                            throw new Error(
+                                `User View "${v.Name}" pins AlternateBaseView "${pinnedAbvName}", which is not registered on entity "${v.ViewEntityInfo.Name}".`,
+                            );
+                        }
+                        if (!candidateAltView.IsUsable) {
+                            throw new Error(
+                                `User View "${v.Name}" pins AlternateBaseView "${candidateAltView.Name}", which is disabled and cannot be used.`,
+                            );
+                        }
+                        altView = candidateAltView;
+                    }
+                    const targetSchema = altView ? altView.EffectiveSchemaName : v.ViewEntityInfo.SchemaName;
+                    const targetView = altView ? altView.ViewName : v.ViewEntityInfo.BaseView;
+                    this.SQL =  `SELECT * FROM [${targetSchema}].[${targetView}]${v.WhereClause && v.WhereClause.length > 0 ? ' WHERE ' + v.WhereClause : ''}`;
                 }
                 break;
         }
@@ -307,9 +325,32 @@ export class DataContextItem {
             if (this.Type === 'full_entity')
                 this.RecordName = this.EntityName;
         }
-        if (dataContextItem.DataJSON && dataContextItem.DataJSON.length > 0) {
+        if (dataContextItem.DataJSON && dataContextItem.DataJSON.length > 0 && this.MaySavedDataBeServedTo(contextUser ?? provider.CurrentUser)) {
             this.Data = JSON.parse(dataContextItem.DataJSON);
         }
+    }
+
+    /**
+     * True when the rows saved in the item record's `DataJSON` may be handed to `user` in place of
+     * re-running the item. Saved rows were captured under the permissions of whoever saved them, not
+     * of the reader, so they are served only when the reader's own run could not be narrower: the item
+     * reads one entity, neither it nor an IS-A ancestor has field-level security, and the reader may read it with no
+     * row-level filter. Query and SQL items can read any number of entities, so their saved rows are
+     * never served. When this returns false the item stays unloaded, and `LoadData` re-runs it for
+     * the reader.
+     * @param user the user the item's data will be served to
+     */
+    protected MaySavedDataBeServedTo(user: UserInfo | null | undefined): boolean {
+        if (this.Type === 'query' || this.Type === 'sql') {
+            return false;
+        }
+        if (!user || !this.Entity || this.Entity.FieldLevelSecurityApplies) {
+            return false;
+        }
+        if (!this.Entity.GetUserPermisions(user)?.CanRead) {
+            return false;
+        }
+        return !this.Entity.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '');
     }
 
     /**
@@ -323,6 +364,9 @@ export class DataContextItem {
             const viewParams: RunViewParams = { IgnoreMaxRows: true }; // ignore max rows for both types
             viewParams.Fields = this.ViewEntity.ViewEntityInfo.Fields.map((f) => f.Name); // include all fields
             viewParams.ViewID = this.ViewID;
+            if (this.ViewEntity.AlternateBaseView) {
+                viewParams.AlternateBaseView = this.ViewEntity.AlternateBaseView;
+            }
             const viewResult = await rv.RunView(viewParams, contextUser);
             if (viewResult && viewResult.Success) {
                 this.Data = viewResult.Results;

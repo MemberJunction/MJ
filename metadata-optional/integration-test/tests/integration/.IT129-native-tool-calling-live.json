@@ -1,0 +1,27 @@
+[
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT129 - Native Tool Calling and Action Param Schemas",
+      "Description": "LIVE-MODEL tier (real model calls cost tokens). Runs fixture Loop agents through AgentRunner with the model and vendor named by the override, and reads what the framework recorded: AIPromptRun.ToolCallingMode for every prompt call, and the ActionExecutionLog.Params each Actions step links to, checked against the params' ValueSchemas. NTC1: native mode set on the agent's own prompt (the Loop system prompt untouched) runs every call native, and the fixture Action receives arguments matching its ValueSchemas (Filters, ValueType Other, as an object; Priority an integer; Recipients an array of strings). NTC2: envelope mode runs every call on the envelope path, with arguments matching the schemas too. NTC3: the stock Create SVG Chart Action receives arguments matching its backfilled ValueSchemas in both modes. NTC4: a native request on a vendor row that declares LLM.SupportsNativeToolCalling false runs on the envelope path and completes. Targets come from NATIVE_TOOLS_IT_MODELS (\"Model@DriverClass\", comma-separated) or the bundle defaults; a target runs only when the runner finds a credential for it (MJ credential binding, the vendor's default credential, or AI_VENDOR_API_KEY__<DRIVER>), others are logged as skipped, and a check with nothing callable skips loudly. A run that fails because the vendor no longer serves the model (404) or the account has no balance is logged and not counted; models listed as known native gaps (#5844) are logged and not counted in the native checks. Self-cleaning.",
+      "MaxExecutionTimeMS": 1800000,
+      "InputDefinition": {},
+      "ExpectedOutcomes": {
+        "summary": "Every callable model runs native when the agent's own prompt opts in and envelope when it does not, and in both modes each Action receives arguments that match its params' ValueSchemas; a vendor row without tool support runs envelope."
+      },
+      "Configuration": {
+        "tier": "live-model",
+        "transport": "server",
+        "checks": [
+          {
+            "type": "native-tool-calling-live"
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "0CC3796A-0795-4A0F-B371-B2BDE6A2E2FE"
+    }
+  }
+]

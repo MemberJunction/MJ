@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, JSONObject, RealtimeToolBatchBarrier } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, JSONObject, MapRealtimeUsageModalityDetail, RealtimeToolBatchBarrier } from '@memberjunction/ai';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
 import {
     BaseRealtimeClient,
@@ -269,11 +269,24 @@ export class OpenAILiveClient extends BaseRealtimeClient {
      * Requests a brief interim narration utterance during delegated background work.
      */
     public RequestSpokenUpdate(instructions: string): void {
+        this.requestInstructedResponse(instructions, 'narration');
+    }
+
+    /** A spoken TURN: the same commentary trigger as the update, with the reply kept `normal` (MJ#4591). */
+    public RequestSpokenTurn(instructions: string): void {
+        this.requestInstructedResponse(instructions, 'normal');
+    }
+
+    /**
+     * The one trigger behind both spoken requests, so the two cannot drift: the instructions ride a
+     * commentary frame and a `response.create` follows unless a tool batch holds it. Skipped while a
+     * response is in flight (the collision rule); `kind` decides only how the reply is tagged.
+     */
+    private requestInstructedResponse(instructions: string, kind: 'normal' | 'narration'): void {
         if (this.responseActive || this.audioPlaying) {
-            // Collision rule: narration is disposable; skip when response is in flight
             return;
         }
-        this.pendingNarration = true;
+        this.pendingNarration = kind === 'narration';
         this.sendDataChannelFrame({
             type: 'session.commentary.append',
             content: instructions,
@@ -628,10 +641,15 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         const duration = seconds !== undefined ? Math.max(OpenAILiveClient.PREBILL_DURATION_SECONDS, seconds) : this.totalDurationSeconds;
         this.totalDurationSeconds = duration;
 
+        // The per-modality split is per response, like the token totals; only the completed response carries it.
+        const inputDetails = MapRealtimeUsageModalityDetail(usage?.['input_token_details']);
+        const outputDetails = MapRealtimeUsageModalityDetail(usage?.['output_token_details']);
         this.emitUsage({
             InputTokens: typeof usage?.input_tokens === 'number' ? usage.input_tokens : 0,
             OutputTokens: typeof usage?.output_tokens === 'number' ? usage.output_tokens : 0,
             DurationSeconds: duration,
+            ...(inputDetails ? { InputTokenDetails: inputDetails } : {}),
+            ...(outputDetails ? { OutputTokenDetails: outputDetails } : {}),
             Raw: usage,
         });
     }

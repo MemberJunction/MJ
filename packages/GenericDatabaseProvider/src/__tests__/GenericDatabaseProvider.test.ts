@@ -42,12 +42,14 @@ import {
     ProviderConfigDataBase,
     InMemoryLocalStorageProvider,
     LocalCacheManager,
+    SQLMaxLength,
 } from '@memberjunction/core';
 import type { PostCommitToken, QueryExecutionSpec, RunViewParams } from '@memberjunction/core';
 import type { MJEntityAIActionEntity } from '@memberjunction/core-entities';
 import { EntityActionDispatchGuard, EntityActionEngineServer } from '@memberjunction/actions';
 import { AIEngine } from '@memberjunction/aiengine';
 import { TransactionFrameTracker } from '../TransactionFrameTracker';
+import { SystemUserID } from '../systemUser';
 import type { ExecuteSQLBatchOptions } from '../GenericDatabaseProvider';
 import type { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '../saveTypes.js';
 
@@ -97,8 +99,18 @@ class TestGenericProvider extends GenericDatabaseProvider {
     public testBuildTotalRowCountSQL(entityInfo: EntityInfo, usingPagination: boolean, maxRowsForQuery: number): string | null {
         return this.BuildTotalRowCountSQL(entityInfo, usingPagination, maxRowsForQuery);
     }
-    public testGetEffectiveBaseView(entityInfo: EntityInfo, params: { DataSource?: 'Live' | 'Materialized' }): string {
+    public testGetEffectiveBaseView(entityInfo: EntityInfo, params: { DataSource?: 'Live' | 'Materialized'; AlternateBaseView?: string }): string {
         return this.GetEffectiveBaseView(entityInfo, params as unknown as RunViewParams);
+    }
+    public async testResolveEffectiveBaseViewTarget(
+        entityInfo: EntityInfo,
+        params: RunViewParams,
+        user?: UserInfo
+    ): Promise<{ schemaName: string; viewName: string }> {
+        return this.resolveEffectiveBaseViewTarget(entityInfo, params, user);
+    }
+    public testAssertExternalRunViewParamsSupported(params: RunViewParams, entityName: string): void {
+        this.assertExternalRunViewParamsSupported(params, entityName);
     }
 
     // Expose protected methods for testing
@@ -192,6 +204,9 @@ class TestGenericProvider extends GenericDatabaseProvider {
         throw new Error('Not supported in test double — GenerateSaveSQL is stubbed and never delegates here.');
     }
     protected WrapSaveCallForResult(): SaveSQLFragment {
+        throw new Error('Not supported in test double — GenerateSaveSQL is stubbed and never delegates here.');
+    }
+    protected ProjectSaveCallToDatestamps(): SaveSQLFragment {
         throw new Error('Not supported in test double — GenerateSaveSQL is stubbed and never delegates here.');
     }
     protected WrapSaveCallWithRecordChange(): SaveSQLFragment {
@@ -389,6 +404,64 @@ describe('GenericDatabaseProvider', () => {
             // Regression: previously derived materialized_vw<CodeName> (= materialized_vwMJE2ESalesByRegion),
             // which does not exist — the minted CodeName differs from the query-derived view name.
             expect(provider.testGetEffectiveBaseView(queryMatEntity, { DataSource: 'Materialized' })).toBe('materialized_vwE2E_Sales_By_Region');
+        });
+
+        it('AlternateBaseView routes to the registered alternate view (including custom schema) and rejects Disabled/Materialized', async () => {
+            const abvEntity = new EntityInfo({
+                ID: '11111111-1111-4111-8111-111111111111',
+                Name: 'Customers',
+                SchemaName: '__mj',
+                BaseTable: 'Customer',
+                BaseView: 'vwCustomers',
+                EntityAlternateBaseViews: [
+                    {
+                        ID: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+                        EntityID: '11111111-1111-4111-8111-111111111111',
+                        Name: 'Active',
+                        ViewName: 'vwActiveCustomers',
+                        SchemaName: 'crm_ext',
+                        Description: 'Active customers only',
+                        Status: 'Active',
+                        CachePolicy: 'Default',
+                        Sequence: 1,
+                    },
+                    {
+                        ID: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+                        EntityID: '11111111-1111-4111-8111-111111111111',
+                        Name: 'Legacy',
+                        ViewName: 'vwLegacyCustomers',
+                        SchemaName: null,
+                        Description: 'Disabled legacy view',
+                        Status: 'Disabled',
+                        CachePolicy: 'Default',
+                        Sequence: 2,
+                    },
+                ],
+            });
+
+            expect(provider.testGetEffectiveBaseView(abvEntity, { AlternateBaseView: 'Active' })).toBe('vwActiveCustomers');
+
+            const target = await provider.testResolveEffectiveBaseViewTarget(abvEntity, {
+                EntityName: 'Customers',
+                AlternateBaseView: 'active',
+            });
+            expect(target).toEqual({ schemaName: 'crm_ext', viewName: 'vwActiveCustomers' });
+
+            // Disabled fails loudly
+            expect(() => provider.testGetEffectiveBaseView(abvEntity, { AlternateBaseView: 'Legacy' })).toThrow(/disabled/i);
+
+            // Materialized + AlternateBaseView fails loudly
+            expect(() =>
+                provider.testGetEffectiveBaseView(abvEntity, { AlternateBaseView: 'Active', DataSource: 'Materialized' })
+            ).toThrow(/Materialized/);
+
+            // External data source rejects AlternateBaseView
+            expect(() =>
+                provider.testAssertExternalRunViewParamsSupported(
+                    { EntityName: 'Customers', AlternateBaseView: 'Active' },
+                    'Customers'
+                )
+            ).toThrow(/AlternateBaseView is not supported for external-data-source/);
         });
     });
 
@@ -851,12 +924,8 @@ describe('GenericDatabaseProvider', () => {
                 Length: f.Length ?? 0,
                 Precision: f.Precision ?? 0,
                 Scale: f.Scale ?? 0,
-                // Mirrors EntityFieldInfo.MaxLength: the n-types halve the byte length.
-                MaxLength: f.MaxLength ?? (
-                    ['nvarchar', 'nchar', 'ntext'].includes((f.Type ?? '').toLowerCase())
-                        ? ((f.Length ?? 0) > 0 ? (f.Length ?? 0) / 2 : 0)
-                        : ((f.Length ?? 0) > 0 ? (f.Length ?? 0) : 0)
-                ),
+                // The helper EntityFieldInfo.MaxLength calls, so the fixture cannot drift from it.
+                MaxLength: f.MaxLength ?? SQLMaxLength(f.Type ?? '', f.Length ?? 0),
             }));
             const entityInfo = {
                 Name: 'TestEntity',
@@ -1043,6 +1112,22 @@ describe('GenericDatabaseProvider', () => {
                         provider.BuildRLSSyntheticRowProjections(entity, entityInfo),
                         `${dialect.constructor.name}: byte length must be halved to characters`,
                     ).toBe(expected);
+                }
+            });
+
+            it('keeps the byte length of a fixed binary column (VARBINARY(16), never VARBINARY(0))', () => {
+                // `MaxLength` is a character count and is 0 for the binary types; SQL Server rejects a
+                // zero length, so a NULL varbinary(n) used to fail the save.
+                for (const Type of ['varbinary', 'binary']) {
+                    const { entity, entityInfo } = MakeRLSEntity({
+                        rlsClause: '',
+                        fields: [{ Name: 'Hash', NeedsQuotes: true, Type, Length: 16, SQLFullType: `${Type}(16)`, Value: null }],
+                    });
+                    const provider = RLS();
+                    (provider as unknown as { getDialect(): unknown }).getDialect = () => new SQLServerDialect();
+
+                    expect(provider.BuildRLSSyntheticRowProjections(entity, entityInfo))
+                        .toBe(`CAST(NULL AS ${Type.toUpperCase()}(16)) AS "Hash"`);
                 }
             });
 
@@ -1758,6 +1843,9 @@ describe('SqlLoggingSessionImpl', () => {
 
 describe('RenderedSQL in ExecuteQueryFromSpec', () => {
     let provider: TestGenericProvider;
+    // These tests cover rendering, over views that are not seeded entities, so they run as the
+    // system user; what a caller may read through this path is covered in adhocSQL.executedRender.test.ts.
+    const specRunner = { ...mockUser, ID: SystemUserID } as UserInfo;
 
     beforeEach(() => {
         provider = new TestGenericProvider();
@@ -1775,7 +1863,7 @@ describe('RenderedSQL in ExecuteQueryFromSpec', () => {
             SQL: 'SELECT ID FROM [dbo].[vwMembers]',
             MaxRows: 10,
         };
-        const result = await provider.ExecuteQueryFromSpec(spec, mockUser);
+        const result = await provider.ExecuteQueryFromSpec(spec, specRunner);
 
         expect(result.Success).toBe(true);
         expect(result.RenderedSQL).toBeDefined();
@@ -1792,7 +1880,7 @@ describe('RenderedSQL in ExecuteQueryFromSpec', () => {
             Parameters: { Status: 'Active' },
             MaxRows: 10,
         };
-        const result = await provider.ExecuteQueryFromSpec(spec, mockUser);
+        const result = await provider.ExecuteQueryFromSpec(spec, specRunner);
 
         expect(result.Success).toBe(true);
         expect(result.RenderedSQL).toBeDefined();
@@ -1815,7 +1903,7 @@ describe('RenderedSQL in ExecuteQueryFromSpec', () => {
             Parameters: { Status: 'Active' },
             MaxRows: 10,
         };
-        const result = await provider.ExecuteQueryFromSpec(spec, mockUser);
+        const result = await provider.ExecuteQueryFromSpec(spec, specRunner);
 
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toContain('ORDER BY');
@@ -1845,7 +1933,7 @@ ORDER BY Cnt DESC`,
             Parameters: { StartDate: '2024-01-01' },
             MaxRows: 10,
         };
-        const result = await provider.ExecuteQueryFromSpec(spec, mockUser);
+        const result = await provider.ExecuteQueryFromSpec(spec, specRunner);
 
         expect(result.Success).toBe(false);
         // RenderedSQL reveals the cap transformation that the error message alone cannot
@@ -1867,7 +1955,7 @@ ORDER BY Cnt DESC`,
             SQL: `SELECT * FROM {{query:"NonExistent/Query"}}`,
             MaxRows: 10,
         };
-        const result = await provider.ExecuteQueryFromSpec(spec, mockUser);
+        const result = await provider.ExecuteQueryFromSpec(spec, specRunner);
 
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toBeTruthy();
@@ -2988,6 +3076,39 @@ describe('GenericDatabaseProvider after-save dispatch captures the token before 
         await dispatched;
         expect(p.aiTokens).toEqual([expected]);
     });
+
+    it('entity actions when Loaded is true: runs Active actions without calling Config, and short-circuits when only Disabled actions exist', async () => {
+        const engine = EntityActionEngineServer.Instance;
+        const configSpy = vi.spyOn(engine, 'Config').mockResolvedValue(undefined);
+        vi.spyOn(engine, 'Loaded', 'get').mockReturnValue(true);
+        vi.spyOn(engine, 'InvocationTypes', 'get').mockReturnValue([afterCreate] as never);
+        const byNameSpy = vi
+            .spyOn(engine, 'GetActionsByEntityName')
+            .mockImplementation((_name: string, status?: string) =>
+                status === 'Active' ? ([{ ID: 'ea-1', Status: 'Active' }] as never) : ([] as never),
+            );
+        vi.spyOn(engine, 'GetActionsByEntityNameAndInvocationType').mockReturnValue([{ ID: 'ea-1' }] as never);
+        vi.spyOn(EntityActionDispatchGuard.Instance, 'Dispatch').mockImplementation(async (_key, run) => {
+            await run();
+            return 'Ran';
+        });
+        const runSpy = vi.spyOn(engine, 'RunEntityAction').mockResolvedValue({ Success: true } as never);
+
+        const p = new DispatchProvider();
+        const results = await p.DispatchAfterSave();
+        expect(configSpy).not.toHaveBeenCalled();
+        expect(byNameSpy).toHaveBeenCalledWith('Widgets', 'Active');
+        expect(runSpy).toHaveBeenCalledTimes(1);
+        expect(results).toHaveLength(1);
+
+        runSpy.mockClear();
+        byNameSpy.mockImplementation((_name: string, status?: string) =>
+            status === 'Disabled' ? ([{ ID: 'ea-disabled', Status: 'Disabled' }] as never) : ([] as never),
+        );
+        const emptyResults = await p.DispatchAfterSave();
+        expect(emptyResults).toEqual([]);
+        expect(runSpy).not.toHaveBeenCalled();
+    });
 });
 
 describe('TransactionFrameTracker', () => {
@@ -3090,5 +3211,215 @@ describe('GenericDatabaseProvider RunView dedup scope follows transaction member
         await p.BeginTransaction();
         expect(p.CallerDedupScope).not.toBe(memberScope);
         await p.RollbackTransaction();
+    });
+});
+
+describe('GenericDatabaseProvider SaveReturnContext & ProjectSaveCallToDatestamps abstraction', () => {
+    function makeMockEntity(saveReturnMode: 'full' | 'datestamps_only'): BaseEntity {
+        const datestampFields = [
+            { Name: 'ID', IsPrimaryKey: true },
+            { Name: '__mj_CreatedAt', IsPrimaryKey: false },
+            { Name: '__mj_UpdatedAt', IsPrimaryKey: false },
+        ] as unknown as EntityFieldInfo[];
+        return {
+            EntityInfo: {
+                Name: 'Widgets',
+                SchemaName: '__mj',
+                BaseTable: 'Widget',
+                SaveReturnMode: saveReturnMode,
+                DatestampReturnFields: datestampFields,
+                PrimaryKeys: [datestampFields[0]],
+                Fields: [],
+            },
+        } as unknown as BaseEntity;
+    }
+
+    it('GetDatestampSelectColumnsSQL quotes identifiers using the provider QuoteIdentifier implementation', () => {
+        const pgLike = new TestGenericProvider(); // QuoteIdentifier -> "col"
+        const entity = makeMockEntity('full');
+        const cols = (pgLike as unknown as { GetDatestampSelectColumnsSQL: (info: EntityInfo) => string }).GetDatestampSelectColumnsSQL(entity.EntityInfo);
+        expect(cols).toBe('"ID", "__mj_CreatedAt", "__mj_UpdatedAt"');
+    });
+
+    it('ResolveSaveReturnContext sets needsDatestampProjection only when compiled SP is full and runtime option is datestamps_only', () => {
+        const p = new TestGenericProvider();
+        const resolve = (e: BaseEntity, opts?: EntitySaveOptions) =>
+            (p as unknown as { ResolveSaveReturnContext: (ent: BaseEntity, o?: EntitySaveOptions) => Record<string, unknown> }).ResolveSaveReturnContext(e, opts);
+
+        const fullDefault = resolve(makeMockEntity('full'));
+        expect(fullDefault).toMatchObject({
+            spReturnMode: 'full',
+            effectiveReturnMode: 'full',
+            spReturnsDatestampsOnly: false,
+            needsDatestampProjection: false,
+            routineSelectColumnsSQL: '*',
+            finalSelectColumnsSQL: '*',
+        });
+
+        const runtimeProjected = resolve(makeMockEntity('full'), { SaveReturnMode: 'datestamps_only' } as EntitySaveOptions);
+        expect(runtimeProjected).toMatchObject({
+            spReturnMode: 'full',
+            effectiveReturnMode: 'datestamps_only',
+            spReturnsDatestampsOnly: false,
+            needsDatestampProjection: true,
+            routineSelectColumnsSQL: '"ID", "__mj_CreatedAt", "__mj_UpdatedAt"',
+            finalSelectColumnsSQL: '"ID", "__mj_CreatedAt", "__mj_UpdatedAt"',
+        });
+
+        const compiledDatestamps = resolve(makeMockEntity('datestamps_only'));
+        expect(compiledDatestamps).toMatchObject({
+            spReturnMode: 'datestamps_only',
+            effectiveReturnMode: 'datestamps_only',
+            spReturnsDatestampsOnly: true,
+            needsDatestampProjection: false,
+            routineSelectColumnsSQL: '*',
+            finalSelectColumnsSQL: '"ID", "__mj_CreatedAt", "__mj_UpdatedAt"',
+        });
+    });
+});
+
+describe('GenericDatabaseProvider RunViewCore single-batch execution (MJ-CORE-6)', () => {
+    it('batches [viewSQL, countSQL] into a single ExecuteSQLBatch call when pagination is used, and uses ExecuteSQL for a single query', async () => {
+        const p = new TestGenericProvider();
+        const entityInfo = {
+            ID: 'entity-1',
+            Name: 'Widgets',
+            SchemaName: '__mj',
+            BaseView: 'vwWidgets',
+            BaseTable: 'Widget',
+            AllowAllRowsAPI: true,
+            TrackRecordChanges: false,
+            PrimaryKeys: [{ Name: 'ID', CodeName: 'ID', NeedsQuotes: true }],
+            Fields: [{ Name: 'ID', CodeName: 'ID', NeedsQuotes: true, AllowInView: true, DefaultInView: true, IsBinaryFieldType: false }],
+            DatetimeFields: [],
+            BinaryFields: [],
+            RelatedEntities: [],
+            UserExemptFromRowLevelSecurity: () => true,
+            GetEffectiveRowFilterWhereClause: () => '',
+            CanUserRead: () => true,
+            CheckPermissions: () => true,
+        } as unknown as EntityInfo;
+
+        Object.defineProperty(p, 'Entities', {
+            get: () => [entityInfo],
+            configurable: true,
+        });
+        vi.spyOn(p, 'EntityByName').mockReturnValue(entityInfo);
+        vi.spyOn(p, 'CheckUserReadPermissions').mockImplementation(() => undefined);
+
+        const batchSpy = vi.spyOn(p, 'ExecuteSQLBatch').mockResolvedValue([
+            [{ ID: 'row-1' }, { ID: 'row-2' }],
+            [{ TotalRowCount: 42 }],
+        ]);
+        const singleSpy = vi.spyOn(p, 'ExecuteSQL').mockResolvedValue([{ ID: 'row-1' }]);
+
+        const runViewCore = (params: RunViewParams) =>
+            (p as unknown as { RunViewCore: (prm: RunViewParams, u?: UserInfo) => Promise<{ Success: boolean; Results: unknown[]; TotalRowCount: number }> }).RunViewCore(params, mockUser);
+
+        // Paginated RunView -> generates [viewSQL, countSQL] -> must call ExecuteSQLBatch once
+        const paginatedResult = await runViewCore({
+            EntityName: 'Widgets',
+            StartRow: 0,
+            MaxRows: 2,
+            ResultType: 'simple',
+        });
+        expect(paginatedResult.Success).toBe(true);
+        expect(paginatedResult.Results).toHaveLength(2);
+        expect(paginatedResult.TotalRowCount).toBe(42);
+        expect(batchSpy).toHaveBeenCalledTimes(1);
+        expect(batchSpy.mock.calls[0][0]).toHaveLength(2);
+        expect(singleSpy).not.toHaveBeenCalled();
+
+        batchSpy.mockClear();
+        singleSpy.mockClear();
+
+        // Non-paginated unbounded RunView -> generates [viewSQL] -> must call ExecuteSQL directly
+        const singleResult = await runViewCore({
+            EntityName: 'Widgets',
+            ResultType: 'simple',
+        });
+        expect(singleResult.Success).toBe(true);
+        expect(singleResult.Results).toHaveLength(1);
+        expect(singleSpy).toHaveBeenCalledTimes(1);
+        expect(batchSpy).not.toHaveBeenCalled();
+    });
+});
+
+describe('GenericDatabaseProvider AlternateBaseView resolution and ClientClauseScreen collisions', () => {
+    it('resolves AlternateBaseView target, honors "" BaseView override over ViewEntity pin, and rejects Materialized + AlternateBaseView', async () => {
+        const p = new TestGenericProvider();
+        const entityInfo = new EntityInfo({
+            ID: '11111111-1111-4111-8111-111111111111',
+            Name: 'Widgets',
+            CodeName: 'Widgets',
+            SchemaName: '__mj',
+            BaseView: 'vwWidgets',
+            BaseTable: 'Widget',
+            Status: 'Active',
+            EntityAlternateBaseViews: [
+                {
+                    ID: '22222222-2222-4222-8222-222222222222',
+                    EntityID: '11111111-1111-4111-8111-111111111111',
+                    Name: 'Active',
+                    ViewName: 'vwWidgetsActive',
+                    SchemaName: 'analytics',
+                    CachePolicy: 'Default',
+                    Status: 'Active',
+                    Sequence: 10,
+                },
+                {
+                    ID: '33333333-3333-4333-8333-333333333333',
+                    EntityID: '11111111-1111-4111-8111-111111111111',
+                    Name: 'Archived',
+                    ViewName: 'vwWidgetsArchived',
+                    SchemaName: null,
+                    CachePolicy: 'Default',
+                    Status: 'Disabled',
+                    Sequence: 20,
+                },
+            ],
+        });
+
+        const resolveTarget = (params: RunViewParams) =>
+            (
+                p as unknown as {
+                    resolveEffectiveBaseViewTarget: (
+                        e: EntityInfo,
+                        prm: RunViewParams,
+                        u?: UserInfo,
+                    ) => Promise<{ schemaName: string; viewName: string }>;
+                }
+            ).resolveEffectiveBaseViewTarget(entityInfo, params, mockUser);
+
+        // 1. Explicit AlternateBaseView with custom SchemaName
+        await expect(resolveTarget({ EntityName: 'Widgets', AlternateBaseView: 'Active' })).resolves.toEqual({
+            schemaName: 'analytics',
+            viewName: 'vwWidgetsActive',
+        });
+
+        // 2. Pinned ViewEntity DisplayState vs explicit "" override back to BaseView
+        const pinnedViewEntity = {
+            AlternateBaseView: 'Active',
+            Get: (f: string) => (f === 'DisplayState' ? JSON.stringify({ alternateBaseView: 'Active' }) : null),
+        } as unknown as RunViewParams['ViewEntity'];
+
+        await expect(resolveTarget({ EntityName: 'Widgets', ViewEntity: pinnedViewEntity })).resolves.toEqual({
+            schemaName: 'analytics',
+            viewName: 'vwWidgetsActive',
+        });
+        await expect(
+            resolveTarget({ EntityName: 'Widgets', ViewEntity: pinnedViewEntity, AlternateBaseView: '' }),
+        ).resolves.toEqual({
+            schemaName: '__mj',
+            viewName: 'vwWidgets',
+        });
+
+        // 3. Disabled or Materialized + AlternateBaseView throws
+        await expect(resolveTarget({ EntityName: 'Widgets', AlternateBaseView: 'Archived' })).rejects.toThrow(
+            /is disabled and cannot be used/,
+        );
+        await expect(
+            resolveTarget({ EntityName: 'Widgets', AlternateBaseView: 'Active', DataSource: 'Materialized' }),
+        ).rejects.toThrow(/cannot be combined with DataSource: 'Materialized'/);
     });
 });

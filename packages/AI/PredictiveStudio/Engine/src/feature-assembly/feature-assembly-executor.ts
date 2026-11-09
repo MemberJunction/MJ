@@ -48,6 +48,7 @@ import type { AIPromptParams } from '@memberjunction/ai-core-plus';
 import type { VisionLLMFeatureStep } from '@memberjunction/predictive-studio-core';
 
 import { type IFeatureDataAccess, RunViewDataAccess, type SourceRow } from './data-access';
+import { ReadCapExceededError } from './read-cap-error';
 import { type DatedRow, ResolveAsOfDate, DaysSinceLastActivityAsOf, ActivityCountAsOf } from './as-of';
 import { LeakageGuardEnforcer } from './leakage-guard';
 import { VisionFeatureExtractor, type IVisionPromptRunner } from './vision-llm';
@@ -141,10 +142,10 @@ export interface FeatureAssemblyParams {
   primaryKeyField?: string;
   /** Telemetry tag (train / materialize / on-demand). Logic is identical regardless. */
   context?: AssemblyContext;
-  /** Request user — REQUIRED on the server for isolation/audit. */
-  contextUser?: UserInfo;
-  /** Optional provider for multi-provider correctness. */
-  provider?: IMetadataProvider;
+  /** Request user — threaded through every read for isolation/audit. */
+  contextUser: UserInfo;
+  /** The provider every read runs on; required because the reads have no global fallback. */
+  provider: IMetadataProvider;
   /**
    * Optional data-access override — the seam that makes the executor unit-testable
    * without a DB. When omitted, a {@link RunViewDataAccess} is used.
@@ -250,6 +251,11 @@ export class FeatureAssemblyExecutor {
     if (!res.Success) {
       throw new Error(`Failed to fetch target records: ${res.ErrorMessage ?? 'unknown error'}`);
     }
+    const cap = params.recordSet.MaxRows;
+    const matched = res.TotalRowCount;
+    if (ReadCapExceededError.IsTruncated(cap, res.Rows.length, matched)) {
+      throw ReadCapExceededError.ForTraining(params.recordSet.EntityName, cap, res.Rows.length, matched);
+    }
     return res.Rows;
   }
 
@@ -271,7 +277,7 @@ export class FeatureAssemblyExecutor {
       cols.add(params.targetVariable);
     }
     // AsOfStrategy 'column' mode reads its cutoff date off each record — a narrow
-    // scope projection that drops it fails every record at resolveAsOfDate, so it
+    // scope projection that drops it fails every record at ResolveAsOfDate, so it
     // must be hydrated (and asserted) exactly like a feature column.
     if (params.asOf?.Mode === 'column' && params.asOf.Column) {
       cols.add(params.asOf.Column);
@@ -393,6 +399,9 @@ export class FeatureAssemblyExecutor {
           }
           break;
         }
+        case 'windowed-aggregate':
+        case 'series':
+          throw new Error(`Feature step ${step.Id} (${step.Kind}) needs a Prediction Unit pipeline: it is assembled as of each row's decision date`);
         default: {
           const exhaustive: never = step;
           throw new Error(`Unsupported FeatureStep kind: ${String((exhaustive as FeatureStep).Kind)}`);
@@ -653,7 +662,7 @@ export class FeatureAssemblyExecutor {
       for (const row of res.Rows) {
         const fk = row[ds.ForeignKeyField];
         const dateVal = row[ds.DateField];
-        if (fk == null || dateVal == null) {
+        if ((fk === null || fk === undefined) || (dateVal === null || dateVal === undefined)) {
           continue;
         }
         const date = new Date(dateVal as string | number);

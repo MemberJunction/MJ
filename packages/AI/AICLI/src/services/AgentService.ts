@@ -1,6 +1,7 @@
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { ExecuteAgentResult, AgentExecutionProgressCallback, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { ExecutionLogger } from '../lib/execution-logger';
 import { InitializeMJProvider } from '../lib/mj-provider';
 import { AgentInfo, ExecutionResult } from '../lib/output-formatter';
@@ -230,13 +231,15 @@ Next steps:
       };
 
       // Suppress console output during agent execution unless verbose
+      // CLI executions always run Flow agents in-process ('inRun') so the caller receives the final result synchronously
       let executionResult: ExecuteAgentResult;
       if (options.verbose) {
         executionResult = await agentRunner.RunAgent({
           agent: agent,
           conversationMessages,
           contextUser: this.contextUser!,
-          onProgress: callbacks.onProgress
+          onProgress: callbacks.onProgress,
+          agentTypeParams: { executionMode: 'inRun' }
         });
       } else {
         executionResult = await ConsoleManager.withSuppressedOutput(async () => {
@@ -244,7 +247,8 @@ Next steps:
             agent: agent,
             conversationMessages,
             contextUser: this.contextUser!,
-            onProgress: callbacks.onProgress
+            onProgress: callbacks.onProgress,
+            agentTypeParams: { executionMode: 'inRun' }
           });
         });
       }
@@ -257,14 +261,20 @@ Next steps:
       }
 
       if (executionResult && executionResult.success) {
-        // Get the result from Message field first, then FinalPayload if Message is empty
-        let resultContent: any = executionResult.agentRun.Message;
+        // Get the result from Message field first, then FinalPayload if Message is empty or generic Flow completion text
+        const defaultFlowMessage = 'Flow completed - no more paths to follow';
+        let resultContent: unknown =
+          executionResult.agentRun.Message && executionResult.agentRun.Message !== defaultFlowMessage
+            ? executionResult.agentRun.Message
+            : undefined;
         
         if (!resultContent && executionResult.agentRun.FinalPayload) {
           // Parse FinalPayload if Message is not available
           try {
             const finalPayload = JSON.parse(executionResult.agentRun.FinalPayload);
-            resultContent = finalPayload;
+            if (finalPayload && (typeof finalPayload !== 'object' || Object.keys(finalPayload).length > 0)) {
+              resultContent = finalPayload;
+            }
           } catch {
             resultContent = executionResult.agentRun.FinalPayload;
           }
@@ -272,7 +282,12 @@ Next steps:
         
         // Use payload if neither Message nor FinalPayload has content
         if (!resultContent && executionResult.payload) {
-          resultContent = executionResult.payload;
+          if (typeof executionResult.payload !== 'object' || Object.keys(executionResult.payload).length > 0) {
+            resultContent = executionResult.payload;
+          }
+        }
+        if (!resultContent && executionResult.agentRun.Message) {
+          resultContent = executionResult.agentRun.Message;
         }
 
         logger.logStep('SUCCESS', 'AGENT', 'Agent execution completed', {
@@ -426,8 +441,6 @@ Log file: ${logger.getLogFilePath()}${stackInfo}`);
   }
 
   private async getContextUser(): Promise<UserInfo> {
-    const { UserCache } = await import('@memberjunction/generic-database-provider');
-    
     if (!UserCache.Users || UserCache.Users.length === 0) {
       throw new Error(`❌ No users found in UserCache
 
@@ -442,10 +455,18 @@ Next steps:
 This is typically a configuration or database setup issue.`);
     }
 
-    // For CLI usage, we'll use the first available user
-    // In a real application, you might want to configure which user to use
-    const user = UserCache.Users[0];
-    
+    const activeUsers = UserCache.Users.filter(
+      (u) => u.IsActive && u.Name?.trim().toLowerCase() !== 'system'
+    );
+    const defaultAdmin = activeUsers.find(
+      (u) => u.Email?.trim().toLowerCase() === 'admin@memberjunction.org'
+    );
+    const developerUser = activeUsers.find((u) =>
+      u.UserRoles?.some((r) => r.Role?.trim().toLowerCase() === 'developer')
+    );
+    const ownerUser = activeUsers.find((u) => u.Type?.trim().toLowerCase() === 'owner');
+    const user = defaultAdmin ?? developerUser ?? ownerUser ?? activeUsers[0] ?? UserCache.Users[0];
+
     if (!user) {
       throw new Error('No valid user found for execution context');
     }

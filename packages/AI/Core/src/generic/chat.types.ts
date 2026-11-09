@@ -155,6 +155,45 @@ export interface ChatToolCall {
 }
 
 /**
+ * What a {@link ChatReasoningBlock} holds.
+ *
+ * - `thinking` — an Anthropic thinking block: its text and the `signature` that authenticates it.
+ * - `redacted_thinking` — an Anthropic thinking block the provider encrypted; only `data` travels.
+ * - `thought` — a Gemini thought part (`thought: true`), with its `thoughtSignature` when it has one.
+ * - `signed_text` — one visible text part of a Gemini turn in which a text part carried a
+ *   `thoughtSignature`: `text` is the part's text and `signature` its signature, if it had one. The
+ *   turn's text parts are kept as they came, so each signature is replayed on the exact text it
+ *   was minted for.
+ */
+export type ChatReasoningKind = 'thinking' | 'redacted_thinking' | 'thought' | 'signed_text';
+
+/**
+ * Provider-opaque reasoning from one assistant turn, kept so the turn can be replayed exactly.
+ *
+ * Anthropic asks for a tool-use turn's thinking blocks to come back unchanged, signatures intact,
+ * or the model loses its reasoning between tool calls; Gemini signs thought and text parts the same
+ * way. Only the driver that produced a block reads it — every other driver ignores blocks whose
+ * `provider` is not its own, so a conversation that fails over to another provider stays valid.
+ * Never shown to the model as text and never read by the agent loop.
+ */
+export interface ChatReasoningBlock {
+    /** The driver family that produced the block, e.g. `'anthropic'` or `'gemini'`. */
+    provider: string;
+    kind: ChatReasoningKind;
+    /** The reasoning text (`thinking`, `thought`), or the visible part's text (`signed_text`). */
+    text?: string;
+    /** The provider signature that must be replayed with the block. */
+    signature?: string;
+    /** Encrypted payload of a `redacted_thinking` block. */
+    data?: string;
+    /**
+     * Where the signature validates, when the provider scopes it (Gemini: endpoint plus model). A
+     * driver drops a block whose origin differs from the request it is building.
+     */
+    origin?: string;
+}
+
+/**
  * The normalized `finish_reason` a driver reports when the model ended its turn by calling one or
  * more tools. Consumers branch on this rather than on any provider-specific stop reason.
  *
@@ -173,6 +212,14 @@ export const CHAT_FINISH_REASON_TOOL_CALLS = 'tool_calls';
  * The agent loop turns it into a corrective retry.
  */
 export const CHAT_FINISH_REASON_MALFORMED_TOOL_CALL = 'malformed_tool_call';
+
+/**
+ * The normalized `finish_reason` a driver reports when the model called a tool the request did not
+ * make available — Gemini's `UNEXPECTED_TOOL_CALL`, raised when the model calls a tool on a request
+ * whose tool choice forbids it or that declared no such tool. Like a malformed call, the turn
+ * carries no `toolCalls`; the agent loop turns it into a corrective retry.
+ */
+export const CHAT_FINISH_REASON_UNEXPECTED_TOOL_CALL = 'unexpected_tool_call';
 
 /**
  * Defines the shape of an individual chat message.
@@ -204,6 +251,13 @@ export type ChatMessage<M = any> = {
      * the conversation; the `tool` turn that answers it follows immediately.
      */
     toolCalls?: ChatToolCall[];
+    /**
+     * For `assistant` turns: the provider's reasoning blocks from that turn, in the order the model
+     * produced them, so the driver can replay them. Set this from
+     * {@link ChatCompletionMessage.reasoning}. Kept apart from `content` so nothing that reads
+     * `content` sees it.
+     */
+    reasoning?: ChatReasoningBlock[];
 }
 
 /**
@@ -237,6 +291,13 @@ export type ChatCompletionMessage = {
      * turn: a forced {@link ChatToolChoice} usually suppresses text entirely.
      */
     toolCalls?: ChatToolCall[];
+
+    /**
+     * The turn's reasoning blocks in replayable form (see {@link ChatReasoningBlock}). `thinking`
+     * above is the readable text; this is what the driver needs to send the turn back. Copy it onto
+     * the {@link ChatMessage} that replays this turn. Absent when the driver keeps none.
+     */
+    reasoning?: ChatReasoningBlock[];
 }
 
 /**
@@ -515,6 +576,12 @@ export type ChatResultChoice = {
     finish_reason: string
     index: number
     logprobs?: ChatResultLogProbs | null
+    /**
+     * The provider's own explanation of why the turn ended, when it gives one — for a malformed or
+     * unexpected tool call, Gemini's description of the call it could not accept. Lets the caller
+     * show the model what it sent.
+     */
+    finishMessage?: string
 }
 
 /**

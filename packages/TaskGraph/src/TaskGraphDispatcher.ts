@@ -36,8 +36,10 @@ import {
     type GraphLayoutEdge,
     ApplyOutputMapping,
     BuildMappedInput,
-    ResolveMappedInput,
+    ResolveLoopBodyParams,
     type ForEachOperation,
+    type LoopBodyActionStep,
+    type LoopStepFold,
     type WhileOperation,
 
     LoadAgentRunTree,
@@ -78,7 +80,9 @@ import {
     ResolveGraphDecisions,
     StillHoldingDecisionOutput,
     type TaskDecisionStepConfiguration,
+    type TaskStepConfiguration,
 } from './decision-node';
+import { ResolveRecordsByNameOrToolName } from './resolve-by-tool-name';
 import { AIDecisionTaskRunner } from './AIDecisionTaskRunner';
 import { HumanTaskSQL, IsHumanTask } from './task-predicates';
 import {
@@ -275,6 +279,7 @@ interface GlobalUserCacheLookup {
 type GraphContext = {
     Depth: number;
     SubmittingAgentRunID: string | null;
+    ParentAgentHierarchy?: string[];
     /**
      * The submitting invocation's `data` / `context` — an input mapping's roots of the same names,
      * as in the in-run walker (R3-3). Empty when the graph was submitted without one.
@@ -387,6 +392,10 @@ type GateDecisionRecord = {
 };
 
 type GraphState = {
+    parentTaskID: string;
+    parent: MJTaskEntity | null;
+    parentMetadata: TaskGraphParentMetadata;
+    rawDependencies: MJTaskDependencyEntity[];
     nodes: TaskGraphNode[];
     edges: TaskGraphEdge[];
     entityById: Map<string, MJTaskEntity>;
@@ -424,6 +433,34 @@ type GraphState = {
      * terminal for everything downstream regardless of what was drawn.
      */
     handledFailureIDs: Set<string>;
+};
+
+/**
+ * Pre-hydrated candidate returned by {@link TaskGraphDispatcher.findClaimableTasks} so
+ * {@link TaskGraphDispatcher.executeClaimed} can execute a claimed task with zero pre-execution
+ * database queries (reusing the in-memory task entity, parent metadata, and dependency outputs
+ * already loaded during the poll pass).
+ */
+export type ClaimedTaskCandidate = {
+    /** The task's ID (convenience alias for `taskEntity.ID`). */
+    ID: string;
+    /** The task's ID. */
+    taskId?: string;
+    /** The task's name. */
+    Name?: string;
+    /** The task's parent graph ID, if any. */
+    ParentID: string | null;
+    /** The pre-loaded `MJTaskEntity` from the active graph's state. */
+    taskEntity: MJTaskEntity;
+    /** The pre-loaded parent `MJTaskEntity` for the graph, if loaded. */
+    parentTask?: MJTaskEntity | null;
+    /** The parsed parent graph metadata from the parent task. */
+    parentMetadata?: TaskGraphParentMetadata | null;
+    /**
+     * Pre-extracted parsed `OutputPayload`s of this task's dependencies, keyed by `DependsOnTaskID`.
+     * Accepts either a `Map` or a plain `Record` when supplied by callers/tests.
+     */
+    dependencyOutputs?: Map<string, unknown> | Record<string, unknown>;
 };
 
 export class TaskGraphDispatcher implements IShutdownable {
@@ -1061,7 +1098,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             // two were the same line of code.
             //
             // Only CLAIMING consumes capacity, because only claiming starts work.
-            await this.propagateAndRollup(provider);
+            const activeGraphs = await this.propagateAndRollup(provider);
 
             const capacity = this.config.MaxConcurrentTasks - this.inFlight.size;
             if (capacity <= 0) return;
@@ -1073,9 +1110,10 @@ export class TaskGraphDispatcher implements IShutdownable {
             // starts after the decision to stop.
             if (!this.running) return;
 
-            const { tasks: candidates, stats } = await this.findClaimableTasks(provider, capacity);
+            const { tasks: candidates, stats } = await this.findClaimableTasks(provider, capacity, activeGraphs);
             const claimedByGraph = new Map<string, number>();
-            for (const task of candidates) {
+            for (const candidate of candidates) {
+                const task = candidate.taskEntity;
                 // Re-checked EVERY iteration, not once before the loop (R2-13). Claiming is itself
                 // awaited, so a multi-task wave can straddle a `Stop`; and `findClaimableTasks` loads
                 // and resolves every active graph, so the scan before this loop can run for seconds.
@@ -1099,7 +1137,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 claimedByGraph.set(graphID, (claimedByGraph.get(graphID) ?? 0) + 1);
                 this.inFlight.add(task.ID);
                 // Intentionally not awaited — the poll loop must keep dispatching while this runs.
-                void this.executeClaimed(task.ID).finally(() => this.inFlight.delete(task.ID));
+                void this.executeClaimed(task.ID, candidate).finally(() => this.inFlight.delete(task.ID));
             }
 
             // The engine's heartbeat, per watched graph: what was ready, what was held, what this
@@ -1130,16 +1168,33 @@ export class TaskGraphDispatcher implements IShutdownable {
      *
      * A fresh provider per task is the point of `ProviderFactory`: parallel tasks must not share a
      * transaction scope or entity instances, or one task's work becomes visible inside another's.
+     *
+     * When `prehydrated` is supplied by `findClaimableTasks`, the task entity, parent graph metadata,
+     * and upstream dependency outputs are already in memory from the poll pass — eliminating $3 + D$
+     * redundant pre-execution database queries per claimed node.
      */
-    private async executeClaimed(taskID: string): Promise<void> {
+    private async executeClaimed(
+        taskOrID: string | ClaimedTaskCandidate,
+        prehydrated?: Partial<ClaimedTaskCandidate>,
+    ): Promise<void> {
+        const hydrated: Partial<ClaimedTaskCandidate> | undefined =
+            typeof taskOrID === 'string' ? prehydrated : taskOrID;
+        const taskID = typeof taskOrID === 'string'
+            ? taskOrID
+            : (taskOrID.taskId ?? taskOrID.ID ?? taskOrID.taskEntity.ID);
         let heartbeat: ReturnType<typeof setInterval> | null = null;
         try {
             const provider = await this.providerFactory.CreateProvider();
 
-            const task = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
-            if (!(await task.Load(taskID))) {
-                LogError(`[TaskGraphDispatcher] Claimed task ${taskID} could not be loaded.`);
-                return;
+            let task: MJTaskEntity;
+            if (hydrated?.taskEntity) {
+                task = hydrated.taskEntity;
+            } else {
+                task = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+                if (!(await task.Load(taskID))) {
+                    LogError(`[TaskGraphDispatcher] Claimed task ${taskID} could not be loaded.`);
+                    return;
+                }
             }
 
             // Emitted after the claim is held, not before: a frame saying "started" for work another
@@ -1182,7 +1237,11 @@ export class TaskGraphDispatcher implements IShutdownable {
                 ClaimExpiresAt: new Date(Date.now() + this.config.ClaimTTLSeconds * 1000).toISOString(),
             });
 
-            const dependencyOutputs = await this.loadDependencyOutputs(provider, taskID);
+            const dependencyOutputs = hydrated?.dependencyOutputs instanceof Map
+                ? hydrated.dependencyOutputs
+                : hydrated?.dependencyOutputs
+                    ? new Map(Object.entries(hydrated.dependencyOutputs))
+                    : await this.loadDependencyOutputs(provider, taskID);
             const parsed = ParseTaskInputPayload(taskID, task.InputPayload);
             let result: TaskBodyOutcome;
             if ('ErrorMessage' in parsed) {
@@ -1192,7 +1251,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 result = { Success: false, ErrorMessage: parsed.ErrorMessage };
             } else {
                 const onProgress = this.nodeProgressEmitter(graphID, ownerUserID, taskID, task.Name);
-                result = await this.runTaskBody(task, provider, parsed.Payload, dependencyOutputs, onProgress);
+                result = await this.runTaskBody(task, provider, parsed.Payload, dependencyOutputs, onProgress, hydrated);
             }
 
             // ONLY THE CONFIRMED OWNER MUTATES THE GRAPH (R2-10).
@@ -1262,30 +1321,41 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
-     * Applies failure propagation and parent rollup across every graph with active work.
+     * Applies failure propagation and parent rollup across every graph with active work, returning
+     * the surviving non-terminal graphs so `findClaimableTasks` can reuse them without re-querying.
      *
      * All four decisions — what is eligible, what must block, what the parent status is, whether the
      * graph is wedged — are delegated to the pure algorithms, unchanged from Phase 1.
      */
-    private async propagateAndRollup(provider: IMetadataProvider, graphIDs?: readonly string[]): Promise<void> {
+    private async propagateAndRollup(provider: IMetadataProvider, graphIDs?: readonly string[]): Promise<GraphState[]> {
         const graphs = graphIDs ?? await this.findActiveGraphIDs(provider);
-        // One read for every graph this pass touches, rather than one per graph — see primeDebugStates.
-        await this.primeDebugStates(provider, graphs);
+        const survivingGraphs: GraphState[] = [];
         for (const parentID of graphs) {
-            // Human steps settle BEFORE the graph state is read, so an answer given since the last
-            // poll is already reflected when eligibility and rollup are computed. Doing it after
-            // would delay every dependent branch by a full poll interval for no reason — and on a
-            // graph whose only remaining work is downstream of a person, that is the difference
-            // between "answered and moving" and "answered and apparently still stuck".
-            await this.expireOverdueRequests(provider, parentID);
-            await this.settleAnsweredHumanTasks(provider, parentID);
-            await this.reconcileWaitingHumanTasks(provider, parentID);
-
             // Edge overrides apply to propagation exactly as they apply to claiming — a branch the
             // operator answered 'false' must cascade its skips here, not merely stop being claimed.
-            const debug = await this.readDebugState(provider, parentID);
-            const graph = await this.loadGraphState(provider, parentID, debug);
+            // `loadGraphState` loads the parent row once and populates `debugStateByGraph` and
+            // `ownerByParentID` from it, avoiding a separate `primeDebugStates` RunView round-trip.
+            let graph = await this.loadGraphState(provider, parentID);
             if (graph.nodes.length === 0) continue;
+            const debug = await this.readDebugState(provider, parentID);
+
+            // Human steps are only swept when the loaded graph actually contains at least one
+            // non-terminal Human task. When a graph has 0 pending human tasks (99% of graphs), this
+            // check short-circuits in memory with 0 DB queries instead of running 3 RunViews per graph.
+            const pendingHumanTasks = [...graph.entityById.values()].filter(
+                (t) => t.Status === 'Pending' && IsHumanTask(t),
+            );
+            if (pendingHumanTasks.length > 0) {
+                await this.expireOverdueRequests(provider, parentID, pendingHumanTasks);
+                const settledHumanCount = await this.settleAnsweredHumanTasks(provider, parentID, pendingHumanTasks);
+                await this.reconcileWaitingHumanTasks(provider, parentID, pendingHumanTasks);
+                if (settledHumanCount > 0) {
+                    // Re-evaluate conditional edges and skip/block cascades now that a human step's
+                    // answer and status have landed, reusing the already-loaded parent task.
+                    graph = await this.loadGraphState(provider, parentID, debug, graph.parent);
+                    if (graph.nodes.length === 0) continue;
+                }
+            }
 
             // SKIPS FIRST — before blocking, before eligibility. A task whose gating predecessors
             // are all Skipped is simultaneously "eligible" (Skipped satisfies a prerequisite) and
@@ -1349,6 +1419,8 @@ export class TaskGraphDispatcher implements IShutdownable {
                 if (!entity) continue;
                 entity.Status = 'Blocked';
                 if (await entity.Save()) {
+                    const node = graph.nodes.find((n) => n.id === taskID);
+                    if (node) node.status = 'Blocked';
                     LogStatus(`[TaskGraphDispatcher] Blocked '${entity.Name}' (${taskID}) — a dependency can never be satisfied.`);
                     // Worth announcing on its own: a blocked step is the one outcome a viewer would
                     // otherwise see as a task that simply never starts.
@@ -1371,15 +1443,17 @@ export class TaskGraphDispatcher implements IShutdownable {
                 LogError(`[TaskGraphDispatcher] Graph ${parentID} is stalled: pending work with no satisfiable path.`);
             }
 
-            const fresh = await this.loadGraphState(provider, parentID, debug);
-            // ComputeParentRollup treats an empty child set as Complete-and-terminal, which is right
-            // for a graph that genuinely has no children and catastrophic for one whose reload came
-            // back empty transiently — it would mark live work finished and fire its continuation.
-            // The outer guard covered the first load only.
-            if (fresh.nodes.length === 0) continue;
-            const rollup = ComputeParentRollup(fresh.nodes, fresh.handledFailureIDs);
-            const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
-            if (!(await parent.Load(parentID))) continue;
+            // Reuse the in-memory `graph` (whose `nodes` and `entityById` were updated in-place as
+            // skips and blocks landed) and its pre-loaded `graph.parent` instead of reloading the
+            // graph state and parent task a second time.
+            const rollup = ComputeParentRollup(graph.nodes, graph.handledFailureIDs);
+            let parent = graph.parent;
+            if (!parent) {
+                const fallbackParent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+                if (!(await fallbackParent.Load(parentID))) continue;
+                parent = fallbackParent;
+                graph.parent = parent;
+            }
             // A graph starts when its first step does.
             //
             // `StartedAt` is stamped by the CLAIM, and a parent is never claimed — it is a container,
@@ -1395,7 +1469,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             // carry this instance's `InputPayload` snapshot and could erase a continuation marker
             // another instance had just claimed. Guarded on `StartedAt IS NULL`, so calling it on
             // every pass is free.
-            const earliestChildStart = this.earliestStart(fresh.entityById);
+            const earliestChildStart = this.earliestStart(graph.entityById);
             if (parent.StartedAt == null && earliestChildStart != null) {
                 await this.claims.TryStampParentStart(provider, parentID, earliestChildStart, this.contextUser);
                 parent.StartedAt = earliestChildStart;
@@ -1426,15 +1500,18 @@ export class TaskGraphDispatcher implements IShutdownable {
                     continue;
                 }
                 parent.Status = rollup.status;
-            } else if (parent.Status !== rollup.status || parent.PercentComplete !== rollup.percentComplete) {
-                // Guarded and column-scoped for the same reason the terminal write is — and the race
-                // here needs no exotic timing. This instance may have computed a non-terminal rollup
-                // from a snapshot taken before another instance settled the graph; a full-row save
-                // would then REVERT the status and erase the continuation marker with it, and the
-                // next pass would settle and deliver a second time. See TryUpdateParentProgress.
-                await this.claims.TryUpdateParentProgress(
-                    provider, parentID, rollup.status, rollup.percentComplete, this.contextUser,
-                );
+            } else {
+                if (parent.Status !== rollup.status || parent.PercentComplete !== rollup.percentComplete) {
+                    // Guarded and column-scoped for the same reason the terminal write is — and the race
+                    // here needs no exotic timing. This instance may have computed a non-terminal rollup
+                    // from a snapshot taken before another instance settled the graph; a full-row save
+                    // would then REVERT the status and erase the continuation marker with it, and the
+                    // next pass would settle and deliver a second time. See TryUpdateParentProgress.
+                    await this.claims.TryUpdateParentProgress(
+                        provider, parentID, rollup.status, rollup.percentComplete, this.contextUser,
+                    );
+                }
+                survivingGraphs.push(graph);
             }
 
             if (rollup.outcome === 'settled') {
@@ -1445,7 +1522,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 // for the whole rescue window.
                 if (!this.announcedSettlements.has(parentID)) {
                     // Geometry is settled once, here, so every viewer of this run agrees on it.
-                    await this.persistComputedLayout(fresh);
+                    await this.persistComputedLayout(graph);
                     // Emitted before the continuation is delivered, and outside its once-only guard: a
                     // viewer watching the run should learn it finished whether or not this instance is
                     // the one that wins the delivery CAS.
@@ -1454,8 +1531,8 @@ export class TaskGraphDispatcher implements IShutdownable {
                         ParentTaskID: parentID,
                         OwnerUserID: await this.resolveOwner(provider, parentID),
                         Status: rollup.status,
-                        CompletedCount: fresh.nodes.filter((n) => n.status === 'Complete').length,
-                        TotalCount: fresh.nodes.length,
+                        CompletedCount: graph.nodes.filter((n) => n.status === 'Complete').length,
+                        TotalCount: graph.nodes.length,
                     });
                     this.announcedSettlements.add(parentID);
                 }
@@ -1504,7 +1581,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     this.keepRetryingSettlement(parentID);
                     continue;
                 }
-                if (await this.deliverContinuation(provider, parent, fresh, readiness.SubmitterCancelled)) {
+                if (await this.deliverContinuation(provider, parent, graph, readiness.SubmitterCancelled)) {
                     // Delivered, expired, or lost the CAS to a peer — every one of those means this
                     // graph is somebody's finished business and needs nothing further from here.
                     this.retryingSettlement.delete(parentID);
@@ -1516,6 +1593,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 }
             }
         }
+        return survivingGraphs;
     }
 
     /**
@@ -1817,13 +1895,27 @@ export class TaskGraphDispatcher implements IShutdownable {
      * run begins at zero, so a self-referencing flow — one that dispatches a graph containing itself
      * — recurses without bound while the cap it should be hitting compares against a permanent zero.
      */
-    private async graphContext(provider: IMetadataProvider, task: MJTaskEntity): Promise<GraphContext> {
+    private async graphContext(
+        provider: IMetadataProvider,
+        task: MJTaskEntity,
+        prehydrated?: Pick<ClaimedTaskCandidate, 'parentTask' | 'parentMetadata'>,
+    ): Promise<GraphContext> {
         let depth = 0;
         let submittingAgentRunID: string | null = null;
         let invocation: { data?: unknown; context?: unknown } = {};
         let submittedByUserID: string | null | undefined = task.UserID;
+        let parentAgentHierarchy: string[] | undefined = undefined;
 
-        if (task.ParentID && typeof provider?.GetEntityObject === 'function') {
+        if (task.ParentID && prehydrated && (prehydrated.parentMetadata || prehydrated.parentTask)) {
+            const parent = prehydrated.parentTask ?? null;
+            const meta = (prehydrated.parentMetadata && typeof prehydrated.parentMetadata.reinvokeDepth === 'number')
+                ? prehydrated.parentMetadata
+                : ParseTaskGraphParentMetadata(parent?.InputPayload ?? null);
+            depth = meta.reinvokeDepth + 1;
+            submittingAgentRunID = parent?.AgentRunID ?? meta.submittedByAgentRunID ?? null;
+            invocation = { data: meta.invocation?.data, context: meta.invocation?.context };
+            submittedByUserID = meta.submittedByUserID ?? parent?.UserID ?? task.UserID;
+        } else if (task.ParentID && typeof provider?.GetEntityObject === 'function') {
             try {
                 const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
                 if (!(await parent.Load(task.ParentID))) {
@@ -1832,6 +1924,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
                     depth = meta.reinvokeDepth + 1;
                     submittingAgentRunID = parent.AgentRunID;
+                    parentAgentHierarchy = meta.parentAgentHierarchy;
                     invocation = { data: meta.invocation?.data, context: meta.invocation?.context };
                     submittedByUserID = meta.submittedByUserID ?? parent.UserID ?? task.UserID;
                 }
@@ -1846,6 +1939,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         return {
             Depth: depth,
             SubmittingAgentRunID: submittingAgentRunID,
+            ParentAgentHierarchy: parentAgentHierarchy,
             Invocation: invocation,
             ExecutionUser: executionUser,
         };
@@ -2035,6 +2129,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             WorkflowName: parent.Name,
             ConversationDetailID: parent.ConversationDetailID ?? null,
             SubmittedByAgentRunID: meta.submittedByAgentRunID,
+            SubmittedByUserID: meta.submittedByUserID ?? null,
             ReinvokeDepth: meta.reinvokeDepth,
             Tasks: [...graph.entityById.values()].map((t) => ({
                 TaskID: t.ID,
@@ -2130,7 +2225,11 @@ export class TaskGraphDispatcher implements IShutdownable {
      * loop; the task is still visible in the Tasks UI, so the work is discoverable even when the
      * nudge does not arrive.
      */
-    private async notifyHumanTaskReady(task: MJTaskEntity, provider: IMetadataProvider): Promise<void> {
+    private async notifyHumanTaskReady(
+        task: MJTaskEntity,
+        provider: IMetadataProvider,
+        preloadedParent?: MJTaskEntity | null,
+    ): Promise<void> {
         if (task.ClaimedBy === HUMAN_TASK_NOTIFIED_MARKER) return;
 
         // The REQUEST is raised whether or not the task names an assignee. An unassigned human step
@@ -2142,7 +2241,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         // has no owning agent — which can never succeed — was re-attempted on every poll forever,
         // each pass re-reading the graph, until the process was OOM-killed. The marker exists to
         // prevent exactly that storm; a permanent failure has to set it.
-        const raised = await this.raiseHumanRequest(task, provider);
+        const raised = await this.raiseHumanRequest(task, provider, preloadedParent);
         if (raised === 'transient-failure') return;   // try again next poll
         if (raised === 'permanent-failure') {
             // Nothing will change on a retry. Mark it so the loop stops, and leave the task Pending
@@ -2367,17 +2466,27 @@ export class TaskGraphDispatcher implements IShutdownable {
     private async findClaimableTasks(
         provider: IMetadataProvider,
         limit: number,
-    ): Promise<{ tasks: MJTaskEntity[]; stats: Map<string, { eligible: number; held: number }> }> {
-        const claimable: MJTaskEntity[] = [];
+        preloadedGraphs?: readonly GraphState[],
+    ): Promise<{ tasks: ClaimedTaskCandidate[]; stats: Map<string, { eligible: number; held: number }> }> {
+        const claimable: ClaimedTaskCandidate[] = [];
         const stats = new Map<string, { eligible: number; held: number }>();
-        const activeGraphs = await this.findActiveGraphIDs(provider);
-        // Usually a no-op — propagateAndRollup primed these earlier in the same pass.
-        await this.primeDebugStates(provider, activeGraphs);
-        for (const parentID of activeGraphs) {
+        const graphSources: Array<{ parentID: string; preloaded?: GraphState }> = preloadedGraphs
+            ? preloadedGraphs
+                .map((g) => ({ parentID: g.parentTaskID ?? g.parent?.ID ?? '', preloaded: g }))
+                .filter((entry) => entry.parentID.length > 0)
+            : await (async () => {
+                const activeGraphs = await this.findActiveGraphIDs(provider);
+                // Usually a no-op — propagateAndRollup primed these earlier in the same pass.
+                await this.primeDebugStates(provider, activeGraphs);
+                return activeGraphs.map((parentID) => ({ parentID }));
+            })();
+
+        for (const source of graphSources) {
             if (claimable.length >= limit) break;
+            const { parentID } = source;
             const debug = await this.readDebugState(provider, parentID);
             await this.announcePauseTransition(provider, parentID, debug);
-            const graph = await this.loadGraphState(provider, parentID, debug);
+            const graph = source.preloaded ?? await this.loadGraphState(provider, parentID, debug);
             // HOLD is what makes "a broken condition stalls visibly" true rather than merely stated.
             // An undecided exclusive group keeps all its edges, and a kept edge on a Complete origin
             // is a SATISFIED prerequisite — so without this filter every branch of the fork would be
@@ -2506,12 +2615,21 @@ export class TaskGraphDispatcher implements IShutdownable {
                         );
                         continue;
                     }
-                    await this.notifyHumanTaskReady(entity, provider);
+                    await this.notifyHumanTaskReady(entity, provider, graph.parent);
                     continue;
                 }
 
                 if (this.inFlight.has(entity.ID)) continue;
-                claimable.push(entity);
+                claimable.push({
+                    ID: entity.ID,
+                    taskId: entity.ID,
+                    ParentID: entity.ParentID,
+                    Name: entity.Name,
+                    taskEntity: entity,
+                    parentTask: graph.parent ?? null,
+                    parentMetadata: graph.parentMetadata,
+                    dependencyOutputs: this.extractDependencyOutputsFromGraph(entity.ID, graph),
+                });
                 if (claimable.length >= limit) break;
             }
 
@@ -2642,6 +2760,7 @@ export class TaskGraphDispatcher implements IShutdownable {
     private async raiseHumanRequest(
         task: MJTaskEntity,
         provider: IMetadataProvider,
+        preloadedParent?: MJTaskEntity | null,
     ): Promise<'raised' | 'permanent-failure' | 'transient-failure'> {
         try {
             const existing = await this.findOpenRequests(provider, task.ID);
@@ -2660,7 +2779,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             // A human task has NO AgentID of its own — that column names what EXECUTES a step, and
             // a person is not an agent. The request still needs one, so it carries the agent that
             // owns the workflow: the graph's own agent, which is who is asking.
-            const owningAgentID = await this.owningAgentOf(provider, task);
+            const owningAgentID = await this.owningAgentOf(provider, task, preloadedParent);
             if (!owningAgentID) {
                 // PERMANENT: a graph with no owning agent will not acquire one by being asked
                 // again. Graphs submitted before the provenance stamp landed are all in this state.
@@ -2677,7 +2796,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             request.Status = 'Requested';
             request.Request = task.Description || `A workflow is waiting on you to complete "${task.Name}".`;
             // The graph's own run is the provenance a reader follows back to see what led here.
-            request.OriginatingAgentRunID = await this.submittingRunOf(provider, task);
+            request.OriginatingAgentRunID = await this.submittingRunOf(provider, task, preloadedParent);
 
             // The deadline, when the author set one. `expireOverdueRequests` has always been able to
             // enforce this — it expires the request and fails the step so a give-up edge can route
@@ -2731,12 +2850,20 @@ export class TaskGraphDispatcher implements IShutdownable {
      * Reads the graph's parent row, falling back to the run that submitted it. A human step has no
      * agent of its own by design: `AgentID` names what EXECUTES a step, and a person is not an agent.
      */
-    private async owningAgentOf(provider: IMetadataProvider, task: MJTaskEntity): Promise<string | null> {
+    private async owningAgentOf(
+        provider: IMetadataProvider,
+        task: MJTaskEntity,
+        preloadedParent?: MJTaskEntity | null,
+    ): Promise<string | null> {
         if (task.AgentID) return task.AgentID;
         if (!task.ParentID) return null;
         try {
-            const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
-            if (!(await parent.Load(task.ParentID))) return null;
+            let parent = preloadedParent ?? null;
+            if (!parent) {
+                const candidate = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+                if (!(await candidate.Load(task.ParentID))) return null;
+                parent = candidate;
+            }
             if (parent.AgentID) return parent.AgentID;
 
             if (!parent.AgentRunID) return null;
@@ -2786,19 +2913,30 @@ export class TaskGraphDispatcher implements IShutdownable {
      * request's own ResponseSchema. A step that only recorded "approved" would force every decision
      * back into a separate action.
      */
-    private async settleAnsweredHumanTasks(provider: IMetadataProvider, graphID: string): Promise<void> {
-        const waiting = await RunView.FromMetadataProvider(provider).RunView<MJTaskEntity>(
-            {
-                EntityName: 'MJ: Tasks',
-                ExtraFilter: `ParentID='${graphID}' AND ${HumanTaskSQL()} AND Status='Pending'`,
-                ResultType: 'entity_object',
-                BypassCache: true,
-            },
-            this.contextUser,
-        );
-        if (!waiting.Success) return;
+    private async settleAnsweredHumanTasks(
+        provider: IMetadataProvider,
+        graphID: string,
+        pendingHumanTasks?: readonly MJTaskEntity[],
+    ): Promise<number> {
+        let tasksToInspect: readonly MJTaskEntity[];
+        if (pendingHumanTasks) {
+            tasksToInspect = pendingHumanTasks.filter((t) => t.Status === 'Pending');
+        } else {
+            const waiting = await RunView.FromMetadataProvider(provider).RunView<MJTaskEntity>(
+                {
+                    EntityName: 'MJ: Tasks',
+                    ExtraFilter: `ParentID='${graphID}' AND ${HumanTaskSQL()} AND Status='Pending'`,
+                    ResultType: 'entity_object',
+                    BypassCache: true,
+                },
+                this.contextUser,
+            );
+            if (!waiting.Success) return 0;
+            tasksToInspect = waiting.Results ?? [];
+        }
 
-        for (const task of waiting.Results ?? []) {
+        let settledCount = 0;
+        for (const task of tasksToInspect) {
             const request = await this.answeredRequestFor(provider, task.ID);
             if (!request) continue;
 
@@ -2827,6 +2965,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 );
                 continue;
             }
+            settledCount++;
 
             // WITHDRAW EVERY OTHER OPEN ASK FOR THIS STEP (R3-5).
             //
@@ -2839,6 +2978,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 provider, [task.ID], 'This step has been settled; the request is no longer open.',
             );
         }
+        return settledCount;
     }
 
     /**
@@ -2862,29 +3002,41 @@ export class TaskGraphDispatcher implements IShutdownable {
      * and raises a fresh request, which is exactly the replacement the design assumed. Bounded by
      * human action: it takes another person cancelling again to come back here.
      */
-    private async reconcileWaitingHumanTasks(provider: IMetadataProvider, graphID: string): Promise<void> {
-        const waiting = await RunView.FromMetadataProvider(provider).RunView<MJTaskEntity>(
-            {
-                EntityName: 'MJ: Tasks',
-                // `StepType` is NULLABLE, and rows predating the column exist (4 in the reference
-                // database at the time of writing). None currently carry a UserID, but a human task
-                // written by any path that set the assignee without the discriminator would be
-                // invisible to a `StepType='Human'` filter and stay dead forever after a cancel —
-                // the exact stall this method exists to end. The notified marker already narrows
-                // this to tasks the dispatcher raised a request for, so the widening cannot pull in
-                // unrelated work.
-                ExtraFilter:
-                    `ParentID='${graphID}' AND Status='Pending' ` +
-                    `AND ${HumanTaskSQL()} ` +
-                    `AND ClaimedBy='${HUMAN_TASK_NOTIFIED_MARKER}'`,
-                ResultType: 'entity_object',
-                BypassCache: true,
-            },
-            this.contextUser,
-        );
-        if (!waiting.Success) return;
+    private async reconcileWaitingHumanTasks(
+        provider: IMetadataProvider,
+        graphID: string,
+        pendingHumanTasks?: readonly MJTaskEntity[],
+    ): Promise<void> {
+        let tasksToInspect: readonly MJTaskEntity[];
+        if (pendingHumanTasks) {
+            tasksToInspect = pendingHumanTasks.filter(
+                (t) => t.Status === 'Pending' && t.ClaimedBy === HUMAN_TASK_NOTIFIED_MARKER,
+            );
+        } else {
+            const waiting = await RunView.FromMetadataProvider(provider).RunView<MJTaskEntity>(
+                {
+                    EntityName: 'MJ: Tasks',
+                    // `StepType` is NULLABLE, and rows predating the column exist (4 in the reference
+                    // database at the time of writing). None currently carry a UserID, but a human task
+                    // written by any path that set the assignee without the discriminator would be
+                    // invisible to a `StepType='Human'` filter and stay dead forever after a cancel —
+                    // the exact stall this method exists to end. The notified marker already narrows
+                    // this to tasks the dispatcher raised a request for, so the widening cannot pull in
+                    // unrelated work.
+                    ExtraFilter:
+                        `ParentID='${graphID}' AND Status='Pending' ` +
+                        `AND ${HumanTaskSQL()} ` +
+                        `AND ClaimedBy='${HUMAN_TASK_NOTIFIED_MARKER}'`,
+                    ResultType: 'entity_object',
+                    BypassCache: true,
+                },
+                this.contextUser,
+            );
+            if (!waiting.Success) return;
+            tasksToInspect = waiting.Results ?? [];
+        }
 
-        for (const task of waiting.Results ?? []) {
+        for (const task of tasksToInspect) {
             // Only when there is nothing live AND nothing terminal. A task with an open request is
             // simply waiting; one with a terminal request is settled on the next pass by
             // settleAnsweredHumanTasks, and re-raising either would ask the same question twice.
@@ -2939,19 +3091,28 @@ export class TaskGraphDispatcher implements IShutdownable {
      * A deadline that nothing enforces is a comment. Without this an `ExpiresAt` in the past leaves
      * the request `Requested` forever and the workflow waiting on it just as long.
      */
-    private async expireOverdueRequests(provider: IMetadataProvider, graphID: string): Promise<void> {
-        // Scoped by an explicit id list rather than a subquery against a view name, so this reads
-        // the same on any provider rather than assuming a SQL dialect and a physical view.
-        const humanTasks = await RunView.FromMetadataProvider(provider).RunView<{ ID: string }>(
-            {
-                EntityName: 'MJ: Tasks',
-                Fields: ['ID'],
-                ExtraFilter: `ParentID='${graphID}' AND ${HumanTaskSQL()} AND Status='Pending'`,
-                ResultType: 'simple',
-            },
-            this.contextUser,
-        );
-        const ids = (humanTasks.Results ?? []).map((r) => `'${r.ID}'`);
+    private async expireOverdueRequests(
+        provider: IMetadataProvider,
+        graphID: string,
+        pendingHumanTasks?: readonly MJTaskEntity[],
+    ): Promise<void> {
+        let ids: string[];
+        if (pendingHumanTasks) {
+            ids = pendingHumanTasks.filter((t) => t.Status === 'Pending').map((r) => `'${r.ID}'`);
+        } else {
+            // Scoped by an explicit id list rather than a subquery against a view name, so this reads
+            // the same on any provider rather than assuming a SQL dialect and a physical view.
+            const humanTasks = await RunView.FromMetadataProvider(provider).RunView<{ ID: string }>(
+                {
+                    EntityName: 'MJ: Tasks',
+                    Fields: ['ID'],
+                    ExtraFilter: `ParentID='${graphID}' AND ${HumanTaskSQL()} AND Status='Pending'`,
+                    ResultType: 'simple',
+                },
+                this.contextUser,
+            );
+            ids = (humanTasks.Results ?? []).map((r) => `'${r.ID}'`);
+        }
         if (ids.length === 0) return;
 
         const nowISO = new Date().toISOString();
@@ -2977,8 +3138,13 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /** The agent run that submitted this task's graph, for provenance on the request. */
-    private async submittingRunOf(provider: IMetadataProvider, task: MJTaskEntity): Promise<string | null> {
+    private async submittingRunOf(
+        provider: IMetadataProvider,
+        task: MJTaskEntity,
+        preloadedParent?: MJTaskEntity | null,
+    ): Promise<string | null> {
         if (!task.ParentID) return null;
+        if (preloadedParent) return preloadedParent.AgentRunID;
         try {
             const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
             return (await parent.Load(task.ParentID)) ? parent.AgentRunID : null;
@@ -2992,6 +3158,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         provider: IMetadataProvider,
         parentTaskID: string,
         debug?: TaskGraphDebugState,
+        preloadedParent?: MJTaskEntity | null,
     ): Promise<GraphState> {
         const rv = RunView.FromMetadataProvider(provider);
         // BypassCache throughout: task status is written by the claim protocol's direct SQL, which
@@ -3003,7 +3170,11 @@ export class TaskGraphDispatcher implements IShutdownable {
         const children = (childrenResult.Success ? childrenResult.Results : []) ?? [];
         if (children.length === 0) {
             return {
+                parentTaskID,
+                parent: preloadedParent ?? null,
+                parentMetadata: ParseTaskGraphParentMetadata(preloadedParent?.InputPayload ?? null),
                 nodes: [], edges: [], entityById: new Map(),
+                rawDependencies: [],
                 unreachableTaskIDs: new Set(), cascadeSkipTaskIDs: new Set(),
                 skipSeedTaskIDs: new Set(), holdTaskIDs: new Set(),
                 handledFailureIDs: new Set(),
@@ -3019,12 +3190,21 @@ export class TaskGraphDispatcher implements IShutdownable {
 
         const entityById = new Map(children.map((c) => [c.ID, c]));
 
-        // Read ONCE, and only when it can change an answer (R2-4). Both consumers below — which
-        // origin statuses may decide an exclusive group, and which failures count as handled — are
-        // no-ops unless something has actually failed, and this runs on every poll for every active
-        // graph, so the parent load stays behind the same cheap exit `computeHandledFailures` used.
-        // One parent read serves both questions this pass asks of the metadata bag.
-        const parentMeta = await this.readParentMetadataFor(provider, parentTaskID);
+        // Read ONCE, and retained on `GraphState` so parent rollup, continuation, human request
+        // provenance, and claimed-task execution all reuse the same loaded parent entity and
+        // parsed metadata without re-querying `MJ: Tasks`.
+        const parent = preloadedParent !== undefined
+            ? preloadedParent
+            : await this.loadParentTask(provider, parentTaskID);
+        const parentMeta = parent
+            ? ParseTaskGraphParentMetadata(parent.InputPayload)
+            : ParseTaskGraphParentMetadata(null);
+        const effectiveDebug = debug
+            ?? this.debugStateByGraph?.get(parentTaskID)
+            ?? ParseTaskGraphDebugState(parent?.InputPayload ?? null);
+        if (!this.debugStateByGraph?.has(parentTaskID)) {
+            this.debugStateByGraph?.set(parentTaskID, effectiveDebug);
+        }
         const failureSemantics = parentMeta.failureSemantics;
         // The invocation's own parameters, carried on the parent so a condition evaluated by any
         // instance sees what the walker saw (R3-3).
@@ -3089,7 +3269,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     originStatus: (entityById.get(d.DependsOnTaskID)?.Status ?? 'Pending') as TaskGraphNodeStatus,
                     priority: d.Priority ?? 0,
                     sequence: d.Sequence ?? 0,
-                    conditionOutcome: this.evaluateExclusiveCondition(d, entityById, invocation, decisions, debug, exclusiveHoldReasons),
+                    conditionOutcome: this.evaluateExclusiveCondition(d, entityById, invocation, decisions, effectiveDebug, exclusiveHoldReasons),
                 })),
                 (edge) => ReadsFailedDecision(conditionByEdge.get(edge.id) ?? '', failedDecisions),
             ),
@@ -3120,8 +3300,9 @@ export class TaskGraphDispatcher implements IShutdownable {
         const gateDecisions: GateDecisionRecord[] = [];
 
         for (const d of ordinary) {
-            if (d.Condition?.trim()) {
-                const decision = this.evaluateEdgeCondition(d, entityById, failureSemantics, invocation, decisions, debug);
+            const cond = d.Condition?.trim();
+            if (cond && cond.toLowerCase() !== 'true' && cond !== '1 === 1' && cond !== '1 == 1') {
+                const decision = this.evaluateEdgeCondition(d, entityById, failureSemantics, invocation, decisions, effectiveDebug);
                 if (decision.decided) {
                     gateDecisions.push({
                         edge: d,
@@ -3131,8 +3312,8 @@ export class TaskGraphDispatcher implements IShutdownable {
                 }
                 if (decision.outcome === 'drop') { droppedInto.add(d.TaskID); continue; }
                 if (decision.outcome === 'hold') heldByCondition.add(d.TaskID);
+                stillReachable.add(d.TaskID);
             }
-            stillReachable.add(d.TaskID);
             liveEdges.push({
                 taskId: d.TaskID,
                 dependsOnTaskId: d.DependsOnTaskID,
@@ -3183,7 +3364,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         const exclusiveHolds = new Set(resolution.holdTaskIDs);
         for (const d of exclusive) {
             const originStatus = entityById.get(d.DependsOnTaskID)?.Status ?? 'Pending';
-            if (!decidingStatuses.has(originStatus as TaskGraphNodeStatus) && !OverrideVerdictFor(debug ?? {}, d.ID)) continue;
+            if (!decidingStatuses.has(originStatus as TaskGraphNodeStatus) && !OverrideVerdictFor(effectiveDebug, d.ID)) continue;
             const held = !loserEdgeIDs.has(d.ID) && exclusiveHolds.has(d.TaskID);
             // The edge that holds its fork says why — below its confidence, from a failed call — and
             // is logged once, as an ordinary edge is. Its siblings hold only because it does.
@@ -3233,9 +3414,13 @@ export class TaskGraphDispatcher implements IShutdownable {
         }
 
         return {
+            parentTaskID,
+            parent,
+            parentMetadata: parentMeta,
             nodes,
             edges: liveEdges,
             entityById,
+            rawDependencies: deps,
             unreachableTaskIDs,
             cascadeSkipTaskIDs,
             skipSeedTaskIDs: confirmedSkipSeeds,
@@ -3434,6 +3619,27 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
 
+    /**
+     * Extracts parsed `OutputPayload` values for all dependencies of `taskID` directly from the
+     * already-loaded `GraphState`, avoiding any additional database round-trips when claiming and
+     * executing a task.
+     */
+    private extractDependencyOutputsFromGraph(taskID: string, graph: GraphState): Map<string, unknown> {
+        const outputs = new Map<string, unknown>();
+        const deps = graph.rawDependencies ?? [];
+        for (const dep of deps) {
+            if (!UUIDsEqual(dep.TaskID, taskID)) continue;
+            const upstream = graph.entityById.get(dep.DependsOnTaskID);
+            if (!upstream?.OutputPayload) continue;
+            try {
+                outputs.set(dep.DependsOnTaskID, JSON.parse(upstream.OutputPayload));
+            } catch (e) {
+                LogError(`[TaskGraphDispatcher] Task ${dep.DependsOnTaskID} has malformed OutputPayload: ${e}`);
+            }
+        }
+        return outputs;
+    }
+
     /** Parsed `OutputPayload` of each completed dependency, keyed by that task's ID. */
     private async loadDependencyOutputs(provider: IMetadataProvider, taskID: string): Promise<Map<string, unknown>> {
         const outputs = new Map<string, unknown>();
@@ -3471,6 +3677,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         inputPayload: unknown,
         dependencyOutputs: Map<string, unknown>,
         onProgress?: TaskRunProgressCallback,
+        prehydrated?: Pick<ClaimedTaskCandidate, 'parentTask' | 'parentMetadata'>,
     ): Promise<TaskBodyOutcome> {
         // A node's input is a name → value object (`TaskGraphSpecNode.inputPayload: Record<string, unknown>`).
         // `mergedPayload` below only merges objects, so anything else would be dropped without a word
@@ -3495,20 +3702,20 @@ export class TaskGraphDispatcher implements IShutdownable {
         // A loop's own step type decides how many times its body runs; the body itself is dispatched
         // through the very same runners as a one-shot step.
         if (task.StepType === 'ForEach' || task.StepType === 'While') {
-            return { ...await this.runLoopTask(task, provider, payload, dependencyOutputs), PayloadAtStart: payload };
+            return { ...await this.runLoopTask(task, provider, payload, dependencyOutputs, prehydrated), PayloadAtStart: payload };
         }
 
         // Routed on StepType before the mappings below: a Decision reads its state from the merged
         // payload by path and writes its answers back under `decisions`, so it has no mapping of its
         // own. And it carries a PromptID, so the Prompt branch would otherwise take it.
         if (task.StepType === 'Decision') {
-            return { ...await this.runDecisionNode(task, provider, payload, onProgress), PayloadAtStart: payload };
+            return { ...await this.runDecisionNode(task, provider, payload, onProgress, prehydrated), PayloadAtStart: payload };
         }
 
         // `data.*` / `context.*` resolve against the invocation that submitted the graph, exactly as
         // the in-run walker resolves them and as branch conditions already see them (R3-3). Without
         // it a mapping like `RecordID: data.ID` reached the action as the literal "data.ID".
-        const context = await this.graphContext(provider, task);
+        const context = await this.graphContext(provider, task, prehydrated);
         const invocation = config?.inputMapping ? context.Invocation : {};
         const { params, errors } = BuildMappedInput(config?.inputMapping, { payload, ...invocation });
         for (const e of errors) LogError(`[TaskGraphDispatcher] Task ${task.ID}: ${e}`);
@@ -3596,8 +3803,9 @@ export class TaskGraphDispatcher implements IShutdownable {
         provider: IMetadataProvider,
         payload: Record<string, unknown>,
         dependencyOutputs: Map<string, unknown>,
+        prehydrated?: Pick<ClaimedTaskCandidate, 'parentTask' | 'parentMetadata'>,
     ): Promise<TaskBodyOutcome> {
-        const config = task.ConfigurationObject;
+        const config = task.ConfigurationObject as TaskStepConfiguration | null;
         const op = task.StepType === 'ForEach' ? config?.forEach : config?.while;
         if (!op) {
             return {
@@ -3627,7 +3835,28 @@ export class TaskGraphDispatcher implements IShutdownable {
         // cost), and the continuation depth (so the recursion cap still applies). Omitting them made
         // loop bodies second-class in every dimension — and reopened the unbounded-recursion hole
         // THROUGH loops, since each spawned run restarted the chain at zero.
-        const graphContext = await this.graphContext(provider, task);
+        const graphContext = await this.graphContext(provider, task, prehydrated);
+
+        // Pre-resolve ActionIDs once for multi-step action bodies (`op.steps[]`). Submit stamps
+        // `config.stepActionIds`; fallback RunView covers callers constructing Task rows directly.
+        const multiSteps = op.steps && op.steps.length > 0 ? op.steps : null;
+        let stepActionIds: Map<string, string> | null = null;
+        if (multiSteps) {
+            if (!this.actionRunner) {
+                return { Success: false, AgentRunID: null, ErrorMessage: 'No action runner is loaded on this host.' };
+            }
+            const resolvedIds = await this.resolveLoopStepActionIds(
+                multiSteps,
+                config?.stepActionIds,
+                task.ActionID,
+                provider,
+                graphContext.ExecutionUser,
+            );
+            if (!resolvedIds.Success || !resolvedIds.Map) {
+                return { Success: false, AgentRunID: null, ErrorMessage: resolvedIds.ErrorMessage };
+            }
+            stepActionIds = resolvedIds.Map;
+        }
 
         // THE LOOP'S PAYLOAD ACCUMULATES. Each iteration's output merges in, and the next iteration
         // — and the While condition — sees it. Without this the condition closure re-read the
@@ -3646,12 +3875,41 @@ export class TaskGraphDispatcher implements IShutdownable {
         // Bounds what the trace's payloads may cost. The pointers are never budgeted — those are the
         // durable record of the work and must survive whatever the payloads do.
         const budget = new IterationPayloadBudget();
+        const isParallelForEach =
+            task.StepType === 'ForEach' && (op as ForEachOperation).executionMode === 'parallel';
+        const deferredFoldsByIndex = new Map<number, LoopStepFold[]>();
 
         const invokeBody: LoopBodyInvoker = async ({ Index, Bindings }) => {
-            // Bindings go INTO the payload rather than beside it, so an authored mapping reaches the
-            // current item the same way it reaches anything else: `payload.<itemVariable>`.
+            if (multiSteps && stepActionIds) {
+                return this.executeMultiStepLoopPass({
+                    task,
+                    op,
+                    steps: multiSteps,
+                    stepActionIds,
+                    index: Index,
+                    bindings: Bindings,
+                    getLivePayload: () => livePayload,
+                    setLivePayload: (next) => { livePayload = next; },
+                    deferLivePayloadFold: isParallelForEach,
+                    deferredFoldsByIndex,
+                    dependencyOutputs,
+                    provider,
+                    executionUser: graphContext.ExecutionUser,
+                    invocation: graphContext.Invocation,
+                    iterationTrace,
+                    budget,
+                });
+            }
+
+            // Bindings go INTO `iterationPayload` AND are passed explicitly to `ResolveLoopBodyParams`,
+            // so durable single-arm loops honor BOTH legacy TaskGraph/Flow mappings (`payload.<itemVar>.*`,
+            // `data.*`, `context.*`, `static:*`) AND the unified ForEachOperation/WhileOperation dialect
+            // (`<itemVar>.*`, `{{<itemVar>.*}}`, inline `{{...}}`) while keeping unresolved paths/tokens literal.
             const iterationPayload = { ...livePayload, ...Bindings };
-            const resolved = ResolveMappedInput(bodyMapping, { payload: iterationPayload, ...graphContext.Invocation }) as Record<string, unknown>;
+            const resolved = ResolveLoopBodyParams(bodyMapping, Bindings, {
+                payload: iterationPayload,
+                ...graphContext.Invocation,
+            });
 
             /**
              * Folds an iteration's output into the running payload the next pass will see, and
@@ -3747,16 +4005,18 @@ export class TaskGraphDispatcher implements IShutdownable {
                 DependencyOutputs: dependencyOutputs,
                 ContinuationDepth: graphContext.Depth,
                 SubmittingAgentRunID: graphContext.SubmittingAgentRunID,
+                ...(graphContext.ParentAgentHierarchy ? { ParentAgentHierarchy: graphContext.ParentAgentHierarchy } : {}),
                 Provider: provider,
                 ContextUser: graphContext.ExecutionUser,
             }), agentInput);
         };
 
+        const evaluator = this.conditionEvaluator ?? new DispatcherConditionEvaluator();
         const outcome = task.StepType === 'ForEach'
-            ? await RunForEachLoop(op as ForEachOperation, { payload }, invokeBody)
+            ? await RunForEachLoop(op as ForEachOperation, { payload, ...graphContext.Invocation }, invokeBody)
             : await RunWhileLoop(
                 op as WhileOperation,
-                (iteration) => this.conditionEvaluator.Evaluate(
+                (iteration) => evaluator.Evaluate(
                     (op as WhileOperation).condition,
                     // BOTH forms, because a workflow should not have two condition dialects. An
                     // EDGE condition is written `payload.brandOK !== true`; a loop condition used
@@ -3764,10 +4024,22 @@ export class TaskGraphDispatcher implements IShutdownable {
                     // so the same expression that routes an edge failed here with
                     // "payload is not defined". The spread stays for conditions already written
                     // against it.
-                    { ...livePayload, payload: livePayload, iteration },
+                    { ...graphContext.Invocation, ...livePayload, payload: livePayload, iteration },
                 ),
                 invokeBody,
             );
+
+        if (isParallelForEach) {
+            // Replay parallel multi-step ForEach folds in deterministic ascending collection-index
+            // order (0 .. N-1) rather than completion order, matching BaseAgent.executeForEachLoop.
+            const orderedIndices = [...deferredFoldsByIndex.keys()].sort((a, b) => a - b);
+            for (const idx of orderedIndices) {
+                for (const fold of deferredFoldsByIndex.get(idx) ?? []) {
+                    livePayload = this.foldIterationOutput(task, livePayload, fold.Output, fold.Mapping);
+                }
+            }
+            iterationTrace.sort((a, b) => a.index - b.index);
+        }
 
         return {
             Success: outcome.Success,
@@ -3782,6 +4054,211 @@ export class TaskGraphDispatcher implements IShutdownable {
             // pass inside `foldIterationOutput`; applying it again against the accumulated payload
             // is what used to make it match nothing.
             Output: this.applyStepOutputMapping(task, livePayload, outcome.Output, config?.outputMapping),
+        };
+    }
+
+    /**
+     * Resolves every step's `ActionID` in a multi-step loop body (`steps[]`) once before iterating.
+     */
+    private async resolveLoopStepActionIds(
+        steps: readonly LoopBodyActionStep[],
+        preResolved: Record<string, string> | undefined,
+        primaryActionId: string | null,
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+    ): Promise<{ Success: boolean; Map?: Map<string, string>; ErrorMessage?: string }> {
+        const map = new Map<string, string>(Object.entries(preResolved ?? {}));
+        if (primaryActionId && steps.length > 0 && !map.has(steps[0].name)) {
+            map.set(steps[0].name, primaryActionId);
+        }
+
+        const missing = [...new Set(steps.map((s) => s.name).filter((n) => !map.has(n)))];
+        if (missing.length > 0) {
+            const resolved = await ResolveRecordsByNameOrToolName({
+                EntityName: 'MJ: Actions',
+                Names: missing,
+                Provider: provider,
+                ContextUser: contextUser,
+            });
+            if (!resolved.Success || !resolved.Map) {
+                return {
+                    Success: false,
+                    ErrorMessage: resolved.ErrorMessage ?? 'Failed to resolve loop step actions.',
+                };
+            }
+            for (const [name, id] of resolved.Map.entries()) {
+                map.set(name, id);
+            }
+        }
+
+        const unresolved = [...new Set(steps.map((s) => s.name).filter((n) => !map.has(n)))];
+        if (unresolved.length > 0) {
+            return {
+                Success: false,
+                ErrorMessage: `Loop step "${steps[0].name}" references unknown action(s): ${unresolved.join(', ')}.`,
+            };
+        }
+        return { Success: true, Map: map };
+    }
+
+    /**
+     * Executes one pass of a multi-step action loop body (`op.steps[]`), chaining step outputs in
+     * memory via `steps.<id>.*`, evaluating per-step `condition` expressions, and folding per-step
+     * `outputMapping` declarations into the loop's running payload.
+     */
+    private async executeMultiStepLoopPass(args: {
+        task: MJTaskEntity;
+        op: ForEachOperation | WhileOperation;
+        steps: readonly LoopBodyActionStep[];
+        stepActionIds: ReadonlyMap<string, string>;
+        index: number;
+        bindings: Record<string, unknown>;
+        getLivePayload: () => Record<string, unknown>;
+        setLivePayload: (next: Record<string, unknown>) => void;
+        deferLivePayloadFold: boolean;
+        deferredFoldsByIndex: Map<number, LoopStepFold[]>;
+        dependencyOutputs: Map<string, unknown>;
+        provider: IMetadataProvider;
+        executionUser: UserInfo;
+        invocation: { data?: unknown; context?: unknown };
+        iterationTrace: MJTaskEntity_ITaskLoopIteration[];
+        budget: IterationPayloadBudget;
+    }): Promise<{ Success: boolean; Output?: unknown; ErrorMessage?: string; ActionLogID?: string }> {
+        const {
+            task, op, steps, stepActionIds, index, bindings,
+            getLivePayload, setLivePayload, deferLivePayloadFold, deferredFoldsByIndex,
+            dependencyOutputs, provider, executionUser, invocation, iterationTrace, budget,
+        } = args;
+
+        const evaluator = this.conditionEvaluator ?? new DispatcherConditionEvaluator();
+        const stepsOutputs: Record<string, Record<string, unknown>> = {};
+        const stepInputsTrace: Record<string, unknown> = {};
+        const executedFolds: LoopStepFold[] = [];
+
+        // Working copy for intra-iteration step chaining; committed onto shared livePayload only via
+        // explicit per-step `outputMapping` declarations (matching BaseAgent.executeLoopStepsIteration).
+        let workingPayload: Record<string, unknown> = structuredClone(getLivePayload());
+        let lastActionLogID: string | undefined;
+        let lastStepOutput: Record<string, unknown> | undefined;
+
+        for (let stepIdx = 0; stepIdx < steps.length; stepIdx++) {
+            const step = steps[stepIdx];
+            const stepKey = step.id?.trim() || `step_${stepIdx}`;
+            const stepBindings: Record<string, unknown> = {
+                ...bindings,
+                index,
+                steps: stepsOutputs,
+            };
+            if (!('item' in stepBindings) && task.StepType === 'ForEach') {
+                const itemVar = (op as ForEachOperation).itemVariable || 'item';
+                stepBindings['item'] = bindings[itemVar];
+            }
+
+            if (step.condition?.trim()) {
+                const conditionScope: Record<string, unknown> = {
+                    ...workingPayload,
+                    ...stepBindings,
+                    payload: { ...workingPayload, ...stepBindings },
+                    steps: stepsOutputs,
+                    index,
+                    iteration: index,
+                    ...(invocation.data !== undefined ? { data: invocation.data } : {}),
+                    ...(invocation.context !== undefined ? { context: invocation.context } : {}),
+                };
+                const verdict = evaluator.Evaluate(step.condition.trim(), conditionScope);
+                if (!verdict.Success) {
+                    const errMsg = `Loop step "${stepKey}" condition failed: ${verdict.ErrorMessage}`;
+                    iterationTrace.push({
+                        index,
+                        payloadAtStart: budget.Take(stepInputsTrace),
+                        payloadAtEnd: budget.Take({ steps: stepsOutputs }),
+                        actionLogID: lastActionLogID,
+                        success: false,
+                        errorMessage: errMsg,
+                    });
+                    return { Success: false, ErrorMessage: errMsg, ActionLogID: lastActionLogID };
+                }
+                if (!verdict.Value) {
+                    continue;
+                }
+            }
+
+            const stepPayload = { ...workingPayload, ...stepBindings };
+            const resolvedParams = ResolveLoopBodyParams(
+                step.params ?? {},
+                stepBindings,
+                { payload: stepPayload, ...invocation },
+            );
+            stepInputsTrace[stepKey] = resolvedParams;
+
+            const actionId = stepActionIds.get(step.name)!;
+            const actionOutcome = await this.actionRunner!.RunActionForTask({
+                TaskID: task.ID,
+                ActionID: actionId,
+                InputPayload: resolvedParams,
+                DependencyOutputs: dependencyOutputs,
+                Provider: provider,
+                ContextUser: executionUser,
+            });
+            if (actionOutcome.ActionLogID) {
+                lastActionLogID = actionOutcome.ActionLogID;
+            }
+
+            if (!actionOutcome.Success) {
+                const errMsg = actionOutcome.ErrorMessage || `Loop step "${stepKey}" (${step.name}) failed`;
+                iterationTrace.push({
+                    index,
+                    payloadAtStart: budget.Take(stepInputsTrace),
+                    payloadAtEnd: budget.Take({ steps: stepsOutputs }),
+                    actionLogID: lastActionLogID,
+                    success: false,
+                    errorMessage: errMsg,
+                });
+                return { Success: false, ErrorMessage: errMsg, ActionLogID: lastActionLogID };
+            }
+
+            const stepOutput: Record<string, unknown> =
+                actionOutcome.Output && typeof actionOutcome.Output === 'object' && !Array.isArray(actionOutcome.Output)
+                    ? (actionOutcome.Output as Record<string, unknown>)
+                    : {};
+            stepsOutputs[stepKey] = stepOutput;
+            if (stepKey !== `step_${stepIdx}`) {
+                stepsOutputs[`step_${stepIdx}`] ??= stepOutput;
+            }
+            lastStepOutput = stepOutput;
+
+            const trimmedMapping = step.outputMapping?.trim();
+            if (trimmedMapping) {
+                workingPayload = this.foldIterationOutput(task, workingPayload, stepOutput, trimmedMapping);
+                executedFolds.push({ Output: stepOutput, Mapping: trimmedMapping });
+            }
+        }
+
+        if (deferLivePayloadFold) {
+            deferredFoldsByIndex.set(index, executedFolds);
+        } else if (executedFolds.length > 0) {
+            let updatedLive = getLivePayload();
+            for (const fold of executedFolds) {
+                updatedLive = this.foldIterationOutput(task, updatedLive, fold.Output, fold.Mapping);
+            }
+            setLivePayload(updatedLive);
+        }
+
+        const combinedOutput: Record<string, unknown> = {
+            ...(lastStepOutput ?? {}),
+            steps: stepsOutputs,
+        };
+        iterationTrace.push({
+            index,
+            payloadAtStart: budget.Take(stepInputsTrace),
+            payloadAtEnd: budget.Take(combinedOutput),
+            actionLogID: lastActionLogID,
+            success: true,
+        });
+        return {
+            Success: true,
+            Output: combinedOutput,
+            ActionLogID: lastActionLogID,
         };
     }
 
@@ -3899,6 +4376,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         resolvedContext?: GraphContext,
     ): Promise<TaskBodyOutcome> {
         const context = resolvedContext ?? await this.graphContext(provider, task);
+        const presetName = (task.ConfigurationObject as TaskStepConfiguration | null)?.agent?.presetName?.trim() || undefined;
         return this.agentRunner.RunAgentForTask({
             TaskID: task.ID,
             AgentID: task.AgentID!,
@@ -3906,6 +4384,8 @@ export class TaskGraphDispatcher implements IShutdownable {
             DependencyOutputs: dependencyOutputs,
             ContinuationDepth: context.Depth,
             SubmittingAgentRunID: context.SubmittingAgentRunID,
+            ...(context.ParentAgentHierarchy ? { ParentAgentHierarchy: context.ParentAgentHierarchy } : {}),
+            ...(presetName ? { ConfigurationPresetName: presetName } : {}),
             Provider: provider,
             ContextUser: context.ExecutionUser,
             OnProgress: onProgress,
@@ -3931,6 +4411,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         provider: IMetadataProvider,
         payload: Record<string, unknown>,
         onProgress?: TaskRunProgressCallback,
+        prehydrated?: Pick<ClaimedTaskCandidate, 'parentTask' | 'parentMetadata'>,
     ): Promise<TaskBodyOutcome> {
         const config = ReadDecisionStepConfiguration(task.Configuration);
         if (!config) return this.decisionNotAsked(task, payload, 'it has no decision settings, so there is nothing to ask');
@@ -3945,7 +4426,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         const conflict = DecisionsPayloadConflict(payload);
         if (conflict) return notAsked(conflict);
 
-        const context = await this.graphContext(provider, task);
+        const context = await this.graphContext(provider, task, prehydrated);
         const startedAt = new Date();
         const result = await this.decisionRunner.RunDecisionForTask({
             TaskID: task.ID,
@@ -4103,6 +4584,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 Fields: ['StepNumber'],
                 OrderBy: 'StepNumber DESC',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
                 BypassCache: true,
             },
@@ -4240,6 +4722,32 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
+     * Loads a graph's parent `MJ: Tasks` row once and caches its owner and debug state when present.
+     */
+    private async loadParentTask(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+    ): Promise<MJTaskEntity | null> {
+        try {
+            const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+            if (await parent.Load(parentTaskID)) {
+                const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
+                const owner = meta.submittedByUserID ?? parent.UserID ?? null;
+                this.ownerByParentID?.set(parentTaskID, owner);
+                if (!this.debugStateByGraph?.has(parentTaskID)) {
+                    this.debugStateByGraph?.set(parentTaskID, ParseTaskGraphDebugState(parent.InputPayload));
+                }
+                return parent;
+            }
+            LogError(`[TaskGraphDispatcher] Parent task ${parentTaskID} could not be loaded; using default graph metadata (no invocation data/context).`);
+        } catch (e) {
+            // Safe defaults still apply — but say so: a missing invocation turns every `data.*` mapping literal.
+            LogError(`[TaskGraphDispatcher] Reading parent task ${parentTaskID} failed; using default graph metadata: ${e instanceof Error ? e.message : String(e)}`);
+        }
+        return null;
+    }
+
+    /**
      * A graph's durable metadata bag, for the questions a pass asks of it.
      *
      * Defaults on any failure to read it, and the defaults are the safe directions: `'block'` means
@@ -4251,15 +4759,8 @@ export class TaskGraphDispatcher implements IShutdownable {
         provider: IMetadataProvider,
         parentTaskID: string,
     ): Promise<TaskGraphParentMetadata> {
-        try {
-            const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
-            if (await parent.Load(parentTaskID)) return ParseTaskGraphParentMetadata(parent.InputPayload);
-            LogError(`[TaskGraphDispatcher] Parent task ${parentTaskID} could not be loaded; using default graph metadata (no invocation data/context).`);
-        } catch (e) {
-            // Safe defaults still apply — but say so: a missing invocation turns every `data.*` mapping literal.
-            LogError(`[TaskGraphDispatcher] Reading parent task ${parentTaskID} failed; using default graph metadata: ${e instanceof Error ? e.message : String(e)}`);
-        }
-        return ParseTaskGraphParentMetadata(null);
+        const parent = await this.loadParentTask(provider, parentTaskID);
+        return parent ? ParseTaskGraphParentMetadata(parent.InputPayload) : ParseTaskGraphParentMetadata(null);
     }
 
     /**
@@ -4303,7 +4804,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             // own bookkeeping is owed either way — but announcing it would message a conversation
             // about a workflow the user stopped, and for `reinvoke` would start a fresh billed turn
             // for the agent they cancelled.
-            const cancelled = run.Status === 'Cancelled';
+            let cancelled = run.Status === 'Cancelled';
             const settledFor = parent.CompletedAt ? Date.now() - parent.CompletedAt.getTime() : 0;
             if (!IsSubmittingRunReady(run.Status, settledFor)) {
                 // Still `Running` and inside the grace: `finalizeAgentRun` has not parked it yet.
@@ -4321,6 +4822,26 @@ export class TaskGraphDispatcher implements IShutdownable {
                     `likely died. Settling and delivering the graph anyway; the run needs separate attention.`,
                 );
             }
+
+            // When a sub-agent submitted the graph on behalf of a parent run, check that any
+            // ancestor runs in the ParentRunID chain have also parked before settling.
+            let currentParentRunID = run.ParentRunID;
+            const visitedReadinessIDs = new Set<string>([(run.ID || meta.submittedByAgentRunID).toLowerCase()]);
+            while (currentParentRunID && !visitedReadinessIDs.has(currentParentRunID.toLowerCase()) && visitedReadinessIDs.size < 10) {
+                visitedReadinessIDs.add(currentParentRunID.toLowerCase());
+                const ancestorRun = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
+                if (!(await ancestorRun.Load(currentParentRunID))) {
+                    break;
+                }
+                if (ancestorRun.Status === 'Cancelled') {
+                    cancelled = true;
+                }
+                if (!IsSubmittingRunReady(ancestorRun.Status, settledFor)) {
+                    return { Verdict: 'defer', SubmitterCancelled: cancelled };
+                }
+                currentParentRunID = ancestorRun.ParentRunID;
+            }
+
             return { Verdict: 'ready', SubmitterCancelled: cancelled };
         } catch (e) {
             LogError(`[TaskGraphDispatcher] Could not check the run waiting on graph ${parent.ID}: ${e instanceof Error ? e.message : String(e)}`);
@@ -4364,38 +4885,60 @@ export class TaskGraphDispatcher implements IShutdownable {
                 LogError(`[TaskGraphDispatcher] Could not load run ${meta.submittedByAgentRunID} to settle it against graph ${parent.ID}.`);
                 return 'defer';
             }
-            if (run.Status !== 'Paused') return 'done';
 
-            // The workflow's outcome becomes the run's outcome. A graph that ended any way other than
-            // Complete did not do what the run started it to do, and a run reporting success over it
-            // would be the same untruth in a different place.
             const succeeded = graphStatus === 'Complete';
-            // COLUMN-SCOPED AND GUARDED ON `Paused` (C4), for the same reason every parent write has
-            // been since Round 1: a full-row save carries a stale snapshot of a row another instance
-            // may have moved, and the predicate makes the transition once-only rather than
-            // last-write-wins.
-            const settled = await this.claims.TrySettleRun(
-                provider, run.ID, succeeded,
-                succeeded ? null : `The workflow "${parent.Name}" ended ${graphStatus}.`,
-                this.contextUser,
-            );
-            if (!settled) {
-                // Left parked rather than forced. A run stuck at Paused is visibly unfinished, which
-                // is a state someone can investigate; a run flipped to Completed by a write that did
-                // not land would be the same lie this whole change removes.
-                // Rowcount 0 is either "a peer settled it first" — fine, and the status read above
-                // would have caught the common case — or a write that did not land. Deferring covers
-                // both: a peer's settle makes the next pass's `Paused` check return `done`.
-                LogError(
-                    `[TaskGraphDispatcher] Could not settle run ${run.ID} against graph ${parent.ID}; ` +
-                    `it is no longer Paused or the write did not land. Retrying next pass.`,
+            const failureMessage = succeeded ? null : `The workflow "${parent.Name}" ended ${graphStatus}.`;
+
+            if (run.Status === 'Paused') {
+                // COLUMN-SCOPED AND GUARDED ON `Paused` (C4), for the same reason every parent write has
+                // been since Round 1: a full-row save carries a stale snapshot of a row another instance
+                // may have moved, and the predicate makes the transition once-only rather than
+                // last-write-wins.
+                const settled = await this.claims.TrySettleRun(
+                    provider, run.ID, succeeded,
+                    failureMessage,
+                    this.contextUser,
                 );
-                return 'defer';
+                if (!settled) {
+                    LogError(
+                        `[TaskGraphDispatcher] Could not settle run ${run.ID} against graph ${parent.ID}; ` +
+                        `it is no longer Paused or the write did not land. Retrying next pass.`,
+                    );
+                    return 'defer';
+                }
+                LogStatus(
+                    `[TaskGraphDispatcher] Run ${run.ID} settled ${succeeded ? 'Completed' : 'Failed'} — ` +
+                    `workflow "${parent.Name}" ended ${graphStatus}.`,
+                );
             }
-            LogStatus(
-                `[TaskGraphDispatcher] Run ${run.ID} settled ${succeeded ? 'Completed' : 'Failed'} — ` +
-                `workflow "${parent.Name}" ended ${graphStatus}.`,
-            );
+
+            // When a sub-agent (e.g. Workflow Planner) submitted the graph on behalf of a parent
+            // conversation agent (e.g. Sage), BaseAgent parks the parent run as `Paused` as well.
+            // Walk up `ParentRunID` and settle any ancestor runs parked in `Paused`.
+            let currentParentRunID = run.ParentRunID;
+            const visitedSettleIDs = new Set<string>([(run.ID || meta.submittedByAgentRunID).toLowerCase()]);
+            while (currentParentRunID && !visitedSettleIDs.has(currentParentRunID.toLowerCase()) && visitedSettleIDs.size < 10) {
+                visitedSettleIDs.add(currentParentRunID.toLowerCase());
+                const ancestorRun = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
+                if (!(await ancestorRun.Load(currentParentRunID))) {
+                    break;
+                }
+                if (ancestorRun.Status === 'Paused') {
+                    const ancestorSettled = await this.claims.TrySettleRun(
+                        provider, ancestorRun.ID, succeeded,
+                        failureMessage,
+                        this.contextUser,
+                    );
+                    if (ancestorSettled) {
+                        LogStatus(
+                            `[TaskGraphDispatcher] Ancestor run ${ancestorRun.ID} settled ${succeeded ? 'Completed' : 'Failed'} — ` +
+                            `workflow "${parent.Name}" ended ${graphStatus}.`,
+                        );
+                    }
+                }
+                currentParentRunID = ancestorRun.ParentRunID;
+            }
+
             return 'done';
         } catch (e) {
             LogError(`[TaskGraphDispatcher] Could not settle the run waiting on graph ${parent.ID}: ${e instanceof Error ? e.message : String(e)}`);
@@ -4435,6 +4978,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             const edges: GraphLayoutEdge[] = graph.edges.map((e) => ({ From: e.dependsOnTaskId, To: e.taskId }));
             const positions = LayoutGraphNodes([...graph.entityById.keys()], edges, { Direction: 'LR' });
 
+            const tasksToSave: MJTaskEntity[] = [];
             for (const task of needsLayout) {
                 const position = positions.get(task.ID);
                 if (!position) continue;
@@ -4444,10 +4988,16 @@ export class TaskGraphDispatcher implements IShutdownable {
                     layout: { x: position.X, y: position.Y },
                 };
                 task.Configuration = JSON.stringify(merged);
-                if (!(await task.Save())) {
-                    LogError(`[TaskGraphDispatcher] Could not save computed layout for ${task.ID}: ${task.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-                }
+                tasksToSave.push(task);
             }
+
+            await Promise.all(
+                tasksToSave.map(async (task) => {
+                    if (!(await task.Save())) {
+                        LogError(`[TaskGraphDispatcher] Could not save computed layout for ${task.ID}: ${task.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                    }
+                }),
+            );
         } catch (e) {
             LogError(`[TaskGraphDispatcher] Could not compute a layout for the settled graph: ${e instanceof Error ? e.message : String(e)}`);
         }
@@ -4554,8 +5104,174 @@ export class TaskGraphDispatcher implements IShutdownable {
             }
         }
         if (inputPayload) {
-            Object.assign(merged, inputPayload);
+            const upstreamSnapshot = { ...merged };
+            const resolvedInput = this.resolveInputValue(inputPayload, upstreamSnapshot, true) as Record<string, unknown>;
+            return { ...merged, ...resolvedInput };
         }
         return merged;
+    }
+
+    /**
+     * Resolves LLM-authored template references (such as `{{output.task3.handle}}`, `{{output.summary}}`,
+     * or `@task1.output.rows`) inside `inputPayload` against the merged upstream dependency outputs so
+     * literal placeholder strings do not clobber real upstream values.
+     */
+    private resolveInputValue(
+        val: unknown,
+        upstream: Record<string, unknown>,
+        isRootObject: boolean = false,
+        topLevelKey?: string,
+    ): unknown {
+        if (typeof val === 'string') {
+            const singleMustache = val.match(/^\s*\{\{\s*([^{}]+?)\s*\}\}\s*$/);
+            const singleAtRef = val.match(/^\s*@([a-zA-Z0-9_-]+\.(?:output|payload)(?:\..+?)?)\s*$/i);
+            if (singleMustache || singleAtRef) {
+                const expr = singleMustache ? singleMustache[1] : singleAtRef![1];
+                if (this.isWholeUpstreamReference(expr, upstream)) {
+                    if (topLevelKey) {
+                        const existing = this.lookupCaseInsensitive(upstream, topLevelKey);
+                        if (existing !== undefined) {
+                            return existing;
+                        }
+                    }
+                    return { ...upstream };
+                }
+                const resolved = this.resolveUpstreamPath(expr, upstream);
+                if (resolved !== undefined) {
+                    return resolved;
+                }
+                if (topLevelKey) {
+                    const existing = this.lookupCaseInsensitive(upstream, topLevelKey);
+                    if (existing !== undefined) {
+                        return existing;
+                    }
+                }
+                return val;
+            }
+            if (val.includes('{{') && val.includes('}}')) {
+                return val.replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (fullMatch, expr: string) => {
+                    const resolved = this.resolveUpstreamPath(expr, upstream);
+                    if (resolved === undefined || resolved === null) {
+                        return fullMatch;
+                    }
+                    return typeof resolved === 'object' ? JSON.stringify(resolved) : String(resolved);
+                });
+            }
+            return val;
+        }
+        if (Array.isArray(val)) {
+            return val.map((item) => this.resolveInputValue(item, upstream, false));
+        }
+        if (val && typeof val === 'object') {
+            const out: Record<string, unknown> = {};
+            for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+                out[k] = this.resolveInputValue(v, upstream, false, isRootObject ? k : undefined);
+            }
+            return out;
+        }
+        return val;
+    }
+
+    /**
+     * Returns true when `rawExpr` refers to an entire upstream task output object
+     * (e.g. `@task1.output`, `{{query_sales.output}}`, `{{output.task1}}`, `{{output}}`)
+     * rather than a specific property path within the output.
+     */
+    private isWholeUpstreamReference(rawExpr: string, upstream: Record<string, unknown>): boolean {
+        const normalized = rawExpr.trim().replace(/^@/, '');
+        if (/^(?:[a-zA-Z0-9_-]+\.)?(?:output|outputs|outputFromTask|taskOutput|taskOutputs|payload)$/i.test(normalized)) {
+            return true;
+        }
+        const m = normalized.match(/^(?:output|outputs|outputFromTask|taskOutput|taskOutputs|payload|result)\.([a-zA-Z0-9_-]+)$/i);
+        if (m) {
+            const key = m[1];
+            if (
+                this.lookupCaseInsensitive(upstream, key) === undefined &&
+                !(upstream.results && typeof upstream.results === 'object' && !Array.isArray(upstream.results) &&
+                    this.lookupCaseInsensitive(upstream.results as Record<string, unknown>, key) !== undefined)
+            ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private resolveUpstreamPath(rawExpr: string, upstream: Record<string, unknown>): unknown {
+        let normalized = rawExpr.trim().replace(/^@/, '');
+        if (this.isWholeUpstreamReference(normalized, upstream)) {
+            return { ...upstream };
+        }
+        const taskOutputFieldMatch =
+            normalized.match(/^(?:output|outputs|outputFromTask|taskOutput|taskOutputs|payload|result)\.[a-zA-Z0-9_-]+\.(?:output|payload)\.(.+)$/i) ??
+            normalized.match(/^[a-zA-Z0-9_-]+\.(?:output|payload)\.(.+)$/i);
+        if (taskOutputFieldMatch) {
+            normalized = taskOutputFieldMatch[1];
+        } else {
+            normalized = normalized.replace(/^(?:output|outputs|outputFromTask|taskOutput|taskOutputs|payload|result)\./i, '');
+        }
+
+        const direct = this.walkObjectPath(upstream, normalized);
+        if (direct !== undefined) {
+            return direct;
+        }
+        if (upstream.results && typeof upstream.results === 'object' && !Array.isArray(upstream.results)) {
+            const fromResults = this.walkObjectPath(upstream.results as Record<string, unknown>, normalized);
+            if (fromResults !== undefined) {
+                return fromResults;
+            }
+        }
+        // Fallback when the first segment is a symbolic task ID (e.g. `output.create_report_doc.handle` or `outputFromTask.code1.summary`)
+        const firstDot = normalized.indexOf('.');
+        if (firstDot > 0) {
+            const firstSeg = normalized.slice(0, firstDot);
+            const rest = normalized.slice(firstDot + 1);
+            if (this.lookupCaseInsensitive(upstream, firstSeg) === undefined) {
+                const viaRest = this.walkObjectPath(upstream, rest);
+                if (viaRest !== undefined) {
+                    return viaRest;
+                }
+                if (upstream.results && typeof upstream.results === 'object' && !Array.isArray(upstream.results)) {
+                    const viaResultsRest = this.walkObjectPath(upstream.results as Record<string, unknown>, rest);
+                    if (viaResultsRest !== undefined) {
+                        return viaResultsRest;
+                    }
+                }
+            }
+        }
+        return undefined;
+    }
+
+    private walkObjectPath(root: Record<string, unknown>, dotPath: string): unknown {
+        const segments = dotPath.split('.').map((s) => s.trim()).filter(Boolean);
+        let current: unknown = root;
+        for (const seg of segments) {
+            if (!current || typeof current !== 'object' || Array.isArray(current)) {
+                return undefined;
+            }
+            const arrayMatch = seg.match(/^([^[\]]+)\[(\d+)\]$/);
+            if (arrayMatch) {
+                const arrVal = this.lookupCaseInsensitive(current as Record<string, unknown>, arrayMatch[1]);
+                if (!Array.isArray(arrVal)) {
+                    return undefined;
+                }
+                current = arrVal[Number(arrayMatch[2])];
+                continue;
+            }
+            current = this.lookupCaseInsensitive(current as Record<string, unknown>, seg);
+        }
+        return current;
+    }
+
+    private lookupCaseInsensitive(obj: Record<string, unknown>, key: string): unknown {
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            return obj[key];
+        }
+        const lower = key.toLowerCase();
+        for (const [k, v] of Object.entries(obj)) {
+            if (k.toLowerCase() === lower) {
+                return v;
+            }
+        }
+        return undefined;
     }
 }

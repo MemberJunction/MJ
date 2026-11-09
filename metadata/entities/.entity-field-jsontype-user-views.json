@@ -91,8 +91,25 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: User Views&Name=DisplayState"
           },
           "sync": {
-            "lastModified": "2026-06-09T06:32:36.558Z",
-            "checksum": "c531fa39bc0c9ff676c5e0f38c3d10471bb1b61f28e034e84f4d798ad7a86301"
+            "lastModified": "2026-10-28T00:36:05.860Z",
+            "checksum": "3f4388a1616200f8052e17da4f3a233059ae8416af478298563ca7d394966a05"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "IUserViewProperty",
+            "JSONTypeIsArray": true,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IUserViewProperty.ts"
+          },
+          "_comments": [
+            "Properties — the view's declared, typed inputs, each driving one predicate on a target field"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: User Views&Name=Properties"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:05.881Z",
+            "checksum": "1fef81f4e6b3d49bce4c284bbfb26abc4c7c5f1a0e416daf1a2a28bbbe5dc4f8"
           }
         }
       ]

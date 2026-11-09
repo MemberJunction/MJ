@@ -1,0 +1,23 @@
+{
+  "id": "T4",
+  "namespace": "673fc7af-5283-4180-b6a0-b95ea5cce94b",
+  "seed": 2209,
+  "description": "Planted series for drift-vs-autocorrelation: strong AR(1) (phi 0.9), constant level, no trend, no seasonality.",
+  "kind": "series",
+  "nPeriods": 240,
+  "testPeriods": 12,
+  "startYear": 2005,
+  "level": 100.0,
+  "trend": 0.0,
+  "seasonAmp": 0.0,
+  "phi": 0.9,
+  "sigma": 2.0,
+  "features": {},
+  "betas": {},
+  "intercept": null,
+  "sizingNote": "240 monthly periods (20 years; Ruling Q9: >= 240 months), monthly rather than daily because it pairs with the monthly D1/T1 scenarios and 240 months gives a lag-1 autocorrelation SE of 0.028 at phi 0.9 (T4 has no trend and no seasonality). Forecast scores use a rolling origin with K = 12 non-overlapping 12-month windows (144 scored forecasts, first origin after 96 training months), because a single 12-point test window measures RMSE with a relative SE of 0.309 while the 12 origins bring it to 0.089 (between-origin spread; evidence/logs/P2/recovery.txt). With phi 0.9 and a constant mean, a last-value naive forecast is close to the oracle (paired t = 0.99), so T4 is a monitoring scenario, not a forecast-ranking one: the series wanders for years while its mean never moves, which a drift monitor must not mistake for drift.",
+  "rollingOrigin": {
+    "K": 12,
+    "H": 12
+  }
+}

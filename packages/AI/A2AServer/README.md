@@ -136,7 +136,10 @@ Execute MemberJunction AI agents through A2A tasks:
 
 ### Server-Sent Events (SSE)
 
-Streaming support for long-running agent operations. Clients can subscribe to task updates via SSE for real-time status and message delivery.
+Streaming support for long-running agent operations. Clients can subscribe to task updates via SSE (`tasks/sendSubscribe`) for real-time status and message delivery:
+- **Event-Driven Updates**: `TaskStore` provides an event-driven pub/sub listener registration (`Subscribe` / `Notify`) so SSE streams push status and artifact updates immediately without polling timers.
+- **Task Cancellation Propagation**: Calling `/tasks/{id}/cancel` (or JSON-RPC `tasks/cancel`) triggers `TaskStore.CancelTask(taskId)`, which aborts the active `AbortController` token passed to `AgentOperations.executeAgent()` so in-flight agent runs terminate immediately.
+- **Cached Agent Card Discovery**: `/.well-known/agent.json` caches the generated `AgentCard` across requests (`GetAgentCard` / `InvalidateAgentCardCache`).
 
 ## A2A Protocol Endpoints
 

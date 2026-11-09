@@ -414,4 +414,81 @@ describe('ClientClauseScreen.AssertTableRefReadable — a schema written is the 
         expect(() => ClientClauseScreen.AssertClauseUsesEntityBaseViews(`ID IN (SELECT ID FROM dbo.vwThings)`, 'ExtraFilter', withDbo, MSSQL, USER)).not.toThrow();
         expect(screen(`ID IN (SELECT ID FROM vwAccounts)`)).not.toThrow();
     });
+
+    it('accepts registered usable AlternateBaseViews and applies owning entity permissions, while refusing Disabled AlternateBaseViews', () => {
+        const accountsWithAbv = {
+            ...entity('Accounts', '__mj', 'vwAccounts', true),
+            AlternateBaseViews: [
+                {
+                    Name: 'Active',
+                    ViewName: 'vwActiveAccounts',
+                    EffectiveSchemaName: 'crm',
+                    IsUsable: true,
+                },
+                {
+                    Name: 'DisabledView',
+                    ViewName: 'vwDisabledAccounts',
+                    EffectiveSchemaName: '__mj',
+                    IsUsable: false,
+                },
+            ],
+        } as unknown as EntityInfo;
+
+        const ledgerWithAbv = {
+            ...entity('Ledger', 'fin', 'vwLedger', false),
+            AlternateBaseViews: [
+                {
+                    Name: 'OpenLedger',
+                    ViewName: 'vwOpenLedger',
+                    EffectiveSchemaName: 'fin',
+                    IsUsable: true,
+                },
+            ],
+        } as unknown as EntityInfo;
+
+        const entitiesWithAbv = [accountsWithAbv, ledgerWithAbv];
+
+        // Registered usable alternate view (even in cross-schema 'crm') is allowed when owning entity is readable unscoped
+        expect(() =>
+            ClientClauseScreen.AssertClauseUsesEntityBaseViews(
+                `ID IN (SELECT ID FROM crm.vwActiveAccounts)`,
+                'ExtraFilter',
+                entitiesWithAbv,
+                MSSQL,
+                USER
+            )
+        ).not.toThrow();
+
+        // Full-statement screen also accepts registered usable alternate view
+        expect(() =>
+            ClientClauseScreen.AssertFullStatementUsesReadableEntityViews(
+                `SELECT ID FROM [crm].[vwActiveAccounts]`,
+                entitiesWithAbv,
+                MSSQL,
+                USER
+            )
+        ).not.toThrow();
+
+        // Disabled alternate view is refused
+        expect(() =>
+            ClientClauseScreen.AssertClauseUsesEntityBaseViews(
+                `ID IN (SELECT ID FROM __mj.vwDisabledAccounts)`,
+                'ExtraFilter',
+                entitiesWithAbv,
+                MSSQL,
+                USER
+            )
+        ).toThrow(/entity base view/);
+
+        // Usable alternate view on an entity the user cannot read is refused with permission error
+        expect(() =>
+            ClientClauseScreen.AssertClauseUsesEntityBaseViews(
+                `ID IN (SELECT ID FROM fin.vwOpenLedger)`,
+                'ExtraFilter',
+                entitiesWithAbv,
+                MSSQL,
+                USER
+            )
+        ).toThrow(/do not have read permission on entity 'Ledger'/);
+    });
 });

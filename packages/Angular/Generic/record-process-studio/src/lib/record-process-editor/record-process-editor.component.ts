@@ -11,7 +11,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnInit, Output, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { type EntityInfo } from '@memberjunction/core';
-import { SafeJSONParse, type FieldRuleSet } from '@memberjunction/global';
+import { SafeJSONParse, UUIDsEqual, type FieldRuleSet } from '@memberjunction/global';
 import { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { FieldRulesBuilderComponent, EntityActionUXHostComponent, type EntityActionUXContext, type EntityActionUXResult } from '@memberjunction/ng-entity-action-ux';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
@@ -50,9 +50,9 @@ type ScopeKind = 'Filter' | 'View' | 'List';
                     <div class="rpe-sec-h"><span class="num">2</span><h3>What it acts on</h3></div>
                     <div class="rpe-grid3">
                         <div class="field"><label>Entity</label>
-                            <select class="mj-input" [value]="Record.EntityID || ''" (change)="onEntityChange($event)">
-                                <option value="" disabled>— choose an entity —</option>
-                                @for (e of Entities; track e.ID) { <option [value]="e.ID">{{ e.DisplayName || e.Name }}</option> }
+                            <select class="mj-input" (change)="onEntityChange($event)">
+                                <option value="" disabled [selected]="!SavedEntityListed">— choose an entity —</option>
+                                @for (e of Entities; track e.ID) { <option [value]="e.ID" [selected]="IsSavedEntity(e)">{{ e.DisplayName || e.Name }}</option> }
                             </select></div>
                         <div class="field"><label>Default scope</label>
                             <select class="mj-input" [value]="Record.ScopeType || 'Filter'" (change)="set('ScopeType', $event)">
@@ -177,6 +177,19 @@ export class RecordProcessEditorComponent extends BaseAngularComponent implement
     public Saving = false;
     public ErrorMessage = '';
     public PreviewDriver: { DriverClass: string; Context: EntityActionUXContext } | null = null;
+
+    /**
+     * Whether `entity` is the record's stored target entity. The picker marks it with [selected] on its option:
+     * a [value] on the <select> runs before @for creates the options, so the first entity would show.
+     */
+    public IsSavedEntity(entity: EntityInfo): boolean {
+        return !!this.Record?.EntityID && UUIDsEqual(entity.ID, this.Record.EntityID);
+    }
+
+    /** Whether the entity picker lists the record's stored entity; when it does not, the placeholder is selected. */
+    public get SavedEntityListed(): boolean {
+        return this.Entities.some((e) => this.IsSavedEntity(e));
+    }
 
     get CanSave(): boolean {
         if (!this.Record?.Name || !this.Record?.EntityID) return false;

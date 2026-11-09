@@ -97,6 +97,71 @@ export function IsPlainObject(value: unknown): value is Record<string, unknown> 
     return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+/**
+ * Deep-merges plain-object layers, EARLIEST first — later layers win per key — into a fresh object,
+ * without prototype pollution.
+ *
+ * Merge rules (per key):
+ * - plain object vs plain object → recursive per-key merge;
+ * - a plain object over anything else → a deep copy of the incoming object REPLACES;
+ * - arrays → a shallow copy (`slice()`) of the incoming array REPLACES;
+ * - anything else (strings, numbers, booleans, `null`) → the incoming value REPLACES;
+ * - `undefined` incoming values are skipped;
+ * - `__proto__`, `constructor` and `prototype` keys are skipped at every depth, so untrusted JSON
+ *   (e.g. a client-supplied override layer) cannot write into `Object.prototype`.
+ *
+ * Layers that are not plain objects (`null`, `undefined`, arrays, scalars) are skipped. Inputs are
+ * never mutated.
+ *
+ * @param layers - The layers to merge, base first, most specific last
+ * @returns The merged object (an empty object when no layer contributes)
+ *
+ * @example
+ * ```typescript
+ * SafeDeepMerge({ a: { x: 1, y: 2 } }, { a: { y: 3 } });   // { a: { x: 1, y: 3 } }
+ * SafeDeepMerge({}, JSON.parse('{"__proto__":{"p":1}}'));   // {} — Object.prototype untouched
+ * ```
+ */
+export function SafeDeepMerge(...layers: ReadonlyArray<unknown>): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    for (const layer of layers) {
+        if (IsPlainObject(layer)) {
+            safeMergeInto(result, layer);
+        }
+    }
+    return result;
+}
+
+/** Recursive worker for {@link SafeDeepMerge} — merges `source` into `target` in place. */
+function safeMergeInto(target: Record<string, unknown>, source: Record<string, unknown>): void {
+    for (const key of Object.keys(source)) {
+        // Keys a deep merge must never write: assigning through them reaches `Object.prototype` (or a
+        // constructor's prototype) instead of creating an own property. `JSON.parse('{"__proto__":{}}')`
+        // produces an own `__proto__` key, so parsed input can carry them. Written as inline equality
+        // checks, not a Set lookup, because CodeQL (js/prototype-pollution-utility) only recognizes
+        // this form as a guard.
+        if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+            continue;
+        }
+        const incoming = source[key];
+        if (incoming === undefined) {
+            continue;
+        }
+        const existing = target[key];
+        if (IsPlainObject(existing) && IsPlainObject(incoming)) {
+            safeMergeInto(existing, incoming);
+        } else if (IsPlainObject(incoming)) {
+            const copy: Record<string, unknown> = {};
+            safeMergeInto(copy, incoming);
+            target[key] = copy;
+        } else if (Array.isArray(incoming)) {
+            target[key] = incoming.slice();
+        } else {
+            target[key] = incoming;
+        }
+    }
+}
+
 export function CopyScalarsAndArrays<T extends object>(
     input: T,
     resolveCircularReferences: boolean = false,
@@ -1138,6 +1203,35 @@ export function stripWhitespace(s: string): string {
   return StripWhitespace(s);
 }
 
+/**
+ * Removes one pair of double quotes that wraps a whole search term: `"Steering Review"` and
+ * `“Steering Review”` both become `Steering Review`.
+ *
+ * In full-text search syntax the quotes mark a phrase, and agents and people write searches that way.
+ * A substring search (SQL `LIKE '%term%'`, or `includes`) has no phrase syntax: it looks for the quote
+ * marks themselves and finds nothing, while the unquoted words, matched as one substring, already are
+ * the phrase.
+ *
+ * Only a wrapping pair is removed, and only when it holds something besides whitespace. A quote inside
+ * the term (`6" pipe`) stays, and `""` or `" "` come back unchanged, so the result is never an empty
+ * pattern that matches everything. Straight and curly double quotes are accepted at either end; single
+ * quotes are not, since they are apostrophes.
+ *
+ * @param term - The search term as typed.
+ * @returns The term without its wrapping quotes, trimmed, or `term` unchanged.
+ *
+ * @example
+ * ```typescript
+ * UnwrapPhraseQuotes('"Executive Steering Review"'); // 'Executive Steering Review'
+ * UnwrapPhraseQuotes('6" pipe');                     // '6" pipe'
+ * UnwrapPhraseQuotes('""');                          // '""'
+ * ```
+ */
+export function UnwrapPhraseQuotes(term: string): string {
+    const inner = /^\s*["“”]([\s\S]*)["“”]\s*$/.exec(term)?.[1].trim();
+    return inner ? inner : term;
+}
+
 
 
 
@@ -1499,6 +1593,24 @@ export function TrimTrailingSlashes(s: string): string {
         end--;
     }
     return end === s.length ? s : s.substring(0, end);
+}
+
+/**
+ * Prepares a caller-supplied string for a log line: caps its length, then strips every CR and LF
+ * so the value cannot start a forged log entry.
+ *
+ * @param value - The string to log.
+ * @param maxLength - Characters kept before the value is cut off. Default 10,000.
+ * @returns The value on one line, with `…[truncated]` appended when it was cut off.
+ *
+ * @example
+ * ```typescript
+ * SanitizeForLog('bob\n[ERROR] forged'); // 'bob[ERROR] forged'
+ * ```
+ */
+export function SanitizeForLog(value: string, maxLength: number = 10_000): string {
+    const capped = value.length > maxLength ? `${value.substring(0, maxLength)}…[truncated]` : value;
+    return capped.replace(/[\r\n]/g, '');
 }
 
 

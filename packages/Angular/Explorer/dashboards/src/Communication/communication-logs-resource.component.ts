@@ -63,7 +63,7 @@ import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
                   </td>
                   <td>
                     <span class="log-provider-badge">
-                      <i [class]="getProviderIcon(log.CommunicationProvider)" [style.color]="getProviderColor(log.CommunicationProvider)"></i>
+                      <i [class]="getProviderIcon(log.CommunicationProvider ?? '')" [style.color]="getProviderColor(log.CommunicationProvider ?? '')"></i>
                       {{log.CommunicationProvider}}
                     </span>
                   </td>
@@ -254,7 +254,8 @@ export class CommunicationLogsResourceComponent extends BaseResourceComponent im
                 EntityName: 'MJ: Communication Logs',
                 OrderBy: 'MessageDate DESC',
                 MaxRows: 200,
-                ResultType: 'entity_object'
+                Fields: ['ID', 'Status', 'Direction', 'CommunicationProvider', 'CommunicationProviderMessageType', 'MessageDate', 'ErrorMessage'],
+                ResultType: 'simple'
             });
 
             if (result.Success) {

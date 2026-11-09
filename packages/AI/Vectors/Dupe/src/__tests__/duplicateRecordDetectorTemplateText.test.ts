@@ -70,6 +70,8 @@ vi.mock('@memberjunction/ai-vectors', () => ({
         _currentUser: Record<string, unknown> = { ID: 'user-1' };
 
         get RunView() { return this._runView; }
+        /** Mirrors the real VectorBase.Provider: the metadata related entities are looked up on (none here). */
+        get Provider() { return { Entities: [] }; }
         get CurrentUser() { return this._currentUser; }
         set CurrentUser(user: unknown) { this._currentUser = user as Record<string, unknown>; }
         /** Mirrors the real VectorBase.BuildExtraFilter. */
@@ -225,6 +227,13 @@ describe('DuplicateRecordDetector.GenerateTemplateTexts renders what vector sync
 
         await expect(detector.render([fakeRecord(SIMPLE_ROW, true)])).rejects.toThrow(/Phones/);
         expect(mockRenderTemplate).not.toHaveBeenCalled();
+    });
+
+    it('renders as the detection user, never as whoever configured the shared template engine', async () => {
+        await detector.render([fakeRecord(SIMPLE_ROW, true)]);
+
+        const options = mockRenderTemplate.mock.calls[0][5] as { ContextUser?: UserInfo } | undefined;
+        expect(options?.ContextUser).toEqual({ ID: 'user-1' });
     });
 
     it('renders with validation skipped and warnings suppressed, as sync does', async () => {

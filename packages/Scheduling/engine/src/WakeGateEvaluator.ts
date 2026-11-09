@@ -396,6 +396,9 @@ export class WakeGateEvaluator {
                         OrderBy: '__mj_UpdatedAt DESC',
                         MaxRows: MAX_WATERMARK_SAMPLE_RECORDS,
                         ResultType: 'simple',
+                        // The watermark in the filter changes every evaluation, so a cached
+                        // entry would never be read again; read live.
+                        BypassCache: true,
                     },
                     {
                         EntityName: rule.entityName,
@@ -627,6 +630,7 @@ export class WakeGateEvaluator {
                 EntityName: 'MJ: AI Prompts',
                 ExtraFilter: `Name='${fallbackName.replace(/'/g, "''")}'`,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object',
             }, contextUser);
             if (res.Success && res.Results.length > 0) {

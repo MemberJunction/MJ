@@ -26,8 +26,15 @@
  *                instantiated the higher-priority server subclass.
  *   - EW10       Record Change text keeps characters outside the database code page: emoji, CJK and
  *                Greek survive in ChangesJSON, FullRecordJSON and ChangesDescription.
+ *   - EW11       SaveReturnMode='datestamps_only' preserves in-memory fields while refreshing PK +
+ *                __mj_CreatedAt / __mj_UpdatedAt.
+ *   - EW12       Delta-only Save() preserves untouched fields, merges non-overlapping concurrent
+ *                edits, and detects overlapping field edits.
+ *   - EW13       Typed save parameters: decimal, bigint, datetime, int, bit and Unicode text round-trip
+ *                with the conversions the literal batch always applied (a decimal is rounded by
+ *                the database from its exact text, never through a double).
  *
- * MUTATION TIER: EW1/EW2/EW3/EW5/EW6/EW7/EW10 write to the database and therefore carry
+ * MUTATION TIER: EW1/EW2/EW3/EW5/EW6/EW7/EW9/EW10/EW11/EW12/EW13 write to the database and therefore carry
  * `RequiresMutation: true` (they run only under RUN_MUTATION_TESTS=1). EW4 and EW8 are read-only —
  * EW8's saves are rejected during validation, before any INSERT is attempted.
  *
@@ -37,7 +44,15 @@
 import { RunView, CompositeKey, ProviderBase, EntitySaveOptions } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider, RunViewParams } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { MJActionCategoryEntity, MJConversationEntity, MJConversationDetailEntity, MJListEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
+import {
+    MJActionCategoryEntity,
+    MJConversationEntity,
+    MJConversationDetailEntity,
+    MJKnowledgeHubSavedSearchEntity,
+    MJListEntity,
+    MJListInvitationEntity,
+    MJTagScopeEntity,
+} from '@memberjunction/core-entities';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext, EntityWritesFixture } from '@memberjunction/testing-integration';
@@ -644,19 +659,27 @@ export const EntityWritesChecks: NamedCheck[] = [
             const isGraphQLTransport = typeof (ctx.Provider as { ExecuteGQL?: unknown }).ExecuteGQL === 'function';
 
             // Helper that runs entity.Save() directly over GraphQLDataProvider when on client transport,
-            // or executes the identical delta extraction + DB-truth merge in-process when on server transport.
+            // or executes the identical delta extraction + optimistic concurrency check + DB-truth merge
+            // in-process when on server transport.
             const saveDelta = async (clientEntity: MJActionCategoryEntity): Promise<boolean> => {
                 if (isGraphQLTransport) {
                     return clientEntity.Save();
                 }
-                const deltaInput: Record<string, unknown> = {};
-                for (const field of clientEntity.Fields) {
-                    if (field.IsPrimaryKey || (!field.ReadOnly && field.Dirty && !field.NotLoaded)) {
-                        deltaInput[field.Name] = field.Value;
-                    }
-                }
                 const serverEntity = await ctx.Provider.GetEntityObject<MJActionCategoryEntity>(CATEGORY_ENTITY, ctx.User);
                 Assert(await serverEntity.Load(clientEntity.ID), 'EW12 server truth Load failed');
+                const serverValues = serverEntity.GetAll();
+                const deltaInput: Record<string, string | number | boolean | Date | null> = {};
+                for (const field of clientEntity.Fields) {
+                    if (field.IsPrimaryKey || (!field.ReadOnly && field.Dirty && !field.NotLoaded)) {
+                        if (!field.IsPrimaryKey) {
+                            const dbVal = serverValues[field.Name];
+                            if (field.OldValue !== dbVal && field.Value !== dbVal) {
+                                return false;
+                            }
+                        }
+                        deltaInput[field.Name] = field.Value as string | number | boolean | Date | null;
+                    }
+                }
                 serverEntity.SetMany(deltaInput);
                 const ok = await serverEntity.Save();
                 if (ok) {
@@ -681,12 +704,21 @@ export const EntityWritesChecks: NamedCheck[] = [
 
             // 2) Non-overlapping concurrent update on catB (Status only): catB was loaded when Description
             //    was still null. Because delta-only Save() sends ONLY primary keys + dirty fields (ID, Status),
-            //    saving catB must NOT clobber catA's Description in the DB, and catB's post-save refresh
-            //    must receive catA's Description from the server!
+            //    saving catB must NOT clobber catA's Description in the DB (verified against DB truth below).
+            //    In memory, catB then receives catA's Description on both transports: in-process, the save
+            //    refreshes from the full server row; over GraphQL, the Update input stays delta-only but its
+            //    selection set requests every loaded non-binary field (#6183, 3a29d7189e), so the merged row
+            //    the server returns — including the concurrent Description — reaches the entity.
             catB.Status = 'Pending';
             Assert(await saveDelta(catB), `EW12 catB non-overlapping update failed: ${catB.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             AssertEqual(catB.Status, 'Pending', 'EW12 catB.Status updated');
-            AssertEqual(catB.Description, 'EW12 Initial Description', 'EW12 catB received catA Description instead of clobbering it with null');
+            AssertEqual(
+                catB.Description,
+                'EW12 Initial Description',
+                isGraphQLTransport
+                    ? 'EW12 catB received catA Description from the full-row GraphQL Update return'
+                    : 'EW12 catB received catA Description from the in-process full-row refresh'
+            );
 
             const verifyMerged = await ctx.Provider.GetEntityObject<MJActionCategoryEntity>(CATEGORY_ENTITY, ctx.User);
             Assert(await verifyMerged.Load(catA.ID), 'EW12 verifyMerged Load failed');
@@ -695,8 +727,9 @@ export const EntityWritesChecks: NamedCheck[] = [
             AssertEqual(verifyMerged.Status, 'Pending', 'EW12 DB Status reflects catB update');
 
             // 3) Overlapping concurrent update on the SAME field (Description): load catC while Description
-            //    is 'EW12 Initial Description', update Description via catA first, then update Description
-            //    via stale catC. Server loads DB truth, detects the OldValues___ overlap on Description,
+            //    is 'EW12 Initial Description', update Description via catA first, then attempt an overlapping
+            //    update via stale catC. Server detects the OldValues___ conflict on Description and rejects
+            //    the stale overwrite (preserving 'EW12 Writer 1'); after reloading DB truth, catC saves cleanly
             //    and records the true DB oldValue ('EW12 Writer 1') in Record Changes.
             const catC = await ctx.Provider.GetEntityObject<MJActionCategoryEntity>(CATEGORY_ENTITY, ctx.User);
             Assert(await catC.Load(catA.ID), 'EW12 catC Load failed');
@@ -705,8 +738,18 @@ export const EntityWritesChecks: NamedCheck[] = [
             Assert(await saveDelta(catA), `EW12 catA Writer 1 save failed: ${catA.LatestResult?.CompleteMessage ?? 'unknown error'}`);
 
             catC.Description = 'EW12 Writer 2 (Overlapping)';
-            Assert(await saveDelta(catC), `EW12 catC Writer 2 save failed: ${catC.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-            AssertEqual(catC.Description, 'EW12 Writer 2 (Overlapping)', 'EW12 catC Description updated (last-write-wins on overlapping field)');
+            const staleSaveSucceeded = await saveDelta(catC);
+            Assert(!staleSaveSucceeded, 'EW12 stale catC overlapping save should be rejected with CONCURRENT_MODIFICATION_CONFLICT');
+
+            const verifyNotClobbered = await ctx.Provider.GetEntityObject<MJActionCategoryEntity>(CATEGORY_ENTITY, ctx.User);
+            Assert(await verifyNotClobbered.Load(catA.ID), 'EW12 verifyNotClobbered Load failed');
+            AssertEqual(verifyNotClobbered.Description, 'EW12 Writer 1', 'EW12 Writer 1 preserved when stale overlapping write is rejected');
+
+            // Reload DB truth on catC and complete the update cleanly
+            Assert(await catC.Load(catA.ID), 'EW12 catC reload failed');
+            catC.Description = 'EW12 Writer 2 (Overlapping)';
+            Assert(await saveDelta(catC), `EW12 catC Writer 2 save after reload failed: ${catC.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            AssertEqual(catC.Description, 'EW12 Writer 2 (Overlapping)', 'EW12 catC Description updated after reload');
             AssertEqual(catC.Status, 'Pending', 'EW12 catC untouched Status preserved');
 
             // Poll Record Changes until all 5 rows (1 Create + 4 Updates) land
@@ -728,6 +771,111 @@ export const EntityWritesChecks: NamedCheck[] = [
             AssertEqual(descChange.oldValue, 'EW12 Writer 1', 'EW12 overlapping save Record Change oldValue reflects true DB state');
 
             console.log('      → delta-only Save() preserved untouched fields, merged non-overlapping concurrent edits, and tracked true DB oldValue on overlapping edit');
+        }
+    },
+    {
+        Id: 'entity-writes.EW13',
+        Name: 'EW13: typed save parameters keep the literal batch\'s conversions (decimal, bigint, datetime, int, bit, Unicode)',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // Saves bind each value as a typed parameter (SQLServerDataProvider saveParameters.ts).
+            // The driver encodes a decimal parameter through a double: 1.005 * 100 = 100.4999…, so
+            // decimal(3,2) would store 1.00. MJ sends decimals as their exact text instead, and
+            // SQL Server rounds that to 1.01, the value the literal batch always stored.
+            const f = fx(ctx);
+            const text = "Zoë's 😀 日本 Ωμέγα (mj-integration-test — safe to delete)";
+            const search = await ctx.Provider.GetEntityObject<MJKnowledgeHubSavedSearchEntity>('MJ: Knowledge Hub Saved Searches', ctx.User);
+            search.NewRecord();
+            search.UserID = ctx.User.ID;
+            search.Name = `${f.Prefix}-typed ${FIXTURE_TAG}`;
+            search.Query = text;
+            search.MinScore = 1.005;
+            search.MaxResults = 7;
+            search.NotifyOnNewResults = true;
+            Assert(await search.Save(), `EW13 saved-search save failed: ${search.LatestResult?.CompleteMessage}`);
+            try {
+                const reloaded = await ctx.Provider.GetEntityObject<MJKnowledgeHubSavedSearchEntity>('MJ: Knowledge Hub Saved Searches', ctx.User);
+                Assert(await reloaded.Load(search.ID), `EW13 reloading saved search ${search.ID} failed`);
+                AssertEqual(reloaded.MinScore, 1.01, 'decimal(3,2) 1.005 stored as SQL Server rounds its exact text (a double would give 1.00)');
+                AssertEqual(reloaded.MaxResults, 7, 'int round trip');
+                AssertEqual(reloaded.NotifyOnNewResults, true, 'bit round trip');
+                AssertEqual(reloaded.Query, text, 'Unicode text with a quote round-trips exactly');
+            } finally {
+                await search.Delete();
+            }
+
+            // SQL Server `datetime` keeps its 1/300 s rounding (.999 becomes the next second);
+            // PostgreSQL's `TIMESTAMPTZ` column preserves microsecond precision (.999 stays .999).
+            const entityRows = await runRows<{ ID: string }>({
+                EntityName: 'MJ: Entities', Fields: ['ID'], MaxRows: 1, ResultType: 'simple'
+            }, ctx.User, 'entity lookup for the List FK');
+            Assert(entityRows.length === 1, 'no entities available to satisfy MJ: Lists.EntityID');
+            const list = await ctx.Provider.GetEntityObject<MJListEntity>(LIST_ENTITY, ctx.User);
+            list.NewRecord();
+            list.Name = `${f.Prefix}-typed ${FIXTURE_TAG}`;
+            list.EntityID = entityRows[0].ID;
+            list.UserID = ctx.User.ID;
+            const listSaved = await list.Save();
+            if (list.ID) {
+                f.ListIds.push(list.ID);
+            }
+            Assert(listSaved, `EW13 list save failed: ${list.LatestResult?.CompleteMessage}`);
+            const invitation = await ctx.Provider.GetEntityObject<MJListInvitationEntity>('MJ: List Invitations', ctx.User);
+            invitation.NewRecord();
+            invitation.ListID = list.ID;
+            invitation.Email = 'ew13@mj-integration-test.invalid';
+            invitation.Role = 'Viewer';
+            invitation.Token = `${f.Prefix}-ew13-token`;
+            invitation.ExpiresAt = new Date('2030-06-15T12:00:00.999Z');
+            invitation.CreatedByUserID = ctx.User.ID;
+            invitation.Status = 'Pending';
+            Assert(await invitation.Save(), `EW13 invitation save failed: ${invitation.LatestResult?.CompleteMessage}`);
+            try {
+                const reloaded = await ctx.Provider.GetEntityObject<MJListInvitationEntity>('MJ: List Invitations', ctx.User);
+                Assert(await reloaded.Load(invitation.ID), `EW13 reloading invitation ${invitation.ID} failed`);
+                const isPostgres = ctx.Provider instanceof ProviderBase && ctx.Provider.PlatformKey === 'postgresql';
+                const expectedIso = isPostgres ? '2030-06-15T12:00:00.999Z' : '2030-06-15T12:00:01.000Z';
+                AssertEqual(
+                    reloaded.ExpiresAt?.toISOString(),
+                    expectedIso,
+                    isPostgres
+                        ? 'TIMESTAMPTZ preserves millisecond precision on PostgreSQL'
+                        : 'datetime rounds .999 to the next second, as SQL Server does',
+                );
+            } finally {
+                await invitation.Delete();
+            }
+
+            // bigint (GraphQL carries it as a 32-bit Int, so the value stays below 2^31).
+            const conversation = await ctx.Provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', ctx.User);
+            conversation.NewRecord();
+            conversation.Name = 'EW13 typed probe (mj-integration-test — safe to delete)';
+            conversation.UserID = ctx.User.ID;
+            Assert(await conversation.Save(), `EW13 conversation save failed: ${conversation.LatestResult?.CompleteMessage}`);
+            (f.ConversationIds ??= []).push(conversation.ID);
+            try {
+                const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', ctx.User);
+                detail.NewRecord();
+                detail.ConversationID = conversation.ID;
+                detail.Role = 'User';
+                detail.Message = text;
+                detail.Status = 'Complete';
+                detail.CompletionTime = 2_000_000_123;
+                Assert(await detail.Save(), `EW13 detail save failed: ${detail.LatestResult?.CompleteMessage}`);
+                (f.ConversationDetailIds ??= []).push(detail.ID);
+                try {
+                    const reloaded = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', ctx.User);
+                    Assert(await reloaded.Load(detail.ID), `EW13 reloading detail ${detail.ID} failed`);
+                    AssertEqual(reloaded.CompletionTime, 2_000_000_123, 'bigint round trip');
+                    AssertEqual(reloaded.Message, text, 'nvarchar(MAX) Unicode round trip');
+                } finally {
+                    await detail.Delete();
+                }
+            } finally {
+                await conversation.Delete();
+            }
+
+            console.log('      → decimal 1.005→1.01, datetime .999→next second, bigint, int, bit and Unicode text all round-tripped');
         }
     }
 ];

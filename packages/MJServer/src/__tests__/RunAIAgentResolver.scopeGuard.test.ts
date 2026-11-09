@@ -31,8 +31,18 @@ const hoisted = vi.hoisted(() => ({
 }));
 
 vi.mock('@memberjunction/ai-agents', () => ({
-    AgentRunner: class {},
+    AgentRunner: class {
+        async CreateAgentReplyDetail() {
+            return { ID: 'reply-1', ConversationID: 'conv-1', __mj_CreatedAt: new Date('2026-10-12T10:00:00.000Z') };
+        }
+    },
     ArtifactToolManager: class {},
+}));
+
+// The conversation's ownership check for an anonymous visitor (MJ#6032) reads the conversation's scope stamp;
+// what this file pins is which sessions reach the dispatch at all, so the check itself is allowed through.
+vi.mock('../realtimeSessions/sessionAccess.js', () => ({
+    AuthorizeConversationTurn: vi.fn(async () => ({ Allowed: true })),
 }));
 
 vi.mock('../realtimeWidget/widgetGuestElevation.js', () => ({

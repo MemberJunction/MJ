@@ -8,7 +8,11 @@ import {
     MJAIAgentEntityExtended,
     WalkAgentRunTree,
     type AgentRunTreeNode,
+    type TaskGraphSpec,
+    type WorkflowSpec,
 } from '@memberjunction/ai-core-plus';
+import { WorkflowSaveOperation } from '@memberjunction/core-entities';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { MJGlobal, MJEvent, MJEventType, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
@@ -19,6 +23,7 @@ import { AIAgentRunAnalyticsComponent } from './ai-agent-run-analytics.component
 import { AIAgentRunCostService, AgentRunCostMetrics } from './ai-agent-run-cost.service';
 import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
+import { SectionPickerItem, IsPhoneViewport, WatchPhoneViewport } from '@memberjunction/ng-ui-components';
 
 /**
  * Task statuses that mean the step is finished with. Anything else means the workflow is still
@@ -59,6 +64,53 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
 
   // UI state
   ActiveTab = 'timeline';
+
+  /** Phone-width viewport, decided once at init. Visualization and Analytics are desktop views. */
+  IsPhone = false;
+
+  /** The timeline's detail pane sits beside the list on desktop and under it on a phone. */
+  get TimelineSplitDirection(): 'horizontal' | 'vertical' {
+    return this.IsPhone ? 'vertical' : 'horizontal';
+  }
+
+  /** The views that work at phone width, as `mj-section-picker` items. */
+  get SectionPickerItems(): SectionPickerItem[] {
+    return [
+      { Key: 'timeline', Title: 'Timeline', Icon: 'fas fa-stream' },
+      { Key: 'details', Title: 'Details', Icon: 'fas fa-info-circle' },
+    ];
+  }
+
+  /** A pick from the phone section sheet; only the phone views are accepted. */
+  OnSectionPicked(key: string): void {
+    if (this.SectionPickerItems.some((i) => i.Key === key)) this.ChangeTab(key);
+  }
+
+  /**
+   * Phone defaults, applied at init and whenever the breakpoint is crossed: a run on Visualization or Analytics opens
+   * on the timeline instead, since those are desktop views (pan, zoom, charts).
+   */
+  ApplyPhoneDefaults(isPhone: boolean): void {
+    this.IsPhone = isPhone;
+    if (isPhone && !this.SectionPickerItems.some((i) => i.Key === this.ActiveTab)) this.ActiveTab = 'timeline';
+  }
+
+  /** Stops following the breakpoint; set at init, called from ngOnDestroy. */
+  private stopPhoneWatch: () => void = () => undefined;
+
+  /**
+   * Re-reads the breakpoint and re-applies the phone defaults, so rotating a tablet or resizing
+   * below 768px on Visualization or Analytics lands on the timeline the picker names.
+   */
+  SyncPhoneViewport(): void {
+    this.ApplyPhoneDefaults(IsPhoneViewport());
+    this.cdr.markForCheck();
+  }
+
+  /** Copies this run's URL so it can be opened on a desktop. */
+  CopyPageLink(): Promise<void> {
+    return this.CopyToClipboard(window.location.href);
+  }
 
   /** @deprecated Use {@link ActiveTab}. */
   get activeTab() {
@@ -148,6 +200,18 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   private _cachedParsedStartingPayload: string | null = null;
   private _cachedParsedFinalPayload: string | null = null;
   private _cachedParsedData: string | null = null;
+  private _cachedStartingPayloadRaw: string | null | undefined = undefined;
+  private _cachedStartingPayloadObject: ReturnType<typeof ParseJSONRecursive> | null = null;
+  private _cachedFinalPayloadRaw: string | null | undefined = undefined;
+  private _cachedFinalPayloadObject: ReturnType<typeof ParseJSONRecursive> | null = null;
+  private _cachedStepStartRaw: string | null | undefined = undefined;
+  private _cachedStepStartItem: TimelineItem | null = null;
+  private _cachedStepPayloadAtStartObject: ReturnType<typeof ParseJSONRecursive> | null = null;
+  private _cachedStepEndRaw: string | null | undefined = undefined;
+  private _cachedStepEndItem: TimelineItem | null = null;
+  private _cachedStepPayloadAtEndObject: ReturnType<typeof ParseJSONRecursive> | null = null;
+  private _lastRunTreeForWorkflowRunning: AgentRunTreeNode | null = null;
+  private _cachedWorkflowStillRunning = false;
   
   // Simple parsing state - true when all parsing is complete
   private _allParsingComplete = false;
@@ -258,6 +322,7 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
     } finally {
       this.RunTreeLoading = false;
       this.scheduleWorkflowPoll();
+      this.cdr.markForCheck();
     }
   }
 
@@ -275,11 +340,19 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
    */
   public get WorkflowStillRunning(): boolean {
     if (!this.RunTree) return false;
-    for (const node of WalkAgentRunTree(this.RunTree)) {
-      if (node.NodeType !== 'Task' && node.NodeType !== 'TaskGraph') continue;
-      if (!TERMINAL_TASK_STATUSES.has(node.Status)) return true;
+    if (this._lastRunTreeForWorkflowRunning !== this.RunTree) {
+      this._lastRunTreeForWorkflowRunning = this.RunTree;
+      let stillRunning = false;
+      for (const node of WalkAgentRunTree(this.RunTree)) {
+        if (node.NodeType !== 'Task' && node.NodeType !== 'TaskGraph') continue;
+        if (!TERMINAL_TASK_STATUSES.has(node.Status)) {
+          stillRunning = true;
+          break;
+        }
+      }
+      this._cachedWorkflowStillRunning = stillRunning;
     }
-    return false;
+    return this._cachedWorkflowStillRunning;
   }
 
   /**
@@ -310,15 +383,20 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   
   async ngOnInit() {
     await super.ngOnInit();
+    this.ApplyPhoneDefaults(IsPhoneViewport());
+    this.stopPhoneWatch = WatchPhoneViewport(() => this.SyncPhoneViewport());
     
     if (this.record && this.record.ID) {
-      await this.DataHelper.loadAgentRunData(this.record.ID);
-      await this.loadRunTree();
-      await this.loadAgent();
-      await this.loadCostMetrics();
+      await Promise.all([
+        this.DataHelper.loadAgentRunData(this.record.ID),
+        this.loadRunTree(),
+        this.loadAgent(),
+        this.loadCostMetrics()
+      ]);
 
       // Parse all JSON fields on form load for instant access later
       this.parseAllFields();
+      this.cdr.markForCheck();
 
       // If the run is in progress, subscribe to BaseEntity events so we
       // pick up new steps / status changes the moment AgentRunner saves
@@ -332,6 +410,7 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
 
   ngOnDestroy() {
     super.ngOnDestroy();
+    this.stopPhoneWatch();
     this.destroy$.next();
     this.destroy$.complete();
     this.clearWorkflowPoll();
@@ -496,11 +575,17 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
     if (!this.record?.AgentID) return;
     
     try {
+      const cachedAgent = AIEngineBase.Instance?.Agents?.find(a => UUIDsEqual(a.ID, this.record.AgentID));
+      if (cachedAgent) {
+        this.Agent = cachedAgent;
+        this.cdr.markForCheck();
+        return;
+      }
       const md = this.ProviderToUse;
       const agent = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
       if (agent && await agent.Load(this.record.AgentID)) {
         this.Agent = agent;
-        this.cdr.detectChanges();
+        this.cdr.markForCheck();
       }
     } catch (error) {
       console.error('Error loading agent:', error);
@@ -523,6 +608,7 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
         isLoading: false,
         error: 'Failed to load cost data'
       };
+      this.cdr.markForCheck();
     }
   }
   
@@ -718,6 +804,58 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   /** @deprecated Use {@link CopyToClipboard}. */
   async copyToClipboard(text: string) {
     return this.CopyToClipboard(text);
+  }
+
+  /** True while a workflow is being saved via `WorkflowSaveOperation`. */
+  public SavingWorkflow = false;
+
+  /**
+   * Persists the selected `TaskGraph` step's `TaskGraphSpec` as a Draft Flow Agent workflow
+   * via `WorkflowSaveOperation` and opens the resulting `MJ: AI Agents` record.
+   */
+  public async OnSaveAsWorkflowRequested(spec: TaskGraphSpec): Promise<void> {
+    if (!spec || this.SavingWorkflow) {
+      return;
+    }
+    this.SavingWorkflow = true;
+    try {
+      const name =
+        spec.workflowName?.trim() ||
+        this.SelectedTimelineItem?.title?.trim() ||
+        (this.Agent?.Name ? `${this.Agent.Name} Workflow` : 'Saved Workflow');
+      const workflowSpec: WorkflowSpec = {
+        name,
+        description: `Saved from AI Agent Run ${this.record?.ID ?? ''}`.trim(),
+        status: 'Draft',
+        graph: { ...spec, workflowName: name },
+        triggers: [],
+      };
+      const op = new WorkflowSaveOperation();
+      const result = await op.Execute(
+        { spec: workflowSpec },
+        { provider: this.ProviderToUse, user: this.ProviderToUse.CurrentUser },
+      );
+      const output = result.Output;
+      if (!result.Success || !output?.success || !output.agentID) {
+        SharedService.Instance.CreateSimpleNotification(
+          output?.errorMessage ?? result.ErrorMessage ?? 'Could not save workflow.',
+          'error',
+          5000,
+        );
+        return;
+      }
+      SharedService.Instance.CreateSimpleNotification(
+        `Saved workflow "${name}". Opening Flow Agent record…`,
+        'success',
+        3500,
+      );
+      this.navigationService.OpenEntityRecord('MJ: AI Agents', CompositeKey.FromID(output.agentID));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      SharedService.Instance.CreateSimpleNotification(`Failed to save workflow: ${msg}`, 'error', 5000);
+    } finally {
+      this.SavingWorkflow = false;
+    }
   }
   
   /**
@@ -917,18 +1055,23 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   /**
    * Get parsed Starting Payload as an object for deep diff
    */
-  get StartingPayloadObject(): any {
-    if (!this.record?.StartingPayload) return null;
+  get StartingPayloadObject(): ReturnType<typeof ParseJSONRecursive> | null {
+    const raw = this.record?.StartingPayload;
+    if (!raw) return null;
+    if (this._cachedStartingPayloadRaw === raw && this._cachedStartingPayloadObject !== null) {
+      return this._cachedStartingPayloadObject;
+    }
+    this._cachedStartingPayloadRaw = raw;
     
     try {
       // First, check if StartingPayload is a JSON string that needs to be parsed
-      let payloadData = this.record.StartingPayload;
+      let payloadData: unknown = raw;
       try {
         // If StartingPayload is a JSON string, parse it first
-        payloadData = JSON.parse(this.record.StartingPayload);
+        payloadData = JSON.parse(raw);
       } catch {
         // If it's not valid JSON, use it as-is
-        payloadData = this.record.StartingPayload;
+        payloadData = raw;
       }
       
       const parseOptions: ParseJSONOptions = {
@@ -937,32 +1080,39 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
         debug: false
       };
       // Re-enabled ParseJSONRecursive with performance optimizations
-      return ParseJSONRecursive(payloadData, parseOptions);
-    } catch (e) {
+      this._cachedStartingPayloadObject = ParseJSONRecursive(payloadData, parseOptions);
+      return this._cachedStartingPayloadObject;
+    } catch {
+      this._cachedStartingPayloadObject = null;
       return null;
     }
   }
 
   /** @deprecated Use {@link StartingPayloadObject}. */
-  get startingPayloadObject(): any {
+  get startingPayloadObject(): ReturnType<typeof ParseJSONRecursive> | null {
     return this.StartingPayloadObject;
   }
 
   /**
    * Get parsed Final Payload as an object for deep diff
    */
-  get FinalPayloadObject(): any {
-    if (!this.record?.FinalPayload) return null;
+  get FinalPayloadObject(): ReturnType<typeof ParseJSONRecursive> | null {
+    const raw = this.record?.FinalPayload;
+    if (!raw) return null;
+    if (this._cachedFinalPayloadRaw === raw && this._cachedFinalPayloadObject !== null) {
+      return this._cachedFinalPayloadObject;
+    }
+    this._cachedFinalPayloadRaw = raw;
     
     try {
       // First, check if FinalPayload is a JSON string that needs to be parsed
-      let payloadData = this.record.FinalPayload;
+      let payloadData: unknown = raw;
       try {
         // If FinalPayload is a JSON string, parse it first
-        payloadData = JSON.parse(this.record.FinalPayload);
+        payloadData = JSON.parse(raw);
       } catch {
         // If it's not valid JSON, use it as-is
-        payloadData = this.record.FinalPayload;
+        payloadData = raw;
       }
       
       const parseOptions: ParseJSONOptions = {
@@ -971,14 +1121,16 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
         debug: false
       };
       // Re-enabled ParseJSONRecursive with performance optimizations
-      return ParseJSONRecursive(payloadData, parseOptions);
-    } catch (e) {
+      this._cachedFinalPayloadObject = ParseJSONRecursive(payloadData, parseOptions);
+      return this._cachedFinalPayloadObject;
+    } catch {
+      this._cachedFinalPayloadObject = null;
       return null;
     }
   }
 
   /** @deprecated Use {@link FinalPayloadObject}. */
-  get finalPayloadObject(): any {
+  get finalPayloadObject(): ReturnType<typeof ParseJSONRecursive> | null {
     return this.FinalPayloadObject;
   }
 
@@ -990,6 +1142,17 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
     this._cachedParsedStartingPayload = null;
     this._cachedParsedFinalPayload = null;
     this._cachedParsedData = null;
+    this._cachedStartingPayloadRaw = undefined;
+    this._cachedStartingPayloadObject = null;
+    this._cachedFinalPayloadRaw = undefined;
+    this._cachedFinalPayloadObject = null;
+    this._cachedStepStartRaw = undefined;
+    this._cachedStepStartItem = null;
+    this._cachedStepPayloadAtStartObject = null;
+    this._cachedStepEndRaw = undefined;
+    this._cachedStepEndItem = null;
+    this._cachedStepPayloadAtEndObject = null;
+    this._lastRunTreeForWorkflowRunning = null;
     this._allParsingComplete = false;
   }
   
@@ -1086,22 +1249,32 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   /**
    * Get parsed PayloadAtStart for the selected step
    */
-  get StepPayloadAtStartObject(): any {
+  get StepPayloadAtStartObject(): ReturnType<typeof ParseJSONRecursive> | null {
     if (!this.SelectedTimelineItem || this.SelectedTimelineItem.type !== 'step') {
       return null;
     }
     
     const stepData = this.SelectedTimelineItem.data;
-    if (!stepData || !stepData.PayloadAtStart) {
+    const raw = stepData?.PayloadAtStart;
+    if (!raw) {
       return null;
     }
+    if (
+      this._cachedStepStartItem === this.SelectedTimelineItem &&
+      this._cachedStepStartRaw === raw &&
+      this._cachedStepPayloadAtStartObject !== null
+    ) {
+      return this._cachedStepPayloadAtStartObject;
+    }
+    this._cachedStepStartItem = this.SelectedTimelineItem;
+    this._cachedStepStartRaw = raw;
     
     try {
-      let payloadData = stepData.PayloadAtStart;
+      let payloadData: unknown = raw;
       try {
-        payloadData = JSON.parse(stepData.PayloadAtStart);
+        payloadData = JSON.parse(raw);
       } catch {
-        payloadData = stepData.PayloadAtStart;
+        payloadData = raw;
       }
       
       const parseOptions: ParseJSONOptions = {
@@ -1110,36 +1283,48 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
         debug: false
       };
       // Re-enabled ParseJSONRecursive with performance optimizations
-      return ParseJSONRecursive(payloadData, parseOptions);
-    } catch (e) {
+      this._cachedStepPayloadAtStartObject = ParseJSONRecursive(payloadData, parseOptions);
+      return this._cachedStepPayloadAtStartObject;
+    } catch {
+      this._cachedStepPayloadAtStartObject = null;
       return null;
     }
   }
 
   /** @deprecated Use {@link StepPayloadAtStartObject}. */
-  get stepPayloadAtStartObject(): any {
+  get stepPayloadAtStartObject(): ReturnType<typeof ParseJSONRecursive> | null {
     return this.StepPayloadAtStartObject;
   }
 
   /**
    * Get parsed PayloadAtEnd for the selected step
    */
-  get StepPayloadAtEndObject(): any {
+  get StepPayloadAtEndObject(): ReturnType<typeof ParseJSONRecursive> | null {
     if (!this.SelectedTimelineItem || this.SelectedTimelineItem.type !== 'step') {
       return null;
     }
     
     const stepData = this.SelectedTimelineItem.data;
-    if (!stepData || !stepData.PayloadAtEnd) {
+    const raw = stepData?.PayloadAtEnd;
+    if (!raw) {
       return null;
     }
+    if (
+      this._cachedStepEndItem === this.SelectedTimelineItem &&
+      this._cachedStepEndRaw === raw &&
+      this._cachedStepPayloadAtEndObject !== null
+    ) {
+      return this._cachedStepPayloadAtEndObject;
+    }
+    this._cachedStepEndItem = this.SelectedTimelineItem;
+    this._cachedStepEndRaw = raw;
     
     try {
-      let payloadData = stepData.PayloadAtEnd;
+      let payloadData: unknown = raw;
       try {
-        payloadData = JSON.parse(stepData.PayloadAtEnd);
+        payloadData = JSON.parse(raw);
       } catch {
-        payloadData = stepData.PayloadAtEnd;
+        payloadData = raw;
       }
       
       const parseOptions: ParseJSONOptions = {
@@ -1148,14 +1333,16 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
         debug: false
       };
       // Re-enabled ParseJSONRecursive with performance optimizations
-      return ParseJSONRecursive(payloadData, parseOptions);
-    } catch (e) {
+      this._cachedStepPayloadAtEndObject = ParseJSONRecursive(payloadData, parseOptions);
+      return this._cachedStepPayloadAtEndObject;
+    } catch {
+      this._cachedStepPayloadAtEndObject = null;
       return null;
     }
   }
 
   /** @deprecated Use {@link StepPayloadAtEndObject}. */
-  get stepPayloadAtEndObject(): any {
+  get stepPayloadAtEndObject(): ReturnType<typeof ParseJSONRecursive> | null {
     return this.StepPayloadAtEndObject;
   }
 }

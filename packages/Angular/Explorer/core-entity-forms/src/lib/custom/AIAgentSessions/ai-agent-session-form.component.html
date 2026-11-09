@@ -10,7 +10,7 @@
 
   <div class="record-form ai-agent-session-form">
     <!-- Header (mirrors the AI Agent Run form header) -->
-    <div class="header">
+    <div class="header phone-hero" [class.hero-view]="!EditMode" [class.hero-compact]="!EditMode && !HeroDetailsOpen">
       <div class="header-content">
         <div class="header-left">
           <div class="icon-wrapper">
@@ -18,10 +18,15 @@
           </div>
           <div class="header-info">
             <h2>AI Agent Session</h2>
-            <div class="meta-info">
+            <div class="meta-info phone-hero-detail">
               @if (record.AgentID) {
                 <span class="agent-name">
-                  <a href="javascript:void(0)" class="entity-link" (click)="OpenEntityRecord('AI Agents', record.AgentID)">
+                  <a href="javascript:void(0)"
+                     class="entity-link"
+                     [mjRecordLink]="record"
+                     FieldName="AgentID"
+                     [HandleClick]="false"
+                     (click)="OpenEntityRecord('AI Agents', record.AgentID)">
                     {{ record.Agent || 'Agent' }}
                   </a>
                 </span>
@@ -29,7 +34,14 @@
               @if (TargetAgentID) {
                 <i class="fas fa-arrow-right-long target-arrow"></i>
                 <span class="agent-name">
-                  <a href="javascript:void(0)" class="entity-link" (click)="OpenEntityRecord('AI Agents', TargetAgentID)">
+                  <a href="javascript:void(0)"
+                     class="entity-link"
+                     mjRecordLink
+                     [EntityName]="'MJ: AI Agents'"
+                     [RecordID]="TargetAgentID"
+                     [DisplayName]="TargetAgentName || 'Target agent'"
+                     [HandleClick]="false"
+                     (click)="OpenEntityRecord('AI Agents', TargetAgentID)">
                     {{ TargetAgentName || 'Target agent' }}
                   </a>
                 </span>
@@ -50,7 +62,7 @@
             <i class="fas" [ngClass]="GetStatusIcon(record.Status)"></i>
             {{ record.Status }}
           </div>
-          <div class="header-actions">
+          <div class="header-actions phone-hero-detail">
             <button class="btn-icon" (click)="RefreshData()" title="Refresh">
               <i class="fas fa-sync-alt"></i>
             </button>
@@ -58,11 +70,16 @@
         </div>
       </div>
 
-      <div class="header-stats">
+      <div class="header-stats phone-hero-detail phone-hero-stats">
         <div class="stat">
           <span class="label">User</span>
           <span class="value">
-            <a href="javascript:void(0)" class="entity-link" (click)="OpenEntityRecord('Users', record.UserID)">{{ record.User }}</a>
+            <a href="javascript:void(0)"
+               class="entity-link"
+               [mjRecordLink]="record"
+               FieldName="UserID"
+               [HandleClick]="false"
+               (click)="OpenEntityRecord('Users', record.UserID)">{{ record.User }}</a>
           </span>
         </div>
         <div class="stat">
@@ -107,7 +124,7 @@
       </div>
 
       <!-- Config bar: target agent / host instance / continuation -->
-      <div class="configuration-bar">
+      <div class="configuration-bar phone-hero-detail">
         <div class="config-item">
           <i class="fas fa-bullseye"></i>
           <div class="config-content">
@@ -146,7 +163,19 @@
           </div>
         </div>
       </div>
+      @if (!EditMode && HeroSummary) {
+        <button type="button" class="phone-hero-summary" [attr.aria-expanded]="HeroDetailsOpen" (click)="ToggleHeroDetails()">
+          <span class="phone-hero-summary-text">{{ HeroSummary }}</span>
+          <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+        </button>
+      }
     </div>
+
+    <!-- Phone: the strip becomes one button that opens the Sections sheet -->
+    <mj-section-picker class="phone-section-picker"
+                       [Items]="SectionPickerItems"
+                       [ActiveKey]="ActiveTab"
+                       (ActiveKeyChange)="OnSectionPicked($event)"></mj-section-picker>
 
     <!-- Tabs -->
     <div class="tabs">

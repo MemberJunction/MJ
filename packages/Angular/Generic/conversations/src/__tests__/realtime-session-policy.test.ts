@@ -254,7 +254,7 @@ describe('RealtimeSessionService — EndRealtimeSession / teardown lifecycle', (
 
     await service.EndRealtimeSession();
 
-    expect(executeGQL).toHaveBeenCalledWith(expect.stringContaining('CloseAgentSession'), { agentSessionId: 'sess-9' });
+    expect(executeGQL).toHaveBeenCalledWith(expect.stringContaining('CloseAgentSession'), { agentSessionId: 'sess-9', closeReason: 'Explicit' });
     expect(disconnect).toHaveBeenCalledTimes(1);
     expect(track.stop).toHaveBeenCalled();
     expect(service.CurrentAgentSessionId).toBeNull();

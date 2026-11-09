@@ -14,7 +14,8 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { ExtractPanelsFromLayout, RemovePartConfirmOptions } from '@memberjunction/ng-dashboard-viewer';
 import type {
-    DashboardNavRequestEvent, DashboardPanel, DashboardPartDialogMode, DashboardPartDialogResult, DashboardViewerComponent, PanelInteractionEvent
+    DashboardNavRequestEvent, DashboardPanel, DashboardPartDialogMode, DashboardPartDialogResult, DashboardPropertiesDialogResult,
+    DashboardProperty, DashboardViewerComponent, DashboardWire, PanelInteractionEvent
 } from '@memberjunction/ng-dashboard-viewer';
 import { DashboardViewerFactory } from './dashboard-viewer-factory';
 import { DASHBOARD_SAVE_IN_PROGRESS } from './dashboard-editor.types';
@@ -34,6 +35,10 @@ const DASHBOARD_CHANGED_BEFORE_SAVE = 'The editor shows another dashboard now. T
 
 /** The part types offered while no viewer is open: one empty list, so change detection sees a stable value. */
 const NO_PART_TYPES: MJDashboardPartTypeEntity[] = [];
+
+/** The properties and wires of a dashboard without any: stable empty lists for change detection. */
+const NO_PROPERTIES: DashboardProperty[] = [];
+const NO_WIRES: DashboardWire[] = [];
 
 /** Permissions before a dashboard loads: nothing is allowed, so no Edit button flashes. */
 const NO_PERMISSIONS: DashboardUserPermissions = {
@@ -150,6 +155,10 @@ export class DashboardEditorComponent extends BaseAngularComponent implements Af
     public PartDialogMode: DashboardPartDialogMode | null = null;
     /** The part the part dialog edits in edit mode. */
     public EditPartPanel: DashboardPanel | null = null;
+    /** True while the dashboard's Properties and wires dialog is open. */
+    public PropertiesDialogOpen = false;
+    /** The dashboard's parts when the Properties and wires dialog opened. */
+    public PropertiesDialogPanels: DashboardPanel[] = [];
 
     private _dashboard: MJDashboardEntity | null = null;
     private viewer: DashboardViewerComponent | null = null;
@@ -177,6 +186,10 @@ export class DashboardEditorComponent extends BaseAngularComponent implements Af
     public get CanEdit(): boolean { return this.Permissions.CanEdit; }
     /** The part types the part dialog offers: the viewer's part types. */
     public get PartTypes(): MJDashboardPartTypeEntity[] { return this.viewer?.GetPartTypes() ?? NO_PART_TYPES; }
+    /** The dashboard's properties, which the part dialog maps onto a part's inputs. */
+    public get DashboardProperties(): DashboardProperty[] { return this.viewer?.GetDashboardProperties() ?? NO_PROPERTIES; }
+    /** The dashboard's wires. */
+    public get DashboardWires(): DashboardWire[] { return this.viewer?.GetWires() ?? NO_WIRES; }
     /** True when someone else owns the dashboard and shared it with the user. */
     public get IsSharedWithUser(): boolean { return !this.Permissions.IsOwner && this.Permissions.PermissionSource !== 'none'; }
     /** True when the shown dashboard is one of the user's favorites. False when the favorites cannot be read. */
@@ -552,9 +565,13 @@ export class DashboardEditorComponent extends BaseAngularComponent implements Af
         return message;
     }
 
-    /** Why a save failed: the thrown error, else the dashboard's failed save result. Empty when neither says. */
+    /**
+     * Why a save failed: the thrown error, else the viewer's refusal (a broken mapping or wire), else the
+     * dashboard's failed save result. Empty when none says.
+     */
     private saveFailureReason(dashboard: MJDashboardEntity, error: unknown): string {
         if (error !== undefined) return errorMessage(error);
+        if (this.viewer?.LastSaveError) return this.viewer.LastSaveError;
         const latest = dashboard.LatestResult;
         return latest && !latest.Success ? latest.CompleteMessage : '';
     }
@@ -734,6 +751,23 @@ export class DashboardEditorComponent extends BaseAngularComponent implements Af
     private closePartDialogs(): void {
         this.PartDialogMode = null;
         this.EditPartPanel = null;
+        this.PropertiesDialogOpen = false;
+        this.PropertiesDialogPanels = [];
+    }
+
+    // ── Properties and wires ──────────────────────────────────
+    /** Opens the dashboard's Properties and wires dialog. Only while editing and not saving. */
+    public OpenPropertiesDialog(): void {
+        if (!this.IsEditing || this.IsSaving || !this.viewer) return;
+        this.PropertiesDialogPanels = ExtractPanelsFromLayout(this.viewer.getConfig()?.layout ?? null);
+        this.PropertiesDialogOpen = true;
+        SafeDetectChanges(this.cdr);
+    }
+
+    /** Applies the dialog's properties and wires to the viewer. They are saved with the dashboard's Save. */
+    public async OnPropertiesDialogSaved(result: DashboardPropertiesDialogResult): Promise<void> {
+        this.closePartDialogs();
+        await this.applyPartChange('Could not update the properties', v => v.SetPropertiesAndWires(result.Properties, result.Wires));
     }
 
     /**

@@ -1,0 +1,38 @@
+{
+  "id": "N1r",
+  "namespace": "9a47ec52-6242-493a-bd13-d64ef161a183",
+  "seed": 2213,
+  "description": "Pure-noise regression twin: all betas 0, constant true mean.",
+  "kind": "regression",
+  "nEntities": 6000,
+  "features": {
+    "A": {
+      "dist": "normal",
+      "mean": 0,
+      "sd": 1
+    },
+    "B": {
+      "dist": "normal",
+      "mean": 0,
+      "sd": 1
+    },
+    "C": {
+      "dist": "bernoulli",
+      "p": 0.5
+    },
+    "D": {
+      "dist": "int",
+      "lo": 0,
+      "hi": 9
+    }
+  },
+  "betas": {
+    "A": 0.0,
+    "B": 0.0,
+    "C": 0.0,
+    "D": 0.0
+  },
+  "intercept": 20.0,
+  "sigma": 4.0,
+  "sizingNote": "6,000 rows (Ruling Q9: >= 5,000). The true mean is constant, so the true model's holdout R^2 is 0 by construction; any fitted skill beyond the mean baseline is overfitting."
+}

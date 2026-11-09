@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     AutoQuotePostgreSQLIdentifiers,
+    AutoQuoteLeavesWordBare,
     PostgreSQLQuotingKeywords,
     PostgreSQLStructuralKeywords,
 } from '../postgresqlAutoQuote.js';
@@ -492,5 +493,22 @@ describe('AutoQuotePostgreSQLIdentifiers', () => {
             const nonUpper = [...PostgreSQLQuotingKeywords].filter((k) => k !== k.toUpperCase());
             expect(nonUpper).toEqual([]);
         });
+    });
+});
+
+describe('AutoQuoteLeavesWordBare', () => {
+    const bare = (sql: string, word: string): boolean => {
+        const start = sql.indexOf(word);
+        return AutoQuoteLeavesWordBare(sql, start, start + word.length);
+    };
+
+    it('agrees with AutoQuotePostgreSQLIdentifiers on which words it quotes', () => {
+        expect(bare('Salary > 1', 'Salary')).toBe(false);
+        expect(bare('SALRY > 1', 'SALRY')).toBe(false);
+        expect(bare('e.sAlary > 1', 'sAlary')).toBe(false);
+        expect(bare('salary > 1', 'salary')).toBe(true);
+        expect(bare('sAlary > 1', 'sAlary')).toBe(true);
+        expect(bare('x IS NULL', 'NULL')).toBe(true);
+        expect(bare('Coalesce(x, 1)', 'Coalesce')).toBe(true);
     });
 });

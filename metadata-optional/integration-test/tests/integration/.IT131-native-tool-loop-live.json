@@ -1,0 +1,31 @@
+[
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT131 - Native Tool Loop (live providers)",
+      "Description": "LIVE-MODEL tier (real model calls cost tokens). Runs fixture Loop agents through AgentRunner on fixture AI Model Vendor rows served by ITRecordingLLM, which forwards each request to the model's real driver (Anthropic, OpenAI, Gemini) and records what the provider received and whether it accepted it. NTLL1: the recording driver stands in for the model's first turn with a call to an undeclared tool, forcing the generic Retry on a native tool-call turn; every later request must be accepted, with the call answered in the protocol. NTLL2: in native-only mode with a text terminal the model writes and corrects a document through agent-local tools; the payload is the corrected document and each call a Tool step. NTLL3 (Claude): with an effort level set, each tool turn that thought is replayed with its signed reasoning and accepted, and a budget-form model thinks again on a later turn. Targets come from NATIVE_LOOP_IT_MODELS (\"Model@DriverClass\", comma-separated) or the bundle defaults; a target runs only when its real driver has an API key. Self-cleaning.",
+      "MaxExecutionTimeMS": 1800000,
+      "InputDefinition": {},
+      "ExpectedOutcomes": {
+        "summary": "Zero provider rejections across retried native turns, agent-tool loops and thinking replay on every callable model; the corrected document lands in the payload and later Claude turns keep thinking."
+      },
+      "Configuration": {
+        "tier": "live-model",
+        "transport": "server",
+        "checks": [
+          {
+            "type": "native-tool-loop-live"
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "CB1469E4-CD6C-473B-92A0-F49FF29D685C"
+    },
+    "sync": {
+      "lastModified": "2026-10-21T03:42:27.051Z",
+      "checksum": "c3557b4866a04e56f97c1ea80a0ad05b1d3d11d6d6af3f3bcf1cd00606938b64"
+    }
+  }
+]

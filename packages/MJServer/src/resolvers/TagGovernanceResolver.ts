@@ -4,6 +4,7 @@ import { LogError, LogStatus } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { TagGovernanceEngine, TagHealthJob, DEFAULT_TAG_HEALTH_THRESHOLDS, TagEngine } from '@memberjunction/tag-engine';
 import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
+import { TagCoOccurrenceEngine } from '@memberjunction/tag-engine-base';
 
 @ObjectType()
 export class PromoteSuggestionResult {
@@ -27,6 +28,30 @@ export class RejectSuggestionResult {
 
     @Field({ nullable: true })
     ErrorMessage?: string;
+}
+
+@ObjectType()
+export class MergeTagsResult {
+    @Field()
+    Success: boolean;
+
+    @Field(() => Int)
+    ItemsMoved: number;
+
+    @Field(() => Int)
+    TaggedItemsMoved: number;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string;
+}
+
+@ObjectType()
+export class RecomputeTagCoOccurrenceResult {
+    @Field(() => Int)
+    PairsUpdated: number;
+
+    @Field(() => Int)
+    PairsDeleted: number;
 }
 
 @ObjectType()
@@ -187,5 +212,45 @@ export class TagGovernanceResolver extends ResolverBase {
             LogError(`RunTagHealth failed: ${msg}`);
             return { Success: false, MergeCount: 0, LowUsageCount: 0, WideNodeCount: 0, DurationMs: 0, ErrorMessage: msg };
         }
+    }
+
+    @Mutation(() => MergeTagsResult)
+    async MergeTags(
+        @Arg('sourceTagIDs', () => [String]) sourceTagIDs: string[],
+        @Arg('survivingTagID') survivingTagID: string,
+        @Ctx() { userPayload }: AppContext = {} as AppContext
+    ): Promise<MergeTagsResult> {
+        try {
+            const currentUser = this.GetUserFromPayload(userPayload);
+            if (!currentUser) {
+                return { Success: false, ItemsMoved: 0, TaggedItemsMoved: 0, ErrorMessage: 'Unable to determine current user' };
+            }
+            await TagEngine.Instance.Config(false, currentUser);
+            const result = await TagGovernanceEngine.Instance.MergeTags(sourceTagIDs, survivingTagID, currentUser);
+            return {
+                Success: true,
+                ItemsMoved: result.ItemsMoved,
+                TaggedItemsMoved: result.TaggedItemsMoved,
+            };
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(`MergeTags failed for survivingTagID ${survivingTagID}: ${msg}`);
+            return { Success: false, ItemsMoved: 0, TaggedItemsMoved: 0, ErrorMessage: msg };
+        }
+    }
+
+    @Mutation(() => RecomputeTagCoOccurrenceResult)
+    async RecomputeTagCoOccurrence(
+        @Ctx() { userPayload }: AppContext = {} as AppContext
+    ): Promise<RecomputeTagCoOccurrenceResult> {
+        const currentUser = this.GetUserFromPayload(userPayload);
+        if (!currentUser) {
+            throw new Error('Unable to determine current user');
+        }
+        const result = await TagCoOccurrenceEngine.Instance.RecomputeCoOccurrence(currentUser);
+        return {
+            PairsUpdated: result.PairsUpdated,
+            PairsDeleted: result.PairsDeleted,
+        };
     }
 }

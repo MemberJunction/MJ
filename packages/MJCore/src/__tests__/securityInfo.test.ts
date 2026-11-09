@@ -74,6 +74,16 @@ describe('UserInfo', () => {
         expect(user.FirstName).toBe('Jane');
         expect(user.LastName).toBe('Smith');
     });
+
+    it('should store AnonymousVisitorID as a non-enumerable per-session property', () => {
+        const user = new UserInfo(null, { ID: 'u-anon' });
+        expect(user.AnonymousVisitorID).toBeUndefined();
+        expect(Object.keys(new UserInfo())).not.toContain('AnonymousVisitorID');
+
+        user.AnonymousVisitorID = 'sid-visitor-1';
+        expect(user.AnonymousVisitorID).toBe('sid-visitor-1');
+        expect(Object.keys(user)).not.toContain('AnonymousVisitorID');
+    });
 });
 
 describe('UserRoleInfo', () => {

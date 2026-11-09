@@ -1,6 +1,6 @@
-import { Component, ChangeDetectorRef, OnDestroy, OnInit, AfterViewInit, inject } from '@angular/core';
+import { Component, ChangeDetectorRef, NgZone, OnDestroy, OnInit, AfterViewInit, inject } from '@angular/core';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
-import { MJUserNotificationEntity, MJUserNotificationTypeEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJUserNotificationEntity, MJUserNotificationTypeEntity, MJUserRoutineEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { CompositeKey, TransactionGroupBase } from '@memberjunction/core';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -71,6 +71,17 @@ interface AgentRequestResourceConfig {
 }
 
 /**
+ * Configuration written by the User Routine dispatcher for a routine run. `conversationId` is
+ * the routine's own conversation, where the run's reply lives; older notifications lack it.
+ */
+interface UserRoutineResourceConfig {
+  type: 'UserRoutine';
+  routineId: string;
+  runId?: string;
+  conversationId?: string;
+}
+
+/**
  * Result of parsing a notification URL
  */
 interface NotificationUrlInfo {
@@ -92,6 +103,7 @@ const RELATIVE_REFRESH_MS = 60_000;
 })
 export class UserNotificationsComponent extends BaseAngularComponent implements OnInit, AfterViewInit, OnDestroy {
   private cdr = inject(ChangeDetectorRef);
+  private ngZone = inject(NgZone, { optional: true });
 
   public RadioSelected: ReadFilterOption = 'All';
 
@@ -172,13 +184,32 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   async ngOnInit() {
     this.loadNotificationTypes();
     // Refresh the snapshot relative-time labels between change-detection passes.
-    this.relativeTimer = setInterval(() => {
-      for (const vm of this.vmCache.values()) {
-        vm.Relative = this.relativeTime(vm.N.__mj_CreatedAt);
-      }
-      this.groupsKey = ''; // day buckets can shift at midnight
-      this.cdr.markForCheck();
-    }, RELATIVE_REFRESH_MS);
+    // Run outside NgZone so the 60s timer only triggers Angular CD when a label actually changes.
+    const startTimer = () => {
+      this.relativeTimer = setInterval(() => {
+        let anyChanged = false;
+        for (const vm of this.vmCache.values()) {
+          const next = this.relativeTime(vm.N.__mj_CreatedAt);
+          if (vm.Relative !== next) {
+            vm.Relative = next;
+            anyChanged = true;
+          }
+        }
+        this.groupsKey = ''; // day buckets can shift at midnight
+        if (anyChanged) {
+          if (this.ngZone) {
+            this.ngZone.run(() => this.cdr.markForCheck());
+          } else {
+            this.cdr.markForCheck();
+          }
+        }
+      }, RELATIVE_REFRESH_MS);
+    };
+    if (this.ngZone) {
+      this.ngZone.runOutsideAngular(startTimer);
+    } else {
+      startTimer();
+    }
   }
 
   ngAfterViewInit(): void {
@@ -209,17 +240,40 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   // Data shaping (filter → view models → day groups)
   // ========================================================================
 
+  private notificationsToShowCache: MJUserNotificationEntity[] = [];
+  private notificationsToShowKey = '';
+  private unreadNotificationsCache: MJUserNotificationEntity[] = [];
+  private unreadNotificationsKey = '';
+  private readNotificationsCache: MJUserNotificationEntity[] = [];
+  private readNotificationsKey = '';
+
+  private computeAllNotificationsSignature(): { all: MJUserNotificationEntity[]; unreadCount: number; baseKey: string } {
+    const all = this.AllNotifications;
+    let unreadCount = 0;
+    for (let i = 0; i < all.length; i++) {
+      if (all[i].Unread) unreadCount++;
+    }
+    const baseKey = `${all.length}|${unreadCount}|${all[0]?.ID ?? ''}|${all[all.length - 1]?.ID ?? ''}`;
+    return { all, unreadCount, baseKey };
+  }
+
   public get NotificationsToShow(): MJUserNotificationEntity[] {
+    const { all, baseKey } = this.computeAllNotificationsSignature();
+    const key = `${baseKey}|${this.RadioSelected}|${this.SelectedTypeFilter ?? ''}|${this.CurrentFilter}`;
+    if (key === this.notificationsToShowKey) {
+      return this.notificationsToShowCache;
+    }
+
     let temp: MJUserNotificationEntity[] = [];
     switch (this.RadioSelected) {
       case 'All':
-        temp = this.AllNotifications;
+        temp = all;
         break;
       case 'Unread':
-        temp = this.AllNotifications.filter(n => n.Unread);
+        temp = all.filter(n => n.Unread);
         break;
       case 'Read':
-        temp = this.AllNotifications.filter(n => !n.Unread);
+        temp = all.filter(n => !n.Unread);
         break;
     }
 
@@ -229,27 +283,29 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     }
 
     // Apply text filter if it is not empty
-    if (this.CurrentFilter.trim().length > 0) {
+    const filterLower = this.CurrentFilter.trim().toLowerCase();
+    if (filterLower.length > 0) {
       // check for inclusion of filter value in title or message
-      temp = temp.filter(n => n.Title?.toLowerCase().includes(this.CurrentFilter.trim().toLowerCase()) ||
-                              n.Message?.toLowerCase().includes(this.CurrentFilter.trim().toLowerCase())
+      temp = temp.filter(n => n.Title?.toLowerCase().includes(filterLower) ||
+                              n.Message?.toLowerCase().includes(filterLower)
                         );
     }
 
+    this.notificationsToShowKey = key;
+    this.notificationsToShowCache = temp;
     return temp;
   }
 
   /**
    * The filtered notifications as render-ready day groups. Memoized on a composite
-   * key of the inputs so the getter stays cheap across change-detection passes and
-   * the (time-sensitive) VM snapshots never rebuild mid-pass.
+   * key of the inputs BEFORE filtering `AllNotifications`, so the getter stays $O(1)$
+   * across change-detection passes and the (time-sensitive) VM snapshots never rebuild mid-pass.
    */
   public get Groups(): NotificationGroup[] {
-    const list = this.NotificationsToShow;
-    const unread = list.filter(n => n.Unread).length;
-    const key = `${list.length}|${unread}|${this.RadioSelected}|${this.SelectedTypeFilter}|${this.CurrentFilter}|${list[0]?.ID ?? ''}|${list[list.length - 1]?.ID ?? ''}`;
+    const { baseKey } = this.computeAllNotificationsSignature();
+    const key = `${baseKey}|${this.RadioSelected}|${this.SelectedTypeFilter ?? ''}|${this.CurrentFilter}`;
     if (key !== this.groupsKey) {
-      this.groups = this.buildGroups(list);
+      this.groups = this.buildGroups(this.NotificationsToShow);
       this.groupsKey = key;
     }
     return this.groups;
@@ -403,6 +459,9 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
       if (typeName === 'meet-room') {
         return true;
       }
+      if (this.parseUserRoutineConfig(notification)) {
+        return true;
+      }
     }
 
     const info = this.NotificationUrl(notification);
@@ -474,11 +533,21 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   }
 
   public get UnreadNotifications(): MJUserNotificationEntity[] {
-    return this.AllNotifications.filter(n => n.Unread);
+    const { all, baseKey } = this.computeAllNotificationsSignature();
+    if (baseKey !== this.unreadNotificationsKey) {
+      this.unreadNotificationsKey = baseKey;
+      this.unreadNotificationsCache = all.filter(n => n.Unread);
+    }
+    return this.unreadNotificationsCache;
   }
 
   public get ReadNotifications(): MJUserNotificationEntity[] {
-    return this.AllNotifications.filter(n => !n.Unread);
+    const { all, baseKey } = this.computeAllNotificationsSignature();
+    if (baseKey !== this.readNotificationsKey) {
+      this.readNotificationsKey = baseKey;
+      this.readNotificationsCache = all.filter(n => !n.Unread);
+    }
+    return this.readNotificationsCache;
   }
 
   SelectReadOption(option: ReadFilterOption): void {
@@ -563,13 +632,16 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     const md = this.ProviderToUse;
     const transGroup = await md.CreateTransactionGroup();
 
-    // Queue all saves - no need to await individual saves since transaction group queues them
+    // Queue all saves. A grouped Save() runs validation and pre-save hooks before it joins the
+    // group, so wait for every one to be queued; submitting earlier sends an empty group that
+    // reports success and persists nothing. A grouped Save() resolves once queued, not once sent.
+    const queued: Promise<boolean>[] = [];
     for (const notification of this.AllNotifications) {
       if (notification.Unread && bRead || !notification.Unread && !bRead) {
-        // Don't await - Save() with transaction group queues the operation immediately
-        this.MarkAsRead(notification, bRead, transGroup);
+        queued.push(this.MarkAsRead(notification, bRead, transGroup));
       }
     }
+    await Promise.all(queued);
 
     // Submit transaction group - this is where the actual network call happens
     if (!await transGroup.Submit())
@@ -596,6 +668,9 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
         return;
       }
       if (this.navigateToMeetRoom(notification)) {
+        return;
+      }
+      if (this.navigateToUserRoutine(notification)) {
         return;
       }
       if (this.navigateToHandoffConsole(notification)) {
@@ -805,12 +880,71 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     if (config.versionNumber) navConfig['versionNumber'] = config.versionNumber;
     if (config.taskId) navConfig['taskId'] = config.taskId;
 
+    // The Chat tab is usually already open and gets reused; a reused tab reads its configuration
+    // only at init, so the same values go in the query params, which it does react to.
     this.navigationService.OpenNavItemByName(
       'Conversations',
       navConfig,
-      chatApp.ID
+      chatApp.ID,
+      { queryParams: { ...navConfig } }
     );
     return true;
+  }
+
+  /** The routine-run config of a notification, or null when it is not one (or names no routine). */
+  private parseUserRoutineConfig(notification: MJUserNotificationEntity): UserRoutineResourceConfig | null {
+    if (!notification.ResourceConfiguration || notification.ResourceConfiguration.trim().length === 0) {
+      return null;
+    }
+    const config = SafeJSONParse<UserRoutineResourceConfig>(notification.ResourceConfiguration);
+    if (!config || config.type?.trim().toLowerCase() !== 'userroutine' || !config.routineId) {
+      return null;
+    }
+    return config;
+  }
+
+  /**
+   * Opens what a routine run produced: its reply, in the routine's own conversation (the
+   * `{ type:'UserRoutine', routineId, runId, conversationId? }` ResourceConfiguration). That
+   * conversation is application-scoped, so the chat sidebar never lists it; the click deep-links
+   * into the Chat app's Conversations item. A notification written before the config carried the
+   * conversation reads it off the routine; a routine with no conversation opens in the Routines
+   * app. Returns false (not handled) when the notification is not a routine run.
+   */
+  private navigateToUserRoutine(notification: MJUserNotificationEntity): boolean {
+    const config = this.parseUserRoutineConfig(notification);
+    if (!config) {
+      return false;
+    }
+    void this.openUserRoutineOutput(config);
+    return true;
+  }
+
+  private async openUserRoutineOutput(config: UserRoutineResourceConfig): Promise<void> {
+    const conversationId = config.conversationId ?? await this.loadRoutineConversationId(config.routineId);
+    const chatApp = conversationId ? this.appManager.GetAppByName('Chat') : null;
+    if (conversationId && chatApp) {
+      // Query params as well as configuration: an already-open Chat tab is reused and reacts
+      // only to a query-param change (its configuration is read once, at init).
+      await this.navigationService.OpenNavItemByName('Conversations', { conversationId }, chatApp.ID, { queryParams: { conversationId } });
+      return;
+    }
+    const routinesApp = this.appManager.GetAppByName('Routines');
+    if (routinesApp) {
+      await this.navigationService.OpenNavItemByName('My Routines', { routine: config.routineId }, routinesApp.ID);
+      return;
+    }
+    MJNotificationService.Instance.CreateSimpleNotification('The Routines app is not installed, so this routine cannot be opened', 'error', 4000);
+  }
+
+  /** The routine's ConversationID, or null when the routine cannot be read or has none. */
+  private async loadRoutineConversationId(routineId: string): Promise<string | null> {
+    const p = this.ProviderToUse;
+    const routine = await p.GetEntityObject<MJUserRoutineEntity>('MJ: User Routines', p.CurrentUser);
+    if (!await routine.Load(routineId)) {
+      return null;
+    }
+    return routine.ConversationID ?? null;
   }
 
   public GetNotificationType(typeId: string | null): MJUserNotificationTypeEntity | null {

@@ -355,6 +355,24 @@ describe('OpenAIRealtimeClient', () => {
             expect(client.IsBusy).toBe(true);
         });
 
+        it('RequestSpokenTurn sends the same response.create but tags the reply normal (MJ#4591)', () => {
+            client.RequestSpokenUpdate('Open the conversation now: greet them.');
+            const updateFrames = channel.SentEvents();
+            // Back to idle so the turn is not skipped by the collision rule.
+            channel.EmitServer({ type: 'response.created' });
+            channel.EmitServer({ type: 'response.done' });
+            channel.Sent = [];
+
+            const { transcripts } = collect(client);
+            client.RequestSpokenTurn('Open the conversation now: greet them.');
+            expect(channel.SentEvents()).toEqual(updateFrames);
+            expect(client.IsBusy).toBe(true);
+
+            channel.EmitServer({ type: 'response.created' });
+            channel.EmitServer({ type: 'response.output_audio_transcript.done', transcript: 'Hello there.' });
+            expect(transcripts).toEqual([{ Role: 'Assistant', Text: 'Hello there.', IsFinal: true, Kind: 'normal' }]);
+        });
+
         it('should keep the session instructions on a spoken update — OpenAI treats response.instructions as a REPLACEMENT', () => {
             // Seen live: the opener ("greet them, introduce yourself…") was spoken with no persona at all,
             // as "Hi, I'm ChatGPT", because the per-response instructions displaced the session's.
@@ -693,6 +711,46 @@ describe('OpenAIRealtimeClient', () => {
             expect(states).toEqual(['listening']); // still reflects the user holding the floor
         });
 
+        it('invokes the OnUserSpeechStart handler on input_audio_buffer.speech_started', () => {
+            let count = 0;
+            client.OnUserSpeechStart(() => { count++; });
+            channel.EmitServer({ type: 'input_audio_buffer.speech_started' });
+            expect(count).toBe(1);
+            channel.EmitServer({ type: 'input_audio_buffer.speech_started' });
+            expect(count).toBe(2);
+        });
+
+        it('raises OnUserSpeechStart alongside the interruption, before the listening state change', () => {
+            const log: string[] = [];
+            client.OnUserSpeechStart(() => log.push('userSpeechStart'));
+            client.OnInterruption(() => log.push('interruption'));
+            client.OnStateChange((s) => log.push(`state:${s}`));
+            channel.EmitServer({ type: 'response.created' });
+            log.length = 0; // ignore state changes from the response starting
+            channel.EmitServer({ type: 'input_audio_buffer.speech_started' });
+            expect(log).toContain('userSpeechStart');
+            expect(log).toContain('interruption');
+            expect(log.indexOf('userSpeechStart')).toBeLessThan(log.indexOf('state:listening'));
+        });
+
+        it('forwards item_id from input_audio_buffer.speech_started to OnUserSpeechStart and carries it as ItemId on the completed user transcript', () => {
+            const startedIds: Array<string | undefined> = [];
+            const { transcripts } = collect(client);
+            client.OnUserSpeechStart((itemId) => startedIds.push(itemId));
+
+            channel.EmitServer({ type: 'input_audio_buffer.speech_started', item_id: 'item_abc' });
+            channel.EmitServer({
+                type: 'conversation.item.input_audio_transcription.completed',
+                transcript: 'Hello from item abc',
+                item_id: 'item_abc',
+            });
+
+            expect(startedIds).toEqual(['item_abc']);
+            expect(transcripts).toEqual([
+                { Role: 'User', Text: 'Hello from item abc', IsFinal: true, Kind: 'normal', ItemId: 'item_abc' },
+            ]);
+        });
+
         it('should NOT emit on the cleared frame that follows a self-initiated cancel', () => {
             const { interruptions } = collect(client);
             channel.EmitServer({ type: 'response.created' });
@@ -796,9 +854,48 @@ describe('OpenAIRealtimeClient', () => {
                 {
                     InputTokens: 120,
                     OutputTokens: 45,
+                    InputTokenDetails: { TextTokens: 80 },
                     Raw: { input_tokens: 120, output_tokens: 45, input_token_details: { text_tokens: 80 } },
                 },
             ]);
+        });
+
+        it('should carry the per-modality split in both directions, leaving the totals unchanged', () => {
+            const usages: RealtimeClientUsage[] = [];
+            client.OnUsage((u) => usages.push(u));
+
+            channel.EmitServer({
+                type: 'response.done',
+                response: {
+                    usage: {
+                        input_tokens: 100,
+                        output_tokens: 50,
+                        input_token_details: { text_tokens: 20, audio_tokens: 80, cached_tokens: 10, cached_tokens_details: { audio_tokens: 6, text_tokens: 4 } },
+                        output_token_details: { text_tokens: 10, audio_tokens: 40 },
+                    },
+                },
+            });
+
+            expect(usages[0]).toMatchObject({
+                InputTokens: 100,
+                OutputTokens: 50,
+                InputTokenDetails: { TextTokens: 20, AudioTokens: 80, CachedTokens: 10, CachedAudioTokens: 6 },
+                OutputTokenDetails: { TextTokens: 10, AudioTokens: 40 },
+            });
+        });
+
+        it('should carry the split from the top-level usage slot xAI uses', () => {
+            const usages: RealtimeClientUsage[] = [];
+            client.OnUsage((u) => usages.push(u));
+
+            channel.EmitServer({
+                type: 'response.done',
+                response: { usage: {} },
+                usage: { input_tokens: 30, output_tokens: 12, output_token_details: { audio_tokens: 12 } },
+            });
+
+            expect(usages[0]).toMatchObject({ InputTokens: 30, OutputTokens: 12, OutputTokenDetails: { AudioTokens: 12 } });
+            expect(usages[0].InputTokenDetails).toBeUndefined();
         });
 
         it('should emit one delta PER completed response (deltas, not cumulative)', () => {

@@ -5,9 +5,9 @@
  * A conversation that ran natively holds an assistant turn carrying `toolCalls` and a `tool` turn of
  * `tool_result` blocks. Providers accept those only alongside tool declarations (and Gemini also
  * polices their order), so a request that strips the declarations but keeps the turns fails for a
- * second, unrelated reason. This is the one encoding for that history the envelope path has always
- * used: the call turn keeps only its prose (the agent loop never appends the model's own call turn on
- * the envelope path), and each result becomes a user message of the loop's
+ * second, unrelated reason. The call turn keeps its prose and states each call it made as
+ * `[Called <tool>(<arguments>)]`, with long arguments clipped, so the history still says what was
+ * asked for; each result becomes a user message of the loop's
  * `[Action Result] <tool> succeeded|failed. <content>` form.
  *
  * Used by the prompt runner's native→envelope fallback and by the eval harness, which writes each
@@ -15,10 +15,20 @@
  *
  * @module generic/toolTurnEncoding
  */
-import type { ChatMessage, ChatMessageContentBlock } from './chat.types';
+import type { ChatMessage, ChatMessageContentBlock, ChatToolCall } from './chat.types';
 
 /** Prefix of the user message a tool result becomes. */
 export const ACTION_RESULT_TEXT_PREFIX = '[Action Result]';
+
+/** Longest argument text a call keeps when written out as text; the rest is elided. */
+export const CALL_ARGUMENT_TEXT_LIMIT = 300;
+
+/** One call as text: `[Called name({...})]`, its arguments as compact JSON, clipped. */
+export function DescribeToolCallAsText(call: ChatToolCall): string {
+    const args = JSON.stringify(call.arguments ?? {});
+    const clipped = args.length > CALL_ARGUMENT_TEXT_LIMIT ? `${args.slice(0, CALL_ARGUMENT_TEXT_LIMIT)}… (${args.length} characters)` : args;
+    return `[Called ${call.name}(${clipped})]`;
+}
 
 /** The prose of a message whose content may be a string or content blocks (text blocks only). */
 function proseOf(content: ChatMessage['content']): string {
@@ -35,8 +45,9 @@ export function EncodeToolTurnsAsText(messages: readonly ChatMessage[]): ChatMes
     const out: ChatMessage[] = [];
     for (const m of messages) {
         if (m.role === 'assistant' && (m.toolCalls?.length ?? 0) > 0) {
-            const prose = proseOf(m.content);
-            if (prose.trim()) out.push({ role: 'assistant', content: prose });
+            const prose = proseOf(m.content).trim();
+            const calls = (m.toolCalls ?? []).map(DescribeToolCallAsText).join('\n');
+            out.push({ role: 'assistant', content: prose ? `${prose}\n${calls}` : calls });
             continue;
         }
         if (m.role === 'tool') {

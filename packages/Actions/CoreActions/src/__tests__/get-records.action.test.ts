@@ -216,6 +216,26 @@ describe('GetRecordsAction', () => {
             expect(r.Message).toContain("with filter: Status = 'Active'");
             expect(r.Message).toContain('ordered by: StartDate ASC');
         });
+
+        it('threads AlternateBaseView into the RunView config and output params when provided', async () => {
+            runViewSpy.mockResolvedValue(okResult([{ ID: '1' }], 1));
+            const params = makeParams([
+                { Name: 'EntityName', Value: 'Events' },
+                { Name: 'AlternateBaseView', Value: 'Active' },
+            ]);
+
+            const r = await runAction(params);
+
+            expect(r.Success).toBe(true);
+            const [config] = runViewSpy.mock.calls[0];
+            expect(config).toEqual({
+                EntityName: 'Events',
+                MaxRows: 100,
+                ResultType: 'simple',
+                AlternateBaseView: 'Active',
+            });
+            expect(findOutput(r.Params, 'AlternateBaseView')?.Value).toBe('Active');
+        });
     });
 
     describe('outputs and messaging', () => {
