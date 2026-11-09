@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { Main, type CliDeps } from '../cli';
@@ -18,7 +18,7 @@ function deps(over: Partial<CliDeps> = {}): CliDeps {
     CleanRun: vi.fn(async () => undefined),
     LabelCatch: vi.fn(async () => undefined),
     LabelPacket: vi.fn(async () => '# packet\n'),
-    BacktestStep: vi.fn(async () => ({ ID: 'l', CorpusPath: '/c.json', Slice: 'Tuning' as const, Set: 'Bug' as const, Model: 'm', CreatedAt: '2026-11-09T10:00:00.000Z', Entries: [] })),
+    BacktestStep: vi.fn(async () => ({ Ledger: { ID: 'l', CorpusPath: '/c.json', Slice: 'Tuning' as const, Set: 'Bug' as const, Model: 'm', CreatedAt: '2026-11-09T10:00:00.000Z', Entries: [] }, Stopped: null })),
     MatchStep: vi.fn(async () => ({ ID: 'l', CorpusPath: '/c.json', Slice: 'Tuning' as const, Set: 'Bug' as const, Model: 'm', CreatedAt: '2026-11-09T10:00:00.000Z', Entries: [] })),
     BuildGateReport: vi.fn(async () => ({ GeneratedAt: '2026-11-09T10:00:00.000Z', Models: [] })),
     ...over,
@@ -123,15 +123,42 @@ describe('Main', () => {
     expect(d.LabelCatch).not.toHaveBeenCalled();
   });
 
-  it('backtest calls BacktestStep with the corpus, slice, set, model, the default --max-usd 50 and --only', async () => {
+  it('backtest calls BacktestStep with the corpus, slice, set, model, --max-usd and --only', async () => {
     const d = deps();
-    expect(await Main(['backtest', '--corpus', 'c.json', '--slice', 'HeldOut', '--set', 'Both', '--model', 'gen-model', '--only', '3,5'], d)).toBe(0);
-    expect(d.BacktestStep).toHaveBeenCalledWith(expect.objectContaining({ CorpusPath: resolve('c.json'), Slice: 'HeldOut', Set: 'Both', Model: 'gen-model', MaxUsd: 50, Only: [3, 5], RepoRoot: '/repo', StoreDir: join('/repo', '.jit-catch', 'store') }));
+    expect(await Main(['backtest', '--corpus', 'c.json', '--slice', 'HeldOut', '--set', 'Both', '--model', 'claude-haiku-5-5', '--max-usd', '20', '--only', '3,5'], d)).toBe(0);
+    expect(d.BacktestStep).toHaveBeenCalledWith(expect.objectContaining({ CorpusPath: resolve('c.json'), Slice: 'HeldOut', Set: 'Both', Model: 'claude-haiku-5-5', MaxUsd: 20, Only: [3, 5], RepoRoot: '/repo', StoreDir: join('/repo', '.jit-catch', 'store') }));
+  });
+
+  it('backtest returns 3 when the run stopped early', async () => {
+    const d = deps({ BacktestStep: vi.fn(async () => ({ Ledger: { ID: 'l', CorpusPath: '/c.json', Slice: 'Tuning' as const, Set: 'Bug' as const, Model: 'm', CreatedAt: '2026-11-09T10:00:00.000Z', Entries: [] }, Stopped: 'cap' as const })) });
+    expect(await Main(['backtest', '--corpus', 'c.json', '--slice', 'Tuning', '--set', 'Bug', '--model', 'claude-haiku-5-5', '--max-usd', '5'], d)).toBe(3);
+  });
+
+  it('label with both --catch and --run is a usage error', async () => {
+    const d = deps();
+    expect(await Main(['label', '--catch', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '--answer', 'Bug', '--user', 'octo', '--run', 'r1'], d)).toBe(2);
+    expect(stderr.join('')).toMatch(/label needs --catch or --run, not both/);
+    expect(d.LabelCatch).not.toHaveBeenCalled();
+    expect(d.LabelPacket).not.toHaveBeenCalled();
+  });
+
+  it('corpus mine refuses to write a list that holds a key and leaves --out unwritten', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'jit-cli-')); const out = join(dir, 'mined.json');
+    const token = 'ghp_' + 'A1b2C3d4'.repeat(5);
+    const clean = [{ PR: 10, MergeSHA: 'a'.repeat(40), MergedAt: '2026-01-20T10:00:00Z', Title: `feat: ${token}`, Files: ['packages/X/src/a.ts'] }];
+    const d = deps({ MineCorpus: vi.fn(async () => ({ Clean: clean, Bug: [] })) });
+    try {
+      expect(await Main(['corpus', 'mine', '--since', '2026-01-01', '--until', '2026-03-31', '--out', out], d)).toBe(1);
+      expect(existsSync(out)).toBe(false);
+      expect(stderr.join('')).not.toContain(token);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('backtest --retry-failed sets RetryFailed', async () => {
     const d = deps();
-    expect(await Main(['backtest', '--corpus', 'c.json', '--slice', 'Tuning', '--set', 'Bug', '--model', 'm', '--retry-failed'], d)).toBe(0);
+    expect(await Main(['backtest', '--corpus', 'c.json', '--slice', 'Tuning', '--set', 'Bug', '--model', 'claude-haiku-5-5', '--max-usd', '5', '--retry-failed'], d)).toBe(0);
     expect(d.BacktestStep).toHaveBeenCalledWith(expect.objectContaining({ RetryFailed: true }));
   });
 
@@ -149,13 +176,14 @@ describe('Main', () => {
     expect(d.MatchStep).not.toHaveBeenCalled();
   });
 
-  it('backtest returns 2 and names the option for a bad --slice, --set, --max-usd or --only, or a missing --corpus or --model', async () => {
+  it('backtest returns 2 and names the option for a bad --slice, --set, --max-usd or --only, or a missing --corpus, --model or --max-usd', async () => {
     const d = deps();
-    const base = { '--corpus': 'c.json', '--slice': 'Tuning', '--set': 'Bug', '--model': 'm' };
+    const base = { '--corpus': 'c.json', '--slice': 'Tuning', '--set': 'Bug', '--model': 'm', '--max-usd': '5' };
     const cases: [Record<string, string | null>, RegExp][] = [
       [{ '--slice': 'All' }, /--slice must be Tuning or HeldOut/], [{ '--set': 'Some' }, /--set must be Bug, Clean or Both/],
       [{ '--model': null }, /backtest needs --model/], [{ '--corpus': null }, /backtest needs --corpus/],
       [{ '--max-usd': '0' }, /--max-usd must be a positive number/], [{ '--only': '3,x' }, /--only must be PR numbers separated by commas/],
+      [{ '--max-usd': null }, /backtest needs --max-usd/],
     ];
     for (const [over, message] of cases) {
       stderr.length = 0;
@@ -164,6 +192,36 @@ describe('Main', () => {
       expect(stderr.join('')).toMatch(message);
     }
     expect(d.BacktestStep).not.toHaveBeenCalled();
+  });
+});
+
+describe('Main warning listeners', () => {
+  it('keeps the process warning listeners it was started with', async () => {
+    const original = process.listeners('warning');
+    const mine = (): void => undefined;
+    process.removeAllListeners('warning');
+    process.on('warning', mine);
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      await Main(['generate', '--pr', 'x'], deps());
+      expect(process.listeners('warning')).toEqual([mine]);
+    } finally {
+      process.removeAllListeners('warning');
+      for (const l of original) process.on('warning', l);
+      vi.restoreAllMocks();
+    }
+  });
+});
+
+describe('Main backtest model', () => {
+  it('returns 2 and names the priced models when --model has no price in the settings', async () => {
+    const stderr: string[] = [];
+    vi.spyOn(process.stderr, 'write').mockImplementation((s: string | Uint8Array) => { stderr.push(String(s)); return true; });
+    const d = deps();
+    expect(await Main(['backtest', '--corpus', 'c.json', '--slice', 'Tuning', '--set', 'Bug', '--model', 'unpriced-model', '--max-usd', '10'], d)).toBe(2);
+    expect(stderr.join('')).toMatch(/--model unpriced-model has no price.*claude-haiku-5-5/);
+    expect(d.BacktestStep).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
   });
 });
 
@@ -195,6 +253,19 @@ describe('Main report', () => {
     const d = deps({ RepoRoot: async () => root }); const file = join(root, 'gate.md');
     expect(await Main(['report', '--ledger', 'c-Tuning-Bug-m1', '--corpus', join(root, 'corpus.json'), '--out', file], d)).toBe(0);
     expect(readFileSync(file, 'utf8')).toMatch(/^# Gate-1 report/);
+  });
+
+  it('refuses to write or print a report that holds a key', async () => {
+    const out: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((s: string | Uint8Array) => { out.push(String(s)); return true; });
+    const token = 'ghp_' + 'A1b2C3d4'.repeat(5);
+    const report = { GeneratedAt: '2026-11-09T10:00:00.000Z', Models: [] };
+    const d = deps({ RepoRoot: async () => root, BuildGateReport: vi.fn(async () => ({ ...report, GeneratedAt: token })) });
+    const file = join(root, 'gate.md');
+    expect(await Main(['report', '--ledger', 'c-Tuning-Bug-m1', '--corpus', join(root, 'corpus.json'), '--out', file], d)).toBe(1);
+    expect(existsSync(file)).toBe(false);
+    expect(await Main(['report', '--ledger', 'c-Tuning-Bug-m1', '--corpus', join(root, 'corpus.json')], d)).toBe(1);
+    expect(out.join('')).not.toContain(token);
   });
 
   it('returns 2 when one --ledger item is not a ledger ID, and 1 when a ledger file is missing', async () => {

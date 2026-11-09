@@ -126,6 +126,11 @@ describe('BuildGateReport', () => {
     expect(m1.BugSet.Caught).toMatchObject({ K: 1, N: 3 });
   });
 
+  it('divides GateCaught by every curated bug PR of the slices, so failed, not run and not yet matched PRs count as not caught', async () => {
+    const m1 = (await build(store())).Models[0];
+    expect(m1.BugSet.GateCaught).toMatchObject({ K: 1, N: CORPUS.Bug.length });
+  });
+
   it('counts an Assessed bug PR without a match result as not yet matched and leaves it out of Caught', async () => {
     const m1 = (await build(store())).Models[0];
     expect(m1.BugSet.NotYetMatched).toBe(1);
@@ -140,12 +145,28 @@ describe('BuildGateReport', () => {
 
   it('sums recorded costs and prices the run tokens from the table', async () => {
     const m1 = (await build(store())).Models[0];
-    expect(m1.Cost.RecordedUSD).toBeCloseTo(6);
+    expect(m1.Cost.RecordedUSD).toBeCloseTo(6.5);
     expect(m1.Cost.TotalUSD).toBeCloseTo(6);
     expect(m1.Cost.PerPR).toBeCloseTo(0.75);
     expect(m1.Cost.PerMatchedCatch).toBeCloseTo(3);
     expect(m1.Cost.TableUSD).toBeCloseTo(6.7);
     expect(m1.Cost.UnpricedModels).toEqual(['mystery']);
+  });
+
+  it('prices and records the same current runs per model, while the total keeps every attempt of a retried entry', async () => {
+    const s = new MemoryStore();
+    s.Runs = [runOf('r-new', [{ Model: 'gen', InputTokens: 1_000_000, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 3 }, { Model: 'other', InputTokens: 5, OutputTokens: 5, CacheReadTokens: 0, CostUSD: 0.25 }]),
+      runOf('r-old', [{ Model: 'gen', InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 9 }])];
+    const retried = ledger('c-Tuning-Bug-m3', 'Bug', 'm3', [entry(1, 'Bug', { RunID: 'r-new', CostUSD: 12.25 })]);
+    const r = await BuildGateReport({ Ledgers: [retried], Corpus: CORPUS, Store: s, RunDirOf: () => { throw new Error('no run dir'); }, Prices: PRICES });
+    const k = r.Models[0].Cost;
+    expect(k.TotalUSD).toBeCloseTo(12.25);
+    expect(k.RecordedUSD).toBeCloseTo(3.25);
+    expect(k.TableUSD).toBeCloseTo(4.25);
+    expect(k.ByModel).toEqual({ gen: { RecordedUSD: 3, TableUSD: 4 }, other: { RecordedUSD: 0.25, TableUSD: 0.25 } });
+    const md = RenderMarkdown(r);
+    expect(md).toContain('- gen: recorded $3.00; at table prices $4.00');
+    expect(md).toContain('- other: recorded $0.25; at table prices $0.25');
   });
 
   it('builds judge pairs per labeled or matched catch and counts High on Intended and Low on Bug', async () => {
@@ -184,6 +205,17 @@ describe('RenderMarkdown', () => {
     expect(md).toContain('PRs: 6; run 4; failed 1; not run 1');
     expect(md).toMatch(/1 run PR has no match result yet/);
     expect(md).toContain('Unpriced models: mystery');
+    expect(md).toContain('Gate caught (reported and matched, of every curated bug PR): 1/6');
+    expect(md).toContain('gate blocked: 1 failed, 1 not run, 1 not yet matched, 0 apply failed (needs a person)');
+    expect(md).not.toContain('gate inputs complete');
+  });
+
+  it('says the gate inputs are complete when every curated bug PR has run and has a match result', async () => {
+    const corpus: Corpus = { ...CORPUS, Bug: CORPUS.Bug.slice(0, 2) };
+    const done = ledger('c-Tuning-Bug-m1', 'Bug', 'm1', [entry(1, 'Bug', { RunID: 'r1', Match: match('Matched', true, { t1: true }) }), entry(2, 'Bug', { RunID: 'r2', Match: match('NoCatch', false, {}) })]);
+    const md = RenderMarkdown(await BuildGateReport({ Ledgers: [done], Corpus: corpus, Store: store(), RunDirOf: () => { throw new Error('no run dir'); }, Prices: PRICES }));
+    expect(md).toContain('gate inputs complete');
+    expect(md).not.toContain('gate blocked');
   });
 
   it('puts model and rule names on one line and escapes a leading # or -', async () => {

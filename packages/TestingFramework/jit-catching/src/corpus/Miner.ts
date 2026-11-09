@@ -35,13 +35,13 @@ export function PullRequestNumberOf(subject: string): number | null {
     return m ? Number(m[1]) : null;
 }
 
-/** Old-side line ranges of each run of removed (`-`) lines, per file. */
+/** Old-side line ranges of each run of removed (`-`) lines, per file. A `\\ No newline at end of file` marker is not a line. */
 export function RemovedRangesByFile(hunks: DiffHunk[]): Record<string, LineRange[]> {
     const out: Record<string, LineRange[]> = {};
     for (const h of hunks) {
         let n = h.OldStart; let run: LineRange | null = null;
         for (const l of h.Lines) {
-            if (l.startsWith('+')) continue;
+            if (l.startsWith('+') || l.startsWith('\\')) continue;
             if (l.startsWith('-')) {
                 if (run) run.End = n; else { run = { Start: n, End: n }; (out[h.Path] ??= []).push(run); }
             } else run = null;

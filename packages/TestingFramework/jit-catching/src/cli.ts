@@ -21,7 +21,7 @@ import { GitHub } from './git/GitHub';
 import { GitRepo } from './git/GitRepo';
 import { PackageMap } from './analyzer/PackageMap';
 import { SliceSchema, type Slice } from './corpus/Corpus';
-import { BacktestStep } from './backtest/Backtest';
+import { BacktestStep, UnpricedModel } from './backtest/Backtest';
 import { MatchStep } from './backtest/Match';
 import { LedgerFile } from './backtest/Ledger';
 import { LoadCorpus } from './corpus/Corpus';
@@ -68,11 +68,12 @@ const USAGE = `usage: jit-catch <${COMMANDS.join('|')}> [options]
   label         --run <run ID> [--store <dir>]
   corpus mine   --since <YYYY-MM-DD> --until <YYYY-MM-DD> --out <file>
   clean         --run <run ID> | --all-finished
-  backtest      --corpus <file> --slice ${SliceSchema.options.join('|')} --set Bug|Clean|Both --model <generator> [--max-usd <n, default 50>] [--only <n,n>] [--retry-failed] [--settings <file>] [--store <dir>]
+  backtest      --corpus <file> --slice ${SliceSchema.options.join('|')} --set Bug|Clean|Both --model <generator> --max-usd <n> [--only <n,n>] [--retry-failed] [--settings <file>] [--store <dir>]
                 --max-usd counts the cost of the whole ledger, every attempt of a --retry-failed entry included, and is checked before each run, so the last run can take the total above it.
   backtest match --ledger <ledger ID> --corpus <file> [--settings <file>] [--store <dir>]
   report        --ledger <ledger ID>[,<ledger ID>…] --corpus <file> [--out <file.md>] [--settings <file>] [--store <dir>]`;
 const SHA_RE = /^[0-9a-f]{7,40}$/;
+const LEDGER_ID_RE = /^[A-Za-z0-9_-]+$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** A command-line mistake; `Main` prints the usage and returns 2. */
@@ -89,9 +90,11 @@ interface Parsed {
 interface BacktestArgs { CorpusPath: string; Slice: Slice; Set: 'Bug' | 'Clean' | 'Both'; Model: string; MaxUsd: number; Only?: number[]; RetryFailed: boolean; }
 const BACKTEST_SETS = ['Bug', 'Clean', 'Both'] as const;
 
-/** Parses argv and dispatches one command. Returns the process exit code: 0 done, 1 failed, 2 usage error. */
+/** Installs the process warning filter that drops the SDK's canUseTool shadow notice. The `jit-catch` bin calls it before `Main`. */
+export function InstallWarningFilter(): void { FilterProcessWarnings(['CLAUDE_SDK_CAN_USE_TOOL_SHADOWED']); }
+
+/** Parses argv and dispatches one command. Returns the process exit code: 0 done, 1 failed, 2 usage error (also a `--model` the settings do not price), 3 backtest stopped early. */
 export async function Main(argv: string[], deps: CliDeps = DEFAULT_DEPS): Promise<number> {
-    FilterProcessWarnings(['CLAUDE_SDK_CAN_USE_TOOL_SHADOWED']);
     let p: Parsed;
     try { p = parse(argv); }
     catch (e) {
@@ -101,6 +104,7 @@ export async function Main(argv: string[], deps: CliDeps = DEFAULT_DEPS): Promis
     }
     try { return await dispatch(p, deps); }
     catch (e) {
+        if (e instanceof UsageError) { process.stderr.write(`${USAGE}\n${e.message}\n`); return 2; }
         process.stderr.write(`jit-catch ${p.Command}: ${OneLine(e)}\n`);
         return 1;
     }
@@ -148,20 +152,27 @@ function checkCorpusMine(sub: string | undefined, p: Parsed): void {
 function parseBacktestForm(sub: string | undefined, v: Parameters<typeof parseBacktest>[0] & { ledger?: string }, p: Parsed): void {
     if (sub === undefined) { p.Backtest = parseBacktest(v); return; }
     if (sub !== 'match') throw new UsageError(`unknown backtest subcommand ${sub}`);
-    if (!v.ledger || !/^[A-Za-z0-9_-]+$/.test(v.ledger)) throw new UsageError('backtest match needs --ledger as a ledger ID (letters, digits, \'-\' and \'_\')');
+    const ids = ledgerIDs(v.ledger);
+    if (ids === null || ids.length !== 1) throw new UsageError('backtest match needs --ledger as a ledger ID (letters, digits, \'-\' and \'_\')');
     if (!v.corpus) throw new UsageError('backtest match needs --corpus');
-    p.Match = { LedgerID: v.ledger, CorpusPath: resolve(v.corpus) };
+    p.Match = { LedgerID: ids[0], CorpusPath: resolve(v.corpus) };
+}
+
+/** The ledger IDs in `text`, separated by commas; null when it is missing or an item is not a ledger ID. */
+function ledgerIDs(text: string | undefined): string[] | null {
+    const ids = text?.split(',') ?? [];
+    return ids.length > 0 && ids.every((id) => LEDGER_ID_RE.test(id)) ? ids : null;
 }
 
 /** `report` needs --ledger as ledger IDs separated by commas, and --corpus. */
 function parseReport(ledger: string | undefined, corpus: string | undefined): Parsed['Report'] {
-    const ids = ledger?.split(',') ?? [];
-    if (ids.length === 0 || !ids.every((id) => /^[A-Za-z0-9_-]+$/.test(id))) throw new UsageError('report needs --ledger as ledger IDs (letters, digits, \'-\' and \'_\') separated by commas');
+    const ids = ledgerIDs(ledger);
+    if (ids === null) throw new UsageError('report needs --ledger as ledger IDs (letters, digits, \'-\' and \'_\') separated by commas');
     if (!corpus) throw new UsageError('report needs --corpus');
     return { LedgerIDs: ids, CorpusPath: resolve(corpus) };
 }
 
-/** Checks and converts the `backtest` options; --max-usd defaults to 50. */
+/** Checks and converts the `backtest` options; --max-usd is required. */
 function parseBacktest(v: { corpus?: string; slice?: string; set?: string; model?: string; 'max-usd'?: string; only?: string; 'retry-failed'?: boolean }): BacktestArgs {
     if (!v.corpus) throw new UsageError('backtest needs --corpus');
     if (!v.model) throw new UsageError('backtest needs --model');
@@ -169,16 +180,19 @@ function parseBacktest(v: { corpus?: string; slice?: string; set?: string; model
     if (!slice.success) throw new UsageError(`--slice must be ${SliceSchema.options.join(' or ')}`);
     const set = BACKTEST_SETS.find((s) => s === v.set);
     if (!set) throw new UsageError('--set must be Bug, Clean or Both');
-    const maxUsd = Number(v['max-usd'] ?? '50');
+    if (v['max-usd'] === undefined) throw new UsageError('backtest needs --max-usd');
+    const maxUsd = Number(v['max-usd']);
     if (!Number.isFinite(maxUsd) || maxUsd <= 0) throw new UsageError('--max-usd must be a positive number');
     if (v.only !== undefined && !/^[1-9]\d*(,[1-9]\d*)*$/.test(v.only)) throw new UsageError('--only must be PR numbers separated by commas');
     return { CorpusPath: resolve(v.corpus), Slice: slice.data, Set: set, Model: v.model, MaxUsd: maxUsd, Only: v.only?.split(',').map(Number), RetryFailed: v['retry-failed'] === true };
 }
 
-/** Mines the corpus candidates, writes `{ Clean, Bug }` to --out and prints the counts. */
+/** Mines the corpus candidates, checks the text for secrets, writes `{ Clean, Bug }` to --out and prints the counts. */
 async function corpusMine(p: Parsed, deps: CliDeps): Promise<number> {
     const mined = await deps.MineCorpus({ RepoRoot: await deps.RepoRoot(), Since: p.Since ?? '', Until: p.Until ?? '' });
-    writeFileSync(resolve(p.Out ?? ''), JSON.stringify({ Clean: mined.Clean, Bug: mined.Bug }, null, 2) + '\n');
+    const text = JSON.stringify({ Clean: mined.Clean, Bug: mined.Bug }, null, 2) + '\n';
+    DefaultRedaction().AssertClean(text, 'corpus mine output');
+    writeFileSync(resolve(p.Out ?? ''), text);
     process.stdout.write(`${mined.Clean.length} clean, ${mined.Bug.length} bug candidates written to ${p.Out}\n`);
     return 0;
 }
@@ -189,6 +203,7 @@ function parseLabel(catchID: string | undefined, answer: string | undefined, use
         if (runID === null) throw new UsageError('label needs --catch or --run');
         return undefined;
     }
+    if (runID !== null) throw new UsageError('label needs --catch or --run, not both');
     if (answer === undefined || !IsLabelAnswer(answer)) throw new UsageError(`--answer must be one of ${LABEL_ANSWERS.join(', ')}`);
     if (!user) throw new UsageError('label --catch needs --user');
     return { CatchID: catchID, Answer: answer, User: user };
@@ -198,6 +213,14 @@ function parseLabel(catchID: string | undefined, answer: string | undefined, use
 function backtestArgs(p: Parsed): BacktestArgs {
     if (!p.Backtest) throw new Error('backtest options were not parsed');
     return p.Backtest;
+}
+
+/** The parsed `backtest` options, after checking that the settings price `--model`; a usage error otherwise. */
+function pricedBacktestArgs(p: Parsed, settings: Settings): BacktestArgs {
+    const args = backtestArgs(p);
+    const unpriced = UnpricedModel(settings.Prices, args.Model);
+    if (unpriced) throw new UsageError(unpriced);
+    return args;
 }
 
 async function dispatch(p: Parsed, deps: CliDeps): Promise<number> {
@@ -220,13 +243,13 @@ async function dispatch(p: Parsed, deps: CliDeps): Promise<number> {
         case 'run': await deps.RunAll({ PR: p.PR, BaseSHA: p.Base, HeadSHA: p.Head, Trigger: p.Trigger, RepoRoot: repoRoot, Settings: settings, StoreDir: storeDir }); break;
         case 'backtest':
             if (p.Match) await deps.MatchStep({ ...p.Match, RepoRoot: repoRoot, Settings: settings, StoreDir: storeDir });
-            else await deps.BacktestStep({ ...backtestArgs(p), RepoRoot: repoRoot, Settings: settings, StoreDir: storeDir });
+            else if ((await deps.BacktestStep({ ...pricedBacktestArgs(p, settings), RepoRoot: repoRoot, Settings: settings, StoreDir: storeDir })).Stopped !== null) return 3;
             break;
     }
     return 0;
 }
 
-/** Builds the gate-1 report from the ledgers, the corpus and the store, and writes it to --out or stdout. */
+/** Builds the gate-1 report from the ledgers, the corpus and the store, checks it for secrets, and writes it to --out or stdout. */
 async function report(p: Parsed, deps: CliDeps): Promise<number> {
     const repoRoot = await deps.RepoRoot();
     if (!p.Report) throw new Error('report options were not parsed');
@@ -239,8 +262,10 @@ async function report(p: Parsed, deps: CliDeps): Promise<number> {
     });
     const store = new FileCatchStore(p.Store ? resolve(p.Store) : join(repoRoot, '.jit-catch', 'store'), redaction);
     const r = await deps.BuildGateReport({ Ledgers: ledgers, Corpus: LoadCorpus(o.CorpusPath), Store: store, RunDirOf: (id) => new RunDir(repoRoot, id, redaction), Prices: LoadSettings(p.SettingsPath).Prices });
-    if (p.Out) writeFileSync(resolve(p.Out), RenderMarkdown(r));
-    else process.stdout.write(RenderMarkdown(r));
+    const md = RenderMarkdown(r);
+    redaction.AssertClean(md, 'gate report');
+    if (p.Out) writeFileSync(resolve(p.Out), md);
+    else process.stdout.write(md);
     return 0;
 }
 

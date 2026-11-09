@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { PullRequestNumberOf, IsEligibleSource, MineClean, MineBugs, type MinerDeps } from '../corpus/Miner';
+import { PullRequestNumberOf, IsEligibleSource, MineClean, MineBugs, RemovedRangesByFile, type MinerDeps } from '../corpus/Miner';
 import type { MergedPullRequest, MergedPullRequestDetail } from '../git/GitHub';
 import type { WorkspacePackage } from '../analyzer/PackageMap';
 
@@ -34,6 +34,14 @@ function fakeDeps(f: Fakes): MinerDeps {
     PackageMap: packageMap,
   };
 }
+
+describe('RemovedRangesByFile', () => {
+  it('does not count a no-newline marker as a line of the old file', () => {
+    const lines = ['-a', '\\ No newline at end of file', '-b', ' c', '-d'];
+    expect(RemovedRangesByFile([{ Path: 'packages/X/src/a.ts', OldStart: 10, OldLines: 4, NewStart: 10, NewLines: 1, Lines: lines }]))
+      .toEqual({ 'packages/X/src/a.ts': [{ Start: 10, End: 11 }, { Start: 13, End: 13 }] });
+  });
+});
 
 describe('PullRequestNumberOf', () => {
   it('reads a merge-commit subject, a squash subject, and returns null for a plain subject', () => {

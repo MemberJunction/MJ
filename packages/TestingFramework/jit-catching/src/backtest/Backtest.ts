@@ -1,14 +1,15 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { Settings } from '../settings';
 import type { BaseCatchStore } from '../contracts/BaseCatchStore';
-import type { TokenUsage } from '../types';
+import type { Run, TokenUsage } from '../types';
 import { GitRepo } from '../git/GitRepo';
 import { FileCatchStore } from '../store/FileCatchStore';
 import { RedactTail, type RedactionCheck } from '../sandbox/Redaction';
 import { DefaultRedaction } from '../pipeline/Deps';
 import { RunAll, RunAllError } from '../pipeline/Run';
-import { RunDir } from '../pipeline/RunDir';
+import { PreflightEnv } from '../pipeline/Preflight';
+import { IsValidRunID, RunDir } from '../pipeline/RunDir';
 import { LoadCorpus, RevisionsOf, type Corpus, type Slice } from '../corpus/Corpus';
 import { LedgerFile, LedgerID, type BacktestLedger, type LedgerEntry } from './Ledger';
 
@@ -19,8 +20,13 @@ const MAX_FAILED_IN_ROW = 3;
 export interface BacktestDeps {
     RunAll: typeof RunAll;
     Repo: Pick<GitRepo, 'FirstParent' | 'Fetch'>;
-    /** The USD cost recorded for a run. */
-    CostOfRun: (runID: string) => Promise<number>;
+    /** The USD cost recorded for a run; null when neither the store nor the run folder has the run. */
+    CostOfRun: (runID: string) => Promise<number | null>;
+    /**
+     * The Backtest runs of `pr` on `headSHA` with generator `model` that started at or after `since` and whose IDs are not in `knownRunIDs`,
+     * with their recorded cost. Two ledgers with the same model and overlapping sets can still find each other's runs.
+     */
+    OrphanRunCost: (pr: number, headSHA: string, knownRunIDs: Set<string>, since: string, model: string) => Promise<OrphanRun[]>;
     Redaction: RedactionCheck;
 }
 
@@ -31,46 +37,91 @@ export interface BacktestDeps {
 export interface BacktestOptions {
     CorpusPath: string; Slice: Slice; Set: 'Bug' | 'Clean' | 'Both'; Model: string; MaxUsd: number; Only?: number[]; RetryFailed?: boolean;
     RepoRoot: string; Settings: Settings; StoreDir: string; Deps?: BacktestDeps;
+    /** The environment the preflight check reads; `process.env` when not given. */
+    Env?: NodeJS.ProcessEnv;
 }
+
+/** Why the run stopped before every Pending entry ran: the spending cap, the failure limit, or null when it did not stop early. */
+export type BacktestStop = 'cap' | 'failures' | null;
+
+/** The ledger after the run and why the run stopped early, if it did. */
+export interface BacktestResult { Ledger: BacktestLedger; Stopped: BacktestStop; }
+
+/** A run the ledger does not name and the USD cost its generation file records. */
+export interface OrphanRun { RunID: string; CostUSD: number; }
 
 /** A corpus PR selected for the backtest and its landing commit. */
 interface SelectedPR { PR: number; Set: 'Bug' | 'Clean'; MergeSHA: string; }
 
 /**
- * Creates or resumes the ledger; runs each Pending entry serially with Settings.GeneratorModel = Model and Trigger 'Backtest';
- * records each run's cost from the injected cost lookup; stops with a message when the ledger's cost reaches MaxUsd. Returns the ledger.
+ * Refuses a model without a price in the settings, then checks the keys of every step once. Creates or resumes the ledger; runs each Pending entry serially with Settings.GeneratorModel = Model and Trigger 'Backtest';
+ * records each run's cost from the injected cost lookup; stops with a message when the ledger's cost reaches MaxUsd. Returns the ledger and why the run stopped early, if it did.
  *
  * Resume: refuses a ledger made for another corpus path, model, slice or set. Appends a Pending entry for each corpus PR of the
- * slice and set that the ledger lacks; entries whose PR left the slice stay as recorded and are named on stderr.
+ * slice and set that the ledger lacks; entries whose PR left the slice stay as recorded and are named on stderr. A Pending entry
+ * with a StartedAt was cut off mid-run: the cost of its orphan runs is added to it and it is run again.
+ * Each entry is written with its StartedAt before its run starts.
  * The cap counts the cost of the whole ledger, including every attempt of a retried entry, and is checked before each run, so the last run can take the total above it.
  * The run stops after 3 Failed entries in a row and leaves the rest Pending.
  */
-export async function BacktestStep(o: BacktestOptions): Promise<BacktestLedger> {
+export async function BacktestStep(o: BacktestOptions): Promise<BacktestResult> {
+    const unpriced = UnpricedModel(o.Settings.Prices, o.Model);
+    if (unpriced) throw new Error(unpriced);
+    PreflightEnv(o.Settings, o.Env ?? process.env, 'Assess');
     const deps = o.Deps ?? defaultDeps(o);
     await deps.Repo.Fetch('next');
     const file = new LedgerFile(o.RepoRoot, LedgerID(o.CorpusPath, o.Slice, o.Set, o.Model), deps.Redaction);
     const selected = selectedPRs(LoadCorpus(o.CorpusPath), o);
     const ledger = file.Exists() ? await resumeLedger(file.Read(), selected, o, deps) : await createLedger(selected, o, deps);
+    await recoverOrphans(ledger, deps);
     if (o.RetryFailed) retryFailed(ledger, o.Only);
     reportSkipped(ledger, o.Only);
     file.Write(ledger);
-    await runPending(ledger, file, o, deps);
-    return ledger;
+    return { Ledger: ledger, Stopped: await runPending(ledger, file, o, deps) };
 }
 
-/** The cost of a run from the store, else from the run folder's generation file, else 0. */
-export function DefaultCostOfRun(store: Pick<BaseCatchStore, 'GetRun'>, repoRoot: string, redaction: RedactionCheck): (runID: string) => Promise<number> {
+/** A message naming the priced models when `model` has no price in `prices`; null when it has one. */
+export function UnpricedModel(prices: Settings['Prices'], model: string): string | null {
+    if (Object.hasOwn(prices, model)) return null;
+    return `--model ${model} has no price in the settings; priced models: ${Object.keys(prices).join(', ')}`;
+}
+
+/** The cost of a run from the store, else from the run folder's generation file, else null. */
+export function DefaultCostOfRun(store: Pick<BaseCatchStore, 'GetRun'>, repoRoot: string, redaction: RedactionCheck): (runID: string) => Promise<number | null> {
     return async (runID) => {
         const run = await store.GetRun(runID);
         if (run) return sumCost(run.TokensByModel);
         const dir = new RunDir(repoRoot, runID, redaction);
-        return existsSync(join(dir.Path, 'generation.json')) ? sumCost(dir.ReadGeneration().Run.TokensByModel) : 0;
+        return existsSync(join(dir.Path, 'generation.json')) ? sumCost(dir.ReadGeneration().Run.TokensByModel) : null;
     };
+}
+
+/** Finds orphan runs in the generation file of each folder under `<repo root>/.jit-catch/runs`; a folder without a readable generation file is skipped. */
+export function DefaultOrphanRunCost(repoRoot: string, redaction: RedactionCheck): BacktestDeps['OrphanRunCost'] {
+    return async (pr, headSHA, knownRunIDs, since, model) => {
+        const runs = join(repoRoot, '.jit-catch', 'runs');
+        if (!existsSync(runs)) return [];
+        const out: OrphanRun[] = [];
+        for (const id of readdirSync(runs).filter((n) => IsValidRunID(n) && !knownRunIDs.has(n)).sort()) {
+            const run = readRun(new RunDir(repoRoot, id, redaction));
+            if (run && run.Trigger === 'Backtest' && run.PRNumber === pr && run.HeadSHA === headSHA && run.GeneratorModel === model && run.StartedAt >= since) out.push({ RunID: id, CostUSD: sumCost(run.TokensByModel) });
+        }
+        return out;
+    };
+}
+
+/** The run recorded in the folder's generation file, or null when it has none or it does not parse. */
+function readRun(dir: RunDir): Run | null {
+    if (!existsSync(join(dir.Path, 'generation.json'))) return null;
+    try { return dir.ReadGeneration().Run; } catch { return null; }
 }
 
 function defaultDeps(o: BacktestOptions): BacktestDeps {
     const redaction = DefaultRedaction();
-    return { RunAll, Repo: new GitRepo(o.RepoRoot), CostOfRun: DefaultCostOfRun(new FileCatchStore(o.StoreDir, redaction), o.RepoRoot, redaction), Redaction: redaction };
+    return {
+        RunAll, Repo: new GitRepo(o.RepoRoot), CostOfRun: DefaultCostOfRun(new FileCatchStore(o.StoreDir, redaction), o.RepoRoot, redaction),
+        OrphanRunCost: DefaultOrphanRunCost(o.RepoRoot, redaction), Redaction: redaction,
+    };
 }
 
 function sumCost(tokens: TokenUsage[]): number { return tokens.reduce((s, u) => s + u.CostUSD, 0); }
@@ -121,6 +172,22 @@ async function resumeLedger(ledger: BacktestLedger, selected: SelectedPR[], o: B
     return ledger;
 }
 
+/**
+ * For each Pending entry with a StartedAt: adds the cost of its orphan runs, with one stderr line per run, and clears StartedAt,
+ * so the entry runs again and the same orphan is not counted twice.
+ */
+async function recoverOrphans(ledger: BacktestLedger, deps: BacktestDeps): Promise<void> {
+    const known = new Set(ledger.Entries.map((e) => e.RunID).filter((id): id is string => id !== null));
+    for (const e of ledger.Entries) {
+        if (e.Status !== 'Pending' || e.StartedAt === null) continue;
+        for (const orphan of await deps.OrphanRunCost(e.PR, e.HeadSHA, known, e.StartedAt, ledger.Model)) {
+            e.CostUSD += orphan.CostUSD;
+            process.stderr.write(`backtest ${ledger.ID}: PR #${e.PR}: recovered ${orphan.CostUSD.toFixed(2)} USD of run ${orphan.RunID}, cut off before it was recorded\n`);
+        }
+        e.StartedAt = null;
+    }
+}
+
 /** Sets the Failed entries (within `only`) back to Pending with no run, error, match or times; the recorded cost stays. */
 function retryFailed(ledger: BacktestLedger, only: number[] | undefined): void {
     for (const e of ledger.Entries) {
@@ -138,20 +205,23 @@ function reportSkipped(ledger: BacktestLedger, only: number[] | undefined): void
     }
 }
 
-/** Runs the Pending entries (within `Only`) one at a time, writing the ledger after each, until the cap or the failure limit stops it. */
-async function runPending(ledger: BacktestLedger, file: LedgerFile, o: BacktestOptions, deps: BacktestDeps): Promise<void> {
+/** Runs the Pending entries (within `Only`) one at a time, writing the ledger after each, until the cap or the failure limit stops it. Returns which one stopped it, or null. */
+async function runPending(ledger: BacktestLedger, file: LedgerFile, o: BacktestOptions, deps: BacktestDeps): Promise<BacktestStop> {
     let failedInRow = 0;
     for (const entry of ledger.Entries.filter((e) => e.Status === 'Pending' && (!o.Only || o.Only.includes(e.PR)))) {
         if (failedInRow >= MAX_FAILED_IN_ROW) {
             process.stderr.write(`backtest ${ledger.ID}: stopped after ${MAX_FAILED_IN_ROW} failed runs in a row; the rest stay Pending\n`);
-            return;
+            return 'failures';
         }
-        if (stopForSpend(ledger, o.MaxUsd)) return;
+        if (stopForSpend(ledger, o.MaxUsd)) return 'cap';
+        entry.StartedAt = new Date().toISOString();
+        file.Write(ledger);
         await runOne(entry, o, deps);
         file.Write(ledger);
         report(ledger, entry);
         failedInRow = entry.Status === 'Failed' ? failedInRow + 1 : 0;
     }
+    return null;
 }
 
 function totalCost(ledger: BacktestLedger): number { return ledger.Entries.reduce((s, e) => s + e.CostUSD, 0); }
@@ -164,10 +234,13 @@ function stopForSpend(ledger: BacktestLedger, maxUsd: number): boolean {
     return true;
 }
 
-/** Runs the pipeline for one entry and records its run, status and times, and adds the run's cost to the entry's. A run that failed after Generate keeps its run ID and cost. */
+/**
+ * Runs the pipeline for one entry and records its run, status and end time, and adds the run's cost to the entry's. A run that failed
+ * after it had an ID keeps its run ID and cost; when neither the store nor the run folder has its cost, the usage the error carries is the cost.
+ */
 async function runOne(entry: LedgerEntry, o: BacktestOptions, deps: BacktestDeps): Promise<void> {
-    entry.StartedAt = new Date().toISOString();
     let runID: string | null = null;
+    let usage: TokenUsage[] = [];
     try {
         runID = (await deps.RunAll({
             PR: entry.PR, BaseSHA: entry.BaseSHA, HeadSHA: entry.HeadSHA, Trigger: 'Backtest',
@@ -175,17 +248,17 @@ async function runOne(entry: LedgerEntry, o: BacktestOptions, deps: BacktestDeps
         })).RunID;
         entry.Status = 'Assessed';
     } catch (e) {
-        if (e instanceof RunAllError) runID = e.RunID;
+        if (e instanceof RunAllError) { runID = e.RunID; usage = e.Usage ?? []; }
         entry.Status = 'Failed';
         entry.Error = errorLine(e instanceof RunAllError ? e.cause : e, deps.Redaction);
     }
     entry.RunID = runID;
-    entry.CostUSD += runID ? await costOf(runID, deps) : 0;
+    entry.CostUSD += runID ? (await costOf(runID, deps)) ?? sumCost(usage) : 0;
     entry.EndedAt = new Date().toISOString();
 }
 
-/** The run's cost; 0, with one stderr line, when the lookup fails. */
-async function costOf(runID: string, deps: BacktestDeps): Promise<number> {
+/** The run's cost, null when it has none recorded; 0, with one stderr line, when the lookup fails. */
+async function costOf(runID: string, deps: BacktestDeps): Promise<number | null> {
     try { return await deps.CostOfRun(runID); }
     catch (e) {
         process.stderr.write(`backtest: cost of run ${runID} unknown, recorded as 0: ${errorLine(e, deps.Redaction)}\n`);

@@ -18,7 +18,7 @@ Options in brackets are optional; the usage text in `src/cli.ts` shows which com
 - `label --catch <catch ID> --answer Bug|Intended|TestFault --user <login>` — records one human label; `label --run <run ID>` prints the label packet of a run.
 - `corpus mine --since <YYYY-MM-DD> --until <YYYY-MM-DD> --out <file>` — mines bug-set and clean-set candidate PRs merged in the window.
 - `clean --run <run ID>` or `clean --all-finished` — removes the worktrees, pnpm store and scratch folders of one run or of every finished run.
-- `backtest --corpus <file> --slice Tuning|HeldOut --set Bug|Clean|Both --model <generator>` — runs every chosen corpus PR into one ledger; `--max-usd <n>` (default 50) caps the ledger cost, `--only <n,n>` picks PRs, `--retry-failed` re-runs failed entries.
+- `backtest --corpus <file> --slice Tuning|HeldOut --set Bug|Clean|Both --model <generator> --max-usd <n>` — runs every chosen corpus PR into one ledger; the required `--max-usd <n>` caps the ledger cost and the command exits 3 when the cap or the failure limit stops it, `--only <n,n>` picks PRs, `--retry-failed` re-runs failed entries. The worst-case overshoot past the cap is about one PR (≈ 36 USD at the default limits plus the judges). A run cut off during Generate leaves no generation file, so a resume does not recover its spend and it does not count toward the cap.
 - `backtest match --ledger <ledger ID> --corpus <file>` — applies each fix PR on top of its bug PR and re-runs the catching tests to see which catches match the known bug.
 - `report --ledger <ledger ID>[,<ledger ID>…] --corpus <file> [--out <file.md>]` — writes the gate-1 report: rates with 95% intervals, costs and judge calibration.
 

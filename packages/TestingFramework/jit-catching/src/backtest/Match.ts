@@ -1,3 +1,4 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { GroupByUUID, IndexByUUID, UUIDSet } from '@memberjunction/global';
 import type { Settings } from '../settings';
@@ -14,12 +15,12 @@ import { LoadCorpus, type Corpus } from '../corpus/Corpus';
 import { LedgerFile, type BacktestLedger, type LedgerEntry, type MatchRecord } from './Ledger';
 
 /** The target methods the match check calls. */
-export type MatchTarget = Pick<VitestCatchTarget, 'Prepare' | 'ApplyPatch' | 'BuildPackages' | 'WriteTests' | 'Run' | 'Cleanup'>;
+export type MatchTarget = Pick<VitestCatchTarget, 'Prepare' | 'BuildPackages' | 'WriteTests' | 'Run' | 'Cleanup'>;
 
 /** The target, repository, store and redaction check, injected so tests run no git, container or store on disk. */
 export interface MatchDeps {
     Target: MatchTarget;
-    Repo: Pick<GitRepo, 'Diff' | 'FirstParent'>;
+    Repo: Pick<GitRepo, 'Diff' | 'FirstParent' | 'CommitWithPatch'>;
     Store: Pick<BaseCatchStore, 'ListCatches'>;
     Redaction: RedactionCheck;
     /** Builds the sandbox image; called before head is prepared when given. */
@@ -32,8 +33,9 @@ export interface MatchOptions { LedgerID: string; CorpusPath: string; RepoRoot: 
 
 /**
  * For every Bug entry that is Assessed and has no Match: the weak, non-dropped catches of its run; none → NoCatch.
- * Else prepares head, applies the fix PR's diff (ApplyFailed when it does not apply), builds the tested packages,
- * writes and runs those tests Settings.Repeats times; a test that passes every time matches. ReportedMatched is true
+ * Else commits head plus the fix PR's diff with the host git in a scratch worktree under `<run dir>/match/work`
+ * (ApplyFailed when it does not apply), then prepares that commit in the sandbox, builds the tested packages,
+ * writes and runs those tests Settings.Repeats times; a test that passes every time matches. Host git never runs in the prepared worktree. ReportedMatched is true
  * when a Reported catch matched. The ledger is written after every entry; an error from the target cleans head up (when prepared), removes the store and ends the step.
  */
 export async function MatchStep(o: MatchOptions): Promise<BacktestLedger> {
@@ -77,12 +79,13 @@ async function matchOne(entry: LedgerEntry, fixSHA: string, o: MatchOptions, dep
     const catches = (await deps.Store.ListCatches(runID)).filter(IsWeakUndropped);
     const tests = catches.length > 0 ? testsOf(catches, new RunDir(o.RepoRoot, runID, deps.Redaction)) : [];
     if (tests.length === 0) return record('NoCatch');
-    const patch = await deps.Repo.Diff(await deps.Repo.FirstParent(fixSHA), fixSHA);
+    const fixed = await fixedCommit(entry.HeadSHA, fixSHA, new RunDir(o.RepoRoot, runID, deps.Redaction), deps.Repo);
+    if (fixed === null) return record('ApplyFailed');
     await deps.EnsureImage?.();
     let head: PreparedRevision | null = null;
     try {
-        head = await deps.Target.Prepare({ Kind: 'Head', SHA: entry.HeadSHA });
-        return await runOnFixedHead(deps.Target, head, patch, tests, catches, o.Settings.Repeats);
+        head = await deps.Target.Prepare({ Kind: 'Head', SHA: fixed });
+        return await runOnFixedHead(deps.Target, head, tests, catches, o.Settings.Repeats);
     } finally {
         if (head) await deps.Target.Cleanup(head);
         await deps.RemoveStore?.();
@@ -101,9 +104,18 @@ function testsOf(catches: Catch[], dir: RunDir): CandidateTest[] {
     return tests;
 }
 
-/** Applies the fix on head; when it applies, builds, writes and runs the tests and records which passed every repeat. */
-async function runOnFixedHead(target: MatchTarget, head: PreparedRevision, patch: string, tests: CandidateTest[], catches: Catch[], repeats: number): Promise<MatchRecord> {
-    if (!(await target.ApplyPatch(head, patch))) return record('ApplyFailed');
+/** The commit of `headSHA` plus the fix PR's diff, built with `<run dir>/match/work/fix.patch` and the scratch worktree `<run dir>/match/work/fix`; null when the diff does not apply. */
+async function fixedCommit(headSHA: string, fixSHA: string, dir: RunDir, repo: MatchDeps['Repo']): Promise<string | null> {
+    const patch = await repo.Diff(await repo.FirstParent(fixSHA), fixSHA);
+    const work = join(dir.Path, 'match', 'work');
+    mkdirSync(work, { recursive: true });
+    const patchFile = join(work, 'fix.patch');
+    writeFileSync(patchFile, patch);
+    return repo.CommitWithPatch(headSHA, patchFile, join(work, 'fix'));
+}
+
+/** Builds, writes and runs the tests on the prepared fixed head and records which passed every repeat. */
+async function runOnFixedHead(target: MatchTarget, head: PreparedRevision, tests: CandidateTest[], catches: Catch[], repeats: number): Promise<MatchRecord> {
     await target.BuildPackages(head, [...new Set(tests.map((t) => t.Package))]);
     await target.WriteTests(head, tests);
     const passing = passedEveryRepeat(tests, await target.Run(head, tests, repeats), repeats);

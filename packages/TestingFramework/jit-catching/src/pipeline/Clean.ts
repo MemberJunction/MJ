@@ -4,7 +4,7 @@ import type { GitRepo } from '../git/GitRepo';
 import { IsValidRunID } from './RunDir';
 
 /** Folders of a run that `CleanRun` removes. */
-const REMOVED = ['work', 'pnpm-store', 'scratch'];
+const REMOVED = ['work', 'pnpm-store', 'scratch', 'match'];
 /** Worktrees under `work/` that are removed through git before the folder goes. */
 const WORKTREES = ['base', 'head'];
 
@@ -15,7 +15,7 @@ function runsRoot(repoRoot: string): string { return join(repoRoot, '.jit-catch'
 function isRealDir(p: string): boolean { try { return lstatSync(p).isDirectory(); } catch { return false; } }
 
 /**
- * Removes `work/`, `pnpm-store/` and `scratch/` of one run; keeps the JSON files, the transcripts and `base-src`.
+ * Removes `work/`, `pnpm-store/`, `scratch/` and `match/` of one run; keeps the JSON files, the transcripts and `base-src`.
  * The base and head worktrees go through `git worktree remove` first, so git forgets them; a git failure is ignored
  * because the folder is removed next anyway.
  */

@@ -15,15 +15,15 @@ function runFolder(root: string, id: string, files: string[]): string {
 }
 
 describe('CleanRun', () => {
-  it('removes work, pnpm-store and scratch through git first and keeps generation.json and base-src', async () => {
+  it('removes work, pnpm-store, scratch and match through git first and keeps generation.json and base-src', async () => {
     const root = temp(); const p = runFolder(root, 'r1', ['generation.json']);
-    for (const d of ['work/base', 'work/head', 'pnpm-store', 'scratch', 'base-src/packages/X']) mkdirSync(join(p, d), { recursive: true });
+    for (const d of ['work/base', 'work/head', 'pnpm-store', 'scratch', 'match/work/pnpm-store', 'base-src/packages/X']) mkdirSync(join(p, d), { recursive: true });
     const repo = { RemoveWorktree: vi.fn(async (_d: string) => undefined) };
 
     await CleanRun(root, 'r1', repo);
 
     expect(repo.RemoveWorktree.mock.calls.map((c) => c[0]).sort()).toEqual([join(p, 'work/base'), join(p, 'work/head')]);
-    for (const d of ['work', 'pnpm-store', 'scratch']) expect(existsSync(join(p, d))).toBe(false);
+    for (const d of ['work', 'pnpm-store', 'scratch', 'match']) expect(existsSync(join(p, d))).toBe(false);
     expect(existsSync(join(p, 'generation.json'))).toBe(true);
     expect(existsSync(join(p, 'base-src/packages/X'))).toBe(true);
   });
