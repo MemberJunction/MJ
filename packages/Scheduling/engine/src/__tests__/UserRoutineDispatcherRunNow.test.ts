@@ -24,6 +24,9 @@ vi.mock('@memberjunction/ai-prompts', () => ({ AIPromptRunner: class {} }));
 vi.mock('@memberjunction/actions', () => ({ ActionEngineServer: { Instance: { Config: vi.fn(), RunAction: vi.fn() } } }));
 
 import { UserRoutineDispatcherDriver } from '../drivers/UserRoutineDispatcherDriver';
+import type { ScheduledJobExecutionContext } from '../BaseScheduledJob';
+import type { MJScheduledJobEntity, MJUserRoutineEntity } from '@memberjunction/core-entities';
+import type { UserInfo } from '@memberjunction/core';
 
 type Driver = UserRoutineDispatcherDriver & {
     createRunRow(routine: unknown, user: unknown): Promise<unknown>;
@@ -141,5 +144,38 @@ describe('UserRoutineDispatcherDriver.RunRoutineNow', () => {
 
         expect(routine.NextRunAt).toBeNull();
         expect(routine.Status).toBe('Disabled');
+    });
+
+    it('preserves a due OneShot routine NextRunAt without claiming it when resolveRoutineOwnerUser fails on a transient UserCache miss', async () => {
+        const pastDue = new Date(Date.now() - 60_000);
+        const { routine, saves } = makeOneShot({
+            UserID: 'MISSING-USER',
+            NextRunAt: pastDue,
+        });
+
+        // Simulate transient UserCache miss for MISSING-USER
+        globalRef.___SINGLETON__UserCache = {
+            Users: [],
+            FindUser: async () => undefined,
+        };
+
+        const sweepDriver = driver as UserRoutineDispatcherDriver & {
+            loadCandidateRoutines?: (u: UserInfo, now: Date) => Promise<MJUserRoutineEntity[]>;
+        };
+        sweepDriver.loadCandidateRoutines = vi.fn(async () => [routine as Partial<MJUserRoutineEntity> as MJUserRoutineEntity]);
+
+        const scheduleStub = { Configuration: null } as Partial<MJScheduledJobEntity> as MJScheduledJobEntity;
+        const context: ScheduledJobExecutionContext = {
+            Schedule: scheduleStub,
+            ContextUser: SYSTEM as Partial<UserInfo> as UserInfo,
+        };
+
+        const result = await driver.Execute(context);
+
+        expect(result.Success).toBe(true);
+        expect(driver.claimRoutine).not.toHaveBeenCalled();
+        expect(routine.NextRunAt).toBe(pastDue);
+        expect(saves).toHaveLength(0);
+        expect(driver.logError).toHaveBeenCalledTimes(1);
     });
 });

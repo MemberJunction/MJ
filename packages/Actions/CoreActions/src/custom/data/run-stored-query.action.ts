@@ -36,13 +36,18 @@ export class RunStoredQueryAction extends BaseAction {
                 } as ActionResultSimple;
             }
 
-            const policyGuard = await AgentDataPolicyGuard.EvaluateStoredQuery(params, queryId, queryName);
+            // Parse parameters JSON if provided before policy evaluation so template SQL renders accurately
+            const queryParameters = this.parseParameters(parametersRaw);
+
+            const policyGuard = await AgentDataPolicyGuard.EvaluateStoredQuery(
+                params,
+                queryId,
+                queryName,
+                queryParameters
+            );
             if ('blocked' in policyGuard) {
                 return policyGuard.blocked;
             }
-
-            // Parse parameters JSON if provided
-            const queryParameters = this.parseParameters(parametersRaw);
 
             // Build RunQueryParams
             const runParams: RunQueryParams = {

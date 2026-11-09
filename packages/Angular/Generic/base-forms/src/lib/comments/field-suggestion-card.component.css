@@ -180,55 +180,6 @@
   padding-top: 2px;
 }
 
-.mj-field-suggestion-card__btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
-  border-radius: var(--mj-radius-sm, 6px);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
-}
-
-.mj-field-suggestion-card__btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.mj-field-suggestion-card__btn--accept {
-  border: 1px solid var(--mj-brand-primary);
-  background: var(--mj-brand-primary);
-  color: var(--mj-text-inverse);
-}
-
-.mj-field-suggestion-card__btn--accept:hover:not(:disabled) {
-  background: var(--mj-brand-primary-hover);
-  border-color: var(--mj-brand-primary-hover);
-}
-
-.mj-field-suggestion-card__btn--reject {
-  border: 1px solid var(--mj-border-default);
-  background: var(--mj-bg-surface-card);
-  color: var(--mj-text-secondary);
-}
-
-.mj-field-suggestion-card__btn--reject:hover:not(:disabled) {
-  border-color: var(--mj-status-error);
-  color: var(--mj-status-error);
-  background: var(--mj-status-error-bg);
-}
-
 .mj-field-suggestion-card__btn--discuss {
   margin-left: auto;
-  border: 1px solid var(--mj-border-subtle);
-  background: transparent;
-  color: var(--mj-text-secondary);
-}
-
-.mj-field-suggestion-card__btn--discuss:hover:not(:disabled) {
-  border-color: var(--mj-brand-primary);
-  color: var(--mj-brand-primary);
-  background: var(--mj-bg-surface-hover);
 }

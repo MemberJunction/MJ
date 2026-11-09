@@ -44,9 +44,10 @@ export abstract class EntitySubtypeDriverBase {
     ): void | boolean | string | Promise<void | boolean | string>;
 
     /**
-     * Optional post-save hook invoked after `finalizeSave()` succeeds and before the enclosing
-     * `EntityTransactionScope` commits, so side-effect writes performed by the driver participate in
-     * the same atomic transaction.
+     * Optional post-save hook invoked inside the active transaction (both direct `Save()`'s
+     * `EntityTransactionScope` and `TransactionGroup.Submit()`'s group transaction) before commit,
+     * so side-effect writes performed by the driver participate in the same atomic transaction and
+     * throwing aborts and rolls back the transaction.
      */
     public AfterSave?(
         entity: BaseEntity,

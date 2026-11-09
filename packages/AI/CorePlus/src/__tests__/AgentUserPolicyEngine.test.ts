@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { BaseEntity, UserInfo } from '@memberjunction/core';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { BaseEntity, IMetadataProvider, IRunViewProvider, RunView, UserInfo } from '@memberjunction/core';
 import { MJGlobal, MJEventType } from '@memberjunction/global';
 import {
     MJAIAgentUserPolicyEntity,
@@ -442,5 +442,177 @@ describe('AgentUserPolicyEngine — the cache follows entity saves', () => {
         raise('save', other);
         raise('remote-invalidate', null, 'MJ: AI Agent Requests');
         expect(AgentUserPolicyEngine.Instance.GetCachedPolicy('agent-cos', 'user-alice-1')?.EmailChannelMode).toBe('DraftOnly');
+    });
+});
+
+describe('AgentUserPolicyEngine — ResolvePolicyForAgentAndUser & DetectAgentPolicyWidening', () => {
+    const engine = AgentUserPolicyEngine.Instance;
+
+    beforeEach(() => {
+        engine.ClearCache();
+        vi.restoreAllMocks();
+    });
+
+    it('distinguishes found, none, and error in ResolvePolicyForAgentAndUser', async () => {
+        const policy = buildPolicy();
+        const runViewFn = vi
+            .fn()
+            .mockResolvedValueOnce({
+                Success: true,
+                Results: [],
+                RowCount: 0,
+                TotalRowCount: 0,
+                ExecutionTime: 1,
+                ErrorMessage: '',
+                UserViewRunID: '',
+            })
+            .mockResolvedValueOnce({
+                Success: false,
+                Results: [],
+                RowCount: 0,
+                TotalRowCount: 0,
+                ExecutionTime: 1,
+                ErrorMessage: 'DB connection lost',
+                UserViewRunID: '',
+            })
+            .mockResolvedValueOnce({
+                Success: true,
+                Results: [policy],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+                ErrorMessage: '',
+                UserViewRunID: '',
+            });
+
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: runViewFn,
+        } as Partial<RunView> as RunView);
+
+        const provider = {} as Partial<IMetadataProvider & IRunViewProvider> as IMetadataProvider;
+
+        const noneRes = await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser, { provider });
+        expect(noneRes).toEqual({ status: 'none', policy: null });
+
+        const errRes = await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser, { provider });
+        expect(errRes.status).toBe('error');
+        if (errRes.status === 'error') {
+            expect(errRes.errorMessage).toContain('DB connection lost');
+        }
+
+        const foundRes = await engine.ResolvePolicyForAgentAndUser('agent-cos', 'user-alice-1', aliceUser, { provider });
+        expect(foundRes).toEqual({ status: 'found', policy });
+    });
+
+    it('blocks agent-initiated policy widening across all privilege axes while allowing tightening and display updates', () => {
+        const baseline = engine.SnapshotPolicy(
+            buildPolicy({
+                Status: 'Paused',
+                CoordinationMode: 'Coordinator',
+                DefaultDataAccessMode: 'ReadOnly',
+                EmailChannelMode: 'DraftOnly',
+                CalendarChannelMode: 'ProposeWithApproval',
+                PhoneChannelMode: 'Disabled',
+                MessagingChannelMode: 'DraftOnly',
+                AllowInterAgentCoordination: false,
+                RequireApprovalForExternalComms: true,
+                RequireApprovalForFinancials: true,
+                RequireApprovalForDestructiveActions: true,
+                AutoApproveAmountThreshold: 250,
+            })
+        );
+
+        // Tightening + non-security fields are permitted
+        const tightened = buildPolicy({
+            Status: 'Paused',
+            CoordinationMode: 'Observer',
+            DefaultDataAccessMode: 'AllowListOnly',
+            EmailChannelMode: 'Disabled',
+            CalendarChannelMode: 'ReadOnly',
+            PhoneChannelMode: 'Disabled',
+            MessagingChannelMode: 'Disabled',
+            AllowInterAgentCoordination: false,
+            RequireApprovalForExternalComms: true,
+            RequireApprovalForFinancials: true,
+            RequireApprovalForDestructiveActions: true,
+            AutoApproveAmountThreshold: 100,
+            DisplayNameOverride: 'Maya v2',
+            InstructionsOverride: 'Tighter instructions',
+        });
+        expect(engine.DetectAgentPolicyWidening(baseline, tightened)).toEqual([]);
+
+        // Unpausing itself is blocked
+        expect(
+            engine.DetectAgentPolicyWidening(baseline, buildPolicy({ Status: 'Active' })).join('; ')
+        ).toMatch(/Status/);
+
+        // Widening DefaultDataAccessMode is blocked
+        expect(
+            engine
+                .DetectAgentPolicyWidening(
+                    engine.SnapshotPolicy(buildPolicy({ DefaultDataAccessMode: 'ReadOnly' })),
+                    buildPolicy({ DefaultDataAccessMode: 'UserCeiling' })
+                )
+                .join('; ')
+        ).toMatch(/DefaultDataAccessMode/);
+
+        // Widening EmailChannelMode or disabling RequireApprovalForFinancials or raising AutoApproveAmountThreshold is blocked
+        expect(
+            engine
+                .DetectAgentPolicyWidening(
+                    engine.SnapshotPolicy(buildPolicy({ EmailChannelMode: 'DraftOnly' })),
+                    buildPolicy({ EmailChannelMode: 'SendAsUser' })
+                )
+                .join('; ')
+        ).toMatch(/EmailChannelMode/);
+
+        expect(
+            engine
+                .DetectAgentPolicyWidening(
+                    engine.SnapshotPolicy(buildPolicy({ RequireApprovalForFinancials: true })),
+                    buildPolicy({ RequireApprovalForFinancials: false })
+                )
+                .join('; ')
+        ).toMatch(/RequireApprovalForFinancials/);
+
+        expect(
+            engine
+                .DetectAgentPolicyWidening(
+                    engine.SnapshotPolicy(buildPolicy({ AutoApproveAmountThreshold: 250 })),
+                    buildPolicy({ AutoApproveAmountThreshold: 1000 })
+                )
+                .join('; ')
+        ).toMatch(/AutoApproveAmountThreshold/);
+
+        // Widening EntityAccessRules or dropping Deny ActionPolicyRules from an agent call is blocked
+        expect(
+            engine
+                .DetectAgentPolicyWidening(
+                    engine.SnapshotPolicy(
+                        buildPolicy({
+                            DefaultDataAccessMode: 'AllowListOnly',
+                            EntityAccessRulesObject: [{ entityPattern: 'Tasks', access: 'ReadOnly' }],
+                        })
+                    ),
+                    buildPolicy({
+                        DefaultDataAccessMode: 'AllowListOnly',
+                        EntityAccessRulesObject: [{ entityPattern: 'Tasks', access: 'ReadWrite' }],
+                    })
+                )
+                .join('; ')
+        ).toMatch(/Tasks/);
+
+        expect(
+            engine
+                .DetectAgentPolicyWidening(
+                    engine.SnapshotPolicy(
+                        buildPolicy({
+                            ActionPolicyRulesObject: [{ actionPattern: '*Delete*', policy: 'Deny' }],
+                        })
+                    ),
+                    buildPolicy({ ActionPolicyRulesObject: [] })
+                )
+                .join('; ')
+        ).toMatch(/Delete/);
     });
 });

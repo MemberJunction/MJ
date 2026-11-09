@@ -3,7 +3,7 @@
  * @module @memberjunction/scheduling-engine
  */
 
-import { RegisterClass, IsValidUUID } from '@memberjunction/global';
+import { RegisterClass, IsValidUUID, UUIDsEqual } from '@memberjunction/global';
 import { BaseScheduledJob, ScheduledJobExecutionContext } from '../BaseScheduledJob';
 import { ValidationResult, UserInfo, Metadata, ValidationErrorInfo, ValidationErrorType, IMetadataProvider } from '@memberjunction/core';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
@@ -244,7 +244,7 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
         if (!ownerUserID) {
             return fallbackContextUser;
         }
-        if (fallbackContextUser?.ID && fallbackContextUser.ID.trim().toLowerCase() === ownerUserID.toLowerCase()) {
+        if (fallbackContextUser?.ID && UUIDsEqual(fallbackContextUser.ID, ownerUserID)) {
             if (fallbackContextUser.IsActive === false) {
                 throw new Error(
                     `Cannot execute scheduled agent job "${schedule.Name ?? schedule.ID}": owner user ${ownerUserID} is inactive.`

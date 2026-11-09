@@ -176,6 +176,19 @@ export class WriteEntityFieldsAction extends BaseAction {
 
             this.applyFieldMap(entity, entityInfo, fields);
 
+            if (prePolicy.allowed.active && prePolicy.allowed.effectiveWhereClause) {
+                const postWhereError = await AgentDataPolicyGuard.VerifyEntityStatePassesWhereClause({
+                    params,
+                    entity,
+                    entityInfo,
+                    effectiveWhereClause: prePolicy.allowed.effectiveWhereClause,
+                    dirtyOnlyOptimization: !isCreate,
+                });
+                if (postWhereError) {
+                    return postWhereError;
+                }
+            }
+
             if (prePolicy.allowed.active && prePolicy.allowed.hasRecordConditionRules) {
                 const postCondError = AgentDataPolicyGuard.CheckRecordCondition({
                     params,

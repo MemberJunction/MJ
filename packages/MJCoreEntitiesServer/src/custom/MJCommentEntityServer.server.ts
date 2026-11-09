@@ -1,11 +1,15 @@
 import {
     BaseEntity,
     BaseEntityResult,
+    EntityDeleteOptions,
     EntitySaveOptions,
     IMetadataProvider,
+    LogError,
+    Metadata,
     ValidationErrorInfo,
     ValidationErrorType,
     ValidationResult,
+    WellKnownUserSource,
 } from '@memberjunction/core';
 import {
     BUILT_IN_COMMENT_TYPE_IDS,
@@ -58,6 +62,28 @@ export class MJCommentEntityServer extends MJCommentEntity {
         return super.Save(options);
     }
 
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (!options?.ReplayOnly) {
+            const provider =
+                (this.ProviderToUse as unknown as IMetadataProvider | null) ?? Metadata.Provider;
+            const contextUser = this.ContextCurrentUser ?? provider?.CurrentUser ?? null;
+            const isSystemOrOwner =
+                WellKnownUserSource.Instance.IsSystemUser(contextUser) || contextUser?.Type === 'Owner';
+            const isAuthor = Boolean(contextUser && this.UserID && UUIDsEqual(contextUser.ID, this.UserID));
+            if (!isSystemOrOwner && this.UserID && !isAuthor) {
+                const entry = new BaseEntityResult();
+                entry.Success = false;
+                entry.Type = 'delete';
+                entry.Message = 'Only the comment author or a system administrator may delete a comment.';
+                entry.StartedAt = new Date();
+                entry.EndedAt = new Date();
+                this.RegisterResultHistoryEntry(entry);
+                return false;
+            }
+        }
+        return super.Delete(options);
+    }
+
     private validateCommentTypeConstraints(result: ValidationResult): void {
         const commentTypeId = this.CommentTypeID;
         if (!commentTypeId) {
@@ -79,29 +105,67 @@ export class MJCommentEntityServer extends MJCommentEntity {
             commentType?.AllowedAnchorTypes ??
             (code === COMMENT_TYPE_CODES.FIELD_SUGGESTION ? '["Field"]' : null);
         if (rawAllowedAnchors) {
+            type ParsedJsonValue = string | number | boolean | null | ParsedJsonValue[] | { [key: string]: ParsedJsonValue };
+            let parsed: ParsedJsonValue;
             try {
-                const parsed: unknown = JSON.parse(rawAllowedAnchors);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    const allowedLower = new Set(
-                        parsed
-                            .filter((v): v is string => typeof v === 'string')
-                            .map((v) => v.trim().toLowerCase())
+                parsed = JSON.parse(rawAllowedAnchors) as ParsedJsonValue;
+            } catch (err) {
+                const errText = err instanceof Error ? err.message : String(err);
+                LogError(
+                    `MJCommentEntityServer: malformed AllowedAnchorTypes JSON on CommentType '${
+                        name ?? code ?? commentTypeId
+                    }': ${errText}`
+                );
+                result.Success = false;
+                result.Errors.push(
+                    new ValidationErrorInfo(
+                        'AnchorType',
+                        `Comment type '${
+                            name ?? code ?? commentTypeId
+                        }' has malformed AllowedAnchorTypes configuration and cannot be saved until corrected.`,
+                        rawAllowedAnchors,
+                        ValidationErrorType.Failure
+                    )
+                );
+                return;
+            }
+
+            if (!Array.isArray(parsed) || !parsed.every((v): v is string => typeof v === 'string')) {
+                LogError(
+                    `MJCommentEntityServer: AllowedAnchorTypes on CommentType '${
+                        name ?? code ?? commentTypeId
+                    }' must be a JSON array of strings.`
+                );
+                result.Success = false;
+                result.Errors.push(
+                    new ValidationErrorInfo(
+                        'AnchorType',
+                        `Comment type '${
+                            name ?? code ?? commentTypeId
+                        }' AllowedAnchorTypes must be a JSON array of strings.`,
+                        rawAllowedAnchors,
+                        ValidationErrorType.Failure
+                    )
+                );
+                return;
+            }
+
+            if (parsed.length > 0) {
+                const allowedLower = new Set(
+                    parsed.map((v) => v.trim().toLowerCase())
+                );
+                const actualAnchor = (this.AnchorType ?? '').trim().toLowerCase();
+                if (!actualAnchor || !allowedLower.has(actualAnchor)) {
+                    result.Success = false;
+                    result.Errors.push(
+                        new ValidationErrorInfo(
+                            'AnchorType',
+                            `Comment type '${name ?? code ?? commentTypeId}' requires AnchorType in [${parsed.join(', ')}], got '${this.AnchorType ?? 'null'}'.`,
+                            this.AnchorType,
+                            ValidationErrorType.Failure
+                        )
                     );
-                    const actualAnchor = (this.AnchorType ?? '').trim().toLowerCase();
-                    if (!actualAnchor || !allowedLower.has(actualAnchor)) {
-                        result.Success = false;
-                        result.Errors.push(
-                            new ValidationErrorInfo(
-                                'AnchorType',
-                                `Comment type '${name ?? code ?? commentTypeId}' requires AnchorType in [${parsed.join(', ')}], got '${this.AnchorType ?? 'null'}'.`,
-                                this.AnchorType,
-                                ValidationErrorType.Failure
-                            )
-                        );
-                    }
                 }
-            } catch {
-                // Ignore malformed JSON in AllowedAnchorTypes
             }
         }
 

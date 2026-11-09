@@ -7,7 +7,7 @@
       "CanRead": true,
       "CanCreate": true,
       "CanUpdate": true,
-      "CanDelete": true
+      "CanDelete": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Comments&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow?create"
@@ -21,7 +21,7 @@
       "CanRead": true,
       "CanCreate": true,
       "CanUpdate": true,
-      "CanDelete": true
+      "CanDelete": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Field Suggestions&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow?create"

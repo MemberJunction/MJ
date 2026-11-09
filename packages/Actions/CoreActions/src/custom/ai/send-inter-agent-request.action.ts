@@ -1,10 +1,11 @@
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
-import { RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
-import { LogError, Metadata } from '@memberjunction/core';
+import { EscapeSQLString, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { MJAIAgentRequestEntity } from '@memberjunction/core-entities';
 import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
+import { UserCache } from '@memberjunction/generic-database-provider';
 
 
 /**
@@ -78,18 +79,55 @@ export class SendInterAgentRequestAction extends BaseAction {
             }
             const senderAgent = senderResolution.agent;
 
+            if (!AIEngine.Instance.CanUserRunAgent(senderAgent.ID, contextUser)) {
+                return {
+                    Success: false,
+                    ResultCode: 'PERMISSION_DENIED',
+                    Message: `User "${contextUser.Name || contextUser.ID}" does not have permission to run sender agent "${senderAgent.Name}".`,
+                    Params: params.Params,
+                };
+            }
+
+            const targetUserActive = await this.verifyActiveTargetUser(targetUserId, contextUser, params);
+            if (!targetUserActive) {
+                return {
+                    Success: false,
+                    ResultCode: 'VALIDATION_ERROR',
+                    Message: `TargetUserID "${targetUserId}" does not match an active MJ user.`,
+                    Params: params.Params,
+                };
+            }
+
             const targetResolution = this.resolveRecipientAgent(params, senderAgent);
             if ('errorResult' in targetResolution) {
                 return targetResolution.errorResult;
             }
             const targetAgent = targetResolution.agent;
 
-            const senderPolicy = await AgentUserPolicyEngine.Instance.GetPolicyForAgentAndUser(
+            const senderPolicyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
                 senderAgent.ID,
                 contextUser.ID,
-                contextUser
+                contextUser,
+                { provider: params.Provider }
             );
+            if (senderPolicyLookup.status === 'error') {
+                return {
+                    Success: false,
+                    ResultCode: 'POLICY_LOOKUP_FAILED',
+                    Message: `Failed to verify sender agent policy: ${senderPolicyLookup.errorMessage}`,
+                    Params: params.Params,
+                };
+            }
+            const senderPolicy = senderPolicyLookup.policy;
             if (senderPolicy) {
+                if (senderPolicy.Status === 'Disabled' || senderPolicy.Status === 'Paused') {
+                    return {
+                        Success: false,
+                        ResultCode: 'POLICY_DENIED',
+                        Message: `Your "${ senderAgent.Name }" policy status is "${ senderPolicy.Status }".`,
+                        Params: params.Params,
+                    };
+                }
                 if (senderPolicy.AllowInterAgentCoordination === false) {
                     return {
                         Success: false,
@@ -108,11 +146,21 @@ export class SendInterAgentRequestAction extends BaseAction {
                 }
             }
 
-            const targetPolicy = await AgentUserPolicyEngine.Instance.GetPolicyForAgentAndUser(
+            const targetPolicyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
                 targetAgent.ID,
                 targetUserId,
-                contextUser
+                contextUser,
+                { provider: params.Provider }
             );
+            if (targetPolicyLookup.status === 'error') {
+                return {
+                    Success: false,
+                    ResultCode: 'POLICY_LOOKUP_FAILED',
+                    Message: `Failed to verify recipient agent policy: ${targetPolicyLookup.errorMessage}`,
+                    Params: params.Params,
+                };
+            }
+            const targetPolicy = targetPolicyLookup.policy;
             const deliveryMode: 'InterAgent' | 'DirectUserRequest' =
                 targetPolicy &&
                 targetPolicy.Status === 'Active' &&
@@ -212,6 +260,42 @@ export class SendInterAgentRequestAction extends BaseAction {
         }
     }
 
+    private async verifyActiveTargetUser(
+        targetUserId: string,
+        contextUser: UserInfo,
+        params: RunActionParams
+    ): Promise<boolean> {
+        if (UUIDsEqual(contextUser.ID, targetUserId)) {
+            return contextUser.IsActive !== false;
+        }
+        try {
+            const cached = await UserCache.Instance.FindUser({ ID: targetUserId });
+            if (cached) {
+                return cached.IsActive !== false;
+            }
+        } catch {
+            // Fall back to RunView when UserCache is not initialized in unit tests
+        }
+        const rv = params.Provider ? RunView.FromMetadataProvider(params.Provider) : new RunView();
+        const res = await rv.RunView<{ ID: string; IsActive?: boolean }>(
+            {
+                EntityName: 'MJ: Users',
+                ExtraFilter: `ID='${EscapeSQLString(targetUserId)}' AND IsActive=1`,
+                Fields: ['ID', 'IsActive'],
+                MaxRows: 1,
+                SkipTotalRowCount: true,
+                ResultType: 'simple',
+            },
+            contextUser
+        );
+        return Boolean(
+            res.Success &&
+                Array.isArray(res.Results) &&
+                res.Results.length > 0 &&
+                res.Results[0].IsActive !== false
+        );
+    }
+
     private resolveSenderAgent(
         params: RunActionParams
     ): { agent: (typeof AIEngine.Instance.Agents)[number] } | { errorResult: ActionResultSimple } {
@@ -221,7 +305,32 @@ export class SendInterAgentRequestAction extends BaseAction {
 
         let agent: (typeof AIEngine.Instance.Agents)[number] | undefined;
         let requestedLabel: string;
-        if (rawAgentName) {
+        if (contextAgentId) {
+            requestedLabel = contextAgentId;
+            agent = AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, contextAgentId));
+            if (agent) {
+                if (rawAgentId && !UUIDsEqual(rawAgentId, agent.ID)) {
+                    return {
+                        errorResult: {
+                            Success: false,
+                            ResultCode: 'PERMISSION_DENIED',
+                            Message: `Sender agent cannot spoof AgentID "${rawAgentId}" while running as "${agent.Name}".`,
+                            Params: params.Params,
+                        },
+                    };
+                }
+                if (rawAgentName && rawAgentName.trim().toLowerCase() !== agent.Name.trim().toLowerCase()) {
+                    return {
+                        errorResult: {
+                            Success: false,
+                            ResultCode: 'PERMISSION_DENIED',
+                            Message: `Sender agent cannot spoof AgentName "${rawAgentName}" while running as "${agent.Name}".`,
+                            Params: params.Params,
+                        },
+                    };
+                }
+            }
+        } else if (rawAgentName) {
             requestedLabel = rawAgentName;
             agent = AIEngine.Instance.Agents.find(
                 (a) => a.Name.trim().toLowerCase() === rawAgentName.trim().toLowerCase()
@@ -230,14 +339,11 @@ export class SendInterAgentRequestAction extends BaseAction {
             const byId = rawAgentId
                 ? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, rawAgentId))
                 : undefined;
-            const byContext = contextAgentId
-                ? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, contextAgentId))
-                : undefined;
-            const defaultCos = !contextAgentId
-                ? AIEngine.Instance.Agents.find((a) => a.Name.trim().toLowerCase() === 'chief of staff')
-                : undefined;
-            agent = byId ?? byContext ?? defaultCos;
-            requestedLabel = rawAgentId ?? contextAgentId ?? 'Chief of Staff';
+            const defaultCos = AIEngine.Instance.Agents.find(
+                (a) => a.Name.trim().toLowerCase() === 'chief of staff'
+            );
+            agent = byId ?? defaultCos;
+            requestedLabel = rawAgentId ?? 'Chief of Staff';
         }
 
         if (!agent) {

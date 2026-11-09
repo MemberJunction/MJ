@@ -30,7 +30,7 @@ import { EscapeSQLString, NormalizeUUID, RegisterClass, RequiresSubclass, UUIDsE
  * as `'Superseded'` when `targetRecord.Save()` commits, while any *other* pending
  * suggestions for the same field still transition to `'Superseded'`.
  */
-const IN_FLIGHT_ACCEPTED_SUGGESTION_IDS = new Set<string>();
+const IN_FLIGHT_ACCEPTED_SUGGESTION_COUNTS = new Map<string, number>();
 
 /**
  * Suggestion IDs currently being marked `'Superseded'` to prevent re-entrant loops.
@@ -41,7 +41,26 @@ export function IsSuggestionAcceptInFlight(suggestionId: string | null | undefin
     if (!suggestionId) {
         return false;
     }
-    return IN_FLIGHT_ACCEPTED_SUGGESTION_IDS.has(NormalizeUUID(suggestionId));
+    return (IN_FLIGHT_ACCEPTED_SUGGESTION_COUNTS.get(NormalizeUUID(suggestionId)) ?? 0) > 0;
+}
+
+export function BeginSuggestionAcceptInFlight(suggestionId: string | null | undefined): void {
+    if (suggestionId) {
+        const key = NormalizeUUID(suggestionId);
+        IN_FLIGHT_ACCEPTED_SUGGESTION_COUNTS.set(key, (IN_FLIGHT_ACCEPTED_SUGGESTION_COUNTS.get(key) ?? 0) + 1);
+    }
+}
+
+export function EndSuggestionAcceptInFlight(suggestionId: string | null | undefined): void {
+    if (suggestionId) {
+        const key = NormalizeUUID(suggestionId);
+        const next = (IN_FLIGHT_ACCEPTED_SUGGESTION_COUNTS.get(key) ?? 0) - 1;
+        if (next <= 0) {
+            IN_FLIGHT_ACCEPTED_SUGGESTION_COUNTS.delete(key);
+        } else {
+            IN_FLIGHT_ACCEPTED_SUGGESTION_COUNTS.set(key, next);
+        }
+    }
 }
 
 export function IsSuggestionSupersedeInFlight(suggestionId: string | null | undefined): boolean {
@@ -94,6 +113,10 @@ export abstract class CommentTypeDriver extends EntitySubtypeDriverBase {
     }
 
     public async OnReject(_context: CommentDispositionContext): Promise<void> {
+        // Default no-op
+    }
+
+    public async OnSupersede(_context: CommentDispositionContext): Promise<void> {
         // Default no-op
     }
 
@@ -170,7 +193,12 @@ function coerceSuggestedValueForField(
         case EntityFieldTSType.Number: {
             const trimmed = rawSuggestedValue.trim();
             if (trimmed.length === 0) {
-                return fieldInfo.AllowsNull ? null : NaN;
+                if (fieldInfo.AllowsNull) {
+                    return null;
+                }
+                throw new Error(
+                    `Empty numeric SuggestedValue is not allowed for non-nullable field '${fieldInfo.Name}'.`
+                );
             }
             const parsed = Number(trimmed);
             if (!Number.isFinite(parsed)) {
@@ -392,10 +420,7 @@ export class FieldSuggestionCommentDriver extends CommentTypeDriver {
         }
         recordField.Value = coercedValue;
 
-        const normSuggestionId = suggestion.ID ? NormalizeUUID(suggestion.ID) : '';
-        if (normSuggestionId) {
-            IN_FLIGHT_ACCEPTED_SUGGESTION_IDS.add(normSuggestionId);
-        }
+        BeginSuggestionAcceptInFlight(suggestion.ID);
         try {
             const savedTarget = await targetRecord.Save();
             if (!savedTarget) {
@@ -406,9 +431,7 @@ export class FieldSuggestionCommentDriver extends CommentTypeDriver {
                 throw new Error(detail);
             }
         } finally {
-            if (normSuggestionId) {
-                IN_FLIGHT_ACCEPTED_SUGGESTION_IDS.delete(normSuggestionId);
-            }
+            EndSuggestionAcceptInFlight(suggestion.ID);
         }
 
         suggestion.IsResolved = true;
@@ -470,6 +493,82 @@ export class FieldSuggestionCommentDriver extends CommentTypeDriver {
         suggestion.IsResolved = true;
         suggestion.ResolvedByUserID = user.ID;
         suggestion.ResolvedAt = new Date();
+    }
+
+    public override async OnSupersede(context: CommentDispositionContext): Promise<void> {
+        const suggestion = context.ExtensionEntity as MJFieldSuggestionEntity;
+        const provider = context.Provider;
+        const user = context.ContextUser;
+        if (!user) {
+            throw new Error('Superseding a field suggestion requires an authenticated user context.');
+        }
+
+        const isSystem = WellKnownUserSource.Instance.IsSystemUser(user);
+        const inFlightHook = IsSuggestionSupersedeInFlight(suggestion.ID);
+        if (!isSystem && !inFlightHook) {
+            const isAuthor = Boolean(suggestion.UserID && UUIDsEqual(user.ID, suggestion.UserID));
+            const linkedEntityId = suggestion.LinkedEntityID;
+            const linkedRecordId = suggestion.LinkedRecordID;
+            const rawAnchorKey = suggestion.AnchorKey?.trim() ?? '';
+            const targetEntityInfo = resolveEntityInfoById(provider, linkedEntityId);
+
+            if (isAuthor) {
+                if (provider.ProviderType === 'Database' && linkedEntityId && linkedRecordId) {
+                    const readAccess = await UserCanReadLinkedRecord(
+                        provider,
+                        user,
+                        linkedEntityId,
+                        linkedRecordId
+                    );
+                    if (!readAccess.Allowed) {
+                        throw new Error(readAccess.Reason ?? 'You do not have access to the target record.');
+                    }
+                }
+            } else if (targetEntityInfo) {
+                if (!targetEntityInfo.AllowUpdateAPI) {
+                    throw new Error(`Updates are disabled on entity '${targetEntityInfo.DisplayNameOrName}'.`);
+                }
+                if (!targetEntityInfo.CheckPermissions(user, EntityPermissionType.Update, false)) {
+                    throw new Error(
+                        `You do not have Update permission on '${targetEntityInfo.DisplayNameOrName}' to supersede field suggestions.`
+                    );
+                }
+                if (rawAnchorKey) {
+                    const targetField = targetEntityInfo.Fields.find(
+                        (f) => f.Name.toLowerCase() === rawAnchorKey.toLowerCase()
+                    );
+                    if (targetField && (targetField.ReadOnly || !targetField.AllowUpdateAPI)) {
+                        throw new Error(`Field '${targetField.DisplayNameOrName}' is read-only.`);
+                    }
+                    if (!targetEntityInfo.IsFieldUpdatableByUser(rawAnchorKey, user)) {
+                        throw new Error(
+                            `You do not have permission to update field '${rawAnchorKey}' and cannot supersede suggestions on it.`
+                        );
+                    }
+                }
+                if (provider.ProviderType === 'Database' && linkedEntityId && linkedRecordId) {
+                    const readAccess = await UserCanReadLinkedRecord(
+                        provider,
+                        user,
+                        linkedEntityId,
+                        linkedRecordId
+                    );
+                    if (!readAccess.Allowed) {
+                        throw new Error(readAccess.Reason ?? 'You do not have access to the target record.');
+                    }
+                }
+            } else {
+                throw new Error('Target entity was not found while checking permission to supersede suggestion.');
+            }
+        }
+
+        suggestion.IsResolved = true;
+        if (!suggestion.ResolvedByUserID) {
+            suggestion.ResolvedByUserID = user.ID;
+        }
+        if (!suggestion.ResolvedAt) {
+            suggestion.ResolvedAt = new Date();
+        }
     }
 
     public override async OnRecordChanged(context: CommentRecordChangedContext): Promise<void> {

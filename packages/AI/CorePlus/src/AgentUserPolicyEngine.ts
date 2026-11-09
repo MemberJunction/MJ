@@ -21,6 +21,7 @@ import {
 } from '@memberjunction/core-entities';
 import {
     BaseSingleton,
+    EscapeSQLString,
     MJEvent,
     MJEventType,
     MJGlobal,
@@ -33,6 +34,45 @@ import { Subscription } from 'rxjs';
 
 /** The entity whose rows this engine caches. */
 const POLICY_ENTITY_NAME = 'MJ: AI Agent User Policies';
+
+/**
+ * Discriminated result of looking up a `(agentId, userId)` policy so security-critical
+ * callers can distinguish "no policy row configured" from "policy lookup failed" and fail closed.
+ */
+export type PolicyLookupResult =
+    | { status: 'found'; policy: MJAIAgentUserPolicyEntity }
+    | { status: 'none'; policy: null }
+    | { status: 'error'; policy: null; errorMessage: string };
+
+/**
+ * Options for {@link AgentUserPolicyEngine.ResolvePolicyForAgentAndUser}.
+ */
+export interface ResolvePolicyLookupOptions {
+    forceRefresh?: boolean;
+    provider?: IMetadataProvider;
+}
+
+/**
+ * Immutable snapshot of permission-bearing fields on {@link MJAIAgentUserPolicyEntity},
+ * captured before mutating an existing entity instance so self-modification checks can
+ * detect any widening attempt.
+ */
+export interface AgentPolicyBaselineSnapshot {
+    Status: MJAIAgentUserPolicyEntity['Status'];
+    CoordinationMode: MJAIAgentUserPolicyEntity['CoordinationMode'];
+    AllowInterAgentCoordination: MJAIAgentUserPolicyEntity['AllowInterAgentCoordination'];
+    DefaultDataAccessMode: MJAIAgentUserPolicyEntity['DefaultDataAccessMode'];
+    EmailChannelMode: MJAIAgentUserPolicyEntity['EmailChannelMode'];
+    PhoneChannelMode: MJAIAgentUserPolicyEntity['PhoneChannelMode'];
+    MessagingChannelMode: MJAIAgentUserPolicyEntity['MessagingChannelMode'];
+    CalendarChannelMode: MJAIAgentUserPolicyEntity['CalendarChannelMode'];
+    RequireApprovalForExternalComms: MJAIAgentUserPolicyEntity['RequireApprovalForExternalComms'];
+    RequireApprovalForFinancials: MJAIAgentUserPolicyEntity['RequireApprovalForFinancials'];
+    RequireApprovalForDestructiveActions: MJAIAgentUserPolicyEntity['RequireApprovalForDestructiveActions'];
+    AutoApproveAmountThreshold: MJAIAgentUserPolicyEntity['AutoApproveAmountThreshold'];
+    EntityAccessRules: MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule[];
+    ActionPolicyRules: MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule[];
+}
 
 /**
  * Type of a time window rule derived from `MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule`.
@@ -233,24 +273,29 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
     }
 
     /**
-     * Load the active/configured `MJAIAgentUserPolicyEntity` for `(agentId, userId)`.
-     * Returns `null` when no policy row has been created yet for this user and agent.
+     * Load the active/configured `MJAIAgentUserPolicyEntity` for `(agentId, userId)` with an
+     * explicit tri-state outcome (`found` | `none` | `error`).
+     *
+     * Security-critical callers MUST check `status === 'error'` and fail closed rather than
+     * treating a database or RunView failure as "no narrowing policy configured".
      */
-    public async GetPolicyForAgentAndUser(
+    public async ResolvePolicyForAgentAndUser(
         agentId: string,
         userId: string,
         contextUser: UserInfo,
-        forceRefresh: boolean = false
-    ): Promise<MJAIAgentUserPolicyEntity | null> {
+        options?: ResolvePolicyLookupOptions
+    ): Promise<PolicyLookupResult> {
+        const forceRefresh = options?.forceRefresh === true;
         const key = this.buildCacheKey(agentId, userId);
         if (!forceRefresh && this.policyCache.has(key)) {
-            return this.policyCache.get(key) ?? null;
+            const cached = this.policyCache.get(key) ?? null;
+            return cached ? { status: 'found', policy: cached } : { status: 'none', policy: null };
         }
 
         try {
-            const rv = new RunView();
-            const safeAgentId = agentId.replace(/'/g, "''");
-            const safeUserId = userId.replace(/'/g, "''");
+            const rv = options?.provider ? RunView.FromMetadataProvider(options.provider) : new RunView();
+            const safeAgentId = EscapeSQLString(agentId);
+            const safeUserId = EscapeSQLString(userId);
             const result = await rv.RunView<MJAIAgentUserPolicyEntity>(
                 {
                     EntityName: 'MJ: AI Agent User Policies',
@@ -261,19 +306,224 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
                 },
                 contextUser
             );
-            if (result.Success && result.Results.length > 0) {
+            if (!result.Success) {
+                const errMessage = result.ErrorMessage || 'RunView returned Success=false loading MJ: AI Agent User Policies';
+                LogError(
+                    `AgentUserPolicyEngine.ResolvePolicyForAgentAndUser failed for agent=${agentId}, user=${userId}: ${errMessage}`
+                );
+                return { status: 'error', policy: null, errorMessage: errMessage };
+            }
+            if (result.Results.length > 0) {
                 const policy = result.Results[0];
                 this.policyCache.set(key, policy);
-                return policy;
+                return { status: 'found', policy };
             }
+            return { status: 'none', policy: null };
         } catch (error) {
+            const errMessage = error instanceof Error ? error.message : String(error);
             LogError(
-                `AgentUserPolicyEngine.GetPolicyForAgentAndUser failed for agent=${agentId}, user=${userId}: ${
-                    error instanceof Error ? error.message : String(error)
-                }`
+                `AgentUserPolicyEngine.ResolvePolicyForAgentAndUser threw for agent=${agentId}, user=${userId}: ${errMessage}`
+            );
+            return { status: 'error', policy: null, errorMessage: errMessage };
+        }
+    }
+
+    /**
+     * Load the active/configured `MJAIAgentUserPolicyEntity` for `(agentId, userId)`.
+     * Returns `null` when no policy row has been created yet or when lookup fails.
+     * Prefer {@link ResolvePolicyForAgentAndUser} in authorization paths so lookup errors fail closed.
+     */
+    public async GetPolicyForAgentAndUser(
+        agentId: string,
+        userId: string,
+        contextUser: UserInfo,
+        forceRefresh: boolean = false
+    ): Promise<MJAIAgentUserPolicyEntity | null> {
+        const lookup = await this.ResolvePolicyForAgentAndUser(agentId, userId, contextUser, { forceRefresh });
+        return lookup.policy;
+    }
+
+    /**
+     * Capture an immutable snapshot of permission-bearing fields on a policy entity before
+     * in-place mutation so {@link DetectAgentPolicyWidening} can compare against the baseline.
+     */
+    public SnapshotPolicy(policy: MJAIAgentUserPolicyEntity): AgentPolicyBaselineSnapshot {
+        return {
+            Status: policy.Status ?? 'Active',
+            CoordinationMode: policy.CoordinationMode ?? 'Observer',
+            AllowInterAgentCoordination: policy.AllowInterAgentCoordination ?? true,
+            DefaultDataAccessMode: policy.DefaultDataAccessMode ?? 'UserCeiling',
+            EmailChannelMode: policy.EmailChannelMode ?? 'DraftOnly',
+            PhoneChannelMode: policy.PhoneChannelMode ?? 'InboundOnly',
+            MessagingChannelMode: policy.MessagingChannelMode ?? 'Enabled',
+            CalendarChannelMode: policy.CalendarChannelMode ?? 'ProposeWithApproval',
+            RequireApprovalForExternalComms: policy.RequireApprovalForExternalComms !== false,
+            RequireApprovalForFinancials: policy.RequireApprovalForFinancials !== false,
+            RequireApprovalForDestructiveActions: policy.RequireApprovalForDestructiveActions !== false,
+            AutoApproveAmountThreshold: policy.AutoApproveAmountThreshold ?? null,
+            EntityAccessRules: JSON.parse(JSON.stringify(this.resolveEntityRules(policy))) as MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule[],
+            ActionPolicyRules: JSON.parse(JSON.stringify(this.resolveActionRules(policy))) as MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule[],
+        };
+    }
+
+    /**
+     * Compare a proposed `MJAIAgentUserPolicyEntity` against `baseline` (or conservative self-onboarding
+     * defaults when `baseline === null`) and return a list of human-readable policy-widening violations.
+     *
+     * Used when an agent invokes `Configure Agent User Policy` on its own behalf so a prompt-injected
+     * agent can narrow or personalize its policy during onboarding, but can NEVER loosen approval gates,
+     * drop/weaken entity/action rules, unpause itself, or escalate channel/coordination modes.
+     */
+    public DetectAgentPolicyWidening(
+        baseline: AgentPolicyBaselineSnapshot | null,
+        proposed: MJAIAgentUserPolicyEntity
+    ): string[] {
+        const effectiveBaseline: AgentPolicyBaselineSnapshot = baseline ?? {
+            Status: 'Active',
+            CoordinationMode: 'Observer',
+            AllowInterAgentCoordination: true,
+            DefaultDataAccessMode: 'UserCeiling',
+            EmailChannelMode: 'DraftOnly',
+            PhoneChannelMode: 'InboundOnly',
+            MessagingChannelMode: 'Enabled',
+            CalendarChannelMode: 'ProposeWithApproval',
+            RequireApprovalForExternalComms: true,
+            RequireApprovalForFinancials: true,
+            RequireApprovalForDestructiveActions: true,
+            AutoApproveAmountThreshold: null,
+            EntityAccessRules: [],
+            ActionPolicyRules: [],
+        };
+
+        const violations: string[] = [];
+
+        const statusRank: Record<MJAIAgentUserPolicyEntity['Status'], number> = {
+            Disabled: 0,
+            Paused: 1,
+            Active: 2,
+        };
+        const nextStatus = proposed.Status ?? 'Active';
+        if (statusRank[nextStatus] > statusRank[effectiveBaseline.Status]) {
+            violations.push(`Cannot widen Status from '${effectiveBaseline.Status}' to '${nextStatus}'.`);
+        }
+
+        const coordRank: Record<MJAIAgentUserPolicyEntity['CoordinationMode'], number> = {
+            Observer: 0,
+            Coordinator: 1,
+            Autonomous: 2,
+        };
+        const nextCoord = proposed.CoordinationMode ?? 'Observer';
+        if (coordRank[nextCoord] > coordRank[effectiveBaseline.CoordinationMode]) {
+            violations.push(
+                `Cannot widen CoordinationMode from '${effectiveBaseline.CoordinationMode}' to '${nextCoord}'.`
             );
         }
-        return null;
+
+        const nextInterAgent = proposed.AllowInterAgentCoordination ?? true;
+        if (nextInterAgent && !effectiveBaseline.AllowInterAgentCoordination) {
+            violations.push('Cannot enable AllowInterAgentCoordination when disabled in baseline policy.');
+        }
+
+        const dataModeRank: Record<MJAIAgentUserPolicyEntity['DefaultDataAccessMode'], number> = {
+            AllowListOnly: 0,
+            ReadOnly: 1,
+            UserCeiling: 2,
+        };
+        const nextDataMode = proposed.DefaultDataAccessMode ?? 'UserCeiling';
+        if (dataModeRank[nextDataMode] > dataModeRank[effectiveBaseline.DefaultDataAccessMode]) {
+            violations.push(
+                `Cannot widen DefaultDataAccessMode from '${effectiveBaseline.DefaultDataAccessMode}' to '${nextDataMode}'.`
+            );
+        }
+
+        const emailRank: Record<MJAIAgentUserPolicyEntity['EmailChannelMode'], number> = {
+            Disabled: 0,
+            ReadOnly: 1,
+            DraftOnly: 2,
+            SendAsAgent: 3,
+            SendAsUser: 4,
+        };
+        const nextEmail = proposed.EmailChannelMode ?? 'DraftOnly';
+        if (emailRank[nextEmail] > emailRank[effectiveBaseline.EmailChannelMode]) {
+            violations.push(
+                `Cannot widen EmailChannelMode from '${effectiveBaseline.EmailChannelMode}' to '${nextEmail}'.`
+            );
+        }
+
+        const phoneRank: Record<MJAIAgentUserPolicyEntity['PhoneChannelMode'], number> = {
+            Disabled: 0,
+            InboundOnly: 1,
+            OutboundWithApproval: 2,
+            OutboundAutonomous: 3,
+        };
+        const nextPhone = proposed.PhoneChannelMode ?? 'InboundOnly';
+        if (phoneRank[nextPhone] > phoneRank[effectiveBaseline.PhoneChannelMode]) {
+            violations.push(
+                `Cannot widen PhoneChannelMode from '${effectiveBaseline.PhoneChannelMode}' to '${nextPhone}'.`
+            );
+        }
+
+        const calendarRank: Record<MJAIAgentUserPolicyEntity['CalendarChannelMode'], number> = {
+            Disabled: 0,
+            ReadOnly: 1,
+            ProposeWithApproval: 2,
+            Autonomous: 3,
+        };
+        const nextCalendar = proposed.CalendarChannelMode ?? 'ProposeWithApproval';
+        if (calendarRank[nextCalendar] > calendarRank[effectiveBaseline.CalendarChannelMode]) {
+            violations.push(
+                `Cannot widen CalendarChannelMode from '${effectiveBaseline.CalendarChannelMode}' to '${nextCalendar}'.`
+            );
+        }
+
+        const msgRank: Record<MJAIAgentUserPolicyEntity['MessagingChannelMode'], number> = {
+            Disabled: 0,
+            Enabled: 1,
+        };
+        const nextMsg = proposed.MessagingChannelMode ?? 'Enabled';
+        if (msgRank[nextMsg] > msgRank[effectiveBaseline.MessagingChannelMode]) {
+            violations.push(
+                `Cannot widen MessagingChannelMode from '${effectiveBaseline.MessagingChannelMode}' to '${nextMsg}'.`
+            );
+        }
+
+        if (effectiveBaseline.RequireApprovalForExternalComms && proposed.RequireApprovalForExternalComms === false) {
+            violations.push('Cannot disable RequireApprovalForExternalComms.');
+        }
+        if (effectiveBaseline.RequireApprovalForFinancials && proposed.RequireApprovalForFinancials === false) {
+            violations.push('Cannot disable RequireApprovalForFinancials.');
+        }
+        if (
+            effectiveBaseline.RequireApprovalForDestructiveActions &&
+            proposed.RequireApprovalForDestructiveActions === false
+        ) {
+            violations.push('Cannot disable RequireApprovalForDestructiveActions.');
+        }
+
+        const nextThreshold = proposed.AutoApproveAmountThreshold ?? null;
+        if (nextThreshold != null) {
+            if (effectiveBaseline.AutoApproveAmountThreshold == null) {
+                violations.push(`Cannot set AutoApproveAmountThreshold (${nextThreshold}) when baseline has none.`);
+            } else if (nextThreshold > effectiveBaseline.AutoApproveAmountThreshold) {
+                violations.push(
+                    `Cannot increase AutoApproveAmountThreshold from ${effectiveBaseline.AutoApproveAmountThreshold} to ${nextThreshold}.`
+                );
+            }
+        }
+
+        this.detectEntityRuleWidening(
+            effectiveBaseline.EntityAccessRules,
+            this.resolveEntityRules(proposed),
+            effectiveBaseline.DefaultDataAccessMode,
+            violations
+        );
+        this.detectActionRuleWidening(
+            effectiveBaseline.ActionPolicyRules,
+            this.resolveActionRules(proposed),
+            violations
+        );
+
+        return violations;
     }
 
     /**
@@ -929,6 +1179,161 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
         return regex.test(candidate.trim());
     }
 
+    private detectEntityRuleWidening(
+        baselineRules: MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule[],
+        proposedRules: MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule[],
+        baselineDefaultMode: MJAIAgentUserPolicyEntity['DefaultDataAccessMode'],
+        violations: string[]
+    ): void {
+        const accessRank: Record<MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule['access'], number> = {
+            Deny: 0,
+            ReadOnly: 1,
+            RequireApprovalOnWrite: 2,
+            ReadWrite: 3,
+        };
+        const normalizePattern = (p: string): string => p.trim().toLowerCase();
+
+        for (const baseRule of baselineRules) {
+            const key = normalizePattern(baseRule.entityPattern);
+            const match = proposedRules.find((r) => normalizePattern(r.entityPattern) === key);
+            if (!match) {
+                violations.push(
+                    `Cannot remove existing EntityAccessRule for pattern '${baseRule.entityPattern}'.`
+                );
+                continue;
+            }
+            if (accessRank[match.access] > accessRank[baseRule.access]) {
+                violations.push(
+                    `Cannot widen EntityAccessRule '${baseRule.entityPattern}' from '${baseRule.access}' to '${match.access}'.`
+                );
+            }
+            if (
+                baseRule.rlsNarrowing?.rowLevelSecurityFilterId &&
+                match.rlsNarrowing?.rowLevelSecurityFilterId !== baseRule.rlsNarrowing.rowLevelSecurityFilterId
+            ) {
+                violations.push(
+                    `Cannot drop or replace rowLevelSecurityFilterId on EntityAccessRule '${baseRule.entityPattern}'.`
+                );
+            }
+            if (
+                baseRule.rlsNarrowing?.whereClause &&
+                (match.rlsNarrowing?.whereClause ?? '').trim() !== baseRule.rlsNarrowing.whereClause.trim()
+            ) {
+                violations.push(
+                    `Cannot drop or alter RLS whereClause on EntityAccessRule '${baseRule.entityPattern}'.`
+                );
+            }
+            if (
+                baseRule.rlsNarrowing?.recordConditionExpression &&
+                (match.rlsNarrowing?.recordConditionExpression ?? '').trim() !==
+                    baseRule.rlsNarrowing.recordConditionExpression.trim()
+            ) {
+                violations.push(
+                    `Cannot drop or alter RLS recordConditionExpression on EntityAccessRule '${baseRule.entityPattern}'.`
+                );
+            }
+
+            const nextDenied = new Set((match.flsNarrowing?.deniedFields ?? []).map(normalizePattern));
+            const nextReadOnly = new Set((match.flsNarrowing?.readOnlyFields ?? []).map(normalizePattern));
+            const nextReqApproval = new Set(
+                (match.flsNarrowing?.requireApprovalFields ?? []).map(normalizePattern)
+            );
+
+            for (const f of baseRule.flsNarrowing?.deniedFields ?? []) {
+                if (!nextDenied.has(normalizePattern(f))) {
+                    violations.push(
+                        `Cannot remove denied field '${f}' from EntityAccessRule '${baseRule.entityPattern}'.`
+                    );
+                }
+            }
+            for (const f of baseRule.flsNarrowing?.readOnlyFields ?? []) {
+                const k = normalizePattern(f);
+                if (!nextReadOnly.has(k) && !nextDenied.has(k)) {
+                    violations.push(
+                        `Cannot remove read-only field '${f}' from EntityAccessRule '${baseRule.entityPattern}'.`
+                    );
+                }
+            }
+            for (const f of baseRule.flsNarrowing?.requireApprovalFields ?? []) {
+                const k = normalizePattern(f);
+                if (!nextReqApproval.has(k) && !nextReadOnly.has(k) && !nextDenied.has(k)) {
+                    violations.push(
+                        `Cannot remove require-approval field '${f}' from EntityAccessRule '${baseRule.entityPattern}'.`
+                    );
+                }
+            }
+
+            if (
+                baseRule.timeWindows &&
+                baseRule.timeWindows.length > 0 &&
+                JSON.stringify(match.timeWindows ?? []) !== JSON.stringify(baseRule.timeWindows)
+            ) {
+                violations.push(
+                    `Cannot drop or alter timeWindows on EntityAccessRule '${baseRule.entityPattern}'.`
+                );
+            }
+        }
+
+        if (baselineDefaultMode === 'AllowListOnly') {
+            const baselineKeys = new Set(baselineRules.map((r) => normalizePattern(r.entityPattern)));
+            for (const propRule of proposedRules) {
+                if (!baselineKeys.has(normalizePattern(propRule.entityPattern)) && propRule.access !== 'Deny') {
+                    violations.push(
+                        `Cannot add non-Deny EntityAccessRule '${propRule.entityPattern}' while DefaultDataAccessMode is AllowListOnly.`
+                    );
+                }
+            }
+        }
+    }
+
+    private detectActionRuleWidening(
+        baselineRules: MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule[],
+        proposedRules: MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule[],
+        violations: string[]
+    ): void {
+        const policyRank: Record<MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule['policy'], number> = {
+            Deny: 0,
+            RequireApproval: 1,
+            Allow: 2,
+        };
+        const ruleKey = (r: MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule): string =>
+            `${r.actionPattern.trim().toLowerCase()}::${(r.conditionExpression ?? '').trim()}`;
+
+        for (const baseRule of baselineRules) {
+            const key = ruleKey(baseRule);
+            const match = proposedRules.find((r) => ruleKey(r) === key);
+            if (!match) {
+                violations.push(
+                    `Cannot remove existing ActionPolicyRule for pattern '${baseRule.actionPattern}'.`
+                );
+                continue;
+            }
+            if (policyRank[match.policy] > policyRank[baseRule.policy]) {
+                violations.push(
+                    `Cannot widen ActionPolicyRule '${baseRule.actionPattern}' from '${baseRule.policy}' to '${match.policy}'.`
+                );
+            }
+            if (
+                baseRule.timeWindows &&
+                baseRule.timeWindows.length > 0 &&
+                JSON.stringify(match.timeWindows ?? []) !== JSON.stringify(baseRule.timeWindows)
+            ) {
+                violations.push(
+                    `Cannot drop or alter timeWindows on ActionPolicyRule '${baseRule.actionPattern}'.`
+                );
+            }
+        }
+
+        const baselineKeys = new Set(baselineRules.map(ruleKey));
+        for (const propRule of proposedRules) {
+            if (!baselineKeys.has(ruleKey(propRule)) && propRule.policy === 'Allow') {
+                violations.push(
+                    `Cannot add explicit Allow ActionPolicyRule '${propRule.actionPattern}' during self-modification.`
+                );
+            }
+        }
+    }
+
     /**
      * Validate a SQL `whereClause` via `SQLExpressionValidator` and interpolate safe
      * `{{UserID}}` and `{{UserEmail}}` tokens.
@@ -937,8 +1342,8 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
         rawWhereClause: string,
         user: UserInfo
     ): { valid: boolean; sql: string | null; error?: string } {
-        const safeUserId = (user.ID ?? '').replace(/'/g, "''");
-        const safeEmail = (user.Email ?? '').replace(/'/g, "''");
+        const safeUserId = EscapeSQLString(user.ID);
+        const safeEmail = EscapeSQLString(user.Email);
         const interpolated = rawWhereClause
             .replace(/\{\{\s*UserID\s*\}\}/gi, () => `'${safeUserId}'`)
             .replace(/\{\{\s*UserEmail\s*\}\}/gi, () => `'${safeEmail}'`);

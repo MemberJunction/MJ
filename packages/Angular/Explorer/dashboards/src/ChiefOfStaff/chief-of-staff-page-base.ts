@@ -16,6 +16,7 @@ import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphq
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { AgentRequestPanelResult } from '@memberjunction/ng-agent-requests';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
@@ -72,6 +73,7 @@ export interface ChiefOfStaffClientTool {
 export abstract class BaseChiefOfStaffPage extends BaseResourceComponent implements OnInit, OnDestroy {
     protected cdr = inject(ChangeDetectorRef);
     protected appManager = inject(ApplicationManager);
+    protected confirmService = inject(MJConfirmService, { optional: true });
     protected override destroy$ = new Subject<void>();
 
     /** Which page this component is. */
@@ -113,6 +115,7 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
     protected chiefOfStaffAgentId: string | null = null;
     private requestedAgentQueryParam: string | null = null;
     private agentQueryParamInitialized = false;
+    private _loadGeneration = 0;
 
     public get SelectedAgentDisplayName(): string {
         return AgentDisplayName(this.DraftPolicy, this.SelectedAgentName ?? CHIEF_OF_STAFF_AGENT_NAME);
@@ -181,12 +184,8 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
         const resolved = nextAgent
             ? ResolveSelectableAgent(this.AvailableAgents, nextAgent)
             : ResolveSelectableAgent(this.AvailableAgents, CHIEF_OF_STAFF_AGENT_NAME);
-        if (resolved && !UUIDsEqual(resolved.ID, this.SelectedAgentID)) {
-            this.SelectedAgentID = resolved.ID;
-            this.SelectedAgentName = resolved.Name;
-            this.chiefOfStaffAgentId = resolved.ID;
-            this.requestedAgentQueryParam = null;
-            void this.LoadChiefOfStaffData();
+        if (resolved && !UUIDsEqual(resolved.ID, this.chiefOfStaffAgentId ?? this.SelectedAgentID)) {
+            void this.requestAgentSwitch(resolved, false);
         }
     }
 
@@ -194,33 +193,77 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
         if (!this.SelectedAgentID) {
             return;
         }
-        this.applySelectedAgentId(this.SelectedAgentID, true);
+        void this.applySelectedAgentId(this.SelectedAgentID, true);
     }
 
     public OnSelectedAgentChange(agentId: string): void {
-        if (!agentId || UUIDsEqual(agentId, this.SelectedAgentID)) {
+        if (!agentId || UUIDsEqual(agentId, this.chiefOfStaffAgentId ?? this.SelectedAgentID)) {
             return;
         }
-        this.applySelectedAgentId(agentId, false);
+        void this.applySelectedAgentId(agentId, false);
     }
 
-    private applySelectedAgentId(agentId: string, allowSameId: boolean): void {
+    private async applySelectedAgentId(agentId: string, allowSameId: boolean): Promise<boolean> {
         if (!allowSameId && UUIDsEqual(agentId, this.SelectedAgentID)) {
-            return;
+            return false;
         }
         const match = this.AvailableAgents.find((a) => UUIDsEqual(a.ID, agentId));
         if (!match) {
-            return;
+            return false;
         }
         if (UUIDsEqual(match.ID, this.chiefOfStaffAgentId)) {
-            return;
+            return false;
         }
-        this.SelectedAgentID = match.ID;
-        this.SelectedAgentName = match.Name;
-        this.chiefOfStaffAgentId = match.ID;
+        return this.requestAgentSwitch(match, true);
+    }
+
+    private async requestAgentSwitch(
+        targetAgent: SelectableGovernanceAgent,
+        syncQueryParam: boolean,
+    ): Promise<boolean> {
+        const prevId = this.chiefOfStaffAgentId;
+        const prevName = this.SelectedAgentName ?? CHIEF_OF_STAFF_AGENT_NAME;
+
+        if (this.IsPageSaveInFlight()) {
+            this.SelectedAgentID = prevId;
+            if (!syncQueryParam) {
+                this.syncSelectedAgentQueryParam();
+            }
+            this.cdr.markForCheck();
+            return false;
+        }
+
+        if (this.HasUnsavedPageEdits()) {
+            const confirmed = this.confirmService
+                ? await this.confirmService.Confirm({
+                      title: 'Discard changes?',
+                      message: `Leave "${prevName}" without saving?`,
+                      detail: 'Your unsaved governance policy changes will be lost.',
+                      type: 'warning',
+                      confirmText: 'Discard changes',
+                      cancelText: 'Keep editing',
+                  })
+                : true;
+            if (!confirmed) {
+                this.SelectedAgentID = prevId;
+                if (!syncQueryParam) {
+                    this.syncSelectedAgentQueryParam();
+                }
+                this.cdr.markForCheck();
+                return false;
+            }
+            this.ResetUnsavedPageEdits();
+        }
+
+        this.SelectedAgentID = targetAgent.ID;
+        this.SelectedAgentName = targetAgent.Name;
+        this.chiefOfStaffAgentId = targetAgent.ID;
         this.requestedAgentQueryParam = null;
-        this.syncSelectedAgentQueryParam();
-        void this.LoadChiefOfStaffData();
+        if (syncQueryParam) {
+            this.syncSelectedAgentQueryParam();
+        }
+        await this.LoadChiefOfStaffData();
+        return true;
     }
 
     protected syncSelectedAgentQueryParam(): void {
@@ -264,6 +307,21 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
         return [];
     }
 
+    /** True when the page holds unsaved user edits that would be clobbered by an agent switch or live reload. */
+    protected HasUnsavedPageEdits(): boolean {
+        return false;
+    }
+
+    /** True when the page is actively persisting user edits. */
+    protected IsPageSaveInFlight(): boolean {
+        return false;
+    }
+
+    /** Clears unsaved-edit state after the user confirms discarding changes. */
+    protected ResetUnsavedPageEdits(): void {
+        // default: nothing
+    }
+
     /** A change arrived while the tab was detached; reload once when it is shown again. */
     private liveReloadPending = false;
 
@@ -280,7 +338,7 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
             debounceTime(750),
             takeUntil(this.destroy$),
         ).subscribe(() => {
-            if (this.navigationService.IsResourceDetached(this)) {
+            if (this.navigationService.IsResourceDetached(this) || this.HasUnsavedPageEdits() || this.IsPageSaveInFlight()) {
                 this.liveReloadPending = true;
                 return;
             }
@@ -291,12 +349,16 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
             filter((c) => c === this && this.liveReloadPending),
             takeUntil(this.destroy$),
         ).subscribe(() => {
+            if (this.HasUnsavedPageEdits() || this.IsPageSaveInFlight()) {
+                return;
+            }
             this.liveReloadPending = false;
             void this.LoadChiefOfStaffData();
         });
     }
 
     public async LoadChiefOfStaffData(): Promise<void> {
+        const generation = ++this._loadGeneration;
         this.IsLoading = true;
         this.cdr.markForCheck();
 
@@ -310,6 +372,9 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
             }
 
             const selectedAgent = await this.resolveSelectedAgent();
+            if (generation !== this._loadGeneration) {
+                return;
+            }
             if (!selectedAgent) {
                 this.showBanner('error', `The "${CHIEF_OF_STAFF_AGENT_NAME}" agent is not installed in this environment.`);
                 return;
@@ -343,6 +408,9 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
             ];
 
             const [policyRes, routineRes, requestRes] = await rv.RunViews(viewParams);
+            if (generation !== this._loadGeneration) {
+                return;
+            }
 
             const policies = policyRes?.Success
                 ? (policyRes.Results as MJAIAgentUserPolicyEntity[])
@@ -362,12 +430,17 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
             this.recalculateMetrics();
             this.OnDataLoaded();
         } catch (err) {
+            if (generation !== this._loadGeneration) {
+                return;
+            }
             const msg = err instanceof Error ? err.message : String(err);
             this.showBanner('error', `Failed to load Chief of Staff data: ${msg}`);
         } finally {
-            this.IsLoading = false;
-            this.publishAgentContext();
-            this.cdr.markForCheck();
+            if (generation === this._loadGeneration) {
+                this.IsLoading = false;
+                this.publishAgentContext();
+                this.cdr.markForCheck();
+            }
         }
     }
 
@@ -860,7 +933,13 @@ export abstract class BaseChiefOfStaffPage extends BaseResourceComponent impleme
                             Error: `No selectable agent matched "${check.value}". Available agents: ${this.AvailableAgents.map((a) => a.Name).join(', ')}`,
                         };
                     }
-                    this.OnSelectedAgentChange(match.ID);
+                    if (!UUIDsEqual(match.ID, this.chiefOfStaffAgentId) && (this.HasUnsavedPageEdits() || this.IsPageSaveInFlight())) {
+                        return {
+                            Success: false,
+                            Error: `Cannot switch governed agent while "${this.SelectedAgentName}" has unsaved governance policy changes. Ask the user to save or reset their changes first.`,
+                        };
+                    }
+                    await this.applySelectedAgentId(match.ID, false);
                     return {
                         Success: true,
                         Data: { SelectedAgentID: match.ID, SelectedAgentName: match.Name },

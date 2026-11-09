@@ -20,7 +20,7 @@
  * @module @memberjunction/ai-agents
  */
 
-import { IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import { BaseSingleton, EscapeSQLString, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
     MJAIAgentRequestEntity,
@@ -233,11 +233,20 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             ? envelope!.workstreamKey?.trim() || 'inter-agent-resolution'
             : 'approval-resolution';
 
-        const policy = await AgentUserPolicyEngine.Instance.GetPolicyForAgentAndUser(
+        const saveUser = this.resolveRoutineSaveUser(targetUserID, contextUser);
+        const policyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
             targetAgentID,
             targetUserID,
-            contextUser
+            saveUser,
+            { provider: metadataProvider }
         );
+        if (policyLookup.status === 'error') {
+            return this.notTriggered(
+                'POLICY_DENIED',
+                `Could not verify target user policy for agent ${targetAgentID}: ${policyLookup.errorMessage}`
+            );
+        }
+        const policy = policyLookup.policy;
         if (policy && (policy.Status === 'Disabled' || policy.Status === 'Paused')) {
             return this.notTriggered(
                 'POLICY_DENIED',
@@ -322,11 +331,20 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             return this.notTriggered('SKIPPED_NOT_APPLICABLE', 'No targetUserID found on InterAgent request.');
         }
 
-        const policy = await AgentUserPolicyEngine.Instance.GetPolicyForAgentAndUser(
+        const saveUser = this.resolveRoutineSaveUser(targetUserID, contextUser);
+        const policyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
             request.AgentID,
             targetUserID,
-            contextUser
+            saveUser,
+            { provider: metadataProvider }
         );
+        if (policyLookup.status === 'error') {
+            return this.notTriggered(
+                'POLICY_DENIED',
+                `Could not verify target user policy for agent ${request.AgentID}: ${policyLookup.errorMessage}`
+            );
+        }
+        const policy = policyLookup.policy;
         if (!policy || policy.Status !== 'Active' || policy.AllowInterAgentCoordination === false) {
             return this.notTriggered(
                 'POLICY_DENIED',
@@ -440,12 +458,19 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
         }
 
         // 4. Enforce user's Chief of Staff / Agent policy in senderUser's context
-        const policy: MJAIAgentUserPolicyEntity | null =
-            await AgentUserPolicyEngine.Instance.GetPolicyForAgentAndUser(
-                identity.AgentID,
-                senderUser.ID,
-                senderUser
+        const policyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
+            identity.AgentID,
+            senderUser.ID,
+            senderUser,
+            { provider: md }
+        );
+        if (policyLookup.status === 'error') {
+            return this.notTriggered(
+                'POLICY_DENIED',
+                `Could not verify policy for ${senderUser.Email} on agent ${identity.AgentID}: ${policyLookup.errorMessage}`
             );
+        }
+        const policy: MJAIAgentUserPolicyEntity | null = policyLookup.policy;
         if (policy) {
             if (policy.Status === 'Disabled' || policy.Status === 'Paused') {
                 return this.notTriggered(
@@ -520,10 +545,33 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             return this.notTriggered('MISSING_REQUIRED_INPUT', 'wakeReason is required to trigger a workstream wake.');
         }
 
+        if (!input.contextUser?.ID) {
+            return this.notTriggered('POLICY_DENIED', 'contextUser is required to trigger a workstream wake.');
+        }
+
+        const isSelfWake = UUIDsEqual(input.contextUser.ID, targetUserID);
+        if (!isSelfWake && !this.isPrivilegedCrossUserWakeCaller(input.contextUser)) {
+            return this.notTriggered(
+                'POLICY_DENIED',
+                `Caller "${input.contextUser.ID}" is not authorized to schedule a cross-user wake for user "${targetUserID}".`
+            );
+        }
+
+        const saveUser = this.resolveRoutineSaveUser(targetUserID, input.contextUser);
+        if (!isSelfWake) {
+            const targetActive = await this.verifyActiveTargetUser(targetUserID, saveUser, md);
+            if (!targetActive) {
+                return this.notTriggered(
+                    'POLICY_DENIED',
+                    `Target user "${targetUserID}" could not be found or is inactive.`
+                );
+            }
+        }
+
         const resolvedAgent = await this.resolveTargetAgentForWorkstream(
             input.targetAgentID,
             input.targetAgentName,
-            input.contextUser,
+            saveUser,
             md
         );
         if (!resolvedAgent) {
@@ -534,13 +582,19 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             );
         }
 
-        const saveUser = this.resolveRoutineSaveUser(targetUserID, input.contextUser);
-        const policy: MJAIAgentUserPolicyEntity | null =
-            await AgentUserPolicyEngine.Instance.GetPolicyForAgentAndUser(
-                resolvedAgent.ID,
-                targetUserID,
-                saveUser
+        const policyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
+            resolvedAgent.ID,
+            targetUserID,
+            saveUser,
+            { provider: md }
+        );
+        if (policyLookup.status === 'error') {
+            return this.notTriggered(
+                'POLICY_DENIED',
+                `Could not verify target user policy for agent "${resolvedAgent.Name ?? resolvedAgent.ID}": ${policyLookup.errorMessage}`
             );
+        }
+        const policy: MJAIAgentUserPolicyEntity | null = policyLookup.policy;
         if (policy && (policy.Status === 'Disabled' || policy.Status === 'Paused')) {
             return this.notTriggered(
                 'POLICY_DENIED',
@@ -549,14 +603,16 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
         }
 
         const baseResumeState: AgentWakeResumeState = input.resumeState ?? {};
+        const canonicalTriggerType =
+            typeof baseResumeState['triggerType'] === 'string' && baseResumeState['triggerType'].trim().length > 0
+                ? baseResumeState['triggerType'].trim()
+                : 'ExternalWorkstreamEvent';
         const resumeState: AgentWakeResumeState = {
-            triggerType: typeof baseResumeState['triggerType'] === 'string' && baseResumeState['triggerType'].trim().length > 0
-                ? baseResumeState['triggerType']
-                : 'ExternalWorkstreamEvent',
+            ...baseResumeState,
+            triggerType: canonicalTriggerType,
             workstreamKey,
             wakeReason,
             triggeredAt: now.toISOString(),
-            ...baseResumeState,
         };
 
         return this.upsertImmediateWakeRoutine({
@@ -570,6 +626,44 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             metadataProvider: md,
             now,
         });
+    }
+
+    private isPrivilegedCrossUserWakeCaller(user: UserInfo | undefined): boolean {
+        if (!user?.ID) {
+            return false;
+        }
+        if (WellKnownUserSource.Instance.IsSystemUser(user)) {
+            return true;
+        }
+        const cachedSystemUser = UserCache.Instance.GetSystemUser();
+        if (cachedSystemUser?.ID && UUIDsEqual(user.ID, cachedSystemUser.ID)) {
+            return true;
+        }
+        return user.Type?.trim().toLowerCase() === 'owner';
+    }
+
+    private async verifyActiveTargetUser(
+        targetUserID: string,
+        contextUser: UserInfo,
+        md: IMetadataProvider
+    ): Promise<boolean> {
+        const cached = await UserCache.Instance.FindUser({ ID: targetUserID });
+        if (cached) {
+            return cached.IsActive !== false;
+        }
+        const rv = RunView.FromMetadataProvider(md);
+        const res = await rv.RunView<{ ID: string; IsActive?: boolean }>(
+            {
+                EntityName: 'MJ: Users',
+                ExtraFilter: `ID='${EscapeSQLString(targetUserID)}' AND IsActive=1`,
+                Fields: ['ID', 'IsActive'],
+                MaxRows: 1,
+                SkipTotalRowCount: true,
+                ResultType: 'simple',
+            },
+            contextUser
+        );
+        return Boolean(res.Success && Array.isArray(res.Results) && res.Results.length > 0);
     }
 
     private async resolveTargetAgentForWorkstream(

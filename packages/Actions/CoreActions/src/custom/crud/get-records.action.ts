@@ -101,6 +101,17 @@ export class GetRecordsAction extends BaseAction {
                 if ('blocked' in policyState) {
                     return policyState.blocked;
                 }
+                const clauseError = AgentDataPolicyGuard.ScreenGetRecordsClauses({
+                    params,
+                    entityInfo,
+                    evalState: policyState.allowed,
+                    filter,
+                    orderBy,
+                    alternateBaseView,
+                });
+                if (clauseError) {
+                    return clauseError;
+                }
             }
 
             // Use RunView to execute the query.
@@ -118,7 +129,11 @@ export class GetRecordsAction extends BaseAction {
             };
 
             const effectiveFilter = policyState.allowed.active
-                ? AgentDataPolicyGuard.CombineExtraFilters(filter, policyState.allowed.effectiveWhereClause)
+                ? AgentDataPolicyGuard.CombineExtraFilters(
+                      filter,
+                      policyState.allowed.effectiveWhereClause,
+                      params.Provider
+                  )
                 : filter;
             if (effectiveFilter) {
                 runViewParams.ExtraFilter = effectiveFilter;

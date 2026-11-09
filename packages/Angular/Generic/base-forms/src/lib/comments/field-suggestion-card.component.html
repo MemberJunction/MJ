@@ -51,12 +51,15 @@
             <div class="mj-field-suggestion-card__actions">
                 <button
                     type="button"
-                    class="mj-field-suggestion-card__btn mj-field-suggestion-card__btn--accept"
+                    mjButton
+                    variant="primary"
+                    size="sm"
+                    class="mj-field-suggestion-card__btn--accept"
                     [disabled]="!CanUserActOnSuggestion || ActiveAction !== null"
                     [title]="ActionDisabledReason || 'Apply suggested value to this field'"
                     (click)="OnAccept()">
                     @if (ActiveAction === 'accept') {
-                        <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                        <mj-loading [showText]="false" size="small"></mj-loading>
                         <span>Applying...</span>
                     } @else {
                         <i class="fa-solid fa-check" aria-hidden="true"></i>
@@ -66,12 +69,15 @@
 
                 <button
                     type="button"
-                    class="mj-field-suggestion-card__btn mj-field-suggestion-card__btn--reject"
+                    mjButton
+                    variant="outline"
+                    size="sm"
+                    class="mj-field-suggestion-card__btn--reject"
                     [disabled]="!CanUserActOnSuggestion || ActiveAction !== null"
                     [title]="ActionDisabledReason || 'Dismiss this field suggestion'"
                     (click)="OnReject()">
                     @if (ActiveAction === 'reject') {
-                        <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                        <mj-loading [showText]="false" size="small"></mj-loading>
                         <span>Rejecting...</span>
                     } @else {
                         <i class="fa-solid fa-xmark" aria-hidden="true"></i>
@@ -82,7 +88,10 @@
                 @if (CanUserDiscuss) {
                     <button
                         type="button"
-                        class="mj-field-suggestion-card__btn mj-field-suggestion-card__btn--discuss"
+                        mjButton
+                        variant="flat"
+                        size="sm"
+                        class="mj-field-suggestion-card__btn--discuss"
                         [disabled]="ActiveAction !== null"
                         title="Reply in this suggestion's conversation thread"
                         (click)="OnDiscuss()">

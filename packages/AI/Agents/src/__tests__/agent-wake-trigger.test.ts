@@ -204,7 +204,7 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
 
         it('falls back to "AgentWake (<key>)" when no policy names the agent', async () => {
             const { provider, savedRoutines } = createMockMetadataProvider();
-            runViewMock.mockResolvedValueOnce({ Success: true, Results: [] });
+            runViewMock.mockResolvedValue({ Success: true, Results: [] });
 
             const approvalRequest = {
                 ID: 'req-name-2', AgentID: COS_AGENT_ID, RequestForUserID: USER_ALICE_ID,
@@ -656,7 +656,7 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
     describe('3. Generic Workstream Wake (TriggerWakeForWorkstream)', () => {
         const FACTORY_AGENT_ID = '00000000-0000-0000-0000-0000FAC70711';
 
-        it('schedules an immediate AgentWake routine for a named non-Chief-of-Staff agent (Software Factory) and workstream', async () => {
+        it('schedules an immediate AgentWake routine for a named non-Chief-of-Staff agent (Software Factory) and workstream when called by system/Owner user', async () => {
             const { provider, savedRoutines, capturedContextUsers } = createMockMetadataProvider();
             AgentUserPolicyEngine.Instance.SetCachedPolicy(
                 createPolicy({
@@ -666,6 +666,7 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
                     Status: 'Active',
                 })
             );
+            findUserMock.mockResolvedValue(aliceUser);
             runViewMock
                 .mockResolvedValueOnce({
                     Success: true,
@@ -685,8 +686,10 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
                     triggerType: 'TaskStatusChanged',
                     recordID: 'task-42',
                     status: 'Ready for Build',
+                    workstreamKey: 'spoofed-workstream',
+                    wakeReason: 'spoofed-reason',
                 },
-                contextUser: serviceUser,
+                contextUser: systemUser,
                 metadataProvider: provider,
                 now: FIXED_NOW,
             });
@@ -700,8 +703,71 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
             expect(savedRoutines[0].TargetID).toBe(FACTORY_AGENT_ID);
             expect(savedRoutines[0].UserID).toBe(USER_ALICE_ID);
             expect(savedRoutines[0].Name).toContain('Software Factory');
-            // Cross-user wake from webhook/hook service user saves as systemUser so ownership gate allows it
             expect(capturedContextUsers[0]).toBe(systemUser);
+            // Canonical wake envelope fields must never be overwritten by caller resumeState
+            expect(savedRoutines[0].WakeConfigurationObject?.resumeState?.['workstreamKey']).toBe('task:task-42');
+            expect(savedRoutines[0].WakeConfigurationObject?.resumeState?.['wakeReason']).toBe(
+                'Factory task moved to Ready for Build'
+            );
+        });
+
+        it('rejects cross-user TriggerWakeForWorkstream from non-Owner callers, inactive target users, and policy lookup errors', async () => {
+            const { provider, savedRoutines } = createMockMetadataProvider();
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(
+                createPolicy({
+                    AgentID: FACTORY_AGENT_ID,
+                    UserID: USER_ALICE_ID,
+                    Agent: 'Software Factory',
+                    Status: 'Active',
+                })
+            );
+
+            // 1. Non-system, non-Owner caller (bobUser / serviceUser) attempting cross-user wake is rejected
+            const unauthorizedCrossUser = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+                targetUserID: USER_ALICE_ID,
+                targetAgentID: FACTORY_AGENT_ID,
+                workstreamKey: 'task:task-42',
+                wakeReason: 'Cross-user spoof',
+                contextUser: bobUser,
+                metadataProvider: provider,
+                now: FIXED_NOW,
+            });
+            expect(unauthorizedCrossUser.triggered).toBe(false);
+            expect(unauthorizedCrossUser.resultCode).toBe('POLICY_DENIED');
+
+            // 2. Inactive target user is rejected even for systemUser
+            findUserMock.mockResolvedValue({ ...aliceUser, IsActive: false } as UserInfo);
+            const inactiveTarget = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+                targetUserID: USER_ALICE_ID,
+                targetAgentID: FACTORY_AGENT_ID,
+                workstreamKey: 'task:task-42',
+                wakeReason: 'Wake inactive user',
+                contextUser: systemUser,
+                metadataProvider: provider,
+                now: FIXED_NOW,
+            });
+            expect(inactiveTarget.triggered).toBe(false);
+            expect(inactiveTarget.resultCode).toBe('POLICY_DENIED');
+
+            // 3. Policy lookup failure (Success: false) fails closed instead of defaulting to allowed
+            AgentUserPolicyEngine.Instance.ClearCache();
+            runViewMock.mockResolvedValueOnce({
+                Success: false,
+                Results: [],
+                ErrorMessage: 'Transient SQL timeout',
+            });
+            const lookupFailed = await AgentWakeTriggerService.Instance.TriggerWakeForWorkstream({
+                targetUserID: USER_ALICE_ID,
+                targetAgentID: FACTORY_AGENT_ID,
+                workstreamKey: 'task:task-42',
+                wakeReason: 'Self wake during DB blip',
+                contextUser: aliceUser,
+                metadataProvider: provider,
+                now: FIXED_NOW,
+            });
+            expect(lookupFailed.triggered).toBe(false);
+            expect(lookupFailed.resultCode).toBe('POLICY_DENIED');
+            expect(savedRoutines).toHaveLength(0);
         });
 
         it('coalesces two rapid external events for the same workstream into pendingEvents without dropping either', async () => {

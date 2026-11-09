@@ -609,4 +609,278 @@ describe('AgentDataPolicyGuard — Runtime Data-Access Narrowing across CRUD & Q
         expect(auditRes.Success).toBe(false);
         expect(auditRes.ResultCode).toBe('PERMISSION_DENIED');
     });
+
+    it('fails closed on policy lookup error, refuses 1=1) OR (1=1 paren breakouts, and refuses Filter/OrderBy referencing denied fields', async () => {
+        const user = makeUser();
+        const { provider } = makeProvider();
+
+        // 1. Policy lookup error (Success: false) fails closed instead of running unnarrowed
+        runViewMock.mockResolvedValueOnce({
+            Success: false,
+            Results: [],
+            ErrorMessage: 'Simulated policy DB error',
+        });
+        const lookupFailRes = await invokeAction(new GetRecordsAction(), {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: user,
+            Context: { AgentID: AGENT_ID },
+            Provider: provider,
+            Filters: [],
+            Params: [{ Name: 'EntityName', Type: 'Input', Value: 'Employees' }],
+        });
+        expect(lookupFailRes.Success).toBe(false);
+        expect(lookupFailRes.ResultCode).toBe('PERMISSION_DENIED');
+        expect(lookupFailRes.Message).toMatch(/Simulated policy DB error/i);
+
+        // 2. Paren breakout in Filter is refused before RunView executes
+        AgentUserPolicyEngine.Instance.SetCachedPolicy(
+            makePolicy({
+                EntityAccessRulesObject: [
+                    {
+                        entityPattern: 'Employees',
+                        access: 'ReadOnly',
+                        rlsNarrowing: { whereClause: "Department = 'Engineering'" },
+                        flsNarrowing: { deniedFields: ['Salary'] },
+                    },
+                ],
+            })
+        );
+        runViewMock.mockClear();
+
+        const breakoutRes = await invokeAction(new GetRecordsAction(), {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: user,
+            Context: { AgentID: AGENT_ID },
+            Provider: provider,
+            Filters: [],
+            Params: [
+                { Name: 'EntityName', Type: 'Input', Value: 'Employees' },
+                { Name: 'Filter', Type: 'Input', Value: '1=1) OR (1=1' },
+            ],
+        });
+        expect(breakoutRes.Success).toBe(false);
+        expect(runViewMock).not.toHaveBeenCalled();
+
+        // 3. Filter and OrderBy referencing denied field Salary are refused
+        const deniedFilterRes = await invokeAction(new GetRecordsAction(), {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: user,
+            Context: { AgentID: AGENT_ID },
+            Provider: provider,
+            Filters: [],
+            Params: [
+                { Name: 'EntityName', Type: 'Input', Value: 'Employees' },
+                { Name: 'Filter', Type: 'Input', Value: 'Salary > 150000' },
+            ],
+        });
+        expect(deniedFilterRes.Success).toBe(false);
+        expect(deniedFilterRes.ResultCode).toBe('PERMISSION_DENIED');
+
+        const deniedOrderRes = await invokeAction(new GetRecordsAction(), {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: user,
+            Context: { AgentID: AGENT_ID },
+            Provider: provider,
+            Filters: [],
+            Params: [
+                { Name: 'EntityName', Type: 'Input', Value: 'Employees' },
+                { Name: 'OrderBy', Type: 'Input', Value: 'Salary DESC' },
+            ],
+        });
+        expect(deniedOrderRes.Success).toBe(false);
+        expect(deniedOrderRes.ResultCode).toBe('PERMISSION_DENIED');
+        expect(runViewMock).not.toHaveBeenCalled();
+    });
+
+    it('refuses stored queries that alias/aggregate denied fields, use CTE positional renames, or read non-allow-listed SQL tables missing from QueryEntities', async () => {
+        const user = makeUser();
+        const aliasedQuery = {
+            ID: 'q-alias',
+            Name: 'Aliased Salary Query',
+            SQL: 'SELECT ID, Salary AS TotalComp FROM __mj.vwEmployees',
+            Entities: [{ QueryID: 'q-alias', EntityID: EMPLOYEES_ENTITY_ID, Entity: 'Employees' } as QueryEntityInfo],
+        } as Partial<QueryInfo> as QueryInfo;
+        const ctePositionalQuery = {
+            ID: 'q-cte',
+            Name: 'CTE Positional Query',
+            SQL: 'WITH c(a, b, c_col, d, e, f) AS (SELECT * FROM __mj.vwEmployees) SELECT a, e FROM c',
+            Entities: [{ QueryID: 'q-cte', EntityID: EMPLOYEES_ENTITY_ID, Entity: 'Employees' } as QueryEntityInfo],
+        } as Partial<QueryInfo> as QueryInfo;
+        const unindexedAuditQuery = {
+            ID: 'q-unindexed-audit',
+            Name: 'Unindexed Audit Query',
+            SQL: 'SELECT ID, Description FROM __mj.vwAuditLogs',
+            Entities: [], // Stale/empty QueryEntities metadata!
+        } as Partial<QueryInfo> as QueryInfo;
+
+        const { provider } = makeProvider({}, [aliasedQuery, ctePositionalQuery, unindexedAuditQuery]);
+
+        AgentUserPolicyEngine.Instance.SetCachedPolicy(
+            makePolicy({
+                DefaultDataAccessMode: 'AllowListOnly',
+                EntityAccessRulesObject: [
+                    {
+                        entityPattern: 'Employees',
+                        access: 'ReadOnly',
+                        flsNarrowing: { deniedFields: ['Salary'] },
+                    },
+                ],
+            })
+        );
+
+        for (const queryName of ['Aliased Salary Query', 'CTE Positional Query', 'Unindexed Audit Query']) {
+            const res = await invokeAction(new RunStoredQueryAction(), {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: user,
+                Context: { AgentID: AGENT_ID },
+                Provider: provider,
+                Filters: [],
+                Params: [{ Name: 'QueryName', Type: 'Input', Value: queryName }],
+            });
+            expect(res.Success).toBe(false);
+            expect(res.ResultCode).toBe('PERMISSION_DENIED');
+        }
+        expect(runQueryMock).not.toHaveBeenCalled();
+    });
+
+    it('enforces policy whereClause on CreateRecordAction and post-mutation UpdateRecordAction, and redacts UpdatedFields.oldValue on read-denied fields', async () => {
+        const user = makeUser();
+
+        AgentUserPolicyEngine.Instance.SetCachedPolicy(
+            makePolicy({
+                EntityAccessRulesObject: [
+                    {
+                        entityPattern: 'Employees',
+                        access: 'ReadWrite',
+                        rlsNarrowing: { whereClause: "Department = 'Engineering'" },
+                        flsNarrowing: { deniedFields: ['InternalNotes'] },
+                    },
+                ],
+            })
+        );
+
+        // 1. CreateRecordAction creating a row in Sales (outside Department = 'Engineering') is refused before Save()
+        const createRig = makeProvider();
+        const createDenied = await invokeAction(new CreateRecordAction(), {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: user,
+            Context: { AgentID: AGENT_ID },
+            Provider: createRig.provider,
+            Filters: [],
+            Params: [
+                { Name: 'EntityName', Type: 'Input', Value: 'Employees' },
+                { Name: 'Fields', Type: 'Input', Value: { Name: 'Bob', Department: 'Sales', Status: 'Active' } },
+            ],
+        });
+        expect(createDenied.Success).toBe(false);
+        expect(createDenied.ResultCode).toBe('PERMISSION_DENIED');
+        expect(createRig.saveMock).not.toHaveBeenCalled();
+
+        // 2. UpdateRecordAction moving an Engineering row out of scope to Finance is refused before Save()
+        const moveOutRig = makeProvider({ initialValues: { ID: 'emp-1', Department: 'Engineering' } });
+        runViewMock.mockResolvedValueOnce({ Success: true, Results: [{ ID: 'emp-1' }], RowCount: 1 });
+        const updateOutRes = await invokeAction(new UpdateRecordAction(), {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: user,
+            Context: { AgentID: AGENT_ID },
+            Provider: moveOutRig.provider,
+            Filters: [],
+            Params: [
+                { Name: 'EntityName', Type: 'Input', Value: 'Employees' },
+                { Name: 'PrimaryKey', Type: 'Input', Value: { ID: 'emp-1' } },
+                { Name: 'Fields', Type: 'Input', Value: { Department: 'Finance' } },
+            ],
+        });
+        expect(updateOutRes.Success).toBe(false);
+        expect(updateOutRes.ResultCode).toBe('PERMISSION_DENIED');
+        expect(moveOutRig.saveMock).not.toHaveBeenCalled();
+
+        // 3. Updating a write-allowed but read-denied field omits UpdatedFields.oldValue and avoids a NO_CHANGES equality oracle
+        const flsReadDeniedEntity = makeEntityInfo(
+            EMPLOYEES_ENTITY_ID,
+            'Employees',
+            '__mj',
+            'Employee',
+            'vwEmployees',
+            [makeField('ID', true, true), makeField('Name'), makeField('Department'), makeField('Salary')]
+        );
+        (flsReadDeniedEntity as { GetDeniedReadFields?: () => Set<string> }).GetDeniedReadFields = () =>
+            new Set<string>(['Salary']);
+
+        AgentUserPolicyEngine.Instance.SetCachedPolicy(
+            makePolicy({
+                EntityAccessRulesObject: [{ entityPattern: 'Employees', access: 'ReadWrite' }],
+            })
+        );
+        const flsRig = makeProvider({ initialValues: { ID: 'emp-1', Department: 'Engineering', Salary: 185000 } });
+        (flsRig.provider as { Entities: EntityInfo[]; EntityByName: (n: string) => EntityInfo | undefined }).Entities = [
+            flsReadDeniedEntity,
+        ];
+        (
+            flsRig.provider as { Entities: EntityInfo[]; EntityByName: (n: string) => EntityInfo | undefined }
+        ).EntityByName = () => flsReadDeniedEntity;
+        const origGetEntityObj = flsRig.provider.GetEntityObject.bind(flsRig.provider);
+        flsRig.provider.GetEntityObject = (async <T>(name: string): Promise<T> => {
+            const obj = (await origGetEntityObj(name)) as T & { EntityInfo: EntityInfo };
+            if (obj) {
+                obj.EntityInfo = flsReadDeniedEntity;
+            }
+            return obj;
+        }) as IMetadataProvider['GetEntityObject'];
+
+        const updateParams: RunActionParams = {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: user,
+            Context: { AgentID: AGENT_ID },
+            Provider: flsRig.provider,
+            Filters: [],
+            Params: [
+                { Name: 'EntityName', Type: 'Input', Value: 'Employees' },
+                { Name: 'PrimaryKey', Type: 'Input', Value: { ID: 'emp-1' } },
+                { Name: 'Fields', Type: 'Input', Value: { Salary: 195000 } },
+            ],
+        };
+        const flsUpdateRes = await invokeAction(new UpdateRecordAction(), updateParams);
+        expect(flsUpdateRes.Success).toBe(true);
+        const updatedFields = updateParams.Params.find((p: ActionParam) => p.Name === 'UpdatedFields')?.Value as Record<
+            string,
+            { oldValue?: string | number; newValue: string | number }
+        >;
+        expect('oldValue' in (updatedFields['Salary'] ?? {})).toBe(false);
+        expect(updatedFields['Salary']?.oldValue).toBeUndefined();
+        expect(updatedFields['Salary']?.newValue).toBe(195000);
+
+        // Same-value update on read-denied Salary must NOT short-circuit with NO_CHANGES (prevents equality oracle)
+        const sameValRig = makeProvider({ initialValues: { ID: 'emp-1', Department: 'Engineering', Salary: 185000 } });
+        (sameValRig.provider as { Entities: EntityInfo[]; EntityByName: (n: string) => EntityInfo | undefined }).Entities = [
+            flsReadDeniedEntity,
+        ];
+        (
+            sameValRig.provider as { Entities: EntityInfo[]; EntityByName: (n: string) => EntityInfo | undefined }
+        ).EntityByName = () => flsReadDeniedEntity;
+        const origSameValGetObj = sameValRig.provider.GetEntityObject.bind(sameValRig.provider);
+        sameValRig.provider.GetEntityObject = (async <T>(name: string): Promise<T> => {
+            const obj = (await origSameValGetObj(name)) as T & { EntityInfo: EntityInfo };
+            if (obj) {
+                obj.EntityInfo = flsReadDeniedEntity;
+            }
+            return obj;
+        }) as IMetadataProvider['GetEntityObject'];
+
+        const sameValRes = await invokeAction(new UpdateRecordAction(), {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: user,
+            Context: { AgentID: AGENT_ID },
+            Provider: sameValRig.provider,
+            Filters: [],
+            Params: [
+                { Name: 'EntityName', Type: 'Input', Value: 'Employees' },
+                { Name: 'PrimaryKey', Type: 'Input', Value: { ID: 'emp-1' } },
+                { Name: 'Fields', Type: 'Input', Value: { Salary: 185000 } },
+            ],
+        });
+        expect(sameValRes.Success).toBe(true);
+        expect(sameValRes.ResultCode).not.toBe('NO_CHANGES');
+        expect(sameValRig.saveMock).toHaveBeenCalledTimes(1);
+    });
 });

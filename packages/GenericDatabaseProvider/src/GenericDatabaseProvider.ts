@@ -7928,6 +7928,53 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Evaluates an arbitrary SQL `whereClause` against an entity's pending in-memory field values
+     * using the same typed synthetic-row subquery (`SELECT CASE WHEN (...) THEN 1 ELSE 0 END`)
+     * used by Create/Update RLS post-image enforcement, without taking or blocking on table locks.
+     *
+     * When `dirtyOnlyOptimization` is `true` and `whereClause` decomposes cleanly into simple
+     * column comparisons whose referenced columns are all clean on `entity`, returns `true`
+     * without a database round-trip (safe only when the pre-image was already verified).
+     */
+    public async EvaluateSyntheticRowWhereClause(
+        entity: BaseEntity,
+        whereClause: string,
+        user: UserInfo,
+        dirtyOnlyOptimization: boolean = false
+    ): Promise<boolean> {
+        const trimmed = whereClause.trim();
+        if (trimmed.length === 0) {
+            return true;
+        }
+        if (dirtyOnlyOptimization) {
+            const referencedColumns = this.TryExtractSimpleFilterColumns(trimmed);
+            if (referencedColumns) {
+                const dirtyNames = new Set(
+                    entity.Fields.filter(f => f.Dirty).map(f => f.Name.trim().toLowerCase())
+                );
+                const touchesFilterColumn = referencedColumns.some(c => dirtyNames.has(c));
+                if (!touchesFilterColumn) {
+                    return true;
+                }
+            }
+        }
+        const projections = this.BuildRLSSyntheticRowProjections(entity, entity.EntityInfo);
+        const sql = `SELECT CASE WHEN (${trimmed}) THEN 1 ELSE 0 END AS pass FROM (SELECT ${projections}) AS newrow`;
+        try {
+            const result = await this.ExecuteSQL<Record<string, number | string | boolean | null>>(
+                sql,
+                undefined,
+                undefined,
+                user
+            );
+            return Boolean(result && result.length > 0 && Number(result[0]['pass']) === 1);
+        } catch (err) {
+            LogError(`EvaluateSyntheticRowWhereClause failed for entity '${entity.EntityInfo?.Name}': ${err instanceof Error ? err.message : String(err)}`);
+            return false;
+        }
+    }
+
+    /**
      * Attempts to fully decompose an RLS WHERE clause into the lower-cased column names it
      * references. Returns the columns ONLY when the whole clause is a conjunction of simple
      * `column <op> literal` terms — anything else (OR, parentheses beyond term grouping,

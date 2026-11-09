@@ -9,6 +9,7 @@ import { UserInfo } from '../generic/securityInfo';
 import { EntityTransactionScope } from '../generic/entityTransactionScope';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider } from '../generic/interfaces';
 import { CompositeKey } from '../generic/compositeKey';
+import { TransactionGroupBase, TransactionItem, TransactionResult } from '../generic/transactionGroup';
 
 const ROLE_ID = 'role-admin-001';
 
@@ -238,6 +239,33 @@ class InMemoryTransactionalTestProvider {
         }
         const id = String(entity.Get('ID'));
         const isNew = !entity.IsSaved;
+        if (entity.TransactionGroup) {
+            const txOwnData: Record<string, string | number | boolean | null> = {};
+            for (const f of entity.EntityInfo.Fields) {
+                if (!f.IsVirtual) {
+                    txOwnData[f.Name] = entity.Get(f.Name) as string | number | boolean | null;
+                }
+            }
+            entity.TransactionGroup.AddTransaction(
+                new TransactionItem(
+                    entity,
+                    isNew ? 'Create' : 'Update',
+                    `SAVE ${entityName}`,
+                    txOwnData,
+                    null,
+                    (_res, success) => {
+                        if (success) {
+                            const tableKey = entityName.toLowerCase();
+                            if (!this._tables.has(tableKey)) {
+                                this._tables.set(tableKey, new Map());
+                            }
+                            this._tables.get(tableKey)!.set(id.toLowerCase(), txOwnData);
+                        }
+                    }
+                )
+            );
+            return {};
+        }
         this.Operations.push({ op: 'save', entityName, isNew, id });
 
         const ownData: Record<string, unknown> = {};
@@ -1132,6 +1160,206 @@ describe('Generic Type Extensions via SubtypeSelector (AutoEnsureOnSave, OnSubty
             expect(loadedConv.ISAChild?.ISAChild?.EntityInfo.Name).toBe('TestFieldSuggestions');
             expect(loadedConv.Get('Type')).toBe('Comment');
             expect(loadedConv.ISAChild?.Get('CommentType')).toBe('Field Suggestion');
+        });
+    });
+
+    // ─── 7. Review Hardening: SaveOptions reuse, concurrent IS-A ops, sync async-driver guard, TransactionGroup AfterSave, lean tx scope ──
+
+    describe('Review hardening guarantees', () => {
+        it('enforces AutoEnsureOnSave and OnSubtypeChange across sequential and concurrent reuse of a shared EntitySaveOptions', async () => {
+            const sharedOpts = new EntitySaveOptions();
+
+            const prod1 = await provider.GetEntityObject('TestProducts');
+            prod1.Set('Name', 'Event One');
+            prod1.Set('ProductTypeID', PROD_TYPE_EVENT_ID);
+
+            const prod2 = await provider.GetEntityObject('TestProducts');
+            prod2.Set('Name', 'Event Two');
+            prod2.Set('ProductTypeID', PROD_TYPE_EVENT_ID);
+
+            // Concurrent saves sharing the exact same EntitySaveOptions instance
+            const [saved1, saved2] = await Promise.all([prod1.Save(sharedOpts), prod2.Save(sharedOpts)]);
+            expect(saved1).toBe(true);
+            expect(saved2).toBe(true);
+            expect(prod1.ISAChild?.EntityInfo.Name).toBe('TestEventProducts');
+            expect(prod2.ISAChild?.EntityInfo.Name).toBe('TestEventProducts');
+            expect(provider.HasRow('TestEventProducts', String(prod1.Get('ID')))).toBe(true);
+            expect(provider.HasRow('TestEventProducts', String(prod2.Get('ID')))).toBe(true);
+
+            // Sequential saves sharing the exact same EntitySaveOptions instance must still enforce OnSubtypeChange: 'Refuse'
+            const comment = await provider.GetEntityObject('TestComments');
+            comment.Set('TypeID', CONV_TYPE_COMMENT_ID);
+            comment.Set('CommentTypeID', COMMENT_TYPE_FLAG_ID);
+            expect(await comment.Save(sharedOpts)).toBe(true);
+            expect(comment.ISAChild?.EntityInfo.Name).toBe('TestQualityFlags');
+
+            comment.Set('CommentTypeID', COMMENT_TYPE_SUGGESTION_ID);
+            expect(await comment.Save(sharedOpts)).toBe(false);
+            expect(comment.LatestResult?.Message).toMatch(/OnSubtypeChange is 'Refuse'/);
+        });
+
+        it('serializes concurrent EnsureISAChild() and ReconcileISAChild() calls on the same parent without creating duplicate child instances', async () => {
+            const product = await provider.GetEntityObject('TestProducts');
+            product.Set('Name', 'Concurrent Folding');
+            product.Set('ProductTypeID', PROD_TYPE_EVENT_ID);
+
+            let eventProductInstantiations = 0;
+            const origGetEntityObject = provider.GetEntityObject.bind(provider);
+            vi.spyOn(provider, 'GetEntityObject').mockImplementation(async (entityName, contextUser) => {
+                if (entityName === 'TestEventProducts') {
+                    eventProductInstantiations++;
+                    await Promise.resolve();
+                }
+                return origGetEntityObject(entityName, contextUser);
+            });
+
+            const [c1, c2, c3] = await Promise.all([
+                product.EnsureISAChild(),
+                product.ReconcileISAChild(),
+                product.EnsureISAChild(),
+            ]);
+
+            expect(c1).not.toBeNull();
+            expect(c1).toBe(c2);
+            expect(c2).toBe(c3);
+            expect(product.ISAChild).toBe(c1);
+            expect(eventProductInstantiations).toBe(1);
+        });
+
+        it('fails closed during synchronous Validate() when a SubtypeSelector.Driver returns an async Promise', async () => {
+            class AsyncOnlyValidateDriver extends TestCommentFamilyDriver {
+                public CustomFamilyAction(): string {
+                    return 'async-only';
+                }
+
+                public override async Validate(_entity: BaseEntity, _result: ValidationResult): Promise<void> {
+                    await Promise.resolve();
+                }
+            }
+
+            MJGlobal.Instance.ClassFactory.Register(
+                TestCommentFamilyDriver,
+                AsyncOnlyValidateDriver,
+                'TestFlagDriver'
+            );
+
+            const flag = await provider.GetEntityObject('TestQualityFlags');
+            flag.Set('TypeID', CONV_TYPE_COMMENT_ID);
+            flag.Set('CommentTypeID', COMMENT_TYPE_FLAG_ID);
+            const commentBranch = flag.ISAParent!;
+
+            // Prime cached driver so synchronous Validate() sees it
+            await commentBranch.ResolveSubtypeDriver();
+
+            const syncResult = commentBranch.Validate();
+            expect(syncResult.Success).toBe(false);
+            expect(syncResult.Errors.some(e => /requires asynchronous validation/i.test(e.Message))).toBe(true);
+
+            // Async ValidateAsync() succeeds cleanly
+            const asyncResult = await commentBranch.ValidateAsync();
+            expect(asyncResult.Success).toBe(true);
+        });
+
+        it('skips BeginEntityTransaction on standalone entities whose selected subtype has neither an extension entity nor a DriverClass', async () => {
+            const chatConv = await provider.GetEntityObject('TestConversations');
+            chatConv.Set('Name', 'Regular Chat');
+            chatConv.Set('TypeID', CONV_TYPE_CHAT_ID);
+
+            provider.Operations = [];
+            expect(await chatConv.Save()).toBe(true);
+            expect(provider.Operations.filter(o => o.op === 'begin_tx')).toHaveLength(0);
+            expect(provider.Operations.map(o => `${o.op}:${o.entityName ?? ''}`)).toEqual([
+                'save:TestConversations',
+            ]);
+        });
+
+        it('runs SubtypeSelector.Driver AfterSave inside open TransactionGroup before CommitGroupTransaction and rolls back if AfterSave throws', async () => {
+            const events: string[] = [];
+            let throwInAfterSave = false;
+
+            class TestInMemoryTransactionGroup extends TransactionGroupBase {
+                private _txScope: EntityTransactionScope | null = null;
+
+                protected override async BeginGroupTransaction(): Promise<void> {
+                    this._txScope = await provider.BeginEntityTransaction();
+                    events.push('tx:begin');
+                }
+
+                protected override async HandleSubmit(): Promise<TransactionResult[]> {
+                    events.push('tx:execute');
+                    return this.PendingTransactions.map(
+                        t => new TransactionResult(t, { ...(t.Vars as Record<string, string | number | boolean | null>) }, true)
+                    );
+                }
+
+                protected override async CommitGroupTransaction(): Promise<void> {
+                    if (this._txScope) {
+                        await this._txScope.Commit();
+                        this._txScope = null;
+                    }
+                    events.push('tx:commit');
+                }
+
+                protected override async RollbackGroupTransaction(): Promise<void> {
+                    if (this._txScope) {
+                        await this._txScope.Rollback();
+                        this._txScope = null;
+                    }
+                    events.push('tx:rollback');
+                }
+            }
+
+            class TxGroupDriver extends EntitySubtypeDriverBase {
+                public override async AfterSave(_entity: BaseEntity, isNew: boolean): Promise<void> {
+                    events.push(`driver:AfterSave:isNew=${isNew}`);
+                    if (throwInAfterSave) {
+                        throw new Error('Transactional AfterSave failure');
+                    }
+                }
+            }
+
+            // Seed a standalone ConversationType with DriverClass only (no IS-A child) so TransactionGroup saves cleanly
+            const CONV_TYPE_DRIVER_ONLY_ID = '99999999-9999-4999-8999-999999999999';
+            provider.SeedRow('TestConversationTypes', {
+                ID: CONV_TYPE_DRIVER_ONLY_ID,
+                Name: 'Driven Chat',
+                ExtensionEntity: null,
+                DriverClass: 'TxGroupDriver',
+            });
+            MJGlobal.Instance.ClassFactory.Register(EntitySubtypeDriverBase, TxGroupDriver, 'TxGroupDriver');
+
+            // 1. Happy path: AfterSave runs after execute and BEFORE tx:commit
+            const group1 = new TestInMemoryTransactionGroup();
+            const conv1 = await provider.GetEntityObject('TestConversations');
+            conv1.Set('Name', 'Grouped Driven Conv');
+            conv1.Set('TypeID', CONV_TYPE_DRIVER_ONLY_ID);
+            conv1.TransactionGroup = group1;
+            expect(await conv1.Save()).toBe(true);
+            expect(await group1.Submit()).toBe(true);
+            expect(events).toEqual([
+                'tx:begin',
+                'tx:execute',
+                'driver:AfterSave:isNew=true',
+                'tx:commit',
+            ]);
+
+            // 2. Throw path: AfterSave failure rolls back group transaction and Submit() returns false
+            events.length = 0;
+            throwInAfterSave = true;
+            const group2 = new TestInMemoryTransactionGroup();
+            const conv2 = await provider.GetEntityObject('TestConversations');
+            conv2.Set('Name', 'Rollback Grouped Conv');
+            conv2.Set('TypeID', CONV_TYPE_DRIVER_ONLY_ID);
+            conv2.TransactionGroup = group2;
+            expect(await conv2.Save()).toBe(true);
+            expect(await group2.Submit()).toBe(false);
+            expect(events).toEqual([
+                'tx:begin',
+                'tx:execute',
+                'driver:AfterSave:isNew=true',
+                'tx:rollback',
+            ]);
+            expect(provider.HasRow('TestConversations', String(conv2.Get('ID')))).toBe(false);
         });
     });
 });

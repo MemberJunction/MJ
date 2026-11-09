@@ -66,26 +66,40 @@ VALUES
     ('17E6A105-AE51-43A2-9D56-290BC8D1D6BB', N'Comment',      N'COMMENT',      N'Anchored comment or suggestion thread attached to an entity record, field, section, or artifact.', N'MJ: Comments', NULL);
 GO
 
--- Preserve any distinct custom Conversation.Type strings present in existing customer data
+-- Preserve any distinct custom Conversation.Type strings present in existing customer data.
+-- Deduplicates normalized Code collisions (e.g. 'my type' vs 'my-type') with a deterministic hash suffix.
 INSERT INTO [${flyway:defaultSchema}].[ConversationType] ([Name], [Code], [Description])
 SELECT
-    src.[CleanName],
-    src.[CleanCode],
+    ranked.[CleanName],
+    CASE
+        WHEN ranked.[CodeSeq] = 1 THEN ranked.[BaseCode]
+        ELSE CONCAT(
+            LEFT(ranked.[BaseCode], 41),
+            N'_',
+            UPPER(SUBSTRING(CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', CONVERT(VARBINARY(400), LOWER(ranked.[CleanName]))), 2), 1, 8))
+        )
+    END,
     N'Migrated from legacy Conversation.Type value.'
 FROM (
-    SELECT DISTINCT
-        LTRIM(RTRIM(c.[Type])) AS [CleanName],
-        LEFT(UPPER(REPLACE(REPLACE(LTRIM(RTRIM(c.[Type])), N' ', N'_'), N'-', N'_')), 50) AS [CleanCode]
-    FROM [${flyway:defaultSchema}].[Conversation] AS c
-    WHERE c.[Type] IS NOT NULL
-      AND LTRIM(RTRIM(c.[Type])) <> N''
-) AS src
-LEFT OUTER JOIN [${flyway:defaultSchema}].[ConversationType] AS existingByName
-    ON existingByName.[Name] = src.[CleanName]
-LEFT OUTER JOIN [${flyway:defaultSchema}].[ConversationType] AS existingByCode
-    ON existingByCode.[Code] = src.[CleanCode]
-WHERE existingByName.[ID] IS NULL
-  AND existingByCode.[ID] IS NULL;
+    SELECT
+        src.[CleanName],
+        src.[BaseCode],
+        ROW_NUMBER() OVER (PARTITION BY src.[BaseCode] ORDER BY src.[CleanName]) AS [CodeSeq]
+    FROM (
+        SELECT DISTINCT
+            LTRIM(RTRIM(c.[Type])) AS [CleanName],
+            LEFT(UPPER(REPLACE(REPLACE(LTRIM(RTRIM(c.[Type])), N' ', N'_'), N'-', N'_')), 50) AS [BaseCode]
+        FROM [${flyway:defaultSchema}].[Conversation] AS c
+        WHERE c.[Type] IS NOT NULL
+          AND LTRIM(RTRIM(c.[Type])) <> N''
+    ) AS src
+    LEFT OUTER JOIN [${flyway:defaultSchema}].[ConversationType] AS existingByName
+        ON existingByName.[Name] = src.[CleanName]
+    LEFT OUTER JOIN [${flyway:defaultSchema}].[ConversationType] AS existingByCode
+        ON existingByCode.[Code] = src.[BaseCode]
+    WHERE existingByName.[ID] IS NULL
+      AND existingByCode.[ID] IS NULL
+) AS ranked;
 GO
 
 -- -------------------------------------------------------------------------------------
@@ -98,11 +112,13 @@ GO
 UPDATE c
 SET c.[TypeID] = CASE
     WHEN c.[AnchorType] IS NOT NULL THEN '17E6A105-AE51-43A2-9D56-290BC8D1D6BB'
-    ELSE COALESCE(ct.[ID], '7F81FF57-C5A8-464D-B3B4-35A4FCF10717')
+    ELSE COALESCE(ctByName.[ID], ctByCode.[ID], '7F81FF57-C5A8-464D-B3B4-35A4FCF10717')
 END
 FROM [${flyway:defaultSchema}].[Conversation] AS c
-LEFT OUTER JOIN [${flyway:defaultSchema}].[ConversationType] AS ct
-    ON ct.[Name] = LTRIM(RTRIM(c.[Type]));
+LEFT OUTER JOIN [${flyway:defaultSchema}].[ConversationType] AS ctByName
+    ON ctByName.[Name] = LTRIM(RTRIM(c.[Type]))
+LEFT OUTER JOIN [${flyway:defaultSchema}].[ConversationType] AS ctByCode
+    ON ctByCode.[Code] = LEFT(UPPER(REPLACE(REPLACE(LTRIM(RTRIM(c.[Type])), N' ', N'_'), N'-', N'_')), 50);
 GO
 
 ALTER TABLE [${flyway:defaultSchema}].[Conversation]

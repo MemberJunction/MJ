@@ -6,6 +6,7 @@ import {
     SignificantTokens,
     SQLParser,
     StrictFragmentValidator,
+    type SQLLexToken,
     type StrictValidationResult,
 } from '@memberjunction/sql-parser';
 import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
@@ -482,6 +483,654 @@ export class ClientClauseScreen {
             }
         }
         return Array.from(names);
+    }
+
+    /**
+     * Refuses statement separators, comments, or unbalanced parentheses outside string literals
+     * and quoted identifiers. Prevents `(${agentFilter}) AND (${policy})` breakout payloads such
+     * as `1=1) OR (1=1` where parenthesis depth drops below zero mid-fragment.
+     */
+    public static AssertBalancedSingleFragment(
+        clause: string | null | undefined,
+        label: string,
+        dialect: SQLParserDialect,
+    ): void {
+        if (clause == null || clause === '') return;
+        ClientClauseScreen.AssertSingleStatementFragment(clause, label, dialect);
+        let depth = 0;
+        for (const token of LexSQL(clause, dialect)) {
+            if (token.Kind === 'open') {
+                depth++;
+            } else if (token.Kind === 'close') {
+                depth--;
+                if (depth < 0) {
+                    throw new Error(`Invalid ${label}: unbalanced closing parenthesis in SQL fragment`);
+                }
+            }
+        }
+        if (depth !== 0) {
+            throw new Error(`Invalid ${label}: unbalanced opening parenthesis in SQL fragment`);
+        }
+    }
+
+    /**
+     * Screens an agent-supplied `Filter` or `OrderBy` fragment (requiring balanced parentheses,
+     * a single read-only fragment, no forbidden functions, and only readable entity base views in
+     * any subqueries) and returns every subquery {@link EntityInfo} referenced so callers can
+     * additionally enforce agent-level entity policies on subquery targets.
+     */
+    public static ScreenAgentClause(
+        clause: string | null | undefined,
+        label: string,
+        entities: readonly EntityInfo[],
+        dialect: SQLParserDialect,
+        user?: UserInfo,
+    ): EntityInfo[] {
+        if (!clause?.trim()) return [];
+        ClientClauseScreen.AssertBalancedSingleFragment(clause, label, dialect);
+        if (SQLParser.HasStackedStatements(clause, dialect)) {
+            throw new Error(`Invalid ${label}: multiple statements are not permitted in filters or sort clauses`);
+        }
+        const fragment = ClientClauseScreen.toDialectQuoting(clause, dialect);
+        ClientClauseScreen.AssertNoIdentifierAliasNames(fragment, dialect, label);
+        ClientClauseScreen.AssertNoForbiddenFunctionCalls(fragment, dialect, label);
+        const result =
+            label === 'OrderBy'
+                ? StrictFragmentValidator.ValidateOrderBy(fragment, dialect, { CollectReads: true })
+                : StrictFragmentValidator.ValidateFilter(fragment, dialect, { CollectReads: true });
+        const reads = ClientClauseScreen.safeReadsOf(
+            result,
+            `Invalid ${label}: not a safe read-only ${label === 'OrderBy' ? 'sort' : 'filter'} fragment — refusing under uncertainty`,
+            label,
+        );
+        ClientClauseScreen.AssertEverySelectAccountedFor(result.ParsedSQL, dialect, reads, label);
+        if (reads.Relations.length === 0) {
+            return [];
+        }
+        const allowed = ClientClauseScreen.BuildEntityBaseViewAllowList(entities);
+        const referenced = new Map<string, EntityInfo>();
+        for (const relation of reads.Relations) {
+            const entity = ClientClauseScreen.AssertRelationReadable(allowed, relation, label, user);
+            if (entity) {
+                if (user) {
+                    ClientClauseScreen.AssertUnscopedRead(entity, user, label);
+                }
+                referenced.set(entity.ID || entity.Name, entity);
+            }
+        }
+        return Array.from(referenced.values());
+    }
+
+    /**
+     * Refuses SQL constructs that rename output columns positionally without naming the underlying
+     * source column:
+     * 1. CTE explicit column-alias lists (`WITH c(a, b) AS (SELECT * FROM ...)`)
+     * 2. Derived-table column-alias lists (`FROM (SELECT * FROM ...) AS t(a, b)`)
+     * 3. Set operations (`UNION` / `INTERSECT` / `EXCEPT`) combined with wildcard (`*`) projections
+     */
+    public static AssertNoPositionalColumnRenames(
+        sql: string,
+        dialect: SQLParserDialect,
+        label = 'SQL',
+    ): void {
+        const tokens = SignificantTokens(LexSQL(sql, dialect));
+        if (tokens.length === 0) return;
+
+        const keywordAllowedBeforeOpenAfterClose = new Set([
+            'and', 'or', 'in', 'not', 'over', 'filter', 'within', 'values',
+            'where', 'on', 'having', 'when', 'then', 'else', 'between',
+            'union', 'intersect', 'except', 'select', 'from', 'join',
+        ]);
+
+        let depth = 0;
+        const depths: number[] = [];
+        for (const tok of tokens) {
+            if (tok.Kind === 'close') {
+                depth = Math.max(0, depth - 1);
+            }
+            depths.push(depth);
+            if (tok.Kind === 'open') {
+                depth++;
+            }
+        }
+
+        // 1. Check CTE header column lists: `WITH [RECURSIVE] name ( ... ) AS (`
+        if (depths[0] === 0 && IsKeyword(tokens[0], 'WITH')) {
+            let idx = 1;
+            if (idx < tokens.length && depths[idx] === 0 && IsKeyword(tokens[idx], 'RECURSIVE')) {
+                idx++;
+            }
+            while (idx < tokens.length) {
+                if (depths[idx] === 0 && (tokens[idx].Kind === 'word' || tokens[idx].Kind === 'identifier')) {
+                    if (IsKeyword(tokens[idx], 'SELECT')) {
+                        break;
+                    }
+                    const isCteHeaderKeyword =
+                        IsKeyword(tokens[idx], 'AS') ||
+                        IsKeyword(tokens[idx], 'MATERIALIZED') ||
+                        IsKeyword(tokens[idx], 'NOT');
+                    const afterName = idx + 1;
+                    if (!isCteHeaderKeyword && afterName < tokens.length && tokens[afterName].Kind === 'open') {
+                        throw new Error(
+                            `Invalid ${label}: CTE column-alias lists are not permitted when field-level masking is active`,
+                        );
+                    }
+                }
+                if (depths[idx] === 0 && IsKeyword(tokens[idx], 'SELECT')) {
+                    break;
+                }
+                idx++;
+            }
+        }
+
+        // 2. Check derived-table column lists: `) [AS] alias (`
+        let hasSetOp = false;
+        let hasWildcardStar = false;
+        for (let i = 0; i < tokens.length; i++) {
+            const tok = tokens[i];
+            if (IsKeyword(tok, 'UNION') || IsKeyword(tok, 'INTERSECT') || IsKeyword(tok, 'EXCEPT')) {
+                hasSetOp = true;
+            }
+            if (tok.Text === '*' || (tok.Kind === 'operator' && tok.Text.includes('*'))) {
+                const prev = i > 0 ? tokens[i - 1] : undefined;
+                if (
+                    !prev ||
+                    prev.Kind === 'comma' ||
+                    prev.Kind === 'dot' ||
+                    IsKeyword(prev, 'SELECT') ||
+                    IsKeyword(prev, 'DISTINCT') ||
+                    IsKeyword(prev, 'ALL')
+                ) {
+                    hasWildcardStar = true;
+                }
+            }
+            if (tok.Kind === 'close') {
+                const next1 = tokens[i + 1];
+                const next2 = tokens[i + 2];
+                const next3 = tokens[i + 3];
+                if (
+                    next1 &&
+                    IsKeyword(next1, 'AS') &&
+                    next2 &&
+                    (next2.Kind === 'word' || next2.Kind === 'identifier') &&
+                    next3?.Kind === 'open'
+                ) {
+                    throw new Error(
+                        `Invalid ${label}: derived-table column-alias lists are not permitted when field-level masking is active`,
+                    );
+                }
+                if (
+                    next1 &&
+                    (next1.Kind === 'word' || next1.Kind === 'identifier') &&
+                    !keywordAllowedBeforeOpenAfterClose.has(
+                        ClientClauseScreen.StripIdentifierQuotes(next1.Text).trim().toLowerCase(),
+                    ) &&
+                    next2?.Kind === 'open'
+                ) {
+                    throw new Error(
+                        `Invalid ${label}: derived-table column-alias lists are not permitted when field-level masking is active`,
+                    );
+                }
+            }
+        }
+
+        // 3. Check set operations with wildcard projections
+        if (hasSetOp && hasWildcardStar) {
+            throw new Error(
+                `Invalid ${label}: set operations (UNION/INTERSECT/EXCEPT) with wildcard (*) projections are not permitted when field-level masking is active`,
+            );
+        }
+    }
+
+    /**
+     * Inspects a stored query's rendered SQL and returns any denied field identifiers that appear
+     * anywhere OTHER than a pure, unaliased top-level `SELECT` projection column (`Col`, `t.Col`,
+     * or `s.t.Col`). Pure unaliased top-level columns preserve their field name in the result set
+     * and are stripped by `AgentDataPolicyGuard.MaskRows`; aliases (`Salary AS Contact`),
+     * expressions/aggregates (`MAX(Salary)`), predicates (`WHERE Salary > ...`), and sorts
+     * (`ORDER BY Salary`) cannot be stripped safely by output column name and are therefore refused.
+     */
+    public static FindUnmaskableStoredQueryDeniedFields(
+        sql: string,
+        dialect: SQLParserDialect,
+        isFieldDenied: (identifier: string) => boolean,
+    ): string[] {
+        const tokens = SignificantTokens(LexSQL(sql, dialect));
+        if (tokens.length === 0) return [];
+
+        let depth = 0;
+        const depths: number[] = [];
+        for (const tok of tokens) {
+            if (tok.Kind === 'close') {
+                depth = Math.max(0, depth - 1);
+            }
+            depths.push(depth);
+            if (tok.Kind === 'open') {
+                depth++;
+            }
+        }
+
+        const topSelectIdx = tokens.findIndex((t, i) => depths[i] === 0 && IsKeyword(t, 'SELECT'));
+        if (topSelectIdx < 0) {
+            return ClientClauseScreen.ExtractStatementIdentifierTokens(sql, dialect).filter(isFieldDenied);
+        }
+
+        let projStart = topSelectIdx + 1;
+        if (
+            projStart < tokens.length &&
+            depths[projStart] === 0 &&
+            (IsKeyword(tokens[projStart], 'DISTINCT') || IsKeyword(tokens[projStart], 'ALL'))
+        ) {
+            projStart++;
+        }
+        if (projStart < tokens.length && depths[projStart] === 0 && IsKeyword(tokens[projStart], 'TOP')) {
+            projStart++;
+            if (projStart < tokens.length && tokens[projStart].Kind === 'open') {
+                projStart++;
+                while (projStart < tokens.length && !(tokens[projStart].Kind === 'close' && depths[projStart] === 0)) {
+                    projStart++;
+                }
+                if (projStart < tokens.length) projStart++;
+            } else if (projStart < tokens.length && tokens[projStart].Kind === 'number') {
+                projStart++;
+            }
+            if (projStart < tokens.length && depths[projStart] === 0 && IsKeyword(tokens[projStart], 'PERCENT')) {
+                projStart++;
+            }
+        }
+
+        let projEnd = tokens.length;
+        for (let i = projStart; i < tokens.length; i++) {
+            if (
+                depths[i] === 0 &&
+                (IsKeyword(tokens[i], 'FROM') ||
+                    IsKeyword(tokens[i], 'INTO') ||
+                    IsKeyword(tokens[i], 'WHERE') ||
+                    IsKeyword(tokens[i], 'GROUP') ||
+                    IsKeyword(tokens[i], 'HAVING') ||
+                    IsKeyword(tokens[i], 'ORDER') ||
+                    IsKeyword(tokens[i], 'UNION') ||
+                    IsKeyword(tokens[i], 'INTERSECT') ||
+                    IsKeyword(tokens[i], 'EXCEPT'))
+            ) {
+                projEnd = i;
+                break;
+            }
+        }
+
+        const unmaskable = new Set<string>();
+        const checkToken = (tok: SQLLexToken): void => {
+            if (tok.Kind === 'word' || tok.Kind === 'identifier') {
+                const name = ClientClauseScreen.StripIdentifierQuotes(tok.Text).trim();
+                if (name.length > 0 && isFieldDenied(name)) {
+                    unmaskable.add(name);
+                }
+            }
+        };
+
+        // Any denied field before projStart (e.g., inside WITH CTEs or TOP expression) is unmaskable
+        for (let i = 0; i < projStart; i++) {
+            checkToken(tokens[i]);
+        }
+
+        // Split top-level projection items by comma at depth 0
+        const items: SQLLexToken[][] = [];
+        let current: SQLLexToken[] = [];
+        for (let i = projStart; i < projEnd; i++) {
+            if (depths[i] === 0 && tokens[i].Kind === 'comma') {
+                items.push(current);
+                current = [];
+            } else {
+                current.push(tokens[i]);
+            }
+        }
+        if (current.length > 0) {
+            items.push(current);
+        }
+
+        const isPlainColumnIdent = (tok: SQLLexToken): boolean =>
+            (tok.Kind === 'word' || tok.Kind === 'identifier') &&
+            !IsKeyword(tok, 'AS') &&
+            !IsKeyword(tok, 'NULL') &&
+            !IsKeyword(tok, 'TRUE') &&
+            !IsKeyword(tok, 'FALSE') &&
+            !IsKeyword(tok, 'CASE') &&
+            !IsKeyword(tok, 'DISTINCT');
+
+        for (const item of items) {
+            const isPureUnaliasedColumn =
+                (item.length === 1 && isPlainColumnIdent(item[0])) ||
+                (item.length === 3 &&
+                    isPlainColumnIdent(item[0]) &&
+                    item[1].Kind === 'dot' &&
+                    isPlainColumnIdent(item[2])) ||
+                (item.length === 5 &&
+                    isPlainColumnIdent(item[0]) &&
+                    item[1].Kind === 'dot' &&
+                    isPlainColumnIdent(item[2]) &&
+                    item[3].Kind === 'dot' &&
+                    isPlainColumnIdent(item[4]));
+            if (!isPureUnaliasedColumn) {
+                for (const tok of item) {
+                    checkToken(tok);
+                }
+            }
+        }
+
+        // Any denied field at or after projEnd (FROM/JOIN/WHERE/GROUP/HAVING/ORDER/UNION) is unmaskable
+        // (skipping the immediate relation name right after FROM or JOIN so view names don't false-positive)
+        for (let i = projEnd; i < tokens.length; i++) {
+            if (IsKeyword(tokens[i], 'FROM') || IsKeyword(tokens[i], 'JOIN')) {
+                let relIdx = i + 1;
+                while (
+                    relIdx + 1 < tokens.length &&
+                    (tokens[relIdx].Kind === 'word' || tokens[relIdx].Kind === 'identifier') &&
+                    tokens[relIdx + 1].Kind === 'dot'
+                ) {
+                    relIdx += 2;
+                }
+                if (
+                    relIdx < tokens.length &&
+                    (tokens[relIdx].Kind === 'word' || tokens[relIdx].Kind === 'identifier')
+                ) {
+                    i = relIdx;
+                    continue;
+                }
+            }
+            checkToken(tokens[i]);
+        }
+
+        return Array.from(unmaskable);
+    }
+
+    /**
+     * Evaluates a simple SQL `WHERE` predicate against an in-memory record map for lightweight
+     * providers that do not expose a live SQL execution engine (e.g. unit-test metadata mocks).
+     * Fails closed (`false`) on any subquery, function call, or unrecognized SQL construct.
+     */
+    public static EvaluateSimpleSqlWherePredicate(
+        whereClause: string,
+        record: Record<string, unknown>,
+        dialect: SQLParserDialect,
+    ): boolean {
+        const trimmed = whereClause.trim();
+        if (trimmed.length === 0) return true;
+        try {
+            ClientClauseScreen.AssertBalancedSingleFragment(trimmed, 'PolicyWhereClause', dialect);
+        } catch {
+            return false;
+        }
+        const tokens = SignificantTokens(LexSQL(trimmed, dialect));
+        if (tokens.length === 0) return true;
+
+        const recordByLowerKey = new Map<string, unknown>();
+        for (const [k, v] of Object.entries(record)) {
+            recordByLowerKey.set(k.trim().toLowerCase(), v);
+        }
+
+        let pos = 0;
+        const peek = (): SQLLexToken | undefined => tokens[pos];
+        const consume = (): SQLLexToken | undefined => tokens[pos++];
+
+        const readLiteral = (): { ok: true; value: string | number | boolean | null } | { ok: false } => {
+            const tok = peek();
+            if (!tok) return { ok: false };
+            if (tok.Kind === 'string') {
+                consume();
+                const raw = tok.Text.replace(/^[NnEe]'/, "'");
+                if (raw.startsWith("'") && raw.endsWith("'")) {
+                    return { ok: true, value: raw.slice(1, -1).replace(/''/g, "'") };
+                }
+                return { ok: false };
+            }
+            if (tok.Kind === 'operator' && (tok.Text === '-' || tok.Text === '+')) {
+                const sign = tok.Text === '-' ? -1 : 1;
+                consume();
+                const numTok = peek();
+                if (!numTok || numTok.Kind !== 'number') return { ok: false };
+                consume();
+                const parsed = Number(numTok.Text);
+                return Number.isFinite(parsed) ? { ok: true, value: sign * parsed } : { ok: false };
+            }
+            if (tok.Kind === 'number') {
+                consume();
+                const parsed = Number(tok.Text);
+                return Number.isFinite(parsed) ? { ok: true, value: parsed } : { ok: false };
+            }
+            if (tok.Kind === 'word') {
+                if (IsKeyword(tok, 'NULL')) {
+                    consume();
+                    return { ok: true, value: null };
+                }
+                if (IsKeyword(tok, 'TRUE')) {
+                    consume();
+                    return { ok: true, value: true };
+                }
+                if (IsKeyword(tok, 'FALSE')) {
+                    consume();
+                    return { ok: true, value: false };
+                }
+            }
+            return { ok: false };
+        };
+
+        const compareValues = (
+            actual: unknown,
+            op: string,
+            expected: string | number | boolean | null,
+        ): boolean => {
+            if (actual === null || actual === undefined || expected === null) {
+                return false;
+            }
+            if (typeof expected === 'number' || typeof actual === 'number') {
+                const leftNum =
+                    typeof actual === 'boolean' ? (actual ? 1 : 0) : Number(actual);
+                const rightNum =
+                    typeof expected === 'boolean' ? (expected ? 1 : 0) : Number(expected);
+                if (!Number.isFinite(leftNum) || !Number.isFinite(rightNum)) return false;
+                switch (op) {
+                    case '=': return leftNum === rightNum;
+                    case '!=':
+                    case '<>': return leftNum !== rightNum;
+                    case '<': return leftNum < rightNum;
+                    case '<=': return leftNum <= rightNum;
+                    case '>': return leftNum > rightNum;
+                    case '>=': return leftNum >= rightNum;
+                    default: return false;
+                }
+            }
+            if (typeof expected === 'boolean' || typeof actual === 'boolean') {
+                const leftBool = typeof actual === 'boolean' ? actual : String(actual).toLowerCase() === 'true' || actual === '1';
+                const rightBool = typeof expected === 'boolean' ? expected : String(expected).toLowerCase() === 'true' || expected === '1';
+                if (op === '=') return leftBool === rightBool;
+                if (op === '!=' || op === '<>') return leftBool !== rightBool;
+                return false;
+            }
+            const leftStr = actual instanceof Date ? actual.toISOString() : String(actual);
+            const rightStr = String(expected);
+            const leftLower = leftStr.toLowerCase();
+            const rightLower = rightStr.toLowerCase();
+            switch (op) {
+                case '=': return leftLower === rightLower;
+                case '!=':
+                case '<>': return leftLower !== rightLower;
+                case '<': return leftLower < rightLower;
+                case '<=': return leftLower <= rightLower;
+                case '>': return leftLower > rightLower;
+                case '>=': return leftLower >= rightLower;
+                default: return false;
+            }
+        };
+
+        const parseOr = (): { ok: true; value: boolean } | { ok: false } => {
+            let left = parseAnd();
+            if (!left.ok) return left;
+            while (peek() && IsKeyword(peek()!, 'OR')) {
+                consume();
+                const right = parseAnd();
+                if (!right.ok) return right;
+                left = { ok: true, value: left.value || right.value };
+            }
+            return left;
+        };
+
+        const parseAnd = (): { ok: true; value: boolean } | { ok: false } => {
+            let left = parseNot();
+            if (!left.ok) return left;
+            while (peek() && IsKeyword(peek()!, 'AND')) {
+                consume();
+                const right = parseNot();
+                if (!right.ok) return right;
+                left = { ok: true, value: left.value && right.value };
+            }
+            return left;
+        };
+
+        const parseNot = (): { ok: true; value: boolean } | { ok: false } => {
+            if (peek() && IsKeyword(peek()!, 'NOT')) {
+                consume();
+                const inner = parseNot();
+                return inner.ok ? { ok: true, value: !inner.value } : inner;
+            }
+            return parsePrimary();
+        };
+
+        const parsePrimary = (): { ok: true; value: boolean } | { ok: false } => {
+            const first = peek();
+            if (!first) return { ok: false };
+            if (first.Kind === 'open') {
+                consume();
+                if (peek() && IsKeyword(peek()!, 'SELECT')) {
+                    return { ok: false };
+                }
+                const inner = parseOr();
+                if (!inner.ok) return inner;
+                if (peek()?.Kind !== 'close') return { ok: false };
+                consume();
+                return inner;
+            }
+
+            // Support literal 1=1 / 1=0 guards
+            if (first.Kind === 'number') {
+                const leftLit = readLiteral();
+                if (!leftLit.ok) return { ok: false };
+                const opTok = consume();
+                if (!opTok || opTok.Kind !== 'operator') return { ok: false };
+                const rightLit = readLiteral();
+                if (!rightLit.ok) return { ok: false };
+                return { ok: true, value: compareValues(leftLit.value, opTok.Text, rightLit.value) };
+            }
+
+            if (first.Kind !== 'word' && first.Kind !== 'identifier') {
+                return { ok: false };
+            }
+            let colTok = consume()!;
+            if (peek()?.Kind === 'dot') {
+                consume();
+                const nextIdent = consume();
+                if (!nextIdent || (nextIdent.Kind !== 'word' && nextIdent.Kind !== 'identifier')) {
+                    return { ok: false };
+                }
+                colTok = nextIdent;
+            }
+            // Reject function calls `fn(...)`
+            if (peek()?.Kind === 'open') {
+                return { ok: false };
+            }
+            const colName = ClientClauseScreen.StripIdentifierQuotes(colTok.Text).trim().toLowerCase();
+            const actualVal = recordByLowerKey.get(colName);
+
+            const next = peek();
+            if (!next) return { ok: false };
+
+            if (IsKeyword(next, 'IS')) {
+                consume();
+                let negated = false;
+                if (peek() && IsKeyword(peek()!, 'NOT')) {
+                    negated = true;
+                    consume();
+                }
+                if (!peek() || !IsKeyword(peek()!, 'NULL')) return { ok: false };
+                consume();
+                const isNull = actualVal === null || actualVal === undefined;
+                return { ok: true, value: negated ? !isNull : isNull };
+            }
+
+            let negatedOp = false;
+            if (IsKeyword(next, 'NOT')) {
+                negatedOp = true;
+                consume();
+            }
+
+            const afterNot = peek();
+            if (!afterNot) return { ok: false };
+
+            if (IsKeyword(afterNot, 'IN')) {
+                consume();
+                if (peek()?.Kind !== 'open') return { ok: false };
+                consume();
+                if (peek() && IsKeyword(peek()!, 'SELECT')) return { ok: false };
+                const items: Array<string | number | boolean | null> = [];
+                while (peek() && peek()!.Kind !== 'close') {
+                    const lit = readLiteral();
+                    if (!lit.ok) return { ok: false };
+                    items.push(lit.value);
+                    if (peek()?.Kind === 'comma') {
+                        consume();
+                    } else if (peek()?.Kind !== 'close') {
+                        return { ok: false };
+                    }
+                }
+                if (peek()?.Kind !== 'close') return { ok: false };
+                consume();
+                const matched = items.some((item) => compareValues(actualVal, '=', item));
+                return { ok: true, value: negatedOp ? !matched : matched };
+            }
+
+            if (IsKeyword(afterNot, 'LIKE')) {
+                consume();
+                const patLit = readLiteral();
+                if (!patLit.ok || typeof patLit.value !== 'string') return { ok: false };
+                if (actualVal === null || actualVal === undefined) return { ok: true, value: false };
+                const regexSrc =
+                    '^' +
+                    patLit.value
+                        .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+                        .replace(/%/g, '.*')
+                        .replace(/_/g, '.') +
+                    '$';
+                const matched = new RegExp(regexSrc, 'is').test(String(actualVal));
+                return { ok: true, value: negatedOp ? !matched : matched };
+            }
+
+            if (negatedOp) return { ok: false };
+
+            if (afterNot.Kind === 'operator') {
+                // Compound operators like `<>`, `!=`, `<=`, `>=` may lex as 1 or 2 operator tokens
+                let opText = consume()!.Text;
+                if (
+                    (opText === '<' && (peek()?.Text === '>' || peek()?.Text === '=')) ||
+                    (opText === '>' && peek()?.Text === '=') ||
+                    (opText === '!' && peek()?.Text === '=')
+                ) {
+                    opText += consume()!.Text;
+                }
+                if (!['=', '!=', '<>', '<', '<=', '>', '>='].includes(opText)) {
+                    return { ok: false };
+                }
+                const right = readLiteral();
+                if (!right.ok) return { ok: false };
+                return { ok: true, value: compareValues(actualVal, opText, right.value) };
+            }
+
+            return { ok: false };
+        };
+
+        const parsed = parseOr();
+        if (!parsed.ok || pos !== tokens.length) {
+            return false;
+        }
+        return parsed.value;
     }
 
     private static buildBaseTableAllowList(entities: readonly EntityInfo[]): EntityBaseViewAllowList {

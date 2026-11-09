@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { CompositeKey } from '@memberjunction/core';
 import { MJAIAgentUserPolicyEntity } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import {
     BuildPolicyDraftFromEntity,
@@ -109,6 +109,18 @@ export class ChiefOfStaffGovernanceComponent extends BaseChiefOfStaffPage {
         this.PolicyDirty = false;
     }
 
+    protected override HasUnsavedPageEdits(): boolean {
+        return this.PolicyDirty;
+    }
+
+    protected override IsPageSaveInFlight(): boolean {
+        return this.IsSavingPolicy;
+    }
+
+    protected override ResetUnsavedPageEdits(): void {
+        this.PolicyDirty = false;
+    }
+
     public OpenPolicyEntityRecord(): void {
         if (this.PolicyEntity) {
             this.navigationService.OpenEntityRecord(
@@ -191,17 +203,22 @@ export class ChiefOfStaffGovernanceComponent extends BaseChiefOfStaffPage {
         this.cdr.markForCheck();
 
         try {
+            const targetAgentId = this.SelectedAgentID ?? this.chiefOfStaffAgentId;
+            if (!targetAgentId) {
+                throw new Error(`The "${this.SelectedAgentName}" agent id has not been resolved; reload the page.`);
+            }
             let entity = this.PolicyEntity;
+            if (entity && !UUIDsEqual(entity.AgentID, targetAgentId)) {
+                throw new Error(
+                    `Loaded policy record belongs to a different agent than "${this.SelectedAgentName}". Reload the page and try again.`,
+                );
+            }
             if (!entity) {
                 entity = await this.ProviderToUse.GetEntityObject<MJAIAgentUserPolicyEntity>(
                     'MJ: AI Agent User Policies',
                     this.ProviderToUse.CurrentUser,
                 );
                 entity.NewRecord();
-                const targetAgentId = this.SelectedAgentID ?? this.chiefOfStaffAgentId;
-                if (!targetAgentId) {
-                    throw new Error(`The "${this.SelectedAgentName}" agent id has not been resolved; reload the page.`);
-                }
                 entity.AgentID = targetAgentId;
                 const currentUserId = this.ProviderToUse.CurrentUser?.ID;
                 if (currentUserId) {

@@ -1,10 +1,17 @@
 import {
     BaseEntity,
     BaseEntityResult,
+    EntityDeleteOptions,
     EntitySaveOptions,
+    EntityTransactionScope,
+    IEntityDataProvider,
     IMetadataProvider,
+    LogError,
     Metadata,
+    ValidationErrorInfo,
+    ValidationErrorType,
     ValidationResult,
+    WellKnownUserSource,
 } from '@memberjunction/core';
 import {
     BUILT_IN_COMMENT_TYPE_IDS,
@@ -17,9 +24,26 @@ import {
 } from '@memberjunction/core-entities';
 import { MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
+    BeginSuggestionAcceptInFlight,
     CommentTypeDriver,
+    EndSuggestionAcceptInFlight,
     FieldSuggestionCommentDriver,
 } from './ConversationAndCommentDrivers';
+
+type EntityTransactionCapableProvider = IEntityDataProvider & {
+    SupportsEntityTransactions?: boolean;
+    BeginEntityTransaction?: () => Promise<EntityTransactionScope>;
+};
+
+const IMMUTABLE_PROPOSAL_FIELDS = [
+    'SuggestedValue',
+    'Source',
+    'Confidence',
+    'LinkedEntityID',
+    'LinkedRecordID',
+    'AnchorType',
+    'AnchorKey',
+] as const;
 
 /**
  * Server-side `MJ: Field Suggestions` entity subclass.
@@ -44,8 +68,30 @@ export class MJFieldSuggestionEntityServer extends MJFieldSuggestionEntity {
         if (driver?.Validate) {
             const maybePromise = driver.Validate(this, result, this.ContextCurrentUser ?? null);
             if (maybePromise instanceof Promise) {
-                maybePromise.catch(() => undefined);
+                maybePromise.catch((err) => {
+                    LogError(
+                        `MJFieldSuggestionEntityServer: async driver Validate rejected during synchronous Validate(): ${
+                            err instanceof Error ? err.message : String(err)
+                        }`
+                    );
+                });
+                const msg =
+                    'Field suggestion comment-type driver returned an asynchronous Promise during synchronous Validate(); call ValidateAsync() or Save() instead.';
+                LogError(msg);
+                result.Success = false;
+                result.Errors.push(
+                    new ValidationErrorInfo('ID', msg, this.ID, ValidationErrorType.Failure)
+                );
             }
+        }
+        return result;
+    }
+
+    public override async ValidateAsync(): Promise<ValidationResult> {
+        const result = await super.ValidateAsync();
+        const driver = await this.resolveCommentTypeDriver();
+        if (driver?.Validate) {
+            await driver.Validate(this, result, this.ContextCurrentUser ?? null);
         }
         return result;
     }
@@ -74,7 +120,7 @@ export class MJFieldSuggestionEntityServer extends MJFieldSuggestionEntity {
         const contextUser = this.ContextCurrentUser ?? provider?.CurrentUser ?? null;
         const driver = await this.resolveCommentTypeDriver();
 
-        // Inspect Outcome transition before super.Save() so OnAccept / OnReject can validate
+        // Inspect Outcome transition before super.Save() so OnAccept / OnReject / OnSupersede can validate
         // permissions, apply target-record writes, and stamp IsResolved/ResolvedByUserID/ResolvedAt
         // onto the parent Conversation before the IS-A chain writes.
         const outcomeField = this.GetFieldByName('Outcome');
@@ -88,20 +134,67 @@ export class MJFieldSuggestionEntityServer extends MJFieldSuggestionEntity {
             return false;
         }
 
+        if (!wasNew && !options?.ReplayOnly) {
+            const mutatedProposalField = IMMUTABLE_PROPOSAL_FIELDS.find(
+                (fieldName) => this.GetFieldByName(fieldName)?.Dirty === true
+            );
+            if (mutatedProposalField) {
+                const isSystem = WellKnownUserSource.Instance.IsSystemUser(contextUser);
+                const isAuthor = Boolean(contextUser && this.UserID && UUIDsEqual(contextUser.ID, this.UserID));
+                if (prevOutcome !== null || (!isSystem && !isAuthor)) {
+                    this.recordSaveDenied(
+                        prevOutcome !== null
+                            ? `Cannot modify '${mutatedProposalField}' after field suggestion Outcome is '${prevOutcome}'.`
+                            : `Only the suggestion author or system may modify '${mutatedProposalField}' on an existing field suggestion.`
+                    );
+                    return false;
+                }
+            }
+        }
+
+        if (prevOutcome !== nextOutcome && nextOutcome === 'Accepted' && !options?.ReplayOnly) {
+            const commentParent =
+                this.ISAParent && this.ISAParent.EntityInfo?.Name === 'MJ: Comments'
+                    ? (this.ISAParent as MJCommentEntity)
+                    : null;
+            const txProvider = this.ProviderToUse as EntityTransactionCapableProvider | null;
+            const acceptScope =
+                txProvider?.SupportsEntityTransactions === true &&
+                typeof txProvider.BeginEntityTransaction === 'function'
+                    ? await txProvider.BeginEntityTransaction()
+                    : null;
+            BeginSuggestionAcceptInFlight(this.ID);
+            try {
+                await driver.OnAccept({
+                    Provider: provider,
+                    ContextUser: contextUser,
+                    Comment: commentParent,
+                    ExtensionEntity: this,
+                });
+                const saved = await super.Save(options);
+                if (!saved) {
+                    await acceptScope?.Rollback();
+                    return false;
+                }
+                await acceptScope?.Commit();
+                return true;
+            } catch (err) {
+                await acceptScope?.Rollback().catch(() => undefined);
+                const message = err instanceof Error ? err.message : String(err);
+                this.recordSaveDenied(message);
+                return false;
+            } finally {
+                EndSuggestionAcceptInFlight(this.ID);
+            }
+        }
+
         if (prevOutcome !== nextOutcome && nextOutcome !== null && !options?.ReplayOnly) {
             const commentParent =
                 this.ISAParent && this.ISAParent.EntityInfo?.Name === 'MJ: Comments'
                     ? (this.ISAParent as MJCommentEntity)
                     : null;
             try {
-                if (nextOutcome === 'Accepted') {
-                    await driver.OnAccept({
-                        Provider: provider,
-                        ContextUser: contextUser,
-                        Comment: commentParent,
-                        ExtensionEntity: this,
-                    });
-                } else if (nextOutcome === 'Rejected') {
+                if (nextOutcome === 'Rejected') {
                     await driver.OnReject({
                         Provider: provider,
                         ContextUser: contextUser,
@@ -109,13 +202,12 @@ export class MJFieldSuggestionEntityServer extends MJFieldSuggestionEntity {
                         ExtensionEntity: this,
                     });
                 } else if (nextOutcome === 'Superseded') {
-                    this.IsResolved = true;
-                    if (!this.ResolvedByUserID && contextUser?.ID) {
-                        this.ResolvedByUserID = contextUser.ID;
-                    }
-                    if (!this.ResolvedAt) {
-                        this.ResolvedAt = new Date();
-                    }
+                    await driver.OnSupersede({
+                        Provider: provider,
+                        ContextUser: contextUser,
+                        Comment: commentParent,
+                        ExtensionEntity: this,
+                    });
                 }
             } catch (err) {
                 const message = err instanceof Error ? err.message : String(err);
@@ -134,6 +226,22 @@ export class MJFieldSuggestionEntityServer extends MJFieldSuggestionEntity {
         }
 
         return true;
+    }
+
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (!options?.ReplayOnly) {
+            const provider =
+                (this.ProviderToUse as unknown as IMetadataProvider | null) ?? Metadata.Provider;
+            const contextUser = this.ContextCurrentUser ?? provider?.CurrentUser ?? null;
+            const isSystemOrOwner =
+                WellKnownUserSource.Instance.IsSystemUser(contextUser) || contextUser?.Type === 'Owner';
+            const isAuthor = Boolean(contextUser && this.UserID && UUIDsEqual(contextUser.ID, this.UserID));
+            if (!isSystemOrOwner && this.UserID && !isAuthor) {
+                this.recordDeleteDenied('Only the author or a system administrator may delete a field suggestion.');
+                return false;
+            }
+        }
+        return super.Delete(options);
     }
 
     private normalizeAnchorKeyToCanonicalFieldName(): void {
@@ -186,6 +294,16 @@ export class MJFieldSuggestionEntityServer extends MJFieldSuggestionEntity {
         const entry = new BaseEntityResult();
         entry.Success = false;
         entry.Type = this.IsSaved ? 'update' : 'create';
+        entry.Message = message;
+        entry.StartedAt = new Date();
+        entry.EndedAt = new Date();
+        this.RegisterResultHistoryEntry(entry);
+    }
+
+    private recordDeleteDenied(message: string): void {
+        const entry = new BaseEntityResult();
+        entry.Success = false;
+        entry.Type = 'delete';
         entry.Message = message;
         entry.StartedAt = new Date();
         entry.EndedAt = new Date();

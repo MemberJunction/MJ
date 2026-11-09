@@ -95,7 +95,7 @@ export class MjFoldedSubtypeSectionComponent extends BaseAngularComponent implem
         if (this._record === value) return;
         this.teardownRecordSubscription();
         this._record = value;
-        this.lastWatchSignature = null;
+        this.lastWatchSignature = value && this.IsFoldEnabled ? this.computeWatchSignature(value) : null;
         this.bindRecordSubscription(value);
         void this.reconcileSubtype();
     }
@@ -344,8 +344,9 @@ export class MjFoldedSubtypeSectionComponent extends BaseAngularComponent implem
         try {
             const prevSectionKey = this.ShouldRenderSection ? this.SectionKey : null;
 
-            const reconciledChild = await record.ReconcileISAChild();
+            await record.ReconcileISAChild();
             if (token !== this.reconcileToken) return;
+            const reconciledChild = record.ISAChild ?? null;
 
             const targetEntityName = await record.ResolveSubtypeEntityName();
             if (token !== this.reconcileToken) return;

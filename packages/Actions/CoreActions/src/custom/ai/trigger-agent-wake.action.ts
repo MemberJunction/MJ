@@ -1,7 +1,7 @@
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
-import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
-import { LogError } from '@memberjunction/core';
+import { RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { LogError, WellKnownUserSource } from '@memberjunction/core';
 import { AgentWakeResumeState, AgentWakeTriggerService } from '@memberjunction/ai-agents';
 
 /**
@@ -29,6 +29,21 @@ export class TriggerAgentWakeAction extends BaseAction {
 
             const targetUserID = this.getStringParam(params, 'TargetUserID') ?? contextUser.ID;
             const contextAgentID = (params.Context as { AgentID?: string } | undefined)?.AgentID?.trim() || undefined;
+            if (!UUIDsEqual(contextUser.ID, targetUserID)) {
+                const isPrivilegedHumanOrSystem =
+                    !contextAgentID &&
+                    (WellKnownUserSource.Instance.IsSystemUser(contextUser) ||
+                        contextUser.Type?.trim().toLowerCase() === 'owner');
+                if (!isPrivilegedHumanOrSystem) {
+                    return {
+                        Success: false,
+                        ResultCode: 'PERMISSION_DENIED',
+                        Message:
+                            'Cross-user agent wakes are restricted to system/Owner callers outside agent execution; use Send Inter-Agent Request for peer coordination.',
+                        Params: params.Params,
+                    };
+                }
+            }
             const targetAgentID = this.getStringParam(params, 'TargetAgentID') ?? this.getStringParam(params, 'AgentID') ?? contextAgentID;
             const targetAgentName = this.getStringParam(params, 'TargetAgentName') ?? this.getStringParam(params, 'AgentName') ?? undefined;
             const workstreamKey = this.getStringParam(params, 'WorkstreamKey');

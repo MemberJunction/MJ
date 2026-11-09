@@ -120,12 +120,30 @@ export class UpdateRecordAction extends BaseRecordMutationAction {
             }
 
             // Track which fields are actually being changed
-            const updatedFields: Record<string, { oldValue: unknown, newValue: unknown }> = {};
+            const updatedFields: Record<string, { oldValue?: unknown, newValue: unknown }> = {};
             let hasChanges = false;
+            const deniedPatterns = preLoadPolicy.allowed.active
+                ? preLoadPolicy.allowed.evalResult.deniedFieldPatterns
+                : [];
 
             // Set each field value (every name resolved above, so resolution cannot miss here)
             for (const [fieldName, fieldValue] of Object.entries(fields)) {
                 const resolvedName = this.resolveEntityFieldName(entity!, fieldName, entityInfo) ?? fieldName;
+                const readDenied = AgentDataPolicyGuard.IsFieldReadDeniedForCaller({
+                    fieldName: resolvedName,
+                    entityInfo: entityInfo,
+                    contextUser: params.ContextUser,
+                    deniedFieldPatterns: deniedPatterns,
+                });
+                if (readDenied) {
+                    // Never compare or echo prior value for read-denied fields (prevents both leakage and NO_CHANGES equality oracle)
+                    entity!.Set(resolvedName, fieldValue);
+                    updatedFields[resolvedName] = {
+                        newValue: fieldValue
+                    };
+                    hasChanges = true;
+                    continue;
+                }
                 const currentValue = entity!.Get(resolvedName);
                 if (currentValue !== fieldValue) {
                     entity!.Set(resolvedName, fieldValue);
@@ -144,6 +162,19 @@ export class UpdateRecordAction extends BaseRecordMutationAction {
                     ResultCode: 'NO_CHANGES',
                     Message: 'No fields were modified'
                 };
+            }
+
+            if (preLoadPolicy.allowed.active && preLoadPolicy.allowed.effectiveWhereClause) {
+                const postWhereError = await AgentDataPolicyGuard.VerifyEntityStatePassesWhereClause({
+                    params,
+                    entity: entity!,
+                    entityInfo: entityInfo!,
+                    effectiveWhereClause: preLoadPolicy.allowed.effectiveWhereClause,
+                    dirtyOnlyOptimization: true,
+                });
+                if (postWhereError) {
+                    return postWhereError;
+                }
             }
 
             if (preLoadPolicy.allowed.active && preLoadPolicy.allowed.hasRecordConditionRules) {

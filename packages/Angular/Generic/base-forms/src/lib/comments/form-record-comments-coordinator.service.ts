@@ -300,7 +300,7 @@ export class FormRecordCommentsCoordinatorService implements OnDestroy {
                           currentUser,
                           activeProvider,
                           forceRefresh
-                      ).catch(() => emptyCommentsBundle)
+                      )
                     : Promise.resolve(emptyCommentsBundle);
 
             const [detailsMap, commentsBundle] = await Promise.all([
@@ -670,18 +670,29 @@ export class FormRecordCommentsCoordinatorService implements OnDestroy {
             provider
         );
 
+        this.applyDisposedSuggestionOptimistically(updated, suggestionId, 'Accepted', currentUser.ID);
+
         const activeRecord = this._record;
-        if (activeRecord?.IsSaved && activeRecord.PrimaryKey) {
+        if (activeRecord?.IsSaved && activeRecord.PrimaryKey && !activeRecord.Dirty) {
             const changedField = (updated.AnchorKey ?? '').trim();
             const changedSet = new Set<string>();
             if (changedField) {
                 changedSet.add(changedField);
                 changedSet.add(changedField.toLowerCase());
             }
-            if (!activeRecord.Dirty && typeof activeRecord.InnerLoad === 'function') {
-                await activeRecord.InnerLoad(activeRecord.PrimaryKey);
+            let reloaded = false;
+            if (typeof activeRecord.InnerLoad === 'function') {
+                try {
+                    reloaded = await activeRecord.InnerLoad(activeRecord.PrimaryKey);
+                } catch (reloadError) {
+                    LogError(
+                        `FormRecordCommentsCoordinatorService.AcceptFieldSuggestion: target record reload failed after suggestion accept succeeded: ${
+                            reloadError instanceof Error ? reloadError.message : String(reloadError)
+                        }`
+                    );
+                }
             }
-            if (this._refreshCoordinator) {
+            if (reloaded && this._refreshCoordinator) {
                 if (changedSet.size > 0) {
                     this._refreshCoordinator.NotifyRemoteUpdate(activeRecord, changedSet);
                 } else {
@@ -690,7 +701,15 @@ export class FormRecordCommentsCoordinatorService implements OnDestroy {
             }
         }
 
-        await this.LoadForRecord(this._record, provider, true);
+        try {
+            await this.LoadForRecord(this._record, provider, true);
+        } catch (refreshError) {
+            LogError(
+                `FormRecordCommentsCoordinatorService.AcceptFieldSuggestion: comments refresh failed after suggestion accept succeeded: ${
+                    refreshError instanceof Error ? refreshError.message : String(refreshError)
+                }`
+            );
+        }
         return updated;
     }
 
@@ -711,8 +730,59 @@ export class FormRecordCommentsCoordinatorService implements OnDestroy {
             provider
         );
 
-        await this.LoadForRecord(this._record, provider, true);
+        this.applyDisposedSuggestionOptimistically(updated, suggestionId, 'Rejected', currentUser.ID);
+
+        try {
+            await this.LoadForRecord(this._record, provider, true);
+        } catch (refreshError) {
+            LogError(
+                `FormRecordCommentsCoordinatorService.RejectFieldSuggestion: comments refresh failed after suggestion reject succeeded: ${
+                    refreshError instanceof Error ? refreshError.message : String(refreshError)
+                }`
+            );
+        }
         return updated;
+    }
+
+    private applyDisposedSuggestionOptimistically(
+        updated: MJFieldSuggestionEntity,
+        fallbackSuggestionId: string,
+        outcome: NonNullable<MJFieldSuggestionEntity['Outcome']>,
+        actingUserId: string
+    ): void {
+        const normId = NormalizeUUID(updated.ID || fallbackSuggestionId);
+        this._suggestionsByConversationId.set(normId, updated);
+        this._commentTypeCodeByConversationId.set(normId, COMMENT_TYPE_CODES.FIELD_SUGGESTION);
+
+        const now = updated.ResolvedAt ?? new Date();
+        const resolvedBy = updated.ResolvedByUserID ?? actingUserId;
+        const acceptedAnchorKey = outcome === 'Accepted' ? (updated.AnchorKey ?? '').trim().toLowerCase() : '';
+
+        for (const conv of this._conversations) {
+            const convNormId = NormalizeUUID(conv.ID);
+            if (convNormId === normId) {
+                conv.IsResolved = true;
+                conv.ResolvedByUserID = resolvedBy;
+                conv.ResolvedAt = now;
+                continue;
+            }
+            if (acceptedAnchorKey) {
+                const sibling = this._suggestionsByConversationId.get(convNormId);
+                if (
+                    sibling &&
+                    sibling.Outcome === null &&
+                    (sibling.AnchorKey ?? '').trim().toLowerCase() === acceptedAnchorKey
+                ) {
+                    sibling.Outcome = 'Superseded';
+                    conv.IsResolved = true;
+                    conv.ResolvedByUserID = resolvedBy;
+                    conv.ResolvedAt = now;
+                }
+            }
+        }
+
+        this.recomputeRollup();
+        this.notifyChanged();
     }
 
     /**

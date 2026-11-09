@@ -2230,8 +2230,42 @@ export abstract class BaseEntity<T = unknown> {
         ByTypeEntityName: Map<string, SubtypeTypeFieldRule[]>;
     } | null = null;
 
-    /** Options objects whose IS-A chain has already been reconciled in the current `Save()` call. */
-    private static readonly _reconciledSaveOptions = new WeakSet<EntitySaveOptions>();
+    /**
+     * Active `(EntitySaveOptions -> WeakSet<RootEntity>)` pairs whose IS-A chain is currently inside
+     * an initiating `Save()` call, preventing leaf delegation from double-reconciling the same chain
+     * while allowing callers to reuse a single `EntitySaveOptions` instance across sequential or
+     * concurrent saves of other records.
+     */
+    private static readonly _reconciledSaveChains = new WeakMap<EntitySaveOptions, WeakSet<BaseEntity>>();
+
+    /** Per-instance async queue serializing `EnsureISAChild` and `ReconcileISAChild` calls. */
+    private _isaChildOpQueue: Promise<unknown> = Promise.resolve();
+
+    private static hasReconciledSaveChain(options: EntitySaveOptions, root: BaseEntity): boolean {
+        return BaseEntity._reconciledSaveChains.get(options)?.has(root) ?? false;
+    }
+
+    private static markReconciledSaveChain(options: EntitySaveOptions, root: BaseEntity): void {
+        let roots = BaseEntity._reconciledSaveChains.get(options);
+        if (!roots) {
+            roots = new WeakSet<BaseEntity>();
+            BaseEntity._reconciledSaveChains.set(options, roots);
+        }
+        roots.add(root);
+    }
+
+    private static unmarkReconciledSaveChain(options: EntitySaveOptions, root: BaseEntity): void {
+        BaseEntity._reconciledSaveChains.get(options)?.delete(root);
+    }
+
+    private runExclusiveISAChildOp<T>(fn: () => Promise<T>): Promise<T> {
+        const next = this._isaChildOpQueue.then(fn, fn);
+        this._isaChildOpQueue = next.then(
+            () => undefined,
+            () => undefined
+        );
+        return next;
+    }
 
     /** Indexes over engine-cached arrays, keyed by the live array itself; see {@link findEngineCachedRow}. */
     private static _engineCachedRowIndexes = new WeakMap<readonly BaseEntity[], EngineCachedRowIndex>();
@@ -2343,6 +2377,10 @@ export abstract class BaseEntity<T = unknown> {
      * @returns The linked child BaseEntity, or null if no subtype applies.
      */
     public async EnsureISAChild(entityName?: string): Promise<BaseEntity | null> {
+        return this.runExclusiveISAChildOp(() => this.ensureISAChildInternal(entityName));
+    }
+
+    private async ensureISAChildInternal(entityName?: string): Promise<BaseEntity | null> {
         if (!entityName) {
             entityName = await this.ResolveSubtypeEntityName();
         }
@@ -2631,6 +2669,10 @@ export abstract class BaseEntity<T = unknown> {
      * it intact so `Save()` can enforce `OnSubtypeChange` (`'Refuse'` or `'Replace'`).
      */
     public async ReconcileISAChild(): Promise<BaseEntity | null> {
+        return this.runExclusiveISAChildOp(() => this.reconcileISAChildInternal());
+    }
+
+    private async reconcileISAChildInternal(): Promise<BaseEntity | null> {
         if (!this.EntityInfo.IsParentType || this.EntityInfo.AllowMultipleSubtypes) {
             return null;
         }
@@ -2658,7 +2700,7 @@ export abstract class BaseEntity<T = unknown> {
         if (!resolvedName) {
             return null;
         }
-        const ensured = await this.EnsureISAChild(resolvedName);
+        const ensured = await this.ensureISAChildInternal(resolvedName);
         if (ensured && ensured.EntityInfo.IsParentType) {
             await ensured.ReconcileISAChild();
         }
@@ -2835,9 +2877,22 @@ export abstract class BaseEntity<T = unknown> {
         }
         const maybePromise = driver.Validate(this, result, this.resolveActiveUserOrNull());
         if (maybePromise instanceof Promise) {
-            // Avoid unhandled rejection when a caller invokes synchronous Validate() on an async driver;
-            // Save() always awaits validateSubtypeDriverAsync() instead.
-            maybePromise.catch(() => undefined);
+            maybePromise.catch((err) => {
+                LogError(
+                    `SubtypeSelector.Driver Validate rejected asynchronously during synchronous Validate() on '${this.EntityInfo.Name}': ${BaseEntity.errorText(err)}`
+                );
+            });
+            const msg = `Subtype driver for '${this.EntityInfo.Name}' requires asynchronous validation; use ValidateAsync() or Save() instead of synchronous Validate().`;
+            LogError(msg);
+            result.Success = false;
+            result.Errors.push(
+                new ValidationErrorInfo(
+                    this.EntityInfo.FirstPrimaryKey?.Name ?? 'ID', // first-pk-ok: fallback source field name for entity-level validation error
+                    msg,
+                    null,
+                    ValidationErrorType.Failure
+                )
+            );
         }
     }
 
@@ -6086,18 +6141,26 @@ export abstract class BaseEntity<T = unknown> {
         // in one, taken only when this entity starts an IS-A chain save whose writes a failure undoes.
         const enclosing = this._unitOfWork;
         let part: UnitOfWorkPart | null = null;
+        let activeSaveOptions: EntitySaveOptions | null = null;
+        let reconciledChainRoot: BaseEntity | null = null;
 
         try {
             this.FlushJSONFieldObjects(); // idempotent; covers graph-node saves that bypass Save()
             const initialDirtyState = this.Dirty; // save this because parent entity save cycle, if any, will clear their dirty flags
 
             const _options: EntitySaveOptions = options ? options : new EntitySaveOptions();
+            activeSaveOptions = _options;
 
             // Generic SubtypeSelector orchestration (AutoEnsureOnSave & OnSubtypeChange: 'Refuse' | 'Replace').
             // Runs once on the initiating Save() across the IS-A chain from root downward before leaf
             // delegation, so newly-ensured children participate in the leaf's single atomic transaction.
-            if (!_options.IsParentEntitySave && !_options.ReplayOnly && !BaseEntity._reconciledSaveOptions.has(_options)) {
-                BaseEntity._reconciledSaveOptions.add(_options);
+            if (
+                !_options.IsParentEntitySave &&
+                !_options.ReplayOnly &&
+                !BaseEntity.hasReconciledSaveChain(_options, this.RootEntity)
+            ) {
+                reconciledChainRoot = this.RootEntity;
+                BaseEntity.markReconciledSaveChain(_options, reconciledChainRoot);
                 const reconcileOutcome = await this.reconcileISAChainBeforeSave(_options);
                 if (reconcileOutcome.kind === 'handled') {
                     return reconcileOutcome.result;
@@ -6118,10 +6181,13 @@ export abstract class BaseEntity<T = unknown> {
             }
 
             // IS-A orchestration: determine if this is the initiating save in a parent chain
-            // (or a standalone entity with a SubtypeSelector.Driver whose hooks run inside a unit of work)
-            const isISAInitiator =
-                (Boolean(this._parentEntity) || Boolean(this.EntityInfo?.SubtypeSelectorConfig?.Driver)) &&
-                !_options.IsParentEntitySave;
+            // (or a standalone entity whose active SubtypeSelector.Driver resolves to a registered driver)
+            const hasActiveDriver =
+                !this._parentEntity &&
+                !_options.IsParentEntitySave &&
+                Boolean(this.EntityInfo?.SubtypeSelectorConfig?.Driver) &&
+                (await this.ResolveSubtypeDriver()) !== null;
+            const isISAInitiator = (Boolean(this._parentEntity) || hasActiveDriver) && !_options.IsParentEntitySave;
 
             // Open (or join) a transaction scope for the parent chain. The provider arbitrates:
             // if a transaction is already in flight — an application cascade, an enclosing graph
@@ -6377,20 +6443,22 @@ export abstract class BaseEntity<T = unknown> {
                             return result;
                         }
                         else {
+                            // Enlist SubtypeSelector.Driver AfterSave inside the open group transaction
+                            // so it runs atomically (and rolls back the group if it throws), matching direct Save().
+                            if (!_options.ReplayOnly && this.EntityInfo?.SubtypeSelectorConfig?.Driver) {
+                                this.TransactionGroup.RegisterInTransactionAfterSave(this, () =>
+                                    this.runSubtypeDriverAfterSave(wasNewBeforeFinalize)
+                                );
+                            }
                             // we are part of a transaction group, so we return true and subscribe to the transaction groups' events and do the finalization work then
                             this.TransactionGroup.TransactionNotifications$.subscribe(({ success, results, error }) => {
                                 const transItem = success && results ? results.find(r => r.Transaction.BaseEntity === this) : undefined;
                                 if (transItem) {
                                     const finalized = this.finalizeSave(transItem.Result, saveSubType, _options); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
-                                    if (finalized && !_options.ReplayOnly) {
-                                        void this.runSubtypeDriverAfterSave(wasNewBeforeFinalize).catch(driverErr => {
-                                            LogError(`SubtypeSelector.Driver AfterSave failed after TransactionGroup commit on '${this.EntityInfo?.Name}': ${BaseEntity.errorText(driverErr)}`);
+                                    if (finalized && !_options.ReplayOnly && !_options.IsParentEntitySave) {
+                                        void this.runChainPostSaveHooks().catch(hookErr => {
+                                            LogError(`PostSave hook failed after TransactionGroup commit on '${this.EntityInfo?.Name}': ${BaseEntity.errorText(hookErr)}`);
                                         });
-                                        if (!_options.IsParentEntitySave) {
-                                            void this.runChainPostSaveHooks().catch(hookErr => {
-                                                LogError(`PostSave hook failed after TransactionGroup commit on '${this.EntityInfo?.Name}': ${BaseEntity.errorText(hookErr)}`);
-                                            });
-                                        }
                                     }
                                 }
                                 else {
@@ -6456,6 +6524,11 @@ export abstract class BaseEntity<T = unknown> {
             }
 
             return false;
+        }
+        finally {
+            if (activeSaveOptions && reconciledChainRoot) {
+                BaseEntity.unmarkReconciledSaveChain(activeSaveOptions, reconciledChainRoot);
+            }
         }
     }
 
@@ -6633,9 +6706,14 @@ export abstract class BaseEntity<T = unknown> {
 
             const leafToSave = root.LeafEntity;
             const saveOpts = Object.assign(new EntitySaveOptions(), options);
-            BaseEntity._reconciledSaveOptions.add(saveOpts);
+            BaseEntity.markReconciledSaveChain(saveOpts, root);
 
-            const saved = await BaseEntity.inUnitOfWork(leafToSave, unit, target => target._innerSave(saveOpts));
+            let saved: boolean;
+            try {
+                saved = await BaseEntity.inUnitOfWork(leafToSave, unit, target => target._innerSave(saveOpts));
+            } finally {
+                BaseEntity.unmarkReconciledSaveChain(saveOpts, root);
+            }
             if (!saved) {
                 if (attachedNewChild) {
                     attachedNewChild._parentEntity = null;

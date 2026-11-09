@@ -497,6 +497,34 @@ describe('MjFoldedSubtypeSectionComponent (DOM)', () => {
         expect(dirtyChild.Revert).toHaveBeenCalledTimes(1);
         expect(parent.ReconcileISAChild).toHaveBeenCalled();
     });
+
+    it('primes lastWatchSignature on Record assignment without duplicate ngDoCheck reconciles and reads saved record.ISAChild', async () => {
+        const issueInfo = makeChildEntityInfo('GitHub Issue Tasks', 'GitHubIssueTasks', ['Number', 'HtmlURL']);
+        const savedChild = makeMockChildRecord(issueInfo, true);
+        const parent = makeMockParentRecord({
+            selectorConfig: { Path: 'TypeID.ExtensionEntity', FoldIntoForm: true },
+            initialTypeId: 'type-issue',
+            isSaved: true,
+            savedChild,
+            resolveEntityByType: () => savedChild,
+            resolveEntityNameByType: () => 'GitHub Issue Tasks',
+        });
+
+        const f = renderComponentFixture(MjFoldedSubtypeSectionComponent, {
+            imports: [CollapsiblePanelStub, FormFieldStub, MJAlertComponent],
+            declarations: [MjFoldedSubtypeSectionComponent],
+            inputs: { Record: parent, EditMode: false },
+        });
+        await settleFixture(f);
+
+        // Saved parent with pre-populated ISAChild renders child fields and does NOT re-reconcile on subsequent ngDoCheck ticks
+        expect(f.componentInstance.ActiveChildRecord).toBe(savedChild);
+        const callsAfterMount = (parent.ReconcileISAChild as ReturnType<typeof vi.fn>).mock.calls.length;
+        f.componentInstance.ngDoCheck();
+        f.componentInstance.ngDoCheck();
+        await settleFixture(f);
+        expect((parent.ReconcileISAChild as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callsAfterMount);
+    });
 });
 
 describe('MjIsaRelatedPanelComponent suppression when FoldIntoForm is enabled', () => {

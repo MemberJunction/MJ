@@ -187,19 +187,30 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             void context.heartbeat?.();
         }
 
-        // Claim + run the due routines with bounded concurrency and per-routine isolation.
+        // Resolve each due routine's owner user BEFORE claiming NextRunAt so a transient UserCache
+        // miss never burns a OneShot routine's NextRunAt=null without executing it.
         const due = candidates.filter(r => IsRoutineDue(r, now));
-        const claimed: MJUserRoutineEntity[] = [];
+        const claimed: Array<{ routine: MJUserRoutineEntity; ownerUser: UserInfo }> = [];
         for (const routine of due) {
+            let ownerUser: UserInfo;
+            try {
+                ownerUser = await this.resolveRoutineOwnerUser(routine, context.ContextUser);
+            } catch (error) {
+                this.logError(
+                    `Skipping claim for routine "${routine.Name}" (${routine.ID}) because owner user could not be resolved — NextRunAt preserved for retry`,
+                    error
+                );
+                continue;
+            }
             if (await this.claimRoutine(routine, now)) {
-                claimed.push(routine);
+                claimed.push({ routine, ownerUser });
             }
         }
 
-        const summaries = await RunWithBoundedConcurrency(claimed, maxConcurrent, async (routine) => {
+        const summaries = await RunWithBoundedConcurrency(claimed, maxConcurrent, async ({ routine, ownerUser }) => {
             // Per-routine error isolation: one routine failing must never kill the sweep.
             try {
-                return await this.executeRoutine(routine, context);
+                return await this.executeRoutine(routine, context, ownerUser);
             } catch (error) {
                 this.logError(`Routine "${routine.Name}" (${routine.ID}) failed outside run tracking`, error);
                 return { RoutineID: routine.ID, RunStatus: 'Failed', Notified: false } satisfies RoutineExecutionSummary;
@@ -427,10 +438,11 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
      */
     private async executeRoutine(
         routine: MJUserRoutineEntity,
-        context: RoutineRunContext
+        context: RoutineRunContext,
+        preResolvedOwnerUser?: UserInfo
     ): Promise<RoutineExecutionSummary> {
         const contextUser = context.ContextUser;
-        const ownerUser = await this.resolveRoutineOwnerUser(routine, contextUser);
+        const ownerUser = preResolvedOwnerUser ?? (await this.resolveRoutineOwnerUser(routine, contextUser));
 
         let gateResult: WakeGateEvaluationResult | undefined;
         if (!context.BypassWakeGate && (routine.WakeConfiguration || routine.WakeConfigurationObject)) {

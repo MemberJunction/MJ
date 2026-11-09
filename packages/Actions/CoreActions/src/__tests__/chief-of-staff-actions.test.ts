@@ -45,16 +45,23 @@ vi.mock('@memberjunction/actions-base', () => ({
     },
 }));
 
-vi.mock('@memberjunction/core', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@memberjunction/core')>()),
-    LogError: vi.fn(),
-    Metadata: class {
-        GetEntityObject = (...args: unknown[]) => getEntityObjectMock(...args);
-    },
-    RunView: class {
-        RunView = (...args: unknown[]) => runViewMock(...args);
-    },
-}));
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    class MockRunView {
+        public static FromMetadataProvider(): MockRunView {
+            return new MockRunView();
+        }
+        public RunView = (...args: Parameters<typeof runViewMock>) => runViewMock(...args);
+    }
+    return {
+        ...actual,
+        LogError: vi.fn(),
+        Metadata: class {
+            GetEntityObject = (...args: Parameters<typeof getEntityObjectMock>) => getEntityObjectMock(...args);
+        },
+        RunView: MockRunView,
+    };
+});
 
 const resolveRequestTypeMock = vi.fn(async (name: string) => (name === 'Approval' ? 'approval-type-id' : null));
 vi.mock('@memberjunction/aiengine', () => ({
@@ -64,21 +71,38 @@ vi.mock('@memberjunction/aiengine', () => ({
             get Agents() {
                 return agentsList;
             },
-            CanUserRunAgent: (...args: unknown[]) => canUserRunAgentMock(...args),
-            ResolveAgentRequestTypeID: (name: string, user: unknown) => resolveRequestTypeMock(name, user),
+            CanUserRunAgent: (...args: Parameters<typeof canUserRunAgentMock>) => canUserRunAgentMock(...args),
+            ResolveAgentRequestTypeID: (name: string, user: UserInfo) => resolveRequestTypeMock(name, user),
         },
     },
 }));
 
-vi.mock('@memberjunction/ai-core-plus', () => ({
-    AgentUserPolicyEngine: {
-        Instance: {
-            GetPolicyForAgentAndUser: (...args: unknown[]) => getPolicyMock(...args),
-            SetCachedPolicy: (...args: unknown[]) => setCachedPolicyMock(...args),
-            BuildPromptPolicyContextBlock: (...args: unknown[]) => buildSummaryMock(...args),
+vi.mock('@memberjunction/ai-core-plus', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/ai-core-plus')>();
+    return {
+        ...actual,
+        AgentUserPolicyEngine: {
+            Instance: {
+                GetPolicyForAgentAndUser: (...args: Parameters<typeof getPolicyMock>) => getPolicyMock(...args),
+                ResolvePolicyForAgentAndUser: async (...args: Parameters<typeof getPolicyMock>) => {
+                    const res = await getPolicyMock(...args);
+                    if (res && typeof res === 'object' && 'status' in res) {
+                        return res;
+                    }
+                    return res ? { status: 'found', policy: res } : { status: 'none', policy: null };
+                },
+                SetCachedPolicy: (...args: Parameters<typeof setCachedPolicyMock>) => setCachedPolicyMock(...args),
+                ClearCache: vi.fn(),
+                BuildPromptPolicyContextBlock: (...args: Parameters<typeof buildSummaryMock>) => buildSummaryMock(...args),
+                SnapshotPolicy: (p: MJAIAgentUserPolicyEntity) => actual.AgentUserPolicyEngine.Instance.SnapshotPolicy(p),
+                DetectAgentPolicyWidening: (
+                    baseline: ReturnType<typeof actual.AgentUserPolicyEngine.Instance.SnapshotPolicy> | null,
+                    proposed: MJAIAgentUserPolicyEntity
+                ) => actual.AgentUserPolicyEngine.Instance.DetectAgentPolicyWidening(baseline, proposed),
+            },
         },
-    },
-}));
+    };
+});
 
 vi.mock('@memberjunction/ai-agents', () => ({
     AgentWakeTriggerService: {
@@ -120,7 +144,12 @@ describe('Chief of Staff Actions Suite', () => {
         agentsList.length = 0;
         agentsList.push({ ID: 'cos-agent-id', Name: 'Chief of Staff' });
         canUserRunAgentMock.mockReset().mockReturnValue(true);
-        runViewMock.mockReset().mockResolvedValue({ Success: true, Results: [] });
+        runViewMock.mockReset().mockImplementation(async (rvParams?: { EntityName?: string }) => {
+            if (rvParams?.EntityName === 'MJ: Users') {
+                return { Success: true, Results: [{ ID: 'target-user', IsActive: true }] };
+            }
+            return { Success: true, Results: [] };
+        });
         getEntityObjectMock.mockReset();
         getPolicyMock.mockReset().mockResolvedValue(null);
         setCachedPolicyMock.mockReset();
@@ -706,7 +735,7 @@ describe('Chief of Staff Actions Suite', () => {
             expect(params.Params.find((p: ActionParam) => p.Name === 'TargetAgentID')?.Value).toBe('factory-agent-id');
         });
 
-        it('TriggerAgentWakeAction delegates to AgentWakeTriggerService.TriggerWakeForWorkstream and populates output params', async () => {
+        it('TriggerAgentWakeAction delegates to AgentWakeTriggerService.TriggerWakeForWorkstream for Owner/self wakes and rejects unauthorized cross-user wakes', async () => {
             triggerWakeForWorkstreamMock.mockResolvedValueOnce({
                 triggered: true,
                 resultCode: 'WAKE_SCHEDULED',
@@ -718,9 +747,12 @@ describe('Chief of Staff Actions Suite', () => {
                 nextRunAtISO: '2026-11-09T18:00:00.000Z',
             });
 
+            const ownerUser = makeUser('admin-1', 'Admin Owner');
+            ownerUser.Type = 'Owner';
+
             const params: RunActionParams = {
                 Action: {} as RunActionParams['Action'],
-                ContextUser: makeUser('pm-1', 'Product Manager'),
+                ContextUser: ownerUser,
                 Filters: [],
                 Params: [
                     { Name: 'TargetUserID', Type: 'Input', Value: 'dev-1' },
@@ -737,6 +769,146 @@ describe('Chief of Staff Actions Suite', () => {
             expect(triggerWakeForWorkstreamMock).toHaveBeenCalledTimes(1);
             expect(params.Params.find((p: ActionParam) => p.Name === 'RoutineID')?.Value).toBe('routine-100');
             expect(params.Params.find((p: ActionParam) => p.Name === 'TargetAgentID')?.Value).toBe('factory-agent-id');
+
+            // Non-owner cross-user wake is rejected
+            const nonOwnerRes = await invokeAction(new TriggerAgentWakeAction(), {
+                ...params,
+                ContextUser: makeUser('pm-1', 'Product Manager'),
+            });
+            expect(nonOwnerRes.Success).toBe(false);
+            expect(nonOwnerRes.ResultCode).toBe('PERMISSION_DENIED');
+
+            // Agent-invoked cross-user wake is rejected even when ContextUser is Owner
+            const agentCrossUserRes = await invokeAction(new TriggerAgentWakeAction(), {
+                ...params,
+                Context: { AgentID: 'factory-agent-id' },
+            });
+            expect(agentCrossUserRes.Success).toBe(false);
+            expect(agentCrossUserRes.ResultCode).toBe('PERMISSION_DENIED');
+        });
+
+        it('ConfigureAgentUserPolicyAction blocks cross-agent targeting, policy loosening by agents, and fails closed on lookup error', async () => {
+            // 1. Cross-agent targeting rejected when invoked by an agent
+            const crossAgentRes = await invokeAction(new ConfigureAgentUserPolicyAction(), {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('dev-1', 'Dev One'),
+                Context: { AgentID: 'factory-agent-id' },
+                Filters: [],
+                Params: [{ Name: 'AgentID', Type: 'Input', Value: 'cos-agent-id' }],
+            });
+            expect(crossAgentRes.Success).toBe(false);
+            expect(crossAgentRes.ResultCode).toBe('PERMISSION_DENIED');
+
+            // 2. Self-widening (unpausing or raising threshold) rejected when invoked by an agent
+            const existingPausedStub = {
+                ID: 'policy-paused',
+                AgentID: 'factory-agent-id',
+                UserID: 'dev-1',
+                Status: 'Paused' as MJAIAgentUserPolicyEntity['Status'],
+                CoordinationMode: 'Observer' as MJAIAgentUserPolicyEntity['CoordinationMode'],
+                AllowInterAgentCoordination: false,
+                DefaultDataAccessMode: 'ReadOnly' as MJAIAgentUserPolicyEntity['DefaultDataAccessMode'],
+                EmailChannelMode: 'DraftOnly' as MJAIAgentUserPolicyEntity['EmailChannelMode'],
+                PhoneChannelMode: 'Disabled' as MJAIAgentUserPolicyEntity['PhoneChannelMode'],
+                MessagingChannelMode: 'DraftOnly' as MJAIAgentUserPolicyEntity['MessagingChannelMode'],
+                CalendarChannelMode: 'ReadOnly' as MJAIAgentUserPolicyEntity['CalendarChannelMode'],
+                RequireApprovalForExternalComms: true,
+                RequireApprovalForFinancials: true,
+                RequireApprovalForDestructiveActions: true,
+                AutoApproveAmountThreshold: 100,
+                EntityAccessRulesObject: [],
+                ActionPolicyRulesObject: [],
+                Save: vi.fn().mockResolvedValue(true),
+            };
+            getPolicyMock.mockResolvedValueOnce(existingPausedStub);
+
+            const widenRes = await invokeAction(new ConfigureAgentUserPolicyAction(), {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('dev-1', 'Dev One'),
+                Context: { AgentID: 'factory-agent-id' },
+                Filters: [],
+                Params: [
+                    { Name: 'Status', Type: 'Input', Value: 'Active' },
+                    { Name: 'AutoApproveAmountThreshold', Type: 'Input', Value: 5000 },
+                ],
+            });
+            expect(widenRes.Success).toBe(false);
+            expect(widenRes.ResultCode).toBe('PERMISSION_DENIED');
+            expect(widenRes.Message).toMatch(/Cannot widen|Cannot increase/);
+            expect(existingPausedStub.Save).not.toHaveBeenCalled();
+
+            // 3. Policy lookup error fails closed
+            getPolicyMock.mockResolvedValueOnce({
+                status: 'error',
+                policy: null,
+                errorMessage: 'Database unavailable',
+            });
+            const errRes = await invokeAction(new ConfigureAgentUserPolicyAction(), {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('dev-1', 'Dev One'),
+                Context: { AgentID: 'factory-agent-id' },
+                Filters: [],
+                Params: [{ Name: 'DisplayNameOverride', Type: 'Input', Value: 'Builder' }],
+            });
+            expect(errRes.Success).toBe(false);
+            expect(errRes.ResultCode).toBe('POLICY_LOOKUP_FAILED');
+        });
+
+        it('SendInterAgentRequestAction blocks sender spoofing, inactive TargetUserID, and fails closed on lookup error', async () => {
+            // 1. Spoofed sender AgentName rejected when invoked by factory-agent-id
+            const spoofRes = await invokeAction(new SendInterAgentRequestAction(), {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('dev-1', 'Dev One'),
+                Context: { AgentID: 'factory-agent-id' },
+                Filters: [],
+                Params: [
+                    { Name: 'AgentName', Type: 'Input', Value: 'Chief of Staff' },
+                    { Name: 'TargetUserID', Type: 'Input', Value: 'reviewer-2' },
+                    { Name: 'Subject', Type: 'Input', Value: 'Spoof attempt' },
+                    { Name: 'Message', Type: 'Input', Value: 'Pretending to be Chief of Staff' },
+                ],
+            });
+            expect(spoofRes.Success).toBe(false);
+            expect(spoofRes.ResultCode).toBe('PERMISSION_DENIED');
+
+            // 2. Inactive or non-existent TargetUserID rejected
+            runViewMock.mockImplementationOnce(async () => ({
+                Success: true,
+                Results: [{ ID: 'reviewer-2', IsActive: false }],
+            }));
+            const inactiveRes = await invokeAction(new SendInterAgentRequestAction(), {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('dev-1', 'Dev One'),
+                Context: { AgentID: 'factory-agent-id' },
+                Filters: [],
+                Params: [
+                    { Name: 'TargetUserID', Type: 'Input', Value: 'reviewer-2' },
+                    { Name: 'Subject', Type: 'Input', Value: 'Check' },
+                    { Name: 'Message', Type: 'Input', Value: 'Hello' },
+                ],
+            });
+            expect(inactiveRes.Success).toBe(false);
+            expect(inactiveRes.ResultCode).toBe('VALIDATION_ERROR');
+
+            // 3. Policy lookup error fails closed
+            getPolicyMock.mockResolvedValueOnce({
+                status: 'error',
+                policy: null,
+                errorMessage: 'Policy query failed',
+            });
+            const lookupErrRes = await invokeAction(new SendInterAgentRequestAction(), {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('dev-1', 'Dev One'),
+                Context: { AgentID: 'factory-agent-id' },
+                Filters: [],
+                Params: [
+                    { Name: 'TargetUserID', Type: 'Input', Value: 'reviewer-2' },
+                    { Name: 'Subject', Type: 'Input', Value: 'Check' },
+                    { Name: 'Message', Type: 'Input', Value: 'Hello' },
+                ],
+            });
+            expect(lookupErrRes.Success).toBe(false);
+            expect(lookupErrRes.ResultCode).toBe('POLICY_LOOKUP_FAILED');
         });
     });
 });

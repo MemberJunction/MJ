@@ -4,6 +4,8 @@ import {
     CompositeKey,
     EntityFieldTSType,
     EntityInfo,
+    EntityTransactionScope,
+    IEntityDataProvider,
     IMetadataProvider,
     RunViewParams,
     RunViewResult,
@@ -13,6 +15,8 @@ import {
 import {
     BUILT_IN_COMMENT_TYPE_IDS,
     BUILT_IN_CONVERSATION_TYPE_IDS,
+    ConversationEngine,
+    MJCommentTypeEntity,
     MJFieldSuggestionEntity,
 } from '@memberjunction/core-entities';
 import {
@@ -492,6 +496,205 @@ describe('FieldSuggestionCommentDriver, Server Subclasses & Security Hooks', () 
                 expect(superSaveSpy).toHaveBeenCalledTimes(1);
             } finally {
                 superSaveSpy.mockRestore();
+            }
+        });
+
+        it('wraps OnAccept + super.Save in BeginEntityTransaction and rolls back when super.Save returns false', async () => {
+            const entityInfo = makeTargetEntityInfo({ allowFieldSuggestions: true });
+            const hoursFieldState: FakeFieldState = { Name: 'HoursEstimated', Value: 2 };
+            const targetRecord = {
+                EntityInfo: entityInfo,
+                InnerLoad: vi.fn(async (_ck: CompositeKey) => true),
+                GetFieldByName: (name: string) => (name === 'HoursEstimated' ? hoursFieldState : null),
+                Save: vi.fn(async () => true),
+                LatestResult: null,
+            } as Partial<BaseEntity> as BaseEntity;
+
+            const commitSpy = vi.fn(async () => {});
+            const rollbackSpy = vi.fn(async () => {});
+            const mockScope: EntityTransactionScope = {
+                Commit: commitSpy,
+                Rollback: rollbackSpy,
+                IsActive: true,
+            };
+            const txProvider = {
+                ProviderType: 'Network',
+                SupportsEntityTransactions: true,
+                BeginEntityTransaction: vi.fn(async () => mockScope),
+                Entities: [entityInfo],
+                EntityByID: () => entityInfo,
+                GetEntityObject: vi.fn(async () => targetRecord),
+            } as Partial<IMetadataProvider & IEntityDataProvider> as IMetadataProvider;
+
+            const superSaveSpy = vi
+                .spyOn(Object.getPrototypeOf(MJFieldSuggestionEntityServer.prototype) as BaseEntity, 'Save')
+                .mockResolvedValueOnce(false)
+                .mockResolvedValueOnce(true);
+
+            try {
+                const buildAcceptedSuggestion = (): MJFieldSuggestionEntityServer => {
+                    const inst = Object.create(MJFieldSuggestionEntityServer.prototype) as MJFieldSuggestionEntityServer;
+                    Object.defineProperties(inst, {
+                        ID: { get: () => SUGGESTION_ID },
+                        IsSaved: { get: () => true },
+                        TypeID: { get: () => BUILT_IN_CONVERSATION_TYPE_IDS.COMMENT, set: () => {} },
+                        CommentTypeID: { get: () => BUILT_IN_COMMENT_TYPE_IDS.FIELD_SUGGESTION, set: () => {} },
+                        AnchorType: { get: () => 'Field', set: () => {} },
+                        AnchorKey: { get: () => 'HoursEstimated', set: () => {} },
+                        LinkedEntityID: { get: () => TARGET_ENTITY_ID },
+                        LinkedRecordID: { get: () => TARGET_RECORD_ID },
+                        SuggestedValue: { get: () => '8' },
+                        Outcome: { get: () => 'Accepted' as MJFieldSuggestionEntity['Outcome'] },
+                        UserID: { get: () => USER_ID },
+                        IsResolved: { get: () => false, set: () => {} },
+                        ResolvedByUserID: { get: () => null, set: () => {} },
+                        ResolvedAt: { get: () => null, set: () => {} },
+                        ISAParent: { get: () => null },
+                        ProviderToUse: { get: () => txProvider },
+                        ContextCurrentUser: { get: () => user },
+                        GetFieldByName: {
+                            value: (name: string) =>
+                                name === 'Outcome'
+                                    ? ({ Name: 'Outcome', OldValue: null, Dirty: true } as ReturnType<BaseEntity['GetFieldByName']>)
+                                    : null,
+                        },
+                        RegisterResultHistoryEntry: { value: vi.fn() },
+                    });
+                    return inst;
+                };
+
+                // 1. super.Save returns false -> Rollback() called, Commit() NOT called
+                const failSave = await buildAcceptedSuggestion().Save();
+                expect(failSave).toBe(false);
+                expect(rollbackSpy).toHaveBeenCalledTimes(1);
+                expect(commitSpy).not.toHaveBeenCalled();
+
+                // 2. super.Save returns true -> Commit() called
+                const okSave = await buildAcceptedSuggestion().Save();
+                expect(okSave).toBe(true);
+                expect(commitSpy).toHaveBeenCalledTimes(1);
+            } finally {
+                superSaveSpy.mockRestore();
+            }
+        });
+
+        it('enforces OnSupersede permissions and rejects empty numeric SuggestedValue on non-nullable fields', async () => {
+            const flsDeniedEntity = makeTargetEntityInfo({ deniedUpdateFields: ['HoursEstimated'] });
+            const nonAuthorSuggestion = {
+                ID: SUGGESTION_ID,
+                UserID: '99999999-0000-4000-8000-000000000999',
+                LinkedEntityID: TARGET_ENTITY_ID,
+                LinkedRecordID: TARGET_RECORD_ID,
+                AnchorType: 'Field',
+                AnchorKey: 'HoursEstimated',
+                SuggestedValue: '5',
+                Outcome: 'Superseded',
+                IsResolved: false,
+                ResolvedByUserID: null as string | null,
+                ResolvedAt: null as Date | null,
+            } as Partial<MJFieldSuggestionEntity> as MJFieldSuggestionEntity;
+
+            // Non-author without field Update permission cannot mark suggestion Superseded
+            await expect(
+                driver.OnSupersede({
+                    Provider: { EntityByID: () => flsDeniedEntity } as Partial<IMetadataProvider> as IMetadataProvider,
+                    ContextUser: user,
+                    Comment: null,
+                    ExtensionEntity: nonAuthorSuggestion,
+                })
+            ).rejects.toThrow(/cannot supersede suggestions/);
+
+            // Suggestion author CAN mark their own pending suggestion Superseded
+            const authorSuggestion = {
+                ...nonAuthorSuggestion,
+                UserID: USER_ID,
+            } as Partial<MJFieldSuggestionEntity> as MJFieldSuggestionEntity;
+            await driver.OnSupersede({
+                Provider: { EntityByID: () => flsDeniedEntity } as Partial<IMetadataProvider> as IMetadataProvider,
+                ContextUser: user,
+                Comment: null,
+                ExtensionEntity: authorSuggestion,
+            });
+            expect(authorSuggestion.IsResolved).toBe(true);
+            expect(authorSuggestion.ResolvedByUserID).toBe(USER_ID);
+
+            // Non-nullable numeric field with empty SuggestedValue throws instead of coercing to NaN
+            const nonNullEntityInfo = makeTargetEntityInfo({ allowFieldSuggestions: true });
+            const hoursField = nonNullEntityInfo.Fields.find((f) => f.Name === 'HoursEstimated')!;
+            (hoursField as { AllowsNull: boolean }).AllowsNull = false;
+            const targetRecord = {
+                EntityInfo: nonNullEntityInfo,
+                InnerLoad: vi.fn(async () => true),
+                GetFieldByName: () => ({ Name: 'HoursEstimated', Value: 3 }),
+                Save: vi.fn(async () => true),
+            } as Partial<BaseEntity> as BaseEntity;
+
+            await expect(
+                driver.OnAccept({
+                    Provider: {
+                        ProviderType: 'Network',
+                        Entities: [nonNullEntityInfo],
+                        EntityByID: () => nonNullEntityInfo,
+                        GetEntityObject: vi.fn(async () => targetRecord),
+                    } as Partial<IMetadataProvider> as IMetadataProvider,
+                    ContextUser: user,
+                    Comment: null,
+                    ExtensionEntity: {
+                        ...authorSuggestion,
+                        Outcome: 'Accepted',
+                        SuggestedValue: '   ',
+                    } as Partial<MJFieldSuggestionEntity> as MJFieldSuggestionEntity,
+                })
+            ).rejects.toThrow(/Empty numeric SuggestedValue is not allowed for non-nullable field/i);
+        });
+
+        it('fails closed on malformed AllowedAnchorTypes JSON and denies non-author Delete() on Comment & FieldSuggestion', async () => {
+            const badTypeId = '77777777-1111-4111-8111-777777777777';
+            const commentTypeSpy = vi
+                .spyOn(ConversationEngine.Instance, 'CommentTypeByID')
+                .mockImplementation((id: string) =>
+                    id === badTypeId
+                        ? ({
+                              ID: badTypeId,
+                              Code: 'CUSTOM_BROKEN',
+                              Name: 'Broken Type',
+                              AllowedAnchorTypes: '{not-valid-json',
+                          } as Partial<MJCommentTypeEntity> as MJCommentTypeEntity)
+                        : undefined
+                );
+
+            try {
+                const fakeComment = Object.create(MJCommentEntityServer.prototype) as MJCommentEntityServer;
+                Object.defineProperties(fakeComment, {
+                    TypeID: { get: () => BUILT_IN_CONVERSATION_TYPE_IDS.COMMENT, set: () => {} },
+                    CommentTypeID: { get: () => badTypeId, set: () => {} },
+                    AnchorType: { get: () => 'Record' },
+                    LinkedEntityID: { get: () => TARGET_ENTITY_ID },
+                    UserID: { get: () => '99999999-0000-4000-8000-000000000999' },
+                    IsSaved: { get: () => false },
+                    ProviderToUse: { get: () => ({} as IMetadataProvider) },
+                    ContextCurrentUser: { get: () => user },
+                    RegisterResultHistoryEntry: { value: vi.fn() },
+                });
+
+                // Malformed AllowedAnchorTypes JSON fails closed on Save()
+                expect(await fakeComment.Save()).toBe(false);
+
+                // Non-author non-system Delete() fails closed on both MJCommentEntityServer and MJFieldSuggestionEntityServer
+                expect(await fakeComment.Delete()).toBe(false);
+
+                const fakeSuggestion = Object.create(
+                    MJFieldSuggestionEntityServer.prototype
+                ) as MJFieldSuggestionEntityServer;
+                Object.defineProperties(fakeSuggestion, {
+                    UserID: { get: () => '99999999-0000-4000-8000-000000000999' },
+                    ProviderToUse: { get: () => ({} as IMetadataProvider) },
+                    ContextCurrentUser: { get: () => user },
+                    RegisterResultHistoryEntry: { value: vi.fn() },
+                });
+                expect(await fakeSuggestion.Delete()).toBe(false);
+            } finally {
+                commentTypeSpy.mockRestore();
             }
         });
     });

@@ -2823,7 +2823,14 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                     const loadedComment = await commentObj.Load(conversation.ID);
                     if (loadedComment) {
                         commentObj.CommentTypeID = requestedCommentTypeId;
-                        await commentObj.Save();
+                        const commentSaved = await commentObj.Save();
+                        if (!commentSaved) {
+                            throw new Error(
+                                commentObj.LatestResult?.CompleteMessage ||
+                                    commentObj.LatestResult?.Message ||
+                                    'Failed to update comment type on anchored conversation'
+                            );
+                        }
                     }
                 }
             }
@@ -2941,6 +2948,17 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             ],
             contextUser
         );
+
+        if (commentsResult && !commentsResult.Success) {
+            throw new Error(
+                commentsResult.ErrorMessage || 'Failed to load anchored MJ: Comments records'
+            );
+        }
+        if (suggestionsResult && !suggestionsResult.Success) {
+            throw new Error(
+                suggestionsResult.ErrorMessage || 'Failed to load anchored MJ: Field Suggestions records'
+            );
+        }
 
         if (commentsResult?.Success && Array.isArray(commentsResult.Results)) {
             for (const rawComment of commentsResult.Results as MJCommentEntity[]) {

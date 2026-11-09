@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { EntityInfo, IMetadataProvider, IRunViewProvider, UserInfo } from '@memberjunction/core';
 import {
     BUILT_IN_COMMENT_TYPE_IDS,
     BUILT_IN_CONVERSATION_TYPE_IDS,
@@ -276,5 +276,72 @@ describe('ConversationEngine — ConversationType, CommentType & FieldSuggestion
         expect(bundle.CommentTypeCodeByConversationId.get(convId.toLowerCase())).toBe(
             COMMENT_TYPE_CODES.FIELD_SUGGESTION
         );
+    });
+
+    it('throws in LoadAnchoredCommentsAndSuggestions when either batched RunViews leg fails instead of returning empty maps', async () => {
+        const convId = 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE';
+        const failingProvider: Partial<IMetadataProvider & IRunViewProvider> = {
+            Entities: [{ Name: 'MJ: Comments' } as EntityInfo, { Name: 'MJ: Field Suggestions' } as EntityInfo],
+            RunViews: vi.fn(async () => [
+                { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '', UserViewRunID: '' },
+                {
+                    Success: false,
+                    Results: [],
+                    RowCount: 0,
+                    TotalRowCount: 0,
+                    ExecutionTime: 1,
+                    ErrorMessage: 'Permission denied on MJ: Field Suggestions',
+                    UserViewRunID: '',
+                },
+            ]),
+        };
+
+        await expect(
+            engine.LoadAnchoredCommentsAndSuggestions([convId], contextUser, failingProvider as IMetadataProvider, true)
+        ).rejects.toThrow(/Permission denied on MJ: Field Suggestions/);
+    });
+
+    it('throws in CreateAnchoredConversation when updating CommentTypeID on MJ: Comments fails to save', async () => {
+        const customTypeId = '88888888-8888-4888-8888-888888888888';
+        const mockConversation = {
+            ID: '11112222-3333-4444-8555-666677778888',
+            ISAChild: null,
+            LatestResult: null,
+            NewRecord: vi.fn(),
+            Save: vi.fn(async () => true),
+        } as Partial<MJConversationEntity> as MJConversationEntity;
+
+        const mockComment = {
+            ID: '11112222-3333-4444-8555-666677778888',
+            CommentTypeID: BUILT_IN_COMMENT_TYPE_IDS.COMMENT,
+            LatestResult: {
+                CompleteMessage: 'AnchorType violates CommentType AllowedAnchorTypes',
+                Message: 'AnchorType violates CommentType AllowedAnchorTypes',
+            } as MJCommentEntity['LatestResult'],
+            Load: vi.fn(async () => true),
+            Save: vi.fn(async () => false),
+        } as Partial<MJCommentEntity> as MJCommentEntity;
+
+        const mockProvider: Partial<IMetadataProvider> = {
+            GetEntityObject: (async <T>(entityName: string): Promise<T> => {
+                if (entityName === 'MJ: Conversations') return mockConversation as T;
+                if (entityName === 'MJ: Comments') return mockComment as T;
+                throw new Error(`Unexpected entity ${entityName}`);
+            }) as IMetadataProvider['GetEntityObject'],
+        };
+
+        await expect(
+            engine.CreateAnchoredConversation(
+                {
+                    linkedEntityId: '12345678-1234-4234-8234-123456789012',
+                    linkedRecordId: 'ABCDEF12-1234-4234-8234-123456789012',
+                    anchorType: 'Record',
+                    commentTypeId: customTypeId,
+                    provider: mockProvider as IMetadataProvider,
+                },
+                contextUser
+            )
+        ).rejects.toThrow(/AnchorType violates CommentType AllowedAnchorTypes/);
+        expect(mockComment.Save).toHaveBeenCalledOnce();
     });
 });

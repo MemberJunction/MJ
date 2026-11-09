@@ -89,6 +89,17 @@ export class CreateRecordAction extends BaseRecordMutationAction {
             if ('blocked' in policyOutcome) {
                 return policyOutcome.blocked;
             }
+            if (policyOutcome.allowed.active && policyOutcome.allowed.effectiveWhereClause) {
+                const whereError = await AgentDataPolicyGuard.VerifyEntityStatePassesWhereClause({
+                    params,
+                    entity: entity!,
+                    entityInfo: entityInfo!,
+                    effectiveWhereClause: policyOutcome.allowed.effectiveWhereClause,
+                });
+                if (whereError) {
+                    return whereError;
+                }
+            }
 
             // Save the record
             const saveResult = await entity!.Save();

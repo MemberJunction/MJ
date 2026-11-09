@@ -1,6 +1,6 @@
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
-import { RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { LogError, Metadata, RunView } from '@memberjunction/core';
 import {
     MJUserRoutineEntity,
@@ -278,9 +278,9 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
         workstreamKey: string,
         params: RunActionParams
     ): Promise<MJUserRoutineEntity | null> {
-        const rv = new RunView();
-        const safeUser = userId.replace(/'/g, "''");
-        const safeAgent = agentId.replace(/'/g, "''");
+        const rv = params.Provider ? RunView.FromMetadataProvider(params.Provider) : new RunView();
+        const safeUser = EscapeSQLString(userId);
+        const safeAgent = EscapeSQLString(agentId);
         const res = await rv.RunView<MJUserRoutineEntity>(
             {
                 EntityName: 'MJ: User Routines',

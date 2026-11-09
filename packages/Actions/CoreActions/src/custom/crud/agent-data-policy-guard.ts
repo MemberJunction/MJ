@@ -1,6 +1,8 @@
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import {
+    BaseEntity,
     CompositeKey,
+    DatabasePlatform,
     DatabaseProviderBase,
     EntityInfo,
     IMetadataProvider,
@@ -44,6 +46,25 @@ export type QueryPolicyGuardOutcome =
     | { blocked: ActionResultSimple }
     | { allowed: { active: boolean; deniedFieldPatterns: string[] } };
 
+interface SyntheticRowWhereEvaluatorProvider {
+    EvaluateSyntheticRowWhereClause(
+        entity: BaseEntity,
+        whereClause: string,
+        user: UserInfo,
+        dirtyOnlyOptimization?: boolean
+    ): Promise<boolean>;
+}
+
+function hasSyntheticRowWhereEvaluator(
+    provider: object | null | undefined
+): provider is SyntheticRowWhereEvaluatorProvider {
+    return (
+        Boolean(provider) &&
+        'EvaluateSyntheticRowWhereClause' in (provider as object) &&
+        typeof (provider as SyntheticRowWhereEvaluatorProvider).EvaluateSyntheticRowWhereClause === 'function'
+    );
+}
+
 /**
  * Shared runtime guard that wires `AgentUserPolicyEngine.EvaluateEntityAccess` and
  * `AgentUserPolicyEngine.MaskRecordFields` into record CRUD actions and query actions
@@ -79,11 +100,23 @@ export class AgentDataPolicyGuard {
             return { allowed: { active: false } };
         }
 
-        const policy = await AgentUserPolicyEngine.Instance.GetPolicyForAgentAndUser(
+        const policyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
             callingAgentId,
             contextUser.ID,
-            contextUser
+            contextUser,
+            { provider: input.params.Provider }
         );
+        if (policyLookup.status === 'error') {
+            return {
+                blocked: {
+                    Success: false,
+                    ResultCode: 'PERMISSION_DENIED',
+                    Message: `Agent data-access policy lookup failed; refusing operation (fail-closed): ${policyLookup.errorMessage}`,
+                    Params: input.params.Params,
+                },
+            };
+        }
+        const policy = policyLookup.policy;
         if (!policy) {
             return { allowed: { active: false } };
         }
@@ -201,6 +234,214 @@ export class AgentDataPolicyGuard {
     }
 
     /**
+     * Verifies that an entity's pending in-memory field values satisfy the agent policy's SQL
+     * row-level filter (`effectiveWhereClause`) BEFORE `entity.Save()` commits (covering Create
+     * and post-mutation Update / WriteEntityFields without holding or deadlocking on DB locks).
+     */
+    public static async VerifyEntityStatePassesWhereClause(input: {
+        params: RunActionParams;
+        entity: BaseEntity;
+        entityInfo: EntityInfo;
+        effectiveWhereClause: string;
+        dirtyOnlyOptimization?: boolean;
+    }): Promise<ActionResultSimple | null> {
+        const clause = input.effectiveWhereClause.trim();
+        if (!clause) {
+            return null;
+        }
+        const contextUser = input.params.ContextUser;
+        if (!contextUser) {
+            return {
+                Success: false,
+                ResultCode: 'PERMISSION_DENIED',
+                Message: `Agent policy row filter on "${input.entityInfo.Name}" requires an acting ContextUser.`,
+                Params: input.params.Params,
+            };
+        }
+
+        const candidateProvider = input.params.Provider ?? Metadata.Provider;
+        let passed = false;
+        try {
+            if (hasSyntheticRowWhereEvaluator(candidateProvider)) {
+                passed = await candidateProvider.EvaluateSyntheticRowWhereClause(
+                    input.entity,
+                    clause,
+                    contextUser,
+                    input.dirtyOnlyOptimization === true
+                );
+            } else {
+                const dialect = ClientClauseScreen.DialectFor(candidateProvider);
+                passed = ClientClauseScreen.EvaluateSimpleSqlWherePredicate(
+                    clause,
+                    input.entity.GetAll(),
+                    dialect
+                );
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return {
+                Success: false,
+                ResultCode: 'PERMISSION_DENIED',
+                Message: `Record on entity "${input.entityInfo.Name}" could not be verified against the calling agent's row-level policy filter: ${msg}`,
+                Params: input.params.Params,
+            };
+        }
+
+        if (!passed) {
+            return {
+                Success: false,
+                ResultCode: 'PERMISSION_DENIED',
+                Message: `Record state on entity "${input.entityInfo.Name}" violates the calling agent's row-level policy scope.`,
+                Params: input.params.Params,
+            };
+        }
+        return null;
+    }
+
+    /**
+     * Returns true when `fieldName` is read-denied for the caller (either by role FLS
+     * `entityInfo.GetDeniedReadFields(contextUser)` or by active agent policy `deniedFieldPatterns`).
+     */
+    public static IsFieldReadDeniedForCaller(input: {
+        fieldName: string;
+        entityInfo: EntityInfo | undefined;
+        contextUser: UserInfo | undefined;
+        deniedFieldPatterns?: string[];
+    }): boolean {
+        const normalized = input.fieldName.trim();
+        if (!normalized) return false;
+        if (input.entityInfo && input.contextUser && typeof input.entityInfo.GetDeniedReadFields === 'function') {
+            const roleDenied = input.entityInfo.GetDeniedReadFields(input.contextUser);
+            const targetLower = normalized.toLowerCase();
+            for (const f of roleDenied) {
+                if (f.trim().toLowerCase() === targetLower) {
+                    return true;
+                }
+            }
+        }
+        if (input.deniedFieldPatterns && input.deniedFieldPatterns.length > 0) {
+            const probe: ScalarRecord = { [normalized]: 1 };
+            const masked = AgentUserPolicyEngine.Instance.MaskRecordFields(probe, input.deniedFieldPatterns);
+            if (!(normalized in masked)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Screens `Filter`, `OrderBy`, and `AlternateBaseView` supplied to `Get Records` by an agent:
+     * 1. Refuses unbalanced parentheses (`1=1) OR (1=1`), statement separators, comments, and
+     *    non-entity-view subqueries via {@link ClientClauseScreen.ScreenAgentClause}.
+     * 2. Enforces the agent's data-access policy on any subquery entity referenced in `Filter`/`OrderBy`.
+     * 3. Validates `AlternateBaseView` against usable `entityInfo.AlternateBaseViews`.
+     * 4. Refuses `Filter` or `OrderBy` tokens that reference fields denied by role FLS or agent
+     *    policy `deniedFieldPatterns` (blocking predicate/sort inference oracles such as `SSN LIKE '1%'`).
+     */
+    public static ScreenGetRecordsClauses(input: {
+        params: RunActionParams;
+        entityInfo: EntityInfo;
+        evalState: ActiveAgentPolicyEvaluation | InactiveAgentPolicyEvaluation;
+        filter?: string;
+        orderBy?: string;
+        alternateBaseView?: string;
+    }): ActionResultSimple | null {
+        const md = input.params.Provider ?? Metadata.Provider;
+        const entities = md?.Entities ?? [input.entityInfo];
+        const dialect = ClientClauseScreen.DialectFor(md);
+        const contextUser = input.params.ContextUser;
+
+        if (input.alternateBaseView?.trim()) {
+            const requestedView = ClientClauseScreen.StripIdentifierQuotes(input.alternateBaseView).trim().toLowerCase();
+            const canonicalView = ClientClauseScreen.StripIdentifierQuotes(input.entityInfo.BaseView).trim().toLowerCase();
+            const isRegistered =
+                requestedView === canonicalView ||
+                (input.entityInfo.AlternateBaseViews ?? []).some(
+                    (abv) =>
+                        abv.IsUsable &&
+                        ClientClauseScreen.StripIdentifierQuotes(abv.ViewName).trim().toLowerCase() === requestedView
+                );
+            if (!isRegistered) {
+                return {
+                    Success: false,
+                    ResultCode: 'PERMISSION_DENIED',
+                    Message: `AlternateBaseView "${input.alternateBaseView}" is not a registered usable view on entity "${input.entityInfo.Name}".`,
+                    Params: input.params.Params,
+                };
+            }
+        }
+
+        const subqueryEntities = new Map<string, EntityInfo>();
+        for (const [label, clause] of [
+            ['Filter', input.filter],
+            ['OrderBy', input.orderBy],
+        ] as const) {
+            if (!clause?.trim()) continue;
+            try {
+                const refs = ClientClauseScreen.ScreenAgentClause(clause, label, entities, dialect, contextUser);
+                for (const ref of refs) {
+                    subqueryEntities.set(ref.ID || ref.Name, ref);
+                }
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                return {
+                    Success: false,
+                    ResultCode: 'PERMISSION_DENIED',
+                    Message: `Get Records ${label} rejected by agent data-policy guard: ${msg}`,
+                    Params: input.params.Params,
+                };
+            }
+        }
+
+        const deniedPatterns = new Set<string>(
+            input.evalState.active ? input.evalState.evalResult.deniedFieldPatterns : []
+        );
+
+        if (subqueryEntities.size > 0 && input.evalState.active && contextUser) {
+            const subEval = AgentDataPolicyGuard.evaluateEntitiesForSqlRead(
+                input.params,
+                input.evalState.policy,
+                contextUser,
+                Array.from(subqueryEntities.values()),
+                'Get Records subquery'
+            );
+            if ('blocked' in subEval) {
+                return subEval.blocked;
+            }
+            for (const pat of subEval.allowed.deniedFieldPatterns) {
+                deniedPatterns.add(pat);
+            }
+        }
+
+        const patternList = Array.from(deniedPatterns);
+        for (const [label, clause] of [
+            ['Filter', input.filter],
+            ['OrderBy', input.orderBy],
+        ] as const) {
+            if (!clause?.trim()) continue;
+            const tokens = ClientClauseScreen.ExtractStatementIdentifierTokens(clause, dialect);
+            const offending = tokens.filter((tok) =>
+                AgentDataPolicyGuard.IsFieldReadDeniedForCaller({
+                    fieldName: tok,
+                    entityInfo: input.entityInfo,
+                    contextUser,
+                    deniedFieldPatterns: patternList,
+                })
+            );
+            if (offending.length > 0) {
+                return {
+                    Success: false,
+                    ResultCode: 'PERMISSION_DENIED',
+                    Message: `Get Records ${label} references field(s) denied by field-level policy: ${offending.join(', ')}.`,
+                    Params: input.params.Params,
+                };
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Evaluates `rlsNarrowing.recordConditionExpression` on a loaded/post-mutation record when active rules exist,
      * returning a deterministic denial/approval/deferral `ActionResultSimple` if blocked.
      */
@@ -301,7 +542,8 @@ export class AgentDataPolicyGuard {
     public static async EvaluateStoredQuery(
         params: RunActionParams,
         queryId: string | undefined,
-        queryName: string | undefined
+        queryName: string | undefined,
+        queryParameters?: Record<string, string>
     ): Promise<QueryPolicyGuardOutcome> {
         const callingAgentId = AgentDataPolicyGuard.GetCallingAgentID(params);
         const contextUser = params.ContextUser;
@@ -309,11 +551,23 @@ export class AgentDataPolicyGuard {
             return { allowed: { active: false, deniedFieldPatterns: [] } };
         }
 
-        const policy = await AgentUserPolicyEngine.Instance.GetPolicyForAgentAndUser(
+        const policyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
             callingAgentId,
             contextUser.ID,
-            contextUser
+            contextUser,
+            { provider: params.Provider }
         );
+        if (policyLookup.status === 'error') {
+            return {
+                blocked: {
+                    Success: false,
+                    ResultCode: 'PERMISSION_DENIED',
+                    Message: `Agent data-access policy lookup failed; refusing stored query (fail-closed): ${policyLookup.errorMessage}`,
+                    Params: params.Params,
+                },
+            };
+        }
+        const policy = policyLookup.policy;
         if (!policy) {
             return { allowed: { active: false, deniedFieldPatterns: [] } };
         }
@@ -344,7 +598,25 @@ export class AgentDataPolicyGuard {
             return { allowed: { active: true, deniedFieldPatterns: [] } };
         }
 
-        const referencedEntities = AgentDataPolicyGuard.resolveStoredQueryEntities(md, queryInfo);
+        const dialect = ClientClauseScreen.DialectFor(md);
+        const renderedOutcome = AgentDataPolicyGuard.renderStoredQuerySql(md, queryInfo, contextUser, queryParameters);
+        if ('blockedMessage' in renderedOutcome) {
+            return {
+                blocked: {
+                    Success: false,
+                    ResultCode: 'PERMISSION_DENIED',
+                    Message: renderedOutcome.blockedMessage,
+                    Params: params.Params,
+                },
+            };
+        }
+
+        const referencedEntities = AgentDataPolicyGuard.resolveStoredQueryEntities(
+            md,
+            queryInfo,
+            renderedOutcome.renderedSql,
+            AgentDataPolicyGuard.policyNarrowsEntityReads(policy)
+        );
         if (referencedEntities === null) {
             return {
                 blocked: {
@@ -361,19 +633,75 @@ export class AgentDataPolicyGuard {
                 blocked: {
                     Success: false,
                     ResultCode: 'PERMISSION_DENIED',
-                    Message: `Stored query "${ queryInfo.Name }" has no catalogued entity lineage and cannot be verified under a narrowed agent data-access policy.`,
+                    Message: `Stored query "${ queryInfo.Name }" has no verifiable entity lineage and cannot be executed under a narrowed agent data-access policy.`,
                     Params: params.Params,
                 },
             };
         }
 
-        return AgentDataPolicyGuard.evaluateEntitiesForSqlRead(
+        const entityCheck = AgentDataPolicyGuard.evaluateEntitiesForSqlRead(
             params,
             policy,
             contextUser,
             referencedEntities,
             `stored query "${ queryInfo.Name }"`
         );
+        if ('blocked' in entityCheck) {
+            return entityCheck;
+        }
+
+        const { deniedFieldPatterns } = entityCheck.allowed;
+        if (deniedFieldPatterns.length > 0) {
+            if (!renderedOutcome.renderedSql) {
+                return {
+                    blocked: {
+                        Success: false,
+                        ResultCode: 'PERMISSION_DENIED',
+                        Message: `Stored query "${ queryInfo.Name }" SQL is unavailable to verify field-level masking rules.`,
+                        Params: params.Params,
+                    },
+                };
+            }
+            try {
+                ClientClauseScreen.AssertNoPositionalColumnRenames(
+                    renderedOutcome.renderedSql,
+                    dialect,
+                    `stored query "${ queryInfo.Name }"`
+                );
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                return {
+                    blocked: {
+                        Success: false,
+                        ResultCode: 'PERMISSION_DENIED',
+                        Message: `Stored query "${ queryInfo.Name }" rejected by agent field-masking guard: ${ msg }`,
+                        Params: params.Params,
+                    },
+                };
+            }
+
+            const unmaskable = ClientClauseScreen.FindUnmaskableStoredQueryDeniedFields(
+                renderedOutcome.renderedSql,
+                dialect,
+                (identifier) => {
+                    const probe: ScalarRecord = { [identifier]: 1 };
+                    const masked = AgentUserPolicyEngine.Instance.MaskRecordFields(probe, deniedFieldPatterns);
+                    return !(identifier in masked);
+                }
+            );
+            if (unmaskable.length > 0) {
+                return {
+                    blocked: {
+                        Success: false,
+                        ResultCode: 'PERMISSION_DENIED',
+                        Message: `Stored query "${ queryInfo.Name }" aliases, aggregates, or filters on field(s) denied by the calling agent's policy (${ unmaskable.join(', ') }), which output column masking cannot strip safely.`,
+                        Params: params.Params,
+                    },
+                };
+            }
+        }
+
+        return entityCheck;
     }
 
     /**
@@ -390,11 +718,23 @@ export class AgentDataPolicyGuard {
             return { allowed: { active: false, deniedFieldPatterns: [] } };
         }
 
-        const policy = await AgentUserPolicyEngine.Instance.GetPolicyForAgentAndUser(
+        const policyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
             callingAgentId,
             contextUser.ID,
-            contextUser
+            contextUser,
+            { provider: params.Provider }
         );
+        if (policyLookup.status === 'error') {
+            return {
+                blocked: {
+                    Success: false,
+                    ResultCode: 'PERMISSION_DENIED',
+                    Message: `Agent data-access policy lookup failed; refusing ad-hoc query (fail-closed): ${policyLookup.errorMessage}`,
+                    Params: params.Params,
+                },
+            };
+        }
+        const policy = policyLookup.policy;
         if (!policy) {
             return { allowed: { active: false, deniedFieldPatterns: [] } };
         }
@@ -478,6 +818,20 @@ export class AgentDataPolicyGuard {
 
         const { deniedFieldPatterns } = entityCheck.allowed;
         if (deniedFieldPatterns.length > 0) {
+            try {
+                ClientClauseScreen.AssertNoPositionalColumnRenames(renderedSql, dialect, 'ad-hoc SQL');
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                return {
+                    blocked: {
+                        Success: false,
+                        ResultCode: 'PERMISSION_DENIED',
+                        Message: `Ad-hoc SQL rejected by agent field-masking guard: ${ msg }`,
+                        Params: params.Params,
+                    },
+                };
+            }
+
             const sqlTokens = ClientClauseScreen.ExtractStatementIdentifierTokens(renderedSql, dialect);
             const tokenProbe: ScalarRecord = {};
             for (const token of sqlTokens) {
@@ -502,11 +856,21 @@ export class AgentDataPolicyGuard {
 
     /**
      * Combines an action's optional user `ExtraFilter` with the agent policy's effective SQL
-     * row-level filter (`whereClause` + resolved `rlsFilterIds`).
+     * row-level filter (`whereClause` + resolved `rlsFilterIds`), asserting first that `existingFilter`
+     * has balanced parentheses and no statement separators or comments so `(${left}) AND (${right})`
+     * can never be broken out of via `1=1) OR (1=1`.
      */
-    public static CombineExtraFilters(existingFilter: string | undefined, policyWhereClause: string): string | undefined {
+    public static CombineExtraFilters(
+        existingFilter: string | undefined,
+        policyWhereClause: string,
+        provider?: IMetadataProvider
+    ): string | undefined {
         const left = existingFilter?.trim() ?? '';
         const right = policyWhereClause.trim();
+        if (left) {
+            const dialect = ClientClauseScreen.DialectFor(provider);
+            ClientClauseScreen.AssertBalancedSingleFragment(left, 'Filter', dialect);
+        }
         if (left && right) {
             return `(${ left }) AND (${ right })`;
         }
@@ -591,9 +955,49 @@ export class AgentDataPolicyGuard {
         return undefined;
     }
 
+    private static renderStoredQuerySql(
+        md: IMetadataProvider | undefined,
+        queryInfo: QueryInfo,
+        contextUser: UserInfo,
+        queryParameters?: Record<string, string>
+    ): { renderedSql: string | null } | { blockedMessage: string } {
+        const rawSql = queryInfo.SQL?.trim() ?? '';
+        if (!rawSql) {
+            return { renderedSql: null };
+        }
+        const platform: DatabasePlatform =
+            md && 'PlatformKey' in md && (md.PlatformKey === 'postgresql' || md.PlatformKey === 'sqlserver')
+                ? (md.PlatformKey as DatabasePlatform)
+                : 'sqlserver';
+        try {
+            const rendered = RenderPipeline.Run(rawSql, {
+                Platform: platform,
+                QueryID: queryInfo.ID,
+                QueryName: queryInfo.Name,
+                ContextUser: contextUser,
+                Parameters: queryParameters,
+                UsesTemplate: Boolean(queryInfo.UsesTemplate),
+                RequireReadStatement: true,
+                QueryInfo: {
+                    SQL: rawSql,
+                    UsesTemplate: Boolean(queryInfo.UsesTemplate),
+                    Parameters: queryInfo.Parameters,
+                },
+            });
+            return { renderedSql: rendered.Trace.AfterTemplates };
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return {
+                blockedMessage: `Stored query "${queryInfo.Name}" SQL could not be rendered safely for agent data-policy verification: ${msg}`,
+            };
+        }
+    }
+
     private static resolveStoredQueryEntities(
         md: IMetadataProvider | undefined,
-        queryInfo: QueryInfo
+        queryInfo: QueryInfo,
+        renderedSql: string | null,
+        policyNarrowsReads: boolean
     ): EntityInfo[] | null {
         const entities = md?.Entities ?? [];
         const resolved = new Map<string, EntityInfo>();
@@ -606,23 +1010,31 @@ export class AgentDataPolicyGuard {
             }
             resolved.set(match.ID || match.Name, match);
         }
-        if (resolved.size > 0) {
-            return Array.from(resolved.values());
-        }
-        if (queryInfo.SQL && queryInfo.SQL.trim().length > 0 && entities.length > 0) {
-            try {
-                const dialect = ClientClauseScreen.DialectFor(md);
-                return ClientClauseScreen.ResolveStatementEntities(
-                    queryInfo.SQL,
-                    entities,
-                    dialect,
-                    `stored query "${ queryInfo.Name }"`
-                );
-            } catch {
-                return [];
+        if (renderedSql && renderedSql.trim().length > 0) {
+            if (entities.length === 0 && policyNarrowsReads) {
+                return null;
             }
+            if (entities.length > 0) {
+                try {
+                    const dialect = ClientClauseScreen.DialectFor(md);
+                    const parsedEntities = ClientClauseScreen.ResolveStatementEntities(
+                        renderedSql,
+                        entities,
+                        dialect,
+                        `stored query "${ queryInfo.Name }"`
+                    );
+                    for (const pe of parsedEntities) {
+                        resolved.set(pe.ID || pe.Name, pe);
+                    }
+                } catch {
+                    return null;
+                }
+            }
+        } else if (policyNarrowsReads) {
+            // Do not trust QueryEntities metadata alone without verifiable SQL under a narrowed policy
+            return null;
         }
-        return [];
+        return Array.from(resolved.values());
     }
 
     private static policyNarrowsEntityReads(policy: MJAIAgentUserPolicyEntity): boolean {

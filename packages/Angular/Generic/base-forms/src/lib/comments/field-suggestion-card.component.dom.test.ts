@@ -10,6 +10,8 @@ import {
     MJFieldSuggestionEntity
 } from '@memberjunction/core-entities';
 import { NormalizeUUID, RegisterClass } from '@memberjunction/global';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
 import { EntitySubtypeUIDriverBase } from '../subtype-ui-driver/entity-subtype-ui-driver';
 import { MjRecordLinkDirective } from '../links/record-link.directive';
@@ -127,6 +129,7 @@ describe('FieldSuggestionCardComponent & Notes & suggestions panel (DOM)', () =>
         };
 
         const f = renderComponentFixture(FieldSuggestionCardComponent, {
+            imports: [MJButtonDirective, SharedGenericModule],
             declarations: [FieldSuggestionCardComponent],
             inputs: {
                 ChildRecord: suggestion,
@@ -172,6 +175,7 @@ describe('FieldSuggestionCardComponent & Notes & suggestions panel (DOM)', () =>
         });
 
         const fAccepted = renderComponentFixture(FieldSuggestionCardComponent, {
+            imports: [MJButtonDirective, SharedGenericModule],
             declarations: [FieldSuggestionCardComponent],
             inputs: {
                 ChildRecord: acceptedSuggestion,
@@ -191,6 +195,7 @@ describe('FieldSuggestionCardComponent & Notes & suggestions panel (DOM)', () =>
         const targetRecord = makeTargetRecord('2026-11-15');
         const pendingSuggestion = makeSuggestion({ Outcome: null });
         const fReadOnly = renderComponentFixture(FieldSuggestionCardComponent, {
+            imports: [MJButtonDirective, SharedGenericModule],
             declarations: [FieldSuggestionCardComponent],
             inputs: {
                 ChildRecord: pendingSuggestion,
@@ -300,6 +305,7 @@ describe('FieldSuggestionCardComponent & Notes & suggestions panel (DOM)', () =>
             await coordinator.LoadForRecord(record, provider);
 
             const f = renderComponentFixture(MjRecordCommentsComponent, {
+                imports: [MJButtonDirective, SharedGenericModule],
                 declarations: [
                     MjRecordCommentsComponent,
                     MjCommentCardDriverHostComponent,
