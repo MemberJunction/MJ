@@ -500,11 +500,51 @@ describe('TaskGraphDispatcher saga coordinator', () => {
             expect(failed?.SecurityEnvelope).toBe('not an envelope');
         });
 
-        it('records a compensation whose insert fails with no other dispatcher\'s row as failed, then escalates it', async () => {
+        it('retries a compensation whose insert failed once (a deadlock, a timeout) and creates it on the next pass', async () => {
+            checkoutGraph(db);
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            let refusals = 1;
+            const pass = coordinatorOver(refusingProvider((row) => row.StepType === 'Action' && row.Status === 'Pending' && refusals-- > 0));
+
+            await pass();
+            expect(compensationOf(db, 'T-B')).toBeUndefined();
+            await pass();
+            const created = compensationOf(db, 'T-B');
+            expect(created?.Status).toBe('Pending');
+            expect(created?.ActionID).toBe(VOID_INVOICE);
+        });
+
+        it('retries a compensation whose action lookup failed, and creates it once the lookup answers', async () => {
+            checkoutGraph(db, { invoiceConfig: { compensationActionName: 'Void Invoice' } });
+            db.Actions.find((a) => a.ID === INVOICE)!.CompensationActionID = null;
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const answer = db.RunView.bind(db);
+            let lookupFailures = 1;
+            vi.spyOn(db, 'RunView').mockImplementation((params, user) => {
+                if (params.EntityName !== 'MJ: Actions' || !params.ExtraFilter?.includes('Name IN')) return answer(params, user);
+                if (lookupFailures-- > 0) {
+                    return { Success: false, Results: [], ErrorMessage: 'Transaction (Process ID 61) was deadlocked' } as ReturnType<SagaDb['RunView']>;
+                }
+                return { Success: true, Results: [{ ID: VOID_INVOICE, Name: 'Void Invoice' }] };
+            });
+            const c = coordinator(db);
+
+            await c.pass();
+            expect(compensationOf(db, 'T-B')).toBeUndefined();
+            await c.pass();
+            const created = compensationOf(db, 'T-B');
+            expect(created?.Status).toBe('Pending');
+            expect(created?.ActionID).toBe(VOID_INVOICE);
+        });
+
+        it('records a compensation whose insert fails on three passes in a row, with no other dispatcher\'s row, as failed, then escalates it', async () => {
             checkoutGraph(db);
             vi.spyOn(console, 'error').mockImplementation(() => undefined);
             const pass = coordinatorOver(refusingProvider((row) => row.StepType === 'Action' && row.Status === 'Pending'));
 
+            await pass();
+            await pass();
+            expect(compensationOf(db, 'T-B')).toBeUndefined();
             await pass();
             const failed = compensationOf(db, 'T-B');
             expect(failed?.Status).toBe('Failed');
@@ -521,6 +561,9 @@ describe('TaskGraphDispatcher saga coordinator', () => {
             await pass();
             compensationOf(db, 'T-B')!.Status = 'Failed';
 
+            expect((await pass()).Pending).toBe(true);
+            expect((await pass()).Pending).toBe(true);
+            expect([...db.Rows.values()].find((r) => r.StepType === 'Human')).toBeUndefined();
             expect((await pass()).Pending).toBe(true);
             const escalation = [...db.Rows.values()].find((r) => r.StepType === 'Human');
             expect(escalation?.Status).toBe('Failed');

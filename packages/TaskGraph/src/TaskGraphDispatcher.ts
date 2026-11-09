@@ -172,6 +172,15 @@ const MAX_SETTLEMENT_RETRY_PASSES = 20;
 const FAILED_GRAPH_BACKOFF_MS = 5 * 60 * 1000;
 
 /**
+ * How many passes in a row may fail to write one saga row (a compensation, or the Human step escalating a
+ * failed one) for a reason that may not repeat before that row is recorded as failed (T5). A deadlock, a
+ * timeout or a dropped connection fails one insert or lookup and the next pass usually succeeds, so one
+ * failure must not end a compensation for good. A cause that cannot change (the action does not exist, the
+ * envelope cannot be read) is recorded at once.
+ */
+const SAGA_ROW_WRITE_ATTEMPTS = 3;
+
+/**
  * What the cost rollup managed to do.
  *
  * `refused-permanent` is a decision the next pass would repeat identically — a truncated tree, a
@@ -580,6 +589,14 @@ export class TaskGraphDispatcher implements IShutdownable {
      * or once the graph is no longer active (settled elsewhere).
      */
     private readonly failedGraphs = new UUIDMap<{ RetryAt: number }>();
+
+    /**
+     * Saga rows this instance failed to write on its last passes, by the task each would compensate
+     * (`CompensatesTaskID`), with the graph it belongs to and how many passes in a row failed
+     * ({@link SAGA_ROW_WRITE_ATTEMPTS}). Cleared when the row lands, when another dispatcher's row is
+     * found, or once the graph is no longer active.
+     */
+    private readonly sagaRowWriteFailures = new UUIDMap<{ GraphID: string; Passes: number }>();
 
     /**
      * Graphs whose settled-branch ANNOUNCEMENTS have already been made by this process.
@@ -1418,6 +1435,9 @@ export class TaskGraphDispatcher implements IShutdownable {
             const active = new UUIDSet(graphs);
             for (const id of [...this.failedGraphs.Keys()]) {
                 if (!active.Has(id)) this.failedGraphs.Delete(id);
+            }
+            for (const [id, failure] of [...this.sagaRowWriteFailures]) {
+                if (!active.Has(failure.GraphID)) this.sagaRowWriteFailures.Delete(id);
             }
         }
         const survivingGraphs: GraphState[] = [];
@@ -4368,9 +4388,12 @@ export class TaskGraphDispatcher implements IShutdownable {
      * is the claim: when two dispatchers both get here, one insert succeeds and the other finds the
      * winner's row and treats the step as already materialized. Nothing is written to the forward step.
      *
-     * A compensation that can never be created (its action no longer resolves, the step's envelope
-     * cannot be read, or the insert fails with no other dispatcher's row behind it) is recorded as a
-     * failed one instead ({@link recordUncreatableSagaRow}), so the saga escalates it rather than waiting.
+     * A compensation that can never be created (its action does not exist, or the step's envelope cannot
+     * be read) is recorded as a failed one at once ({@link recordUncreatableSagaRow}), so the saga
+     * escalates it rather than waiting. One that failed for a reason that may not repeat (the action
+     * lookup errored, or the insert failed with no other dispatcher's row behind it) is retried on later
+     * passes, and recorded as failed only after {@link SAGA_ROW_WRITE_ATTEMPTS} of them in a row
+     * ({@link retrySagaRowOrRecordFailed}).
      *
      * @returns true when this call wrote a row
      */
@@ -4380,7 +4403,8 @@ export class TaskGraphDispatcher implements IShutdownable {
         forwardTask: MJTaskEntity,
         compensation: TaskCompensationStepMetadata,
     ): Promise<boolean> {
-        const compActionID = await this.resolveCompensationActionID(provider, compensation);
+        const action = await this.resolveCompensationActionID(provider, compensation);
+        const compActionID = action.ActionID;
         const envelope = this.compensationEnvelope(graph, forwardTask);
         const compTask = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
         compTask.NewRecord();
@@ -4404,25 +4428,55 @@ export class TaskGraphDispatcher implements IShutdownable {
             },
         };
         compTask.Configuration = JSON.stringify(compConfig);
-        const cannotRun = !compActionID
+        const cannotRun = !compActionID && action.LookupError === undefined
             ? 'its compensation action could not be resolved'
             : 'Refusal' in envelope ? `its security envelope cannot be enforced: ${envelope.Refusal}` : null;
         if (cannotRun) {
             return this.recordUncreatableSagaRow(provider, compTask, `Cannot compensate '${forwardTask.Name}' (${forwardTask.ID}): ${cannotRun}.`);
         }
+        if (action.LookupError !== undefined) {
+            return this.retrySagaRowOrRecordFailed(provider, graph, compTask,
+                `Cannot compensate '${forwardTask.Name}' (${forwardTask.ID}): looking up its compensation action failed: ${action.LookupError}.`);
+        }
         const actingUser = await this.sagaActingUser(provider, graph, forwardTask);
         const recordChanges = await this.loadCorrelatedRecordChanges(provider, forwardTask, actingUser);
         compTask.InputPayload = JSON.stringify(this.buildForwardTaskCompensationInput(forwardTask, compensation, recordChanges));
         if (await compTask.Save()) {
+            this.sagaRowWriteFailures.Delete(forwardTask.ID);
             LogStatus(`[TaskGraphDispatcher] Compensating '${forwardTask.Name}' (${forwardTask.ID}) with task ${compTask.ID}.`);
             return true;
         }
         if (await this.rowCompensating(provider, forwardTask.ID)) {
+            this.sagaRowWriteFailures.Delete(forwardTask.ID);
             LogStatus(`[TaskGraphDispatcher] '${forwardTask.Name}' (${forwardTask.ID}) is already being compensated by another dispatcher.`);
             return false;
         }
-        return this.recordUncreatableSagaRow(provider, compTask,
+        return this.retrySagaRowOrRecordFailed(provider, graph, compTask,
             `Could not create the compensation task for '${forwardTask.Name}' (${forwardTask.ID}): ${compTask.LatestResult?.CompleteMessage ?? 'unknown error'}.`);
+    }
+
+    /**
+     * A saga row's write failed for a reason that may not repeat: a lookup that errored, or an insert
+     * that failed with no other dispatcher's row behind it (or with that check failing too). The next
+     * pass retries it; only after {@link SAGA_ROW_WRITE_ATTEMPTS} passes in a row have failed for the
+     * same row is it recorded as failed ({@link recordUncreatableSagaRow}).
+     *
+     * @returns true when this call wrote the failed row
+     */
+    private async retrySagaRowOrRecordFailed(
+        provider: IMetadataProvider,
+        graph: GraphState,
+        intended: MJTaskEntity,
+        reason: string,
+    ): Promise<boolean> {
+        const key = intended.CompensatesTaskID;
+        const passes = (this.sagaRowWriteFailures.Get(key)?.Passes ?? 0) + 1;
+        this.sagaRowWriteFailures.Set(key, { GraphID: graph.parentTaskID, Passes: passes });
+        if (passes < SAGA_ROW_WRITE_ATTEMPTS) {
+            LogError(`[TaskGraphDispatcher] ${reason} Failed ${passes} of ${SAGA_ROW_WRITE_ATTEMPTS} passes in a row; the next pass retries.`);
+            return false;
+        }
+        return this.recordUncreatableSagaRow(provider, intended, reason);
     }
 
     /**
@@ -4457,6 +4511,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         row.SecurityEnvelope = intended.SecurityEnvelope;
         row.Configuration = intended.Configuration;
         if (await row.Save()) {
+            this.sagaRowWriteFailures.Delete(intended.CompensatesTaskID);
             LogError(`[TaskGraphDispatcher] ${reason} Recorded as failed step ${row.ID} so the rollback can go on.`);
             return true;
         }
@@ -4474,7 +4529,8 @@ export class TaskGraphDispatcher implements IShutdownable {
      * notifies the person and raises an `MJ: AI Agent Requests` row on behalf of the graph's agent — or,
      * for a graph with no agent, logs that once and leaves the step in the Tasks UI. Completing the step
      * resumes the rollback; cancelling it (or letting it expire) stops it (see {@link NextSagaStep}). A step
-     * that cannot be created is recorded as a failed one ({@link recordUncreatableSagaRow}), which stops it too.
+     * that cannot be created after {@link SAGA_ROW_WRITE_ATTEMPTS} passes in a row is recorded as a failed
+     * one ({@link retrySagaRowOrRecordFailed}), which stops it too.
      *
      * @returns true when this call wrote a row
      */
@@ -4506,13 +4562,15 @@ export class TaskGraphDispatcher implements IShutdownable {
         human.SecurityEnvelope = failedCompensation.SecurityEnvelope;
         human.InputPayload = JSON.stringify(escalation.ContextData);
         if (await human.Save()) {
+            this.sagaRowWriteFailures.Delete(failedCompensation.ID);
             LogStatus(`[TaskGraphDispatcher] Compensation ${failedCompensation.ID} failed; asked a person to undo '${forwardTask.Name}' (task ${human.ID}).`);
             return true;
         }
         if (await this.rowCompensating(provider, failedCompensation.ID)) {
+            this.sagaRowWriteFailures.Delete(failedCompensation.ID);
             return false;
         }
-        return this.recordUncreatableSagaRow(provider, human,
+        return this.retrySagaRowOrRecordFailed(provider, graph, human,
             `Could not ask a person to undo '${forwardTask.Name}' (${forwardTask.ID}) after compensation ${failedCompensation.ID} failed: ` +
             `${human.LatestResult?.CompleteMessage ?? 'unknown error'}.`);
     }
@@ -4565,23 +4623,28 @@ export class TaskGraphDispatcher implements IShutdownable {
 
     /**
      * Resolves a compensation action UUID from `compensationActionId` or `compensationActionName`.
+     * `ActionID` is null when neither names an action that exists. `LookupError` says the name lookup
+     * itself failed, so whether the action exists is unknown and a later pass may yet find it.
      */
     private async resolveCompensationActionID(
         provider: IMetadataProvider,
         compMeta: TaskCompensationStepMetadata,
-    ): Promise<string | null> {
+    ): Promise<{ ActionID: string | null; LookupError?: string }> {
         if (compMeta.compensationActionId?.trim()) {
-            return compMeta.compensationActionId.trim();
+            return { ActionID: compMeta.compensationActionId.trim() };
         }
         const name = compMeta.compensationActionName?.trim();
-        if (!name) return null;
+        if (!name) return { ActionID: null };
         const resolved = await ResolveRecordsByNameOrToolName({
             EntityName: 'MJ: Actions',
             Names: [name],
             Provider: provider,
             ContextUser: this.contextUser,
         });
-        return resolved.Map?.get(name) ?? resolved.Map?.get(name.toLowerCase()) ?? null;
+        if (!resolved.Success) {
+            return { ActionID: null, LookupError: resolved.ErrorMessage || 'unknown error' };
+        }
+        return { ActionID: resolved.Map?.get(name) ?? resolved.Map?.get(name.toLowerCase()) ?? null };
     }
 
     /**
