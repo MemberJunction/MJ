@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, symlinkSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { BuildSdkOptions, ClaudeAgentGenerator, SdkRunner, type AgentMessage } from '../generator/ClaudeAgentGenerator';
+import { ClaudeAgentGenerator, FilterProcessWarnings, SdkRunner, type AgentMessage } from '../generator/ClaudeAgentGenerator';
 import { DEFAULT_SETTINGS } from '../settings';
 import { SessionError } from '../generator/UsageCounter';
 import type { GenerationRequest } from '../types';
@@ -201,17 +201,26 @@ describe('SdkRunner', () => {
     expect((err as SessionError).Usage).toEqual({ Model: 'claude-haiku-5-5', InputTokens: 100, OutputTokens: 2, CacheReadTokens: 0, CostUSD: (100 * 1 + 2 * 5) / 1_000_000 });
     expect(err?.message).toMatch(/exited with code 1/);
   });
-  it('forwards SDK stderr to the sink except the canUseTool shadow notice', () => {
-    const lines: string[] = [];
-    const o = BuildSdkOptions(runOptions(), { System: 's', McpServer: { type: 'sdk', name: 'jit' } as never, Abort: new AbortController(), CanUseTool: async () => ({ behavior: 'deny', message: 'no' }), Env: {}, Stderr: (s) => lines.push(s) });
-    o.stderr?.('ordinary line\n');
-    o.stderr?.('[warn] CLAUDE_SDK_CAN_USE_TOOL_SHADOWED: canUseTool is shadowed by allowedTools\n');
-    expect(lines).toEqual(['ordinary line\n']);
-  });
   it('keeps the result message when the SDK throws after error_max_turns', async () => {
     env(); sdk.after = 'throw';
     sdk.messages = [init('ANTHROPIC_API_KEY'), assistant('m1', 5), { type: 'result', subtype: 'error_max_turns', total_cost_usd: 0.5, num_turns: 4, usage: { input_tokens: 5, output_tokens: 7, cache_read_input_tokens: 3, cache_creation_input_tokens: 2 }, modelUsage: {} }];
     const out = await collect(SdkRunner('p', 's', runOptions()));
     expect(out.filter((m) => m.Type === 'result')).toEqual([{ Type: 'result', Subtype: 'error_max_turns', CostUSD: 0.5, Turns: 1, Usage: { InputTokens: 7, OutputTokens: 7, CacheReadTokens: 3 } }]);
+  });
+});
+
+describe('FilterProcessWarnings', () => {
+  const original = process.listeners('warning');
+  afterEach(() => {
+    process.removeAllListeners('warning');
+    for (const l of original) process.on('warning', l);
+  });
+  it('drops warnings with a filtered code and writes the others in Node format', async () => {
+    const lines: string[] = [];
+    FilterProcessWarnings(['CLAUDE_SDK_CAN_USE_TOOL_SHADOWED'], (s) => lines.push(s));
+    process.emitWarning('x', { code: 'CLAUDE_SDK_CAN_USE_TOOL_SHADOWED' });
+    process.emitWarning('y', { code: 'OTHER' });
+    await new Promise((r) => setImmediate(r));
+    expect(lines).toEqual([`(node:${process.pid}) [OTHER] Warning: y\n`]);
   });
 });

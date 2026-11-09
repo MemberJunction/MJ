@@ -10,7 +10,7 @@ Runs write to `<repo>/.jit-catch/runs/<RunID>/`.
 
 ## Commands
 
-Most commands also take `--settings <file>` and `--store <dir>`; the usage text in `src/cli.ts` lists every option.
+Options in brackets are optional; the usage text in `src/cli.ts` shows which command takes `--settings` and `--store`.
 
 - `generate` / `run` — `--pr <n>` or `--head <sha> [--base <sha>]`, optional `--trigger`. `generate` writes tests for one PR; `run` runs generate, execute and assess in one go.
 - `execute --run <run ID>` — runs the generated tests of a run on base and head.
@@ -30,7 +30,7 @@ Design: §14.1 of the design document. The pass values apply to the held-out sli
 2. Run `backtest --slice Tuning --set Both` cheapest model first, always with `--max-usd`: Haiku on the full slice; Sonnet unless Haiku passes; then Opus on a sample of 15 PRs (`--only`) if Sonnet passes, or on the full slice if it fails.
 3. Run `backtest match` on each ledger.
 4. Send each clean-set PR author the catches for their PRs (`label --run` prints the packet) and record each answer with `label --catch <catch ID> --answer Bug|Intended|TestFault --user <login>`.
-5. Run `report` over the ledgers and choose a model, then run steps 2–4 once on the `HeldOut` slice with that model. Gate 1 passes when the held-out slice has at least 25% of bug PRs caught and at most 10% false alarms on clean PRs.
+5. Run `report` over the ledgers and choose a model, then run steps 2–4 once on the `HeldOut` slice with that model. Gate 1 passes when the held-out slice has at least 25% of bug PRs with a reported catch that matches the known bug (step 3) and at most 10% false alarms on clean PRs.
 
 ## Measured on three merged PRs (phase 1, 2026-11-09)
 

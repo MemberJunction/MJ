@@ -184,16 +184,26 @@ const MutantSchema = z.object({ Edits: z.array(z.object({ File: z.string(), Find
 const RunTestShape = { File: z.string(), Mutant: MutantSchema.optional() };
 const WriteTestShape = { File: z.string(), Source: z.string() };
 
-/** SDK stderr chunks that hold this notice are dropped: run_test skips `canUseTool` on purpose (D36). */
-const SHADOW_NOTICE = 'CLAUDE_SDK_CAN_USE_TOOL_SHADOWED';
+/** The listener `FilterProcessWarnings` installed, while it is attached. */
+let warningFilter: ((w: Error & { code?: string }) => void) | null = null;
 
 /**
- * SDK options for one session. `tools` restricts the built-ins; only run_test skips `canUseTool` (spike §2, D36).
- * SDK stderr goes to `x.Stderr` (default: process stderr), without the canUseTool shadow notice.
+ * Replaces the default process `warning` listeners with one that drops warnings whose `code` is in `codes` and writes
+ * every other warning as one line in Node's format. Installs once; later calls do nothing while the listener is attached.
  */
-export function BuildSdkOptions(o: AgentRunOptions, x: { System: string; McpServer: McpSdkServerConfigWithInstance; Abort: AbortController; CanUseTool: CanUseTool; Env: Record<string, string>; Stderr?: (data: string) => void }): Options {
-    const sink = x.Stderr ?? ((data: string) => { process.stderr.write(data); });
-    return { stderr: (data: string) => { if (!data.includes(SHADOW_NOTICE)) sink(data); }, cwd: o.Cwd, model: o.Model, maxTurns: o.MaxTurns, maxBudgetUsd: o.BudgetUsd, systemPrompt: x.System, settingSources: [], permissionMode: 'default', env: x.Env,
+export function FilterProcessWarnings(codes: readonly string[], sink: (line: string) => void = (s) => { process.stderr.write(s); }): void {
+    if (warningFilter && process.listeners('warning').includes(warningFilter)) return;
+    process.removeAllListeners('warning');
+    warningFilter = (w) => {
+        if (w.code && codes.includes(w.code)) return;
+        sink(`(node:${process.pid}) ${w.code ? `[${w.code}] ` : ''}${w.name}: ${w.message}\n`);
+    };
+    process.on('warning', warningFilter);
+}
+
+/** SDK options for one session. `tools` restricts the built-ins; only run_test skips `canUseTool` (spike §2, D36). */
+export function BuildSdkOptions(o: AgentRunOptions, x: { System: string; McpServer: McpSdkServerConfigWithInstance; Abort: AbortController; CanUseTool: CanUseTool; Env: Record<string, string> }): Options {
+    return { cwd: o.Cwd, model: o.Model, maxTurns: o.MaxTurns, maxBudgetUsd: o.BudgetUsd, systemPrompt: x.System, settingSources: [], permissionMode: 'default', env: x.Env,
         tools: ['Read', 'Grep', 'Glob'], allowedTools: ['mcp__jit__run_test'],
         disallowedTools: ['Bash', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Task', 'Agent'],
         mcpServers: { jit: x.McpServer }, abortController: x.Abort, canUseTool: x.CanUseTool };
