@@ -86,6 +86,23 @@ describe('LoadScopedFieldsForBuild', () => {
         expect(loaded?.get('cio-2')?.map(r => r.Name)).toEqual(['id']);
     });
 
+    it('narrows the read to the named objects, matched in any case', async () => {
+        installEngine(['CIO-1', 'CIO-2', 'CIO-3']);
+        runView.mockResolvedValue({ Success: true, Results: [] } as unknown as RunViewResult);
+
+        await WithCatalogScope('CI-1', () => LoadScopedFieldsForBuild('INT-1', USER, ['OBJ-cio-2', 'obj-CIO-3', 'obj-absent']));
+
+        expect(runView).toHaveBeenCalledOnce();
+        expect((runView.mock.calls[0][0] as RunViewParams).ExtraFilter).toBe("CompanyIntegrationObjectID IN ('CIO-2','CIO-3')");
+    });
+
+    it('an empty name list reads nothing', async () => {
+        installEngine(['CIO-1']);
+        const loaded = await WithCatalogScope('CI-1', () => LoadScopedFieldsForBuild('INT-1', USER, []));
+        expect(loaded?.size).toBe(0);
+        expect(runView).not.toHaveBeenCalled();
+    });
+
     it(`reads ${SCOPED_FIELDS_CHUNK} objects per query`, async () => {
         installEngine(Array.from({ length: 2 * SCOPED_FIELDS_CHUNK + 50 }, (_, i) => `CIO-${i}`));
         runView.mockResolvedValue({ Success: true, Results: [] } as unknown as RunViewResult);
@@ -134,14 +151,16 @@ describe('every schema build reads its fields through the loader', () => {
         // ApplySchema, ApplyAll, buildSchemaForConnector, ApplyAllBatch, SchemaEvolution.
         expect(calls.length).toBe(5);
         const inline = /await LoadScopedFieldsForBuild\(companyIntegration\.IntegrationID, user\)/;
-        // SchemaEvolution loads once into `scopedFields`, because its field-map reconcile reads the same rows.
+        // SchemaEvolution and buildSchemaForConnector load once into `scopedFields`: evolution's
+        // field-map reconcile reads the same rows, and buildSchemaForConnector's prefetched (batch)
+        // branch needs them for its inactive-row warnings without running the rebuild at all.
         const hoisted = /scopedFields,?\s*\)/;
         for (const call of calls) {
             expect(inline.test(call) || hoisted.test(call)).toBe(true);
         }
         const hoistedCalls = calls.filter(c => !inline.test(c));
-        expect(hoistedCalls).toHaveLength(1);
-        expect(SRC).toMatch(/const scopedFields = await LoadScopedFieldsForBuild\(companyIntegration\.IntegrationID, user\);/);
+        expect(hoistedCalls).toHaveLength(2);
+        expect(SRC.match(/const scopedFields = await LoadScopedFieldsForBuild\(companyIntegration\.IntegrationID, user\);/g)).toHaveLength(2);
     });
 
     it('the rebuild reads fields only through FieldsForBuild, never the engine directly', () => {
@@ -172,6 +191,14 @@ describe('a refresh reads the connection\'s fields, never a cold engine cache', 
         expect(reconcile).toMatch(/FieldsForBuild\(integrationObjectID, scopedFields, IntegrationEngineBase\.Instance\)/);
         expect(reconcile).not.toMatch(/\.GetIntegrationObjectFields\(/);
         expect(SRC).toMatch(/this\.reconcileFieldMapsForEntityMap\(em, io\.ID, user, md, autoEnableNewColumns, scopedFields\)/);
+    });
+
+    it('the re-key check reads the catalog key through FieldsForBuild with the loaded rows', () => {
+        expect(SRC).toMatch(/CatalogIdentityKey\(\s*FieldsForBuild\(io\.ID, scopedFields, IntegrationEngineBase\.Instance\)\s*\)/);
+    });
+
+    it('nothing in the resolver reads field rows from the engine directly', () => {
+        expect(SRC).not.toMatch(/\.GetIntegrationObjectFields\(/);
     });
 
     it('the dependency map reads FK parents from the edge set, not from field rows', () => {

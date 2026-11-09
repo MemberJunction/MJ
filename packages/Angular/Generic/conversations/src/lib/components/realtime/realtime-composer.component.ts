@@ -1,4 +1,4 @@
-import { Component, ElementRef, EventEmitter, HostListener, Input, Output, ViewChild, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, ElementRef, EventEmitter, HostListener, Input, Output, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
@@ -154,6 +154,7 @@ export class RealtimeComposerComponent {
   @ViewChild('dockInput') private dockInput?: ElementRef<HTMLInputElement | HTMLTextAreaElement>;
 
   private realtime = inject(RealtimeSessionService);
+  private cdr = inject(ChangeDetectorRef);
 
   /** The captions control's tooltip: what a click does. */
   public get CaptionsTitle(): string {
@@ -227,6 +228,7 @@ export class RealtimeComposerComponent {
    */
   public AppendAndFocus(text: string): void {
     this.Draft = (this.Draft ?? '') + text;
+    this.cdr.markForCheck();
     const el = this.dockInput?.nativeElement;
     if (el) {
       el.value = this.Draft;

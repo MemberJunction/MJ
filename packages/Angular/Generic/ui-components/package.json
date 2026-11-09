@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ng-ui-components",
-  "version": "6.2.0-edge.6",
-  "description": "MemberJunction: Angular UI Components - reusable standalone components replacing Kendo UI dependencies.",
+  "version": "6.2.0",
+  "description": "MemberJunction: Angular UI Components - reusable standalone components, the house UI kit.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
   "files": [
@@ -24,7 +24,7 @@
   "devDependencies": {
     "@angular/compiler": "21.2.22",
     "@angular/compiler-cli": "21.2.22",
-    "@memberjunction/ng-test-utils": "6.2.0-edge.6",
+    "@memberjunction/ng-test-utils": "6.2.0",
     "vitest": "^4.0.18"
   },
   "peerDependencies": {

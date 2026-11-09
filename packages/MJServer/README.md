@@ -110,6 +110,15 @@ MJServer uses a layered configuration system with the following priority (highes
 | `MJ_TELEMETRY_ENABLED` | Enable server telemetry | `true` |
 | `MJ_REALTIME_ENABLED` | Enable WebRTC SDP broker router (`/realtime/sdp-exchange`) | `true` |
 | `METADATA_CACHE_REFRESH_INTERVAL` | Metadata refresh interval (ms) | `180000` |
+| `MJ_SESSION_JANITOR_ENABLED` | Run the AI Agent Session janitor's periodic tick — see [Idle databases](#idle-databases-serverless-sql-auto-pause) | `true` |
+| `MJ_SESSION_JANITOR_SWEEP_INTERVAL_MS` | How often the session janitor ticks (ms, greater than 0) | `60000` |
+| `MJ_BRIDGE_RECONCILER_ENABLED` | Repeat the realtime bridge orphan reconcile (the startup pass always runs) | `true` |
+| `MJ_BRIDGE_RECONCILER_SWEEP_INTERVAL_MS` | How often it repeats (ms, greater than 0) | `600000` |
+| `MJ_HANDOFF_OFFER_EXPIRY_ENABLED` | Run the 15-second expiry sweep over human-handoff offers | `true` |
+| `MJ_HANDOFF_OFFER_EXPIRY_SWEEP_INTERVAL_MS` | How often it runs (ms, greater than 0) | `15000` |
+| `MJ_CONVERSATION_DETAIL_RECONCILER_ENABLED` | Repeat the orphaned conversation detail reconcile (the startup pass always runs) | `true` |
+| `MJ_CONVERSATION_DETAIL_RECONCILER_SWEEP_INTERVAL_MS` | How often it repeats (ms, greater than 0) | `300000` |
+| `MJ_AGENT_RUN_WATCHDOG_SWEEP_INTERVAL_MS` | How often the agent-run watchdog sweeps for orphaned runs, once this process has run an agent (ms); `0` = startup sweep only | `300000` |
 | `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL` | `MJ: AI Models` name every process embeds locally with — see [Changing the local embedding model](#changing-the-local-embedding-model) | highest-PowerRank active local model |
 | `MJ_LOG_GRAPHQL_VARIABLES` | Enable redacted verbose echo of GraphQL variables to stdout — see [Debugging GraphQL requests](#debugging-graphql-requests) | `false` |
 
@@ -169,6 +178,34 @@ module.exports = {
     enabled: true,
     systemUserEmail: 'system@example.com',
     maxConcurrentJobs: 5,
+  },
+
+  // Background sweeps — see "Idle databases" below and the Serverless Database Auto-Pause guide
+  agentSessions: {
+    janitor: {
+      enabled: true,              // env: MJ_SESSION_JANITOR_ENABLED
+      sweepIntervalMs: 60000,     // env: MJ_SESSION_JANITOR_SWEEP_INTERVAL_MS
+      closeThresholdMinutes: 15,  // a session idle longer than this is closed
+    },
+    bridgeReconciler: {
+      enabled: true,              // env: MJ_BRIDGE_RECONCILER_ENABLED
+      sweepIntervalMs: 600000,    // env: MJ_BRIDGE_RECONCILER_SWEEP_INTERVAL_MS
+    },
+    handoffOfferExpiry: {
+      enabled: true,              // env: MJ_HANDOFF_OFFER_EXPIRY_ENABLED
+      sweepIntervalMs: 15000,     // env: MJ_HANDOFF_OFFER_EXPIRY_SWEEP_INTERVAL_MS
+    },
+  },
+  conversationDetailReconciler: {
+    enabled: true,                // env: MJ_CONVERSATION_DETAIL_RECONCILER_ENABLED
+    sweepIntervalMs: 300000,      // env: MJ_CONVERSATION_DETAIL_RECONCILER_SWEEP_INTERVAL_MS
+  },
+
+  // Agent-run watchdog — heartbeat only while a run is in flight; the sweep runs once any agent has run
+  agentRunWatchdog: {
+    sweepIntervalMs: 300000,      // env: MJ_AGENT_RUN_WATCHDOG_SWEEP_INTERVAL_MS; 0 = startup sweep only
+    heartbeatIntervalMs: 30000,   // liveness stamp for this process's in-flight runs
+    staleThresholdMinutes: 5,     // a Running run with no heartbeat for this long is force-failed
   },
 
   sqlLogging: {
@@ -432,6 +469,18 @@ sequenceDiagram
     Note over P,DB: Transaction auto-committed on success, rolled back on error
 ```
 
+### Startup and Health Checks
+
+`Serve()` binds its port before it boots, behind a startup gate, so a slow start answers probes instead of refusing connections:
+
+| Path (under `MJAPI_BASE_PATH`) | While starting | Once ready |
+|---|---|---|
+| `/healthcheck` (readiness) | `503` with `{ status: 'starting', phase, phaseElapsedMs, elapsedMs }` (`status: 'failed'` if the boot threw) | `200` `{ status: 'ok' }` |
+| `/healthcheck/live` (liveness) | `200` | `200` |
+| anything else, including WebSocket upgrades | `503` with `Retry-After` | handled by the app |
+
+`/healthcheck` keeps meaning "serve traffic", so load balancers, the Explorer reconnect poll and the MJAPI image's `HEALTHCHECK` work unchanged. Platforms that restart a container which is not live within a time limit can point their liveness probe at `/healthcheck/live`. A port already in use now fails at the start of boot rather than the end. A boot that throws logs the phase it failed in; the error text is not served.
+
 ### Per-Request Provider Isolation
 
 Each GraphQL request receives its own `SQLServerDataProvider` instance, ensuring complete transaction isolation between concurrent requests. Metadata is cached and reused across providers for efficiency.
@@ -588,7 +637,7 @@ The server includes resolvers for the following domains:
 | `UserViewResolver` | User view management |
 | `UserResolver` | User profile operations |
 | `UserFavoriteResolver` | Favorite record management |
-| `MergeRecordsResolver` | Record merge operations |
+| `MergeRecordsResolver` | `MergeRecords` mutation (requires `AllowRecordMerge` on the entity; API keys need the `entity:merge` scope), plus `GetEntityDependencies` / `GetRecordDependencies` queries. See the [Duplicate Management Guide](../../guides/DUPLICATE_MANAGEMENT_GUIDE.md). |
 | `SyncDataResolver` / `SyncRolesUsersResolver` | Data synchronization |
 | `FileResolver` / `FileCategoryResolver` | File and category management |
 | `EntityCommunicationsResolver` | Entity-level communications |
@@ -601,7 +650,8 @@ The server includes resolvers for the following domains:
 | `TelemetryResolver` | Server telemetry queries |
 | `ColorResolver` | Color palette operations |
 | `InfoResolver` | Server info queries |
-| `PotentialDuplicateRecordResolver` | Duplicate detection |
+| `PotentialDuplicateRecordResolver` | `GetRecordDuplicates` query: starts a list-based duplicate detection run (asynchronous; returns `Inprogress`) |
+| `DuplicateEntryCheckResolver` | `CheckDuplicateEntry` mutation: the entry-time duplicate check for a new record's values (API keys need `view:run` and `prompt:execute`) |
 | `RunTestResolver` | Test execution |
 | `RunTemplateResolver` | Template execution |
 | `TaskResolver` | Task orchestration |
@@ -779,6 +829,12 @@ scheduledJobs: {
 ```
 
 The service starts automatically during server initialization and shuts down gracefully on SIGTERM/SIGINT.
+
+## Idle databases (serverless SQL auto-pause)
+
+MJAPI runs several background loops that query the database on a timer, and keeps `connectionPool.min` connections open, even when nobody is using it. That stops a serverless database (Azure SQL serverless, Aurora Serverless, Neon) from pausing. Every loop has a switch; turned off together, an idle MJAPI sends no periodic queries.
+
+**→ [Serverless Database Auto-Pause Guide](../../guides/SERVERLESS_DATABASE_AUTO_PAUSE_GUIDE.md)** has the copy-paste settings, every loop with its default, its switch and what turning it off costs, the orphaned-agent-run trade-off, and how to check from the database side that MJAPI is quiet.
 
 ## AI Integration
 

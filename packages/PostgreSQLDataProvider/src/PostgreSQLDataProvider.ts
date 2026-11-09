@@ -24,11 +24,22 @@ import {
     RecordChangePayload,
     EntityDeleteOptions,
     EntitySaveOptions,
+    GetDiagnosticContext,
+    IsDiagnosticCaptureSuppressed,
 } from '@memberjunction/core';
 
 
-import { GenericDatabaseProvider, SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext, DescribeStatementFailure } from '@memberjunction/generic-database-provider';
-import type { DescribeStatementResult } from '@memberjunction/generic-database-provider';
+import {
+    GenericDatabaseProvider,
+    SaveCoercedValue,
+    SaveCallBinding,
+    SaveSQLFragment,
+    SaveReturnContext,
+    DescribeStatementFailure,
+    SummarizeSqlParameters,
+    FormatSqlParameterTypesForError,
+} from '@memberjunction/generic-database-provider';
+import type { DatabasePoolStats, DescribeStatementResult } from '@memberjunction/generic-database-provider';
 import {
     DescribeCatalogParameters, DescribeWrapperSQL, FieldDescriptionOf, MapPostgreSQLDescribeFields, POSTGRESQL_DESCRIBE_CATALOG_SQL, POSTGRESQL_DESCRIBE_TIMEOUT_MS,
     type PostgreSQLDescribeCatalogRow,
@@ -306,6 +317,20 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         return this._connectionManager.Pool;
     }
 
+    /** Reads the live counts from the pg pool, or `null` before the pool is initialized. */
+    public override GetPoolStats(): DatabasePoolStats | null {
+        if (!this._connectionManager.IsConnected) {
+            return null;
+        }
+        const pool = this._connectionManager.Pool;
+        return {
+            TotalConnections: pool.totalCount,
+            ActiveConnections: pool.totalCount - pool.idleCount,
+            IdleConnections: pool.idleCount,
+            WaitingRequests: pool.waitingCount,
+        };
+    }
+
     get InstanceConnectionString(): string {
         const cfg = this._configData?.ConnectionConfig;
         if (!cfg) return '';
@@ -342,6 +367,8 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             parent.ExcludeSchemas,
             false,
         );
+        cfg.ConcurrencyCheck = this.ConcurrencyCheck;
+        cfg.DeltaUpdates = this.DeltaUpdates;
         await child.ConfigWithSharedPool(cfg, this.DatabaseConnection);
         return child;
     }
@@ -419,11 +446,77 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
 
     // ─── SQL Execution ───────────────────────────────────────────────
 
+    /**
+     * Executes a query on the given PostgreSQL queryable source while notifying
+     * registered `ISqlObserver` listeners and active SQL logging sessions.
+     */
+    public async ExecuteObservedQuery<T = Record<string, unknown>>(
+        source: { query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[]; rowCount?: number | null }> },
+        sqlText: string,
+        params?: unknown[],
+        options?: ExecuteSQLOptions,
+        contextUser?: UserInfo,
+    ): Promise<Array<T>> {
+        const startTime = performance.now();
+        try {
+            const result = await source.query(sqlText, params);
+            const durationMs = performance.now() - startTime;
+            const rows = (result?.rows ?? []) as Array<T>;
+            const rowCount = Array.isArray(result?.rows)
+                ? result.rows.length
+                : typeof result?.rowCount === 'number'
+                  ? result.rowCount
+                  : 0;
+            if (!options?.ignoreLogging && !IsDiagnosticCaptureSuppressed() && GenericDatabaseProvider.HasSqlObservers()) {
+                GenericDatabaseProvider.NotifySqlObservers({
+                    ts: Date.now(),
+                    sql: sqlText,
+                    parameterSummaries: SummarizeSqlParameters(params, !(options?.isMutation ?? false)),
+                    durationMs,
+                    rowCount,
+                    isMutation: options?.isMutation ?? false,
+                    description: options?.description,
+                    diagnosticContext: GetDiagnosticContext(),
+                    ignoreLogging: options?.ignoreLogging,
+                });
+            }
+            if (!options?.ignoreLogging && this.HasActiveSqlLoggingSessions) {
+                await this._logSqlStatement(
+                    sqlText,
+                    params,
+                    options?.description,
+                    options?.ignoreLogging ?? false,
+                    options?.isMutation ?? false,
+                    undefined,
+                    contextUser,
+                );
+            }
+            return rows;
+        } catch (err) {
+            const durationMs = performance.now() - startTime;
+            if (!options?.ignoreLogging && !IsDiagnosticCaptureSuppressed() && GenericDatabaseProvider.HasSqlObservers()) {
+                GenericDatabaseProvider.NotifySqlObservers({
+                    ts: Date.now(),
+                    sql: sqlText,
+                    parameterSummaries: SummarizeSqlParameters(params, false),
+                    durationMs,
+                    rowCount: 0,
+                    isMutation: options?.isMutation ?? false,
+                    errorMessage: err instanceof Error ? err.message : String(err),
+                    description: options?.description,
+                    diagnosticContext: GetDiagnosticContext(),
+                    ignoreLogging: options?.ignoreLogging,
+                });
+            }
+            throw err;
+        }
+    }
+
     async ExecuteSQL<T>(
         query: string,
         parameters?: unknown[],
         options?: ExecuteSQLOptions,
-        _contextUser?: UserInfo
+        contextUser?: UserInfo
     ): Promise<Array<T>> {
         const processedParams = PGQueryParameterProcessor.ProcessParameters(parameters);
         // Auto-quote PascalCase identifiers in raw SQL. MJ has lots of hand-written
@@ -438,10 +531,9 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         try {
             if (options?.connectionSource) {
                 const bypass = options.connectionSource as {
-                    query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }>;
+                    query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[]; rowCount?: number | null }>;
                 };
-                const bypassResult = await bypass.query(quotedQuery, processedParams);
-                return bypassResult.rows as T[];
+                return await this.ExecuteObservedQuery<T>(bypass, quotedQuery, processedParams, options, contextUser);
             }
             const timeoutMs = this.effectiveTimeoutMs(options?.timeoutMs);
             // Both protections are skipped only for a statement that will run inside the caller's own
@@ -452,19 +544,20 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             const readOnly = !!options?.readOnlyTransaction && !joinsCallerTransaction;
             const timed = timeoutMs !== undefined && !joinsCallerTransaction;
             if (readOnly || timed) {
-                return await this.executeOnOwnConnection<T>(quotedQuery, processedParams, readOnly, timeoutMs);
+                return await this.executeOnOwnConnection<T>(quotedQuery, processedParams, readOnly, timeoutMs, options, contextUser);
             }
             if (options?.ignoreAmbientTransaction) {
                 // A read that does not join the ambient transaction: straight to the pool (#4514).
-                const poolResult = await this._connectionManager.Pool.query(quotedQuery, processedParams);
-                return poolResult.rows as T[];
+                return await this.ExecuteObservedQuery<T>(this._connectionManager.Pool, quotedQuery, processedParams, options, contextUser);
             }
             const source = this.resolveQuerySource();
-            const result = await source.query(quotedQuery, processedParams);
-            return result.rows as T[];
+            return await this.ExecuteObservedQuery<T>(source, quotedQuery, processedParams, options, contextUser);
         } catch (err) {
             const desc = options?.description ? ` [${options.description}]` : '';
-            LogError(`PostgreSQLDataProvider.ExecuteSQL failed${desc}: ${err instanceof Error ? err.message : String(err)}`);
+            const paramSummary = processedParams && processedParams.length > 0
+                ? ` (Parameters: ${FormatSqlParameterTypesForError(processedParams)})`
+                : '';
+            LogError(`PostgreSQLDataProvider.ExecuteSQL failed${desc}${paramSummary}: ${err instanceof Error ? err.message : String(err)}`);
             throw err;
         }
     }
@@ -511,6 +604,8 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         params: unknown[] | undefined,
         readOnly: boolean,
         timeoutMs: number | undefined,
+        options?: ExecuteSQLOptions,
+        contextUser?: UserInfo,
     ): Promise<Array<T>> {
         const client = await this._connectionManager.AcquireClient();
         try {
@@ -519,9 +614,9 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
                 if (timeoutMs !== undefined) {
                     await client.query(`SET LOCAL statement_timeout = ${timeoutMs}`);
                 }
-                const result = await client.query(sql, params);
+                const rows = await this.ExecuteObservedQuery<T>(client, sql, params, options, contextUser);
                 await client.query(readOnly ? 'ROLLBACK' : 'COMMIT');
-                return result.rows as T[];
+                return rows;
             } catch (err) {
                 await client.query('ROLLBACK').catch(() => undefined);
                 throw err;
@@ -589,8 +684,12 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      */
     public async RunColocatedSQL<T = Record<string, unknown>>(sql: string, params?: ReadonlyArray<unknown>): Promise<T[]> {
         const source = this.resolveQuerySource();
-        const result = await source.query(sql, params ? [...params] : undefined);
-        return result.rows as T[];
+        return await this.ExecuteObservedQuery<T>(
+            source,
+            sql,
+            params ? [...params] : undefined,
+            { description: 'RunColocatedSQL' },
+        );
     }
 
     /**
@@ -696,8 +795,16 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         } catch { /* swallow — surfacing the primary error */ }
     }
 
+    /**
+     * Returns the currently active `pg.PoolClient` transaction handle managed by this provider,
+     * or `null` when no physical transaction is open.
+     */
+    public get ActiveTransactionClient(): pg.PoolClient | null {
+        return this._transaction;
+    }
+
     async CreateTransactionGroup(): Promise<TransactionGroupBase> {
-        return new PostgreSQLTransactionGroup();
+        return new PostgreSQLTransactionGroup(this);
     }
 
     protected override BuildPaginationSQL(maxRows: number, startRow: number): string {
@@ -1043,6 +1150,25 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
     }
 
     /**
+     * Reads the target record's physical columns from `"schema"."BaseTable" WHERE ... FOR UPDATE`
+     * inside the save transaction so concurrent writers serialize on the row lock before `spUpdate*`
+     * executes. Queries `BaseTable` directly because PostgreSQL does not allow `FOR UPDATE` on views
+     * containing `LEFT JOIN`s.
+     */
+    protected override RenderLockedRowReadSQL(
+        entityInfo: EntityInfo,
+        pkWhereClause: string,
+        columns: string[],
+    ): string | null {
+        if (columns.length === 0 || !pkWhereClause || !entityInfo.BaseTable) {
+            return null;
+        }
+        const selectCols = columns.map((c) => this.QuoteIdentifier(c)).join(', ');
+        const tableRef = this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseTable);
+        return `SELECT ${selectCols} FROM ${tableRef} WHERE ${pkWhereClause} FOR UPDATE`;
+    }
+
+    /**
      * Wraps a PG binding with the bare `SELECT * FROM schema.fn(...)`
      * result-capture pattern. PG returns the row directly; no
      * @ResultTable equivalent.
@@ -1365,12 +1491,16 @@ SELECT * FROM delete_result`;
             // Negative lookahead: don't quote words followed by ( — those are function calls
             // (e.g., LENGTH(...), LEFT(...)), not column references. Without this, a field
             // named "Length" causes LENGTH() to be quoted as "Length"() which PG can't resolve.
+            // Negative lookbehind (?<!\$): don't quote $1 parameter tokens whose identifier
+            // part might match a numeric/field pattern (BindExtraFilterParameters rewrites
+            // @paramName to $1 before TransformExternalSQLClause runs; on PostgreSQL, @ is the
+            // unary absolute-value operator, so @FieldName must still quote "FieldName").
             // `fieldName` is escaped before interpolation: PostgreSQL identifiers may
             // legally contain regex metacharacters (`$`, `(`, `.`), and injecting one
             // raw built a pattern that either matched nothing — a `$` became an
             // end-anchor, so `a$$b` was never quoted at all — or matched the wrong
             // text. Discovered alongside issue #3171.
-            const re = new RegExp(`\\b${escapeRegExp(fieldName)}\\b(?!\\s*\\()`, 'gi');
+            const re = new RegExp(`(?<!\\$)\\b${escapeRegExp(fieldName)}\\b(?!\\s*\\()`, 'gi');
             // Function replacement, for the same reason on the other side: a quoted
             // identifier containing `$` would be expanded by a string replacement.
             const quoted = pgDialect.QuoteIdentifier(fieldName);

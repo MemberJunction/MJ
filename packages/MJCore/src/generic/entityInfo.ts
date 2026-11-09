@@ -17,6 +17,7 @@ import {
     ReadRelationshipJoinFields,
     type EntitySaveReturnMode,
     type IEntityConfiguration,
+    type IEntityCommentsConfiguration,
     type IEntityRelationshipConfiguration,
     type IEntityFieldConfiguration,
     type IEntityCloneConfiguration,
@@ -24,6 +25,9 @@ import {
     type IEntityFieldCloneConfiguration,
 } from "./entityConfiguration"
 import type { IEntitySubtypeSelectorConfig } from "./JSONType-interfaces/IEntitySubtypeSelectorConfig"
+import { EntityLifecyclePolicyEngine, type IEntityLifecyclePolicy } from "./entityLifecyclePolicy"
+import { DocumentNumberingEngine, type IDocumentNumberPolicy } from "./documentNumberingEngine"
+import { CrossEntityPolicyEngine, type IDeclarativeParentStateLockPolicy } from "./crossEntityPolicyEngine"
 
 /**
  * Runtime domain for {@link EntityFieldInfo.ExtendedType}. This array is the single source of
@@ -3574,6 +3578,28 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
+     * Effective declarative + programmatic lifecycle policy (state machine, field-freeze, and
+     * `WriteAuthority`) resolved for this entity, or `null` when none is configured.
+     */
+    get LifecyclePolicy(): IEntityLifecyclePolicy | null {
+        return EntityLifecyclePolicyEngine.Instance.ResolvePolicy(this);
+    }
+
+    /**
+     * Effective declarative + programmatic document auto-numbering policies resolved for this entity.
+     */
+    get AutoNumberPolicies(): ReadonlyArray<IDocumentNumberPolicy> {
+        return DocumentNumberingEngine.Instance.ResolvePolicies(this);
+    }
+
+    /**
+     * Effective declarative cross-entity parent-state lock policies resolved for this entity.
+     */
+    get CrossEntityPolicies(): ReadonlyArray<IDeclarativeParentStateLockPolicy> {
+        return CrossEntityPolicyEngine.Instance.ResolveDeclarativePolicies(this);
+    }
+
+    /**
      * Controls which columns a save operation (`spCreate` / `spUpdate`) returns from the database
      * for this entity. Defaults to `'full'` when `Configuration.SaveReturnMode` is omitted or not
      * `'datestamps_only'`.
@@ -3613,6 +3639,66 @@ export class EntityInfo extends BaseInfo {
      */
     get NotCloneable(): boolean {
         return this.CloneConfig?.NotCloneable === true;
+    }
+
+    /**
+     * Parsed anchored record commenting configuration (`Configuration.Comments`) for this entity.
+     */
+    get CommentsConfig(): IEntityCommentsConfiguration | null {
+        return this.ConfigurationObject?.Comments ?? null;
+    }
+
+    /**
+     * Returns true when anchored record commenting (`MJ: Conversations` with `AnchorType` set)
+     * is enabled on this entity (`Configuration.Comments.Enabled !== false`).
+     * Defaults to `true` when omitted.
+     */
+    get AllowRecordComments(): boolean {
+        return this.CommentsConfig?.Enabled !== false;
+    }
+
+    /**
+     * Returns true when the specified user is permitted to post, reply to, or resolve
+     * anchored record comments on this entity according to `Configuration.Comments`:
+     * 1. `AllowRecordComments` must be `true`.
+     * 2. The user must hold the configured `RequiredPermission` (`'Read'` by default, or `'Update'`).
+     * 3. When `AllowedRoles` is non-empty, the user must belong to at least one listed role.
+     */
+    public CanUserComment(user: UserInfo | null | undefined): boolean {
+        if (!this.AllowRecordComments) {
+            return false;
+        }
+        if (!user) {
+            return false;
+        }
+        const requiredPerm =
+            this.CommentsConfig?.RequiredPermission === 'Update'
+                ? EntityPermissionType.Update
+                : EntityPermissionType.Read;
+        if (!this.CheckPermissions(user, requiredPerm, false)) {
+            return false;
+        }
+        const allowedRoles = this.CommentsConfig?.AllowedRoles;
+        if (Array.isArray(allowedRoles) && allowedRoles.length > 0) {
+            const normalizedAllowed = new Set(
+                allowedRoles.map((r) => (r ?? '').trim().toLowerCase()).filter(Boolean)
+            );
+            if (normalizedAllowed.size > 0) {
+                const userRoles = user.UserRoles ?? [];
+                const hasRole = userRoles.some((ur) => {
+                    const roleName = (ur.Role ?? '').trim().toLowerCase();
+                    const roleId = (ur.RoleID ?? '').trim().toLowerCase();
+                    return (
+                        (roleName.length > 0 && normalizedAllowed.has(roleName)) ||
+                        (roleId.length > 0 && normalizedAllowed.has(roleId))
+                    );
+                });
+                if (!hasRole) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
     /**
      * Date and time when this entity was created

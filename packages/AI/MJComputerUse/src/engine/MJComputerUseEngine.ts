@@ -785,6 +785,11 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     ): Promise<DomainAuthBinding> {
         const credential = binding.Credential!;
         const credTypeName = credential.CredentialType;
+        if (credTypeName == null) {
+            throw new Error(
+                `Credential "${credential.Name}" has no credential type (its CredentialTypeID does not resolve to a credential type record).`
+            );
+        }
         const values = this.parseCredentialValues(credential);
         const method = this.mapCredentialToAuthMethod(credTypeName, values);
 

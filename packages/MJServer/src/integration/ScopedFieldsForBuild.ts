@@ -27,11 +27,15 @@ import {
 } from '@memberjunction/integration-engine-base';
 import { CurrentCatalogCI } from '@memberjunction/integration-engine';
 
-/** What a schema build reads off a field row. The shared entity and the per-connection row both satisfy it. */
+/**
+ * What a schema build — and a refresh's re-key check — reads off a field row. The shared entity and
+ * the per-connection row both satisfy it.
+ */
 export type BuildFieldRow = Pick<
     MJIntegrationObjectFieldEntity,
     'Name' | 'DisplayName' | 'Description' | 'Type' | 'IsRequired' | 'AllowsNull' | 'Length' | 'Precision'
     | 'Scale' | 'DefaultValue' | 'IsPrimaryKey' | 'IsUniqueKey' | 'IsReadOnly' | 'RelatedIntegrationObjectID' | 'Status'
+    | 'Sequence'
 >;
 
 /** A connection's field rows, keyed by lower-cased per-connection object id. */
@@ -47,15 +51,25 @@ type StoredFieldRow = Omit<CompanyIntegrationObjectFieldRow, 'IntegrationObjectI
  * Loads the field rows of the connection in catalog scope for a schema build, or returns `null`
  * when the build should read the shared catalog (no scope, or no per-connection catalog).
  *
+ * `objectNames` narrows the read to those active objects, matched by name in any case; omitted,
+ * every active object of the connection is read. A caller that needs a handful of objects out of a
+ * wide catalog then reads those rows and no others.
+ *
  * @throws PER_CONNECTION_FIELDS_UNREADABLE when a read fails — never an empty answer.
  */
-export async function LoadScopedFieldsForBuild(integrationID: string, user: UserInfo): Promise<ScopedBuildFields | null> {
+export async function LoadScopedFieldsForBuild(
+    integrationID: string,
+    user: UserInfo,
+    objectNames?: readonly string[],
+): Promise<ScopedBuildFields | null> {
     const ciID = CurrentCatalogCI();
     if (!ciID) return null;
     const engine = IntegrationEngineBase.Instance;
     if (!engine.HasCompanyIntegrationCatalog(ciID)) return null;
 
-    const objects = engine.GetActiveIntegrationObjects(integrationID);
+    const wanted = objectNames ? new Set(objectNames.map(n => n.toLowerCase())) : null;
+    const objects = engine.GetActiveIntegrationObjects(integrationID)
+        .filter(o => !wanted || wanted.has(o.Name.toLowerCase()));
     const byObject: ScopedBuildFields = new Map();
     const rv = new RunView();
     for (let i = 0; i < objects.length; i += SCOPED_FIELDS_CHUNK) {

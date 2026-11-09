@@ -104,27 +104,10 @@
   color: var(--mj-text-muted);
 }
 
-.new-agent-dialog .form-fields .k-textbox,
-.new-agent-dialog .form-fields .k-textarea,
-.new-agent-dialog .form-fields .k-dropdown,
-.new-agent-dialog .form-fields .k-numerictextbox {
-  border-radius: 6px;
-}
-
 .new-agent-dialog .advanced-settings {
   margin-top: 1.5rem;
   border-radius: 8px;
   overflow: hidden;
-}
-
-.new-agent-dialog .advanced-settings .k-expander-header {
-  background: var(--mj-bg-surface-card);
-  padding: 1rem;
-}
-
-.new-agent-dialog .advanced-settings .k-expander-header i {
-  margin-right: 0.5rem;
-  color: var(--mj-brand-primary);
 }
 
 .new-agent-dialog .advanced-settings .advanced-grid {

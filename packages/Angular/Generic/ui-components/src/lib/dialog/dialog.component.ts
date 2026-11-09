@@ -22,7 +22,6 @@ const SIZE_MAP: Record<MjDialogSize, string> = {
 /**
  * mj-dialog — Modal dialog component using native `<dialog>` element.
  *
- * Replaces `<kendo-dialog>`.
  *
  * Supports both explicit width/height and size presets.
  * Content is projected, with an optional `<mj-dialog-actions>` for the footer.
@@ -56,8 +55,10 @@ const SIZE_MAP: Record<MjDialogSize, string> = {
   standalone: true,
   template: `
     @if (Visible) {
-      <div class="mj-dialog-backdrop" (click)="OnBackdropClick($event)">
+      <div class="mj-dialog-backdrop" [class.mj-dialog-backdrop--sheet]="PhoneMode === 'sheet'" (click)="OnBackdropClick($event)">
         <div class="mj-dialog-container"
+          [class.mj-dialog-container--sheet]="PhoneMode === 'sheet'"
+          [class.mj-dialog-container--full]="PhoneMode === 'full'"
           [attr.role]="Role"
           aria-modal="true"
           tabindex="-1"
@@ -197,6 +198,18 @@ export class MJDialogComponent implements OnDestroy {
 
   get dialogId(): number {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     return this.DialogId;
+  }
+
+  /**
+   * How the dialog presents on a phone (dialog.scss applies it under 768px; desktop is unchanged).
+   * `sheet`: a bottom sheet sized to its content, for every alert dialog and for `sm` / `auto`
+   * dialogs without an explicit `Width`. `full`: full-screen with the title and actions pinned,
+   * for `md` / `lg` / `xl` and any dialog given a `Width` (it was laid out for a desktop width).
+   */
+  get PhoneMode(): 'sheet' | 'full' {
+    if (this.Role === 'alertdialog') return 'sheet';
+    if (this.Width) return 'full';
+    return this.Size === 'sm' || this.Size === 'auto' ? 'sheet' : 'full';
   }
 
   get ResolvedWidth(): string {
@@ -375,12 +388,17 @@ export class MJDialogComponent implements OnDestroy {
     return container;
   }
 
-  /** First element that can take focus. The ✕ is skipped only for the button fallback. */
+  /**
+   * First element that can take focus. The ✕ is skipped only for the button fallback. A hidden or
+   * inert element is skipped too: `.focus()` on one is a silent no-op, which would leave focus
+   * outside the dialog.
+   */
   private firstEnabled(nodes: NodeListOf<HTMLElement>, skipClose = false): HTMLElement | null {
     for (const el of Array.from(nodes)) {
       if (skipClose && el.classList.contains('mj-dialog-close')) continue;
       if (this.isDisabled(el)) continue;
       if (el instanceof HTMLInputElement && el.type === 'hidden') continue;
+      if (!this.isVisibleStop(el)) continue;
       return el;
     }
     return null;
@@ -430,14 +448,15 @@ export class MJDialogComponent implements OnDestroy {
   }
 
   /**
-   * display:none and [hidden] hide the whole subtree. visibility is inherited, and a child
-   * can set visible again, so that check is only on the element itself.
+   * display:none, [hidden] and [inert] (a collapsed accordion body) take the whole subtree out of
+   * focus. visibility is inherited, and a child can set visible again, so that check is only on the
+   * element itself.
    */
   private isVisibleStop(el: HTMLElement): boolean {
     if (getComputedStyle(el).visibility === 'hidden') return false;
     let current: HTMLElement | null = el;
     while (current) {
-      if (current.hasAttribute('hidden')) return false;
+      if (current.hasAttribute('hidden') || current.hasAttribute('inert')) return false;
       if (getComputedStyle(current).display === 'none') return false;
       current = current.parentElement;
     }
@@ -463,7 +482,6 @@ export class MJDialogComponent implements OnDestroy {
 /**
  * mj-dialog-titlebar — Custom titlebar content for mj-dialog.
  *
- * Replaces `<kendo-dialog-titlebar>`.
  *
  * @example
  * ```html
@@ -485,7 +503,6 @@ export class MJDialogTitlebarComponent {}
 /**
  * mj-dialog-actions — Footer action bar for mj-dialog.
  *
- * Replaces `<kendo-dialog-actions>`.
  *
  * @example
  * ```html

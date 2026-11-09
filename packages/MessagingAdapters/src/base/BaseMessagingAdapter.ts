@@ -9,9 +9,9 @@
  * platform-specific operations like sending messages and fetching threads.
  */
 
-import { AgentRunner } from '@memberjunction/ai-agents';
+import { AgentRunner, ResolveHandoffTarget } from '@memberjunction/ai-agents';
 import { ChatMessage, parseBase64DataUrl } from '@memberjunction/ai';
-import { ExecuteAgentParams, ExecuteAgentResult, FileOutputRef, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentParams, ExecuteAgentResult, FileOutputRef, MAX_HANDOFF_HOPS, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { MJArtifactEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
@@ -37,6 +37,10 @@ interface ConversationAgentResult {
     artifactId?: string;
     /** The MJ Conversation ID for this interaction. */
     conversationId?: string;
+    /** The MJ Conversation Detail ID for the agent's response row, if created. */
+    agentResponseDetailId?: string;
+    /** The execution parameters used for the initial agent run. */
+    params: ExecuteAgentParams;
 }
 
 /**
@@ -133,6 +137,14 @@ export abstract class BaseMessagingAdapter {
     /** Max entries in the thread map before forced eviction of oldest entries. */
     private static readonly THREAD_MAP_MAX_SIZE = 10_000;
 
+    /**
+     * Per-thread execution chain. Messages on one platform thread are handled one at a time, in
+     * arrival order, so a rapid burst cannot race: the first message creates the MJ Conversation
+     * and stores its id before the second message looks it up, and the per-thread streaming
+     * indicator is never clobbered by a parallel turn.
+     */
+    private inFlightThreadPromises = new Map<string, Promise<void>>();
+
     constructor(settings: MessagingAdapterSettings) {
         this.settings = settings;
     }
@@ -168,6 +180,31 @@ export abstract class BaseMessagingAdapter {
             return;
         }
 
+        // Serialize messages on the same thread behind an in-flight promise so rapid
+        // multi-message bursts in one thread reuse the same MJ Conversation in order.
+        const threadKey = this.getThreadKey(message);
+        const previous = this.inFlightThreadPromises.get(threadKey) ?? Promise.resolve();
+        const current = previous
+            .catch(() => {
+                // Earlier turn errors are already handled; never block subsequent turns in the thread.
+            })
+            .then(() => this.handleMessageForThread(message));
+
+        this.inFlightThreadPromises.set(threadKey, current);
+        try {
+            await current;
+        } finally {
+            if (this.inFlightThreadPromises.get(threadKey) === current) {
+                this.inFlightThreadPromises.delete(threadKey);
+            }
+        }
+    }
+
+    /**
+     * Executes the full message handling pipeline for a single turn once its per-thread
+     * serialization slot has been acquired.
+     */
+    private async handleMessageForThread(message: IncomingMessage): Promise<void> {
         // 2. Resolve the MJ user for this platform sender
         const contextUser = await this.resolveContextUser(message);
 
@@ -686,13 +723,11 @@ export abstract class BaseMessagingAdapter {
         return null;
     }
 
-    /** Maximum number of delegation hops to prevent infinite loops. */
-    private static readonly MAX_DELEGATION_HOPS = 3;
-
     /**
      * Execute the agent and send the response, with streaming support.
-     * Handles delegation automatically: when the agent returns `payload.invokeAgent`,
-     * the target agent is auto-executed (matching MJ Explorer behavior).
+     * Handles handoffs automatically via `AgentRunner.FollowHandoffs`, and falls back to
+     * `detectDelegation` / `handleDelegation` when an older agent emits `payload.invokeAgent`
+     * or delegation prose without returning `NextStep: 'Handoff'`.
      */
     /**
      * Get the thread key for conversation mapping.
@@ -709,7 +744,9 @@ export abstract class BaseMessagingAdapter {
         conversationMessages: ChatMessage[],
         multiAgentNote: string | null
     ): Promise<void> {
-        // Look up existing MJ Conversation for this thread
+        // Look up the MJ Conversation for this thread. HandleMessage serializes same-thread turns,
+        // so by the time a follow-up message gets here the earlier turn has finished and stored
+        // the id below; RunAgentInConversation creates the conversation when there is none yet.
         const threadKey = this.getThreadKey(message);
         const existingConversationId = this.getThreadConversationId(threadKey);
 
@@ -731,7 +768,167 @@ export abstract class BaseMessagingAdapter {
             this.setThreadConversationId(threadKey, conversationId);
         }
 
-        // Check for delegation: payload.invokeAgent indicates the agent wants to hand off
+        // First-class Handoff step: follow the handoff chain via AgentRunner.FollowHandoffs
+        if (result.handoff && !this.settings.DisableDelegation) {
+            const runner = new AgentRunner();
+            let activeProgressMessageId: string | null | undefined = progressMessageId;
+            const updateInterval = this.settings.StreamingUpdateIntervalMs ?? 1000;
+
+            const outcomes = await runner.FollowHandoffs({
+                params: { ...agentResult.params, conversationMessages },
+                sourceResult: result,
+                conversationId: conversationId ?? '',
+                sourceConversationDetailId: agentResult.agentResponseDetailId ?? '',
+                createArtifacts: true,
+                hooks: {
+                    OnHopStart: async (hopInfo, source) => {
+                        const sourceName = hopInfo.sourceAgent.Name ?? 'Agent';
+                        const targetName = hopInfo.targetAgent.Name ?? 'Agent';
+                        const presetDisplay = hopInfo.preset
+                            ? (hopInfo.preset.DisplayName || hopInfo.preset.Name)
+                            : null;
+                        const presetSuffix = presetDisplay ? ` (${presetDisplay})` : '';
+                        const transferLine = `${sourceName} transferred you to **${targetName}**${presetSuffix}`;
+                        const sourceMessage = source.agentResult.agentRun?.Message?.trim();
+                        const transferBody = sourceMessage && !this.looksLikeJSON(sourceMessage)
+                            ? `${sourceMessage}\n\n${transferLine}`
+                            : transferLine;
+                        const fullTransferNote = hopInfo.hopIndex === 0 && multiAgentNote
+                            ? `${multiAgentNote}\n\n${transferBody}`
+                            : transferBody;
+
+                        const formattedTransfer = await this.formatResponse(
+                            source.agentResult,
+                            hopInfo.sourceAgent,
+                            fullTransferNote,
+                            { ConversationId: conversationId }
+                        );
+                        if (activeProgressMessageId) {
+                            await this.updateFinalMessage(message, activeProgressMessageId, formattedTransfer);
+                        } else {
+                            await this.sendFinalMessage(message, formattedTransfer);
+                        }
+
+                        const thinkingText = `_${targetName} is thinking..._`;
+                        let hopProgressMessageId: string | null = await this.sendOrUpdateStreamingMessage(
+                            message,
+                            thinkingText,
+                            null,
+                            hopInfo.targetAgent
+                        );
+                        activeProgressMessageId = hopProgressMessageId;
+                        let hopStreamBuffer = '';
+                        let hopLastUpdateTime = Date.now();
+
+                        return {
+                            onProgress: (progress) => {
+                                if (progress.displayMode === 'historical') return;
+                                const stepCount = (progress.metadata?.stepCount as number) ?? undefined;
+                                const stepNumber = (progress.metadata?.stepNumber as number) ?? undefined;
+                                const stepSuffix = stepNumber != null && stepCount != null
+                                    ? ` (Step ${stepNumber} of ${stepCount})`
+                                    : '';
+                                const progressLabel = `_${progress.message}${stepSuffix}_`;
+                                if (!hopStreamBuffer) {
+                                    const now = Date.now();
+                                    if (now - hopLastUpdateTime >= updateInterval) {
+                                        hopLastUpdateTime = now;
+                                        this.sendOrUpdateStreamingMessage(
+                                            message, progressLabel, hopProgressMessageId, hopInfo.targetAgent
+                                        ).then(msgId => {
+                                            hopProgressMessageId = msgId;
+                                            activeProgressMessageId = msgId;
+                                        }).catch((err) => {
+                                            LogError('Progress update failed:', undefined, err);
+                                        });
+                                    }
+                                }
+                            },
+                            onStreaming: (chunk) => {
+                                hopStreamBuffer += chunk.content;
+                                const now = Date.now();
+                                if (now - hopLastUpdateTime >= updateInterval) {
+                                    hopLastUpdateTime = now;
+                                    this.sendOrUpdateStreamingMessage(
+                                        message, hopStreamBuffer, hopProgressMessageId, hopInfo.targetAgent
+                                    ).then(msgId => {
+                                        hopProgressMessageId = msgId;
+                                        activeProgressMessageId = msgId;
+                                    }).catch((err) => {
+                                        LogError('Streaming update failed:', undefined, err);
+                                    });
+                                }
+                            },
+                        };
+                    },
+                    OnHopEnd: async (hopInfo, outcome) => {
+                        if (outcome.agentResult?.handoff) {
+                            // Another hop is requested; defer finalizing activeProgressMessageId
+                            // until the next hop starts (or is refused after the loop).
+                            return;
+                        }
+                        if (outcome.agentResult) {
+                            const candidateArtifactId = outcome.artifactInfo?.artifactId;
+                            const hopArtifactId = candidateArtifactId
+                                && (await this.isUserVisibleArtifact(candidateArtifactId, contextUser))
+                                ? candidateArtifactId
+                                : undefined;
+                            await this.sendAgentResult(
+                                message,
+                                hopInfo.targetAgent,
+                                outcome.agentResult,
+                                null,
+                                { ArtifactId: hopArtifactId, ConversationId: conversationId },
+                                activeProgressMessageId
+                            );
+                            activeProgressMessageId = null;
+                        } else if (outcome.error) {
+                            const errorMessage = "I'm sorry, I encountered an error processing your request. Please try again.";
+                            const errorFormatted = await this.formatResponse(
+                                null,
+                                hopInfo.targetAgent,
+                                errorMessage,
+                                { ConversationId: conversationId }
+                            );
+                            if (activeProgressMessageId) {
+                                await this.updateFinalMessage(message, activeProgressMessageId, errorFormatted);
+                            } else {
+                                await this.sendFinalMessage(message, errorFormatted);
+                            }
+                            activeProgressMessageId = null;
+                        }
+                    },
+                },
+            });
+
+            if (outcomes.length === 0) {
+                // Hop 0 target was refused before OnHopStart ran; deliver the source result.
+                const metadata: AgentResponseMetadata = { ArtifactId: artifactId, ConversationId: conversationId };
+                await this.sendAgentResult(message, agent, result, multiAgentNote, metadata, activeProgressMessageId);
+            } else if (activeProgressMessageId != null) {
+                // A subsequent hop requested another handoff that was refused before OnHopStart ran;
+                // finalize the last target's open streaming message.
+                const lastOutcome = outcomes[outcomes.length - 1];
+                if (lastOutcome.agentResult) {
+                    const candidateArtifactId = lastOutcome.artifactInfo?.artifactId;
+                    const hopArtifactId = candidateArtifactId
+                        && (await this.isUserVisibleArtifact(candidateArtifactId, contextUser))
+                        ? candidateArtifactId
+                        : undefined;
+                    await this.sendAgentResult(
+                        message,
+                        lastOutcome.targetAgent,
+                        lastOutcome.agentResult,
+                        null,
+                        { ArtifactId: hopArtifactId, ConversationId: conversationId },
+                        activeProgressMessageId
+                    );
+                }
+            }
+            return;
+        }
+
+        // Fallback for non-Handoff agents: payload.invokeAgent or delegation prose indicates a handoff
         const delegationTarget = this.detectDelegation(result);
         if (delegationTarget) {
             await this.handleDelegation(
@@ -787,9 +984,10 @@ export abstract class BaseMessagingAdapter {
 
         const params: ExecuteAgentParams = {
             agent,
-            conversationMessages,
+            conversationMessages: [...conversationMessages],
             contextUser,
             payload: {}, // Provide empty starting payload so loop agents can apply payloadChangeRequests
+            handoffChain: this.settings.DisableDelegation ? undefined : [],
             onProgress: (progress) => {
                 if (progress.displayMode === 'historical') return;
 
@@ -858,6 +1056,8 @@ export abstract class BaseMessagingAdapter {
                 progressMessageId,
                 artifactId,
                 conversationId: conversationResult.conversationId,
+                agentResponseDetailId: conversationResult.agentResponseDetailId,
+                params,
             };
         } catch (error) {
             LogError('Error running agent for messaging adapter:', undefined, error);
@@ -1003,15 +1203,15 @@ export abstract class BaseMessagingAdapter {
     }
 
     /**
-     * Handle agent delegation: send a delegation note, then auto-execute the target agent.
+     * Handle fallback agent delegation (for non-Handoff agents that emit `payload.invokeAgent`
+     * or delegation prose): send a delegation note, then auto-execute the target agent.
      *
-     * Mirrors MJ Explorer's `handleSubAgentInvocation()`:
-     * 1. Show the delegating agent's message (e.g., "Delegating to Marketing Agent")
-     * 2. Find the target agent in availableAgents
+     * 1. Resolve and validate the target agent via `ResolveHandoffTarget`
+     * 2. Show the delegating agent's message (e.g., "Delegating to Marketing Agent")
      * 3. Execute the target agent with the same conversation context
      * 4. Send the target agent's result
      *
-     * Supports chained delegation up to MAX_DELEGATION_HOPS.
+     * Supports chained delegation up to MAX_HANDOFF_HOPS.
      */
     private async handleDelegation(
         message: IncomingMessage,
@@ -1022,24 +1222,35 @@ export abstract class BaseMessagingAdapter {
         conversationMessages: ChatMessage[],
         multiAgentNote: string | null,
         hopCount: number = 0,
-        conversationId?: string
+        conversationId?: string,
+        handoffChain?: string[]
     ): Promise<void> {
+        const currentChain = handoffChain ?? [];
+
         // Prevent infinite delegation loops
-        if (hopCount >= BaseMessagingAdapter.MAX_DELEGATION_HOPS) {
-            LogError(`Delegation loop detected: exceeded ${BaseMessagingAdapter.MAX_DELEGATION_HOPS} hops`);
+        if (hopCount >= MAX_HANDOFF_HOPS) {
+            LogError(`Delegation loop detected: exceeded ${MAX_HANDOFF_HOPS} hops`);
             await this.sendAgentResult(message, sourceAgent, sourceResult, multiAgentNote);
             return;
         }
 
-        // Find the target agent
-        const targetAgent = this.availableAgents.find(
-            a => a.Name != null && a.Name.toLowerCase() === targetAgentName.toLowerCase()
-        );
-        if (!targetAgent) {
-            LogError(`Delegation target '${targetAgentName}' not found in available agents`);
+        // Resolve and validate the target agent via ResolveHandoffTarget (enforcing ParentID,
+        // ExposeAsAction, view/run permissions, cycle checks, and MAX_HANDOFF_HOPS).
+        const resolution = await ResolveHandoffTarget({
+            AgentName: targetAgentName,
+            SourceAgentID: sourceAgent.ID,
+            HandoffChain: currentChain,
+            ContextUser: contextUser,
+            Agents: this.availableAgents,
+        });
+        if (resolution.Refusal || !resolution.Target) {
+            LogError(
+                `Delegation target '${targetAgentName}' refused (${resolution.Refusal?.Reason ?? 'NotFound'}): ${resolution.Refusal?.Message ?? 'Target not found'}`
+            );
             await this.sendAgentResult(message, sourceAgent, sourceResult, multiAgentNote);
             return;
         }
+        const targetAgent = resolution.Target;
 
         // Send the delegating agent's message as a brief note
         const sourceMessage = sourceResult.agentRun?.Message;
@@ -1074,10 +1285,12 @@ export abstract class BaseMessagingAdapter {
             // Check if the target agent also delegates
             const nextDelegation = this.detectDelegation(targetAgentResult.result);
             if (nextDelegation) {
+                const nextChain = sourceAgent.ID ? [...currentChain, sourceAgent.ID] : currentChain;
                 await this.handleDelegation(
                     message, targetAgent, targetAgentResult.result, nextDelegation,
                     contextUser, updatedMessages, null, hopCount + 1,
-                    targetAgentResult.conversationId ?? conversationId
+                    targetAgentResult.conversationId ?? conversationId,
+                    nextChain
                 );
                 return;
             }

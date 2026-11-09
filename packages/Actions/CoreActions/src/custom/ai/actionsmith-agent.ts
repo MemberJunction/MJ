@@ -106,14 +106,16 @@ export class ActionSmithAgent extends BaseAgent {
         nextStep: BaseAgentNextStep<P>,
         currentPayload: P,
         agentRun: MJAIAgentRunEntityExtended,
-        currentStep: MJAIAgentRunStepEntityExtended
+        currentStep: MJAIAgentRunStepEntityExtended,
+        chatHandlingOption?: 'Consult' | 'Failed' | 'Retry' | 'Success' | null
     ): Promise<BaseAgentNextStep<P>> {
         const base = await super.validateChatNextStep(
             params,
             nextStep,
             currentPayload,
             agentRun,
-            currentStep
+            currentStep,
+            chatHandlingOption
         );
         if (base.step === 'Retry') {
             return base;

@@ -88,7 +88,8 @@ on:
   #               cache-invalidation checks S17/S23/S24/S29/S30/S31b/C10 — the bug class that
   #               shipped twice — cost nothing on a throwaway CI DB), plus the cross-server
   #               Redis invalidation rig (two MJAPI processes + Redis; the fingerprint bugs of
-  #               2026-07 proved this can be 100% broken with every single-process tier green).
+  #               2026-07 proved this can be 100% broken with every single-process tier green),
+  #               and the schema-mutating rig (its own throwaway database; CodeGen runs per scenario).
   #   30 6 * * 0  WEEKLY (Sun) — the "Integration Tests — Live Model" suite, budget-capped,
   #               gated on the INTEGRATION_LIVE_MODEL_KEYS secret (see that job).
   schedule:
@@ -118,7 +119,7 @@ jobs:
       codegen: ${{ steps.filter.outputs.codegen }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Check changed paths
@@ -153,19 +154,25 @@ jobs:
   # now SKIPS them instead of failing them — "could not run" and "ran and found a problem" stop
   # reporting the same state, which is also what lets a ruleset treat them differently (MJ#4648).
   # Resolve-only: it writes no node_modules and is not a substitute for each job's own install.
+  #
+  # Deliberately NOT named like lockfile-guard.yml's `Lockfile matches package.json`, although both
+  # run the same `pnpm install --frozen-lockfile --lockfile-only`. That name is the required check in
+  # next-protect, and a ruleset matches checks by name only: two jobs reporting under it would make
+  # the verdict depend on which one reported last, and this one does not run on every PR. The
+  # required check is lockfile-guard.yml's; this job only exists so the jobs below can skip.
   preflight:
-    name: Lockfile resolves
+    name: Lockfile resolves (integration preflight)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - name: Set up Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: 'pnpm'
@@ -208,7 +215,7 @@ jobs:
       TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -265,13 +272,13 @@ jobs:
           exit 1
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
       - name: Set up node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: 'pnpm'
@@ -331,7 +338,7 @@ jobs:
         id: dbcache
         # The nightly provisions cold on purpose — see the block comment above.
         if: github.event_name != 'schedule'
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: /tmp/mjdb
           key: ${{ steps.dbkey.outputs.key }}
@@ -511,10 +518,34 @@ jobs:
       - name: Save the provisioned-DB snapshot
         if: (github.event_name == 'push' || github.event_name == 'schedule') && steps.dbcache.outputs.cache-hit != 'true' && steps.dbsnapshot.outcome == 'success'
         continue-on-error: true
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: /tmp/mjdb
           key: ${{ steps.dbkey.outputs.key }}
+
+      # Encrypted entity fields (MJ: Credentials.Values and the like) need a base key in BOTH
+      # processes that write them: MJAPI (IT160 over the wire) and the mj test process (IT161
+      # in-process). Without one the save is refused and those bundles can only skip. A per-run
+      # throwaway is enough — the database was provisioned for this run, so there is no earlier
+      # ciphertext to stay compatible with. GITHUB_ENV carries it to every later step.
+      - name: Generate a throwaway encryption key for this run
+        run: echo "MJ_BASE_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+
+      # Clone the provisioned [test] database into 3 isolated worker databases ([test_s1],
+      # [test_s2], [test_s3]) so the 101 pure-server deterministic bundles can execute across
+      # 3 LPT-balanced shards concurrently without cross-bundle mutation or entity-cache collisions,
+      # while [test] remains dedicated to MJAPI and the client-transport (+ wire-companion) worker.
+      - name: Clone isolated worker databases for parallel server shards
+        run: |
+          docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+            /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -b \
+            -Q "
+              BACKUP DATABASE [test] TO DISK='/var/opt/mssql/worker_seed.bak' WITH COMPRESSION, INIT, FORMAT;
+              RESTORE DATABASE [test_s1] FROM DISK='/var/opt/mssql/worker_seed.bak' WITH REPLACE, MOVE 'test' TO '/var/opt/mssql/data/test_s1.mdf', MOVE 'test_log' TO '/var/opt/mssql/data/test_s1_log.ldf';
+              RESTORE DATABASE [test_s2] FROM DISK='/var/opt/mssql/worker_seed.bak' WITH REPLACE, MOVE 'test' TO '/var/opt/mssql/data/test_s2.mdf', MOVE 'test_log' TO '/var/opt/mssql/data/test_s2_log.ldf';
+              RESTORE DATABASE [test_s3] FROM DISK='/var/opt/mssql/worker_seed.bak' WITH REPLACE, MOVE 'test' TO '/var/opt/mssql/data/test_s3.mdf', MOVE 'test_log' TO '/var/opt/mssql/data/test_s3_log.ldf';
+            "
+          docker exec -u 0 sql rm -f /var/opt/mssql/worker_seed.bak
 
       # Boot MJAPI against the provisioned DB so the client-transport members execute
       # instead of skipping. MJ_API_KEY is a throwaway per-run system key: MJServer
@@ -557,6 +588,10 @@ jobs:
       # MJ_API_KEY (same value MJAPI booted with) arms the client-transport members.
       # RUN_MUTATION_TESTS=1 on the nightly cron arms the save/delete cache-invalidation
       # checks — PR/push runs keep them Skipped (visible in the summary, never false-green).
+      #
+      # Parallel sharding across 4 isolated databases (1 per vCPU on standard 4-core runners):
+      #   - server-1..3 run `--transport=server --shard=k/3` against `test_s1..3`
+      #   - client runs `--transport=client` against `test` (the DB served by MJAPI on :4000)
       - name: Run integration tier (mj test)
         env:
           MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
@@ -580,8 +615,93 @@ jobs:
           # tiers.ts's own doc comment assumes CI does this, and nothing did.
           RUN_AGENT_TESTS: '0'
         run: |
-          set -o pipefail
-          pnpm run test:integration 2>&1 | tee /tmp/integration.log
+          set -uo pipefail
+          SUITE_NAME="Integration Tests — Deterministic"
+          rm -f /tmp/integration-shard-*.log /tmp/integration-shard-*.status /tmp/integration-shard-*.json /tmp/integration.log
+
+          run_shard() {
+            local name="$1"
+            local db="$2"
+            shift 2
+            local log="/tmp/integration-shard-${name}.log"
+            local status_file="/tmp/integration-shard-${name}.status"
+            local json_file="/tmp/integration-shard-${name}.json"
+            local start_ts
+            start_ts=$(date +%s)
+            echo "[shard:${name}] Starting on DB=${db} args=($*)..."
+            local rc=0
+            DB_DATABASE="${db}" MJ_INTEGRATION_TEST=1 \
+              node packages/MJCLI/bin/run.js test suite "${SUITE_NAME}" --output "${json_file}" "$@" > "${log}" 2>&1 || rc=$?
+            local end_ts
+            end_ts=$(date +%s)
+            local elapsed=$((end_ts - start_ts))
+            printf '%s\t%s\t%s\t%s\t%s\n' "${name}" "${db}" "$*" "${rc}" "${elapsed}s" > "${status_file}"
+            echo "[shard:${name}] Finished with exit=${rc} in ${elapsed}s"
+            return 0
+          }
+
+          # Entity Vector Sync - Daily is seeded with RunImmediatelyIfNeverRun and a CI database has
+          # never run it, so MJAPI starts it on every boot: 90-170 s of in-process embedding that
+          # stops /healthcheck answering and times out requests waiting for a pooled connection.
+          # A client shard started alongside it got a provider with no metadata (#6361). The job
+          # has to run, because binary-fields.BF2/BF3 read the rows it writes. So the client shard
+          # waits for it; the server shards don't use MJAPI and start now. After the limit the
+          # client shard starts anyway, and a job that never finished fails the checks that need it.
+          wait_for_first_run_jobs() {
+            local pending=""
+            for _ in $(seq 1 84); do
+              pending=$(docker exec sql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U SA -P 'VeryStr0ngP@ssw0rd' \
+                -d test -h -1 -W -I -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM [__mj].[ScheduledJob] j
+                  WHERE j.[Status] = 'Active' AND j.[RunImmediatelyIfNeverRun] = 1
+                    AND NOT EXISTS (SELECT 1 FROM [__mj].[ScheduledJobRun] r
+                                    WHERE r.[ScheduledJobID] = j.[ID] AND r.[CompletedAt] IS NOT NULL);" | tr -d '[:space:]') || true
+              if [ "${pending}" = "0" ]; then
+                echo "[shard:client] First-run scheduled jobs finished after ${SECONDS}s."
+                return 0
+              fi
+              sleep 5
+            done
+            echo "::warning::First-run scheduled jobs still pending (${pending}) after 420 s; starting the client shard anyway."
+          }
+
+          run_shard "server-1" "test_s1" --transport=server --shard=1/3 &
+          PID_S1=$!
+          run_shard "server-2" "test_s2" --transport=server --shard=2/3 &
+          PID_S2=$!
+          run_shard "server-3" "test_s3" --transport=server --shard=3/3 &
+          PID_S3=$!
+          { wait_for_first_run_jobs; run_shard "client" "test" --transport=client; } &
+          PID_CLIENT=$!
+
+          wait "${PID_S1}" "${PID_S2}" "${PID_S3}" "${PID_CLIENT}"
+
+          OVERALL_EXIT=0
+          for SHARD in server-1 server-2 server-3 client; do
+            LOG="/tmp/integration-shard-${SHARD}.log"
+            STATUS_FILE="/tmp/integration-shard-${SHARD}.status"
+            RC=$(cut -f4 "${STATUS_FILE}")
+            ELAPSED=$(cut -f5 "${STATUS_FILE}")
+            echo "::group::Shard ${SHARD} (exit=${RC}, duration=${ELAPSED})"
+            cat "${LOG}"
+            echo "::endgroup::"
+            cat "${LOG}" >> /tmp/integration.log
+            if [ "${RC}" -ne 0 ]; then
+              OVERALL_EXIT=1
+            fi
+          done
+
+          if [ "${OVERALL_EXIT}" -ne 0 ]; then
+            echo "::error::One or more integration shards failed — summary of failing shards:"
+            for SHARD in server-1 server-2 server-3 client; do
+              STATUS_FILE="/tmp/integration-shard-${SHARD}.status"
+              RC=$(cut -f4 "${STATUS_FILE}")
+              if [ "${RC}" -ne 0 ]; then
+                echo "=== Failing shard: ${SHARD} (exit=${RC}) ==="
+                grep -E '(\[(SUITE_COMPLETE|SUMMARY|DURATION|FAILURES|SKIPPED)\]|✗|Error:)' "/tmp/integration-shard-${SHARD}.log" | tail -80 || true
+              fi
+            done
+            exit 1
+          fi
 
       # IT92 and IT134 are the only checks that prove field-level security through MJAPI's
       # GraphQL and REST endpoints. The suite counts a skipped check as a skip, not a failure, so a
@@ -596,16 +716,103 @@ jobs:
       - name: Publish suite summary
         if: always()
         run: |
-          {
-            echo '## Integration tier result'
-            echo '```'
-            grep -E '\[(SUITE_COMPLETE|SUMMARY|DURATION|FAILURES|SKIPPED)\]' /tmp/integration.log || echo 'No suite summary found in the log.'
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          node -e '
+            const fs = require("node:fs");
+            const shards = ["server-1", "server-2", "server-3", "client"];
+            const lines = [
+              "## Integration tier result (4 parallel shards)",
+              "",
+              "| Shard | Database | Flags | Exit | Wall Time | Suite Summary |",
+              "| --- | --- | --- | --- | --- | --- |",
+            ];
+            let totalPassed = 0, totalFailed = 0, totalSkipped = 0, totalTests = 0, haveTotals = false;
+            const detailBlocks = [];
+
+            for (const shard of shards) {
+              const statusPath = `/tmp/integration-shard-${shard}.status`;
+              const jsonPath = `/tmp/integration-shard-${shard}.json`;
+              const logPath = `/tmp/integration-shard-${shard}.log`;
+              if (!fs.existsSync(statusPath)) continue;
+
+              const [, db = "", flags = "", rc = "", elapsed = ""] =
+                fs.readFileSync(statusPath, "utf8").trim().split("\t");
+              const logText = fs.existsSync(logPath) ? fs.readFileSync(logPath, "utf8") : "";
+
+              let parsed = null;
+              if (fs.existsSync(jsonPath)) {
+                try { parsed = JSON.parse(fs.readFileSync(jsonPath, "utf8")); } catch {}
+              }
+              if (!parsed && logText) {
+                const p = /"passedTests":\s*(\d+)/.exec(logText);
+                const f = /"failedTests":\s*(\d+)/.exec(logText);
+                const s = /"skippedTests":\s*(\d+)/.exec(logText);
+                const t = /"totalTests":\s*(\d+)/.exec(logText);
+                if (p && f && t) {
+                  parsed = {
+                    passedTests: Number(p[1]),
+                    failedTests: Number(f[1]),
+                    skippedTests: s ? Number(s[1]) : 0,
+                    totalTests: Number(t[1]),
+                  };
+                }
+              }
+
+              let summaryCell = "(no summary line)";
+              if (parsed && typeof parsed.totalTests === "number") {
+                const p = parsed.passedTests ?? 0;
+                const f = parsed.failedTests ?? 0;
+                const s = parsed.skippedTests ?? 0;
+                const t = parsed.totalTests ?? 0;
+                summaryCell = `${p} passed / ${f} failed / ${s} skipped of ${t}`;
+                totalPassed += p;
+                totalFailed += f;
+                totalSkipped += s;
+                totalTests += t;
+                haveTotals = true;
+              } else if (logText) {
+                const m = /\[SUMMARY\]\s*(.+)/.exec(logText);
+                if (m) summaryCell = m[1].trim();
+              }
+
+              lines.push(`| \`${shard}\` | \`${db}\` | \`${flags}\` | \`${rc}\` | ${elapsed} | ${summaryCell} |`);
+
+              const skipGateMatch = /Skip gate:\s*(.+)/.exec(logText);
+              const detailLines = [`=== ${shard} (${summaryCell}) ===`];
+              if (skipGateMatch) detailLines.push(`Skip gate: ${skipGateMatch[1].trim()}`);
+              if (parsed && Array.isArray(parsed.testResults)) {
+                const failed = parsed.testResults.filter(tr => tr.status !== "Passed" && tr.status !== "Skipped");
+                for (const tr of failed) {
+                  detailLines.push(`  ✗ ${tr.testName} (${tr.status})`);
+                }
+              }
+              detailBlocks.push(detailLines.join("\n"));
+            }
+
+            if (haveTotals) {
+              lines.push(
+                `| **Total** | | | | | **${totalPassed} passed / ${totalFailed} failed / ${totalSkipped} skipped of ${totalTests}** |`
+              );
+            }
+            lines.push("", "### Per-shard details", "```", ...detailBlocks, "```");
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
+          '
 
       - name: Dump MJAPI log on failure
         if: failure()
         run: tail -300 /tmp/mjapi.log || true
+
+      # The tail above stops at 300 lines, and the line that explains a failure is usually earlier:
+      # a client-transport check's query refusal is logged by MJAPI ("RunQuery: query ... refused for
+      # user ... by ..."), not by the test process, at the moment it happens (#6173). Keep the whole
+      # log so a failed run can be diagnosed without reproducing it.
+      - name: Upload MJAPI log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mjapi-log-deterministic-${{ github.run_attempt }}
+          path: /tmp/mjapi.log
+          if-no-files-found: ignore
+          retention-days: 14
 
   # ── WEEKLY live-model lane (Sunday 06:30 UTC + manual dispatch) ─────────────────────────
   # Runs "Integration Tests — Live Model" (15 tests: prompt-runner, agent-runner, shipped
@@ -656,7 +863,7 @@ jobs:
 
       - name: Checkout repo
         if: steps.prereq.outputs.READY == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -710,7 +917,7 @@ jobs:
 
       - name: Set up pnpm
         if: steps.prereq.outputs.READY == 'true'
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - name: Create SQL database
         if: steps.prereq.outputs.READY == 'true'
@@ -718,7 +925,7 @@ jobs:
 
       - name: Set up node
         if: steps.prereq.outputs.READY == 'true'
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: 'pnpm'
@@ -827,7 +1034,7 @@ jobs:
           - 6379:6379
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -877,13 +1084,13 @@ jobs:
           exit 1
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
       - name: Set up node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: 'pnpm'
@@ -1006,7 +1213,7 @@ jobs:
       TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -1056,13 +1263,13 @@ jobs:
           exit 1
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
       - name: Set up node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: 'pnpm'
@@ -1117,6 +1324,10 @@ jobs:
             # only way to act on this failure used to be reproducing the whole job locally. Emit the
             # shape of the change (per-file +/-) and a bounded excerpt instead. Bounded because a
             # full regeneration of __mj.ts is ~100k lines and would bury the log.
+            # `git status` lists untracked files (`??`) but `git diff` ignores them, so a newly
+            # emitted file printed two empty sections. Intent-to-add (-N) makes them show in the
+            # diff as additions without staging their content.
+            git add -A -N -- packages/ metadata/ migrations/ || true
             git diff --stat -- packages/ metadata/ migrations/ > /tmp/drift-stat.txt || true
             git diff -- packages/ metadata/ migrations/ | head -c 100000 > /tmp/drift-diff.txt || true
             echo "--- change shape ---"
@@ -1155,6 +1366,82 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # ── NIGHTLY schema-mutating rig ────────────────────────────────────────────────────────
+  # Tests that change the schema and then run `mj codegen` cannot run in the deterministic tier:
+  # that tier is read-only-or-self-cleaning against one shared database, and its checks run
+  # in-process. This rig creates its own database on the job's SQL Server (mj_rig_fls_<timestamp>),
+  # runs migrate → sync push → codegen on it, then the field-level security reconciliation
+  # scenarios (test plan 2.7a–2.7d, 2.8c, 2.10: a column, a foreign key, a computed column and a
+  # layered-view column added; a custom view narrowed; a no-change run), and drops it. Each scenario
+  # runs CodeGen and requires it to exit 0. Nightly + on demand only: it runs CodeGen ~9 times.
+  schema-mutating-rig:
+    name: Schema-mutating rig (nightly)
+    needs: [preflight]
+    if: (github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') || github.event_name == 'workflow_dispatch'
+    timeout-minutes: 90
+    runs-on: ubuntu-latest
+    env:
+      DB_HOST: localhost
+      DB_PORT: '1433'
+      DB_USERNAME: sa
+      DB_PASSWORD: VeryStr0ngP@ssw0rd
+      CODEGEN_DB_USERNAME: sa
+      CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
+      DB_TRUST_SERVER_CERTIFICATE: 'true'
+      MJ_CODEGEN_NO_AI: '1'
+      MJ_CODEGEN_SKIP_COMMANDS: '1'
+      MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Rationale and setup
+      # instructions live once, on the build job in test.yml.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Create docker network
+        run: docker network create -d bridge local-net
+
+      - name: Create SQL Server container
+        run: docker run --rm -d --network local-net --name sql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+
+      - name: Wait for SQL Server to be ready
+        run: |
+          for i in $(seq 1 30); do
+            if docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+                 /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "SELECT 1" >/dev/null 2>&1; then
+              echo "SQL Server is ready (attempt $i)."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "SQL Server did not become ready within the timeout." >&2
+          exit 1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build CLI + CodeGen + test framework
+        run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/codegen-lib --filter=@memberjunction/testing-integration
+
+      # The rig creates, bootstraps and drops its own database; there is no "Create SQL database"
+      # step. Each CLI step's full output goes to a temp directory the rig prints at start.
+      - name: Run schema-mutating rig
+        run: npx tsx packages/TestingFramework/integration-test-suite/rigs/schema-mutating/schema-mutating-tests.ts
+
   # ── WEEKLY AI CodeGen drift gate ───────────────────────────────────────────────────────
   # Runs the CodeGen idempotency and drift suite with live AI models enabled.
   codegen-drift-ai:
@@ -1180,7 +1467,7 @@ jobs:
       MJ_CODEGEN_SKIP_COMMANDS: '1'
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -1230,13 +1517,13 @@ jobs:
           exit 1
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
       - name: Set up node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: 'pnpm'
@@ -1288,6 +1575,10 @@ jobs:
             # only way to act on this failure used to be reproducing the whole job locally. Emit the
             # shape of the change (per-file +/-) and a bounded excerpt instead. Bounded because a
             # full regeneration of __mj.ts is ~100k lines and would bury the log.
+            # `git status` lists untracked files (`??`) but `git diff` ignores them, so a newly
+            # emitted file printed two empty sections. Intent-to-add (-N) makes them show in the
+            # diff as additions without staging their content.
+            git add -A -N -- packages/ metadata/ migrations/ || true
             git diff --stat -- packages/ metadata/ migrations/ > /tmp/drift-stat.txt || true
             git diff -- packages/ metadata/ migrations/ | head -c 100000 > /tmp/drift-diff.txt || true
             echo "--- change shape ---"
@@ -1325,3 +1616,41 @@ jobs:
               echo '</details>'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # Backstop alarm: this workflow's push run on `next` gates nothing, so a red one used to be
+  # visible only to whoever opened the Actions tab. Red opens (or comments on) one rolling issue
+  # for THIS workflow; green closes it. Logic and tests: .github/scripts/backstop-alarm.mjs.
+  # Push to `next` only: line branches (lts/**) and the scheduled lanes are not what the alarm's
+  # title describes. `cancelled` counts as red, as in test.yml: a push run here is never cancelled
+  # by concurrency, so a cancel means a timeout or a manual stop.
+  backstop-alarm:
+    name: Backstop alarm
+    needs: [changes, preflight, integration-sqlserver, integration-live-model, cross-server-invalidation, codegen-drift, codegen-drift-ai]
+    if: always() && github.event_name == 'push' && github.ref_name == 'next'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+          filter: blob:none
+
+      - name: Alert on backstop failure
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/scripts/backstop-alarm.mjs red --workflow "Integration Tier"
+
+      # A cleanup failure must never turn a green run red (that would file an alarm about the
+      # alarm), so this step alone is continue-on-error; the script still logs ::error::.
+      - name: Resolve backstop alarm on green
+        if: ${{ !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/scripts/backstop-alarm.mjs green --workflow "Integration Tier"

@@ -59,13 +59,28 @@ import {
   RecordChangeSource,
   RecordChangePayload,
   EntityDeleteOptions,
+  GetDiagnosticContext,
 } from '@memberjunction/core';
 import { NodeFileSystemProvider } from './NodeFileSystemProvider';
 
 import { EntityAIActionParams } from '@memberjunction/aiengine';
 import { QueueManager } from '@memberjunction/queue';
-import { GenericDatabaseProvider, ExecuteSQLBatchOptions, SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext, IsTypedQueryParameterList, IsNamedQueryParameterList, TypedQueryParameter, DescribeStatementFailure } from '@memberjunction/generic-database-provider';
-import type { DescribeStatementResult } from '@memberjunction/generic-database-provider';
+import {
+  GenericDatabaseProvider,
+  ExecuteSQLBatchOptions,
+  SaveCoercedValue,
+  SaveCallBinding,
+  SaveSQLFragment,
+  SaveReturnContext,
+  IsTypedQueryParameterList,
+  IsNamedQueryParameterList,
+  NamedQueryParameter,
+  TypedQueryParameter,
+  DescribeStatementFailure,
+  SummarizeSqlParameters,
+  FormatSqlParameterTypesForError,
+} from '@memberjunction/generic-database-provider';
+import type { DatabasePoolStats, DescribeStatementResult } from '@memberjunction/generic-database-provider';
 import { BindTypedParameters } from './typedParameters';
 import { MapSQLServerDescribeRows, SQLSERVER_DESCRIBE_SQL, type SQLServerDescribeRow } from './statementDescription';
 import { MJQueryEntityExtended } from '@memberjunction/core-entities';
@@ -167,7 +182,15 @@ function buildRequest(
   }
   if (IsNamedQueryParameterList(parameters)) {
     // Named inputs whose type the driver infers; the statement already references them by name.
+    const boundByName = new Map<string, unknown>();
     for (const p of parameters) {
+      if (boundByName.has(p.Name)) {
+        if (!Object.is(boundByName.get(p.Name), p.Value)) {
+          throw new Error(`Duplicate query parameter '@${p.Name}' bound with conflicting values.`);
+        }
+        continue;
+      }
+      boundByName.set(p.Name, p.Value);
       request.input(p.Name, p.Value);
     }
     return { request, processedQuery: query };
@@ -272,15 +295,20 @@ async function executeSQLCore(
     throw error;
   }
 
+  const startTs = Date.now();
+  const startHr = typeof performance !== 'undefined' && performance.now ? performance.now() : startTs;
+  const diagCtx = options?.diagnosticContext ?? GetDiagnosticContext();
+
   try {
     const { request, processedQuery } = buildRequest(connectionSource, query, parameters);
     const queryPromise = options?.timeoutMs
       ? QueryWithTimeout<SQLCoreResult>(request, processedQuery, options.timeoutMs)
       : request.query(processedQuery);
 
+    let result: sql.IResult<any>;
     if (options && !options.ignoreLogging && context.logSqlStatement) {
       const literalSQL = options.literalSQL;
-      const [result] = await Promise.all([
+      [result] = await Promise.all([
         queryPromise,
         context.logSqlStatement(
           literalSQL ?? query,
@@ -292,10 +320,35 @@ async function executeSQLCore(
           options.contextUser
         )
       ]);
-      return result;
+    } else {
+      result = await queryPromise;
     }
 
-    return await queryPromise;
+    if (!options?.ignoreLogging && GenericDatabaseProvider.HasSqlObservers()) {
+      const endHr = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+      const durationMs = Math.round((endHr - startHr) * 100) / 100;
+      const rowCount =
+        Array.isArray(result?.rowsAffected) && result.rowsAffected.length > 0
+          ? result.rowsAffected.reduce((a: number, b: number) => a + b, 0)
+          : Array.isArray(result?.recordset)
+            ? result.recordset.length
+            : 0;
+      GenericDatabaseProvider.NotifySqlObservers({
+        ts: startTs,
+        durationMs,
+        sql: query,
+        description: options?.description,
+        isMutation: !!options?.isMutation,
+        rowCount,
+        parameterSummaries: SummarizeSqlParameters(parameters, !options?.isMutation),
+        sessionId: diagCtx?.sessionId,
+        traceId: diagCtx?.traceId,
+        spanId: diagCtx?.spanId,
+        ignoreLogging: options?.ignoreLogging,
+      });
+    }
+
+    return result;
   } catch (error: any) {
     // Retry once for stale connection errors on non-transactional queries.
     // Transactions cannot be retried because the connection state is already
@@ -308,7 +361,29 @@ async function executeSQLCore(
       return executeSQLCore(query, parameters, context, options, true);
     }
 
-    // Build detailed error message with query and parameters.
+    if (!options?.ignoreLogging && GenericDatabaseProvider.HasSqlObservers()) {
+      const endHr = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+      const durationMs = Math.round((endHr - startHr) * 100) / 100;
+      GenericDatabaseProvider.NotifySqlObservers({
+        ts: startTs,
+        durationMs,
+        sql: query,
+        description: options?.description,
+        isMutation: !!options?.isMutation,
+        parameterSummaries: SummarizeSqlParameters(parameters, false),
+        error: {
+          name: error?.name ? String(error.name) : 'Error',
+          message: error?.message ? String(error.message) : String(error),
+          code: error?.code ? String(error.code) : undefined,
+        },
+        sessionId: diagCtx?.sessionId,
+        traceId: diagCtx?.traceId,
+        spanId: diagCtx?.spanId,
+        ignoreLogging: options?.ignoreLogging,
+      });
+    }
+
+    // Build detailed error message with query and parameter types/lengths (never raw parameter values).
     // mssql RequestError has a precedingErrors array with the actual root-cause
     // SQL Server messages (e.g. "object already exists") that precede the
     // generic "Could not create constraint" wrapper. Always include them.
@@ -322,7 +397,7 @@ async function executeSQLCore(
     const errorMessage = `Error executing SQL
     Error: ${error?.message ? error.message : error}${precedingMsgs}
     Query: ${literalSQL ?? query}
-    Parameters: ${literalSQL || !parameters ? 'None' : JSON.stringify(parameters)}`;
+    Parameters: ${literalSQL || !parameters ? 'None' : FormatSqlParameterTypesForError(parameters)}`;
 
     // Preserve the original error type (ConnectionError vs RequestError) so callers
     // can structurally distinguish infrastructure failures from query-level errors.
@@ -690,6 +765,8 @@ export class SQLServerDataProvider
       parent.ExcludeSchemas,
       false,
     );
+    cfg.ConcurrencyCheck = this.ConcurrencyCheck;
+    cfg.DeltaUpdates = this.DeltaUpdates;
     await child.Config(cfg, this);
     return child;
   }
@@ -891,6 +968,20 @@ export class SQLServerDataProvider
     return this._pool;
   }
 
+  /** Reads the live counts from the mssql connection pool, or `null` before the pool is set. */
+  public override GetPoolStats(): DatabasePoolStats | null {
+    const pool = this._pool;
+    if (!pool) {
+      return null;
+    }
+    return {
+      TotalConnections: pool.size,
+      ActiveConnections: pool.borrowed,
+      IdleConnections: pool.available,
+      WaitingRequests: pool.pending,
+    };
+  }
+
   /**
    * For the SQLServerDataProvider the unique instance connection string which is used to identify, uniquely, a given connection is the following format:
    * mssql://host:port/instanceName?/database
@@ -1028,7 +1119,7 @@ export class SQLServerDataProvider
    * Uses multiple result sets to return status for each view efficiently.
    */
   protected async getBatchedServerCacheStatus(
-    items: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }>,
+    items: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string; queryParameters?: NamedQueryParameter[] }>,
     contextUser?: UserInfo
   ): Promise<Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>> {
     const results = new Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>();
@@ -1040,8 +1131,10 @@ export class SQLServerDataProvider
     // Build array of SQL statements for batch execution (recording per-item resolution errors
     // in `results` without aborting valid sibling items in the batch)
     const sqlStatements: string[] = [];
+    const batchParameters: Array<NamedQueryParameter[] | undefined> = [];
+    let hasAnyParameters = false;
     const validItems: Array<{ index: number }> = [];
-    for (const { index, entityInfo, whereSQL, item } of items) {
+    for (const { index, entityInfo, whereSQL, item, queryParameters } of items) {
       // The freshness probe MUST target the same physical view the read targets. For a
       // DataSource:'Materialized' read that's the materialized_vw<CodeName> wrapper (a full SELECT *
       // snapshot of the base view, so it carries __mj_UpdatedAt) — NOT the live base view. Probing the
@@ -1054,6 +1147,12 @@ export class SQLServerDataProvider
       try {
         const effectiveTarget = await this.resolveEffectiveBaseViewTarget(entityInfo, item.params, contextUser);
         sqlStatements.push(this.BuildCacheStatusSQL(entityInfo, effectiveTarget.viewName, whereSQL, effectiveTarget.schemaName));
+        if (queryParameters && queryParameters.length > 0) {
+          batchParameters.push(queryParameters);
+          hasAnyParameters = true;
+        } else {
+          batchParameters.push(undefined);
+        }
         validItems.push({ index });
       } catch (err) {
         results.set(index, {
@@ -1069,7 +1168,12 @@ export class SQLServerDataProvider
 
     try {
       // Execute the batched SQL using existing ExecuteSQLBatch method
-      const resultSets = await this.ExecuteSQLBatch(sqlStatements, undefined, undefined, contextUser);
+      const resultSets = await this.ExecuteSQLBatch(
+        sqlStatements,
+        hasAnyParameters ? batchParameters : undefined,
+        undefined,
+        contextUser,
+      );
 
       // Process each result set and map to the corresponding item index
       for (let i = 0; i < validItems.length; i++) {
@@ -1110,6 +1214,7 @@ export class SQLServerDataProvider
     orderBySQL: string,
     user: UserInfo,
     schemaNameOverride?: string,
+    queryParameters?: NamedQueryParameter[],
   ): Promise<{ executeViewSQL: string; runID: string }> {
     // entityInfo + effectiveBaseView are passed in (no reverse-lookup by base-view name) so the logged
     // read honors DataSource:'Materialized' and AlternateBaseView — effectiveBaseView is the materialized
@@ -1126,7 +1231,8 @@ export class SQLServerDataProvider
             INSERT INTO @ViewIDList (ID) (SELECT ${pkName} FROM [${targetSchema}].${effectiveBaseView} WHERE (${whereSQL}))
             EXEC [${this.MJCoreSchemaName}].spCreateUserViewRunWithDetail(${viewId},${user.Email}, @ViewIDLIst)
             `;
-    const runIDResult = await this.ExecuteSQL(sSQL, undefined, undefined, user);
+    const boundParams = queryParameters && queryParameters.length > 0 ? queryParameters : undefined;
+    const runIDResult = await this.ExecuteSQL(sSQL, boundParams, undefined, user);
     const runID: string = runIDResult[0].UserViewRunID;
     const sRetSQL: string = `SELECT * FROM [${targetSchema}].${effectiveBaseView} WHERE ${pkName} IN
                                     (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE UserViewRunID=${runID})
@@ -1661,25 +1767,48 @@ export class SQLServerDataProvider
     const execParams: string[] = [];
     let simpleParams = '';
     let bFirst = true;
+    const needsSimpleParams =
+      this.HasActiveSqlLoggingSessions ||
+      !!entity.TransactionGroup ||
+      Object.prototype.hasOwnProperty.call(this, '_logSqlStatement') ||
+      Object.getPrototypeOf(this) !== SQLServerDataProvider.prototype;
 
     for (const [f, value] of fieldValues) {
       const varName = `@${f.CodeName}${uniqueSuffix}`;
       declarations.push(`${varName} ${f.SQLFullType.toUpperCase()}`);
 
-      // A binary value is rendered to its hex literal ONCE and reused below: the literal is twice
-      // the size of the bytes, and the SET block and the simple-params form both carry it.
       const hasValue = value !== null && value !== undefined;
-      const binaryLiteral = hasValue && f.IsBinaryFieldType ? this.FormatBinaryLiteral(f, value) : undefined;
-      if (hasValue) {
-        setStatements.push(`SET ${varName} = ${params.AddField(f, binaryLiteral ?? this.generateSetStatementValue(f, value))}`);
+      if (hasValue && f.IsBinaryFieldType) {
+        const binaryBytes = this.decodeBinaryFieldBytes(f, value);
+        let cachedHexLiteral: string | undefined;
+        const getHexLiteral = (): string => {
+          if (cachedHexLiteral === undefined) {
+            cachedHexLiteral = this.FormatBinaryLiteral(f, binaryBytes);
+          }
+          return cachedHexLiteral;
+        };
+        setStatements.push(`SET ${varName} = ${params.AddBinaryField(f, binaryBytes, getHexLiteral)}`);
+        execParams.push(`@${f.CodeName}=${varName}`);
+        if (needsSimpleParams) {
+          simpleParams += this.generateSingleSPParam(f, value as string, bFirst, getHexLiteral());
+        }
+        bFirst = false;
+      } else {
+        if (hasValue) {
+          setStatements.push(`SET ${varName} = ${params.AddField(f, this.generateSetStatementValue(f, value))}`);
+        }
+        execParams.push(`@${f.CodeName}=${varName}`);
+        if (needsSimpleParams) {
+          simpleParams += this.generateSingleSPParam(f, value as string, bFirst);
+        }
+        bFirst = false;
       }
-      execParams.push(`@${f.CodeName}=${varName}`);
-      simpleParams += this.generateSingleSPParam(f, value as string, bFirst, binaryLiteral);
-      bFirst = false;
 
       if ((value === null || value === undefined) && f.NeedsClearCompanion) {
         execParams.push(`@${f.CodeName}_Clear=1`);
-        simpleParams += `, @${f.CodeName}_Clear=1`;
+        if (needsSimpleParams) {
+          simpleParams += `, @${f.CodeName}_Clear=1`;
+        }
       }
     }
 
@@ -1766,6 +1895,24 @@ export class SQLServerDataProvider
    * parameter has nothing to replay, so it is logged as a comment. A hand-written update proc
    * (spUpdateGenerated off) makes no ISNULL promise, so it keeps the full-row form.
    */
+  /**
+   * Reads the target record's physical columns from `[schema].[BaseTable] WITH (UPDLOCK, ROWLOCK)`
+   * inside the save transaction so concurrent writers serialize on the target row lock before
+   * `spUpdate*` executes, without propagating update locks to joined lookup tables in `BaseView`.
+   */
+  protected override RenderLockedRowReadSQL(
+    entityInfo: EntityInfo,
+    pkWhereClause: string,
+    columns: string[],
+  ): string | null {
+    if (columns.length === 0 || !pkWhereClause) {
+      return null;
+    }
+    const selectCols = columns.map((c) => this.QuoteIdentifier(c)).join(', ');
+    const tableRef = this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseTable || entityInfo.BaseView);
+    return `SELECT ${selectCols} FROM ${tableRef} WITH (UPDLOCK, ROWLOCK) WHERE ${pkWhereClause}`;
+  }
+
   protected override RenderReplayUpdateSQL(
     binding: SaveCallBinding,
     entity: BaseEntity,
@@ -2068,7 +2215,7 @@ export class SQLServerDataProvider
    */
   public static MaxInlineBinaryBytes: number = 32 * 1024 * 1024;
 
-  protected FormatBinaryLiteral(field: EntityFieldInfo, value: unknown): string {
+  private decodeBinaryFieldBytes(field: EntityFieldInfo, value: unknown): Buffer {
     const bytes = IsByteArray(value) ? value : TryBase64ToBytes(typeof value === 'string' ? value : null);
     if (!bytes) {
       throw new Error(`Field "${field.Name}" is binary (${field.Type}); its value must be a base64 string, but it is not valid base64`);
@@ -2080,7 +2227,11 @@ export class SQLServerDataProvider
         `or raise the limit if the batch size and Record Changes cost are acceptable.`,
       );
     }
-    return `0x${Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('hex').toUpperCase()}`;
+    return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  }
+
+  protected FormatBinaryLiteral(field: EntityFieldInfo, value: unknown): string {
+    return `0x${this.decodeBinaryFieldBytes(field, value).toString('hex').toUpperCase()}`;
   }
 
   /**
@@ -2504,13 +2655,17 @@ export class SQLServerDataProvider
     // This prevents EREQINPROG errors when multiple queries try to use the same transaction
     this.initializeQueueProcessor();
     const queue = this.ensureSqlQueue();
+    const enqueuedDiagnosticContext = options?.diagnosticContext ?? GetDiagnosticContext();
+    const effectiveOptions: InternalSQLOptions | undefined = enqueuedDiagnosticContext
+      ? { ...options, diagnosticContext: enqueuedDiagnosticContext }
+      : options;
     return new Promise<sql.IResult<any>>((resolve, reject) => {
       queue.next({
         kind: 'query',
         query,
         parameters,
         context,
-        options,
+        options: effectiveOptions,
         // Ours if it is the ambient handle now, or was one that has since ended: a caller holding
         // the old handle after its commit must be told so, not sent to mssql for ENOTBEGUN.
         ambient: context.transaction === this._transaction || (!!context.transaction && this._endedHandles.has(context.transaction)),
@@ -2764,6 +2919,157 @@ export class SQLServerDataProvider
   }
 
   /**
+   * Builds the combined SQL statement and bound parameter map/list for a multi-query batch.
+   *
+   * When multiple statements in the batch pass `NamedQueryParameter[]` or `TypedQueryParameter[]`
+   * with the same parameter name and identical value/type (such as RunView's `[dataSQL, countSQL, aggregateSQL]`),
+   * they share the single `@name` declaration without rewriting the query text.
+   * If a subsequent statement in the batch binds the same parameter name to a *different* value or SQL type,
+   * the colliding parameter is scoped to `q{queryIndex}_{name}` and rewritten outside string literals,
+   * quoted identifiers, and SQL comments so independent statements in a batch never overwrite or shadow each other.
+   */
+  private static buildBatchExecutionPayload(
+    queries: string[],
+    parameters?: unknown[][],
+  ): { batchSQL: string; effectiveBatchParams: Record<string, unknown> | TypedQueryParameter[] } {
+    let batchSQL = '';
+    const batchParameters: Record<string, unknown> = {};
+    const typedBatchParameters: TypedQueryParameter[] = [];
+    const boundParameterNames = new Set<string>();
+    const boundMeta = new Map<string, { value: unknown; sqlType?: string }>();
+    let globalParamIndex = 0;
+
+    queries.forEach((query, queryIndex) => {
+      let processedQuery = query;
+
+      if (parameters && parameters[queryIndex]) {
+        const queryParams = parameters[queryIndex];
+        if (IsTypedQueryParameterList(queryParams)) {
+          const localNames = new Set(queryParams.map(p => p.Name));
+          for (const p of queryParams) {
+            const existing = boundMeta.get(p.Name);
+            if (!existing) {
+              boundParameterNames.add(p.Name);
+              boundMeta.set(p.Name, { value: p.Value, sqlType: p.SQLType });
+              typedBatchParameters.push(p);
+              batchParameters[p.Name] = p.Value;
+            } else if (Object.is(existing.value, p.Value) && existing.sqlType === p.SQLType) {
+              // Identical name, value, and SQL type across batched statements — share @Name directly
+            } else {
+              const scopedName = SQLServerDataProvider.allocateScopedBatchParamName(
+                queryIndex,
+                p.Name,
+                boundParameterNames,
+                localNames,
+              );
+              boundParameterNames.add(scopedName);
+              boundMeta.set(scopedName, { value: p.Value, sqlType: p.SQLType });
+              typedBatchParameters.push(new TypedQueryParameter(scopedName, p.SQLType, p.Value));
+              batchParameters[scopedName] = p.Value;
+              processedQuery = GenericDatabaseProvider.RewriteSqlParameterReferences(
+                processedQuery,
+                p.Name,
+                scopedName,
+                SQLServerDataProvider._dialectInstance,
+              );
+            }
+          }
+        } else if (IsNamedQueryParameterList(queryParams)) {
+          const localNames = new Set(queryParams.map(p => p.Name));
+          for (const p of queryParams) {
+            const existing = boundMeta.get(p.Name);
+            if (!existing) {
+              boundParameterNames.add(p.Name);
+              boundMeta.set(p.Name, { value: p.Value });
+              batchParameters[p.Name] = p.Value;
+            } else if (Object.is(existing.value, p.Value) && existing.sqlType === undefined) {
+              // Identical name and value across batched statements — share @Name directly
+            } else {
+              const scopedName = SQLServerDataProvider.allocateScopedBatchParamName(
+                queryIndex,
+                p.Name,
+                boundParameterNames,
+                localNames,
+              );
+              boundParameterNames.add(scopedName);
+              boundMeta.set(scopedName, { value: p.Value });
+              batchParameters[scopedName] = p.Value;
+              processedQuery = GenericDatabaseProvider.RewriteSqlParameterReferences(
+                processedQuery,
+                p.Name,
+                scopedName,
+                SQLServerDataProvider._dialectInstance,
+              );
+            }
+          }
+        } else if (Array.isArray(queryParams)) {
+          // Handle positional parameters
+          queryParams.forEach((value) => {
+            const paramName = `p${globalParamIndex}`;
+            batchParameters[paramName] = value;
+            globalParamIndex++;
+          });
+          // Replace ? placeholders with parameter names
+          let localParamIndex = globalParamIndex - queryParams.length;
+          processedQuery = processedQuery.replace(/\?/g, () => `@p${localParamIndex++}`);
+        } else if (typeof queryParams === 'object') {
+          // Handle named parameters - prefix with query index to avoid conflicts
+          for (const [key, value] of Object.entries(queryParams)) {
+            const paramName = `q${queryIndex}_${key}`;
+            batchParameters[paramName] = value;
+            // Replace parameter references in query
+            // `key` is a caller-supplied parameter name, so it is DATA on both
+            // sides. Escaped before interpolation because a `$` in it acts as an
+            // end-anchor — the pattern then matches nothing, the placeholder is
+            // never rewritten, and mssql fails with "Must declare the scalar
+            // variable" while batchParameters holds the prefixed name. Carried
+            // through a replacement function for the same reason on the other
+            // side. Sibling of the escapeRegExp fix in PostgreSQLDataProvider.
+            // See issue #3171.
+            const prefixed = `@${paramName}`;
+            processedQuery = processedQuery.replace(
+              new RegExp(`@${EscapeRegExpLiteral(key)}\\b`, 'g'),
+              () => prefixed,
+            );
+          }
+        }
+      }
+
+      batchSQL += processedQuery;
+      if (queryIndex < queries.length - 1) {
+        batchSQL += ';\n';
+      }
+    });
+
+    const effectiveBatchParams =
+      typedBatchParameters.length > 0 && typedBatchParameters.length === boundParameterNames.size && globalParamIndex === 0
+        ? typedBatchParameters
+        : batchParameters;
+
+    return { batchSQL, effectiveBatchParams };
+  }
+
+  private static allocateScopedBatchParamName(
+    queryIndex: number,
+    baseName: string,
+    boundNames: ReadonlySet<string>,
+    localNames: ReadonlySet<string>,
+  ): string {
+    const candidate = `q${queryIndex}_${baseName}`;
+    if (!boundNames.has(candidate) && !localNames.has(candidate)) {
+      return candidate;
+    }
+    let suffix = 1;
+    while (
+      boundNames.has(`q${queryIndex}_${suffix}_${baseName}`) ||
+      localNames.has(`q${queryIndex}_${suffix}_${baseName}`)
+    ) {
+      suffix++;
+    }
+    return `q${queryIndex}_${suffix}_${baseName}`;
+  }
+
+  /**
    * Static method to execute a batch of SQL queries using a provided connection source.
    * This allows the batch logic to be reused from external contexts like TransactionGroup.
    * All queries are combined into a single SQL statement and executed together within
@@ -2781,55 +3087,7 @@ export class SQLServerDataProvider
     contextUser?: UserInfo,
   ): Promise<any[][]> {
     try {
-      // Build combined batch SQL and parameters
-      let batchSQL = '';
-      const batchParameters: Record<string, any> = {};
-      let globalParamIndex = 0;
-
-      queries.forEach((query, queryIndex) => {
-        let processedQuery = query;
-        
-        // Add parameters for this query if provided
-        if (parameters && parameters[queryIndex]) {
-          const queryParams = parameters[queryIndex];
-          if (Array.isArray(queryParams)) {
-            // Handle positional parameters
-            queryParams.forEach((value, localIndex) => {
-              const paramName = `p${globalParamIndex}`;
-              batchParameters[paramName] = value;
-              globalParamIndex++;
-            });
-            // Replace ? placeholders with parameter names
-            let localParamIndex = globalParamIndex - queryParams.length;
-            processedQuery = processedQuery.replace(/\?/g, () => `@p${localParamIndex++}`);
-          } else if (typeof queryParams === 'object') {
-            // Handle named parameters - prefix with query index to avoid conflicts
-            for (const [key, value] of Object.entries(queryParams)) {
-              const paramName = `q${queryIndex}_${key}`;
-              batchParameters[paramName] = value;
-              // Replace parameter references in query
-              // `key` is a caller-supplied parameter name, so it is DATA on both
-              // sides. Escaped before interpolation because a `$` in it acts as an
-              // end-anchor — the pattern then matches nothing, the placeholder is
-              // never rewritten, and mssql fails with "Must declare the scalar
-              // variable" while batchParameters holds the prefixed name. Carried
-              // through a replacement function for the same reason on the other
-              // side. Sibling of the escapeRegExp fix in PostgreSQLDataProvider.
-              // See issue #3171.
-              const prefixed = `@${paramName}`;
-              processedQuery = processedQuery.replace(
-                new RegExp(`@${EscapeRegExpLiteral(key)}\\b`, 'g'),
-                () => prefixed,
-              );
-            }
-          }
-        }
-
-        batchSQL += processedQuery;
-        if (queryIndex < queries.length - 1) {
-          batchSQL += ';\n';
-        }
-      });
+      const { batchSQL, effectiveBatchParams } = SQLServerDataProvider.buildBatchExecutionPayload(queries, parameters);
 
       // Create execution context for batch SQL
       let pool: sql.ConnectionPool;
@@ -2859,11 +3117,8 @@ export class SQLServerDataProvider
         }
       };
       
-      // Use named parameters for batch SQL
-      const namedParams: Record<string, any> = batchParameters;
-      
       // Execute using the centralized core function
-      const result = await executeSQLCore(batchSQL, namedParams, context, {
+      const result = await executeSQLCore(batchSQL, effectiveBatchParams, context, {
         description: 'Batch execution',
         ignoreLogging: false,
         isMutation: false,
@@ -2911,55 +3166,7 @@ export class SQLServerDataProvider
       if (joinsAmbient) {
         this.AssertAmbientTransactionUsable();
       }
-      // Build combined batch SQL and parameters (same as static method)
-      let batchSQL = '';
-      const batchParameters: Record<string, any> = {};
-      let globalParamIndex = 0;
-
-      queries.forEach((query, queryIndex) => {
-        let processedQuery = query;
-        
-        // Add parameters for this query if provided
-        if (parameters && parameters[queryIndex]) {
-          const queryParams = parameters[queryIndex];
-          if (Array.isArray(queryParams)) {
-            // Handle positional parameters
-            queryParams.forEach((value, localIndex) => {
-              const paramName = `p${globalParamIndex}`;
-              batchParameters[paramName] = value;
-              globalParamIndex++;
-            });
-            // Replace ? placeholders with parameter names
-            let localParamIndex = globalParamIndex - queryParams.length;
-            processedQuery = processedQuery.replace(/\?/g, () => `@p${localParamIndex++}`);
-          } else if (typeof queryParams === 'object') {
-            // Handle named parameters - prefix with query index to avoid conflicts
-            for (const [key, value] of Object.entries(queryParams)) {
-              const paramName = `q${queryIndex}_${key}`;
-              batchParameters[paramName] = value;
-              // Replace parameter references in query
-              // `key` is a caller-supplied parameter name, so it is DATA on both
-              // sides. Escaped before interpolation because a `$` in it acts as an
-              // end-anchor — the pattern then matches nothing, the placeholder is
-              // never rewritten, and mssql fails with "Must declare the scalar
-              // variable" while batchParameters holds the prefixed name. Carried
-              // through a replacement function for the same reason on the other
-              // side. Sibling of the escapeRegExp fix in PostgreSQLDataProvider.
-              // See issue #3171.
-              const prefixed = `@${paramName}`;
-              processedQuery = processedQuery.replace(
-                new RegExp(`@${EscapeRegExpLiteral(key)}\\b`, 'g'),
-                () => prefixed,
-              );
-            }
-          }
-        }
-
-        batchSQL += processedQuery;
-        if (queryIndex < queries.length - 1) {
-          batchSQL += ';\n';
-        }
-      });
+      const { batchSQL, effectiveBatchParams } = SQLServerDataProvider.buildBatchExecutionPayload(queries, parameters);
 
       // Create execution context
       const context: SQLExecutionContext = {
@@ -2972,7 +3179,7 @@ export class SQLServerDataProvider
       };
 
       // Execute using instance method (which handles queue for transactions)
-      const result = await this._internalExecuteSQLInstance(batchSQL, batchParameters, context, {
+      const result = await this._internalExecuteSQLInstance(batchSQL, effectiveBatchParams, context, {
         description: options?.description || 'Batch execution',
         ignoreLogging: options?.ignoreLogging || false,
         isMutation: options?.isMutation || false,
@@ -3378,8 +3585,48 @@ IF ${varName} IS NOT NULL
     return this._fileSystemProvider;
   }
 
-        public async CreateTransactionGroup(): Promise<TransactionGroupBase> {
-    return new SQLServerTransactionGroup();
+  /**
+   * Returns the currently active physical `mssql.Transaction` handle managed by this provider,
+   * or `null` when no physical transaction is open.
+   */
+  public get ActiveTransactionHandle(): sql.Transaction | null {
+    return this._transaction ?? null;
+  }
+
+  /**
+   * Executes a `mssql` request callback against `transaction`, serialized through this provider's
+   * transaction SQL queue when `transaction` is the provider's active transaction handle.
+   */
+  public async ExecuteOnTransactionHandle<TRow>(
+    transaction: sql.Transaction,
+    description: string,
+    run: (tx: sql.Transaction) => Promise<sql.IResult<TRow>>,
+  ): Promise<sql.IResult<TRow>> {
+    if (this._endedHandles.has(transaction)) {
+      throw new Error(
+        'The ambient transaction ended before this TransactionGroup request ran. ' +
+        'Await every query issued on the transaction before committing or rolling back.'
+      );
+    }
+    if (transaction !== this._transaction) {
+      return run(transaction);
+    }
+    let result!: sql.IResult<TRow>;
+    await this.enqueueTransactionAction(description, transaction, async () => {
+      await this.waitForActiveRequest();
+      if (this._endedHandles.has(transaction) || transaction !== this._transaction) {
+        throw new Error(
+          'The ambient transaction ended before this TransactionGroup request ran. ' +
+          'Await every query issued on the transaction before committing or rolling back.'
+        );
+      }
+      result = await run(transaction);
+    });
+    return result;
+  }
+
+  public async CreateTransactionGroup(): Promise<TransactionGroupBase> {
+    return new SQLServerTransactionGroup(this);
   }
 
   /**************************************************************************/

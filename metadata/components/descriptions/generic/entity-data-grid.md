@@ -16,3 +16,5 @@ Entity-aware data grid that **automatically loads records via RunView** with ada
 - Data source is not a MemberJunction entity (external API, calculated results) → **Use DataGrid**
 
 **Key difference from DataGrid**: EntityDataGrid is opinionated and automatic (manages RunView, caching, pagination). DataGrid is flexible and passive (you control data loading). Choose EntityDataGrid for simple 'show me the records' scenarios, DataGrid for custom data sources or complex queries.
+
+**Export is built in**: an export icon beside the grid's search box (over its top-right corner on hover when filtering is off) offers CSV and Excel of every record matching `extraFilter` and the user's text filter, in the current sort, not only the loaded page (up to 100,000 records; a capped file ends with a note row saying so), with the primary key columns first. Never wrap EntityDataGrid in `ExportableData`. Use `exportLabel` to name the file; `exportable={false}` only when the grid is not a dataset the user would want as a file.

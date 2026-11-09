@@ -32,6 +32,8 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
   private readonly _destroying$ = new Subject<void>();
   private readonly _initializationCompleted$ = new BehaviorSubject<boolean>(false);
   private _initPromise: Promise<void> | null = null;
+  /** Timestamp when a refresh-token exchange failed during token extraction, avoiding redundant 30s iframe hangs. */
+  private _silentRefreshFailedAt: number | null = null;
 
   /**
    * Factory function to provide Angular dependencies required by MSAL
@@ -48,6 +50,9 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         },
         cache: {
           cacheLocation: 'localStorage',
+        },
+        system: {
+          iframeBridgeTimeout: 4000,
         },
       }),
     },
@@ -292,42 +297,55 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
       }
 
       // First try to get cached token from account
-      // This avoids unnecessary iframe calls that can timeout
+      // This avoids unnecessary network/iframe calls when the token is still fresh
       if (account.idToken) {
         // Check if token is expired or about to expire (within 5-minute buffer)
         // This prevents the race condition where proactive refresh hasn't completed
         // but the cached token is already expired
         if (this.isTokenValid(account.idToken, 300)) {
+          this._silentRefreshFailedAt = null;
           return account.idToken;
         }
 
-        // Token expired or near-expiry — force a silent refresh
-        console.debug('[MSAL] Cached token expired or near-expiry, forcing silent refresh');
+        // Token expired or near-expiry — attempt silent refresh (refresh token first, with 4s-bounded
+        // iframe fallback when the 24h SPA refresh token has expired but the Entra SSO cookie is active)
+        console.debug('[MSAL] Cached token expired or near-expiry, attempting silent refresh');
         try {
           const response = await this.Auth.instance.acquireTokenSilent({
             scopes: ['User.Read', 'email', 'profile'],
             account: account,
             forceRefresh: true
           });
-          return response.idToken || null;
+          if (response.idToken && this.isTokenValid(response.idToken)) {
+            this._silentRefreshFailedAt = null;
+            return response.idToken;
+          }
         } catch (refreshError) {
-          console.warn('[MSAL] Silent refresh failed, returning expired cached token:', refreshError);
-          // Fall through to existing cache-only acquisition below
+          console.warn('[MSAL] Silent refresh failed:', refreshError);
+          if (this.isInteractionRequiredError(refreshError)) {
+            this._silentRefreshFailedAt = Date.now();
+          }
+          return null;
         }
       }
 
-      // If not in account, try silent token acquisition from cache only
-      // Use CacheLookupPolicy.AccessToken to avoid iframe calls
+      // If not on account or expired, try cache + refresh token (with bounded iframe fallback)
       const response = await this.Auth.instance.acquireTokenSilent({
         scopes: ['User.Read', 'email', 'profile'],
-        account: account,
-        cacheLookupPolicy: CacheLookupPolicy.AccessToken
+        account: account
       });
 
-      // MSAL-specific detail: JWT is in idToken property
-      return response.idToken || null;
+      if (response.idToken && this.isTokenValid(response.idToken)) {
+        this._silentRefreshFailedAt = null;
+        return response.idToken;
+      }
+
+      return null;
     } catch (error) {
       console.error('[MSAL] Error extracting ID token:', error);
+      if (this.isInteractionRequiredError(error)) {
+        this._silentRefreshFailedAt = Date.now();
+      }
       return null;
     }
   }
@@ -432,11 +450,23 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         };
       }
 
-      // MSAL 5.x: Pass account for reliable silent acquisition
-      // Use forceRefresh to bypass cache and ensure a network round-trip.
-      // This is critical because this method is called after the server rejected
-      // the current token — returning a cached (potentially stale) ID token would
-      // cause the retry to fail with the same JWT_EXPIRED error.
+      // If extractIdTokenInternal() just attempted a refresh-token exchange within the last
+      // 10 seconds and failed, skip making a redundant second attempt (or waiting for a 30-45s
+      // hidden iframe timeout) and trigger interactive redirect immediately.
+      if (this._silentRefreshFailedAt !== null && Date.now() - this._silentRefreshFailedAt < 10000) {
+        this._silentRefreshFailedAt = null;
+        console.debug('[MSAL] Refresh token already failed during token extraction — redirecting immediately');
+        return {
+          success: false,
+          error: {
+            type: AuthErrorType.INTERACTION_REQUIRED,
+            message: 'Cached token and refresh token are expired or unavailable — interaction required',
+            userMessage: 'Your session has expired. Redirecting to login...'
+          }
+        };
+      }
+
+      // MSAL 5.x: Pass account for reliable silent acquisition (refresh token first, bounded 4s iframe fallback).
       const response = await this.Auth.instance.acquireTokenSilent({
         scopes: ['User.Read', 'email', 'profile'],
         account: account,
@@ -490,17 +520,8 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
       // - no_account_error: Account not found in cache
       // - InteractionRequiredAuthError: Server requires user interaction
       const errorCode = (error as Record<string, unknown>)?.errorCode as string | undefined;
-      const interactionRequiredCodes = [
-        'monitor_window_timeout',
-        'timed_out',
-        'no_tokens_found',
-        'no_account_error',
-        'login_required',
-        'consent_required',
-        'token_refresh_required'  // ClientAuthError when cached token needs refresh
-      ];
 
-      if (interactionRequiredCodes.includes(errorCode || '') || error instanceof InteractionRequiredAuthError) {
+      if (this.isInteractionRequiredError(error)) {
         // Return INTERACTION_REQUIRED error - base class will call handleSessionExpiryInternal
         return {
           success: false,
@@ -518,6 +539,24 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         error: this.classifyErrorInternal(error)
       };
     }
+  }
+
+  private isInteractionRequiredError(error: unknown): boolean {
+    if (error instanceof InteractionRequiredAuthError) {
+      return true;
+    }
+    const errorCode = (error as Record<string, unknown>)?.errorCode as string | undefined;
+    const interactionRequiredCodes = [
+      'monitor_window_timeout',
+      'timed_out',
+      'no_tokens_found',
+      'no_account_error',
+      'login_required',
+      'consent_required',
+      'token_refresh_required',
+      'invalid_grant'
+    ];
+    return interactionRequiredCodes.includes(errorCode || '');
   }
 
   /**

@@ -18,7 +18,8 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider, ReadableFieldsTransportKey,
          SearchEntityParams, EntitySearchResult, ScoredCandidate, RemoteOpInvokeOptions, RemoteOpResult, RemoteOpProgress,
          GetLocalTimeZone, TIME_ZONE_HEADER, ViewPropertyValues, ResolveMJAPIURL,
-         GetEffectiveAlternateBaseViewName } from "@memberjunction/core";
+         GetEffectiveAlternateBaseViewName, TelemetryManager, GetDiagnosticContext, IsDiagnosticCaptureSuppressed,
+         CompositeFilter } from "@memberjunction/core";
 import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore, DeserializeValidationErrors } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
@@ -31,7 +32,112 @@ import { GraphQLTransactionGroup } from "./graphQLTransactionGroup";
 import { GraphQLAIClient } from "./graphQLAIClient";
 import { BrowserIndexedDBStorageProvider } from "./storage-providers";
 import { SanitizeGraphQLError, ToSafeGraphQLError } from "./sanitizeGraphQLError";
-import { IsGraphQLMutation } from "./graphQLOperationKind";
+import { IsGraphQLMutation, FirstGraphQLOperationKind, ExtractGraphQLOperationName } from "./graphQLOperationKind";
+
+/**
+ * Structured network operation observation emitted by {@link GraphQLDataProvider}
+ * for flight recorders and diagnostic bundles. Never includes raw variable values.
+ */
+export interface NetworkDiagnosticObservation {
+    operationName: string;
+    operationKind: 'query' | 'mutation' | 'subscription';
+    traceId: string;
+    spanId: string;
+    traceparent: string;
+    durationMs: number;
+    /** Approximate size: query text plus the JSON text of the variables. */
+    requestBytes: number;
+    /** Approximate size: the JSON text of the response data, or of the error response. */
+    responseBytes: number;
+    succeeded: boolean;
+    errorCode?: string;
+    errorMessage?: string;
+    retryCount: number;
+    variableKeys: string[];
+    timestamp: number;
+}
+
+export type NetworkDiagnosticObserver = (observation: NetworkDiagnosticObservation) => void;
+
+const _networkDiagnosticObservers = new Set<NetworkDiagnosticObserver>();
+
+/**
+ * Registers a callback notified after every GraphQL network operation (`ExecuteGQL` and
+ * `ExecuteGQLWithProgress`). Returns an unsubscribe function.
+ */
+export function RegisterNetworkDiagnosticObserver(observer: NetworkDiagnosticObserver): () => void {
+    _networkDiagnosticObservers.add(observer);
+    return () => {
+        _networkDiagnosticObservers.delete(observer);
+    };
+}
+
+/** The headers of a GraphQL HTTP response. */
+export interface GraphQLResponseHeaders {
+    get(name: string): string | null;
+}
+
+export type ResponseHeaderObserver = (headers: GraphQLResponseHeaders) => void;
+
+const _responseHeaderObservers = new Set<ResponseHeaderObserver>();
+
+/**
+ * Registers a callback called with the headers of each GraphQL HTTP response. Returns an
+ * unsubscribe function. An observer that throws does not affect the request or other observers.
+ */
+export function RegisterResponseHeaderObserver(observer: ResponseHeaderObserver): () => void {
+    _responseHeaderObservers.add(observer);
+    return () => {
+        _responseHeaderObservers.delete(observer);
+    };
+}
+
+type MaybeHeaders = { get?: (name: string) => string | null };
+
+/**
+ * Returns the response's headers when it has a `headers.get` function. A failed request
+ * (graphql-request `ClientError`) carries its response on `error.response`.
+ */
+function responseHeadersOf(response: unknown): GraphQLResponseHeaders | null {
+    if (!response || typeof response !== 'object') {
+        return null;
+    }
+    const source = response instanceof Error ? (response as { response?: { headers?: MaybeHeaders } }).response : response;
+    const headers = (source as { headers?: MaybeHeaders } | undefined)?.headers;
+    return headers && typeof headers.get === 'function' ? (headers as GraphQLResponseHeaders) : null;
+}
+
+function notifyResponseHeaderObservers(response: unknown): void {
+    const headers = _responseHeaderObservers.size > 0 ? responseHeadersOf(response) : null;
+    if (!headers) {
+        return;
+    }
+    for (const observer of _responseHeaderObservers) {
+        try {
+            observer(headers);
+        } catch {
+            // an observer failure never breaks the request
+        }
+    }
+}
+
+function generateHexId(byteCount: number): string {
+    const g = globalThis as { crypto?: { getRandomValues?: (arr: Uint8Array) => Uint8Array } };
+    if (g.crypto && typeof g.crypto.getRandomValues === 'function') {
+        const bytes = new Uint8Array(byteCount);
+        g.crypto.getRandomValues(bytes);
+        let hex = '';
+        for (let i = 0; i < bytes.length; i++) {
+            hex += bytes[i].toString(16).padStart(2, '0');
+        }
+        return hex;
+    }
+    let fallback = '';
+    for (let i = 0; i < byteCount; i++) {
+        fallback += Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
+    }
+    return fallback;
+}
 
 // define the shape for a RefreshToken function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
 export type RefreshTokenFunction = () => Promise<string>;
@@ -1173,6 +1279,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 }
                 // ExtraFilter/OrderBy are resolved to strings by ProviderBase.PreRunView
                 innerParams.ExtraFilter = params.ExtraFilter ? (params.ExtraFilter as string) : '';
+                const serializedSingleFilter = this.serializeRunViewFilter(params.Filter);
+                if (serializedSingleFilter !== undefined) {
+                    innerParams.Filter = serializedSingleFilter;
+                }
                 innerParams.OrderBy = params.OrderBy ? (params.OrderBy as string) : '';
                 innerParams.UserSearchString = params.UserSearchString ? params.UserSearchString : '';
                 innerParams.Fields = params.Fields; // pass it straight through, either null or array of strings
@@ -1217,6 +1327,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     innerParams.SaveViewResults = params.SaveViewResults ? params.SaveViewResults : false;
                 }
                 this.applyViewPropertiesToInput(params, innerParams, dynamicView);
+                if (params.Parameters !== undefined) {
+                    innerParams.Parameters = params.Parameters;
+                }
 
                 // Include Aggregates if provided
                 if (params.Aggregates && params.Aggregates.length > 0) {
@@ -1316,6 +1429,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
+    private serializeRunViewFilter(filter: RunViewParams['Filter']): string | undefined {
+        if (!filter) {
+            return undefined;
+        }
+        return filter instanceof CompositeFilter ? filter.ToJSON() : JSON.stringify(filter);
+    }
+
     /**
      * Puts a run's view-property values on its GraphQL input. Only a stored-view run takes them,
      * and `ServerProperties` never leave the server, so either mistake throws rather than being dropped.
@@ -1385,6 +1505,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
                     // ExtraFilter/OrderBy are resolved to strings by ProviderBase.PreRunViews
                     innerParam.ExtraFilter = (param.ExtraFilter as string) || '';
+                    const serializedBatchFilter = this.serializeRunViewFilter(param.Filter);
+                    if (serializedBatchFilter !== undefined) {
+                        innerParam.Filter = serializedBatchFilter;
+                    }
                     innerParam.OrderBy = (param.OrderBy as string) || '';
                     innerParam.UserSearchString = param.UserSearchString || '';
                     // pass it straight through, either null or array of strings
@@ -1428,6 +1552,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         innerParam.SaveViewResults = param.SaveViewResults || false;
                     }
                     this.applyViewPropertiesToInput(param, innerParam, dynamicView);
+                    if (param.Parameters !== undefined) {
+                        innerParam.Parameters = param.Parameters;
+                    }
 
                     // Include Aggregates if provided
                     if (param.Aggregates && param.Aggregates.length > 0) {
@@ -1527,6 +1654,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     EntityName: item.params.EntityName || '',
                     // ExtraFilter/OrderBy are resolved to strings by ProviderBase
                     ExtraFilter: (item.params.ExtraFilter as string) || '',
+                    ...(item.params.Filter ? { Filter: this.serializeRunViewFilter(item.params.Filter) } : {}),
                     OrderBy: (item.params.OrderBy as string) || '',
                     Fields: item.params.Fields,
                     UserSearchString: item.params.UserSearchString || '',
@@ -1562,6 +1690,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     // strongest available "read true database state" arrived as its opposite, and
                     // BaseEngine.Config(true) in a browser could not escape a stale server slot.
                     BypassCache: item.params.BypassCache,
+                    ...(item.params.Parameters !== undefined ? { Parameters: item.params.Parameters } : {}),
                 },
                 cacheStatus: item.cacheStatus ? {
                     maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
@@ -2141,8 +2270,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * key validation still runs in `ProviderBase.RouteOperation` before this is called.
      */
     protected override async InternalRouteOperation<TInput = unknown, TOutput = unknown>(operationKey: string, input: TInput, options: RemoteOpInvokeOptions): Promise<RemoteOpResult<TOutput>> {
-        const mutation = gql`mutation ExecuteRemoteOperation($operationKey: String!, $inputJSON: String!, $invokeMode: String!, $progressChannelId: String) {
-            ExecuteRemoteOperation(input: { operationKey: $operationKey, inputJSON: $inputJSON, invokeMode: $invokeMode, progressChannelId: $progressChannelId }) {
+        const mutation = gql`mutation ExecuteRemoteOperation($operationKey: String!, $inputJSON: String!, $invokeMode: String!, $progressChannelId: String, $contractFingerprint: String) {
+            ExecuteRemoteOperation(input: { operationKey: $operationKey, inputJSON: $inputJSON, invokeMode: $invokeMode, progressChannelId: $progressChannelId, contractFingerprint: $contractFingerprint }) {
                 success
                 resultCode
                 outputJSON
@@ -2184,6 +2313,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 inputJSON: JSON.stringify(input ?? null),
                 invokeMode: options.mode ?? 'attached',
                 progressChannelId: progressChannelId ?? null,
+                contractFingerprint: options.contractFingerprint ?? null,
             });
             const r = data?.ExecuteRemoteOperation;
             if (!r) {
@@ -2477,11 +2607,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      *   writable fields (`f.IsPrimaryKey || (!f.ReadOnly && !f.NotLoaded && f.Dirty)`) in both
      *   `vars.input` and `vars.input.OldValues___`. Clean fields, read-only fields (`__mj_CreatedAt`,
      *   `__mj_UpdatedAt`), virtual fields, and `NotLoaded` fields are omitted from the mutation input.
-     * - **Delta response selection on Update**: Requests only primary keys, dirty fields,
-     *   `__mj_CreatedAt` / `__mj_UpdatedAt`, and (when any foreign key field was dirtied) virtual
-     *   fields so joined display names refresh from the server view. The delta response is merged
-     *   onto `entity.GetAll()` before `ApplyServerFieldAccess` so `BaseEntity.finalizeSave()` keeps
-     *   clean loaded fields intact and preserves `NotLoaded` on unloaded fields.
+     * - **Response selection on Update**: Requests primary keys, `__mj_CreatedAt` / `__mj_UpdatedAt`,
+     *   dirty fields, server-derived fields, and every other loaded non-binary field, so a concurrent
+     *   change the server preserved on an untouched column reaches the entity. `NotLoaded` and binary
+     *   fields are not requested. The response is merged onto `entity.GetAll()` before
+     *   `ApplyServerFieldAccess` so `BaseEntity.finalizeSave()` preserves `NotLoaded` on unloaded fields.
      * - **`datestamps_only` return mode**: Requests only primary keys and `__mj_CreatedAt` /
      *   `__mj_UpdatedAt` and merges the response onto `entity.GetAll()`.
      * - **Forced full save (`options?.IgnoreDirtyState === true`)**: Bypasses the dirty-only filter on
@@ -2610,16 +2740,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     return f.IsPrimaryKey || f.EntityFieldInfo.IsSpecialDateField;
                 }
                 if (filterToDirtyOnly) {
+                    // Every loaded non-binary field comes back, not only the dirty ones: the server
+                    // merges a concurrent change to an untouched column into the saved row, and the
+                    // entity can only reflect that change if the response carries the column.
                     return (
                         f.IsPrimaryKey ||
                         f.EntityFieldInfo.IsSpecialDateField ||
                         this.isFieldDirtyOnChain(entity, f) ||
                         Boolean(serverDerivedFields?.has(f.Name)) ||
-                        (!f.NotLoaded &&
-                            !f.EntityFieldInfo.IsBinaryFieldType &&
-                            (Boolean(f.EntityFieldInfo.IsVirtual) ||
-                                Boolean(f.EntityFieldInfo.IsComputed) ||
-                                f.ReadOnly))
+                        (!f.NotLoaded && !f.EntityFieldInfo.IsBinaryFieldType)
                     );
                 }
                 return true;
@@ -3110,8 +3239,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             originalVal = originalVal.toString();
                         if (typeof returnedVal === 'number')
                             returnedVal = returnedVal.toString();
-                        // now compare the two values
-                        if (originalVal !== returnedVal) {
+                        // now compare the two values; a UUID key compares case-insensitively (the server echoes its own casing)
+                        const isUUIDKey = entity.EntityInfo.Fields.find((f) => f.Name === key.FieldName)?.IsUniqueIdentifier === true;
+                        const keysMatch = isUUIDKey ? UUIDsEqual(originalVal, returnedVal) : originalVal === returnedVal;
+                        if (!keysMatch) {
                             throw new Error (`Primary key value mismatch in server Delete response. Field: ${key.FieldName}, Original: ${originalVal}, Returned: ${returnedVal}`);
                         }
                     }
@@ -3559,6 +3690,81 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     /**
+     * Mints a W3C Trace Context `traceparent` header (`00-<32-hex-traceId>-<16-hex-spanId>-01`).
+     * Reuses `existingTraceId` when provided (e.g. across a `JWT_EXPIRED` retry).
+     */
+    public static MintTraceparent(existingTraceId?: string): { traceparent: string; traceId: string; spanId: string } {
+        const traceId = existingTraceId && /^[0-9a-f]{32}$/i.test(existingTraceId)
+            ? existingTraceId.toLowerCase()
+            : generateHexId(16);
+        const spanId = generateHexId(8);
+        return {
+            traceparent: `00-${traceId}-${spanId}-01`,
+            traceId,
+            spanId,
+        };
+    }
+
+    /**
+     * True when a network diagnostic observer is registered or telemetry is on. Payload sizes are
+     * only measured then, so the JSON serialization never costs anything on an idle client.
+     */
+    private shouldMeasurePayloadSizes(): boolean {
+        if (_networkDiagnosticObservers.size > 0) {
+            return true;
+        }
+        const tm = typeof TelemetryManager !== 'undefined' ? TelemetryManager?.Instance : undefined;
+        return Boolean(tm?.IsEnabled);
+    }
+
+    /** Length of the JSON text of `value`; 0 when it is missing or cannot be serialized. */
+    private static approximateJsonSize(value: unknown): number {
+        if (value == null) {
+            return 0;
+        }
+        try {
+            return JSON.stringify(value)?.length ?? 0;
+        } catch {
+            return 0;
+        }
+    }
+
+    private emitNetworkTelemetry(obs: NetworkDiagnosticObservation): void {
+        try {
+            const suppressed = typeof IsDiagnosticCaptureSuppressed === 'function' && IsDiagnosticCaptureSuppressed();
+            if (!suppressed) {
+                for (const listener of _networkDiagnosticObservers) {
+                    try {
+                        listener(obs);
+                    } catch {
+                        // Never allow diagnostic observers to disrupt network execution
+                    }
+                }
+            }
+            const tm = typeof TelemetryManager !== 'undefined' ? TelemetryManager?.Instance : undefined;
+            if (tm && typeof tm.RecordEvent === 'function' && tm.IsEnabled) {
+                tm.RecordEvent(
+                    'Network',
+                    `GraphQL.${obs.operationKind}.${obs.operationName}`,
+                    {
+                        operationType: obs.operationKind,
+                        operationName: obs.operationName,
+                        traceId: obs.traceId,
+                        retryCount: obs.retryCount,
+                        requestSize: obs.requestBytes,
+                        responseSize: obs.responseBytes,
+                        statusCode: obs.succeeded ? 200 : 500,
+                        status: obs.succeeded ? 200 : 500,
+                    },
+                    obs.durationMs,
+                );
+            }
+        } catch {
+            // Never allow telemetry errors to propagate out of GraphQL transport
+        }
+    }
+
+    /**
      * Executes a GraphQL query/mutation with real upload progress tracking via XMLHttpRequest.
      * Useful for large payload mutations such as file uploads where byte-level progress reporting is required.
      */
@@ -3578,7 +3784,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         query: string,
         variables: Record<string, unknown>,
         onProgress?: (event: { loaded: number; total: number; percent: number }) => void,
-        refreshTokenIfNeeded: boolean = true
+        refreshTokenIfNeeded: boolean = true,
+        existingTraceId?: string,
+        retryCount: number = 0
     ): Promise<T> {
         if (!this._configData?.URL) {
             throw new Error('GraphQLDataProvider is not configured with a URL.');
@@ -3587,6 +3795,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         const url = this._configData.URL;
         const payload = JSON.stringify({ query, variables });
         const isMutation = IsGraphQLMutation(query);
+        const operationKind = FirstGraphQLOperationKind(query) ?? 'query';
+        const operationName = ExtractGraphQLOperationName(query);
+        const { traceparent, traceId, spanId } = GraphQLDataProvider.MintTraceparent(existingTraceId);
+        const diagCtx = typeof GetDiagnosticContext === 'function' ? GetDiagnosticContext() : undefined;
+        const startTime = performance.now();
+        const variableKeys = variables && typeof variables === 'object' ? Object.keys(variables) : [];
+
         const settle = () => {
             // see ExecuteGQL — a mutation can write server-side without a local BaseEntity event
             if (isMutation) {
@@ -3598,6 +3813,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const xhr = new XMLHttpRequest();
             xhr.open('POST', url);
             xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.setRequestHeader('traceparent', traceparent);
+            if (diagCtx?.sessionId) {
+                xhr.setRequestHeader('x-mj-diagnostic-session', diagCtx.sessionId);
+            }
 
             if (this._sessionId) {
                 xhr.setRequestHeader('x-session-id', this._sessionId);
@@ -3625,6 +3844,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
 
             xhr.onload = async () => {
+                const durationMs = performance.now() - startTime;
+                const responseBytes = xhr.responseText ? xhr.responseText.length : 0;
                 if (xhr.status >= 200 && xhr.status < 300) {
                     try {
                         const json = JSON.parse(xhr.responseText) as { data?: T; errors?: Array<{ message?: string; extensions?: { code?: string } }> };
@@ -3633,22 +3854,86 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             const code = error?.extensions?.code?.toUpperCase()?.trim();
                             if (code === 'JWT_EXPIRED' && refreshTokenIfNeeded) {
                                 await this.RefreshToken();
-                                resolve(await this.ExecuteGQLWithProgress<T>(query, variables, onProgress, false));
+                                resolve(await this.ExecuteGQLWithProgress<T>(query, variables, onProgress, false, traceId, retryCount + 1));
                                 return;
                             }
+                            this.emitNetworkTelemetry({
+                                operationName,
+                                operationKind,
+                                traceId,
+                                spanId,
+                                traceparent,
+                                durationMs,
+                                requestBytes: payload.length,
+                                responseBytes,
+                                succeeded: false,
+                                errorCode: code,
+                                errorMessage: error.message || 'GraphQL Error',
+                                retryCount,
+                                variableKeys,
+                                timestamp: Date.now(),
+                            });
                             reject(new Error(error.message || 'GraphQL Error'));
                         } else {
+                            this.emitNetworkTelemetry({
+                                operationName,
+                                operationKind,
+                                traceId,
+                                spanId,
+                                traceparent,
+                                durationMs,
+                                requestBytes: payload.length,
+                                responseBytes,
+                                succeeded: true,
+                                retryCount,
+                                variableKeys,
+                                timestamp: Date.now(),
+                            });
                             resolve(json.data as T);
                         }
                     } catch (err) {
                         reject(err);
                     }
                 } else {
+                    this.emitNetworkTelemetry({
+                        operationName,
+                        operationKind,
+                        traceId,
+                        spanId,
+                        traceparent,
+                        durationMs,
+                        requestBytes: payload.length,
+                        responseBytes,
+                        succeeded: false,
+                        errorCode: `HTTP_${xhr.status}`,
+                        errorMessage: `HTTP error ${xhr.status}: ${xhr.statusText}`,
+                        retryCount,
+                        variableKeys,
+                        timestamp: Date.now(),
+                    });
                     reject(new Error(`HTTP error ${xhr.status}: ${xhr.statusText}`));
                 }
             };
 
-            xhr.onerror = () => reject(new Error('Network error during request'));
+            xhr.onerror = () => {
+                this.emitNetworkTelemetry({
+                    operationName,
+                    operationKind,
+                    traceId,
+                    spanId,
+                    traceparent,
+                    durationMs: performance.now() - startTime,
+                    requestBytes: payload.length,
+                    responseBytes: 0,
+                    succeeded: false,
+                    errorCode: 'NETWORK_ERROR',
+                    errorMessage: 'Network error during request',
+                    retryCount,
+                    variableKeys,
+                    timestamp: Date.now(),
+                });
+                reject(new Error('Network error during request'));
+            };
             xhr.onabort = () => reject(new Error('Request aborted'));
 
             xhr.send(payload);
@@ -3664,12 +3949,53 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @returns 
      */
     public async ExecuteGQL(query: string, variables: any, refreshTokenIfNeeded: boolean = true, options?: ExecuteGQLOptions): Promise<any> {
+        return this.executeGQLInternal(query, variables, refreshTokenIfNeeded, options, undefined, 0);
+    }
+
+    private async executeGQLInternal(
+        query: string,
+        variables: any,
+        refreshTokenIfNeeded: boolean,
+        options: ExecuteGQLOptions | undefined,
+        existingTraceId: string | undefined,
+        retryCount: number
+    ): Promise<any> {
         const isMutation = IsGraphQLMutation(query);
+        const operationKind = FirstGraphQLOperationKind(query) ?? 'query';
+        const operationName = ExtractGraphQLOperationName(query);
+        const { traceparent, traceId, spanId } = GraphQLDataProvider.MintTraceparent(existingTraceId);
+        const diagCtx = typeof GetDiagnosticContext === 'function' ? GetDiagnosticContext() : undefined;
+        const requestHeaders: Record<string, string> = {
+            traceparent,
+            ...(diagCtx?.sessionId ? { 'x-mj-diagnostic-session': diagCtx.sessionId } : {}),
+        };
+        const startTime = performance.now();
+        const variableKeys = variables && typeof variables === 'object' ? Object.keys(variables as Record<string, unknown>) : [];
+        const measureSizes = this.shouldMeasurePayloadSizes();
+        const approxReqBytes = (typeof query === 'string' ? query.length : 0)
+            + (measureSizes ? GraphQLDataProvider.approximateJsonSize(variables) : 0);
+
         try {
-            const data = await this._client.request(query, variables);
+            const data = await this._client.request(query, variables, requestHeaders);
+            const durationMs = performance.now() - startTime;
+            this.emitNetworkTelemetry({
+                operationName,
+                operationKind,
+                traceId,
+                spanId,
+                traceparent,
+                durationMs,
+                requestBytes: approxReqBytes,
+                responseBytes: measureSizes ? GraphQLDataProvider.approximateJsonSize(data) : 0,
+                succeeded: true,
+                retryCount,
+                variableKeys,
+                timestamp: Date.now(),
+            });
             return data;
         }
         catch (e) {
+            const durationMs = performance.now() - startTime;
             // Enhanced error logging to diagnose 500 errors.
             //
             // SECURITY: the error thrown by the underlying graphql-request client
@@ -3704,20 +4030,69 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 const code = error?.extensions?.code?.toUpperCase().trim()
                 if (code === 'JWT_EXPIRED') {
                     if (refreshTokenIfNeeded) {
-                        // token expired, so we need to refresh it and try again
+                        // token expired, so we need to refresh it and try again, preserving traceId
                         await this.RefreshToken();
-                        return await this.ExecuteGQL(query, variables, false/*don't attempt to refresh again*/, options);
+                        return await this.executeGQLInternal(query, variables, false/*don't attempt to refresh again*/, options, traceId, retryCount + 1);
                     }
                     else {
                         // token expired but the caller doesn't want a refresh, so just return the error
+                        this.emitNetworkTelemetry({
+                            operationName,
+                            operationKind,
+                            traceId,
+                            spanId,
+                            traceparent,
+                            durationMs,
+                            requestBytes: approxReqBytes,
+                            responseBytes: measureSizes ? GraphQLDataProvider.approximateJsonSize(e.response) : 0,
+                            succeeded: false,
+                            errorCode: code,
+                            errorMessage: safeToThrow.message,
+                            retryCount,
+                            variableKeys,
+                            timestamp: Date.now(),
+                        });
                         LogError(`JWT_EXPIRED and refreshTokenIfNeeded is false`);
                         throw safeToThrow;
                     }
                 }
-                else
+                else {
+                    this.emitNetworkTelemetry({
+                        operationName,
+                        operationKind,
+                        traceId,
+                        spanId,
+                        traceparent,
+                        durationMs,
+                        requestBytes: approxReqBytes,
+                        responseBytes: measureSizes ? GraphQLDataProvider.approximateJsonSize(e.response) : 0,
+                        succeeded: false,
+                        errorCode: code,
+                        errorMessage: safeToThrow.message,
+                        retryCount,
+                        variableKeys,
+                        timestamp: Date.now(),
+                    });
                     throw safeToThrow;
+                }
             }
             else {
+                this.emitNetworkTelemetry({
+                    operationName,
+                    operationKind,
+                    traceId,
+                    spanId,
+                    traceparent,
+                    durationMs,
+                    requestBytes: approxReqBytes,
+                    responseBytes: measureSizes ? GraphQLDataProvider.approximateJsonSize(e?.response) : 0,
+                    succeeded: false,
+                    errorCode: safeToThrow.Code,
+                    errorMessage: safeToThrow.message,
+                    retryCount,
+                    variableKeys,
+                    timestamp: Date.now(),
+                });
                 // LogError() stringifies its argument (String(message) internally), which
                 // for the raw error class yields the full serialised request.
                 LogError(JSON.stringify(safeError));
@@ -3842,6 +4217,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      *
      * Specifically clears:
      * - The `MJ_Metadata` IndexedDB database (entity definitions, RunView/RunQuery/Dataset caches)
+     * - The `MJ_Diagnostics` IndexedDB database, if it exists
      * - All localStorage keys except those in `preservedKeys`
      *
      * @param preservedKeys localStorage keys to keep across logout (e.g. theme preference).
@@ -3858,9 +4234,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         keysToRemove.forEach(key => localStorage.removeItem(key));
 
-        // Delete the MJ IndexedDB metadata cache
-        await new Promise<void>((resolve) => {
-            const req = indexedDB.deleteDatabase('MJ_Metadata');
+        // Delete the `MJ_Metadata` and `MJ_Diagnostics` IndexedDB databases
+        await Promise.all(['MJ_Metadata', 'MJ_Diagnostics'].map((name) => GraphQLDataProvider.deleteIndexedDb(name)));
+    }
+
+    /** Deletes one IndexedDB database; resolves when the deletion ends, fails or is blocked. */
+    private static deleteIndexedDb(name: string): Promise<void> {
+        return new Promise<void>((resolve) => {
+            const req = indexedDB.deleteDatabase(name);
             req.onsuccess = () => resolve();
             req.onerror = () => resolve();
             req.onblocked = () => resolve();
@@ -3898,6 +4279,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             headers,
             responseMiddleware: (response) => {
                 this.inspectResponseCacheHeaders(response);
+                notifyResponseHeaderObservers(response);
             },
         });
 
@@ -4308,9 +4690,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return new Observable((observer) => {
             const client = this.getOrCreateWSClient();
             this._activeSubscriptionCount++;
+            const { traceparent } = GraphQLDataProvider.MintTraceparent();
+            const diagCtx = typeof GetDiagnosticContext === 'function' ? GetDiagnosticContext() : undefined;
+            const extensions: Record<string, unknown> = {
+                traceparent,
+                ...(diagCtx?.sessionId ? { diagnosticSessionId: diagCtx.sessionId } : {}),
+            };
 
             const unsubscribe = client.subscribe(
-                { query: subscription, variables },
+                { query: subscription, variables, extensions },
                 {
                     next: (data) => {
                         observer.next(data.data);

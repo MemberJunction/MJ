@@ -1061,17 +1061,17 @@ describe('C2: per-modality usage accumulation', () => {
         vi.useFakeTimers();
         const runner = new RealtimeSessionRunner(h.deps);
         await runner.Start();
-        h.session.fireUsage({ InputTokens: 100, OutputTokens: 40, InputTokenDetails: { TextTokens: 20, AudioTokens: 70, CachedTokens: 10 }, OutputTokenDetails: { TextTokens: 10, AudioTokens: 30 } });
-        h.session.fireUsage({ InputTokens: 50, OutputTokens: 20, InputTokenDetails: { TextTokens: 5, AudioTokens: 45 }, OutputTokenDetails: { AudioTokens: 20 } });
+        h.session.fireUsage({ InputTokens: 100, OutputTokens: 40, InputTokenDetails: { TextTokens: 20, AudioTokens: 70, CachedTokens: 10, CachedAudioTokens: 6 }, OutputTokenDetails: { TextTokens: 10, AudioTokens: 30 } });
+        h.session.fireUsage({ InputTokens: 50, OutputTokens: 20, InputTokenDetails: { TextTokens: 5, AudioTokens: 45, CachedTokens: 40, CachedAudioTokens: 35 }, OutputTokenDetails: { AudioTokens: 20 } });
         await vi.advanceTimersByTimeAsync(5001);
         expect(h.checkpointSpy).toHaveBeenCalledWith({
             InputTokens: 150,
             OutputTokens: 60,
-            InputTokenDetails: { TextTokens: 25, AudioTokens: 115, CachedTokens: 10 },
+            InputTokenDetails: { TextTokens: 25, AudioTokens: 115, CachedTokens: 50, CachedAudioTokens: 41 },
             OutputTokenDetails: { TextTokens: 10, AudioTokens: 50 },
         });
         const result = await runner.Stop();
-        expect(result.FinalUsage.InputTokenDetails).toEqual({ TextTokens: 25, AudioTokens: 115, CachedTokens: 10 });
+        expect(result.FinalUsage.InputTokenDetails).toEqual({ TextTokens: 25, AudioTokens: 115, CachedTokens: 50, CachedAudioTokens: 41 });
     });
 
     it('totals-only updates never grow phantom detail blocks', async () => {

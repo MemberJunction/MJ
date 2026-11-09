@@ -9,7 +9,7 @@
  */
 
 import { CompositeKey, IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UnwrapPhraseQuotes } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
 import type { LaneKind } from './ScopeExplanation';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeEntityConstraint } from './search.types';
@@ -170,7 +170,8 @@ export class EntitySearchProvider extends BaseSearchProvider {
         contextUser: UserInfo,
         scopeConstraints?: ScopeConstraints
     ): Promise<SearchResultItem[]> {
-        const trimmed = (query ?? '').trim();
+        // Measured without wrapping phrase quotes: the database searches `"a"` as `a`.
+        const trimmed = UnwrapPhraseQuotes((query ?? '').trim());
         if (trimmed.length < EntitySearchProvider.MIN_TERM_LENGTH) return [];
         try {
             // Honor per-provider query transform (e.g., FTS keyword extraction, AI rewrite)
@@ -497,7 +498,10 @@ export class EntitySearchProvider extends BaseSearchProvider {
     ): SearchResultItem[] {
         const md = this.Provider;
         const entityInfo = md.EntityByName(entityName);
-        const queryLower = query.toLowerCase();
+        // Scored as the database searched it: a wrapping pair of phrase quotes is not record text. Left in,
+        // a quoted one-word query (`"SOW"`) matched no field here and every row it fetched was dropped.
+        const queryLower = UnwrapPhraseQuotes(query).toLowerCase().trim();
+        const queryTokens = queryLower.split(/\s+/).filter(t => t.length >= 2);
 
         // Get searchable fields and classify them by importance
         const searchFields = entityInfo?.Fields.filter(f => f.IncludeInUserSearchAPI) ?? [];
@@ -517,15 +521,20 @@ export class EntitySearchProvider extends BaseSearchProvider {
             const title = this.extractTitle(record, entityInfo);
             const snippet = this.extractSnippet(record, entityInfo);
 
-            // Calculate relevance: check how many fields match the query
+            // Calculate relevance: check how many fields match the query (full phrase or multi-word tokens)
             let matchedFields = 0;
             let nameFieldMatch = false;
             for (const field of searchFields) {
                 const val = record[field.Name];
-                if (val != null && String(val).toLowerCase().includes(queryLower)) {
-                    matchedFields++;
-                    if (nameFields.some(nf => nf.Name === field.Name)) {
-                        nameFieldMatch = true;
+                if (val != null) {
+                    const strVal = String(val).toLowerCase();
+                    const fullMatch = queryLower.length > 0 && strVal.includes(queryLower);
+                    const tokenMatch = !fullMatch && queryTokens.length > 1 && queryTokens.some(tok => strVal.includes(tok));
+                    if (fullMatch || tokenMatch) {
+                        matchedFields++;
+                        if (nameFields.some(nf => nf.Name === field.Name)) {
+                            nameFieldMatch = true;
+                        }
                     }
                 }
             }

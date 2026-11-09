@@ -20,6 +20,14 @@ import ts from 'typescript';
 /** Directories that should never contain UUID comparison anti-patterns */
 const SCAN_ROOT = path.resolve(__dirname, '..', '..', '..'); // packages/
 
+/**
+ * Floor on how many files the scan must read. `findTsFiles` returns [] for a missing root, and a
+ * test moved one directory deeper resolves SCAN_ROOT to a single package: either way the gate
+ * would pass while scanning almost nothing. The repo has ~7000 scannable files and no single
+ * top-level folder under packages/ has more than ~2600, so this floor sits between the two.
+ */
+const MIN_SCANNED_FILES = 3000;
+
 /** Patterns that indicate direct UUID comparison (anti-patterns) */
 const ANTI_PATTERNS = [
     /\.ID\s*===\s*(?!['"]|true|false|null|undefined|0\b)/,     // .ID === someVar (not string literals or primitives)
@@ -166,6 +174,7 @@ function findFlaggedLines(filePath: string, relativePath: string): Violation[] {
 describe('UUID Comparison Compliance', () => {
     it('should not have direct UUID comparisons (=== / !==) in source files', () => {
         const tsFiles = findTsFiles(SCAN_ROOT);
+        expect(tsFiles.length).toBeGreaterThan(MIN_SCANNED_FILES);
         const allViolations: Violation[] = [];
 
         for (const file of tsFiles) {
@@ -290,7 +299,6 @@ const NESTED_SCAN_BASELINE: Record<string, number> = {
     'AI/CorePlus/src/conversation-routing-decision.ts': 1,
     'AI/CorePlus/src/task-graph/flow-graph-compiler.ts': 1,
     'AI/Knowledge/TagEngine/src/TagEngine.ts': 1,
-    'AI/PredictiveStudio/Engine/src/experiment/experiment-orchestrator.ts': 1,
     'AI/Prompts/src/BaseModelRunner.ts': 2,
     'AI/Prompts/src/ExecutionPlanner.ts': 4,
     'Actions/ContentAutotag/src/generic/content-autotag-and-vectorize.action.ts': 3,
@@ -319,7 +327,6 @@ const NESTED_SCAN_BASELINE: Record<string, number> = {
     'Angular/Explorer/dashboards/src/Integration/components/pipelines/pipelines.component.ts': 1,
     'Angular/Explorer/dashboards/src/Lists/components/lists-operations-resource.component.ts': 1,
     'Angular/Explorer/dashboards/src/MCP/mcp-dashboard.component.ts': 6,
-    'Angular/Explorer/dashboards/src/PredictiveStudio/engine/predictive-studio.engine.ts': 1,
     'Angular/Explorer/dashboards/src/QueryBrowser/query-browser-resource.component.ts': 1,
     'Angular/Explorer/dashboards/src/Scheduling/services/scheduling-instrumentation.service.ts': 1,
     'Angular/Explorer/dashboards/src/Testing/components/testing-explorer.component.ts': 1,
@@ -392,7 +399,6 @@ const NESTED_SCAN_BASELINE: Record<string, number> = {
     'MJCoreEntitiesServer/src/custom/rubrics/versionPublish.ts': 1,
     'MJServer/src/resolvers/IntegrationDiscoveryResolver.ts': 1,
     'MJServer/src/resolvers/SyncRolesUsersResolver.ts': 1,
-    'MJServer/src/resolvers/meetings/meetingMutations.ts': 1,
     'Rubrics/Base/src/authoring.ts': 2,
     'Rubrics/Engine/src/rubricCli.ts': 2,
     'Scheduling/engine/src/drivers/ActionScheduledJobDriver.ts': 1,
@@ -414,7 +420,6 @@ const NESTED_SCAN_BASELINE: Record<string, number> = {
     'TestingFramework/integration-test-suite/src/checks/realtime-deterministic.checks.ts': 1,
     'TestingFramework/integration-test-suite/src/checks/record-cloning.checks.ts': 3,
     'TestingFramework/integration-test-suite/src/checks/runquery-catalog.checks.ts': 1,
-    'TestingFramework/integration-test-suite/src/checks/runquery-rendering.checks.ts': 1,
     'TestingFramework/integration-test-suite/src/checks/trailing-runtime-state.checks.ts': 3,
     'TestingFramework/integration-test-suite/src/checks/transaction-groups-batched.checks.ts': 1,
     'TestingFramework/integration-test-suite/src/discovery-corpus/generator.ts': 1,

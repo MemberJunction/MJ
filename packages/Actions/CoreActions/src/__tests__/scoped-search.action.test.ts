@@ -877,6 +877,16 @@ describe('ScopedSearchAction', () => {
             expect(result.ResultCode).toBe('PERMISSION_DENIED');
             expect(searchSpy).not.toHaveBeenCalled();
         });
+
+        it('refuses a host-assigned Global scope in a tenant-scoped run, saying the host assigned it (no other scope is searchable)', async () => {
+            getActiveScopeByIDSpy.mockReturnValue({ ID: HOST_SCOPE, Name: 'Global', IsGlobal: true });
+            const result = await run(new ScopedSearchAction(), inHostRun());
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('INVALID_PARAM');
+            expect(result.Message).toMatch(/host assigned this scope/);
+            expect(result.Message).not.toMatch(/Pass a ScopeID/);
+            expect(searchSpy).not.toHaveBeenCalled();
+        });
     });
 
     describe('Tenant — bound to the RUN when inside one (RunActionParams.RunScope)', () => {

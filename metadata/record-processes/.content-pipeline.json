@@ -194,6 +194,36 @@
   },
   {
     "fields": {
+      "Name": "Content Pipeline — Graph",
+      "Description": "Clusters embedded Content Item Chunks into governed MJ: Graph Concepts and emits typed MJ: Graph Edges (SourcedFrom, Mentions, Broader Than, Contradicts) into the target Graph configured on each Content Source.",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Items",
+      "Status": "Active",
+      "WorkType": "Pipeline Stage",
+      "ScopeType": "Filter",
+      "ScopeFilter": "(SegmentationStatus = 'Completed') AND (DeleteStatus IS NULL)",
+      "OnChangeEnabled": false,
+      "ScheduleEnabled": false,
+      "OnDemandEnabled": true,
+      "SkipUnchanged": false,
+      "WatermarkStrategy": "Checksum",
+      "BatchSize": 25,
+      "MaxConcurrency": 2,
+      "Configuration": {
+        "Stages": [
+          "Graph"
+        ]
+      }
+    },
+    "primaryKey": {
+      "ID": "D153F7AE-A176-4D0C-8530-845A81BE775A"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:23.119Z",
+      "checksum": "2b1112ed51a16e8eb82012c91d0d15af9677b01d949619a195d6f17b2bad268c"
+    }
+  },
+  {
+    "fields": {
       "Name": "Content Pipeline — Delete",
       "Description": "Removes everything a Content Item marked for deletion produced — its vector, its kept bytes — then marks its chunks and expanded children for removal. Its chunks are removed by the Delete Chunks process, its child items by this one in turn. A record whose removal could not be attempted stays Pending rather than being marked Deleted.",
       "EntityID": "@lookup:MJ: Entities.Name=MJ: Content Items",

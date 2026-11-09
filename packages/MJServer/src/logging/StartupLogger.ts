@@ -1,4 +1,5 @@
 import { configInfo } from '../config.js';
+import { MJServerStartupState } from '../startupState.js';
 import { LogStatus } from '@memberjunction/core';
 import ora from 'ora';
 import type { Ora } from 'ora';
@@ -82,7 +83,25 @@ type StartupSummaryData = {
  * logger.PrintSummary();
  * ```
  */
+export type StartupSummarySnapshot = {
+  Level: ServerLogLevel;
+  Summary: Readonly<StartupSummaryData>;
+  PhaseTimings: ReadonlyArray<PhaseTiming>;
+  TotalStartupMs: number;
+};
+
 export class StartupLogger {
+  private static _lastSnapshot: StartupSummarySnapshot | null = null;
+
+  /**
+   * Returns a read-only snapshot of the most recent server startup summary,
+   * used by diagnostic health snapshots to report startup phase durations without
+   * mutating or re-running startup logic.
+   */
+  public static GetLastStartupSnapshot(): StartupSummarySnapshot | null {
+    return StartupLogger._lastSnapshot;
+  }
+
   private readonly resolvedLevel: ServerLogLevel;
   private readonly phaseTimings: PhaseTiming[] = [];
   private readonly summary: StartupSummaryData = { AuthProviders: [] };
@@ -220,6 +239,8 @@ export class StartupLogger {
    */
   public BeginPhase(phase: string): number {
     this.currentPhase = phase;
+    // The startup gate reports this phase on /healthcheck while the server boots.
+    MJServerStartupState.Instance.SetPhase(phase);
     this.refreshBootText();
     return performance.now();
   }
@@ -302,6 +323,12 @@ export class StartupLogger {
     // Clear the transient spinner before any block output so the line it
     // occupied is replaced cleanly by the summary.
     this.StopBoot();
+    StartupLogger._lastSnapshot = {
+      Level: this.resolvedLevel,
+      Summary: { ...this.summary, AuthProviders: [...this.summary.AuthProviders] },
+      PhaseTimings: this.phaseTimings.map((p) => ({ ...p })),
+      TotalStartupMs: performance.now(),
+    };
     if (this.resolvedLevel === 'minimal') {
       this.printReadyLineOnly();
       return;

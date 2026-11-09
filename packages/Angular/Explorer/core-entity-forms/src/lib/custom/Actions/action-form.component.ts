@@ -7,15 +7,44 @@ import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { MJActionFormComponent } from '../../generated/Entities/MJAction/mjaction.form.component';
 import { MJDialogService, MJDialogRef } from '@memberjunction/ng-ui-components';
 import { ActionParamDialogComponent, ActionResultCodeDialogComponent } from '@memberjunction/ng-actions';
+import { JoinHeroSummary, CountLabel } from '../../shared/phone-hero';
+import { PhoneSectionsState } from '../../shared/phone-sections-state';
 
 @RegisterClass(BaseFormComponent, 'MJ: Actions')
 @Component({
   standalone: false,
     selector: 'mj-action-form',
     templateUrl: './action-form.component.html',
-    styleUrls: ['./action-form.component.css']
+    styleUrls: ['./action-form.component.css', '../../shared/phone-hero.css']
 })
 export class MJActionFormComponentExtended extends MJActionFormComponent implements OnInit {
+
+    /** Phone width shows the stacked accordions as sections behind one picker (design call 7A). */
+    public Phone = new PhoneSectionsState(() => this.cdr.markForCheck());
+
+    ngOnDestroy() {
+        super.ngOnDestroy();
+        this.Phone.Stop();
+    }
+
+    /** Phone hero (6A): whether the summary line is expanded to show the rest of the hero. */
+    public HeroDetailsOpen = false;
+
+    /** Toggles the phone hero between its compact identity row and the full hero. */
+    public ToggleHeroDetails(): void {
+        this.HeroDetailsOpen = !this.HeroDetailsOpen;
+        this.cdr.markForCheck();
+    }
+
+    /** The phone hero's one-line summary of what the compact hero leaves out. */
+    public get HeroSummary(): string {
+        return JoinHeroSummary([
+            this.category?.Name,
+            this.record.Type,
+            CountLabel(this.ActionParams.length, 'param'),
+            this.HasCodeApproval && this.record.CodeApprovalStatus ? `Code ${this.record.CodeApprovalStatus.toLowerCase()}` : null,
+        ]);
+    }
     public record!: MJActionEntity;
 
     // This form has a fully custom layout (header panel + accordion

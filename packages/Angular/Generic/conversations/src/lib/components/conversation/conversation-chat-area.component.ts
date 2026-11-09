@@ -33,6 +33,7 @@ import { ComposerDraftStore } from '../../services/composer-draft-store';
 import { ConversationEmptyStateComponent } from './conversation-empty-state.component';
 import { TestFeedbackDialogData, TestFeedbackDialogResult } from '@memberjunction/ng-testing';
 import { DialogService as ConversationsDialogService } from '../../services/dialog.service';
+import { ConfirmMoveIntoFolder } from '../../utils/folder-move';
 import { Subject, firstValueFrom } from 'rxjs';
 import { map, takeUntil } from 'rxjs/operators';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
@@ -106,6 +107,13 @@ import {
 import { DecideArtifactPanelAction, SnapshotArtifactVersions, ArtifactPanelAction, ArtifactPanelBaseline, ArtifactVersionRef } from '../../utils/artifact-panel-action';
 import { GetThreadReplyRoots, type ThreadReplyRevealRequest } from '../../utils/thread-replies';
 import { NormalizeUUID, UUIDsEqual, UUIDSet, UUIDMap, IndexByUUID, IsValidUUID } from '@memberjunction/global';
+import { AgentAccentVar, type MessageHandoffInfo } from '../message/agent-handoff-card.component';
+import {
+  BuildHandoffsByDetailId,
+  LoadHandoffStepsForRuns,
+  type HandoffRunStepRow,
+} from '../../utils/agent-handoff-map';
+import { FindContinuityAgentMessage } from '../../utils/agent-turn-routing';
 
 const EMPTY_THREAD_REPLY_ROOTS = new UUIDMap<string>();
 
@@ -129,6 +137,8 @@ import {
   AfterResponseFormSubmittedEventArgs,
   BeforeStopClickedEventArgs,
   AfterStopClickedEventArgs,
+  BeforeArtifactPanelOpenEventArgs,
+  AfterArtifactPanelOpenEventArgs,
   SessionStartedEventArgs,
   SessionChannelStateChangedEventArgs,
   SessionEndedEventArgs,
@@ -490,6 +500,15 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   get readReplyFromTop(): ConversationChatAreaComponent['ReadReplyFromTop'] {
     return this.ReadReplyFromTop;
   }
+
+  /**
+   * Whether inline markdown links in conversation messages open in a new browser tab
+   * (`target="_blank"` with `rel="noopener noreferrer"`). In-page fragment links (`#heading`)
+   * and `mailto:` / `tel:` / `sms:` links stay in the current tab. Default `true` so clicking
+   * an external link in a reply does not navigate away from the active conversation; set `false`
+   * to open links in the current tab.
+   */
+  @Input() OpenLinksInNewTab = true;
 
   // --- Additional host-level feature gates (all default true; false removes the
   //     affordance entirely). Forwarded to the message list / message items / empty
@@ -1094,10 +1113,113 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   public get ModePickerTargetAgentId(): string | null {
-    return this.Conversation?.DefaultAgentID
+    return this.CurrentOwnerAgent?.ID
+        ?? this.Conversation?.DefaultAgentID
         ?? this.DefaultAgentId
         ?? this.conversationManagerAgent?.ID
         ?? null;
+  }
+
+  private _cachedOwnerAgentKey?: string;
+  private _cachedOwnerAgent: { ID: string; Name: string; IsConversationManager: boolean } | null = null;
+
+  /**
+   * Current conversation owner agent for the header `.with-chip` and composer
+   * placeholder: continuity (last non-Sage reply not preceded by a newer
+   * `@Sage` user message) -> pinned/default agent -> conversation manager.
+   * Memoized by message count and active routing inputs so template evaluation
+   * does not scan `messages` on every change-detection cycle.
+   */
+  public get CurrentOwnerAgent(): { ID: string; Name: string; IsConversationManager: boolean } | null {
+    const managerId = this.conversationManagerAgent?.ID ?? null;
+    const rows = this.DisplayMessages?.length ? this.DisplayMessages : this.messages ?? [];
+    const lastRow = rows.length > 0 ? rows[rows.length - 1] : null;
+    const defaultId = this.Conversation?.DefaultAgentID ?? this.DefaultAgentId ?? null;
+    const floorMs = this.AgentHistoryFrom ? new Date(this.AgentHistoryFrom).getTime() : '';
+    const allowedKey = this.AllowedAgentIDs ? this.AllowedAgentIDs.join(',') : '';
+    const cacheKey = `${rows.length}|${lastRow?.ID ?? ''}|${lastRow?.AgentID ?? ''}|${defaultId ?? ''}|${managerId ?? ''}|${floorMs}|${allowedKey}`;
+    if (this._cachedOwnerAgentKey === cacheKey) {
+      return this._cachedOwnerAgent ?? null;
+    }
+
+    const continuity = FindContinuityAgentMessage(
+      rows,
+      managerId,
+      {
+        conversationManagerName: this.conversationManagerAgent?.Name ?? 'Sage',
+        isWithinFloor: msg => !this.AgentHistoryFrom || msg.__mj_CreatedAt >= this.AgentHistoryFrom,
+      },
+    );
+    let targetId: string | null = null;
+    if (continuity?.AgentID && this.isOwnerAgentAllowed(continuity.AgentID)) {
+      targetId = continuity.AgentID;
+    } else {
+      const fallbackId = defaultId ?? managerId;
+      if (fallbackId && this.isOwnerAgentAllowed(fallbackId)) {
+        targetId = fallbackId;
+      }
+    }
+    if (!targetId) {
+      this._cachedOwnerAgentKey = cacheKey;
+      this._cachedOwnerAgent = null;
+      return null;
+    }
+    const meta = this.resolveHandoffAgentMeta(targetId);
+    const isManager = managerId ? UUIDsEqual(targetId, managerId) : false;
+    const owner = {
+      ID: targetId,
+      Name: meta?.Name || (isManager ? (this.conversationManagerAgent?.Name || 'Sage') : 'Agent'),
+      IsConversationManager: isManager,
+    };
+    this._cachedOwnerAgentKey = cacheKey;
+    this._cachedOwnerAgent = owner;
+    return owner;
+  }
+
+  public get CurrentOwnerAgentName(): string {
+    return this.CurrentOwnerAgent?.Name || this.conversationManagerAgent?.Name || 'Sage';
+  }
+
+  public get CurrentOwnerAccentVar(): string {
+    return AgentAccentVar(this.CurrentOwnerAgent?.ID);
+  }
+
+  private isOwnerAgentAllowed(agentId: string | null | undefined): boolean {
+    if (!agentId) {
+      return false;
+    }
+    if (this.AllowedAgentIDs == null) {
+      return true;
+    }
+    return this.AllowedAgentIDs.some(allowed => UUIDsEqual(allowed, agentId));
+  }
+
+  private resolveHandoffAgentMeta(agentId: string): {
+    Name?: string | null;
+    LogoURL?: string | null;
+    IconClass?: string | null;
+  } | null {
+    if (this.conversationManagerAgent && UUIDsEqual(this.conversationManagerAgent.ID, agentId)) {
+      return {
+        Name: this.conversationManagerAgent.Name,
+        LogoURL: this.conversationManagerAgent.LogoURL,
+        IconClass: this.conversationManagerAgent.IconClass,
+      };
+    }
+    const agents = AIEngineBase.Instance?.Agents;
+    const found = agents?.find(a => UUIDsEqual(a.ID, agentId));
+    if (found) {
+      return {
+        Name: found.Name,
+        LogoURL: found.LogoURL,
+        IconClass: found.IconClass,
+      };
+    }
+    const msg = this.messages?.find(m => UUIDsEqual(m.AgentID, agentId) && m.Agent);
+    if (msg) {
+      return { Name: msg.Agent };
+    }
+    return null;
   }
 
   /**
@@ -1358,6 +1480,37 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Not fired when `BeforeStopClicked` was canceled.
    */
   @Output() AfterStopClicked = new EventEmitter<AfterStopClickedEventArgs>();
+
+  /**
+   * Cancelable — fired BEFORE the built-in right-hand artifact viewer drawer opens.
+   * Set `event.Cancel = true` to open the artifact in a host-managed workspace drawer
+   * instead; `ShowArtifactPanel` stays unchanged and `AfterArtifactPanelOpen` does not fire.
+   */
+  @Output() BeforeArtifactPanelOpen = new EventEmitter<BeforeArtifactPanelOpenEventArgs>();
+
+  /**
+   * @deprecated Use {@link BeforeArtifactPanelOpen}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (beforeArtifactPanelOpen) keeps working. Must stay AFTER BeforeArtifactPanelOpen: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() beforeArtifactPanelOpen = this.BeforeArtifactPanelOpen;
+
+  /**
+   * Fired AFTER the built-in artifact viewer drawer opens.
+   * Not fired when `BeforeArtifactPanelOpen` was canceled.
+   */
+  @Output() AfterArtifactPanelOpen = new EventEmitter<AfterArtifactPanelOpenEventArgs>();
+
+  /**
+   * @deprecated Use {@link AfterArtifactPanelOpen}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (afterArtifactPanelOpen) keeps working. Must stay AFTER AfterArtifactPanelOpen: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() afterArtifactPanelOpen = this.AfterArtifactPanelOpen;
 
   /** Informational. */
   @Output() SessionStarted = new EventEmitter<SessionStartedEventArgs>();
@@ -2225,6 +2378,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   public set agentRunsByDetailId(value) {
     this.AgentRunsByDetailId = value;
   }
+
+  /**
+   * Handoff metadata by source conversation detail ID, built from the source
+   * run's `Handoff` step (`MJ: AI Agent Run Steps`) and subsequent target reply.
+   */
+  public HandoffsByDetailId = new Map<string, MessageHandoffInfo>();
+
+  private handoffStepsByRunId = new Map<string, HandoffRunStepRow>();
 
   /**
    * Ratings by conversation detail ID (parsed from RatingsJSON)
@@ -3653,6 +3814,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
     this.SelectedArtifactId = null;
     this.SelectedVersionNumber = undefined;
+    this.hostInterceptedArtifactId = null;
     this.CanShareSelectedArtifact = false;
     this.CanEditSelectedArtifact = false;
     this.ShowArtifactsModal = false;
@@ -3693,6 +3855,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.ForkSummaries = [];
     this.ShowForksPopover = false;
     this.IsRenamingTitle = false;
+    this.HandoffsByDetailId = new Map();
+    this.handoffStepsByRunId?.clear();
     if (this.forkSummaryRefreshTimer) {
       clearTimeout(this.forkSummaryRefreshTimer);
       this.forkSummaryRefreshTimer = null;
@@ -4268,6 +4432,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.RealtimeSessionMetaMap = new Map([...this.RealtimeSessionMetaMap, ...sessionMeta]);
     }
 
+    const newRunIds = newIds
+      .map(id => this.AgentRunsByDetailId.get(id)?.ID)
+      .filter((id): id is string => !!id);
+    if (newRunIds.length > 0) {
+      await this.loadHandoffStepsForRunIds(newRunIds, conversationId);
+      if (!this.isActiveConversation(conversationId)) {
+        return;
+      }
+    } else {
+      this.rebuildHandoffsMap();
+    }
+
     // A page of OLDER artifacts just entered the map. Any artifact-panel baseline taken before
     // this point can no longer be diffed against the map for creations — these arrived from
     // history, not from a run. See snapshotArtifactPanelBaseline.
@@ -4319,6 +4495,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.ArtifactsByDetailId.clear();
       this.SystemArtifactsByDetailId.clear();
       this.RatingsByDetailId.clear();
+      this.handoffStepsByRunId.clear();
 
       // Copy agent runs from engine (cast to extended type for UI compatibility)
       for (const [detailId, agentRun] of cacheEntry.AgentRunsByDetailId) {
@@ -4356,6 +4533,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         return;
       }
 
+      const runIds = Array.from(this.AgentRunsByDetailId.values())
+        .map(r => r?.ID)
+        .filter((id): id is string => !!id);
+      await this.loadHandoffStepsForRunIds(runIds, conversationId, loadToken);
+      if (!this.isCurrentConversationContext(conversationId, loadToken)) {
+        return;
+      }
+
       // Create new Map references to trigger Angular change detection
       this.AgentRunsByDetailId = new Map(this.AgentRunsByDetailId);
       this.ArtifactsByDetailId = new Map(this.ArtifactsByDetailId);
@@ -4380,6 +4565,54 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.lastLoadedConversationId = null;
       this.artifactMapConversationId = null;
     }
+  }
+
+  private async loadHandoffStepsForRunIds(
+    runIds: readonly string[],
+    conversationId?: string | null,
+    loadToken?: number,
+  ): Promise<void> {
+    if (runIds.length > 0) {
+      const steps = await LoadHandoffStepsForRuns(
+        this.ProviderToUse,
+        runIds,
+      );
+      if (
+        conversationId != null &&
+        !this.isCurrentConversationContext(conversationId, loadToken)
+      ) {
+        return;
+      }
+      for (const step of steps) {
+        if (step && step.ID && step.AgentRunID && (!step.StepType || step.StepType === 'Handoff')) {
+          this.handoffStepsByRunId.set(step.ID, step);
+        }
+      }
+    }
+    this.rebuildHandoffsMap();
+  }
+
+  private rebuildHandoffsMap(): void {
+    const stepsMap = this.handoffStepsByRunId;
+    if (!stepsMap || stepsMap.size === 0 || !this.AgentRunsByDetailId || this.AgentRunsByDetailId.size === 0) {
+      if (!this.HandoffsByDetailId || this.HandoffsByDetailId.size > 0) {
+        this.HandoffsByDetailId = new Map();
+      }
+      return;
+    }
+    const engineAgents = AIEngineBase.Instance?.Agents ?? [];
+    const agents =
+      this.conversationManagerAgent &&
+      !engineAgents.some(a => UUIDsEqual(a.ID, this.conversationManagerAgent?.ID))
+        ? [this.conversationManagerAgent, ...engineAgents]
+        : engineAgents;
+    this.HandoffsByDetailId = BuildHandoffsByDetailId({
+      Messages: this.messages ?? [],
+      AgentRunsByDetailId: this.AgentRunsByDetailId,
+      HandoffSteps: Array.from(stepsMap.values()),
+      Agents: agents,
+      Presets: AIEngineBase.Instance?.AgentConfigurations ?? [],
+    });
   }
 
   /**
@@ -4603,7 +4836,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
 
     // Where the viewport goes: a fresh send follows — an in-place update of a message that
-    // is already on screen must not re-run the send path's scroll.
+    // is already on screen must not re-run the send path's scroll or rebuild the handoffs map.
+    if (!upsert.Existed) {
+      this.rebuildHandoffsMap();
+    }
     this.followTranscript(upsert.Existed ? 'update' : 'new', message);
 
     // Force change detection — zone.js 0.15 no longer patches graphql-ws WebSocket callbacks,
@@ -4748,9 +4984,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         }
       }
 
+      await this.loadHandoffStepsForRunIds([existingAgentRun.ID], event.conversationId);
+      if (!this.isActiveConversation(event.conversationId)) {
+        return;
+      }
+
       // Trigger re-render to show updated status
       this.messages = [...this.messages];
       this.cdr.detectChanges();
+    } else {
+      this.rebuildHandoffsMap();
     }
 
     // Reload attachments for this message to pick up newly created media attachments
@@ -4791,6 +5034,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         if (event.conversationId) {
           ConversationEngine.Instance.SetAgentRunForDetail(event.conversationId, event.conversationDetailId, event.agentRun);
         }
+      }
+      if (!existingRun || !UUIDsEqual(existingRun.ID, event.agentRun.ID)) {
+        this.rebuildHandoffsMap();
       }
     }
     else {
@@ -4856,7 +5102,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       const existingMessageIds = new Set(this.messages.map(m => m.ID));
 
       // Merge the refreshed window with existing client-side messages.
-      // Preserves messages added client-side (e.g., by handleSubAgentInvocation)
+      // Preserves messages added client-side (e.g., server-followed handoff rows)
       // that haven't been picked up by entity events yet due to timing.
       const merged = new Map<string, MJConversationDetailEntity>();
 
@@ -4877,15 +5123,20 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       const newMessages = engineDetails.filter(m => !existingMessageIds.has(m.ID));
 
       // Check engine cache for agent runs on new messages
+      const discoveredRunIds: string[] = [];
       for (const message of newMessages) {
         if (message.AgentID && message.ID) {
           const agentRun = this.engine.GetAgentRunForDetail(conversationId, message.ID);
           if (agentRun) {
             this.AgentRunsByDetailId.set(message.ID, agentRun as MJAIAgentRunEntityExtended);
+            if (agentRun.ID) {
+              discoveredRunIds.push(agentRun.ID);
+            }
             LogStatusEx({message: `✅ Found cached agent run for new delegated message ${message.ID}`, verboseOnly: true});
           }
         }
       }
+      await this.loadHandoffStepsForRunIds(discoveredRunIds, conversationId);
 
       LogStatusEx({message: `✅ Refreshed ${engineDetails.length} messages from engine cache (${newMessages.length} new)`, verboseOnly: true});
     } catch (error) {
@@ -6054,6 +6305,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       if (stoppedAgent !== undefined) {
         return `Continue, or tell ${stoppedAgent ?? 'the agent'} what to do differently`;
       }
+      const owner = this.CurrentOwnerAgent;
+      if (owner && !owner.IsConversationManager) {
+        if (owner.Name.trim().toLowerCase() === 'video studio') {
+          return `Ask ${owner.Name} for changes, like "make the opening faster"`;
+        }
+        return `Ask ${owner.Name} for changes or a follow-up...`;
+      }
     }
     return MAIN_COMPOSER_PLACEHOLDER;
   }
@@ -6389,6 +6647,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
           if (!isCurrent()) {
             return;
           }
+          await this.loadHandoffStepsForRunIds([agentRun.ID], expectedConversationId, loadToken);
+          if (!isCurrent()) {
+            return;
+          }
         }
       }
 
@@ -6435,6 +6697,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.windowStore.ApplyLocalDetail(message);
 
       // Force re-render with updated agent run and artifacts
+      this.rebuildHandoffsMap();
       this.messages = [...this.messages];
       this.cdr.detectChanges();
 
@@ -6554,6 +6817,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
             if (conversationId) {
               ConversationEngine.Instance.SetAgentRunForDetail(conversationId, conversationDetailId, existingRun);
             }
+          }
+
+          await this.loadHandoffStepsForRunIds([agentRunId], conversationId);
+          if (!this.isActiveConversation(conversationId)) {
+            return agentRun;
           }
 
           // Refresh the target message in place when already rendered; fall back to
@@ -6725,6 +6993,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * @param baseline - From {@link snapshotArtifactPanelBaseline}, taken before the turn's reloads.
    * @param conversationId - The conversation this turn belongs to.
    */
+  private hostInterceptedArtifactId: string | null = null;
+
   private async decideAndApplyArtifactPanel(
     baseline: ArtifactPanelBaseline,
     conversationId: string | null | undefined
@@ -6736,9 +7006,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       UUIDsEqual(baseline.MapConversationId, baseline.conversationId) &&
       this.artifactMapGeneration === baseline.MapGeneration;
 
+    const hostIntercepted = !this.ShowArtifactPanel && this.hostInterceptedArtifactId != null;
     const action = DecideArtifactPanelAction({
-      panelOpen: this.ShowArtifactPanel,
-      selectedArtifactId: this.SelectedArtifactId,
+      panelOpen: this.ShowArtifactPanel || hostIntercepted,
+      selectedArtifactId: this.ShowArtifactPanel ? this.SelectedArtifactId : this.hostInterceptedArtifactId,
       before: baseline.Versions,
       after: this.allArtifactRefs(),
       baselineComparable,
@@ -6755,15 +7026,39 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
+   * Emits {@link BeforeArtifactPanelOpen} and returns `false` when a listener cancels it.
+   */
+  private emitBeforeArtifactPanelOpen(
+    artifactId: string,
+    versionNumber?: number,
+    versionId?: string
+  ): boolean {
+    const beforeArgs = new BeforeArtifactPanelOpenEventArgs(artifactId, versionNumber, versionId);
+    this.BeforeArtifactPanelOpen?.emit(beforeArgs);
+    if (beforeArgs.Cancel) {
+      this.hostInterceptedArtifactId = artifactId;
+      return false;
+    }
+    this.hostInterceptedArtifactId = null;
+    return true;
+  }
+
+  /**
    * Carry out the decision from {@link decideArtifactPanelAction}: open the panel on an artifact
    * version, refresh the already-open viewer, or do nothing.
    */
   private async applyArtifactPanelAction(action: ArtifactPanelAction, conversationId: string | null | undefined): Promise<void> {
     switch (action.kind) {
       case 'open':
+        if (!this.emitBeforeArtifactPanelOpen(action.artifactId, action.versionNumber)) {
+          return;
+        }
         this.SelectedArtifactId = action.artifactId;
         this.SelectedVersionNumber = action.versionNumber;
         this.ShowArtifactPanel = true;
+        this.AfterArtifactPanelOpen?.emit(
+          new AfterArtifactPanelOpenEventArgs(action.artifactId, action.versionNumber)
+        );
         await this.loadArtifactPermissions(action.artifactId, conversationId, action.artifactId);
         // The permission load is async: the user may have switched conversations or picked a
         // different artifact while it was in flight, so only narrate what is still on screen.
@@ -6776,6 +7071,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         });
         return;
       case 'refresh':
+        if (!this.ShowArtifactPanel) {
+          await this.applyArtifactPanelAction(
+            { kind: 'open', artifactId: action.artifactId, versionNumber: action.versionNumber },
+            conversationId
+          );
+          return;
+        }
         // ONE channel, deliberately. Writing `selectedVersionNumber` as well would change the
         // viewer's `[versionNumber]` input in the same change-detection pass, and its `ngOnChanges`
         // would load the version a second time on top of the load this emission already starts —
@@ -6971,11 +7273,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   async OpenArtifactFromModal(artifactId: string, versionNumber?: number): Promise<void> {
     const conversationId = this.ConversationId;
+    this.ShowArtifactsModal = false;
+    if (!this.emitBeforeArtifactPanelOpen(artifactId, versionNumber)) {
+      return;
+    }
     this.artifactSelectionEpoch++;
     this.SelectedArtifactId = artifactId;
     this.SelectedVersionNumber = versionNumber;
     this.ShowArtifactPanel = true;
-    this.ShowArtifactsModal = false;
+    this.AfterArtifactPanelOpen?.emit(
+      new AfterArtifactPanelOpenEventArgs(artifactId, versionNumber)
+    );
 
     // Load permissions for the selected artifact
     await this.loadArtifactPermissions(artifactId, conversationId, artifactId);
@@ -7020,29 +7328,20 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   async OnProjectSelected(project: any): Promise<void> {
-    if (this.Conversation && project) {
-      try {
-        await this.engine.SaveConversation(
-          this.Conversation.ID,
-          { ProjectID: project.ID },
-          this.CurrentUser
-        );
-        this.ShowProjectSelector = false;
-      } catch (error) {
-        console.error('Failed to assign project:', error);
-      }
-    } else if (this.Conversation && !project) {
-      // Remove project assignment
-      try {
-        await this.engine.SaveConversation(
-          this.Conversation.ID,
-          { ProjectID: null },
-          this.CurrentUser
-        );
-        this.ShowProjectSelector = false;
-      } catch (error) {
-        console.error('Failed to remove project:', error);
-      }
+    if (!this.Conversation) return;
+    const projectId: string | null = project?.ID ?? null;
+    // Only the owner moves a conversation (the server refuses anyone else), and a move of an inheriting
+    // conversation into a Shared or Public folder shares it, so it asks first: the same rules as the list.
+    if (!this.CurrentUser || !this.engine.CanMoveConversation(this.Conversation, this.CurrentUser.ID)) {
+      await this.confirmDialog.alert('Cannot Move', "Only the conversation's owner can move it to another folder.");
+      return;
+    }
+    if (!(await ConfirmMoveIntoFolder(this.confirmDialog, this.engine, projectId, [this.Conversation]))) return;
+    try {
+      await this.engine.SaveConversation(this.Conversation.ID, { ProjectID: projectId }, this.CurrentUser);
+      this.ShowProjectSelector = false;
+    } catch (error) {
+      console.error(projectId ? 'Failed to assign project:' : 'Failed to remove project:', error);
     }
   }
 
@@ -7717,28 +8016,48 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   async OnArtifactClicked(data: {artifactId: string; versionId?: string}): Promise<void> {
     const conversationId = this.ConversationId;
-    this.artifactSelectionEpoch++;
-    this.SelectedArtifactId = data.artifactId;
 
     // If versionId is provided, find the version number from display data (no lazy load needed)
+    let resolvedVersionNumber: number | undefined;
     if (data.versionId) {
-      for (const artifactList of this.ArtifactsByDetailId.values()) {
-        for (const artifactInfo of artifactList) {
-          if (artifactInfo.artifactVersionId === data.versionId) {
-            this.SelectedVersionNumber = artifactInfo.versionNumber;
-            LogStatusEx({message: `📦 Opening artifact viewer for v${this.SelectedVersionNumber}`, verboseOnly: true});
+      for (const map of [this.ArtifactsByDetailId, this.SystemArtifactsByDetailId]) {
+        if (!map) {
+          continue;
+        }
+        for (const artifactList of map.values()) {
+          for (const artifactInfo of artifactList) {
+            if (UUIDsEqual(artifactInfo.artifactVersionId, data.versionId)) {
+              resolvedVersionNumber = artifactInfo.versionNumber;
+              break;
+            }
+          }
+          if (resolvedVersionNumber !== undefined) {
             break;
           }
         }
+        if (resolvedVersionNumber !== undefined) {
+          break;
+        }
       }
-    } else {
-      // No specific version, let viewer default to latest
-      this.SelectedVersionNumber = undefined;
     }
+
+    if (!this.emitBeforeArtifactPanelOpen(data.artifactId, resolvedVersionNumber, data.versionId)) {
+      return;
+    }
+    if (resolvedVersionNumber !== undefined) {
+      LogStatusEx({message: `📦 Opening artifact viewer for v${resolvedVersionNumber}`, verboseOnly: true});
+    }
+
+    this.artifactSelectionEpoch++;
+    this.SelectedArtifactId = data.artifactId;
+    this.SelectedVersionNumber = resolvedVersionNumber;
 
     this.SelectedTaskGraphPanel = null;
     this.ShowRemoteBrowserPanel = false;
     this.ShowArtifactPanel = true;
+    this.AfterArtifactPanelOpen?.emit(
+      new AfterArtifactPanelOpenEventArgs(data.artifactId, resolvedVersionNumber, data.versionId)
+    );
 
     // Load permissions for the selected artifact
     await this.loadArtifactPermissions(data.artifactId, conversationId, data.artifactId);
@@ -8990,7 +9309,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
 
-    const panelAlreadyOpen = this.SelectedArtifactId === artifactId && this.ShowArtifactPanel;
+    const panelAlreadyOpen = UUIDsEqual(this.SelectedArtifactId, artifactId) && this.ShowArtifactPanel;
     console.log(
       '[client:capture-data-snapshot] Panel state — currentSelectedId=' +
         this.SelectedArtifactId +
@@ -9002,10 +9321,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // Open the artifact panel so the viewer mounts (if it isn't already).
     if (!panelAlreadyOpen) {
+      if (!this.emitBeforeArtifactPanelOpen(artifactId, undefined)) {
+        return;
+      }
       this.artifactSelectionEpoch++;
       this.SelectedArtifactId = artifactId;
       this.SelectedVersionNumber = undefined;
       this.ShowArtifactPanel = true;
+      this.AfterArtifactPanelOpen?.emit(
+        new AfterArtifactPanelOpenEventArgs(artifactId, undefined)
+      );
       try {
         await this.loadArtifactPermissions(artifactId, conversationId, artifactId);
       } catch {
@@ -9624,6 +9949,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // (prioritizing ParentRunID == null and ContinuationDepth == 0 over continuation
     // synthesis runs, and newest __mj_CreatedAt among ties so retried messages use their latest run).
     const chosenByDetailId = new Map<string, MJAIAgentRunEntityExtended>();
+    const refreshedRunIds: string[] = [];
     for (const run of result.Results || []) {
       const detailId = run.ConversationDetailID;
       if (!detailId) {
@@ -9636,9 +9962,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
     for (const [detailId, run] of chosenByDetailId.entries()) {
       this.AgentRunsByDetailId.set(detailId, run);
+      if (run.ID) {
+        refreshedRunIds.push(run.ID);
+      }
     }
     // New map reference so OnPush children re-read it.
     this.AgentRunsByDetailId = new Map(this.AgentRunsByDetailId);
+    await this.loadHandoffStepsForRunIds(refreshedRunIds, conversationId, loadToken);
   }
 
   /**
@@ -9949,13 +10279,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // Find the message containing this artifact version
     let messageIdWithArtifact: string | null = null;
+    let resolvedVersionId: string | undefined;
 
     for (const [detailId, artifactList] of this.ArtifactsByDetailId.entries()) {
       for (const artifactInfo of artifactList) {
-        if (artifactInfo.artifactId === artifactIdToOpen) {
+        if (UUIDsEqual(artifactInfo.artifactId, artifactIdToOpen)) {
           // Found the artifact - check if version matches (if specified)
           if (versionNumberToOpen == null || artifactInfo.versionNumber === versionNumberToOpen) {
             messageIdWithArtifact = detailId;
+            if (versionNumberToOpen != null) {
+              resolvedVersionId = artifactInfo.artifactVersionId;
+            }
             console.log('✅ Found artifact in message:', detailId);
             break;
           }
@@ -9969,11 +10303,20 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
 
+    const resolvedVersionNumber = versionNumberToOpen ?? undefined;
+    if (!this.emitBeforeArtifactPanelOpen(artifactIdToOpen, resolvedVersionNumber, resolvedVersionId)) {
+      this.scrollToMessage(messageIdWithArtifact);
+      return;
+    }
+
     // Open the artifact panel
     this.artifactSelectionEpoch++;
     this.SelectedArtifactId = artifactIdToOpen;
-    this.SelectedVersionNumber = versionNumberToOpen ?? undefined;
+    this.SelectedVersionNumber = resolvedVersionNumber;
     this.ShowArtifactPanel = true;
+    this.AfterArtifactPanelOpen?.emit(
+      new AfterArtifactPanelOpenEventArgs(artifactIdToOpen, resolvedVersionNumber, resolvedVersionId)
+    );
 
     // Load permissions for the artifact
     await this.loadArtifactPermissions(artifactIdToOpen, conversationId, artifactIdToOpen);

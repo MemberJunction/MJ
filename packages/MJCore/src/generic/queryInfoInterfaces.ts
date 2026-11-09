@@ -69,6 +69,11 @@ export interface IQueryFieldInfoBase {
      * Description of the summary calculation
      */
     SummaryDescription: string;
+    /**
+     * Whether this output column is produced by every template branch variant of the query.
+     * Defaults to true; when false, the column is only present when a conditional branch is taken.
+     */
+    InAllBranchVariants?: boolean;
 }
 
 /**

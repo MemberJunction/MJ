@@ -21,7 +21,7 @@ import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
 import type { RequestHandler, Request, Response, NextFunction } from 'express';
-import { DatabaseProviderBase, UserInfo, type IMetadataProvider, type MagicLinkScope, type ReturningVisitorContext, type WidgetGuestContext } from '@memberjunction/core';
+import { DatabaseProviderBase, UserInfo, GetDiagnosticContext, type IMetadataProvider, type MagicLinkScope, type ReturningVisitorContext, type WidgetGuestContext } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { PostgreSQLDataProvider, PostgreSQLProviderConfigData } from '@memberjunction/postgresql-dataprovider';
 import { Metadata, IsValidTimeZone, TIME_ZONE_HEADER } from '@memberjunction/core';
@@ -49,7 +49,7 @@ function isDebugLogLevel(): boolean {
   if (isDebugLevelCache === undefined) {
     isDebugLevelCache = StartupLogger.resolveLevelFromConfig() === 'debug';
   }
-  return isDebugLevelCache;
+  return isDebugLevelCache || GetDiagnosticContext()?.sessionId != null;
 }
 
 const SESSION_AUDIT_TYPE = 'Session Established';
@@ -371,13 +371,6 @@ const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayloa
     jwt.verify(token, GetSigningKeys(issuer), verifyOptions, (err, jwt) => {
       if (jwt && typeof jwt !== 'string' && !err) {
         const payload = jwt.payload ?? jwt;
-
-        // Per-request token confirmation — debug-only (one of the worst
-        // "constantly on" offenders on an authenticated server).
-        if (isDebugLogLevel()) {
-          const userInfo = ExtractUserInfoFromPayload(payload);
-          console.log(`Valid token: ${userInfo.fullName || 'Unknown'} (${userInfo.email || userInfo.preferredUsername || 'Unknown'})`);
-        }
         resolve(payload);
       } else {
         console.warn('Invalid token');
@@ -577,6 +570,11 @@ export const GetUserPayload = async (
     // the session enforces exactly the link's granted scope (no DB accretion). No-op
     // for everything else.
     const sessionUser = BuildMagicLinkSessionUser(userRecord, payload);
+
+    // Debug-only confirmation of a freshly verified token. It names the user by ID only.
+    if (!cachedAuth && isDebugLogLevel()) {
+      console.log(`Valid token: user ${sessionUser.ID}`);
+    }
 
     // Session-established audit — once per issued token (deduped), fire-and-forget so
     // it never adds latency to the request. The dedup mark is set synchronously here.
@@ -864,6 +862,8 @@ async function createPerRequestProviders(
     p = await createPostgresProvider();
   } else {
     const config = new SQLServerProviderConfigData(dataSource, mj_core_schema, 0, undefined, undefined, false);
+    config.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
+    config.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
     const sqlProvider = new SQLServerDataProvider();
     await sqlProvider.Config(config);
     p = sqlProvider as unknown as DatabaseProviderBase;
@@ -906,6 +906,8 @@ async function createPostgresProvider(): Promise<DatabaseProviderBase> {
     undefined,
     false, // use existing metadata from global provider
   );
+  pgConfig.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
+  pgConfig.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
 
   // Share the connection pool from the primary provider to avoid pool exhaustion
   const primaryProvider = Metadata.Provider as unknown as { DatabaseConnection?: import('pg').Pool }; // global-provider-ok: bootstrap (per-connection PG pool sharing)
