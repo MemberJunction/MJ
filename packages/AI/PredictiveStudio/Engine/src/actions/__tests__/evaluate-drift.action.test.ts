@@ -11,6 +11,7 @@ import {
   type IDriftAlertEmitter,
 } from '../evaluate-drift.action';
 import type { FeatureAndPredictionDriftReport } from '../../maintenance/psi-drift-detector';
+import { RunFeatureValueView, type FeatureValueDoubleRow } from '../../__tests__/feature-value-view-double';
 
 const TEST_USER = { ID: 'user-drift-test', Name: 'Drift Tester' } as UserInfo;
 
@@ -37,7 +38,16 @@ function getOutput(params: RunActionParams, name: string): unknown {
 }
 
 describe('EvaluateFeatureAndPredictionDriftAction', () => {
+  let byNameSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    // Alerts resolve the Records resource type by name; no test loads the real engine.
+    vi.spyOn(ResourceTypeEngine.Instance, 'Config').mockResolvedValue(undefined);
+    byNameSpy = vi
+      .spyOn(ResourceTypeEngine.Instance, 'ByName')
+      .mockImplementation((name: string) => (name === 'Records' ? ({ ID: 'rt-records', Name: 'Records' } as MJResourceTypeEntity) : undefined));
+  });
   afterEach(() => {
+    vi.restoreAllMocks();
     EvaluateFeatureAndPredictionDriftAction.SetDefaultAlertEmitter(null);
   });
 
@@ -138,14 +148,9 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
 
       const savedNotifications: Array<{ UserID: string; Title: string; Message: string }> = [];
       const fakeProvider = {
-        RunView: async (_params: RunViewParams): Promise<RunViewResult> => ({
-          Success: true,
-          Results: rows,
-          RowCount: rows.length,
-          TotalRowCount: rows.length,
-          ExecutionTime: 1,
-          ErrorMessage: '',
-        }),
+        // The alert reads its Record Process by ID; this caller cannot see it.
+        RunView: async (): Promise<RunViewResult> => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 1, ErrorMessage: '' }),
+        RunViews: async (views: RunViewParams[]): Promise<RunViewResult[]> => views.map((v) => RunFeatureValueView(rows, v)),
         GetEntityObject: async <T>(entityName: string) => {
           expect(entityName).toBe('MJ: User Notifications');
           const notif = {
@@ -167,7 +172,7 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
           };
           return notif as T;
         },
-      } as Pick<IMetadataProvider, 'RunView' | 'GetEntityObject'> as IMetadataProvider;
+      } as Partial<IMetadataProvider> as IMetadataProvider;
 
       const action = new EvaluateFeatureAndPredictionDriftAction();
       expect(Reflect.get(action, 'SetAlertEmitter')).toBeUndefined();
@@ -280,16 +285,7 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
             ErrorMessage: '',
           };
         }
-        const filter = String(viewParams.ExtraFilter ?? '');
-        const results = filter.includes("'rp-ml-1'") ? driftedRows : stableRows;
-        return {
-          Success: true,
-          Results: results,
-          RowCount: results.length,
-          TotalRowCount: results.length,
-          ExecutionTime: 1,
-          ErrorMessage: '',
-        };
+        return RunFeatureValueView([...driftedRows, ...stableRows], viewParams);
       };
 
       const fakeProvider = {
@@ -338,14 +334,16 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
       const processResults = getOutput(runParams, 'ProcessResults') as Array<{
         RecordProcessID: string;
         OverallSeverity: string;
+        Truncated: boolean;
       }>;
       expect(processResults).toHaveLength(2);
       expect(processResults[0]?.RecordProcessID).toBe('rp-ml-1');
       expect(processResults[0]?.OverallSeverity).toBe('Critical');
       expect(processResults[1]?.RecordProcessID).toBe('rp-infer-2');
       expect(processResults[1]?.OverallSeverity).toBe('None');
-      // Both processes' Feature Values come from one batched RunViews, never a read per process.
-      expect(runViewsBatchSizes).toEqual([2]);
+      expect(processResults.map((p) => p.Truncated)).toEqual([false, false]);
+      // Both processes' Feature Values (two windows each) come from one batched RunViews, never a read per process.
+      expect(runViewsBatchSizes).toEqual([4]);
     });
 
     it('keeps sweeping when one record process cannot be read, and reports that process as not evaluated', async () => {
@@ -428,22 +426,14 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
       expect(result.ResultCode).toBe('MISSING_PARAMETER');
     });
 
-    it('passes MaxRows to the drift loader (S9)', async () => {
-      let capturedMaxRows: number | undefined;
-
+    it('passes MaxRows to the drift loader as a per-window cap, fetching one row over it (S9, P2)', async () => {
+      const captured: RunViewParams[] = [];
       const fakeProvider = {
-        RunView: async (params: RunViewParams): Promise<RunViewResult> => {
-          capturedMaxRows = params.MaxRows;
-          return {
-            Success: true,
-            Results: [],
-            RowCount: 0,
-            TotalRowCount: 0,
-            ExecutionTime: 1,
-            ErrorMessage: '',
-          };
+        RunViews: async (views: RunViewParams[]): Promise<RunViewResult[]> => {
+          captured.push(...views);
+          return views.map((v) => RunFeatureValueView([], v));
         },
-      } as Pick<IMetadataProvider, 'RunView'> as IMetadataProvider;
+      } as Partial<IMetadataProvider> as IMetadataProvider;
 
       const action = new EvaluateFeatureAndPredictionDriftAction();
       const runParams = buildRunParams({
@@ -454,9 +444,69 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
       runParams.Provider = fakeProvider;
 
       await action.Run(runParams);
-      expect(capturedMaxRows).toBe(5000);
+      expect(captured.map((v) => v.MaxRows)).toEqual([5001, 5001]);
+    });
+
+    it('rejects MaxRows <= 0 with INVALID_PARAMETER, for one process and for the sweep (P2)', async () => {
+      const fakeProvider = {
+        RunView: async (): Promise<RunViewResult> => ({
+          Success: true,
+          Results: [{ ID: 'rp-1', Name: 'One', WorkType: 'ML Model', Status: 'Active' }],
+          RowCount: 1,
+          TotalRowCount: 1,
+          ExecutionTime: 1,
+          ErrorMessage: '',
+        }),
+        RunViews: async (views: RunViewParams[]): Promise<RunViewResult[]> => views.map((v) => RunFeatureValueView([], v)),
+      } as Partial<IMetadataProvider> as IMetadataProvider;
+
+      for (const target of [{ RecordProcessID: { value: 'rp-1' } }, {}]) {
+        const runParams = buildRunParams({ ...target, MaxRows: { value: 0 }, EmitAlertOnDrift: { value: false } });
+        runParams.Provider = fakeProvider;
+        const result = await new EvaluateFeatureAndPredictionDriftAction().Run(runParams);
+        expect(result.Success).toBe(false);
+        expect(result.ResultCode).toBe('INVALID_PARAMETER');
+      }
+    });
+
+    it('reports a process whose window exceeded MaxRows as Truncated on its process result (P2)', async () => {
+      const nowMs = Date.now();
+      const row = (rp: string, id: string, computedAt: number) => ({
+        ID: id, RecordProcessID: rp, EntityID: 'ent-1', RecordID: id, FeatureName: 'Score', Role: 'Champion',
+        Source: 'Pipeline', ValueNumeric: 0.5, ValueText: null, Confidence: 0.9, Reasoning: null,
+        ComputedAt: new Date(computedAt).toISOString(),
+      });
+      const rows = [
+        ...Array.from({ length: 31 }, (_, i) => row('rp-big', `big-${i}`, nowMs - 2 * 86_400_000 + i * 60_000)),
+        ...Array.from({ length: 30 }, (_, i) => row('rp-full', `full-${i}`, nowMs - 2 * 86_400_000 + i * 60_000)),
+      ];
+      const fakeProvider = {
+        RunView: async (): Promise<RunViewResult> => ({
+          Success: true,
+          Results: [
+            { ID: 'rp-big', Name: 'Big', WorkType: 'ML Model', Status: 'Active' },
+            { ID: 'rp-full', Name: 'Exactly Full', WorkType: 'Infer', Status: 'Active' },
+          ],
+          RowCount: 2,
+          TotalRowCount: 2,
+          ExecutionTime: 1,
+          ErrorMessage: '',
+        }),
+        RunViews: async (views: RunViewParams[]): Promise<RunViewResult[]> => views.map((v) => RunFeatureValueView(rows, v)),
+      } as Partial<IMetadataProvider> as IMetadataProvider;
+
+      const runParams = buildRunParams({ MaxRows: { value: 30 }, EmitAlertOnDrift: { value: false } });
+      runParams.Provider = fakeProvider;
+      const result = await new EvaluateFeatureAndPredictionDriftAction().Run(runParams);
+      expect(result.Success).toBe(true);
+      const processResults = getOutput(runParams, 'ProcessResults') as Array<{ RecordProcessID: string; Truncated: boolean }>;
+      expect(processResults.map((p) => [p.RecordProcessID, p.Truncated])).toEqual([
+        ['rp-big', true],
+        ['rp-full', false],
+      ]);
     });
   });
+
   describe('Alert routing and content (P1)', () => {
     const SYSTEM = new UserInfo(null, { ID: UserCache.Instance.SYSTEM_USER_ID, Name: 'System', Type: 'User', IsActive: true });
     const OWNER = new UserInfo(null, { ID: 'owner-1', Name: 'Org Owner', Email: 'owner@example.com', Type: 'Owner', IsActive: true });
@@ -479,11 +529,11 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
       Models?: Array<{ ID: string; Pipeline: string; Version: number }>;
     }
 
-    /** 120 baseline rows at 0.1 and 120 evaluation rows at 0.99: Critical drift. */
-    function driftingRows(): Array<Record<string, unknown>> {
+    /** 120 baseline rows at 0.1 and 120 evaluation rows at 0.99 of one record process / model: Critical drift. */
+    function driftingRows(recordProcessId: unknown, mlModelId: unknown): Array<FeatureValueDoubleRow> {
       const nowMs = Date.now();
       const row = (id: string, value: number, computedAt: number) => ({
-        ID: id, RecordProcessID: 'rp-alert', EntityID: 'ent-1', RecordID: id, FeatureName: 'Score', Role: 'Champion',
+        ID: id, RecordProcessID: String(recordProcessId), MLModelID: String(mlModelId), EntityID: 'ent-1', RecordID: id, FeatureName: 'Score', Role: 'Champion',
         Source: 'Pipeline', ValueNumeric: value, ValueText: null, Confidence: 0.9, Reasoning: null,
         ComputedAt: new Date(computedAt).toISOString(),
       });
@@ -494,7 +544,12 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
     }
 
     /** Serves the stored Record Process / ML Model rows (by `ID = '…'`) and drifting Feature Values; captures saved notifications. */
-    function alertProvider(stored: StoredRows, saved: SavedNotification[], readsAs: Array<string | undefined>): IMetadataProvider {
+    function alertProvider(
+      stored: StoredRows,
+      featureValues: FeatureValueDoubleRow[],
+      saved: SavedNotification[],
+      readsAs: Array<string | undefined>,
+    ): IMetadataProvider {
       const view = async (v: RunViewParams, user?: UserInfo): Promise<RunViewResult> => {
         const idMatch = /^ID = '([^']+)'$/.exec(String(v.ExtraFilter ?? ''));
         const byId = <T extends { ID: string }>(rows: T[]): T[] => (idMatch ? rows.filter((r) => r.ID === idMatch[1]) : rows);
@@ -506,7 +561,7 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
           readsAs.push(user?.ID);
           results = byId(stored.Models ?? []);
         } else if (v.EntityName === 'MJ: Feature Values') {
-          results = driftingRows();
+          results = RunFeatureValueView(featureValues, v).Results;
         }
         return { Success: true, Results: results, RowCount: results.length, TotalRowCount: results.length, ExecutionTime: 1, ErrorMessage: '' };
       };
@@ -551,23 +606,22 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
       const readsAs: Array<string | undefined> = [];
       const runParams = buildRunParams(inputs);
       runParams.ContextUser = caller;
-      runParams.Provider = alertProvider(stored, saved, readsAs);
+      runParams.Provider = alertProvider(
+        stored,
+        driftingRows(inputs['RecordProcessID']?.value, inputs['ModelID']?.value),
+        saved,
+        readsAs,
+      );
       const result = await new EvaluateFeatureAndPredictionDriftAction().Run(runParams);
       expect(result.Success).toBe(true);
       expect(getOutput(runParams, 'ShouldAlert')).toBe(true);
       return { saved, readsAs, runParams };
     }
 
-    let byNameSpy: ReturnType<typeof vi.spyOn>;
     beforeEach(() => {
       UserCache.Instance.SetUsers([SYSTEM, OWNER, MEMBER, TARGET, INACTIVE, NAMED_SYSTEM]);
-      vi.spyOn(ResourceTypeEngine.Instance, 'Config').mockResolvedValue(undefined);
-      byNameSpy = vi
-        .spyOn(ResourceTypeEngine.Instance, 'ByName')
-        .mockImplementation((name: string) => (name === 'Records' ? ({ ID: 'rt-records', Name: 'Records' } as MJResourceTypeEntity) : undefined));
     });
     afterEach(() => {
-      vi.restoreAllMocks();
       UserCache.Instance.SetUsers([]);
     });
 

@@ -1309,7 +1309,7 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "Optional maximum number of Feature Value rows loaded per process during drift evaluation (defaults to 100,000)."
+            "Description": "Optional maximum number of Feature Value rows loaded per window (baseline and evaluation, each newest-first) per process during drift evaluation (defaults to 100,000). Must be a positive whole number. A process with a fuller window reports Truncated=true in ProcessResults."
           },
           "primaryKey": {
             "ID": "E6B65E19-1457-421D-B9DB-A5CC0B4C3D39"

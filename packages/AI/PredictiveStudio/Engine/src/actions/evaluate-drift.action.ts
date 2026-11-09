@@ -48,6 +48,8 @@ export interface ProcessDriftSummaryItem {
   readonly MaxPSI: number;
   readonly ShouldAlert: boolean;
   readonly InsufficientData: boolean;
+  /** True when a window held more than `MaxRows` rows, so only its newest `MaxRows` were evaluated. */
+  readonly Truncated: boolean;
   readonly AlertEmitted: boolean;
   readonly AlertID?: string;
   /** This process's confidence-floor and champion-vs-challenger metrics; absent when its load failed. */
@@ -462,6 +464,7 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
           MaxPSI: 0,
           ShouldAlert: false,
           InsufficientData: true,
+          Truncated: false,
           AlertEmitted: false,
           ErrorMessage: message,
           Summary: `Not evaluated: ${message}`,
@@ -507,6 +510,7 @@ export class EvaluateFeatureAndPredictionDriftAction extends BasePredictiveStudi
         MaxPSI: report.MaxPSI,
         ShouldAlert: report.ShouldAlert,
         InsufficientData: report.InsufficientData,
+        Truncated: report.Truncated === true,
         AlertEmitted: procAlertEmitted,
         AlertID: procAlertId,
         DivergenceMetrics: report.DivergenceMetrics,

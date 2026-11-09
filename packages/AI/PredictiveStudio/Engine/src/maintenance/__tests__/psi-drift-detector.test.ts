@@ -13,6 +13,21 @@ import {
   LoadFeatureAndPredictionDriftFromFeatureValues,
   PSIDriftDetector,
 } from '../psi-drift-detector';
+import { RunFeatureValueView, type FeatureValueDoubleRow } from '../../__tests__/feature-value-view-double';
+
+/** A provider whose batched reads answer from `rows` as the database would; records every view it was asked for. */
+function featureValueProvider(rows: readonly FeatureValueDoubleRow[], views: RunViewParams[] = []): IMetadataProvider {
+  return {
+    RunView: async (v: RunViewParams): Promise<RunViewResult> => {
+      views.push(v);
+      return RunFeatureValueView(rows, v);
+    },
+    RunViews: async (batch: RunViewParams[]): Promise<RunViewResult[]> => {
+      views.push(...batch);
+      return batch.map((v) => RunFeatureValueView(rows, v));
+    },
+  } as Partial<IMetadataProvider> as IMetadataProvider;
+}
 
 describe('psi-drift-detector', () => {
   describe('ComputePopulationStabilityIndex and ClassifyPSISeverity', () => {
@@ -285,29 +300,18 @@ describe('psi-drift-detector', () => {
         },
       ];
 
-      let capturedFilter = '';
-      const provider = {
-        RunView: async (params: RunViewParams): Promise<RunViewResult> => {
-          capturedFilter = String(params.ExtraFilter ?? '');
-          return {
-            Success: true,
-            Results: rows,
-            RowCount: rows.length,
-            TotalRowCount: rows.length,
-            ExecutionTime: 1,
-            ErrorMessage: '',
-          };
-        },
-      } as Pick<IMetadataProvider, 'RunView'> as IMetadataProvider;
-
+      const views: RunViewParams[] = [];
       const driftInput = await LoadFeatureAndPredictionDriftFromFeatureValues({
         RecordProcessID: 'rp-drift-1',
-        Provider: provider,
+        Provider: featureValueProvider(rows, views),
         ContextUser: { ID: 'user-1' } as UserInfo,
       });
 
-      expect(capturedFilter).toContain("RecordProcessID = 'rp-drift-1'");
-      expect(capturedFilter).toContain("ComputedAt >= '");
+      expect(views).toHaveLength(2);
+      for (const v of views) {
+        expect(v.ExtraFilter).toContain("RecordProcessID = 'rp-drift-1'");
+        expect(v.ExtraFilter).toContain("ComputedAt >= '");
+      }
       expect(driftInput.NumericFeatures?.['ChurnScore']?.Baseline).toHaveLength(120);
       expect(driftInput.NumericFeatures?.['ChurnScore']?.Evaluation).toHaveLength(120);
       expect(driftInput.ConfidenceAndDivergence?.Pairs).toHaveLength(1);
@@ -341,16 +345,7 @@ describe('psi-drift-detector', () => {
         ComputedAt: new Date(twelveHoursAgoMs + i * 1_000),
       }));
 
-      const provider = {
-        RunView: async (): Promise<RunViewResult> => ({
-          Success: true,
-          Results: rows,
-          RowCount: rows.length,
-          TotalRowCount: rows.length,
-          ExecutionTime: 1,
-          ErrorMessage: '',
-        }),
-      } as Pick<IMetadataProvider, 'RunView'> as IMetadataProvider;
+      const provider = featureValueProvider(rows);
 
       const driftInput = await LoadFeatureAndPredictionDriftFromFeatureValues({
         RecordProcessID: 'rp-recent-only',
@@ -405,28 +400,17 @@ describe('psi-drift-detector', () => {
         })),
       ];
 
-      let capturedFilter = '';
-      const provider = {
-        RunView: async (params: RunViewParams): Promise<RunViewResult> => {
-          capturedFilter = String(params.ExtraFilter ?? '');
-          return {
-            Success: true,
-            Results: rows,
-            RowCount: rows.length,
-            TotalRowCount: rows.length,
-            ExecutionTime: 1,
-            ErrorMessage: '',
-          };
-        },
-      } as Pick<IMetadataProvider, 'RunView'> as IMetadataProvider;
-
+      const views: RunViewParams[] = [];
       const driftInput = await LoadFeatureAndPredictionDriftFromFeatureValues({
         RecordProcessID: 'rp-src',
-        Provider: provider,
+        Provider: featureValueProvider(rows, views),
         ContextUser: { ID: 'user-1' } as UserInfo,
       });
 
-      expect(capturedFilter).toContain("Source = 'Pipeline'");
+      expect(views.map((v) => v.ExtraFilter)).toEqual([
+        expect.stringContaining("Source = 'Pipeline'"),
+        expect.stringContaining("Source = 'Pipeline'"),
+      ]);
       // Human rows are ignored by buildDriftInputFromRows as well
       expect(driftInput.NumericFeatures?.['Score']?.Evaluation).toHaveLength(120);
     });
@@ -469,16 +453,7 @@ describe('psi-drift-detector', () => {
         },
       ];
 
-      const provider = {
-        RunView: async (): Promise<RunViewResult> => ({
-          Success: true,
-          Results: rows,
-          RowCount: rows.length,
-          TotalRowCount: rows.length,
-          ExecutionTime: 1,
-          ErrorMessage: '',
-        }),
-      } as Pick<IMetadataProvider, 'RunView'> as IMetadataProvider;
+      const provider = featureValueProvider(rows);
 
       const driftInput = await LoadFeatureAndPredictionDriftFromFeatureValues({
         RecordProcessID: 'rp-win',
@@ -491,65 +466,47 @@ describe('psi-drift-detector', () => {
     });
 
     it('filters by MLModelID when ModelID is provided (S8)', async () => {
-      let capturedFilter = '';
-      const provider = {
-        RunView: async (params: RunViewParams): Promise<RunViewResult> => {
-          capturedFilter = String(params.ExtraFilter ?? '');
-          return {
-            Success: true,
-            Results: [],
-            RowCount: 0,
-            TotalRowCount: 0,
-            ExecutionTime: 1,
-            ErrorMessage: '',
-          };
-        },
-      } as Pick<IMetadataProvider, 'RunView'> as IMetadataProvider;
-
+      const views: RunViewParams[] = [];
       await LoadFeatureAndPredictionDriftFromFeatureValues({
         ModelID: 'model-ml-target-uuid',
-        Provider: provider,
+        Provider: featureValueProvider([], views),
         ContextUser: { ID: 'user-1' } as UserInfo,
       });
 
-      expect(capturedFilter).toContain("MLModelID = 'model-ml-target-uuid'");
-      expect(capturedFilter).not.toContain("AIModelID = 'model-ml-target-uuid'");
+      expect(views).toHaveLength(2);
+      for (const v of views) {
+        expect(v.ExtraFilter).toContain("MLModelID = 'model-ml-target-uuid'");
+        expect(v.ExtraFilter).not.toContain("AIModelID = 'model-ml-target-uuid'");
+      }
     });
 
-    it('chunks record process sweep into batches of DRIFT_SWEEP_BATCH_SIZE (10) and flags truncation at MaxRows (S9)', async () => {
+    it('chunks record process sweep into batches of DRIFT_SWEEP_BATCH_SIZE (10), two windowed views per process, and flags truncation past MaxRows (S9)', async () => {
+      const nowMs = Date.now();
+      const champion = (rp: string, i: number, computedAt: number) => ({
+        ID: `${rp}-${i}`,
+        RecordProcessID: rp,
+        RecordID: `rec-${i}`,
+        FeatureName: 'Score',
+        Role: 'Champion' as const,
+        Source: 'Pipeline' as const,
+        ValueNumeric: 0.5,
+        ComputedAt: new Date(computedAt),
+      });
+      const rows = [
+        ...Array.from({ length: 24 }, (_, p) => champion(`rp-${p}`, 0, nowMs - 2 * 86_400_000)),
+        // 60 evaluation-window rows: over MaxRows (50)
+        ...Array.from({ length: 60 }, (_, i) => champion('rp-trunc', i, nowMs - 2 * 86_400_000 + i * 1000)),
+      ];
       const batchSizes: number[] = [];
       const fakeProvider = {
         RunViews: async (views: RunViewParams[]): Promise<RunViewResult[]> => {
           batchSizes.push(views.length);
-          return views.map((v) => {
-            const isTruncated = String(v.ExtraFilter ?? '').includes("'rp-trunc'");
-            const count = isTruncated ? 50 : 2;
-            return {
-              Success: true,
-              Results: Array.from({ length: count }, (_, i) => ({
-                ID: `r-${i}`,
-                RecordProcessID: 'rp-test',
-                RecordID: `rec-${i}`,
-                FeatureName: 'Score',
-                Role: 'Champion' as const,
-                Source: 'Pipeline' as const,
-                ValueNumeric: 0.5,
-                ComputedAt: new Date(),
-              })),
-              RowCount: count,
-              TotalRowCount: count,
-              ExecutionTime: 1,
-              ErrorMessage: '',
-            };
-          });
+          return views.map((v) => RunFeatureValueView(rows, v));
         },
-      } as Pick<IMetadataProvider, 'RunViews'> as IMetadataProvider;
+      } as Partial<IMetadataProvider> as IMetadataProvider;
 
-      // 25 processes -> batches of 10, 10, 5
-      const processIds = [
-        ...Array.from({ length: 24 }, (_, i) => `rp-${i}`),
-        'rp-trunc',
-      ];
+      // 25 processes -> batches of 10, 10, 5 processes (20, 20, 10 views)
+      const processIds = [...Array.from({ length: 24 }, (_, i) => `rp-${i}`), 'rp-trunc'];
 
       const loads = await LoadFeatureAndPredictionDriftForRecordProcesses(processIds, {
         Provider: fakeProvider,
@@ -558,14 +515,83 @@ describe('psi-drift-detector', () => {
       });
 
       expect(loads).toHaveLength(25);
-      expect(batchSizes).toEqual([10, 10, 5]);
+      expect(batchSizes).toEqual([20, 20, 10]);
+      expect(loads.filter((l) => l.Input?.Truncated === true).map((l) => l.RecordProcessID)).toEqual(['rp-trunc']);
 
       const truncLoad = loads.find((l) => l.RecordProcessID === 'rp-trunc');
-      expect(truncLoad?.Input?.Truncated).toBe(true);
-
+      expect(truncLoad?.Input?.NumericFeatures?.['Score']?.Evaluation).toHaveLength(50);
       const report = EvaluateFeatureAndPredictionDrift(truncLoad!.Input!);
       expect(report.Truncated).toBe(true);
       expect(report.Summary).toContain('Truncated=true');
+    });
+
+    describe('MaxRows caps each window separately (P2)', () => {
+      const nowMs = Date.now();
+      /** `baseline` rows 14-20 days ago at 0.1 and `evaluation` rows in the last 3 days at 0.9, one minute apart. */
+      function windowRows(baseline: number, evaluation: number) {
+        const row = (id: string, value: number, computedAt: number) => ({
+          ID: id,
+          RecordProcessID: 'rp-capped',
+          RecordID: id,
+          FeatureName: 'Score',
+          Role: 'Champion' as const,
+          Source: 'Pipeline' as const,
+          ValueNumeric: value,
+          Confidence: 0.9,
+          ComputedAt: new Date(computedAt),
+        });
+        return [
+          ...Array.from({ length: baseline }, (_, i) => row(`b-${i}`, 0.1, nowMs - 20 * 86_400_000 + i * 60_000)),
+          ...Array.from({ length: evaluation }, (_, i) => row(`e-${i}`, 0.9, nowMs - 3 * 86_400_000 + i * 60_000)),
+        ];
+      }
+
+      it('keeps the newest MaxRows rows of each window, so a capped process still has an evaluation window', async () => {
+        const rows = windowRows(80, 80);
+        const input = await LoadFeatureAndPredictionDriftFromFeatureValues({
+          RecordProcessID: 'rp-capped',
+          Provider: featureValueProvider(rows),
+          ContextUser: { ID: 'user-1' } as UserInfo,
+          MaxRows: 50,
+          MinSampleSize: 10,
+        });
+
+        expect(input.Truncated).toBe(true);
+        expect(input.NumericFeatures?.['Score']?.Baseline).toHaveLength(50);
+        expect(input.NumericFeatures?.['Score']?.Evaluation).toHaveLength(50);
+        const report = EvaluateFeatureAndPredictionDrift(input);
+        expect(report.InsufficientData).toBe(false);
+        expect(report.OverallSeverity).toBe('Critical');
+      });
+
+      it('does not report truncation when a window holds exactly MaxRows rows', async () => {
+        for (const [baseline, evaluation] of [[25, 25], [50, 50], [50, 0]] as const) {
+          const input = await LoadFeatureAndPredictionDriftFromFeatureValues({
+            RecordProcessID: 'rp-capped',
+            Provider: featureValueProvider(windowRows(baseline, evaluation)),
+            ContextUser: { ID: 'user-1' } as UserInfo,
+            MaxRows: 50,
+          });
+          expect(input.Truncated, `${baseline} baseline + ${evaluation} evaluation rows`).toBe(false);
+          expect(input.NumericFeatures?.['Score']?.Baseline).toHaveLength(baseline);
+          expect(input.NumericFeatures?.['Score']?.Evaluation ?? []).toHaveLength(evaluation);
+        }
+      });
+
+      it('rejects a MaxRows that is not a positive whole number', async () => {
+        for (const maxRows of [0, -5, 2.5]) {
+          await expect(
+            LoadFeatureAndPredictionDriftFromFeatureValues({
+              RecordProcessID: 'rp-capped',
+              Provider: featureValueProvider([]),
+              MaxRows: maxRows,
+            }),
+          ).rejects.toThrow(/^INVALID_PARAMETER: MaxRows/);
+          await expect(
+            LoadFeatureAndPredictionDriftForRecordProcesses([], { Provider: featureValueProvider([]), MaxRows: maxRows }),
+          ).rejects.toThrow(/^INVALID_PARAMETER: MaxRows/);
+        }
+      });
     });
 
     it('compares classification labels for agreement when both champion and challenger have labels (M3)', () => {

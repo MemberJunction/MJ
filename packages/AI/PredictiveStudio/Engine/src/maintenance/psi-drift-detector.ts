@@ -33,7 +33,7 @@ export const PSI_CRITICAL_THRESHOLD = 0.25;
 /** Default minimum valid sample size required before PSI or confidence drift is evaluated. */
 export const DEFAULT_MIN_SAMPLE_SIZE = 100;
 
-/** Default maximum rows loaded from `MJ: Feature Values` in a single drift evaluation. */
+/** Default maximum `MJ: Feature Values` rows loaded per window (baseline, evaluation) in a single drift evaluation. */
 export const DEFAULT_DRIFT_MAX_ROWS = 100000;
 
 /** Batch size (in Record Processes) when running scheduled drift sweeps across multiple processes. */
@@ -184,6 +184,10 @@ export interface LoadDriftFromFeatureValuesOptions {
   readonly CriticalPSIThreshold?: number;
   readonly Epsilon?: number;
   readonly MinSampleSize?: number;
+  /**
+   * Row cap per window: the baseline window and the evaluation window are each read newest-first and capped
+   * separately, so a capped load still covers both. Must be a positive whole number (defaults to 100,000).
+   */
   readonly MaxRows?: number;
 }
 
@@ -877,20 +881,28 @@ function resolveDriftWindows(options: Pick<LoadDriftFromFeatureValuesOptions, 'E
   return { BaselineStartMs: baselineEndMs - 28 * DAY_MS, BaselineEndMs: baselineEndMs, EvaluationStartMs: evaluationStartMs };
 }
 
-/** The bounded `MJ: Feature Values` read behind one drift load: one record process (or model), both windows. */
-function featureValueDriftView(options: LoadDriftFromFeatureValuesOptions, windows: DriftWindows): RunViewParams {
-  const filterClauses: string[] = [];
-  if (typeof options.RecordProcessID === 'string' && options.RecordProcessID.trim().length > 0) {
-    filterClauses.push(`RecordProcessID = '${EscapeSQLString(options.RecordProcessID.trim())}'`);
-  } else if (typeof options.ModelID === 'string' && options.ModelID.trim().length > 0) {
-    filterClauses.push(`MLModelID = '${EscapeSQLString(options.ModelID.trim())}'`);
-  }
-  filterClauses.push(`ComputedAt >= '${EscapeSQLString(new Date(windows.BaselineStartMs).toISOString())}'`);
-  filterClauses.push("Source = 'Pipeline'");
-  return {
+/**
+ * The two bounded `MJ: Feature Values` reads behind one drift load of one record process (or model): the baseline
+ * window, and everything computed since it ends (the evaluation window). Each is read newest-first and capped on its
+ * own, so a capped load keeps the newest rows of BOTH windows; one row over the cap is fetched to tell a full window
+ * from a truncated one.
+ */
+function featureValueDriftViews(
+  options: LoadDriftFromFeatureValuesOptions,
+  windows: DriftWindows,
+  maxRows: number,
+): [RunViewParams, RunViewParams] {
+  const target =
+    typeof options.RecordProcessID === 'string' && options.RecordProcessID.trim().length > 0
+      ? `RecordProcessID = '${EscapeSQLString(options.RecordProcessID.trim())}' AND `
+      : typeof options.ModelID === 'string' && options.ModelID.trim().length > 0
+        ? `MLModelID = '${EscapeSQLString(options.ModelID.trim())}' AND `
+        : '';
+  const at = (ms: number): string => EscapeSQLString(new Date(ms).toISOString());
+  const view = (window: string): RunViewParams => ({
     EntityName: 'MJ: Feature Values',
-    ExtraFilter: filterClauses.join(' AND '),
-    OrderBy: 'ComputedAt ASC',
+    ExtraFilter: `${target}${window} AND Source = 'Pipeline'`,
+    OrderBy: 'ComputedAt DESC',
     Fields: [
       'ID',
       'RecordProcessID',
@@ -909,8 +921,42 @@ function featureValueDriftView(options: LoadDriftFromFeatureValuesOptions, windo
       'ComputedAt',
     ],
     ResultType: 'simple',
-    MaxRows: options.MaxRows ?? DEFAULT_DRIFT_MAX_ROWS,
-  };
+    MaxRows: maxRows + 1,
+    SkipTotalRowCount: true,
+  });
+  return [
+    view(`ComputedAt >= '${at(windows.BaselineStartMs)}' AND ComputedAt < '${at(windows.BaselineEndMs)}'`),
+    view(`ComputedAt >= '${at(windows.BaselineEndMs)}'`),
+  ];
+}
+
+/** The per-window row cap: a positive whole number, defaulting to {@link DEFAULT_DRIFT_MAX_ROWS}. */
+function resolveDriftMaxRows(maxRows: number | undefined): number {
+  const value = maxRows ?? DEFAULT_DRIFT_MAX_ROWS;
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error('INVALID_PARAMETER: MaxRows must be a positive whole number.');
+  }
+  return value;
+}
+
+/**
+ * Both windows' rows, each cut to `maxRows`, oldest first; `Truncated` when either window had more.
+ * `windowRows` are the two {@link featureValueDriftViews} results, each newest-first.
+ */
+function capDriftWindows(
+  windowRows: readonly (readonly FeatureValueDriftRow[])[],
+  maxRows: number,
+  label: string,
+): { Rows: FeatureValueDriftRow[]; Truncated: boolean } {
+  const truncated = windowRows.some((rows) => rows.length > maxRows);
+  if (truncated) {
+    LogError(
+      `Drift evaluation for '${label}' was truncated at MaxRows (${maxRows}) per window: the oldest rows of a full window were not read.`,
+    );
+  }
+  const rows = windowRows.flatMap((w) => w.slice(0, maxRows));
+  rows.sort((a, b) => new Date(a.ComputedAt).getTime() - new Date(b.ComputedAt).getTime());
+  return { Rows: rows, Truncated: truncated };
 }
 
 /**
@@ -933,28 +979,22 @@ export async function LoadFeatureAndPredictionDriftFromFeatureValues(
   options: LoadDriftFromFeatureValuesOptions,
 ): Promise<FeatureAndPredictionDriftInput> {
   const windows = resolveDriftWindows(options);
-  const maxRows = options.MaxRows ?? DEFAULT_DRIFT_MAX_ROWS;
-  const res = await RunView.FromMetadataProvider(options.Provider).RunView<FeatureValueDriftRow>(
-    featureValueDriftView(options, windows),
+  const maxRows = resolveDriftMaxRows(options.MaxRows);
+  const results = await RunView.FromMetadataProvider(options.Provider).RunViews<FeatureValueDriftRow>(
+    featureValueDriftViews(options, windows, maxRows),
     options.ContextUser,
   );
-  if (!res.Success) {
+  if (results.length !== 2 || results.some((r) => !r?.Success)) {
     throw new Error(
-      `Failed to load MJ: Feature Values for drift evaluation: ${res.ErrorMessage ?? 'unknown error'}`,
+      `Failed to load MJ: Feature Values for drift evaluation: ${results.find((r) => r && !r.Success)?.ErrorMessage ?? 'unknown error'}`,
     );
   }
-  const rows = res.Results ?? [];
-  const truncated = rows.length >= maxRows;
-  if (truncated) {
-    LogError(
-      `Drift evaluation for Record Process '${options.RecordProcessID ?? options.ModelID ?? ''}' was truncated at MaxRows (${maxRows}). Drift metrics may be incomplete.`,
-    );
-  }
-  const input = buildDriftInputFromRows(rows, windows, options);
-  if (truncated) {
-    (input as { Truncated?: boolean }).Truncated = true;
-  }
-  return input;
+  const capped = capDriftWindows(
+    results.map((r) => r.Results ?? []),
+    maxRows,
+    options.RecordProcessID ?? options.ModelID ?? '',
+  );
+  return { ...buildDriftInputFromRows(capped.Rows, windows, options), Truncated: capped.Truncated };
 }
 
 /** One record process's drift input, or (with no `Input`) why its Feature Values could not be read. */
@@ -973,11 +1013,11 @@ export async function LoadFeatureAndPredictionDriftForRecordProcesses(
   recordProcessIDs: readonly string[],
   options: Omit<LoadDriftFromFeatureValuesOptions, 'RecordProcessID' | 'ModelID'>,
 ): Promise<RecordProcessDriftLoad[]> {
+  const maxRows = resolveDriftMaxRows(options.MaxRows);
   if (recordProcessIDs.length === 0) {
     return [];
   }
   const windows = resolveDriftWindows(options);
-  const maxRows = options.MaxRows ?? DEFAULT_DRIFT_MAX_ROWS;
   const allLoads: RecordProcessDriftLoad[] = [];
 
   for (let c = 0; c < recordProcessIDs.length; c += DRIFT_SWEEP_BATCH_SIZE) {
@@ -986,36 +1026,31 @@ export async function LoadFeatureAndPredictionDriftForRecordProcesses(
       ...options,
       RecordProcessID: id,
     }));
+    // Two views per process (baseline window, evaluation window), all in one round trip.
     const results = await RunView.FromMetadataProvider(options.Provider).RunViews<FeatureValueDriftRow>(
-      perProcess.map((o) => featureValueDriftView(o, windows)),
+      perProcess.flatMap((o) => featureValueDriftViews(o, windows, maxRows)),
       options.ContextUser,
     );
 
     for (let i = 0; i < perProcess.length; i++) {
       const o = perProcess[i];
       const recordProcessID = o.RecordProcessID ?? '';
-      const res = results[i];
-      if (!res?.Success) {
+      const windowResults = [results[2 * i], results[2 * i + 1]];
+      if (windowResults.some((r) => !r?.Success)) {
         allLoads.push({
           RecordProcessID: recordProcessID,
-          ErrorMessage: `Failed to load MJ: Feature Values for drift evaluation: ${res?.ErrorMessage ?? 'unknown error'}`,
+          ErrorMessage: `Failed to load MJ: Feature Values for drift evaluation: ${windowResults.find((r) => r && !r.Success)?.ErrorMessage ?? 'unknown error'}`,
         });
         continue;
       }
-      const rows = res.Results ?? [];
-      const truncated = rows.length >= maxRows;
-      if (truncated) {
-        LogError(
-          `Drift evaluation for Record Process '${recordProcessID}' was truncated at MaxRows (${maxRows}). Drift metrics may be incomplete.`,
-        );
-      }
-      const input = buildDriftInputFromRows(rows, windows, o);
-      if (truncated) {
-        (input as { Truncated?: boolean }).Truncated = true;
-      }
+      const capped = capDriftWindows(
+        windowResults.map((r) => r?.Results ?? []),
+        maxRows,
+        recordProcessID,
+      );
       allLoads.push({
         RecordProcessID: recordProcessID,
-        Input: input,
+        Input: { ...buildDriftInputFromRows(capped.Rows, windows, o), Truncated: capped.Truncated },
       });
     }
   }

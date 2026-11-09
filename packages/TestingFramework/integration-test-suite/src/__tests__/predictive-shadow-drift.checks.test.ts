@@ -148,13 +148,14 @@ function buildInMemoryHarness() {
                 if (keyMatch && r['ValueKeyHash'] !== keyMatch[1]) {
                     return false;
                 }
-                const compMatch = /ComputedAt >= '([^']+)'/.exec(filter);
-                if (compMatch) {
-                    const rowTs = new Date(r['ComputedAt'] as string | Date).getTime();
-                    const minTs = new Date(compMatch[1]).getTime();
-                    if (rowTs < minTs) {
-                        return false;
-                    }
+                const rowTs = new Date(r['ComputedAt'] as string | Date).getTime();
+                const fromMatch = /ComputedAt >= '([^']+)'/.exec(filter);
+                if (fromMatch && rowTs < new Date(fromMatch[1]).getTime()) {
+                    return false;
+                }
+                const beforeMatch = /ComputedAt < '([^']+)'/.exec(filter);
+                if (beforeMatch && rowTs >= new Date(beforeMatch[1]).getTime()) {
+                    return false;
                 }
                 return true;
             });
