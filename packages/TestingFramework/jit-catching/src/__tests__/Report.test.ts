@@ -18,7 +18,9 @@ const PRICES = { gen: { Input: 4, Output: 20, CachedInput: 0.2 } };
 /** An in-memory store that counts reads per run ID. */
 class MemoryStore extends BaseCatchStore {
   public Runs: Run[] = []; public Catches: Catch[] = []; public Feedback: Feedback[] = []; public Sessions: SessionRecord[] = [];
+  /** `<method>:<run ID>` → number of reads. */
   public Reads: Record<string, number> = {};
+  private read(method: string, id: string): void { this.Reads[`${method}:${id}`] = (this.Reads[`${method}:${id}`] ?? 0) + 1; }
   public async SaveRun(): Promise<void> {}
   public async SaveCandidateTests(_t: CandidateTest[]): Promise<void> {}
   public async SaveExecutionResults(_r: ExecutionResult[]): Promise<void> {}
@@ -26,11 +28,11 @@ class MemoryStore extends BaseCatchStore {
   public async SaveFeedback(): Promise<void> {}
   public async SavePromotionCandidates(_p: PromotionCandidate[]): Promise<void> {}
   public async SaveSessions(): Promise<void> {}
-  public async GetRun(id: string): Promise<Run | null> { return this.Runs.filter((r) => r.ID === id)[0] ?? null; }
+  public async GetRun(id: string): Promise<Run | null> { this.read('GetRun', id); return this.Runs.filter((r) => r.ID === id)[0] ?? null; }
   public async ListRuns(): Promise<Run[]> { return this.Runs; }
-  public async ListCatches(runId: string): Promise<Catch[]> { this.Reads[runId] = (this.Reads[runId] ?? 0) + 1; return this.Catches.filter((c) => c.RunID === runId); }
+  public async ListCatches(runId: string): Promise<Catch[]> { this.read('ListCatches', runId); return this.Catches.filter((c) => c.RunID === runId); }
   public async ListFeedback(catchId: string): Promise<Feedback[]> { return this.Feedback.filter((f) => f.CatchID === catchId); }
-  public async ListSessions(runId: string): Promise<SessionRecord[]> { return this.Sessions.filter((s) => s.RunID === runId); }
+  public async ListSessions(runId: string): Promise<SessionRecord[]> { this.read('ListSessions', runId); return this.Sessions.filter((s) => s.RunID === runId); }
 }
 
 function runOf(id: string, tokens: TokenUsage[] = []): Run {
@@ -55,15 +57,16 @@ function ledger(id: string, set: BacktestLedger['Set'], model: string, entries: 
 
 const CORPUS: Corpus = {
   Version: 1, Seed: 1,
-  Bug: [1, 2, 3].map((n) => ({ BugPR: n, FixPR: n + 100, BugMergeSHA: SHA('c'), FixMergeSHA: SHA('d'), Description: 'd', Slice: 'Tuning' as const })),
-  Clean: [{ PR: 10, MergeSHA: SHA('e'), Slice: 'Tuning' }, { PR: 11, MergeSHA: SHA('e'), Slice: 'Tuning' }, { PR: 12, MergeSHA: SHA('e'), Slice: 'Tuning' }, { PR: 13, MergeSHA: SHA('e'), Slice: 'HeldOut' }],
+  Bug: [1, 2, 3, 4, 5, 6].map((n) => ({ BugPR: n, FixPR: n + 100, BugMergeSHA: SHA('c'), FixMergeSHA: SHA('d'), Description: 'd', Slice: 'Tuning' as const })),
+  Clean: [{ PR: 10, MergeSHA: SHA('e'), Slice: 'Tuning' }, { PR: 11, MergeSHA: SHA('e'), Slice: 'Tuning' }, { PR: 12, MergeSHA: SHA('e'), Slice: 'Tuning' }, { PR: 13, MergeSHA: SHA('e'), Slice: 'HeldOut' }, { PR: 14, MergeSHA: SHA('e'), Slice: 'Tuning' }],
 };
 
 const P1 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'; const P2 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2';
 
 function store(): MemoryStore {
   const s = new MemoryStore();
-  s.Runs = [runOf('r1', [{ Model: 'gen', InputTokens: 1_000_000, OutputTokens: 100_000, CacheReadTokens: 1_000_000, CostUSD: 6 }]), runOf('r2'), runOf('r10'), runOf('r11'), runOf('r12'), runOf('r20')];
+  s.Runs = [runOf('r1', [{ Model: 'gen', InputTokens: 1_000_000, OutputTokens: 100_000, CacheReadTokens: 1_000_000, CostUSD: 6 }]), runOf('r2'), runOf('r10'), runOf('r11'), runOf('r12'), runOf('r20'), runOf('r4'),
+    runOf('r5', [{ Model: 'mystery', InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 0.5 }]), runOf('r14')];
   s.Catches = [
     catchOf('c1', 'r1', 't1', { Reported: true, JudgeBuckets: buckets('High', 'Low') }),
     catchOf('c2', 'r2', 't2', { JudgeBuckets: buckets('High', null) }),
@@ -76,8 +79,9 @@ function store(): MemoryStore {
     catchOf('d12', 'r12', 't14', { DroppedByRule: 'NoAssertion' }),
     catchOf('pb1', 'r12', P1, { Verdict: { Label: 'PassesBoth', Timeout: false, Reason: '' } }),
     catchOf('pb2', 'r12', P2, { Verdict: { Label: 'PassesBoth', Timeout: false, Reason: '' } }),
+    catchOf('c14a', 'r14', 't15', { Reported: true }), catchOf('c14b', 'r14', 't16', { Reported: true }),
   ];
-  s.Feedback = [feedback('c10', 'Bug', '2026-11-09T09:00:00.000Z'), feedback('c10', 'Intended', '2026-11-09T11:00:00.000Z'), feedback('c12', 'AuthorChangedPR', AT)];
+  s.Feedback = [feedback('c10', 'Bug', '2026-11-09T09:00:00.000Z'), feedback('c10', 'Intended', '2026-11-09T11:00:00.000Z'), feedback('c12', 'AuthorChangedPR', AT), feedback('c14a', 'Bug', AT), feedback('c14b', 'Intended', AT)];
   s.Sessions = [session('r1', 'Done'), session('r1', 'TurnLimit'), session('r10', 'Done'), session('r2', 'Done')];
   return s;
 }
@@ -88,9 +92,12 @@ function ledgers(): BacktestLedger[] {
       entry(1, 'Bug', { RunID: 'r1', CostUSD: 2, Match: match('Matched', true, { t1: true }) }),
       entry(2, 'Bug', { RunID: 'r2', CostUSD: 1, Match: match('Matched', false, { t2: true, t3: false }) }),
       entry(3, 'Bug', { Status: 'Failed', Error: 'boom', CostUSD: 0.5 }),
+      entry(4, 'Bug', { RunID: 'r4' }),
+      entry(5, 'Bug', { RunID: 'r5', Match: match('NotMatched', false, {}) }),
     ]),
     ledger('c-Tuning-Clean-m1', 'Clean', 'm1', [
       entry(10, 'Clean', { RunID: 'r10', CostUSD: 1 }), entry(11, 'Clean', { RunID: 'r11', CostUSD: 1 }), entry(12, 'Clean', { RunID: 'r12', CostUSD: 0.5 }),
+      entry(14, 'Clean', { RunID: 'r14' }),
     ]),
     ledger('c-Tuning-Clean-m2', 'Clean', 'm2', [entry(10, 'Clean', { RunID: 'r20', CostUSD: 0.25 })]),
   ];
@@ -115,24 +122,30 @@ describe('BuildGateReport', () => {
 
   it('counts a bug PR as caught only when a reported catch matched', async () => {
     const m1 = (await build(store())).Models[0];
-    expect(m1.BugSet).toMatchObject({ PRs: 3, Run: 2, Failed: 1, AnyWeakMatched: 2, NoCatch: 0, ApplyFailed: 0 });
-    expect(m1.BugSet.Caught).toMatchObject({ K: 1, N: 2, Rate: 0.5 });
-    expect(m1.BugSet.Caught.Low).toBeCloseTo(0.095, 2);
+    expect(m1.BugSet).toMatchObject({ PRs: 6, Run: 4, Failed: 1, AnyWeakMatched: 2, NotMatched: 1, NoCatch: 0, ApplyFailed: 0 });
+    expect(m1.BugSet.Caught).toMatchObject({ K: 1, N: 3 });
+  });
+
+  it('counts an Assessed bug PR without a match result as not yet matched and leaves it out of Caught', async () => {
+    const m1 = (await build(store())).Models[0];
+    expect(m1.BugSet.NotYetMatched).toBe(1);
+    expect(m1.BugSet.Caught.N).toBe(3);
   });
 
   it('counts false alarms only for labels Intended or TestFault, by the latest label, and keeps pending labels apart', async () => {
     const m1 = (await build(store())).Models[0];
-    expect(m1.CleanSet).toMatchObject({ PRs: 3, Run: 3, Failed: 0, Reported: 3, Labeled: 2, Pending: 1, RealBugs: 1 });
-    expect(m1.CleanSet.FalseAlarms).toMatchObject({ K: 1, N: 3 });
+    expect(m1.CleanSet).toMatchObject({ PRs: 4, Run: 4, Failed: 0, Reported: 4, Labeled: 3, Pending: 1, RealBugs: 2 });
+    expect(m1.CleanSet.FalseAlarms).toMatchObject({ K: 2, N: 4 });
   });
 
   it('sums recorded costs and prices the run tokens from the table', async () => {
     const m1 = (await build(store())).Models[0];
     expect(m1.Cost.RecordedUSD).toBeCloseTo(6);
     expect(m1.Cost.TotalUSD).toBeCloseTo(6);
-    expect(m1.Cost.PerPR).toBeCloseTo(1.2);
+    expect(m1.Cost.PerPR).toBeCloseTo(0.75);
     expect(m1.Cost.PerMatchedCatch).toBeCloseTo(3);
-    expect(m1.Cost.TableUSD).toBeCloseTo(6.2);
+    expect(m1.Cost.TableUSD).toBeCloseTo(6.7);
+    expect(m1.Cost.UnpricedModels).toEqual(['mystery']);
   });
 
   it('builds judge pairs per labeled or matched catch and counts High on Intended and Low on Bug', async () => {
@@ -152,10 +165,11 @@ describe('BuildGateReport', () => {
     expect(m1.CoverageNotMeasured).toBe(1);
   });
 
-  it('reads the catches of each run once', async () => {
+  it('reads the run, the catches and the sessions of each run once', async () => {
     const s = store();
     await build(s);
-    expect(s.Reads).toEqual({ r1: 1, r2: 1, r10: 1, r11: 1, r12: 1, r20: 1 });
+    const ids = ['r1', 'r2', 'r4', 'r5', 'r10', 'r11', 'r12', 'r14', 'r20'];
+    expect(s.Reads).toEqual(Object.fromEntries(['GetRun', 'ListCatches', 'ListSessions'].flatMap((m) => ids.map((id) => [`${m}:${id}`, 1]))));
   });
 });
 
@@ -166,7 +180,18 @@ describe('RenderMarkdown', () => {
     expect(md.match(/^## /gm)).toHaveLength(2);
     expect(md).toContain('## m1');
     expect(md).toContain('## m2');
-    expect(md).toContain('1/2 = 50.0% (95% CI 9.5%–90.5%)');
+    expect(md).toContain('1/3 = 33.3% (95% CI 6.1%–79.2%)');
+    expect(md).toContain('PRs: 6; run 4; failed 1; not run 1');
+    expect(md).toMatch(/1 run PR has no match result yet/);
+    expect(md).toContain('Unpriced models: mystery');
+  });
+
+  it('puts model and rule names on one line and escapes a leading # or -', async () => {
+    const r = await BuildGateReport({ Ledgers: [ledgers()[2]], Corpus: CORPUS, Store: store(), RunDirOf: () => { throw new Error('no run dir'); }, Prices: PRICES });
+    r.Models[0] = { ...r.Models[0], Model: '# evil\nmodel', Drops: { '- rule\r\nx': 1 } };
+    const md = RenderMarkdown(r);
+    expect(md).toContain('## \\# evil model\n');
+    expect(md).toContain('- \\- rule  x: 1\n');
     expect(md).toMatch(/False alarms[^\n]*0\/1 = 0\.0% \(95% CI 0\.0%–79\.3%\)/);
   });
 });

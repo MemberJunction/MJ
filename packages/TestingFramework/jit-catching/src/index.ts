@@ -41,4 +41,4 @@ export { MineClean, MineBugs, IsEligibleSource, PullRequestNumberOf, RemovedRang
 export { LedgerFile, LedgerID, MatchRecordSchema, LedgerEntrySchema, BacktestLedgerSchema, type MatchRecord, type LedgerEntry, type BacktestLedger } from './backtest/Ledger';
 export { BacktestStep, DefaultCostOfRun, type BacktestOptions, type BacktestDeps } from './backtest/Backtest';
 export { WilsonInterval, RateOf, type RateWithInterval } from './report/Stats';
-export { BuildGateReport, RenderMarkdown, LatestLabel, TableCostOf, type GateReport, type GateReportOptions, type ModelReport, type HumanLabel, type AgreementResult } from './report/Report';
+export { BuildGateReport, RenderMarkdown, LatestLabel, TableCostOf, MarkdownText, type GateReport, type GateReportOptions, type ModelReport, type HumanLabel, type AgreementResult } from './report/Report';

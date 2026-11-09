@@ -227,7 +227,8 @@ async function dispatch(p: Parsed, deps: CliDeps): Promise<number> {
 /** Builds the gate-1 report from the ledgers, the corpus and the store, and writes it to --out or stdout. */
 async function report(p: Parsed, deps: CliDeps): Promise<number> {
     const repoRoot = await deps.RepoRoot();
-    const o = p.Report ?? { LedgerIDs: [], CorpusPath: '' };
+    if (!p.Report) throw new Error('report options were not parsed');
+    const o = p.Report;
     const redaction = DefaultRedaction();
     const ledgers = o.LedgerIDs.map((id) => {
         const file = new LedgerFile(repoRoot, id, redaction);

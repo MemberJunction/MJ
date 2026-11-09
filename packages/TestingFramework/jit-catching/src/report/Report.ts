@@ -15,11 +15,12 @@ export type HumanLabel = 'Bug' | 'Intended' | 'TestFault';
 
 export interface ModelReport {
     Model: string; Ledgers: string[];
-    /** Caught = run bug PRs whose reported catch matched the fix. */
-    BugSet: { PRs: number; Run: number; Failed: number; Caught: RateWithInterval; AnyWeakMatched: number; NoCatch: number; ApplyFailed: number };
+    /** Caught = run bug PRs whose reported catch matched the fix ÷ run bug PRs with a match result. NotYetMatched = run bug PRs with no match result. */
+    BugSet: { PRs: number; Run: number; Failed: number; Caught: RateWithInterval; AnyWeakMatched: number; NotMatched: number; NoCatch: number; ApplyFailed: number; NotYetMatched: number };
     /** FalseAlarms = run clean PRs with a reported catch labeled Intended or TestFault. */
     CleanSet: { PRs: number; Run: number; Failed: number; Reported: number; Labeled: number; Pending: number; FalseAlarms: RateWithInterval; RealBugs: number };
-    Cost: { TotalUSD: number; PerPR: number | null; PerMatchedCatch: number | null; RecordedUSD: number; TableUSD: number };
+    /** UnpricedModels: models with no table price; their recorded cost is used in TableUSD. */
+    Cost: { TotalUSD: number; PerPR: number | null; PerMatchedCatch: number | null; RecordedUSD: number; TableUSD: number; UnpricedModels: string[] };
     /** Session end reason → count. */
     Sessions: Record<string, number>;
     /** Drop rule → count. */
@@ -125,11 +126,13 @@ function corpusPRs(ledgers: BacktestLedger[], corpus: Corpus, set: 'Bug' | 'Clea
 
 function bugSetOf(entries: LedgerEntry[], prs: number): ModelReport['BugSet'] {
     const run = entries.filter((e) => e.Status === 'Assessed');
-    const status = (s: string): number => run.filter((e) => e.Match?.Status === s).length;
+    const matched = run.filter((e) => e.Match !== null);
+    const status = (s: string): number => matched.filter((e) => e.Match?.Status === s).length;
     return {
         PRs: prs, Run: run.length, Failed: entries.filter((e) => e.Status === 'Failed').length,
-        Caught: RateOf(run.filter((e) => e.Match?.ReportedMatched === true).length, run.length),
-        AnyWeakMatched: status('Matched'), NoCatch: status('NoCatch'), ApplyFailed: status('ApplyFailed'),
+        Caught: RateOf(matched.filter((e) => e.Match?.ReportedMatched === true).length, matched.length),
+        AnyWeakMatched: status('Matched'), NotMatched: status('NotMatched'), NoCatch: status('NoCatch'), ApplyFailed: status('ApplyFailed'),
+        NotYetMatched: run.length - matched.length,
     };
 }
 
@@ -149,8 +152,12 @@ function cleanSetOf(entries: LedgerEntry[], prs: number, data: Map<string, RunDa
 function costOf(entries: LedgerEntry[], runPRs: number, matched: number, data: Map<string, RunData>, prices: Settings['Prices']): ModelReport['Cost'] {
     const recorded = entries.reduce((s, e) => s + e.CostUSD, 0);
     const runIDs = new Set(entries.flatMap((e) => (e.RunID === null ? [] : [e.RunID])));
-    const table = [...runIDs].flatMap((id) => data.get(id)?.Run?.TokensByModel ?? []).reduce((s, u) => s + TableCostOf(u, prices), 0);
-    return { TotalUSD: recorded, PerPR: runPRs === 0 ? null : recorded / runPRs, PerMatchedCatch: matched === 0 ? null : recorded / matched, RecordedUSD: recorded, TableUSD: table };
+    const usage = [...runIDs].flatMap((id) => data.get(id)?.Run?.TokensByModel ?? []);
+    const unpriced = [...new Set(usage.filter((u) => !prices[u.Model]).map((u) => u.Model))].sort();
+    return {
+        TotalUSD: recorded, PerPR: runPRs === 0 ? null : recorded / runPRs, PerMatchedCatch: matched === 0 ? null : recorded / matched,
+        RecordedUSD: recorded, TableUSD: usage.reduce((s, u) => s + TableCostOf(u, prices), 0), UnpricedModels: unpriced,
+    };
 }
 
 /** Cost of one usage row at the per-1M-token prices, cache reads at the cached-input price; the recorded cost when the model has no price. */
@@ -213,28 +220,40 @@ export function RenderMarkdown(r: GateReport): string {
 function renderModel(m: ModelReport): string[] {
     const b = m.BugSet; const c = m.CleanSet;
     return [
-        `## ${m.Model}`, '', `Ledgers: ${m.Ledgers.join(', ')}`, '',
-        `### Bug set`, '', `- PRs: ${b.PRs}; run ${b.Run}; failed ${b.Failed}`, `- Caught (reported and matched): ${rate(b.Caught)}`,
-        `- Any weak catch matched: ${b.AnyWeakMatched}; no catch: ${b.NoCatch}; fix did not apply: ${b.ApplyFailed}`, '',
-        `### Clean set`, '', `- PRs: ${c.PRs}; run ${c.Run}; failed ${c.Failed}`, `- With a reported catch: ${c.Reported}; labeled ${c.Labeled}; pending ${c.Pending}`,
+        `## ${MarkdownText(m.Model)}`, '', `Ledgers: ${m.Ledgers.map(MarkdownText).join(', ')}`, '',
+        `### Bug set`, '', `- ${prLine(b)}`, `- Caught (reported and matched): ${rate(b.Caught)}`,
+        `- Any weak catch matched: ${b.AnyWeakMatched}; not matched: ${b.NotMatched}; no catch: ${b.NoCatch}; fix did not apply: ${b.ApplyFailed}`,
+        ...(b.NotYetMatched > 0 ? [`- Warning: ${b.NotYetMatched} run PR${b.NotYetMatched === 1 ? ' has' : 's have'} no match result yet; run \`backtest match\` and report again`] : []), '',
+        `### Clean set`, '', `- ${prLine(c)}`, `- With a reported catch: ${c.Reported}; labeled ${c.Labeled}; pending ${c.Pending}`,
         `- False alarms (Intended or TestFault): ${rate(c.FalseAlarms)}`, `- Real bugs found: ${c.RealBugs}`, '',
         ...renderCost(m), ...renderCounts('Session end reasons', m.Sessions), ...renderCounts('Drop rules', m.Drops), ...renderJudges(m), '',
     ];
 }
 
+/** PRs in the corpus slices, run, failed, and not run (neither run nor failed). */
+function prLine(s: { PRs: number; Run: number; Failed: number }): string {
+    return `PRs: ${s.PRs}; run ${s.Run}; failed ${s.Failed}; not run ${s.PRs - s.Run - s.Failed}`;
+}
+
 function renderCost(m: ModelReport): string[] {
     const k = m.Cost;
     return [`### Cost`, '', `- Total: ${usd(k.TotalUSD)} (recorded ${usd(k.RecordedUSD)}; at table prices ${usd(k.TableUSD)})`,
-        `- Per run PR: ${k.PerPR === null ? 'n/a' : usd(k.PerPR)}; per matched bug PR: ${k.PerMatchedCatch === null ? 'n/a' : usd(k.PerMatchedCatch)}`, ''];
+        `- Per run PR: ${k.PerPR === null ? 'n/a' : usd(k.PerPR)}; per matched bug PR: ${k.PerMatchedCatch === null ? 'n/a' : usd(k.PerMatchedCatch)}`,
+        ...(k.UnpricedModels.length > 0 ? [`- Unpriced models: ${k.UnpricedModels.map(MarkdownText).join(', ')} (recorded cost used at table prices)`] : []), ''];
+}
+
+/** Text on one Markdown line: CR and LF become spaces, and a leading '#' or '-' is escaped. */
+export function MarkdownText(text: string): string {
+    return text.replace(/[\r\n]/g, ' ').replace(/^([#-])/, '\\$1');
 }
 
 function renderCounts(title: string, counts: Record<string, number>): string[] {
-    const rows = Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)).map(([k, n]) => `- ${k}: ${n}`);
+    const rows = Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)).map(([k, n]) => `- ${MarkdownText(k)}: ${n}`);
     return [`### ${title}`, '', ...(rows.length > 0 ? rows : ['- none']), ''];
 }
 
 function renderJudges(m: ModelReport): string[] {
-    const judges = m.Judges.map((j) => `- ${j.Model}: ${agreement(j.Agreement)}; High on Intended/TestFault ${j.HighOnIntended}; Low on bugs ${j.LowOnBug}`);
+    const judges = m.Judges.map((j) => `- ${MarkdownText(j.Model)}: ${agreement(j.Agreement)}; High on Intended/TestFault ${j.HighOnIntended}; Low on bugs ${j.LowOnBug}`);
     const tp = (['Bug', 'Intended', 'TestFault'] as const).map((l) => `- TPProb on ${l}: n=${m.TPProb[l].N}, mean ${m.TPProb[l].Mean === null ? 'n/a' : m.TPProb[l].Mean.toFixed(2)}`);
     return [`### Judge calibration`, '', ...(judges.length > 0 ? judges : ['- no judged catch with a known truth']), ...tp,
         `- Tests passing both revisions with no coverage measured: ${m.CoverageNotMeasured}`];
