@@ -62,7 +62,7 @@ type RealtimeUsageDirection = 'Input' | 'Output';
 type ModalityField = keyof RealtimeUsageModalityDetail;
 
 /** Every field a modality block carries. */
-const MODALITY_FIELDS: readonly ModalityField[] = ['TextTokens', 'AudioTokens', 'ImageTokens', 'VideoTokens', 'CachedTokens', 'VideoFrames', 'VideoSeconds'];
+const MODALITY_FIELDS: readonly ModalityField[] = ['TextTokens', 'AudioTokens', 'ImageTokens', 'VideoTokens', 'CachedTokens', 'CachedAudioTokens', 'VideoFrames', 'VideoSeconds'];
 
 /** The fields that hold a running total rather than an amount per update: adding keeps the larger value. */
 const RUNNING_TOTALS: Record<RealtimeUsageDirection, ReadonlySet<ModalityField>> = {

@@ -222,10 +222,10 @@ export class SkillMarkdownConverter {
         return LIST_KEYS.has(key);
     }
 
-    /** Quotes a scalar value if it contains a colon or leading/trailing whitespace that would otherwise break the simple parser. */
+    /** Quotes a scalar value if it contains a colon, leading/trailing whitespace or a leading quote that would otherwise break the simple parser. */
     private static escapeScalar(value: string): string {
-        if (/^\s|\s$|:/.test(value)) {
-            return `"${value.replace(/"/g, '\\"')}"`;
+        if (/^\s|\s$|:|^"/.test(value)) {
+            return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
         }
         return value;
     }
@@ -234,7 +234,7 @@ export class SkillMarkdownConverter {
     private static unescapeScalar(value: string): string {
         const trimmed = value.trim();
         if (trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length >= 2) {
-            return trimmed.slice(1, -1).replace(/\\"/g, '"');
+            return trimmed.slice(1, -1).replace(/\\(["\\])/g, '$1');
         }
         return trimmed;
     }

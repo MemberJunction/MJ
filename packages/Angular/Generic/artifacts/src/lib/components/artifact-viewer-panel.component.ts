@@ -1,10 +1,11 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, Type, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, Type, ChangeDetectorRef, HostListener } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { UserInfo, Metadata, RunView, RunViewParams, LogError, CompositeKey, DataSnapshot } from '@memberjunction/core';
 import { ParseJSONRecursive, ParseJSONOptions , UUIDsEqual } from '@memberjunction/global';
 import { MJArtifactEntity, MJArtifactVersionEntity, MJArtifactVersionAttributeEntity, MJArtifactTypeEntity, MJCollectionEntity, MJCollectionArtifactEntity, ArtifactMetadataEngine, MJConversationEntity, MJConversationDetailArtifactEntity, MJConversationDetailEntity, MJArtifactUseEntity, ConversationEngine, type ConversationScope } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import type { PdfOrientation } from '@memberjunction/ng-react';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ArtifactTypePluginViewerComponent } from './artifact-type-plugin-viewer.component';
@@ -1906,6 +1907,45 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
 
   OnShare(): void {
     this.ShareRequested.emit(this.artifactId);
+  }
+
+  /** True while a PDF export is being prepared: the header button shows progress and ignores clicks. */
+  IsExportingPDF = false;
+
+  /** Whether the header's PDF menu (portrait / landscape) is open. */
+  ShowPDFMenu = false;
+
+  TogglePDFMenu(): void {
+    this.ShowPDFMenu = !this.ShowPDFMenu;
+  }
+
+  /** Closes the PDF menu on any click outside it (the menu stops its own clicks) or on Escape. */
+  @HostListener('document:click')
+  @HostListener('document:keydown.escape')
+  ClosePDFMenu(): void {
+    if (this.ShowPDFMenu) {
+      this.ShowPDFMenu = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /** Downloads what the viewer shows as an A4 PDF in the chosen orientation, from the header menu. */
+  async OnExportPDF(orientation: PdfOrientation): Promise<void> {
+    this.ShowPDFMenu = false;
+    if (this.IsExportingPDF) {
+      return;
+    }
+    this.IsExportingPDF = true;
+    this.cdr.detectChanges();
+    try {
+      await this.pluginViewer?.ExportPDF(orientation);
+    } catch (error: unknown) {
+      console.error('[ArtifactViewerPanel] PDF export failed:', error);
+      this.notificationService.CreateSimpleNotification('Could not create the PDF. See the browser console for details.', 'error', 5000);
+    } finally {
+      this.IsExportingPDF = false;
+      this.cdr.detectChanges();
+    }
   }
 
   /** @deprecated Use {@link OnShare}. */

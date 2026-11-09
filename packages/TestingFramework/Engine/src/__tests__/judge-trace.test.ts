@@ -17,8 +17,10 @@ import {
     BuildJudgeTrace,
     DEFAULT_JUDGE_TIMEOUT_MS,
     ReadJudgeCriteria,
+    ReadJudgeCriteriaList,
     ReadJudgeTimeoutMS,
     type JudgeCriterion,
+    type JudgeCriterionInput,
 } from '../oracles/judge-trace';
 import type { OracleConfig, OracleInput } from '../types';
 
@@ -160,6 +162,34 @@ describe('ReadJudgeCriteria', () => {
         ['null', null],
     ])('rejects %s, naming its position', (_label, entry) => {
         expect(readError({ judgeValidationCriteria: ['Fine', entry] }, {})).toMatch(/^Criterion 2 must be a non-empty string/);
+    });
+});
+
+describe('ReadJudgeCriteriaList', () => {
+    it('reads plain and weighted criteria in order', () => {
+        const list: JudgeCriterionInput[] = ['Is polite', { criterion: 'Answers', weight: 2 }, { criterion: 'Cites' }];
+        expect(ReadJudgeCriteriaList(list)).toEqual({
+            Success: true,
+            Value: [
+                { Criterion: 'Is polite', Weight: 1 },
+                { Criterion: 'Answers', Weight: 2 },
+                { Criterion: 'Cites', Weight: 1 },
+            ],
+        });
+    });
+
+    it('gives the same errors as ReadJudgeCriteria for the same list', () => {
+        const lists: unknown[] = [[], 'Is polite', ['Fine', { criterion: 'A', weight: -1 }], [{ criterion: 'A', weight: 0 }]];
+        for (const list of lists) {
+            const direct = ReadJudgeCriteriaList(list);
+            const viaOracle = ReadJudgeCriteria(oracleInput(null, { judgeValidationCriteria: list }, null), {});
+            expect(direct.Success).toBe(false);
+            expect(direct).toEqual(viaOracle);
+        }
+    });
+
+    it('reports none for a missing list', () => {
+        expect(ReadJudgeCriteriaList(undefined)).toEqual({ Success: false, ErrorMessage: 'No validation criteria provided' });
     });
 });
 

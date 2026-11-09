@@ -25,9 +25,9 @@ export class TextExtractor {
 
         let text = html;
 
-        // Remove script and style elements entirely
-        text = TextExtractor.removeElements(text, /<script/gi, /<\/script>/gi);
-        text = TextExtractor.removeElements(text, /<style/gi, /<\/style>/gi);
+        // Remove script and style elements entirely (end tags may carry spaces or attributes)
+        text = TextExtractor.removeElements(text, /<script\b/gi, /<\/script\b/gi);
+        text = TextExtractor.removeElements(text, /<style\b/gi, /<\/style\b/gi);
 
         // Replace block-level elements with newlines
         text = text.replace(/<\/(p|div|h[1-6]|li|tr|br|blockquote|pre)>/gi, '\n');
@@ -85,6 +85,33 @@ export class TextExtractor {
     }
 
     /**
+     * Removes each element from its opening tag through the `>` of its closing tag, in one forward
+     * walk over the string. A regex such as `<script\b[^>]*>[\s\S]*?<\/script[^>]*>` backtracks
+     * polynomially on crafted input; this stays linear. An element with no closing tag is left
+     * for the tag stripper, so its text remains but no tag does.
+     * @param open global, case-insensitive pattern for the start of the opening tag
+     * @param close global, case-insensitive pattern for the start of the closing tag
+     */
+    private static removeElements(text: string, open: RegExp, close: RegExp): string {
+        const kept: string[] = [];
+        let pos = 0;
+        for (;;) {
+            open.lastIndex = pos;
+            const opening = open.exec(text);
+            if (!opening) break;
+            close.lastIndex = opening.index + opening[0].length;
+            const closing = close.exec(text);
+            if (!closing) break;
+            const end = text.indexOf('>', closing.index + closing[0].length);
+            if (end === -1) break;
+            kept.push(text.slice(pos, opening.index));
+            pos = end + 1;
+        }
+        kept.push(text.slice(pos));
+        return kept.join('');
+    }
+
+    /**
      * Truncate text to a maximum token count (estimated).
      * Truncates at the last whitespace boundary before the limit.
      */
@@ -102,38 +129,6 @@ export class TextExtractor {
     // ─────────────────────────────────────────────
     // Private Helpers
     // ─────────────────────────────────────────────
-
-    /**
-     * Remove every element from its opening tag (`opener`, then anything up to the next `>`) through
-     * the first `closer` after it, case-insensitively. The same result as
-     * `/<script[^>]*>[\s\S]*?<\/script>/gi`, scanned by index: that regex rescans to the end of the
-     * text for every unclosed `<script`, which is quadratic (CodeQL js/polynomial-redos). Once no `>`
-     * or no closing tag remains, no later opening can match either, so the scan stops.
-     *
-     * @param opener Global, case-insensitive regex for the tag's opening, e.g. `/<script/gi`.
-     * @param closer Global, case-insensitive regex for the closing tag, e.g. `/<\/script>/gi`.
-     */
-    private static removeElements(html: string, opener: RegExp, closer: RegExp): string {
-        let out = '';
-        let copied = 0;
-        opener.lastIndex = 0;
-        let open: RegExpExecArray | null;
-        while ((open = opener.exec(html)) !== null) {
-            const tagEnd = html.indexOf('>', open.index + open[0].length);
-            if (tagEnd === -1) {
-                break;
-            }
-            closer.lastIndex = tagEnd + 1;
-            const close = closer.exec(html);
-            if (!close) {
-                break;
-            }
-            out += html.slice(copied, open.index);
-            copied = close.index + close[0].length;
-            opener.lastIndex = copied;
-        }
-        return out + html.slice(copied);
-    }
 
     private static decodeHTMLEntities(text: string): string {
         const entityMap: Record<string, string> = {
