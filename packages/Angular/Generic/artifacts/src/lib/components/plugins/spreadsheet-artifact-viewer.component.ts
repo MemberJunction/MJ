@@ -3538,6 +3538,7 @@ export class SpreadsheetArtifactViewerComponent
             this.lastSavedComparableJson = this.getComparableWorkbookJson(this.Workbook);
             this.LastSavedVersionNumber = nextVerNum;
             this.StatusBannerMessage = `Saved Artifact Version v${nextVerNum}`;
+            this.ContentCommitted.emit(serialized);
           }
         } else {
           this.lastSavedComparableJson = this.getComparableWorkbookJson(this.Workbook);

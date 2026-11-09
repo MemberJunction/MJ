@@ -12,11 +12,11 @@
       </div>
       <div class="panel-header-right">
         <div class="version-selector"
-             [class.clickable]="allVersions.length > 1 && viewContext !== 'collection'"
-             (click)="viewContext !== 'collection' && toggleVersionDropdown()">
+             [class.clickable]="allVersions.length > 1"
+             (click)="toggleVersionDropdown()">
           <i class="fas fa-history"></i>
           <span class="version-label">v{{ selectedVersionNumber }}</span>
-          @if (allVersions.length > 1 && viewContext !== 'collection') {
+          @if (allVersions.length > 1) {
             <i class="fas fa-chevron-down dropdown-icon" [class.open]="showVersionDropdown"></i>
           }
           @if (showVersionDropdown) {
@@ -157,7 +157,8 @@
                 (navigationRequest)="onNavigationRequest($event)"
                 (pluginLoaded)="onPluginLoaded()"
                 (tabsChanged)="onTabsChanged()"
-                (applyFormRequested)="applyFormRequested.emit($event)">
+                (applyFormRequested)="applyFormRequested.emit($event)"
+                (ContentCommitted)="OnPluginContentCommitted($event)">
               </mj-artifact-type-plugin-viewer>
             </div>
           }

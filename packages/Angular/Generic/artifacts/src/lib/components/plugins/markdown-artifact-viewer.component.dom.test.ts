@@ -220,7 +220,10 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
     const f = renderDocsViewer(richDoc, false);
     const root = f.nativeElement as HTMLElement;
 
-    // Default mode when editable is 'edit', with no top raw textarea in the page canvas
+    // Default mode on open is 'preview' (Read mode), then switching to 'edit' enables in-place WYSIWYG blocks
+    expect(f.componentInstance.ViewMode).toBe('preview');
+    f.componentInstance.SetViewMode('edit');
+    f.detectChanges();
     expect(f.componentInstance.ViewMode).toBe('edit');
     expect(root.querySelector('[data-testid="docs-editor-textarea"]')).toBeNull();
 
@@ -431,5 +434,25 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
     expect(comp.ArtifactPermissionEntries.some((e) => e.UserID === 'user-colleague-1')).toBe(false);
     comp.ClosePermissionsModal();
     expect(comp.ShowPermissionsModal).toBe(false);
+
+    // 7. Suggest Mode: pending suggestions enable Save Version and are committed on save
+    comp.SetViewMode('suggest');
+    const firstMdSeg = comp.DocumentSegments.find((s) => s.Kind === 'markdown')!;
+    comp.ApplyInPlaceSegmentChange(firstMdSeg, '# Updated Strategy Title via Suggest', 'Title refinement');
+    expect(comp.PendingSuggestionsCount).toBe(1);
+    expect(comp.HasUnsavedChanges).toBe(true);
+
+    await comp.OnSaveDocumentVersion();
+    expect(comp.PendingSuggestionsCount).toBe(0);
+    expect(comp.MarkdownContent).toContain('# Updated Strategy Title via Suggest');
+
+    // 8. Read-only mode hides Write, Suggest, Format, Insert, and Save Version buttons
+    f.componentRef.setInput('readonly', true);
+    f.detectChanges();
+    const roRoot = f.nativeElement as HTMLElement;
+    expect(comp.ViewMode).toBe('preview');
+    expect(roRoot.querySelector('[data-testid="mode-edit-btn"]')).toBeNull();
+    expect(roRoot.querySelector('[data-testid="mode-suggest-btn"]')).toBeNull();
+    expect(roRoot.querySelector('[data-testid="save-doc-version-btn"]')).toBeNull();
   });
 });

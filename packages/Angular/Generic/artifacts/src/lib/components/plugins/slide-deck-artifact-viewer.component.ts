@@ -3640,12 +3640,14 @@ export class SlideDeckArtifactViewerComponent
       }
       ver.ArtifactID = this.artifactVersion.ArtifactID;
       ver.VersionNumber = this.CurrentVersionNumber + 1;
-      ver.Content = SlideDeckEngine.Instance.SerializeDeckSpec(this.Deck);
+      const serializedContent = SlideDeckEngine.Instance.SerializeDeckSpec(this.Deck);
+      ver.Content = serializedContent;
       const saved = await ver.Save();
       if (saved) {
         this.lastSavedComparableDeckJson = this.getComparableDeckJson(this.Deck);
         this.CurrentVersionNumber = ver.VersionNumber;
         this.LastSavedVersionNumber = ver.VersionNumber;
+        this.ContentCommitted.emit(serializedContent);
       }
       this.cdr.markForCheck();
     } catch {

@@ -780,12 +780,15 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
 
   /**
    * The listed version to show: the requested one, else the newest. With a scope, a requested
-   * version that is not listed sets {@link ScopeNotice}.
+   * version that is not listed sets {@link ScopeNotice}. When newer versions exist that were saved
+   * directly in the editor (unlinked to any subsequent chat message card) or when opened from a
+   * collection, shows the newest version so in-place user edits are surfaced immediately.
    */
   private pickVersionToShow(
     versions: Record<string, unknown>[],
     targetVersionNumber: number | undefined,
-    scope: ConversationScope | null
+    scope: ConversationScope | null,
+    messageLinkedVersionIds?: ReadonlySet<string>
   ): Record<string, unknown> {
     const newest = versions[0];
     if (!targetVersionNumber) {
@@ -793,6 +796,17 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     }
     const requested = versions.find(v => v.VersionNumber === targetVersionNumber);
     if (requested) {
+      const newestNum = (newest.VersionNumber as number) || 1;
+      const requestedNum = (requested.VersionNumber as number) || 1;
+      const newestId = String(newest.ID || '').toLowerCase();
+      const requestedId = String(requested.ID || '').toLowerCase();
+      const hasUnlinkedNewerUserSave =
+        Boolean(messageLinkedVersionIds) &&
+        messageLinkedVersionIds!.has(requestedId) &&
+        !messageLinkedVersionIds!.has(newestId);
+      if (newestNum > requestedNum && (this.ViewContext === 'collection' || hasUnlinkedNewerUserSave)) {
+        return newest;
+      }
       return requested;
     }
     if (scope) {
@@ -847,13 +861,12 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
           ResultType: 'simple'
         },
         {
-          // [2] Conversation detail artifact links (for Links tab)
+          // [2] Conversation detail artifact links (for Links tab & detecting in-place user saves)
           EntityName: 'MJ: Conversation Detail Artifacts',
           ExtraFilter: `ArtifactVersionID IN (
             SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${artifactId}'
           )`,
           Fields: ['ID', 'ConversationDetailID', 'ArtifactVersionID'],
-          MaxRows: 1,
           SkipTotalRowCount: true,
           ResultType: 'simple'
         }
@@ -875,8 +888,19 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       this.AllVersions = versionsResult.Results as MJArtifactVersionEntity[];
       this.applyVersionScope(scope);
 
+      const messageLinkedVersionIds = new Set<string>(
+        ((convDetailResult?.Success && convDetailResult.Results) ? convDetailResult.Results : [])
+          .map((r: Record<string, unknown>) => String(r['ArtifactVersionID'] || r.ArtifactVersionID || '').toLowerCase())
+          .filter(Boolean)
+      );
+
       // The requested version, or the latest (first in DESC order)
-      const versionToLoad = this.pickVersionToShow(versionsResult.Results, targetVersionNumber, scope);
+      const versionToLoad = this.pickVersionToShow(
+        versionsResult.Results,
+        targetVersionNumber,
+        scope,
+        messageLinkedVersionIds
+      );
       this.SelectedVersionNumber = (versionToLoad.VersionNumber as number) || 1;
 
       // PERF: Start artifact type resolution and selected version content load in parallel
@@ -1293,26 +1317,40 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     if (tabs.length > 0) {
       this.ActiveTab = tabs[0].toLowerCase();
     }
-    if (this.PluginViewer?.ContentCommitted) {
-      this.PluginViewer.ContentCommitted.pipe(takeUntil(this.destroy$)).subscribe((newContent: string) => {
-        void this.OnPluginContentCommitted(newContent);
-      });
-    }
     this.cdr.detectChanges(); // zone.js 0.15: plugin loaded via async callback, force CD
   }
 
   /**
-   * Persists a new `MJArtifactVersionEntity` when an inline-editable viewer plugin
-   * emits `ContentCommitted`.
+   * Synchronizes the panel's version list or persists a new `MJArtifactVersionEntity` when an
+   * inline-editable viewer plugin emits `ContentCommitted`.
    */
   public async OnPluginContentCommitted(serializedContent: string): Promise<void> {
     if (!this.Artifact || !this.CurrentUser || this.canEdit === false) {
       return;
     }
     try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const currentMaxVersion = this.AllVersions.reduce((max, v) => Math.max(max, v.VersionNumber || 0), 0);
+
+      // Check whether the plugin itself already saved the new version row in the database
+      const latestCheck = await rv.RunView<MJArtifactVersionEntity>(
+        this.buildVersionListQuery(this.Artifact.ID, this.activeScope),
+        this.CurrentUser
+      );
+      if (latestCheck.Success && latestCheck.Results && latestCheck.Results.length > 0) {
+        const newestInDb = latestCheck.Results[0];
+        if ((newestInDb.VersionNumber || 0) > currentMaxVersion) {
+          this.AllVersions = latestCheck.Results;
+          this.applyVersionScope(this.activeScope);
+          this.SelectedVersionNumber = newestInDb.VersionNumber || currentMaxVersion + 1;
+          this.JsonContent = this.formatJSON(serializedContent);
+          this.cdr.detectChanges();
+          return;
+        }
+      }
+
       const md = this.ProviderToUse;
-      const nextVersionNum =
-        this.AllVersions.reduce((max, v) => Math.max(max, v.VersionNumber || 0), 0) + 1;
+      const nextVersionNum = currentMaxVersion + 1;
       const newVer = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', this.CurrentUser);
       newVer.NewRecord();
       newVer.ArtifactID = this.Artifact.ID;

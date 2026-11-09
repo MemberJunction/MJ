@@ -100,42 +100,18 @@ export interface DocsPermissionEntry {
         <div class="mj-docs-toolbar__left">
           <button
             type="button"
-            class="mj-docs-btn mj-docs-btn--icon"
+            class="mj-docs-btn"
             [class.mj-docs-btn--active]="ShowOutlineRail"
-            title="Toggle Document Outline"
+            [attr.aria-pressed]="ShowOutlineRail"
+            title="Show or Hide Document Outline (Saved across all your documents)"
             data-testid="toggle-outline-btn"
             (click)="ToggleOutlineRail()"
           >
-            <i class="fas fa-bars-staggered"></i>
+            <i class="fas fa-list-ul"></i>
             <span>Outline</span>
           </button>
 
           <div class="mj-docs-mode-group" role="tablist" aria-label="Document Mode">
-            <button
-              type="button"
-              class="mj-docs-mode-btn"
-              [class.mj-docs-mode-btn--active]="ViewMode === 'edit'"
-              [disabled]="!CanUserEdit"
-              title="Write & Edit Document"
-              data-testid="mode-edit-btn"
-              (click)="SetViewMode('edit')"
-            >
-              <i class="fas fa-pen-to-square"></i> Write
-            </button>
-            <button
-              type="button"
-              class="mj-docs-mode-btn"
-              [class.mj-docs-mode-btn--active]="ViewMode === 'suggest'"
-              [disabled]="!CanUserEdit"
-              title="Suggest Tracked Edits"
-              data-testid="mode-suggest-btn"
-              (click)="SetViewMode('suggest')"
-            >
-              <i class="fas fa-code-pull-request"></i> Suggest
-              @if (PendingSuggestionsCount > 0) {
-                <span class="mj-docs-badge mj-docs-badge--brand">{{ PendingSuggestionsCount }}</span>
-              }
-            </button>
             <button
               type="button"
               class="mj-docs-mode-btn"
@@ -146,6 +122,31 @@ export interface DocsPermissionEntry {
             >
               <i class="fas fa-eye"></i> Read
             </button>
+            @if (CanUserEdit) {
+              <button
+                type="button"
+                class="mj-docs-mode-btn"
+                [class.mj-docs-mode-btn--active]="ViewMode === 'edit'"
+                title="Write & Edit Document"
+                data-testid="mode-edit-btn"
+                (click)="SetViewMode('edit')"
+              >
+                <i class="fas fa-pen-to-square"></i> Write
+              </button>
+              <button
+                type="button"
+                class="mj-docs-mode-btn"
+                [class.mj-docs-mode-btn--active]="ViewMode === 'suggest'"
+                title="Suggest Tracked Edits (Committed on Save)"
+                data-testid="mode-suggest-btn"
+                (click)="SetViewMode('suggest')"
+              >
+                <i class="fas fa-code-pull-request"></i> Suggest
+                @if (PendingSuggestionsCount > 0) {
+                  <span class="mj-docs-badge mj-docs-badge--brand">{{ PendingSuggestionsCount }}</span>
+                }
+              </button>
+            }
           </div>
 
           @if (CanUserEdit && (ViewMode === 'edit' || ViewMode === 'suggest' || ViewMode === 'source')) {
@@ -437,7 +438,18 @@ export interface DocsPermissionEntry {
         @if (ShowOutlineRail) {
           <aside class="mj-docs-outline-rail" data-testid="docs-outline-rail">
             <div class="mj-docs-outline-rail__header">
-              <h4>Document Outline</h4>
+              <div class="mj-docs-outline-rail__title-row">
+                <h4>Document Outline</h4>
+                <button
+                  type="button"
+                  class="mj-docs-rail-close-btn"
+                  title="Hide Document Outline"
+                  data-testid="close-outline-rail-btn"
+                  (click)="ToggleOutlineRail()"
+                >
+                  <i class="fas fa-xmark"></i>
+                </button>
+              </div>
               <span class="mj-docs-outline-stats">{{ WordStats.Words }} words · {{ WordStats.Lines }} lines</span>
             </div>
 
@@ -551,9 +563,20 @@ export interface DocsPermissionEntry {
                   <i class="fas fa-code-pull-request"></i>
                   <span>
                     <strong>Suggest Mode Active:</strong> Edit any heading, paragraph, list item, callout, or table cell
-                    directly in place below — your changes will be queued as tracked Suggestion Cards without altering
-                    baseline text until accepted.
+                    directly in place below — your changes are tracked as pending suggestions and committed when you click
+                    <strong>Accept</strong> or <strong>Save Version</strong>.
                   </span>
+                  @if (PendingSuggestionsCount > 0) {
+                    <button
+                      type="button"
+                      class="mj-docs-btn mj-docs-btn--primary"
+                      data-testid="commit-all-suggestions-btn"
+                      (click)="CommitPendingSuggestions()"
+                    >
+                      <i class="fas fa-check-double"></i>
+                      <span>Accept All ({{ PendingSuggestionsCount }})</span>
+                    </button>
+                  }
                 </div>
               }
 
@@ -2248,9 +2271,36 @@ export interface DocsPermissionEntry {
         border-bottom: 1px solid var(--mj-border-default);
       }
 
+      .mj-docs-outline-rail__title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 4px;
+      }
+
       .mj-docs-outline-rail__header h4 {
-        margin: 0 0 4px 0;
+        margin: 0;
         font-size: 13px;
+      }
+
+      .mj-docs-rail-close-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        background: transparent;
+        color: var(--mj-text-secondary);
+        cursor: pointer;
+      }
+
+      .mj-docs-rail-close-btn:hover {
+        background: var(--mj-bg-surface-hover);
+        color: var(--mj-text-primary);
       }
 
       .mj-docs-outline-stats {
@@ -3800,8 +3850,6 @@ export class MarkdownArtifactViewerComponent
     if (changes['readonly']) {
       if (this.readonly && (this.ViewMode === 'edit' || this.ViewMode === 'suggest')) {
         this.ViewMode = 'preview';
-      } else if (!this.readonly && !this.userExplicitlySelectedMode && this.ViewMode === 'preview') {
-        this.ViewMode = 'edit';
       }
       this.cdr.markForCheck();
     }
@@ -3835,8 +3883,18 @@ export class MarkdownArtifactViewerComponent
     this.cdr.markForCheck();
   }
 
+  private static readonly OUTLINE_PREF_SETTING_KEY = 'MJ.Docs.ShowOutlineRail';
+
   public ToggleOutlineRail(): void {
     this.ShowOutlineRail = !this.ShowOutlineRail;
+    try {
+      void UserInfoEngine.Instance.SetSettingDebounced(
+        MarkdownArtifactViewerComponent.OUTLINE_PREF_SETTING_KEY,
+        String(this.ShowOutlineRail),
+      );
+    } catch {
+      // Ignore if UserInfoEngine is not initialized in unit tests
+    }
     this.cdr.markForCheck();
   }
 
@@ -5162,6 +5220,13 @@ export class MarkdownArtifactViewerComponent
     this.userCollapsedBlockOverrides.clear();
     this.collapsedHeadingIds.clear();
     try {
+      const outlinePref = UserInfoEngine.Instance.GetSetting(
+        MarkdownArtifactViewerComponent.OUTLINE_PREF_SETTING_KEY,
+      );
+      if (outlinePref === 'true' || outlinePref === 'false') {
+        this.ShowOutlineRail = outlinePref === 'true';
+      }
+
       const raw = UserInfoEngine.Instance.GetSetting(this.getCollapsedBlocksUserSettingKey());
       if (!raw) {
         return;
@@ -5959,6 +6024,7 @@ export class MarkdownArtifactViewerComponent
 
   /**
    * Creates or updates a tracked Suggestion Card for a document block.
+   * When a pending suggestion already exists for the same block, updates its proposed Markdown in-place.
    */
   public CreateOrUpdatePendingSuggestion(
     blockId: string,
@@ -5967,6 +6033,15 @@ export class MarkdownArtifactViewerComponent
     rationale: string,
     authorName = 'Current User',
   ): DocumentSuggestionItem {
+    const existing = this.Suggestions.find((s) => s.BlockID === blockId && s.Status === 'Pending');
+    if (existing) {
+      existing.ProposedMarkdown = proposedMarkdown;
+      existing.Rationale = rationale;
+      existing.CreatedAt = new Date().toISOString();
+      this.cdr.markForCheck();
+      return existing;
+    }
+
     const item: DocumentSuggestionItem = {
       SuggestionID: `sug-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       BlockID: blockId,
@@ -5980,6 +6055,33 @@ export class MarkdownArtifactViewerComponent
     this.Suggestions = [item, ...this.Suggestions];
     this.cdr.markForCheck();
     return item;
+  }
+
+  /**
+   * Commits all pending tracked suggestions into the working Markdown document and marks them Accepted.
+   */
+  public CommitPendingSuggestions(): number {
+    const pending = this.Suggestions.filter((s) => s.Status === 'Pending');
+    if (pending.length === 0) {
+      return 0;
+    }
+    let nextMd = this.MarkdownContent;
+    for (const sug of pending) {
+      sug.Status = 'Accepted';
+      if (nextMd.includes(sug.OriginalMarkdown)) {
+        nextMd = nextMd.replace(sug.OriginalMarkdown, () => sug.ProposedMarkdown);
+      } else {
+        const seg = this.DocumentSegments.find((s) => s.SegmentID === sug.BlockID);
+        if (seg && nextMd.includes(seg.RawMarkdown)) {
+          nextMd = nextMd.replace(seg.RawMarkdown, () => sug.ProposedMarkdown);
+        } else {
+          nextMd = sug.ProposedMarkdown;
+        }
+      }
+    }
+    this.OnMarkdownChanged(nextMd);
+    this.StatusBannerMessage = `Committed ${pending.length} tracked suggestion${pending.length === 1 ? '' : 's'}.`;
+    return pending.length;
   }
 
   public OpenSuggestionModalForSegment(seg: DocumentRenderSegment): void {
@@ -6202,12 +6304,13 @@ export class MarkdownArtifactViewerComponent
       this.SavedVersionSnapshots.length > 0
         ? this.SavedVersionSnapshots[this.SavedVersionSnapshots.length - 1].Content
         : this.initialLoadedMarkdown;
-    return this.MarkdownContent !== latestSaved;
+    return this.MarkdownContent !== latestSaved || this.PendingSuggestionsCount > 0;
   }
 
   /**
-   * Saves a new `MJArtifactVersionEntity` snapshot, triggers room compaction when connected via WebSocket,
-   * persists to `MJ: Artifact Versions` when connected to a provider, and emits `ContentCommitted`.
+   * Saves a new `MJArtifactVersionEntity` snapshot (committing any pending Suggest Mode edits first),
+   * triggers room compaction when connected via WebSocket, persists to `MJ: Artifact Versions` when
+   * connected to a provider, and emits `ContentCommitted`.
    */
   public async OnSaveDocumentVersion(): Promise<void> {
     if (!this.CanUserEdit || this.IsSavingVersion || !this.HasUnsavedChanges) {
@@ -6216,6 +6319,7 @@ export class MarkdownArtifactViewerComponent
     this.IsSavingVersion = true;
     this.cdr.markForCheck();
     try {
+      const committedSuggestionsCount = this.CommitPendingSuggestions();
       const nextVerNum =
         Math.max(
           this.artifactVersion?.VersionNumber ?? 1,
@@ -6234,7 +6338,10 @@ export class MarkdownArtifactViewerComponent
       });
 
       this.ContentCommitted.emit(this.MarkdownContent);
-      this.StatusBannerMessage = `Saved document version v${nextVerNum}.`;
+      this.StatusBannerMessage =
+        committedSuggestionsCount > 0
+          ? `Committed ${committedSuggestionsCount} suggestion${committedSuggestionsCount === 1 ? '' : 's'} and saved document version v${nextVerNum}.`
+          : `Saved document version v${nextVerNum}.`;
     } finally {
       this.IsSavingVersion = false;
       this.cdr.markForCheck();
@@ -6377,7 +6484,7 @@ export class MarkdownArtifactViewerComponent
     this.initialLoadedMarkdown = raw;
     this.loadCollapsedStateFromUserSettings();
     if (!this.userExplicitlySelectedMode) {
-      this.ViewMode = this.CanUserEdit ? 'edit' : 'preview';
+      this.ViewMode = 'preview';
     }
     this.SavedVersionSnapshots = [
       {
