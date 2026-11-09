@@ -72,8 +72,14 @@ function rolelessUser(ctx: IntegrationCheckContext): UserInfo {
 
 /**
  * The harness user, holding only the Integration role: it may create, update and delete `MJ: Graph
- * Edges` but holds no `Graph: Approve Edges` (granted to Developer only). Sharing the harness user's ID
- * keeps audit rows valid.
+ * Edges` but holds no `Graph: Approve Edges` (granted to Developer only).
+ *
+ * By default it shares the harness user's ID, because GR3 saves as it: that save should be refused, but
+ * if the gate let it through, the edge and its audit rows would name this user, so the ID must be a real
+ * one. `distinctId` gives it a never-persisted ID instead, for a check that only reads as it: GR6 hands it
+ * to `FilterNodesForUser` and `Subgraph`, which write nothing (its query edges are refused before
+ * `RunQuery` runs), and as an audience reader, where the caller's ID would drop it as a duplicate of the
+ * caller (`GraphEngine` keeps each principal once by ID).
  */
 function integrationOnlyUser(ctx: IntegrationCheckContext, distinctId = false): UserInfo {
     const integration = ctx.Provider.Roles.find((r) => r.Name?.trim().toLowerCase() === 'integration');
