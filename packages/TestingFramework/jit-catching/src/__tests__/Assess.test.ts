@@ -50,6 +50,16 @@ describe('AssessStep', () => {
     expect((await store.ListCatches(RUN_ID)).map((x) => x.CandidateTestID).sort()).toEqual([ID_A, ID_B, ID_C].sort());
   });
 
+  it('keeps one catch per test in the store when the step runs again on the same run', async () => {
+    const judge = vi.fn(async (_c: CatchContext): Promise<PanelResult> => ({ TPProb: 0.8, Buckets: [{ Model: 'm', Bucket: 'High', Reason: 'r' }], Median: 'High', Usage: [] }));
+    const store = new FileCatchStore(storeDir, redaction);
+    const opts = { RunID: RUN_ID, RepoRoot: root, Settings: DEFAULT_SETTINGS, StoreDir: storeDir, Env: FULL_ENV,
+      Deps: { JudgePanel: { Judge: judge }, Rules: new RuleFilter(AllRules()), Store: store, Redaction: redaction } };
+    const first = await AssessStep(opts); const second = await AssessStep(opts);
+    expect(second.Catches.map((c) => c.ID).sort()).toEqual(first.Catches.map((c) => c.ID).sort());
+    expect((await store.ListCatches(RUN_ID)).map((x) => x.CandidateTestID).sort()).toEqual([ID_A, ID_B, ID_C].sort());
+  });
+
   it('refuses a BaseRootDir outside the run folder before judging or saving', async () => {
     const outside = mkdtempSync(join(tmpdir(), 'jit-outside-'));
     const dir = new RunDir(root, RUN_ID, redaction);
