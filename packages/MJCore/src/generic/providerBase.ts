@@ -21,7 +21,7 @@ import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
 import { Metadata } from "./metadata";
-import { RunView, RunViewParams, IsMaterializedDataSource } from "../views/runView";
+import { RunView, RunViewParams, IsMaterializedDataSource, ExtractRunViewParameterNames } from "../views/runView";
 import { DatabasePlatform, PlatformSQL, IsPlatformSQL } from "./platformSQL";
 import { Observable, Subscription } from "rxjs";
 import { GetDataHooks, PreRunViewHook, PostRunViewHook } from "./dataHooks";
@@ -321,7 +321,8 @@ type MetadataDatasetItemRecord = {
  * the `Reason`, for the log).
  */
 export type MetadataRefreshScopeResult =
-    | { Kind: 'none' }
+    /** Nothing to reload. `AnyItemMoved`: some item's timestamp did move, but none the build reads. */
+    | { Kind: 'none'; AnyItemMoved: boolean }
     | { Kind: 'scoped'; Codes: ReadonlyArray<string> }
     | { Kind: 'full'; Reason: string };
 
@@ -392,6 +393,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * acts on its answer. Held as the promise (not a flag) so only its owner clears it.
      */
     private _refreshCheckInFlight: Promise<boolean> | null = null;
+    /**
+     * The remote timestamps stored by the last refresh check whose status read succeeded; null after
+     * a check whose read failed. {@link RefreshIfNeeded} reuses the stored remote timestamps for its
+     * scoped reload only while they are this array, so a check whose read failed is followed by a
+     * fresh read. This prefers fresher stamps; it is not needed for correctness, because any stored
+     * stamps were read before the scoped dataset read starts.
+     */
+    private _checkedRemoteMetadataTimestamps: MetadataInfo[] | null = null;
     /**
      * Set when Config() adopts a snapshot it loaded from the server (which fetched the current user
      * with it); consumed by the next {@link preValidateAndRefresh}, which then has nothing to check.
@@ -818,13 +827,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * needs no reload (see {@link MetadataRefreshScope}).
      */
     public static get MetadataBuildItemCodes(): ReadonlySet<string> {
-        return new Set([...AllMetadataArrays.map(m => m.key.substring(3)), ...ProviderBase._metadataFoldedItemCodes]);
+        return ProviderBase._metadataBuildItemCodes;
     }
     /** The items {@link GetAllMetadata} folds into entities (PostProcessEntityMetadata) and applications. */
     private static readonly _metadataFoldedItemCodes: ReadonlyArray<string> = [
         'EntityFields', 'EntityFieldValues', 'EntityPermissions', 'EntityRelationships', 'EntitySettings', 'EntityOrganicKeys',
         'EntityOrganicKeyRelatedEntities', 'EntityFieldPermissions', 'EntityAlternateBaseViews', 'ApplicationEntities', 'ApplicationSettings',
     ];
+    private static readonly _metadataBuildItemCodes: ReadonlySet<string> =
+        new Set([...AllMetadataArrays.map(m => m.key.substring(3)), ...ProviderBase._metadataFoldedItemCodes]);
 
     /**
      * Delays, in milliseconds, before each retry of a metadata refresh that failed; the last one
@@ -1194,15 +1205,26 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     /**
      * How this provider refreshes after a metadata member entity changed. The base behavior
-     * re-reads the authoritative timestamps (the status query is read from the database every
-     * time, never from a cache layer) and reloads only what they show changed — see
-     * {@link MetadataRefreshScope}: nothing, the saved-query family, or everything (a hard
-     * {@link Refresh}, which bypasses every cache layer). A timestamp read that fails while
-     * metadata is loaded is retried on {@link MetadataRefreshRetryDelaysMs}; it is not a reason
-     * for a full reload. With nothing loaded there is nothing to keep serving, so the full load
-     * runs. Transport providers (GraphQL) override this with a staleness check so a browser
-     * doesn't re-pull the full metadata graph for a change the server-side timestamp comparison
-     * can disconfirm.
+     * re-reads the authoritative timestamps once (the status query is read from the database
+     * every time, never from a cache layer) and reloads only what they show changed — see
+     * {@link MetadataRefreshScope}: nothing, the saved-query family (through
+     * {@link ReloadMetadata}, which reuses that read instead of reading the timestamps again), or
+     * everything (a hard {@link Refresh}, which bypasses every cache layer).
+     *
+     * The caller holds positive evidence that a member entity was written, so "no item moved" is
+     * NOT taken as "nothing changed" here: a write committed with a stamp older than the item's
+     * current max — on PostgreSQL `NOW()` is the transaction start, so any in-place edit inside a
+     * transaction that outlived a peer's later write; on SQL Server the statement-to-commit
+     * window — leaves both the max stamp and the row count where they were. Only a change the
+     * timestamps positively attribute to items the metadata build never reads (`Dashboards`) is
+     * answered without a reload. The same rule governs the follow-up pass that a write arriving
+     * mid-reload queues (see `_metadataWriteEventPending`).
+     *
+     * A timestamp read that fails while metadata is loaded is retried on
+     * {@link MetadataRefreshRetryDelaysMs}; it is not a reason for a full reload. With nothing
+     * loaded there is nothing to keep serving, so the full load runs. Transport providers
+     * (GraphQL) override this with a staleness check so a browser doesn't re-pull the full
+     * metadata graph for a change the server-side timestamp comparison can disconfirm.
      */
     protected async RefreshAfterMetadataMemberChange(): Promise<boolean> {
         if (this.MetadataMemberRefreshMustWait) {
@@ -1226,7 +1248,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // concurrently here, because that mutates _latestRemoteMetadataTimestamps out from under
             // the in-flight pass before it runs adoptServerMetadata(). Instead, delegate directly to
             // ReloadMetadata, which sets _metadataReloadQueued = true and re-reads authoritative
-            // remote timestamps at the start of the queued follow-up pass.
+            // remote timestamps at the start of the queued follow-up pass. That pass must apply the
+            // write-event rule (no item moved ⇒ full reload), so the evidence is handed to it.
+            this._metadataWriteEventPending = true;
             return this.ReloadMetadata(true, undefined, true);
         }
         if (!this.AllowRefresh) {
@@ -1234,8 +1258,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
         // The writer holds positive evidence, so the timestamps are re-read from the authoritative
         // status query, and only what they show changed is reloaded (see MetadataRefreshScope). A
-        // change the status cannot see (rolled back, or not committed yet) is invisible to a full
-        // reload's read too, so "nothing changed" is an answer, not a reason to reload everything.
+        // change only to items the build never reads needs no reload. But "no item moved at all"
+        // is not trusted here: a committed write can leave the max stamp and the row count where
+        // they were (see the method doc), and the writer must see its own write.
         let timestampsRead = false;
         try {
             timestampsRead = await this.RefreshRemoteMetadataTimestamps();
@@ -1250,16 +1275,41 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
             return this.Refresh(); // nothing loaded to keep serving
         }
-        const scope = this.MetadataRefreshScope();
+        const scope = ProviderBase.applyWriteEventRule(this.MetadataRefreshScope());
         if (scope.Kind === 'none') {
             this.markMetadataCurrent();
             return true;
         }
         if (scope.Kind === 'scoped') {
-            return this.ReloadMetadata(true, undefined, true);
+            return this.ReloadMetadata(true, undefined, true, true);
         }
         LogStatus(`[Metadata] Full reload needed: ${scope.Reason}`);
         return this.Refresh();
+    }
+
+    /**
+     * Set by a write-event refresh that found a reload in flight and queued a follow-up pass; that
+     * pass consumes it and applies {@link applyWriteEventRule}. Without it the follow-up would take
+     * "no item moved" as "nothing changed", and the writer could miss its own write.
+     */
+    private _metadataWriteEventPending = false;
+
+    /**
+     * Set by an explicit full reload (a `Refresh()`) that found a reload in flight and queued a
+     * follow-up pass; that pass consumes it and runs in full, so the promise of a full reload holds.
+     */
+    private _metadataFullReloadRequested = false;
+
+    /**
+     * The write-event rule: a refresh prompted by a member-entity write knows something changed, so
+     * a `none` scope in which no item moved at all becomes a full reload. A `none` in which only
+     * items the build never reads moved stands — the timestamps positively attribute the change.
+     */
+    private static applyWriteEventRule(scope: MetadataRefreshScopeResult): MetadataRefreshScopeResult {
+        if (scope.Kind === 'none' && !scope.AnyItemMoved) {
+            return { Kind: 'full', Reason: 'a metadata member entity was written, but no item timestamp moved' };
+        }
+        return scope;
     }
 
     /** True when this provider holds metadata it can keep serving while a refresh is retried. */
@@ -3669,8 +3719,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return;
         }
         const view = params.ViewEntity as SavedViewSortSource | undefined;
+        const parameterNames = ExtractRunViewParameterNames(params.Parameters);
+        if (parameterNames.size > 0) {
+            this.AssertClausesRespectFieldSecurityForEntity(entity, [params.ExtraFilter], contextUser, parameterNames);
+        }
         this.AssertClausesRespectFieldSecurityForEntity(entity, [
-            params.ExtraFilter,
+            ...(parameterNames.size > 0 ? [] : [params.ExtraFilter]),
             params.OverrideExcludeFilter,
             ...(params.Aggregates ?? []).map(a => a?.expression),
             view ? view.Get('WhereClause') : undefined,
@@ -3690,8 +3744,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * The shared entry point for every clause slot a provider runs: RunView parameters, a saved
      * view's stored clauses, dataset item filters, user-search text spliced as SQL.
      */
-    protected AssertClausesRespectFieldSecurityForEntity(entity: EntityInfo, clauses: Iterable<unknown>, user: UserInfo): void {
-        this.assertFragmentsAllowed(entity, clauses, user, (sql, context) => FieldSecuritySQLGate.FindViolation(sql, context));
+    protected AssertClausesRespectFieldSecurityForEntity(
+        entity: EntityInfo,
+        clauses: Iterable<unknown>,
+        user: UserInfo,
+        parameterNames?: ReadonlySet<string>,
+    ): void {
+        this.assertFragmentsAllowed(entity, clauses, user, (sql, context) => FieldSecuritySQLGate.FindViolation(sql, context), parameterNames);
     }
 
     /**
@@ -3709,8 +3768,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         fragments: Iterable<unknown>,
         user: UserInfo,
         find: (sql: string, context: FieldSecuritySQLContext) => FieldSecurityViolation | null,
+        parameterNames?: ReadonlySet<string>,
     ): void {
-        const context: FieldSecuritySQLContext = { User: user, Dialect: this.PlatformKey, Catalog: this.Entities, TargetEntity: entity };
+        const context: FieldSecuritySQLContext = {
+            User: user,
+            Dialect: this.PlatformKey,
+            Catalog: this.Entities,
+            TargetEntity: entity,
+            ParameterNames: parameterNames,
+        };
         for (const clause of fragments) {
             if (typeof clause !== 'string' || clause.trim().length === 0) {
                 continue;
@@ -5970,14 +6036,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /**
      * Reloads this provider's metadata. Single-flight: at most one reload runs at a time, and a
      * request arriving mid-reload queues exactly one follow-up pass.
-     * @param hardRefresh - re-read the remote timestamps first and bypass every cache layer
+     * @param hardRefresh - re-read the remote timestamps first (unless `stampsFresh`) and bypass
+     * every cache layer
      * @param scopedFirst - reload only what the timestamps show changed (see
      * {@link MetadataRefreshScope}): nothing, the saved-query family (see
      * {@link PartialRefreshMetadataItemCodes}), or everything. Defaults to true unless
-     * hardRefresh: an explicit Refresh() is always a full reload. A pass that may be scoped but
-     * cannot read the timestamps keeps the metadata loaded and is retried later.
+     * hardRefresh: an explicit Refresh() is always a full reload, and so is one that joins a
+     * reload already in flight — the follow-up pass it queues runs in full. A pass that may be
+     * scoped but cannot read the timestamps keeps the metadata loaded and is retried later.
+     * @param stampsFresh - the caller read the remote timestamps just before this call. The first
+     * hard pass then uses them instead of reading them again; a queued follow-up pass still reads.
      */
-    protected async ReloadMetadata(hardRefresh: boolean, providerToUse?: IMetadataProvider, scopedFirst: boolean = !hardRefresh): Promise<boolean> {
+    protected async ReloadMetadata(hardRefresh: boolean, providerToUse?: IMetadataProvider, scopedFirst: boolean = !hardRefresh, stampsFresh: boolean = false): Promise<boolean> {
         // first, make sure we reset the flag to false so that if another call to this function happens
         // while we are waiting for the async call to finish, we dont do it again
         this._refresh = false;
@@ -5991,6 +6061,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // guaranteeing the final swap comes from a read that started after the last request.
         if (this._metadataReloadInFlight) {
             this._metadataReloadQueued = true;
+            if (!scopedFirst) {
+                // An explicit Refresh() promises a full reload; the follow-up pass keeps that promise.
+                this._metadataFullReloadRequested = true;
+            }
             if (this._metadataReadsJoinTransaction) {
                 // Caller owns an open database transaction (RefreshWithinTransaction) and is
                 // waiting for this reload before it can COMMIT or ROLLBACK. An in-flight pool
@@ -6013,6 +6087,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         this._metadataReloadInFlight = (async () => {
             let effectiveHardRefresh = hardRefresh;
             let tryScoped = scopedFirst;
+            let timestampsFresh = stampsFresh;
             do {
                 this._metadataReloadQueued = false;
 
@@ -6023,19 +6098,30 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // them (one cheap status query, authoritative) BEFORE the load, not after:
                 // a write landing DURING the load then leaves the stamped timestamps looking
                 // stale and the next tick reloads — the safe direction. Reading after could
-                // stamp the snapshot as containing a write it does not.
+                // stamp the snapshot as containing a write it does not. When the caller has just
+                // read them (stampsFresh), the first pass uses that read.
                 let timestampsRead = true;
-                if (effectiveHardRefresh) {
+                if (effectiveHardRefresh && !timestampsFresh) {
                     timestampsRead = await this.RefreshRemoteMetadataTimestamps(providerToUse);
                 }
 
                 // SCOPED FIRST: reload only what the timestamps show changed (see
                 // MetadataRefreshScope) — nothing, the saved-query family with every other array kept
                 // as is, or everything. A pass that may be scoped but could not read the timestamps
-                // has no basis for choosing, so it keeps what is loaded and is retried later.
-                const scope: MetadataRefreshScopeResult | null = !tryScoped
+                // has no basis for choosing, so it keeps what is loaded and is retried later. A pass
+                // that stands in for a write-event refresh applies the write-event rule (see
+                // RefreshAfterMetadataMemberChange); one that stands in for an explicit Refresh()
+                // runs in full.
+                const fullRequested = this._metadataFullReloadRequested;
+                this._metadataFullReloadRequested = false;
+                const writeEvent = this._metadataWriteEventPending;
+                this._metadataWriteEventPending = false;
+                let scope: MetadataRefreshScopeResult | null = (!tryScoped || fullRequested)
                     ? { Kind: 'full', Reason: 'a full reload was requested' }
                     : (timestampsRead || !this.holdsMetadata) ? this.MetadataRefreshScope() : null;
+                if (scope && writeEvent) {
+                    scope = ProviderBase.applyWriteEventRule(scope);
+                }
                 if (!scope) {
                     this.scheduleMetadataRefreshRetry('the metadata timestamps could not be read');
                 }
@@ -6048,6 +6134,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // The follow-up re-reads the timestamps first, so it may still be attributed to the
                 // saved-query family — and a scoped read never trusts a cache layer either.
                 tryScoped = true;
+                timestampsFresh = false;
             } while (this._metadataReloadQueued);
         })();
         try {
@@ -6143,6 +6230,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const rollup = norm(ProviderBase._allMetadataTypeName);
         const prevLocal = this._latestLocalMetadataTimestamps ?? [];
         const datasetItems = this._metadataDatasetItems;
+        const built = ProviderBase.MetadataBuildItemCodes;
         const resRecord = res as unknown as Record<string, unknown> | undefined;
 
         let hasMismatch = false;
@@ -6170,7 +6258,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             if (datasetItems && datasetItems.length > 0) {
                 const match = (remoteEntry.ID ? datasetItemsByEntityID?.Get(remoteEntry.ID) : undefined)
                     ?? datasetItemsByNameOrCode.get(norm(remoteEntry.Type));
-                if (match && match.RowCount !== undefined) {
+                // Only items the build reads have a received count to check. The others (Dashboards)
+                // are never read, so their recorded count is whatever the last full load saw; after a
+                // scoped reload it would be stale and would report a mismatch that is not one.
+                if (match && match.RowCount !== undefined && built.has(match.Code)) {
                     receivedRowCount = match.RowCount;
                     receivedUpdateDate = match.LatestUpdateDate;
                 }
@@ -6319,7 +6410,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 return { Kind: 'full', Reason: 'the metadata timestamp moved, but no item did' };
             }
         }
-        return { Kind: 'none' };
+        return { Kind: 'none', AnyItemMoved: anyItemChanged };
     }
 
     /**
@@ -7255,6 +7346,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Read the reachability flag in the SAME synchronous turn the await above resumed in —
         // before the next await can let a concurrent check overwrite it.
         const serverReached = this._lastRemoteTimestampReadReached;
+        this._checkedRemoteMetadataTimestamps = gotTimestamps ? this._latestRemoteMetadataTimestamps : null;
         if (gotTimestamps) {
             this._lastRefreshCheckAt = Date.now();
         }
@@ -7328,8 +7420,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 this.markMetadataCurrent();
                 return true;
             }
-            if (scope.Kind === 'scoped')
-                return this.ReloadMetadata(true, providerToUse, true);
+            if (scope.Kind === 'scoped') {
+                // Reuse the stored stamps while they come from the latest successful check; after a
+                // failed check read, or a read stored by another caller, the pass reads them again.
+                const stampsFresh = this._checkedRemoteMetadataTimestamps != null
+                    && this._checkedRemoteMetadataTimestamps === this._latestRemoteMetadataTimestamps;
+                return this.ReloadMetadata(true, providerToUse, true, stampsFresh);
+            }
             LogStatus(`[Metadata] Full reload needed: ${scope.Reason}`);
             return this.Refresh(providerToUse);
         }

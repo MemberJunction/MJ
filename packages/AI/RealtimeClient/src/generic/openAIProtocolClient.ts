@@ -1,4 +1,4 @@
-import { ClientRealtimeSessionConfig, JSONObject, ResolveResponseDoneUsage } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, JSONObject, MapRealtimeUsageModalityDetail, ResolveResponseDoneUsage } from '@memberjunction/ai';
 import { BaseRealtimeClient, RealtimeClientState, ToProviderSessionConfig } from './baseRealtimeClient';
 import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
@@ -757,16 +757,22 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
     /**
      * Emits the completed response's usage to the host as a DELTA (the `response.done` usage
      * payload covers exactly this response, so it is already incremental — the `OnUsage`
-     * contract's preferred shape). Frames without a usage payload emit nothing.
+     * contract's preferred shape). Frames without a usage payload emit nothing. The per-modality
+     * split (`input_token_details` / `output_token_details`) rides along when the provider sends it,
+     * so pricing can tell audio tokens from text tokens.
      */
     private emitResponseUsage(event: OAIProtocolResponseDone): void {
         const usage = ResolveResponseDoneUsage(event);
         if (!usage) {
             return;
         }
+        const inputDetails = MapRealtimeUsageModalityDetail(usage['input_token_details']);
+        const outputDetails = MapRealtimeUsageModalityDetail(usage['output_token_details']);
         this.emitUsage({
             InputTokens: typeof usage.input_tokens === 'number' ? usage.input_tokens : undefined,
             OutputTokens: typeof usage.output_tokens === 'number' ? usage.output_tokens : undefined,
+            ...(inputDetails ? { InputTokenDetails: inputDetails } : {}),
+            ...(outputDetails ? { OutputTokenDetails: outputDetails } : {}),
             Raw: usage,
         });
     }

@@ -50,8 +50,18 @@ export type PreSaveHook = (
   contextUser: UserInfo | undefined
 ) => boolean | string | Promise<boolean | string>;
 
+/**
+ * Hook that runs before a Delete operation on a BaseEntity.
+ * Return `true` to allow the delete, `false` to reject with a default message,
+ * or a string to reject with that custom error message.
+ */
+export type PreDeleteHook = (
+  entity: BaseEntity,
+  contextUser: UserInfo | undefined
+) => boolean | string | Promise<boolean | string>;
+
 /** Well-known hook names used by the data hooks system */
-export type HookName = 'PreRunView' | 'PostRunView' | 'PreSave';
+export type HookName = 'PreRunView' | 'PostRunView' | 'PreSave' | 'PreDelete';
 
 const DATA_HOOKS_KEY = '__mj_dataHooks';
 

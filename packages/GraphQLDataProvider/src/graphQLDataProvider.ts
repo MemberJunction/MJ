@@ -1322,6 +1322,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     innerParams.SaveViewResults = params.SaveViewResults ? params.SaveViewResults : false;
                 }
                 this.applyViewPropertiesToInput(params, innerParams, dynamicView);
+                if (params.Parameters !== undefined) {
+                    innerParams.Parameters = params.Parameters;
+                }
 
                 // Include Aggregates if provided
                 if (params.Aggregates && params.Aggregates.length > 0) {
@@ -1533,6 +1536,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         innerParam.SaveViewResults = param.SaveViewResults || false;
                     }
                     this.applyViewPropertiesToInput(param, innerParam, dynamicView);
+                    if (param.Parameters !== undefined) {
+                        innerParam.Parameters = param.Parameters;
+                    }
 
                     // Include Aggregates if provided
                     if (param.Aggregates && param.Aggregates.length > 0) {
@@ -1667,6 +1673,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     // strongest available "read true database state" arrived as its opposite, and
                     // BaseEngine.Config(true) in a browser could not escape a stale server slot.
                     BypassCache: item.params.BypassCache,
+                    ...(item.params.Parameters !== undefined ? { Parameters: item.params.Parameters } : {}),
                 },
                 cacheStatus: item.cacheStatus ? {
                     maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
@@ -3215,8 +3222,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             originalVal = originalVal.toString();
                         if (typeof returnedVal === 'number')
                             returnedVal = returnedVal.toString();
-                        // now compare the two values
-                        if (originalVal !== returnedVal) {
+                        // now compare the two values; a UUID key compares case-insensitively (the server echoes its own casing)
+                        const isUUIDKey = entity.EntityInfo.Fields.find((f) => f.Name === key.FieldName)?.IsUniqueIdentifier === true;
+                        const keysMatch = isUUIDKey ? UUIDsEqual(originalVal, returnedVal) : originalVal === returnedVal;
+                        if (!keysMatch) {
                             throw new Error (`Primary key value mismatch in server Delete response. Field: ${key.FieldName}, Original: ${originalVal}, Returned: ${returnedVal}`);
                         }
                     }

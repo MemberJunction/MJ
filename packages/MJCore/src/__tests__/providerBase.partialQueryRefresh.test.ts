@@ -13,7 +13,10 @@
  * filter, so the dataset definition — columns, where clauses, post-processing — is reused
  * verbatim and nothing else is read), swaps them in, and leaves every other metadata array
  * untouched. A change only to items the metadata build never reads (Dashboards) reloads
- * nothing. Anything else stale, or an explicit Refresh(), still takes the full path.
+ * nothing. Anything else stale, or an explicit Refresh(), still takes the full path. A refresh
+ * prompted by a member-entity write knows something changed, so for it "no item moved at all" is
+ * a full reload, not "nothing to do": a committed write can leave the item's max stamp and row
+ * count where they were (PostgreSQL stamps `NOW()`, the transaction start).
  *
  * They also pin the retry policy: a failed timestamp read, scoped reload or full reload keeps
  * the metadata already loaded and is retried on a backoff, instead of escalating to a full
@@ -21,7 +24,10 @@
  * `MetadataScopedReloadAttempts`-th scoped failure in a row falls back to the full reload.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 import { ProviderBase } from '../generic/providerBase';
+import { LogEntry, RegisterLogSink } from '../generic/logging';
 import {
     DatasetItemFilterType,
     DatasetResultType,
@@ -107,6 +113,8 @@ class PartialRefreshProvider extends TestMetadataProvider {
     public failStatus = false;
     /** How many status queries ran. */
     public statusReads = 0;
+    /** Runs once during the next scoped read, after the read has suspended, then clears. */
+    public onScopedRead: (() => void) | null = null;
 
     constructor(private readonly store?: ILocalStorageProvider) {
         super();
@@ -142,6 +150,12 @@ class PartialRefreshProvider extends TestMetadataProvider {
         const scoped = suppressed.size > 0;
         if (!scoped && this.failFullRead) {
             return { DatasetID: 'md', DatasetName: datasetName, Success: false, Status: 'scripted full-read failure', LatestUpdateDate: new Date(0), Results: [] };
+        }
+        if (scoped && this.onScopedRead) {
+            await new Promise(resolve => setTimeout(resolve, 0)); // a real read suspends here
+            const hook = this.onScopedRead;
+            this.onScopedRead = null;
+            hook();
         }
         return {
             DatasetID: 'md',
@@ -294,17 +308,94 @@ describe('ProviderBase — partial refresh of the saved-query family', () => {
         expect(provider.Queries).toHaveLength(2);
     });
 
-    it('the write-event path reloads nothing when the authoritative timestamps show nothing changed', async () => {
-        // The status query is read from SQL on every call, never from a cache layer, and a full
-        // reload would stamp the very same timestamps on a snapshot identical to the one held. A
-        // write the status cannot see (rolled back, or not committed yet) is invisible to the full
-        // reload's pool read too, so reloading anyway bought nothing but the cost.
-        const entitiesBefore = provider.Entities;
+    it('the write-event path reloads everything when no item timestamp moved: the writer must see its own write', async () => {
+        // A write committed with a stamp older than the item's current max leaves the max stamp
+        // and the row count where they were. On PostgreSQL `__mj_UpdatedAt` is `NOW()`, the
+        // transaction start, so an in-place edit inside a transaction that outlived a peer's later
+        // write does exactly this; on SQL Server the statement-to-commit window does. The status
+        // query cannot see it, but the writer knows it happened, so the hard Refresh() stands.
+        provider.rows.Queries[0] = { ...provider.rows.Queries[0], Name: 'Renamed In Place' }; // no touch()
 
         expect(await provider['RefreshAfterMetadataMemberChange']()).toBe(true);
 
-        expect(provider.datasetReads).toHaveLength(1); // only the boot load
-        expect(provider.Entities).toBe(entitiesBefore);
+        expect(provider.datasetReads).toHaveLength(2);
+        expect(provider.suppressedCodes(provider.lastRead())).toEqual([]); // a full read
+        expect(provider.Queries[0].Name).toBe('Renamed In Place');
+    });
+
+    it('a write event that arrives mid-reload, and moves no item, still gets a full follow-up pass', async () => {
+        // The same rule governs the follow-up pass that a write arriving during a reload queues.
+        provider.touch('Queries', { ID: 'q2', Name: 'Second Query', Status: 'Pending', CategoryID: null });
+        let queued: Promise<boolean> | null = null;
+        provider.onScopedRead = () => {
+            provider.rows.Queries[0] = { ...provider.rows.Queries[0], Name: 'Renamed In Place' }; // no touch()
+            queued = provider['RefreshAfterMetadataMemberChange']();
+        };
+
+        await provider['RefreshAfterMetadataMemberChange']();
+        expect(queued).not.toBeNull();
+        await queued;
+
+        expect(provider.datasetReads).toHaveLength(3); // the cold boot, the scoped pass, the full follow-up
+        expect(provider.suppressedCodes(provider.lastRead())).toEqual([]);
+        expect(provider.Queries.find(q => q.ID === 'q1')?.Name).toBe('Renamed In Place');
+    });
+
+    it('a Refresh() that joins an in-flight scoped reload still gets its full reload', async () => {
+        provider.touch('Queries', { ID: 'q2', Name: 'Second Query', Status: 'Pending', CategoryID: null });
+        let queued: Promise<boolean> | null = null;
+        provider.onScopedRead = () => {
+            queued = provider.Refresh();
+        };
+
+        await provider.RefreshIfNeeded(undefined, true);
+        expect(queued).not.toBeNull();
+        await queued;
+
+        expect(provider.datasetReads).toHaveLength(3);
+        expect(provider.suppressedCodes(provider.lastRead())).toEqual([]); // the promised full reload
+    });
+
+    it('after a Dashboards row is added, scoped reloads report no row-count mismatch and leave Dashboards current', async () => {
+        // Dashboards is never read by the metadata build, so its recorded row count is whatever the
+        // last full load saw. Comparing that stale count on every scoped adopt logged a false
+        // "Row count mismatch", invalidated the Dashboards caches, and held the local Dashboards
+        // stamp back — so every saved-query write re-ran the check and warned again.
+        const warnings: LogEntry[] = [];
+        const unsubscribe = RegisterLogSink(entry => { if (entry.severity === 'warning') warnings.push(entry); });
+        try {
+            provider.touch('Dashboards', { ID: 'd1', Name: 'Sales' });
+            provider.touch('Queries', { ID: 'q2', Name: 'Second Query', Status: 'Pending', CategoryID: null });
+            await provider.RefreshIfNeeded(undefined, true);
+            expect(provider.suppressedCodes(provider.lastRead())).toEqual(EVERYTHING_ELSE);
+
+            expect(await provider.CheckToSeeIfRefreshNeeded(undefined, true)).toBe(false);
+
+            provider.touch('Queries', { ID: 'q3', Name: 'Third Query', Status: 'Pending', CategoryID: null });
+            await provider.RefreshIfNeeded(undefined, true);
+            expect(provider.suppressedCodes(provider.lastRead())).toEqual(EVERYTHING_ELSE);
+            expect(await provider.CheckToSeeIfRefreshNeeded(undefined, true)).toBe(false);
+
+            const dashboardsLocal = provider.LatestLocalMetadata.find(m => m.Type === 'MJ: Dashboards');
+            expect(dashboardsLocal?.UpdatedAt?.getTime()).toBe(provider.stamps.Dashboards.UpdatedAt.getTime());
+            expect(warnings.filter(w => w.message.includes('Row count mismatch'))).toEqual([]);
+        }
+        finally {
+            unsubscribe();
+        }
+    });
+
+    it('MetadataBuildItemCodes is the shipped MJ_Metadata dataset minus the items the build never reads', () => {
+        // The allowlist's unsafe default is "not read": an item folded into the build but missing
+        // here would classify as unread, and its changes would never be reloaded. Pin it to the
+        // shipped dataset so a new item fails this test instead.
+        type DatasetRecord = { fields: { Name: string }; relatedEntities?: Record<string, Array<{ fields: { Code: string } }>> };
+        const datasets = JSON.parse(readFileSync(resolve(__dirname, '../../../../metadata/datasets/.datasets.json'), 'utf8')) as DatasetRecord[];
+        const mjMetadata = datasets.find(d => d.fields.Name === 'MJ_Metadata');
+        const shipped = (mjMetadata?.relatedEntities?.['MJ: Dataset Items'] ?? []).map(i => i.fields.Code).sort();
+        expect(shipped.length).toBeGreaterThan(0);
+        const neverRead = ['Dashboards', 'Dashboard_Categories'];
+        expect([...ProviderBase.MetadataBuildItemCodes].sort()).toEqual(shipped.filter(c => !neverRead.includes(c)));
     });
 
     it('a write only to items the metadata build never reads (Dashboards) reloads nothing, and stamps the snapshot current', async () => {
@@ -345,11 +436,11 @@ describe('ProviderBase — partial refresh of the saved-query family', () => {
 
     it('MetadataRefreshScope answers none, scoped or full, and names the reason for a full reload', async () => {
         await provider.RefreshRemoteMetadataTimestamps();
-        expect(provider['MetadataRefreshScope']()).toEqual({ Kind: 'none' });
+        expect(provider['MetadataRefreshScope']()).toEqual({ Kind: 'none', AnyItemMoved: false });
 
         provider.touch('Dashboards');
         await provider.RefreshRemoteMetadataTimestamps();
-        expect(provider['MetadataRefreshScope']()).toEqual({ Kind: 'none' });
+        expect(provider['MetadataRefreshScope']()).toEqual({ Kind: 'none', AnyItemMoved: true });
 
         provider.touch('QueryFields');
         await provider.RefreshRemoteMetadataTimestamps();
@@ -408,6 +499,45 @@ describe('ProviderBase — partial refresh of the saved-query family', () => {
         expect(provider.refreshChecks).toBe(checksAfterScoped + 1);
     });
 
+    it('a scoped member-change refresh reads the status once', async () => {
+        provider.touch('Queries', { ID: 'q2', Name: 'Second Query', Status: 'Pending', CategoryID: null });
+        provider.statusReads = 0;
+
+        await provider['RefreshAfterMetadataMemberChange']();
+
+        expect(provider.suppressedCodes(provider.lastRead())).toEqual(EVERYTHING_ELSE);
+        expect(provider.Queries).toHaveLength(2);
+        expect(provider.statusReads).toBe(1);
+    });
+
+    it('the scoped branch of RefreshIfNeeded reads the status once', async () => {
+        provider.touch('Queries', { ID: 'q2', Name: 'Second Query', Status: 'Pending', CategoryID: null });
+        provider.statusReads = 0;
+
+        await provider.RefreshIfNeeded(undefined, true);
+
+        expect(provider.suppressedCodes(provider.lastRead())).toEqual(EVERYTHING_ELSE);
+        expect(provider.Queries).toHaveLength(2);
+        expect(provider.statusReads).toBe(1);
+    });
+
+    it('a follow-up pass queued during a scoped reload reads the status again', async () => {
+        provider.touch('Queries', { ID: 'q2', Name: 'Second Query', Status: 'Pending', CategoryID: null });
+        provider.statusReads = 0;
+        let queued: Promise<boolean> | null = null;
+        provider.onScopedRead = () => {
+            provider.touch('Queries', { ID: 'q3', Name: 'Third Query', Status: 'Pending', CategoryID: null });
+            queued = provider['RefreshAfterMetadataMemberChange']();
+        };
+
+        await provider['RefreshAfterMetadataMemberChange']();
+        expect(queued).not.toBeNull();
+        await queued;
+
+        expect(provider.datasetReads).toHaveLength(3); // the cold boot, the first pass, the queued pass
+        expect(provider.Queries).toHaveLength(3);
+        expect(provider.statusReads).toBe(2);
+    });
 });
 
 /**
@@ -551,6 +681,8 @@ describe('ProviderBase — a failed metadata refresh is retried, not escalated',
         const reads = provider.statusReads;
 
         // A new write arrives while the retry is armed: the debounce replaces it rather than adding a second timer.
+        // (A saved-query write, so the refresh it prompts is scoped and reads the status exactly once.)
+        touchQueries();
         provider.failStatus = false;
         provider['scheduleMetadataMemberRefresh']();
         await vi.advanceTimersByTimeAsync(ProviderBase.MetadataDatasetRefreshDebounceMs);

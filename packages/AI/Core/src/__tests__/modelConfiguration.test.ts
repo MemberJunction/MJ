@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect } from 'vitest';
 import {
     AIModelConfiguration,
     ApplyEmbeddingInputPrefix,
@@ -408,6 +408,26 @@ describe('Realtime.Pricing — prices for output the token cost rows do not cove
 
         expect(ResolveEffectiveModelConfiguration(model, row)?.Realtime?.Pricing?.AvatarVideoOutput).toBeNull();
     });
+
+    it('merges the audio prices per key beside the avatar video price', () => {
+        const audioInput: RealtimeUnitPrice = { Price: 32, Unit: 'Per 1M Tokens', Currency: 'USD' };
+        const audioOutput: RealtimeUnitPrice = { Price: 64, Unit: 'Per 1M Tokens', Currency: 'USD' };
+        const vendorDefaults: AIModelConfiguration = { Realtime: { Pricing: { AudioInput: audioInput, AudioOutput: audioOutput } } };
+        const row: AIModelConfiguration = { Realtime: { Pricing: { AvatarVideoOutput: avatarVideo, AudioOutput: { Price: 48 } } } };
+
+        expect(ResolveEffectiveModelConfiguration(null, null, vendorDefaults, row)?.Realtime?.Pricing).toEqual({
+            AvatarVideoOutput: avatarVideo,
+            AudioInput: audioInput,
+            AudioOutput: { Price: 48, Unit: 'Per 1M Tokens', Currency: 'USD' },
+        });
+    });
+
+    it('an explicit null on a more specific layer withdraws an inherited audio price', () => {
+        const model: AIModelConfiguration = { Realtime: { Pricing: { AudioInput: { Price: 32, Unit: 'Per 1M Tokens', Currency: 'USD' } } } };
+        const row: AIModelConfiguration = { Realtime: { Pricing: { AudioInput: null } } };
+
+        expect(ResolveEffectiveModelConfiguration(model, row)?.Realtime?.Pricing?.AudioInput).toBeNull();
+    });
 });
 
 /** The fields of a MetadataSync record that the seed tests read. */
@@ -614,3 +634,16 @@ describe('Lockstep — the JSONType source CodeGen generates from declares what 
     });
 });
 
+
+describe('ResolveEffectiveModelConfiguration — prototype pollution (CodeQL #169, #553)', () => {
+    afterEach(() => {
+        delete (Object.prototype as { polluted?: unknown }).polluted;
+    });
+
+    it('does not write a __proto__ layer key into Object.prototype', () => {
+        const hostile = JSON.parse('{"__proto__":{"polluted":1},"Realtime":{"__proto__":{"polluted":1}}}') as AIModelConfiguration;
+        const effective = ResolveEffectiveModelConfiguration({ Realtime: { FullDuplex: true } }, hostile);
+        expect(({} as { polluted?: unknown }).polluted).toBeUndefined();
+        expect(effective).toEqual({ Realtime: { FullDuplex: true } });
+    });
+});

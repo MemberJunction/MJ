@@ -205,7 +205,7 @@ export const MJAIAgentArtifactTypeSchema = z.object({
         * * Field Name: Agent
         * * Display Name: Agent
         * * SQL Data Type: nvarchar(255)`),
-    ArtifactType: z.string().describe(`
+    ArtifactType: z.string().nullable().describe(`
         * * Field Name: ArtifactType
         * * Display Name: Artifact Type
         * * SQL Data Type: nvarchar(100)`),
@@ -425,7 +425,7 @@ export const MJAIAgentClientToolSchema = z.object({
         * * Field Name: Agent
         * * Display Name: Agent Name
         * * SQL Data Type: nvarchar(255)`),
-    ClientToolDefinition: z.string().describe(`
+    ClientToolDefinition: z.string().nullable().describe(`
         * * Field Name: ClientToolDefinition
         * * Display Name: Tool Name
         * * SQL Data Type: nvarchar(200)`),
@@ -673,7 +673,7 @@ export const MJAIAgentCredentialSchema = z.object({
         * * Field Name: Agent
         * * Display Name: Agent Name
         * * SQL Data Type: nvarchar(255)`),
-    Credential: z.string().describe(`
+    Credential: z.string().nullable().describe(`
         * * Field Name: Credential
         * * Display Name: Credential Name
         * * SQL Data Type: nvarchar(200)`),
@@ -1221,7 +1221,7 @@ export const MJAIAgentModalitySchema = z.object({
         * * Field Name: Agent
         * * Display Name: Agent
         * * SQL Data Type: nvarchar(255)`),
-    Modality: z.string().describe(`
+    Modality: z.string().nullable().describe(`
         * * Field Name: Modality
         * * Display Name: Modality
         * * SQL Data Type: nvarchar(50)`),
@@ -1708,7 +1708,7 @@ export const MJAIAgentPersonaSchema = z.object({
         * * Field Name: Agent
         * * Display Name: Agent Name
         * * SQL Data Type: nvarchar(255)`),
-    Persona: z.string().describe(`
+    Persona: z.string().nullable().describe(`
         * * Field Name: Persona
         * * Display Name: Persona Name
         * * SQL Data Type: nvarchar(100)`),
@@ -1799,7 +1799,7 @@ export const MJAIAgentPromptSchema = z.object({
         * * Field Name: Agent
         * * Display Name: Agent
         * * SQL Data Type: nvarchar(255)`),
-    Prompt: z.string().describe(`
+    Prompt: z.string().nullable().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
         * * SQL Data Type: nvarchar(255)`),
@@ -2237,7 +2237,7 @@ export const MJAIAgentRubricSchema = z.object({
         * * Field Name: Agent
         * * Display Name: Agent
         * * SQL Data Type: nvarchar(255)`),
-    Rubric: z.string().describe(`
+    Rubric: z.string().nullable().describe(`
         * * Field Name: Rubric
         * * Display Name: Rubric
         * * SQL Data Type: nvarchar(255)`),
@@ -2342,7 +2342,7 @@ export const MJAIAgentRunMediaSchema = z.object({
         * * Field Name: SourcePromptRunMedia
         * * Display Name: Source Prompt Run Media
         * * SQL Data Type: nvarchar(255)`),
-    Modality: z.string().describe(`
+    Modality: z.string().nullable().describe(`
         * * Field Name: Modality
         * * Display Name: Modality
         * * SQL Data Type: nvarchar(50)`),
@@ -3083,7 +3083,7 @@ export const MJAIAgentSearchScopeSchema = z.object({
         * * Field Name: Agent
         * * Display Name: Agent Name
         * * SQL Data Type: nvarchar(255)`),
-    SearchScope: z.string().describe(`
+    SearchScope: z.string().nullable().describe(`
         * * Field Name: SearchScope
         * * Display Name: Search Scope Name
         * * SQL Data Type: nvarchar(200)`),
@@ -3316,7 +3316,7 @@ export const MJAIAgentSessionBridgeSchema = z.object({
     *   * ModelSide
     *   * Regex
         * * Description: How the agent decided speech was addressed to it: Auto (the model's own judgement when it is full-duplex, name matching otherwise), ModelSide (the model's own judgement), or Regex (matching the agent's names). NULL when not recorded.`),
-    Provider: z.string().describe(`
+    Provider: z.string().nullable().describe(`
         * * Field Name: Provider
         * * Display Name: Provider
         * * SQL Data Type: nvarchar(100)`),
@@ -3386,7 +3386,7 @@ export const MJAIAgentSessionChannelSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Channel: z.string().describe(`
+    Channel: z.string().nullable().describe(`
         * * Field Name: Channel
         * * Display Name: Channel
         * * SQL Data Type: nvarchar(100)`),
@@ -3610,7 +3610,7 @@ export const MJAIAgentSessionSchema = z.object({
         * * Field Name: Agent
         * * Display Name: Agent
         * * SQL Data Type: nvarchar(255)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -3676,7 +3676,7 @@ export const MJAIAgentSkillSchema = z.object({
         * * Field Name: Agent
         * * Display Name: Agent Name
         * * SQL Data Type: nvarchar(255)`),
-    Skill: z.string().describe(`
+    Skill: z.string().nullable().describe(`
         * * Field Name: Skill
         * * Display Name: Skill Name
         * * SQL Data Type: nvarchar(255)`),
@@ -3732,11 +3732,11 @@ export const MJAIAgentStepPathSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    OriginStep: z.string().describe(`
+    OriginStep: z.string().nullable().describe(`
         * * Field Name: OriginStep
         * * Display Name: Origin Step
         * * SQL Data Type: nvarchar(255)`),
-    DestinationStep: z.string().describe(`
+    DestinationStep: z.string().nullable().describe(`
         * * Field Name: DestinationStep
         * * Display Name: Destination Step
         * * SQL Data Type: nvarchar(255)`),
@@ -4248,7 +4248,7 @@ export const MJAIAgentUserPolicySchema = z.object({
         * * Field Name: Agent
         * * Display Name: Agent Name
         * * SQL Data Type: nvarchar(255)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
@@ -4816,7 +4816,7 @@ if this limit is exceeded.`),
         * * Field Name: DefaultArtifactType
         * * Display Name: Default Artifact Type
         * * SQL Data Type: nvarchar(100)`),
-    OwnerUser: z.string().describe(`
+    OwnerUser: z.string().nullable().describe(`
         * * Field Name: OwnerUser
         * * Display Name: Owner User
         * * SQL Data Type: nvarchar(100)`),
@@ -5025,7 +5025,7 @@ export const MJAIBridgeAgentIdentitySchema = z.object({
         * * Field Name: Agent
         * * Display Name: Agent Name
         * * SQL Data Type: nvarchar(255)`),
-    Provider: z.string().describe(`
+    Provider: z.string().nullable().describe(`
         * * Field Name: Provider
         * * Display Name: Provider Name
         * * SQL Data Type: nvarchar(100)`),
@@ -5083,11 +5083,11 @@ export const MJAIBridgeProviderChannelSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Provider: z.string().describe(`
+    Provider: z.string().nullable().describe(`
         * * Field Name: Provider
         * * Display Name: Provider Name
         * * SQL Data Type: nvarchar(100)`),
-    Channel: z.string().describe(`
+    Channel: z.string().nullable().describe(`
         * * Field Name: Channel
         * * Display Name: Channel Name
         * * SQL Data Type: nvarchar(100)`),
@@ -5280,7 +5280,7 @@ export const MJAIConfigurationParamSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Configuration: z.string().describe(`
+    Configuration: z.string().nullable().describe(`
         * * Field Name: Configuration
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(100)`),
@@ -5469,7 +5469,7 @@ export const MJAICredentialBindingSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Credential: z.string().describe(`
+    Credential: z.string().nullable().describe(`
         * * Field Name: Credential
         * * Display Name: Credential Name
         * * SQL Data Type: nvarchar(200)`),
@@ -5602,11 +5602,11 @@ export const MJAIModelActionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    AIModel: z.string().describe(`
+    AIModel: z.string().nullable().describe(`
         * * Field Name: AIModel
         * * Display Name: AIModel
         * * SQL Data Type: nvarchar(50)`),
-    AIAction: z.string().describe(`
+    AIAction: z.string().nullable().describe(`
         * * Field Name: AIAction
         * * Display Name: AIAction
         * * SQL Data Type: nvarchar(50)`),
@@ -5658,11 +5658,11 @@ export const MJAIModelArchitectureSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Model: z.string().describe(`
+    Model: z.string().nullable().describe(`
         * * Field Name: Model
         * * Display Name: Model Name
         * * SQL Data Type: nvarchar(50)`),
-    Architecture: z.string().describe(`
+    Architecture: z.string().nullable().describe(`
         * * Field Name: Architecture
         * * Display Name: Architecture Name
         * * SQL Data Type: nvarchar(100)`),
@@ -5772,19 +5772,19 @@ export const MJAIModelCostSchema = z.object({
         * * Display Name: Cache Write Price Per Unit
         * * SQL Data Type: decimal(18, 8)
         * * Description: Optional price per unit for input tokens written to the AI provider's prompt cache (cache writes / creation), expressed in the same currency and UnitType as InputPricePerUnit. When NULL, cache-write tokens are priced at InputPricePerUnit. Populated for providers that bill cache creation separately (e.g. Anthropic, ~1.25x input); leave NULL for providers that do not (OpenAI, Gemini), which also report 0 cache-write tokens.`),
-    Model: z.string().describe(`
+    Model: z.string().nullable().describe(`
         * * Field Name: Model
         * * Display Name: Model Name
         * * SQL Data Type: nvarchar(50)`),
-    Vendor: z.string().describe(`
+    Vendor: z.string().nullable().describe(`
         * * Field Name: Vendor
         * * Display Name: Vendor Name
         * * SQL Data Type: nvarchar(50)`),
-    PriceType: z.string().describe(`
+    PriceType: z.string().nullable().describe(`
         * * Field Name: PriceType
         * * Display Name: Price Type Name
         * * SQL Data Type: nvarchar(100)`),
-    UnitType: z.string().describe(`
+    UnitType: z.string().nullable().describe(`
         * * Field Name: UnitType
         * * Display Name: Unit Type Name
         * * SQL Data Type: nvarchar(100)`),
@@ -5867,11 +5867,11 @@ export const MJAIModelModalitySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Model: z.string().describe(`
+    Model: z.string().nullable().describe(`
         * * Field Name: Model
         * * Display Name: Model
         * * SQL Data Type: nvarchar(50)`),
-    Modality: z.string().describe(`
+    Modality: z.string().nullable().describe(`
         * * Field Name: Modality
         * * Display Name: Modality
         * * SQL Data Type: nvarchar(50)`),
@@ -5920,11 +5920,11 @@ export const MJAIModelPersonaSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Model: z.string().describe(`
+    Model: z.string().nullable().describe(`
         * * Field Name: Model
         * * Display Name: Model
         * * SQL Data Type: nvarchar(50)`),
-    Persona: z.string().describe(`
+    Persona: z.string().nullable().describe(`
         * * Field Name: Persona
         * * Display Name: Persona
         * * SQL Data Type: nvarchar(100)`),
@@ -6074,11 +6074,11 @@ export const MJAIModelTypeSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJAIModelTypeEntity_IAIModelConfiguration
         * * Description: Type-wide default of the per-modality model-configuration bag (JSON, IAIModelConfiguration shape: LLM / Realtime / Vision / Audio sections). Base layer of the ModelConfiguration cascade — AIModel and AIModelVendor rows inherit from it per key and may override. NULL = contributes nothing.`),
-    DefaultInputModality: z.string().describe(`
+    DefaultInputModality: z.string().nullable().describe(`
         * * Field Name: DefaultInputModality
         * * Display Name: Default Input Modality Name
         * * SQL Data Type: nvarchar(50)`),
-    DefaultOutputModality: z.string().describe(`
+    DefaultOutputModality: z.string().nullable().describe(`
         * * Field Name: DefaultOutputModality
         * * Display Name: Default Output Modality Name
         * * SQL Data Type: nvarchar(50)`),
@@ -6198,15 +6198,15 @@ export const MJAIModelVendorSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJAIModelVendorEntity_IAIModelConfiguration
         * * Description: Most-specific layer of the per-modality model-configuration bag (JSON, IAIModelConfiguration shape) — configuration for THIS model on THIS provider. Deep-merges per key over the model and type layers. NULL = inherit the merged model/type configuration unchanged.`),
-    Model: z.string().describe(`
+    Model: z.string().nullable().describe(`
         * * Field Name: Model
         * * Display Name: Model Name
         * * SQL Data Type: nvarchar(50)`),
-    Vendor: z.string().describe(`
+    Vendor: z.string().nullable().describe(`
         * * Field Name: Vendor
         * * Display Name: Vendor Name
         * * SQL Data Type: nvarchar(50)`),
-    Type: z.string().describe(`
+    Type: z.string().nullable().describe(`
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(50)`),
@@ -6402,15 +6402,15 @@ export const MJAIPersonaVendorSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Persona: z.string().describe(`
+    Persona: z.string().nullable().describe(`
         * * Field Name: Persona
         * * Display Name: Persona Name
         * * SQL Data Type: nvarchar(100)`),
-    Vendor: z.string().describe(`
+    Vendor: z.string().nullable().describe(`
         * * Field Name: Vendor
         * * Display Name: Vendor Name
         * * SQL Data Type: nvarchar(50)`),
-    Modality: z.string().describe(`
+    Modality: z.string().nullable().describe(`
         * * Field Name: Modality
         * * Display Name: Modality Name
         * * SQL Data Type: nvarchar(50)`),
@@ -6685,11 +6685,11 @@ export const MJAIPromptModelSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJAIPromptModelEntity_IAIPromptModelConfiguration
         * * Description: Most-specific layer of the prompt configuration bag (JSON, IAIPromptModelConfiguration shape) — configuration for THIS prompt on THIS model. Deep-merges per key over the AIPrompt layer, which in turn sits above the model-catalog ModelConfiguration cascade. NULL = inherit the merged configuration unchanged.`),
-    Prompt: z.string().describe(`
+    Prompt: z.string().nullable().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
         * * SQL Data Type: nvarchar(255)`),
-    Model: z.string().describe(`
+    Model: z.string().nullable().describe(`
         * * Field Name: Model
         * * Display Name: Model
         * * SQL Data Type: nvarchar(50)`),
@@ -6789,7 +6789,7 @@ export const MJAIPromptRunMediaSchema = z.object({
         * * Field Name: PromptRun
         * * Display Name: Prompt Run
         * * SQL Data Type: nvarchar(255)`),
-    Modality: z.string().describe(`
+    Modality: z.string().nullable().describe(`
         * * Field Name: Modality
         * * Display Name: Modality
         * * SQL Data Type: nvarchar(50)`),
@@ -7316,15 +7316,15 @@ export const MJAIPromptRunSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: The user on whose behalf this prompt was executed, written when the run is created. NULL for automated/unauthenticated runs and for runs that pre-date this column. For an agent-driven run the agent run's user is also reachable through AIAgentRunStep.TargetLogID, which vwAIUsageFacts falls back to.`),
-    Prompt: z.string().describe(`
+    Prompt: z.string().nullable().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
         * * SQL Data Type: nvarchar(255)`),
-    Model: z.string().describe(`
+    Model: z.string().nullable().describe(`
         * * Field Name: Model
         * * Display Name: Model
         * * SQL Data Type: nvarchar(50)`),
-    Vendor: z.string().describe(`
+    Vendor: z.string().nullable().describe(`
         * * Field Name: Vendor
         * * Display Name: Vendor
         * * SQL Data Type: nvarchar(50)`),
@@ -7833,7 +7833,7 @@ export const MJAIPromptSchema = z.object({
     *   * None
     *   * Referenced
         * * Description: Which template inputs (data, templateData) prompt runs store in Messages: None (shape only), Referenced (only keys the template uses) or Full. NULL uses the server default.`),
-    Template: z.string().describe(`
+    Template: z.string().nullable().describe(`
         * * Field Name: Template
         * * Display Name: Template Text
         * * SQL Data Type: nvarchar(255)`),
@@ -7841,7 +7841,7 @@ export const MJAIPromptSchema = z.object({
         * * Field Name: Category
         * * Display Name: Category Name
         * * SQL Data Type: nvarchar(255)`),
-    Type: z.string().describe(`
+    Type: z.string().nullable().describe(`
         * * Field Name: Type
         * * Display Name: Type Name
         * * SQL Data Type: nvarchar(255)`),
@@ -8031,11 +8031,11 @@ export const MJAIResultCacheSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
         * * Description: Reference to the AIPromptRun that created this cache entry.`),
-    AIPrompt: z.string().describe(`
+    AIPrompt: z.string().nullable().describe(`
         * * Field Name: AIPrompt
         * * Display Name: AI Prompt
         * * SQL Data Type: nvarchar(255)`),
-    AIModel: z.string().describe(`
+    AIModel: z.string().nullable().describe(`
         * * Field Name: AIModel
         * * Display Name: AI Model
         * * SQL Data Type: nvarchar(50)`),
@@ -8096,11 +8096,11 @@ export const MJAISkillActionSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether activating the skill puts this action into the agent's run. 1 (default): the action is described to the model and callable during the run, today's behaviour. 0: the action stays bundled with the skill (SKILL.md export, tooling) but is left out of the run entirely: not described to the model and not executable by the agent; only application code invokes it, through the Actions API. Use 0 for actions a person triggers through the UI on a later turn, such as a menu button in the skill's reply.`),
-    Skill: z.string().describe(`
+    Skill: z.string().nullable().describe(`
         * * Field Name: Skill
         * * Display Name: Skill
         * * SQL Data Type: nvarchar(255)`),
-    Action: z.string().describe(`
+    Action: z.string().nullable().describe(`
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(425)`),
@@ -8174,7 +8174,7 @@ export const MJAISkillPermissionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Skill: z.string().describe(`
+    Skill: z.string().nullable().describe(`
         * * Field Name: Skill
         * * Display Name: Skill
         * * SQL Data Type: nvarchar(255)`),
@@ -8252,11 +8252,11 @@ export const MJAISkillSearchScopeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Skill: z.string().describe(`
+    Skill: z.string().nullable().describe(`
         * * Field Name: Skill
         * * Display Name: Skill
         * * SQL Data Type: nvarchar(255)`),
-    SearchScope: z.string().describe(`
+    SearchScope: z.string().nullable().describe(`
         * * Field Name: SearchScope
         * * Display Name: Search Scope
         * * SQL Data Type: nvarchar(200)`),
@@ -8295,7 +8295,7 @@ export const MJAISkillSubAgentSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Skill: z.string().describe(`
+    Skill: z.string().nullable().describe(`
         * * Field Name: Skill
         * * Display Name: Skill
         * * SQL Data Type: nvarchar(255)`),
@@ -8403,7 +8403,7 @@ export const MJAISkillSchema = z.object({
     *   * Conversation
     *   * Run
         * * Description: How long an activation lasts. Run (default): the skill is active for the run that activated it and no longer — a one-shot capability. Conversation: once activated in a run that belongs to a conversation, the skill stays active for that conversation (an MJ: Conversation Skills row, Status Active) and is re-requested at the start of every later root run there until ended — a persona, or a mode whose menu is pressed on the next turn. Subject to every availability gate on each run; ActivationMode still decides who may trigger the FIRST activation.`),
-    CreatedByUser: z.string().describe(`
+    CreatedByUser: z.string().nullable().describe(`
         * * Field Name: CreatedByUser
         * * Display Name: Created By User
         * * SQL Data Type: nvarchar(100)`),
@@ -8523,11 +8523,11 @@ export const MJAIVendorTypeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Vendor: z.string().describe(`
+    Vendor: z.string().nullable().describe(`
         * * Field Name: Vendor
         * * Display Name: Vendor
         * * SQL Data Type: nvarchar(50)`),
-    Type: z.string().describe(`
+    Type: z.string().nullable().describe(`
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(50)`),
@@ -8648,11 +8648,11 @@ export const MJAPIApplicationScopeSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
         * * Description: Optional row-level filter acting as a CEILING for every API key operating under this application — a restriction keys inherit and cannot widen. Composes with the per-key filter (APIKeyScope.RowFilterID) and with role-based RLS using AND, never OR, so no layer can broaden another. References the same RowLevelSecurityFilter catalog used by role-based RLS. NULL (the default) means the application imposes no row ceiling. The same authoring constraints as APIKeyScope.RowFilterID apply: exact single-entity resource pattern, all referenced columns must exist on that entity, and all referrers of the filter record must resolve to the same entity.`),
-    Application: z.string().describe(`
+    Application: z.string().nullable().describe(`
         * * Field Name: Application
         * * Display Name: Application Name
         * * SQL Data Type: nvarchar(100)`),
-    Scope: z.string().describe(`
+    Scope: z.string().nullable().describe(`
         * * Field Name: Scope
         * * Display Name: Scope Name
         * * SQL Data Type: nvarchar(100)`),
@@ -8734,11 +8734,11 @@ export const MJAPIKeyApplicationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    APIKey: z.string().describe(`
+    APIKey: z.string().nullable().describe(`
         * * Field Name: APIKey
         * * Display Name: API Key Value
         * * SQL Data Type: nvarchar(255)`),
-    Application: z.string().describe(`
+    Application: z.string().nullable().describe(`
         * * Field Name: Application
         * * Display Name: Application Name
         * * SQL Data Type: nvarchar(100)`),
@@ -8808,11 +8808,11 @@ export const MJAPIKeyScopeSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
         * * Description: Optional row-level filter narrowing WHICH RECORDS this scope grant applies to, in addition to the resource pattern that governs which entities. References the same RowLevelSecurityFilter catalog used by role-based RLS, so the filter text flows through the standard {{Token}} substitution engine and every existing RLS enforcement point (RunView, Load by primary key, save, delete, search). NULL (the default) means no row restriction — behavior identical to before this column existed. When set, the rule's ResourcePattern must name a single exact entity (no wildcards, no comma-separated lists), every column the filter references must resolve to a real non-virtual field on that entity, and every other referrer of the same filter record must resolve to that same entity. Critically, this filter is evaluated INDEPENDENTLY of the role-RLS exemption: a user exempt from role RLS is still bound by their key's filter, because narrowing a principal below what their roles allow is the entire purpose of a key ceiling.`),
-    APIKey: z.string().describe(`
+    APIKey: z.string().nullable().describe(`
         * * Field Name: APIKey
         * * Display Name: API Key
         * * SQL Data Type: nvarchar(255)`),
-    Scope: z.string().describe(`
+    Scope: z.string().nullable().describe(`
         * * Field Name: Scope
         * * Display Name: Scope
         * * SQL Data Type: nvarchar(100)`),
@@ -8915,7 +8915,7 @@ export const MJAPIKeyUsageLogSchema = z.object({
         * * Display Name: Denied Reason
         * * SQL Data Type: nvarchar(500)
         * * Description: When authorization is denied, explains why (e.g., app ceiling blocked, no matching key scope, explicit deny rule).`),
-    APIKey: z.string().describe(`
+    APIKey: z.string().nullable().describe(`
         * * Field Name: APIKey
         * * Display Name: API Key
         * * SQL Data Type: nvarchar(255)`),
@@ -8996,11 +8996,11 @@ export const MJAPIKeySchema = z.object({
         * * Display Name: Key Prefix
         * * SQL Data Type: nvarchar(20)
         * * Description: A short preview of the key shown at creation time (e.g. mj_sk_a1b2). Stores the configured prefix plus the first 4 characters of the random body for visual identification. NULL for keys created before this column was added.`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
-    CreatedByUser: z.string().describe(`
+    CreatedByUser: z.string().nullable().describe(`
         * * Field Name: CreatedByUser
         * * Display Name: Created By User
         * * SQL Data Type: nvarchar(100)`),
@@ -9181,11 +9181,11 @@ export const MJAccessControlRuleSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
-    GrantedByUser: z.string().describe(`
+    GrantedByUser: z.string().nullable().describe(`
         * * Field Name: GrantedByUser
         * * Display Name: Granted By User
         * * SQL Data Type: nvarchar(100)`),
@@ -9226,11 +9226,11 @@ export const MJActionAuthorizationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Action: z.string().describe(`
+    Action: z.string().nullable().describe(`
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(425)`),
-    Authorization: z.string().describe(`
+    Authorization: z.string().nullable().describe(`
         * * Field Name: Authorization
         * * Display Name: Authorization
         * * SQL Data Type: nvarchar(100)`),
@@ -9384,7 +9384,7 @@ export const MJActionContextSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Action: z.string().describe(`
+    Action: z.string().nullable().describe(`
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(425)`),
@@ -9484,11 +9484,11 @@ export const MJActionExecutionLogSchema = z.object({
         * * Display Name: Result Parameters
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON-formatted FINAL parameter set captured when the action finished - the inputs as the action left them, plus any output parameters it produced. Written on FAILURE exactly as on success, under the same redaction rules: a failed run's partially-mutated inputs are usually the most diagnostic thing available, and an audit trail that records only successes is not an audit trail. Distinct from Params, which holds the values the action was called with and is never overwritten. NULL means one thing only - the run never finished (process died, host killed) - so it is a signal rather than an absence, and must not be backfilled.`),
-    Action: z.string().describe(`
+    Action: z.string().nullable().describe(`
         * * Field Name: Action
         * * Display Name: Action Name
         * * SQL Data Type: nvarchar(425)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
@@ -9581,11 +9581,11 @@ export const MJActionLibrarySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Action: z.string().describe(`
+    Action: z.string().nullable().describe(`
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(425)`),
-    Library: z.string().describe(`
+    Library: z.string().nullable().describe(`
         * * Field Name: Library
         * * Display Name: Library
         * * SQL Data Type: nvarchar(255)`),
@@ -9690,7 +9690,7 @@ export const MJActionParamSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJActionParamEntity_IActionParamValueSchema
         * * Description: Optional JSON Schema fragment describing this parameter's value, limited to the cross-provider subset: type, description, enum, items, properties and required. When set, the native tool builder declares it to the model in place of the coarse ValueType mapping, and argument coercion follows it. For an IsArray parameter it describes one element. When NULL, the schema is derived from ValueType.`),
-    Action: z.string().describe(`
+    Action: z.string().nullable().describe(`
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(425)`),
@@ -9738,7 +9738,7 @@ export const MJActionResultCodeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Action: z.string().describe(`
+    Action: z.string().nullable().describe(`
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(425)`),
@@ -10060,11 +10060,11 @@ export const MJApplicationRoleSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Application: z.string().describe(`
+    Application: z.string().nullable().describe(`
         * * Field Name: Application
         * * Display Name: Application Name
         * * SQL Data Type: nvarchar(100)`),
-    Role: z.string().describe(`
+    Role: z.string().nullable().describe(`
         * * Field Name: Role
         * * Display Name: Role Name
         * * SQL Data Type: nvarchar(50)`),
@@ -10331,11 +10331,11 @@ export const MJArchiveConfigurationEntitySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ArchiveConfiguration: z.string().describe(`
+    ArchiveConfiguration: z.string().nullable().describe(`
         * * Field Name: ArchiveConfiguration
         * * Display Name: Archive Configuration Name
         * * SQL Data Type: nvarchar(255)`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
@@ -10460,7 +10460,7 @@ export const MJArchiveConfigurationSchema = z.object({
         * * Field Name: StorageAccount
         * * Display Name: Storage Account Name
         * * SQL Data Type: nvarchar(200)`),
-    CreatedByUser: z.string().describe(`
+    CreatedByUser: z.string().nullable().describe(`
         * * Field Name: CreatedByUser
         * * Display Name: Created By User
         * * SQL Data Type: nvarchar(100)`),
@@ -10546,11 +10546,11 @@ export const MJArchiveRunDetailSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ArchiveRun: z.string().describe(`
+    ArchiveRun: z.string().nullable().describe(`
         * * Field Name: ArchiveRun
         * * Display Name: Archive Run
         * * SQL Data Type: nvarchar(255)`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
@@ -10658,11 +10658,11 @@ export const MJArchiveRunSchema = z.object({
     *   * Purge
     *   * Store
         * * Description: The configuration's StorageMode when this run started: Store (copies written to storage) or Purge (no copies kept; only failed records get an ArchiveRunDetail row).`),
-    ArchiveConfiguration: z.string().describe(`
+    ArchiveConfiguration: z.string().nullable().describe(`
         * * Field Name: ArchiveConfiguration
         * * Display Name: Configuration Name
         * * SQL Data Type: nvarchar(255)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
@@ -10729,11 +10729,11 @@ export const MJArtifactPermissionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Artifact: z.string().describe(`
+    Artifact: z.string().nullable().describe(`
         * * Field Name: Artifact
         * * Display Name: Artifact
         * * SQL Data Type: nvarchar(255)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -10922,7 +10922,7 @@ export const MJArtifactUseSchema = z.object({
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version
         * * SQL Data Type: nvarchar(255)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -11090,11 +11090,11 @@ export const MJArtifactVersionSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: One-way override that forces this artifact version to be delivered via tools regardless of the Artifact Type's DefaultDeliveryMode. When true, the resolver never emits an inline content block for this version. There is no inverse override — an instance cannot be widened from ToolsOnly to Inline. Default false.`),
-    Artifact: z.string().describe(`
+    Artifact: z.string().nullable().describe(`
         * * Field Name: Artifact
         * * Display Name: Artifact
         * * SQL Data Type: nvarchar(255)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -11166,15 +11166,15 @@ export const MJArtifactSchema = z.object({
     *   * Always
     *   * System Only
         * * Description: Controls artifact visibility in user-facing lists. "Always" shows in all lists, "System Only" hides from normal views (for system-generated artifacts like agent routing payloads).`),
-    Environment: z.string().describe(`
+    Environment: z.string().nullable().describe(`
         * * Field Name: Environment
         * * Display Name: Environment
         * * SQL Data Type: nvarchar(255)`),
-    Type: z.string().describe(`
+    Type: z.string().nullable().describe(`
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(100)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -11313,11 +11313,11 @@ export const MJAuditLogSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
-    AuditLogType: z.string().describe(`
+    AuditLogType: z.string().nullable().describe(`
         * * Field Name: AuditLogType
         * * Display Name: Audit Log Type
         * * SQL Data Type: nvarchar(50)`),
@@ -11497,11 +11497,11 @@ export const MJAuthorizationRoleSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Authorization: z.string().describe(`
+    Authorization: z.string().nullable().describe(`
         * * Field Name: Authorization
         * * Display Name: Authorization
         * * SQL Data Type: nvarchar(100)`),
-    Role: z.string().describe(`
+    Role: z.string().nullable().describe(`
         * * Field Name: Role
         * * Display Name: Role
         * * SQL Data Type: nvarchar(50)`),
@@ -11661,11 +11661,11 @@ export const MJBrandKitAssetSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    BrandKit: z.string().describe(`
+    BrandKit: z.string().nullable().describe(`
         * * Field Name: BrandKit
         * * Display Name: Brand Kit
         * * SQL Data Type: nvarchar(255)`),
-    File: z.string().describe(`
+    File: z.string().nullable().describe(`
         * * Field Name: File
         * * Display Name: File
         * * SQL Data Type: nvarchar(500)`),
@@ -11831,11 +11831,11 @@ export const MJCalendarEventLinkSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    CommunicationProvider: z.string().describe(`
+    CommunicationProvider: z.string().nullable().describe(`
         * * Field Name: CommunicationProvider
         * * Display Name: Communication Provider
         * * SQL Data Type: nvarchar(255)`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -11887,7 +11887,7 @@ export const MJCalendarSyncStateSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    CommunicationProvider: z.string().describe(`
+    CommunicationProvider: z.string().nullable().describe(`
         * * Field Name: CommunicationProvider
         * * Display Name: Communication Provider
         * * SQL Data Type: nvarchar(255)`),
@@ -11978,7 +11978,7 @@ export const MJClusterAnalysisSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -12042,7 +12042,7 @@ export const MJClusterAnalysisClusterSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ClusterAnalysis: z.string().describe(`
+    ClusterAnalysis: z.string().nullable().describe(`
         * * Field Name: ClusterAnalysis
         * * Display Name: Cluster Analysis
         * * SQL Data Type: nvarchar(255)`),
@@ -12097,7 +12097,7 @@ export const MJCollectionArtifactSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Eager-load hint for a realtime media kit: when 1, the agent is told to show / the client to prefetch this item at session start rather than waiting until it is contextually relevant. Default 0 (lazy — surfaced only when the agent chooses).`),
-    Collection: z.string().describe(`
+    Collection: z.string().nullable().describe(`
         * * Field Name: Collection
         * * Display Name: Collection Name
         * * SQL Data Type: nvarchar(255)`),
@@ -12168,11 +12168,11 @@ export const MJCollectionPermissionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Collection: z.string().describe(`
+    Collection: z.string().nullable().describe(`
         * * Field Name: Collection
         * * Display Name: Collection
         * * SQL Data Type: nvarchar(255)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -12245,7 +12245,7 @@ export const MJCollectionSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: The user who owns this collection and has full permissions`),
-    Environment: z.string().describe(`
+    Environment: z.string().nullable().describe(`
         * * Field Name: Environment
         * * Display Name: Environment
         * * SQL Data Type: nvarchar(255)`),
@@ -12402,11 +12402,11 @@ export const MJCommunicationLogSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    CommunicationProvider: z.string().describe(`
+    CommunicationProvider: z.string().nullable().describe(`
         * * Field Name: CommunicationProvider
         * * Display Name: Communication Provider
         * * SQL Data Type: nvarchar(255)`),
-    CommunicationProviderMessageType: z.string().describe(`
+    CommunicationProviderMessageType: z.string().nullable().describe(`
         * * Field Name: CommunicationProviderMessageType
         * * Display Name: Communication Provider Message Type
         * * SQL Data Type: nvarchar(255)`),
@@ -12466,11 +12466,11 @@ export const MJCommunicationProviderMessageTypeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    CommunicationProvider: z.string().describe(`
+    CommunicationProvider: z.string().nullable().describe(`
         * * Field Name: CommunicationProvider
         * * Display Name: Communication Provider
         * * SQL Data Type: nvarchar(255)`),
-    CommunicationBaseMessageType: z.string().describe(`
+    CommunicationBaseMessageType: z.string().nullable().describe(`
         * * Field Name: CommunicationBaseMessageType
         * * Display Name: Communication Base Message Type
         * * SQL Data Type: nvarchar(100)`),
@@ -12665,7 +12665,7 @@ export const MJCommunicationRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -12820,11 +12820,11 @@ export const MJCompanyIntegrationEntityMapSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    CompanyIntegration: z.string().describe(`
+    CompanyIntegration: z.string().nullable().describe(`
         * * Field Name: CompanyIntegration
         * * Display Name: Company Integration Name
         * * SQL Data Type: nvarchar(255)`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
@@ -12925,7 +12925,7 @@ export const MJCompanyIntegrationFieldMapSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    EntityMap: z.string().describe(`
+    EntityMap: z.string().nullable().describe(`
         * * Field Name: EntityMap
         * * Display Name: Entity Map
         * * SQL Data Type: nvarchar(500)`),
@@ -13133,7 +13133,7 @@ export const MJCompanyIntegrationObjectFieldSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    CompanyIntegrationObject: z.string().describe(`
+    CompanyIntegrationObject: z.string().nullable().describe(`
         * * Field Name: CompanyIntegrationObject
         * * Display Name: Company Integration Object
         * * SQL Data Type: nvarchar(255)`),
@@ -13446,11 +13446,11 @@ export const MJCompanyIntegrationObjectSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Integration: z.string().describe(`
+    Integration: z.string().nullable().describe(`
         * * Field Name: Integration
         * * Display Name: Integration
         * * SQL Data Type: nvarchar(100)`),
-    CompanyIntegration: z.string().describe(`
+    CompanyIntegration: z.string().nullable().describe(`
         * * Field Name: CompanyIntegration
         * * Display Name: Company Integration
         * * SQL Data Type: nvarchar(255)`),
@@ -13501,11 +13501,11 @@ export const MJCompanyIntegrationRecordMapSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    CompanyIntegration: z.string().describe(`
+    CompanyIntegration: z.string().nullable().describe(`
         * * Field Name: CompanyIntegration
         * * Display Name: Company Integration
         * * SQL Data Type: nvarchar(255)`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -13573,7 +13573,7 @@ export const MJCompanyIntegrationRunAPILogSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    CompanyIntegrationRun: z.string().describe(`
+    CompanyIntegrationRun: z.string().nullable().describe(`
         * * Field Name: CompanyIntegrationRun
         * * Display Name: Company Integration Run
         * * SQL Data Type: nvarchar(100)`),
@@ -13833,7 +13833,7 @@ export const MJCompanyIntegrationSyncWatermarkSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    EntityMap: z.string().describe(`
+    EntityMap: z.string().nullable().describe(`
         * * Field Name: EntityMap
         * * Display Name: Entity Map Name
         * * SQL Data Type: nvarchar(500)`),
@@ -14071,11 +14071,11 @@ export const MJComponentDependencySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Component: z.string().describe(`
+    Component: z.string().nullable().describe(`
         * * Field Name: Component
         * * Display Name: Component
         * * SQL Data Type: nvarchar(500)`),
-    DependencyComponent: z.string().describe(`
+    DependencyComponent: z.string().nullable().describe(`
         * * Field Name: DependencyComponent
         * * Display Name: Dependency Component
         * * SQL Data Type: nvarchar(500)`),
@@ -14229,11 +14229,11 @@ export const MJComponentLibraryLinkSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Component: z.string().describe(`
+    Component: z.string().nullable().describe(`
         * * Field Name: Component
         * * Display Name: Component
         * * SQL Data Type: nvarchar(500)`),
-    Library: z.string().describe(`
+    Library: z.string().nullable().describe(`
         * * Field Name: Library
         * * Display Name: Library
         * * SQL Data Type: nvarchar(500)`),
@@ -15192,15 +15192,15 @@ export const MJContentItemSchema = z.object({
         * * Field Name: ContentSource
         * * Display Name: Content Source Name
         * * SQL Data Type: nvarchar(255)`),
-    ContentType: z.string().describe(`
+    ContentType: z.string().nullable().describe(`
         * * Field Name: ContentType
         * * Display Name: Content Type Name
         * * SQL Data Type: nvarchar(255)`),
-    ContentSourceType: z.string().describe(`
+    ContentSourceType: z.string().nullable().describe(`
         * * Field Name: ContentSourceType
         * * Display Name: Content Source Type Name
         * * SQL Data Type: nvarchar(255)`),
-    ContentFileType: z.string().describe(`
+    ContentFileType: z.string().nullable().describe(`
         * * Field Name: ContentFileType
         * * Display Name: Content File Type Name
         * * SQL Data Type: nvarchar(255)`),
@@ -15347,7 +15347,7 @@ export const MJContentProcessRunDetailSchema = z.object({
         * * Field Name: ContentSource
         * * Display Name: Content Source Name
         * * SQL Data Type: nvarchar(255)`),
-    ContentSourceType: z.string().describe(`
+    ContentSourceType: z.string().nullable().describe(`
         * * Field Name: ContentSourceType
         * * Display Name: Source Type Category
         * * SQL Data Type: nvarchar(255)`),
@@ -15750,15 +15750,15 @@ export const MJContentSourceSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
         * * Description: Optional target Semantic Graph (MJ: Graphs) that this Content Source populates when the Content Pipeline Graph overlay stage runs. Multiple Content Sources can share the same GraphID.`),
-    ContentType: z.string().describe(`
+    ContentType: z.string().nullable().describe(`
         * * Field Name: ContentType
         * * Display Name: Content Type Name
         * * SQL Data Type: nvarchar(255)`),
-    ContentSourceType: z.string().describe(`
+    ContentSourceType: z.string().nullable().describe(`
         * * Field Name: ContentSourceType
         * * Display Name: Content Source Type Name
         * * SQL Data Type: nvarchar(255)`),
-    ContentFileType: z.string().describe(`
+    ContentFileType: z.string().nullable().describe(`
         * * Field Name: ContentFileType
         * * Display Name: Content File Type Name
         * * SQL Data Type: nvarchar(255)`),
@@ -15906,7 +15906,7 @@ export const MJContentTypeSchema = z.object({
         * * Display Name: Extractor Key
         * * SQL Data Type: nvarchar(100)
         * * Description: The default content extractor for items of this content type, beside SegmenterKey and CleanerKey. A per-type default has no home in a source's Configuration, and reading it from a run's Options would make it per-run.`),
-    AIModel: z.string().describe(`
+    AIModel: z.string().nullable().describe(`
         * * Field Name: AIModel
         * * Display Name: AI Model Name
         * * SQL Data Type: nvarchar(50)`),
@@ -15962,7 +15962,7 @@ export const MJConversationArtifactPermissionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ConversationArtifact: z.string().describe(`
+    ConversationArtifact: z.string().nullable().describe(`
         * * Field Name: ConversationArtifact
         * * Display Name: Conversation Artifact
         * * SQL Data Type: nvarchar(255)`),
@@ -16015,7 +16015,7 @@ export const MJConversationArtifactVersionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ConversationArtifact: z.string().describe(`
+    ConversationArtifact: z.string().nullable().describe(`
         * * Field Name: ConversationArtifact
         * * Display Name: Conversation Artifact
         * * SQL Data Type: nvarchar(255)`),
@@ -16084,7 +16084,7 @@ export const MJConversationArtifactSchema = z.object({
         * * Field Name: Conversation
         * * Display Name: Conversation
         * * SQL Data Type: nvarchar(255)`),
-    ArtifactType: z.string().describe(`
+    ArtifactType: z.string().nullable().describe(`
         * * Field Name: ArtifactType
         * * Display Name: Artifact Type
         * * SQL Data Type: nvarchar(100)`),
@@ -16163,7 +16163,7 @@ export const MJConversationBranchSchema = z.object({
         * * Field Name: ParentBranch
         * * Display Name: Parent Branch Detail
         * * SQL Data Type: nvarchar(255)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
@@ -16364,7 +16364,7 @@ export const MJConversationDetailAttachmentSchema = z.object({
         * * Field Name: ConversationDetail
         * * Display Name: Conversation Detail Record
         * * SQL Data Type: nvarchar(100)`),
-    Modality: z.string().describe(`
+    Modality: z.string().nullable().describe(`
         * * Field Name: Modality
         * * Display Name: Modality Record
         * * SQL Data Type: nvarchar(50)`),
@@ -16425,7 +16425,7 @@ export const MJConversationDetailRatingSchema = z.object({
         * * Field Name: ConversationDetail
         * * Display Name: Conversation Detail
         * * SQL Data Type: nvarchar(100)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -16753,7 +16753,7 @@ export const MJConversationSkillSchema = z.object({
         * * Field Name: Conversation
         * * Display Name: Conversation Reference
         * * SQL Data Type: nvarchar(255)`),
-    Skill: z.string().describe(`
+    Skill: z.string().nullable().describe(`
         * * Field Name: Skill
         * * Display Name: Skill Name
         * * SQL Data Type: nvarchar(255)`),
@@ -16887,7 +16887,7 @@ export const MJConversationWidgetInstanceSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Application: z.string().describe(`
+    Application: z.string().nullable().describe(`
         * * Field Name: Application
         * * Display Name: Application
         * * SQL Data Type: nvarchar(100)`),
@@ -16895,7 +16895,7 @@ export const MJConversationWidgetInstanceSchema = z.object({
         * * Field Name: PinnedAgent
         * * Display Name: Pinned Agent
         * * SQL Data Type: nvarchar(255)`),
-    GuestRole: z.string().describe(`
+    GuestRole: z.string().nullable().describe(`
         * * Field Name: GuestRole
         * * Display Name: Guest Role
         * * SQL Data Type: nvarchar(50)`),
@@ -17094,7 +17094,7 @@ export const MJConversationSchema = z.object({
         * * Display Name: Resolved At
         * * SQL Data Type: datetimeoffset
         * * Description: UTC timestamp when this anchored conversation thread was most recently marked resolved. NULL when IsResolved = 0.`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -17106,7 +17106,7 @@ export const MJConversationSchema = z.object({
         * * Field Name: DataContext
         * * Display Name: Data Context
         * * SQL Data Type: nvarchar(255)`),
-    Environment: z.string().describe(`
+    Environment: z.string().nullable().describe(`
         * * Field Name: Environment
         * * Display Name: Environment
         * * SQL Data Type: nvarchar(255)`),
@@ -17412,7 +17412,7 @@ export const MJCredentialSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    CredentialType: z.string().describe(`
+    CredentialType: z.string().nullable().describe(`
         * * Field Name: CredentialType
         * * Display Name: Credential Type
         * * SQL Data Type: nvarchar(100)`),
@@ -17465,7 +17465,7 @@ export const MJDashboardCategorySchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -17539,11 +17539,11 @@ export const MJDashboardCategoryLinkSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Dashboard: z.string().describe(`
+    Dashboard: z.string().nullable().describe(`
         * * Field Name: Dashboard
         * * Display Name: Dashboard Name
         * * SQL Data Type: nvarchar(255)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
@@ -17614,11 +17614,11 @@ export const MJDashboardCategoryPermissionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    DashboardCategory: z.string().describe(`
+    DashboardCategory: z.string().nullable().describe(`
         * * Field Name: DashboardCategory
         * * Display Name: Dashboard Category
         * * SQL Data Type: nvarchar(100)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -17755,11 +17755,11 @@ export const MJDashboardPermissionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Dashboard: z.string().describe(`
+    Dashboard: z.string().nullable().describe(`
         * * Field Name: Dashboard
         * * Display Name: Dashboard
         * * SQL Data Type: nvarchar(255)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -17826,7 +17826,7 @@ export const MJDashboardUserPreferenceSchema = z.object({
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
-    Dashboard: z.string().describe(`
+    Dashboard: z.string().nullable().describe(`
         * * Field Name: Dashboard
         * * Display Name: Dashboard
         * * SQL Data Type: nvarchar(255)`),
@@ -17874,11 +17874,11 @@ export const MJDashboardUserStateSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Dashboard: z.string().describe(`
+    Dashboard: z.string().nullable().describe(`
         * * Field Name: Dashboard
         * * Display Name: Dashboard
         * * SQL Data Type: nvarchar(255)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -18008,7 +18008,7 @@ export const MJDashboardSchema = z.object({
         * * Display Name: Approved Fingerprint
         * * SQL Data Type: nvarchar(100)
         * * Description: SHA-256 fingerprint of the definition that was approved: its layout, parts, property mappings, wires and code. The approval is current only while this matches the fingerprint of the current definition.`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -18020,7 +18020,7 @@ export const MJDashboardSchema = z.object({
         * * Field Name: Application
         * * Display Name: Application
         * * SQL Data Type: nvarchar(100)`),
-    Environment: z.string().describe(`
+    Environment: z.string().nullable().describe(`
         * * Field Name: Environment
         * * Display Name: Environment
         * * SQL Data Type: nvarchar(255)`),
@@ -18112,7 +18112,7 @@ export const MJDataContextItemSchema = z.object({
         * * Display Name: Code Name
         * * SQL Data Type: nvarchar(255)
         * * Description: Optional programmatic identifier for this data context item. Must be unique within the DataContext and follow JavaScript naming conventions (letters, numbers, underscore, starting with letter or underscore). Used for improved code generation and programmatic access to data context items.`),
-    DataContext: z.string().describe(`
+    DataContext: z.string().nullable().describe(`
         * * Field Name: DataContext
         * * Display Name: Data Context
         * * SQL Data Type: nvarchar(255)`),
@@ -18169,7 +18169,7 @@ export const MJDataContextSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -18236,11 +18236,11 @@ export const MJDatasetItemSchema = z.object({
         * * Display Name: Columns
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional column to store a comma-delimited list of columns for the DatasetItem`),
-    Dataset: z.string().describe(`
+    Dataset: z.string().nullable().describe(`
         * * Field Name: Dataset
         * * Display Name: Dataset
         * * SQL Data Type: nvarchar(100)`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -18668,7 +18668,7 @@ export const MJDiagnosticSessionChunkSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    DiagnosticSession: z.string().describe(`
+    DiagnosticSession: z.string().nullable().describe(`
         * * Field Name: DiagnosticSession
         * * Display Name: Diagnostic Session
         * * SQL Data Type: nvarchar(255)`),
@@ -18791,7 +18791,7 @@ export const MJDiagnosticSessionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    CreatedByUser: z.string().describe(`
+    CreatedByUser: z.string().nullable().describe(`
         * * Field Name: CreatedByUser
         * * Display Name: Created By User Name
         * * SQL Data Type: nvarchar(100)`),
@@ -18802,6 +18802,44 @@ export const MJDiagnosticSessionSchema = z.object({
 });
 
 export type MJDiagnosticSessionEntityType = z.infer<typeof MJDiagnosticSessionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Document Sequence Counters
+ */
+export const MJDocumentSequenceCounterSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SequenceKey: z.string().describe(`
+        * * Field Name: SequenceKey
+        * * Display Name: Sequence Key
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Globally unique logical sequence identifier (for example Orders.OrderNumber or Accounting.JournalEntry.EntryNumber).`),
+    ScopeKey: z.string().describe(`
+        * * Field Name: ScopeKey
+        * * Display Name: Scope Key
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Deterministic partition key combining tenant, scope fields, and reset period (or __GLOBAL__ for unpartitioned sequences).`),
+    CurrentValue: z.number().describe(`
+        * * Field Name: CurrentValue
+        * * Display Name: Current Value
+        * * SQL Data Type: bigint
+        * * Description: Most recently allocated integer value for this (SequenceKey, ScopeKey) partition.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJDocumentSequenceCounterEntityType = z.infer<typeof MJDocumentSequenceCounterSchema>;
 
 /**
  * zod schema definition for the entity MJ: Duplicate Run Detail Matches
@@ -18940,7 +18978,7 @@ export const MJDuplicateRunDetailMatchSchema = z.object({
         * * Display Name: Proposed Field Map
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON of the LLM's proposed per-field survivor choices for the matched set. Resolved to literal {FieldName, Value} entries (the existing MergeRecords FieldMap contract) and applied to the surviving record before the transactional merge; the user can override per field.`),
-    DuplicateRunDetail: z.string().describe(`
+    DuplicateRunDetail: z.string().nullable().describe(`
         * * Field Name: DuplicateRunDetail
         * * Display Name: Duplicate Run Detail Object
         * * SQL Data Type: nvarchar(500)`),
@@ -19043,7 +19081,7 @@ export const MJDuplicateRunDetailSchema = z.object({
         * * Display Name: Ended At
         * * SQL Data Type: datetimeoffset
         * * Description: When processing completed for this specific record during duplicate detection.`),
-    DuplicateRun: z.string().describe(`
+    DuplicateRun: z.string().nullable().describe(`
         * * Field Name: DuplicateRun
         * * Display Name: Run Name
         * * SQL Data Type: nvarchar(255)`),
@@ -19168,11 +19206,11 @@ export const MJDuplicateRunSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entity Documents (vwEntityDocuments.ID)
         * * Description: The Entity Document this run used: its template, vectors, match thresholds and LLM reasoning settings produced the run's matches.`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
-    StartedByUser: z.string().describe(`
+    StartedByUser: z.string().nullable().describe(`
         * * Field Name: StartedByUser
         * * Display Name: Started By User
         * * SQL Data Type: nvarchar(100)`),
@@ -19184,7 +19222,7 @@ export const MJDuplicateRunSchema = z.object({
         * * Field Name: ApprovedByUser
         * * Display Name: Approved By User
         * * SQL Data Type: nvarchar(100)`),
-    EntityDocument: z.string().describe(`
+    EntityDocument: z.string().nullable().describe(`
         * * Field Name: EntityDocument
         * * Display Name: Entity Document Name
         * * SQL Data Type: nvarchar(250)`),
@@ -19236,7 +19274,7 @@ export const MJEmployeeCompanyIntegrationSchema = z.object({
         * * Field Name: Employee
         * * Display Name: Employee Name
         * * SQL Data Type: nvarchar(81)`),
-    CompanyIntegration: z.string().describe(`
+    CompanyIntegration: z.string().nullable().describe(`
         * * Field Name: CompanyIntegration
         * * Display Name: Integration Name
         * * SQL Data Type: nvarchar(255)`),
@@ -19277,7 +19315,7 @@ export const MJEmployeeRoleSchema = z.object({
         * * Field Name: Employee
         * * Display Name: Employee Name
         * * SQL Data Type: nvarchar(81)`),
-    Role: z.string().describe(`
+    Role: z.string().nullable().describe(`
         * * Field Name: Role
         * * Display Name: Role Name
         * * SQL Data Type: nvarchar(50)`),
@@ -19318,7 +19356,7 @@ export const MJEmployeeSkillSchema = z.object({
         * * Field Name: Employee
         * * Display Name: Employee Name
         * * SQL Data Type: nvarchar(81)`),
-    Skill: z.string().describe(`
+    Skill: z.string().nullable().describe(`
         * * Field Name: Skill
         * * Display Name: Skill
         * * SQL Data Type: nvarchar(50)`),
@@ -19625,11 +19663,11 @@ export const MJEncryptionKeySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    EncryptionKeySource: z.string().describe(`
+    EncryptionKeySource: z.string().nullable().describe(`
         * * Field Name: EncryptionKeySource
         * * Display Name: Encryption Key Source
         * * SQL Data Type: nvarchar(100)`),
-    EncryptionAlgorithm: z.string().describe(`
+    EncryptionAlgorithm: z.string().nullable().describe(`
         * * Field Name: EncryptionAlgorithm
         * * Display Name: Encryption Algorithm
         * * SQL Data Type: nvarchar(50)`),
@@ -20206,15 +20244,15 @@ export const MJEntityAIActionSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
-    AIModel: z.string().describe(`
+    AIModel: z.string().nullable().describe(`
         * * Field Name: AIModel
         * * Display Name: AIModel
         * * SQL Data Type: nvarchar(50)`),
-    AIAction: z.string().describe(`
+    AIAction: z.string().nullable().describe(`
         * * Field Name: AIAction
         * * Display Name: AIAction
         * * SQL Data Type: nvarchar(50)`),
@@ -20271,7 +20309,7 @@ export const MJEntityActionFilterSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ActionFilter: z.string().describe(`
+    ActionFilter: z.string().nullable().describe(`
         * * Field Name: ActionFilter
         * * Display Name: Action Filter Name
         * * SQL Data Type: nvarchar(MAX)`),
@@ -20363,7 +20401,7 @@ export const MJEntityActionInvocationSchema = z.object({
         * * Display Name: Runtime UX Driver Class
         * * SQL Data Type: nvarchar(255)
         * * Description: Optional class name of a registered runtime-UX driver component (a BaseEntityActionRuntimeUX subclass resolved via MJGlobal.ClassFactory) that owns this invocation's interaction — parameter collection, dry-run preview, confirmation, and progress. NULL invokes the action directly with no custom UX. This lets any action opt into a richer, reusable runtime experience while the grid/toolbar stays operation-agnostic.`),
-    InvocationType: z.string().describe(`
+    InvocationType: z.string().nullable().describe(`
         * * Field Name: InvocationType
         * * Display Name: Invocation Type Name
         * * SQL Data Type: nvarchar(255)`),
@@ -20427,7 +20465,7 @@ export const MJEntityActionParamSchema = z.object({
         * * Display Name: Log Value
         * * SQL Data Type: bit
         * * Description: Optional per-binding override of ActionParam.LogValue. NULL (the default) inherits the parameter definition. Set to 0 when this particular binding passes something sensitive through a parameter that is ordinarily safe to log - a message body through a generic Text parameter, for instance. Cannot re-enable logging for a value type the hard rule suppresses.`),
-    ActionParam: z.string().describe(`
+    ActionParam: z.string().nullable().describe(`
         * * Field Name: ActionParam
         * * Display Name: Action Parameter Name
         * * SQL Data Type: nvarchar(255)`),
@@ -20513,11 +20551,11 @@ export const MJEntityActionSchema = z.object({
     *   * Durable
     *   * Inline
         * * Description: How an After* dispatch of this binding executes. Inline (the default) runs it fire-and-forget in the saving process, which is fast but lost if that process dies. Durable submits a single-node task graph instead, so the work survives a restart and is reclaimed by the dispatcher — at the cost of a Task row, a dispatcher hop of latency, and the action's parameters being persisted (redacted) at rest. Ignored for Validate and Before* invocations, which run inside the save and cannot be deferred without changing whether the save succeeds.`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
-    Action: z.string().describe(`
+    Action: z.string().nullable().describe(`
         * * Field Name: Action
         * * Display Name: Action Name
         * * SQL Data Type: nvarchar(425)`),
@@ -20612,7 +20650,7 @@ export const MJEntityAlternateBaseViewSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Text
         * * SQL Data Type: nvarchar(255)`),
@@ -20658,7 +20696,7 @@ export const MJEntityCommunicationFieldSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    EntityCommunicationMessageType: z.string().describe(`
+    EntityCommunicationMessageType: z.string().nullable().describe(`
         * * Field Name: EntityCommunicationMessageType
         * * Display Name: Message Type Name
         * * SQL Data Type: nvarchar(100)`),
@@ -20701,11 +20739,11 @@ export const MJEntityCommunicationMessageTypeSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
-    BaseMessageType: z.string().describe(`
+    BaseMessageType: z.string().nullable().describe(`
         * * Field Name: BaseMessageType
         * * Display Name: Base Message Type
         * * SQL Data Type: nvarchar(100)`),
@@ -20756,7 +20794,7 @@ export const MJEntityDocumentRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    EntityDocument: z.string().describe(`
+    EntityDocument: z.string().nullable().describe(`
         * * Field Name: EntityDocument
         * * Display Name: Entity Document
         * * SQL Data Type: nvarchar(250)`),
@@ -20801,7 +20839,7 @@ export const MJEntityDocumentSettingSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    EntityDocument: z.string().describe(`
+    EntityDocument: z.string().nullable().describe(`
         * * Field Name: EntityDocument
         * * Display Name: Entity Document
         * * SQL Data Type: nvarchar(250)`),
@@ -20966,11 +21004,11 @@ export const MJEntityDocumentSchema = z.object({
     *   * LLMGated
     *   * ReviewAll
         * * Description: Graduated human-in-the-loop level, consulted only when EnableLLMReasoning = 1. ReviewAll = every proposed merge goes to human review; LLMGated = only LLM "Merge" recommendations surface (NotDuplicate suppressed but logged); AutoMergeAboveAbsolute = at/above AbsoluteMatchThreshold AND LLM "Merge", auto-execute (still honoring the per-merge AllowRecordMerge guard).`),
-    Type: z.string().describe(`
+    Type: z.string().nullable().describe(`
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(100)`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
@@ -20978,7 +21016,7 @@ export const MJEntityDocumentSchema = z.object({
         * * Field Name: VectorDatabase
         * * Display Name: Vector Database Name
         * * SQL Data Type: nvarchar(100)`),
-    Template: z.string().describe(`
+    Template: z.string().nullable().describe(`
         * * Field Name: Template
         * * Display Name: Template Name
         * * SQL Data Type: nvarchar(255)`),
@@ -21064,11 +21102,11 @@ export const MJEntityFieldPermissionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    EntityField: z.string().describe(`
+    EntityField: z.string().nullable().describe(`
         * * Field Name: EntityField
         * * Display Name: Entity Field
         * * SQL Data Type: nvarchar(255)`),
-    Role: z.string().describe(`
+    Role: z.string().nullable().describe(`
         * * Field Name: Role
         * * Display Name: Role
         * * SQL Data Type: nvarchar(50)`),
@@ -21119,6 +21157,17 @@ export const MJEntityFieldValueSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Source: z.union([z.literal('Check'), z.literal('Config'), z.literal('Manual')]).describe(`
+        * * Field Name: Source
+        * * Display Name: Source
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Manual
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Check
+    *   * Config
+    *   * Manual
+        * * Description: Where this value came from. Check = parsed from the column's CHECK constraint by CodeGen. Config = declared in the additionalSchemaInfo file and written by CodeGen. Manual = entered by a person or by any other process. CodeGen removes Config rows the file no longer declares (when retractRemovedSoftKeys is on) and never removes Manual rows.`),
     EntityField: z.string().describe(`
         * * Field Name: EntityField
         * * Display Name: Entity Field
@@ -21827,11 +21876,11 @@ export const MJEntityFormContributionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
-    Component: z.string().describe(`
+    Component: z.string().nullable().describe(`
         * * Field Name: Component
         * * Display Name: Component
         * * SQL Data Type: nvarchar(500)`),
@@ -21937,11 +21986,11 @@ export const MJEntityFormOverrideSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
-    Component: z.string().describe(`
+    Component: z.string().nullable().describe(`
         * * Field Name: Component
         * * Display Name: Component Name
         * * SQL Data Type: nvarchar(500)`),
@@ -22042,11 +22091,11 @@ export const MJEntityOrganicKeyRelatedEntitySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    EntityOrganicKey: z.string().describe(`
+    EntityOrganicKey: z.string().nullable().describe(`
         * * Field Name: EntityOrganicKey
         * * Display Name: Organic Key
         * * SQL Data Type: nvarchar(255)`),
-    RelatedEntity: z.string().describe(`
+    RelatedEntity: z.string().nullable().describe(`
         * * Field Name: RelatedEntity
         * * Display Name: Related Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -22132,7 +22181,17 @@ export const MJEntityOrganicKeySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Entity: z.string().describe(`
+    Source: z.union([z.literal('Config'), z.literal('Manual')]).describe(`
+        * * Field Name: Source
+        * * Display Name: Source
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Manual
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Config
+    *   * Manual
+        * * Description: Where this organic key came from. Config = declared in the additionalSchemaInfo file and written by CodeGen. Manual = created by a person or by any other process. CodeGen removes Config keys the file no longer declares, with their related entities and unused bridge views (when retractRemovedSoftKeys is on), and never removes Manual keys.`),
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -22319,15 +22378,15 @@ export const MJEntityRecordDocumentSchema = z.object({
         * * Display Name: Vector Binary
         * * SQL Data Type: varbinary(MAX)
         * * Description: The embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of VectorJSON. Written alongside VectorJSON by vector sync; readers prefer it and fall back to VectorJSON when it is NULL.`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
-    EntityDocument: z.string().describe(`
+    EntityDocument: z.string().nullable().describe(`
         * * Field Name: EntityDocument
         * * Display Name: Entity Document
         * * SQL Data Type: nvarchar(250)`),
-    VectorIndex: z.string().describe(`
+    VectorIndex: z.string().nullable().describe(`
         * * Field Name: VectorIndex
         * * Display Name: Vector Index
         * * SQL Data Type: nvarchar(255)`),
@@ -22620,7 +22679,7 @@ export const MJEntitySettingSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -22818,7 +22877,7 @@ export const MJExperimentSessionIterationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ExperimentSession: z.string().describe(`
+    ExperimentSession: z.string().nullable().describe(`
         * * Field Name: ExperimentSession
         * * Display Name: Experiment Session Name
         * * SQL Data Type: nvarchar(255)`),
@@ -22900,7 +22959,7 @@ export const MJExperimentSessionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Experiment: z.string().describe(`
+    Experiment: z.string().nullable().describe(`
         * * Field Name: Experiment
         * * Display Name: Experiment Name
         * * SQL Data Type: nvarchar(255)`),
@@ -23241,7 +23300,7 @@ export const MJExternalDataSourceSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Type: z.string().describe(`
+    Type: z.string().nullable().describe(`
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(100)`),
@@ -23451,7 +23510,7 @@ export const MJFeaturePipelineVersionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    RecordProcess: z.string().describe(`
+    RecordProcess: z.string().nullable().describe(`
         * * Field Name: RecordProcess
         * * Display Name: Record Process
         * * SQL Data Type: nvarchar(255)`),
@@ -23590,7 +23649,7 @@ export const MJFeatureValueCacheSchema = z.object({
         * * Field Name: RecordProcess
         * * Display Name: Record Process Name
         * * SQL Data Type: nvarchar(255)`),
-    Prompt: z.string().describe(`
+    Prompt: z.string().nullable().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt Name
         * * SQL Data Type: nvarchar(255)`),
@@ -23762,11 +23821,21 @@ export const MJFeatureValueSchema = z.object({
     *   * Human
     *   * Pipeline
         * * Description: Who produced the value: Pipeline (computed by the Feature Pipeline) or Human (entered by a person, which write-back leaves in place).`),
-    RecordProcess: z.string().describe(`
+    EffectiveAsOf: z.date().nullable().describe(`
+        * * Field Name: EffectiveAsOf
+        * * Display Name: Effective As Of
+        * * SQL Data Type: datetimeoffset
+        * * Description: Instant from which this value is the record's value of the feature; as-of assembly reads the latest value with EffectiveAsOf at or before a row's decision date. On a Source = Model row it is the scoring as-of date. NULL = not effective-dated (ineligible for as-of assembly).`),
+    InputAsOf: z.date().nullable().describe(`
+        * * Field Name: InputAsOf
+        * * Display Name: Input As Of
+        * * SQL Data Type: datetimeoffset
+        * * Description: Instant of the input data the value was computed from (its provenance); never after EffectiveAsOf.`),
+    RecordProcess: z.string().nullable().describe(`
         * * Field Name: RecordProcess
         * * Display Name: Record Process
         * * SQL Data Type: nvarchar(255)`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -23884,11 +23953,11 @@ export const MJFileEntityRecordLinkSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    File: z.string().describe(`
+    File: z.string().nullable().describe(`
         * * Field Name: File
         * * Display Name: File
         * * SQL Data Type: nvarchar(500)`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -23956,7 +24025,7 @@ export const MJFileStorageAccountPermissionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    FileStorageAccount: z.string().describe(`
+    FileStorageAccount: z.string().nullable().describe(`
         * * Field Name: FileStorageAccount
         * * Display Name: Storage Account Name
         * * SQL Data Type: nvarchar(200)`),
@@ -24020,11 +24089,11 @@ export const MJFileStorageAccountSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, this storage account is included in universal/global search results. Only effective if the associated provider supports search (SupportsSearch = 1).`),
-    Provider: z.string().describe(`
+    Provider: z.string().nullable().describe(`
         * * Field Name: Provider
         * * Display Name: Provider Type
         * * SQL Data Type: nvarchar(50)`),
-    Credential: z.string().describe(`
+    Credential: z.string().nullable().describe(`
         * * Field Name: Credential
         * * Display Name: Credential Name
         * * SQL Data Type: nvarchar(200)`),
@@ -24160,7 +24229,7 @@ export const MJFileSchema = z.object({
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(255)`),
-    Provider: z.string().describe(`
+    Provider: z.string().nullable().describe(`
         * * Field Name: Provider
         * * Display Name: Provider
         * * SQL Data Type: nvarchar(50)`),
@@ -24239,7 +24308,7 @@ export const MJFormChromeRuleSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -24405,11 +24474,11 @@ export const MJGeneratedCodeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Category: z.string().describe(`
+    Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(255)`),
-    GeneratedByModel: z.string().describe(`
+    GeneratedByModel: z.string().nullable().describe(`
         * * Field Name: GeneratedByModel
         * * Display Name: Generated By Model
         * * SQL Data Type: nvarchar(50)`),
@@ -24602,7 +24671,7 @@ export const MJGraphConceptSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Graph: z.string().describe(`
+    Graph: z.string().nullable().describe(`
         * * Field Name: Graph
         * * Display Name: Graph
         * * SQL Data Type: nvarchar(255)`),
@@ -24610,7 +24679,7 @@ export const MJGraphConceptSchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
-    ConceptType: z.string().describe(`
+    ConceptType: z.string().nullable().describe(`
         * * Field Name: ConceptType
         * * Display Name: Concept Type
         * * SQL Data Type: nvarchar(100)`),
@@ -24678,7 +24747,7 @@ export const MJGraphEdgeProviderSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Graph: z.string().describe(`
+    Graph: z.string().nullable().describe(`
         * * Field Name: Graph
         * * Display Name: Graph
         * * SQL Data Type: nvarchar(255)`),
@@ -24724,11 +24793,11 @@ export const MJGraphEdgeTypeEndpointSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    EdgeType: z.string().describe(`
+    EdgeType: z.string().nullable().describe(`
         * * Field Name: EdgeType
         * * Display Name: Edge Type
         * * SQL Data Type: nvarchar(100)`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -24892,19 +24961,19 @@ export const MJGraphEdgeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Graph: z.string().describe(`
+    Graph: z.string().nullable().describe(`
         * * Field Name: Graph
         * * Display Name: Graph
         * * SQL Data Type: nvarchar(255)`),
-    EdgeType: z.string().describe(`
+    EdgeType: z.string().nullable().describe(`
         * * Field Name: EdgeType
         * * Display Name: Edge Type
         * * SQL Data Type: nvarchar(100)`),
-    SourceEntity: z.string().describe(`
+    SourceEntity: z.string().nullable().describe(`
         * * Field Name: SourceEntity
         * * Display Name: Source Entity
         * * SQL Data Type: nvarchar(255)`),
-    TargetEntity: z.string().describe(`
+    TargetEntity: z.string().nullable().describe(`
         * * Field Name: TargetEntity
         * * Display Name: Target Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -25027,7 +25096,7 @@ export const MJGraphSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    GraphType: z.string().describe(`
+    GraphType: z.string().nullable().describe(`
         * * Field Name: GraphType
         * * Display Name: Graph Type
         * * SQL Data Type: nvarchar(100)`),
@@ -25175,7 +25244,7 @@ export const MJIdentityClaimSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ClaimType: z.string().describe(`
+    ClaimType: z.string().nullable().describe(`
         * * Field Name: ClaimType
         * * Display Name: Claim Type
         * * SQL Data Type: nvarchar(100)`),
@@ -25408,7 +25477,7 @@ export const MJIntegrationObjectFieldSchema = z.object({
     *   * Declared
     *   * Discovered
         * * Description: Provenance of this IntegrationObjectField row: Declared (from static research/docs), Discovered (from runtime API introspection), Custom (customer-defined custom field, e.g., HubSpot custom property on standard object). Drives merge precedence — discovered/runtime wins for type/constraints; declared wins for description/label/sequence/category.`),
-    IntegrationObject: z.string().describe(`
+    IntegrationObject: z.string().nullable().describe(`
         * * Field Name: IntegrationObject
         * * Display Name: Integration Object
         * * SQL Data Type: nvarchar(255)`),
@@ -25700,7 +25769,7 @@ export const MJIntegrationObjectSchema = z.object({
         * * Display Name: Stable Ordering Key
         * * SQL Data Type: nvarchar(255)
         * * Description: Stable, monotonic ordering column (usually the PK) used for keyset/no-watermark resume of a scan. Null when the object has no stable key.`),
-    Integration: z.string().describe(`
+    Integration: z.string().nullable().describe(`
         * * Field Name: Integration
         * * Display Name: Integration
         * * SQL Data Type: nvarchar(100)`),
@@ -26017,7 +26086,7 @@ export const MJInteractionLinkSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -26115,7 +26184,7 @@ export const MJInteractionOfferSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    TargetUser: z.string().describe(`
+    TargetUser: z.string().nullable().describe(`
         * * Field Name: TargetUser
         * * Display Name: Target User
         * * SQL Data Type: nvarchar(100)`),
@@ -26298,7 +26367,7 @@ export const MJKnowledgeHubSavedSearchSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
@@ -26399,7 +26468,7 @@ export const MJLibraryItemSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Library: z.string().describe(`
+    Library: z.string().nullable().describe(`
         * * Field Name: Library
         * * Display Name: Library
         * * SQL Data Type: nvarchar(255)`),
@@ -26448,7 +26517,7 @@ export const MJListCategorySchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -26529,7 +26598,7 @@ export const MJListDetailSchema = z.object({
         * * Display Name: Additional Data
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional column that allows for tracking any additional data for each ListDetail row`),
-    List: z.string().describe(`
+    List: z.string().nullable().describe(`
         * * Field Name: List
         * * Display Name: List
         * * SQL Data Type: nvarchar(100)`),
@@ -26605,11 +26674,11 @@ export const MJListInvitationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    List: z.string().describe(`
+    List: z.string().nullable().describe(`
         * * Field Name: List
         * * Display Name: List Name
         * * SQL Data Type: nvarchar(100)`),
-    CreatedByUser: z.string().describe(`
+    CreatedByUser: z.string().nullable().describe(`
         * * Field Name: CreatedByUser
         * * Display Name: Created By User
         * * SQL Data Type: nvarchar(100)`),
@@ -26668,11 +26737,11 @@ export const MJListShareSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    List: z.string().describe(`
+    List: z.string().nullable().describe(`
         * * Field Name: List
         * * Display Name: List Name
         * * SQL Data Type: nvarchar(100)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
@@ -26770,11 +26839,11 @@ export const MJListSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When 1, RefreshFromSource uses SourceFilterSnapshot as the source. When 0 (default), it re-reads the live SourceView.`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
@@ -26852,7 +26921,7 @@ export const MJMCPServerConnectionPermissionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    MCPServerConnection: z.string().describe(`
+    MCPServerConnection: z.string().nullable().describe(`
         * * Field Name: MCPServerConnection
         * * Display Name: MCP Server Connection
         * * SQL Data Type: nvarchar(255)`),
@@ -26913,7 +26982,7 @@ export const MJMCPServerConnectionToolSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    MCPServerConnection: z.string().describe(`
+    MCPServerConnection: z.string().nullable().describe(`
         * * Field Name: MCPServerConnection
         * * Display Name: Connection Name
         * * SQL Data Type: nvarchar(255)`),
@@ -27029,7 +27098,7 @@ export const MJMCPServerConnectionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    MCPServer: z.string().describe(`
+    MCPServer: z.string().nullable().describe(`
         * * Field Name: MCPServer
         * * Display Name: MCP Server
         * * SQL Data Type: nvarchar(255)`),
@@ -27125,7 +27194,7 @@ export const MJMCPServerToolSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    MCPServer: z.string().describe(`
+    MCPServer: z.string().nullable().describe(`
         * * Field Name: MCPServer
         * * Display Name: MCP Server
         * * SQL Data Type: nvarchar(255)`),
@@ -27356,7 +27425,7 @@ export const MJMCPToolExecutionLogSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    MCPServerConnection: z.string().describe(`
+    MCPServerConnection: z.string().nullable().describe(`
         * * Field Name: MCPServerConnection
         * * Display Name: Connection
         * * SQL Data Type: nvarchar(255)`),
@@ -27364,7 +27433,7 @@ export const MJMCPToolExecutionLogSchema = z.object({
         * * Field Name: MCPServerTool
         * * Display Name: Tool
         * * SQL Data Type: nvarchar(255)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -27403,7 +27472,7 @@ export const MJMCPToolFavoriteSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
@@ -27468,11 +27537,11 @@ export const MJMLAlgorithmUseCaseRankingSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    MLAlgorithm: z.string().describe(`
+    MLAlgorithm: z.string().nullable().describe(`
         * * Field Name: MLAlgorithm
         * * Display Name: ML Algorithm
         * * SQL Data Type: nvarchar(255)`),
-    MLAlgorithmUseCase: z.string().describe(`
+    MLAlgorithmUseCase: z.string().nullable().describe(`
         * * Field Name: MLAlgorithmUseCase
         * * Display Name: ML Algorithm Use Case
         * * SQL Data Type: nvarchar(255)`),
@@ -27603,6 +27672,179 @@ export const MJMLAlgorithmSchema = z.object({
 });
 
 export type MJMLAlgorithmEntityType = z.infer<typeof MJMLAlgorithmSchema>;
+
+/**
+ * zod schema definition for the entity MJ: ML Evaluation Protocols
+ */
+export const MJMLEvaluationProtocolSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    LineageRootID: z.string().describe(`
+        * * Field Name: LineageRootID
+        * * Display Name: Lineage Root ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Evaluation Protocols (vwMLEvaluationProtocols.ID)
+        * * Description: ID of version 1 of this protocol. Version 1 points at itself.`),
+    Version: z.number().describe(`
+        * * Field Name: Version
+        * * Display Name: Version
+        * * SQL Data Type: int
+        * * Description: Version number within the lineage, starting at 1. A saved version is never updated.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name of the protocol.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What the protocol is for, in plain words.`),
+    Holdout: z.string().describe(`
+        * * Field Name: Holdout
+        * * Display Name: Holdout
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON HoldoutSplit (guard field): {kind:"date-carved", dateColumn, cutoff, holdoutEnd, newEntityReport} or {kind:"rolling-origin", origins (>= 5), horizonPeriods, gapPeriods, minTrainPeriods, window}.`),
+    InnerValidation: z.string().describe(`
+        * * Field Name: InnerValidation
+        * * Display Name: Inner Validation
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON InnerValidation over development rows only: repeated-stratified-kfold, grouped-kfold or blocked-time.`),
+    Seed: z.number().describe(`
+        * * Field Name: Seed
+        * * Display Name: Seed
+        * * SQL Data Type: int
+        * * Description: Random seed for every split, fold, bootstrap and estimator of a run under this protocol.`),
+    HoldoutAccessBudget: z.literal(1).describe(`
+        * * Field Name: HoldoutAccessBudget
+        * * Display Name: Holdout Access Budget
+        * * SQL Data Type: int
+        * * Default Value: 1
+    * * Value List Type: List
+    * * Possible Values 
+    *   * 1
+        * * Description: How many times the locked holdout may be scored per run: always 1, for one declared finalist.`),
+    PrimaryScore: z.string().describe(`
+        * * Field Name: PrimaryScore
+        * * Display Name: Primary Score
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON ProperScore {family, metric}: the only metric that ranks candidates and gates outcomes. Its family must equal the pipeline unit's task kind.`),
+    SecondaryMetrics: z.string().describe(`
+        * * Field Name: SecondaryMetrics
+        * * Display Name: Secondary Metrics
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of secondary metric keys (auc, accuracy, f1, precision, recall, r2, calibration-slope); reported with intervals, never used to rank.`),
+    Baselines: z.string().describe(`
+        * * Field Name: Baselines
+        * * Display Name: Baselines
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of BaselineSpec fitted on every run: dummy, one-feature, glm, naive, seasonal-naive, incumbent-heuristic.`),
+    Calibration: z.string().describe(`
+        * * Field Name: Calibration
+        * * Display Name: Calibration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON CalibrationMethod: platt, isotonic or auto, always fit on a disjoint calibration fold; not-applicable for regression.`),
+    Resampling: z.string().describe(`
+        * * Field Name: Resampling
+        * * Display Name: Resampling
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON ResamplingSpec: {kind:"none"} or {kind:"in-fold", method}; resampling never touches holdout rows.`),
+    Intervals: z.string().describe(`
+        * * Field Name: Intervals
+        * * Display Name: Intervals
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON IntervalSpec: level 0.95, method, resamples and the paired test for model-versus-comparator differences.`),
+    Promotion: z.string().describe(`
+        * * Field Name: Promotion
+        * * Display Name: Promotion
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON PromotionRule (guard field): comparators, incumbent, margin (>= 0), lowerBoundLevel 0.95, pairedOn same-holdout-rows, decisionTable Q13+Q14+Q15.`),
+    AllowedOutcomes: z.string().describe(`
+        * * Field Name: AllowedOutcomes
+        * * Display Name: Allowed Outcomes
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array, exactly ["model","keep-simple-baseline","no-signal"]: a protocol cannot omit no-signal.`),
+    LeakageAudit: z.string().describe(`
+        * * Field Name: LeakageAudit
+        * * Display Name: Leakage Audit
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON LeakageAuditSpec (guard field): held-out single-feature AUC ceiling, time-shifted-label test, drop-column test, per-source-column importance aggregation, high-cardinality ID check.`),
+    Exclusions: z.string().describe(`
+        * * Field Name: Exclusions
+        * * Display Name: Exclusions
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON ProtocolExclusions (guard field): {denyFields, denySources} — columns and sources that never enter the feature matrix (the former LeakageGuard deny lists).`),
+    Slices: z.string().describe(`
+        * * Field Name: Slices
+        * * Display Name: Slices
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON SliceSpec: {outOfTime, subgroups} — each slice is reported with the primary score and its interval.`),
+    PredictionIntervals: z.string().nullable().describe(`
+        * * Field Name: PredictionIntervals
+        * * Display Name: Prediction Intervals
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON PredictionIntervalSpec {method, nominalCoverage} for continuous, count and non-negative tasks; NULL when not requested.`),
+    ResidualDiagnostics: z.string().nullable().describe(`
+        * * Field Name: ResidualDiagnostics
+        * * Display Name: Residual Diagnostics
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON ResidualDiagnosticsSpec {acfLags, ljungBoxAlpha} for series and panels; NULL otherwise.`),
+    RetrainTriggers: z.string().describe(`
+        * * Field Name: RetrainTriggers
+        * * Display Name: Retrain Triggers
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of RetrainTrigger declared for monitoring (outcome-degradation, calibration-drift).`),
+    SearchStrategy: z.string().describe(`
+        * * Field Name: SearchStrategy
+        * * Display Name: Search Strategy
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON SearchStrategy: {kind:"random", candidates} or {kind:"guided", method, equalCostComparisonId}.`),
+    Budgets: z.string().describe(`
+        * * Field Name: Budgets
+        * * Display Name: Budgets
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON Budgets (guard field): maxComputeSeconds, maxTokens, maxCandidates, hardStop true.`),
+    MinMinorityClassRows: z.number().describe(`
+        * * Field Name: MinMinorityClassRows
+        * * Display Name: Min Minority Class Rows
+        * * SQL Data Type: int
+        * * Default Value: 20
+        * * Description: Smallest minority-class row count in the locked holdout for which a classification gate may return model; below it the gate cannot ship a model.`),
+    GuardFieldsEditableBy: z.union([z.literal('human-only'), z.literal('non-agent')]).describe(`
+        * * Field Name: GuardFieldsEditableBy
+        * * Display Name: Guard Fields Editable By
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: non-agent
+    * * Value List Type: List
+    * * Possible Values 
+    *   * human-only
+    *   * non-agent
+        * * Description: Who may change the guard fields (Holdout, Promotion, LeakageAudit, Exclusions, Budgets and this setting) in the next version: non-agent (default: any author except an agent tool call — a user, a non-agent API caller, a scheduled job or the system) or human-only (optional: only a version authored by a user). Every author's version passes the same guard-field validation.`),
+    AuthoredBy: z.string().describe(`
+        * * Field Name: AuthoredBy
+        * * Display Name: Authored By
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON Actor who authored this version.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    LineageRoot: z.string().nullable().describe(`
+        * * Field Name: LineageRoot
+        * * Display Name: Lineage Root
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJMLEvaluationProtocolEntityType = z.infer<typeof MJMLEvaluationProtocolSchema>;
 
 /**
  * zod schema definition for the entity MJ: ML Model Scoring Bindings
@@ -27798,11 +28040,11 @@ export const MJMLModelSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Pipeline: z.string().describe(`
+    Pipeline: z.string().nullable().describe(`
         * * Field Name: Pipeline
         * * Display Name: Pipeline
         * * SQL Data Type: nvarchar(255)`),
-    Algorithm: z.string().describe(`
+    Algorithm: z.string().nullable().describe(`
         * * Field Name: Algorithm
         * * Display Name: Algorithm
         * * SQL Data Type: nvarchar(255)`),
@@ -27813,6 +28055,120 @@ export const MJMLModelSchema = z.object({
 });
 
 export type MJMLModelEntityType = z.infer<typeof MJMLModelSchema>;
+
+/**
+ * zod schema definition for the entity MJ: ML Prediction Units
+ */
+export const MJMLPredictionUnitSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    LineageRootID: z.string().describe(`
+        * * Field Name: LineageRootID
+        * * Display Name: Lineage Root ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Prediction Units (vwMLPredictionUnits.ID)
+        * * Description: ID of version 1 of this unit. Version 1 points at itself; every later version points at version 1.`),
+    Version: z.number().describe(`
+        * * Field Name: Version
+        * * Display Name: Version
+        * * SQL Data Type: int
+        * * Description: Version number within the lineage, starting at 1. A saved version is never updated.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name of the unit, e.g. "Member renewal (person x membership period)".`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What the unit predicts and for whom, in plain words.`),
+    UnitRows: z.string().describe(`
+        * * Field Name: UnitRows
+        * * Display Name: Unit Rows
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON UnitRows: {kind:"grain", grainEntity, decisionDate, filter} or {kind:"grain-x-periods", grainEntity, childEntity, foreignKey, periodDate, filter}. Defines what one row is and its decision date.`),
+    LabelRule: z.string().describe(`
+        * * Field Name: LabelRule
+        * * Display Name: Label Rule
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON LabelRule: how the outcome of a row is read — a column on the row, the next period of the same grain record, or an event in a dated child entity — always within the window that starts LabelGapDays after the decision date and lasts LabelWindowDays.`),
+    LabelWindowDays: z.number().describe(`
+        * * Field Name: LabelWindowDays
+        * * Display Name: Label Window Days
+        * * SQL Data Type: int
+        * * Description: Length in days of the outcome window. A row whose window ends after the data cutoff is censored (excluded and counted).`),
+    LabelGapDays: z.number().describe(`
+        * * Field Name: LabelGapDays
+        * * Display Name: Label Gap Days
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Days between the decision date and the start of the outcome window.`),
+    TaskType: z.string().describe(`
+        * * Field Name: TaskType
+        * * Display Name: Task Type
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON TaskType: binary {classOrder, adverseIndex}, multiclass {classOrder, adverseIndices}, continuous, count, non-negative {tweediePower}, or forecast {valueKind}. Which class a score refers to and the adverse direction are derived from it, never stored separately.`),
+    LabelVersion: z.number().describe(`
+        * * Field Name: LabelVersion
+        * * Display Name: Label Version
+        * * SQL Data Type: int
+        * * Description: Outcome-definition version: equals the previous version's LabelVersion when LabelRule, LabelWindowDays, LabelGapDays and TaskType are unchanged, and that plus one otherwise.`),
+    Censoring: z.string().describe(`
+        * * Field Name: Censoring
+        * * Display Name: Censoring Rule
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON CensoringRule: {rule:"exclude-unresolved", cutoff} where cutoff is {kind:"corpus-end", entity, field}, {kind:"now"} or {kind:"fixed", at}. Rows whose outcome window has not closed at the cutoff are excluded and counted.`),
+    ChangeHistoryPolicy: z.string().describe(`
+        * * Field Name: ChangeHistoryPolicy
+        * * Display Name: Change History Policy
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON ChangeHistoryPolicy: {onUncoveredRow:"refuse"|"exclude-and-count", externalSourceRows:"as-of-detection-time"|"ineligible"} — what as-of assembly does when a decision date precedes the change history of a field updated in place.`),
+    GroupKey: z.string().nullable().describe(`
+        * * Field Name: GroupKey
+        * * Display Name: Group Key
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Field on the row whose value keeps one entity's rows together in grouped folds and the new-entity report; NULL means the grain record key.`),
+    TemporalSpec: z.string().nullable().describe(`
+        * * Field Name: TemporalSpec
+        * * Display Name: Temporal Spec
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON TemporalSpec for series and panels: timeColumn, horizonPeriods, lags, rollingWindows, period, seasonality. Every lag and rolling-window endLag is at least horizonPeriods. Required when TaskType is forecast. Versioned with the unit.`),
+    DecisionSpec: z.string().describe(`
+        * * Field Name: DecisionSpec
+        * * Display Name: Decision Spec
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON DecisionSpec: the action the prediction serves, the actor role, the capacity per period (for precision at capacity) and the period.`),
+    IncumbentHeuristic: z.string().describe(`
+        * * Field Name: IncumbentHeuristic
+        * * Display Name: Incumbent Heuristic
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON IncumbentHeuristic: {kind:"none"} or {kind:"rule", name, scoreExpression} — today's rule of thumb, scored as a named comparator on the same holdout.`),
+    AuthoredBy: z.string().describe(`
+        * * Field Name: AuthoredBy
+        * * Display Name: Authored By
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON Actor who authored this version: {kind:"human", userId} (a user), or an automated author {kind:"agent", agentRunId}, {kind:"scheduled-job", scheduledJobRunId} or {kind:"system", component}.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    LineageRoot: z.string().nullable().describe(`
+        * * Field Name: LineageRoot
+        * * Display Name: Lineage Root
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJMLPredictionUnitEntityType = z.infer<typeof MJMLPredictionUnitSchema>;
 
 /**
  * zod schema definition for the entity MJ: ML Training Pipelines
@@ -27916,13 +28272,33 @@ export const MJMLTrainingPipelineSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    TargetEntity: z.string().describe(`
+    PredictionUnitID: z.string().nullable().describe(`
+        * * Field Name: PredictionUnitID
+        * * Display Name: Prediction Unit
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Prediction Units (vwMLPredictionUnits.ID)
+        * * Description: The exact Prediction Unit version this pipeline trains on. NULL only on a pipeline created before Predictive Studio 6.3 that has not been migrated; such a pipeline cannot be trained.`),
+    EvaluationProtocolID: z.string().nullable().describe(`
+        * * Field Name: EvaluationProtocolID
+        * * Display Name: Evaluation Protocol
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Evaluation Protocols (vwMLEvaluationProtocols.ID)
+        * * Description: The exact Evaluation Protocol version every training run of this pipeline is graded under. Its primary score family must equal the unit's task kind.`),
+    TargetEntity: z.string().nullable().describe(`
         * * Field Name: TargetEntity
         * * Display Name: Target Entity
         * * SQL Data Type: nvarchar(255)`),
-    Algorithm: z.string().describe(`
+    Algorithm: z.string().nullable().describe(`
         * * Field Name: Algorithm
         * * Display Name: Algorithm
+        * * SQL Data Type: nvarchar(255)`),
+    PredictionUnit: z.string().nullable().describe(`
+        * * Field Name: PredictionUnit
+        * * Display Name: Prediction Unit Name
+        * * SQL Data Type: nvarchar(255)`),
+    EvaluationProtocol: z.string().nullable().describe(`
+        * * Field Name: EvaluationProtocol
+        * * Display Name: Evaluation Protocol Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -28024,7 +28400,29 @@ export const MJMLTrainingRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Pipeline: z.string().describe(`
+    TrainingSnapshotID: z.string().nullable().describe(`
+        * * Field Name: TrainingSnapshotID
+        * * Display Name: Training Snapshot
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Training Snapshots (vwMLTrainingSnapshots.ID)
+        * * Description: The Training Snapshot this run trained on; NULL for a run refused before assembly and for runs before Predictive Studio 6.3.`),
+    EvaluationProtocolID: z.string().nullable().describe(`
+        * * Field Name: EvaluationProtocolID
+        * * Display Name: Evaluation Protocol
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Evaluation Protocols (vwMLEvaluationProtocols.ID)
+        * * Description: The Evaluation Protocol version the run was graded under, pinned when the run started.`),
+    CodeVersion: z.string().nullable().describe(`
+        * * Field Name: CodeVersion
+        * * Display Name: Code Version
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON CodeVersion: PS git commit, sidecar version, library versions, thread count and seed the run used.`),
+    ComputeSeconds: z.number().nullable().describe(`
+        * * Field Name: ComputeSeconds
+        * * Display Name: Compute Seconds
+        * * SQL Data Type: decimal(18, 3)
+        * * Description: Measured trainer compute time in seconds, as returned by the sidecar.`),
+    Pipeline: z.string().nullable().describe(`
         * * Field Name: Pipeline
         * * Display Name: Pipeline
         * * SQL Data Type: nvarchar(255)`),
@@ -28032,13 +28430,248 @@ export const MJMLTrainingRunSchema = z.object({
         * * Field Name: ExperimentSessionIteration
         * * Display Name: Experiment Session Iteration
         * * SQL Data Type: nvarchar(255)`),
-    Algorithm: z.string().describe(`
+    Algorithm: z.string().nullable().describe(`
         * * Field Name: Algorithm
         * * Display Name: Algorithm
+        * * SQL Data Type: nvarchar(255)`),
+    TrainingSnapshot: z.string().nullable().describe(`
+        * * Field Name: TrainingSnapshot
+        * * Display Name: Training Snapshot
+        * * SQL Data Type: nvarchar(64)`),
+    EvaluationProtocol: z.string().nullable().describe(`
+        * * Field Name: EvaluationProtocol
+        * * Display Name: Evaluation Protocol Details
         * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJMLTrainingRunEntityType = z.infer<typeof MJMLTrainingRunSchema>;
+
+/**
+ * zod schema definition for the entity MJ: ML Training Snapshots
+ */
+export const MJMLTrainingSnapshotSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ContentHash: z.string().describe(`
+        * * Field Name: ContentHash
+        * * Display Name: Content Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 (lower-case hex) of the canonical JSON of the three file hashes, the feature schema hash, PredictionUnitID, LabelVersion, FeatureSpecVersion, EvaluationProtocolID and DataCutoff.`),
+    PipelineID: z.string().describe(`
+        * * Field Name: PipelineID
+        * * Display Name: Pipeline
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Training Pipelines (vwMLTrainingPipelines.ID)
+        * * Description: The ML Training Pipeline whose feature spec was assembled.`),
+    PredictionUnitID: z.string().describe(`
+        * * Field Name: PredictionUnitID
+        * * Display Name: Prediction Unit
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Prediction Units (vwMLPredictionUnits.ID)
+        * * Description: The exact Prediction Unit version whose rows were read.`),
+    LabelVersion: z.number().describe(`
+        * * Field Name: LabelVersion
+        * * Display Name: Label Version
+        * * SQL Data Type: int
+        * * Description: The unit's LabelVersion at assembly.`),
+    FeatureSpecVersion: z.number().describe(`
+        * * Field Name: FeatureSpecVersion
+        * * Display Name: Feature Spec Version
+        * * SQL Data Type: int
+        * * Description: The pipeline Version whose FeatureSteps produced the feature spec.`),
+    EvaluationProtocolID: z.string().nullable().describe(`
+        * * Field Name: EvaluationProtocolID
+        * * Display Name: Evaluation Protocol
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Evaluation Protocols (vwMLEvaluationProtocols.ID)
+        * * Description: The Evaluation Protocol version whose holdout rule assigned the manifest roles; NULL only for a legacy pipeline trained before its protocol was migrated.`),
+    StorageProviderID: z.string().describe(`
+        * * Field Name: StorageProviderID
+        * * Display Name: Storage Provider
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: File Storage Providers (vwFileStorageProviders.ID)
+        * * Description: The File Storage Provider holding the three files.`),
+    MatrixFileID: z.string().describe(`
+        * * Field Name: MatrixFileID
+        * * Display Name: Matrix File
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+        * * Description: MJ: Files row of matrix.jsonl (header line with column names, then one JSON array per manifest row).`),
+    MatrixSha256: z.string().describe(`
+        * * Field Name: MatrixSha256
+        * * Display Name: Matrix SHA-256
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 of the matrix file bytes.`),
+    MatrixSizeBytes: z.number().describe(`
+        * * Field Name: MatrixSizeBytes
+        * * Display Name: Matrix Size (Bytes)
+        * * SQL Data Type: bigint
+        * * Description: Size of the matrix file in bytes.`),
+    RowManifestFileID: z.string().describe(`
+        * * Field Name: RowManifestFileID
+        * * Display Name: Row Manifest File
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+        * * Description: MJ: Files row of manifest.jsonl (one SnapshotRowKey per row; the locked-holdout rows are the stored holdout keys).`),
+    RowManifestSha256: z.string().describe(`
+        * * Field Name: RowManifestSha256
+        * * Display Name: Row Manifest SHA-256
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 of the manifest file bytes.`),
+    RowManifestSizeBytes: z.number().describe(`
+        * * Field Name: RowManifestSizeBytes
+        * * Display Name: Row Manifest Size (Bytes)
+        * * SQL Data Type: bigint
+        * * Description: Size of the manifest file in bytes.`),
+    ProvenanceFileID: z.string().describe(`
+        * * Field Name: ProvenanceFileID
+        * * Display Name: Provenance File
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+        * * Description: MJ: Files row of provenance.jsonl (for every row and column: source kind, source reference, source version, computed-at).`),
+    ProvenanceSha256: z.string().describe(`
+        * * Field Name: ProvenanceSha256
+        * * Display Name: Provenance SHA-256
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 of the provenance file bytes.`),
+    ProvenanceSizeBytes: z.number().describe(`
+        * * Field Name: ProvenanceSizeBytes
+        * * Display Name: Provenance Size (Bytes)
+        * * SQL Data Type: bigint
+        * * Description: Size of the provenance file in bytes.`),
+    ManifestRowCount: z.number().describe(`
+        * * Field Name: ManifestRowCount
+        * * Display Name: Manifest Row Count
+        * * SQL Data Type: int
+        * * Description: Rows in the manifest (development plus locked holdout).`),
+    HoldoutRowCount: z.number().describe(`
+        * * Field Name: HoldoutRowCount
+        * * Display Name: Holdout Row Count
+        * * SQL Data Type: int
+        * * Description: Manifest rows with role locked-holdout.`),
+    FeatureSpec: z.string().describe(`
+        * * Field Name: FeatureSpec
+        * * Display Name: Feature Spec
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of the resolved FeatureColumnSpec (name, dated source, encoding, missing-value policy) assembled.`),
+    FeatureSchema: z.string().describe(`
+        * * Field Name: FeatureSchema
+        * * Display Name: Feature Schema
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of matrix columns {name, encoding, sourceColumn} in matrix order.`),
+    FeatureSchemaHash: z.string().describe(`
+        * * Field Name: FeatureSchemaHash
+        * * Display Name: Feature Schema Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 of the canonical JSON of FeatureSchema; compared before scoring.`),
+    ColumnProvenance: z.string().describe(`
+        * * Field Name: ColumnProvenance
+        * * Display Name: Column Provenance
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of ColumnProvenance: per matrix column, the source kind, source reference and source version.`),
+    PinnedFeatureVersions: z.string().describe(`
+        * * Field Name: PinnedFeatureVersions
+        * * Display Name: Pinned Feature Versions
+        * * SQL Data Type: nvarchar(MAX)
+        * * Default Value: []
+        * * Description: JSON array of FeatureVersionPin for every Feature Value source read.`),
+    RowsRead: z.number().describe(`
+        * * Field Name: RowsRead
+        * * Display Name: Rows Read
+        * * SQL Data Type: int
+        * * Description: Unit rows read from the source before exclusions; equals the source count (a truncated read is refused).`),
+    ReadComplete: z.boolean().describe(`
+        * * Field Name: ReadComplete
+        * * Display Name: Read Complete
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Always 1: a snapshot exists only for a complete read.`),
+    CensoredRowsExcluded: z.number().describe(`
+        * * Field Name: CensoredRowsExcluded
+        * * Display Name: Censored Rows Excluded
+        * * SQL Data Type: int
+        * * Description: Rows excluded because their outcome window had not closed at DataCutoff.`),
+    LabelKnownRowsExcluded: z.number().describe(`
+        * * Field Name: LabelKnownRowsExcluded
+        * * Display Name: Label Known Rows Excluded
+        * * SQL Data Type: int
+        * * Description: Rows excluded because their outcome was already recorded on or before the decision date (next-period rule).`),
+    EmptyLabelRowsExcluded: z.number().describe(`
+        * * Field Name: EmptyLabelRowsExcluded
+        * * Display Name: Empty Label Rows Excluded
+        * * SQL Data Type: int
+        * * Description: Rows excluded because their label was empty (NULL or an empty string) — unlabelled, never a class.`),
+    UncoveredHistoryRowsExcluded: z.string().describe(`
+        * * Field Name: UncoveredHistoryRowsExcluded
+        * * Display Name: Uncovered History Rows Excluded
+        * * SQL Data Type: nvarchar(MAX)
+        * * Default Value: []
+        * * Description: JSON array {entity, field, rows}: rows excluded because a field's change history did not cover their decision date (policy exclude-and-count).`),
+    DuplicateRowsRemoved: z.number().describe(`
+        * * Field Name: DuplicateRowsRemoved
+        * * Display Name: Duplicate Rows Removed
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Rows removed as exact duplicates of (entity key, decision date, period).`),
+    ClassBalance: z.string().nullable().describe(`
+        * * Field Name: ClassBalance
+        * * Display Name: Class Balance
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array {label, rows} over manifest rows for classification tasks; NULL otherwise.`),
+    DataCutoff: z.date().describe(`
+        * * Field Name: DataCutoff
+        * * Display Name: Data Cutoff
+        * * SQL Data Type: datetimeoffset
+        * * Description: The censoring cutoff the unit resolved to for this assembly.`),
+    AssemblyCodeVersion: z.string().describe(`
+        * * Field Name: AssemblyCodeVersion
+        * * Display Name: Assembly Code Version
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Package version and git commit of the assembly code that built the snapshot.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Pipeline: z.string().nullable().describe(`
+        * * Field Name: Pipeline
+        * * Display Name: Pipeline
+        * * SQL Data Type: nvarchar(255)`),
+    PredictionUnit: z.string().nullable().describe(`
+        * * Field Name: PredictionUnit
+        * * Display Name: Prediction Unit
+        * * SQL Data Type: nvarchar(255)`),
+    EvaluationProtocol: z.string().nullable().describe(`
+        * * Field Name: EvaluationProtocol
+        * * Display Name: Evaluation Protocol
+        * * SQL Data Type: nvarchar(255)`),
+    StorageProvider: z.string().nullable().describe(`
+        * * Field Name: StorageProvider
+        * * Display Name: Storage Provider
+        * * SQL Data Type: nvarchar(50)`),
+    MatrixFile: z.string().nullable().describe(`
+        * * Field Name: MatrixFile
+        * * Display Name: Matrix File
+        * * SQL Data Type: nvarchar(500)`),
+    RowManifestFile: z.string().nullable().describe(`
+        * * Field Name: RowManifestFile
+        * * Display Name: Row Manifest File
+        * * SQL Data Type: nvarchar(500)`),
+    ProvenanceFile: z.string().nullable().describe(`
+        * * Field Name: ProvenanceFile
+        * * Display Name: Provenance File
+        * * SQL Data Type: nvarchar(500)`),
+});
+
+export type MJMLTrainingSnapshotEntityType = z.infer<typeof MJMLTrainingSnapshotSchema>;
 
 /**
  * zod schema definition for the entity MJ: Magic Link Invite Allowed Domains
@@ -28139,7 +28772,7 @@ export const MJMagicLinkInviteApplicationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Application: z.string().describe(`
+    Application: z.string().nullable().describe(`
         * * Field Name: Application
         * * Display Name: Application
         * * SQL Data Type: nvarchar(100)`),
@@ -28178,7 +28811,7 @@ export const MJMagicLinkInviteRoleSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Role: z.string().describe(`
+    Role: z.string().nullable().describe(`
         * * Field Name: Role
         * * Display Name: Role
         * * SQL Data Type: nvarchar(50)`),
@@ -28299,15 +28932,15 @@ export const MJMagicLinkInviteSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Application: z.string().describe(`
+    Application: z.string().nullable().describe(`
         * * Field Name: Application
         * * Display Name: Application
         * * SQL Data Type: nvarchar(100)`),
-    Role: z.string().describe(`
+    Role: z.string().nullable().describe(`
         * * Field Name: Role
         * * Display Name: Role
         * * SQL Data Type: nvarchar(50)`),
-    CreatedByUser: z.string().describe(`
+    CreatedByUser: z.string().nullable().describe(`
         * * Field Name: CreatedByUser
         * * Display Name: Created By User
         * * SQL Data Type: nvarchar(100)`),
@@ -28425,7 +29058,7 @@ export const MJMaterializedResultQuerySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Query: z.string().describe(`
+    Query: z.string().nullable().describe(`
         * * Field Name: Query
         * * Display Name: Query
         * * SQL Data Type: nvarchar(255)`),
@@ -28688,7 +29321,7 @@ export const MJMeetingParticipantSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Meeting: z.string().describe(`
+    Meeting: z.string().nullable().describe(`
         * * Field Name: Meeting
         * * Display Name: Meeting
         * * SQL Data Type: nvarchar(255)`),
@@ -28810,7 +29443,7 @@ export const MJMeetingSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    HostUser: z.string().describe(`
+    HostUser: z.string().nullable().describe(`
         * * Field Name: HostUser
         * * Display Name: Host User
         * * SQL Data Type: nvarchar(100)`),
@@ -29054,11 +29687,11 @@ export const MJOAuthAuthorizationStateSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    MCPServerConnection: z.string().describe(`
+    MCPServerConnection: z.string().nullable().describe(`
         * * Field Name: MCPServerConnection
         * * Display Name: MCP Server Connection
         * * SQL Data Type: nvarchar(255)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -29158,11 +29791,11 @@ export const MJOAuthClientRegistrationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    MCPServerConnection: z.string().describe(`
+    MCPServerConnection: z.string().nullable().describe(`
         * * Field Name: MCPServerConnection
         * * Display Name: MCP Server Connection
         * * SQL Data Type: nvarchar(255)`),
-    MCPServer: z.string().describe(`
+    MCPServer: z.string().nullable().describe(`
         * * Field Name: MCPServer
         * * Display Name: MCP Server
         * * SQL Data Type: nvarchar(255)`),
@@ -29228,7 +29861,7 @@ export const MJOAuthTokenSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    MCPServerConnection: z.string().describe(`
+    MCPServerConnection: z.string().nullable().describe(`
         * * Field Name: MCPServerConnection
         * * Display Name: MCP Server Connection
         * * SQL Data Type: nvarchar(255)`),
@@ -29295,7 +29928,7 @@ export const MJOpenAppDependencySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    OpenApp: z.string().describe(`
+    OpenApp: z.string().nullable().describe(`
         * * Field Name: OpenApp
         * * Display Name: Open App
         * * SQL Data Type: nvarchar(64)`),
@@ -29405,11 +30038,11 @@ export const MJOpenAppInstallHistorySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    OpenApp: z.string().describe(`
+    OpenApp: z.string().nullable().describe(`
         * * Field Name: OpenApp
         * * Display Name: Open App
         * * SQL Data Type: nvarchar(64)`),
-    ExecutedByUser: z.string().describe(`
+    ExecutedByUser: z.string().nullable().describe(`
         * * Field Name: ExecutedByUser
         * * Display Name: Executed By User
         * * SQL Data Type: nvarchar(100)`),
@@ -29559,7 +30192,7 @@ export const MJOpenAppSchema = z.object({
         * * Display Name: Last Completed Step Target Version
         * * SQL Data Type: nvarchar(20)
         * * Description: The version this app was being upgraded TO when LastCompletedStep was last written, for Upgrade only. A resume only trusts LastCompletedStep when this matches the version currently being requested — otherwise a checkpoint from an interrupted upgrade to a different version could wrongly skip steps for the new target. Cleared alongside LastCompletedStep.`),
-    InstalledByUser: z.string().describe(`
+    InstalledByUser: z.string().nullable().describe(`
         * * Field Name: InstalledByUser
         * * Display Name: Installed By User
         * * SQL Data Type: nvarchar(100)`),
@@ -29784,7 +30417,7 @@ export const MJPhoneNumberSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Provider: z.string().describe(`
+    Provider: z.string().nullable().describe(`
         * * Field Name: Provider
         * * Display Name: Provider
         * * SQL Data Type: nvarchar(100)`),
@@ -29892,7 +30525,7 @@ export const MJProcessRunDetailSchema = z.object({
         * * Display Name: Warnings
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of the record's non-fatal problems (for example, its Dedup Cache entry could not be stored) on a record that otherwise succeeded. NULL when there were none. Failures are in ErrorMessage, never here.`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
@@ -30162,7 +30795,7 @@ export const MJProjectSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: The user who owns this folder, or NULL when the folder is shared with the whole environment. NULL (the value every pre-existing folder carries) means SHARED: visible to anyone who can read projects in the environment, which was the only possible behaviour before this column existed. A set value means PERSONAL: the folder belongs to that user and consumers filter it to them, so it stays out of other people's sidebars. Personal is opt-in at create time; nothing is migrated.`),
-    Environment: z.string().describe(`
+    Environment: z.string().nullable().describe(`
         * * Field Name: Environment
         * * Display Name: Environment
         * * SQL Data Type: nvarchar(255)`),
@@ -30268,7 +30901,7 @@ export const MJPublicLinkSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -30484,7 +31117,7 @@ export const MJQuerySchema = z.object({
         * * Field Name: EmbeddingModel
         * * Display Name: Embedding Model Name
         * * SQL Data Type: nvarchar(50)`),
-    SQLDialect: z.string().describe(`
+    SQLDialect: z.string().nullable().describe(`
         * * Field Name: SQLDialect
         * * Display Name: SQL Dialect Name
         * * SQL Data Type: nvarchar(100)`),
@@ -30563,7 +31196,7 @@ export const MJQueryCategorySchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(50)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -30647,11 +31280,11 @@ export const MJQueryDependencySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Query: z.string().describe(`
+    Query: z.string().nullable().describe(`
         * * Field Name: Query
         * * Display Name: Source Query Name
         * * SQL Data Type: nvarchar(255)`),
-    DependsOnQuery: z.string().describe(`
+    DependsOnQuery: z.string().nullable().describe(`
         * * Field Name: DependsOnQuery
         * * Display Name: Target Query Name
         * * SQL Data Type: nvarchar(255)`),
@@ -30713,11 +31346,11 @@ export const MJQueryEntitySchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entity Alternate Base Views (vwEntityAlternateBaseViews.ID)
         * * Description: When this query references an alternate base view rather than the entity's primary BaseView, records the specific MJ: Entity Alternate Base Views row while EntityID continues to reference the owning entity.`),
-    Query: z.string().describe(`
+    Query: z.string().nullable().describe(`
         * * Field Name: Query
         * * Display Name: Query
         * * SQL Data Type: nvarchar(255)`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -30841,7 +31474,7 @@ export const MJQueryFieldSchema = z.object({
         * * Display Name: Source Object Name
         * * SQL Data Type: nvarchar(500)
         * * Description: The source of this output column as the database server reported it (schema.object.column), recorded when the source is a table or view that backs no MJ entity. NULL when the column maps to an entity field (see SourceEntityFieldID) or has no direct source.`),
-    Query: z.string().describe(`
+    Query: z.string().nullable().describe(`
         * * Field Name: Query
         * * Display Name: Query
         * * SQL Data Type: nvarchar(255)`),
@@ -30946,7 +31579,7 @@ export const MJQueryParameterSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, only server code may supply this parameter's value (RunQueryParams.ServerParameters). A value for it from a client is refused.`),
-    Query: z.string().describe(`
+    Query: z.string().nullable().describe(`
         * * Field Name: Query
         * * Display Name: Query
         * * SQL Data Type: nvarchar(255)`),
@@ -30983,11 +31616,11 @@ export const MJQueryPermissionSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Query: z.string().describe(`
+    Query: z.string().nullable().describe(`
         * * Field Name: Query
         * * Display Name: Query
         * * SQL Data Type: nvarchar(255)`),
-    Role: z.string().describe(`
+    Role: z.string().nullable().describe(`
         * * Field Name: Role
         * * Display Name: Role
         * * SQL Data Type: nvarchar(50)`),
@@ -31031,11 +31664,11 @@ export const MJQuerySQLSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Query: z.string().describe(`
+    Query: z.string().nullable().describe(`
         * * Field Name: Query
         * * Display Name: Query Name
         * * SQL Data Type: nvarchar(255)`),
-    SQLDialect: z.string().describe(`
+    SQLDialect: z.string().nullable().describe(`
         * * Field Name: SQLDialect
         * * Display Name: Dialect Name
         * * SQL Data Type: nvarchar(100)`),
@@ -31109,7 +31742,7 @@ export const MJQueueTaskSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Queue: z.string().describe(`
+    Queue: z.string().nullable().describe(`
         * * Field Name: Queue
         * * Display Name: Queue
         * * SQL Data Type: nvarchar(50)`),
@@ -31263,7 +31896,7 @@ export const MJQueueSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    QueueType: z.string().describe(`
+    QueueType: z.string().nullable().describe(`
         * * Field Name: QueueType
         * * Display Name: Queue Type
         * * SQL Data Type: nvarchar(50)`),
@@ -31321,7 +31954,7 @@ export const MJRSUPendingWorkSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    CompanyIntegration: z.string().describe(`
+    CompanyIntegration: z.string().nullable().describe(`
         * * Field Name: CompanyIntegration
         * * Display Name: Company Integration
         * * SQL Data Type: nvarchar(255)`),
@@ -31368,11 +32001,11 @@ export const MJRecommendationItemSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Recommendation: z.string().describe(`
+    Recommendation: z.string().nullable().describe(`
         * * Field Name: Recommendation
         * * Display Name: Recommendation
         * * SQL Data Type: nvarchar(MAX)`),
-    DestinationEntity: z.string().describe(`
+    DestinationEntity: z.string().nullable().describe(`
         * * Field Name: DestinationEntity
         * * Display Name: Destination Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -31466,11 +32099,11 @@ export const MJRecommendationRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    RecommendationProvider: z.string().describe(`
+    RecommendationProvider: z.string().nullable().describe(`
         * * Field Name: RecommendationProvider
         * * Display Name: Recommendation Provider
         * * SQL Data Type: nvarchar(255)`),
-    RunByUser: z.string().describe(`
+    RunByUser: z.string().nullable().describe(`
         * * Field Name: RunByUser
         * * Display Name: Run By User
         * * SQL Data Type: nvarchar(100)`),
@@ -31512,11 +32145,11 @@ export const MJRecommendationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    RecommendationRun: z.string().describe(`
+    RecommendationRun: z.string().nullable().describe(`
         * * Field Name: RecommendationRun
         * * Display Name: Recommendation Run
         * * SQL Data Type: nvarchar(255)`),
-    SourceEntity: z.string().describe(`
+    SourceEntity: z.string().nullable().describe(`
         * * Field Name: SourceEntity
         * * Display Name: Source Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -31569,7 +32202,7 @@ export const MJRecordChangeReplayRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -31705,11 +32338,11 @@ export const MJRecordChangeSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJRecordChangeEntity_IRecordChangeContext
         * * Description: Optional JSON configuration bag carrying structured provenance context (shape = IRecordChangeContext). Used by clone, merge, and other multi-record or automated operations to record lineage, root records, and field change summaries.`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -31816,7 +32449,7 @@ export const MJRecordCloneLogItemSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -31945,11 +32578,11 @@ export const MJRecordCloneLogSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    RootEntity_: z.string().describe(`
+    RootEntity_: z.string().nullable().describe(`
         * * Field Name: RootEntity
         * * Display Name: Root Entity
         * * SQL Data Type: nvarchar(255)`),
-    InitiatedByUser: z.string().describe(`
+    InitiatedByUser: z.string().nullable().describe(`
         * * Field Name: InitiatedByUser
         * * Display Name: Initiated By User
         * * SQL Data Type: nvarchar(100)`),
@@ -32075,7 +32708,7 @@ export const MJRecordGeoCodeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
@@ -32145,11 +32778,11 @@ export const MJRecordLinkSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    SourceEntity: z.string().describe(`
+    SourceEntity: z.string().nullable().describe(`
         * * Field Name: SourceEntity
         * * Display Name: Source Entity
         * * SQL Data Type: nvarchar(255)`),
-    TargetEntity: z.string().describe(`
+    TargetEntity: z.string().nullable().describe(`
         * * Field Name: TargetEntity
         * * Display Name: Target Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -32201,7 +32834,7 @@ export const MJRecordMergeDeletionLogSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    RecordMergeLog: z.string().describe(`
+    RecordMergeLog: z.string().nullable().describe(`
         * * Field Name: RecordMergeLog
         * * Display Name: Merge Log Summary
         * * SQL Data Type: nvarchar(450)`),
@@ -32290,11 +32923,11 @@ export const MJRecordMergeLogSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
-    InitiatedByUser: z.string().describe(`
+    InitiatedByUser: z.string().nullable().describe(`
         * * Field Name: InitiatedByUser
         * * Display Name: Initiated By User Name
         * * SQL Data Type: nvarchar(100)`),
@@ -32415,11 +33048,11 @@ export const MJRecordProcessWatermarkSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    RecordProcess: z.string().describe(`
+    RecordProcess: z.string().nullable().describe(`
         * * Field Name: RecordProcess
         * * Display Name: Record Process Name
         * * SQL Data Type: nvarchar(255)`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
@@ -32631,7 +33264,7 @@ export const MJRecordProcessSchema = z.object({
         * * Field Name: Category
         * * Display Name: Category Name
         * * SQL Data Type: nvarchar(255)`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
@@ -32955,11 +33588,11 @@ export const MJResourceLinkSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
-    ResourceType: z.string().describe(`
+    ResourceType: z.string().nullable().describe(`
         * * Field Name: ResourceType
         * * Display Name: Resource Type
         * * SQL Data Type: nvarchar(255)`),
@@ -33054,7 +33687,7 @@ export const MJResourcePermissionSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: The user who granted this permission. NULL when the share pre-dates this column or when the grantor is unknown (e.g., a system-seeded permission).`),
-    ResourceType: z.string().describe(`
+    ResourceType: z.string().nullable().describe(`
         * * Field Name: ResourceType
         * * Display Name: Resource Type
         * * SQL Data Type: nvarchar(255)`),
@@ -33549,7 +34182,7 @@ export const MJRubricCriterionLevelSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Criterion: z.string().describe(`
+    Criterion: z.string().nullable().describe(`
         * * Field Name: Criterion
         * * Display Name: Criterion
         * * SQL Data Type: nvarchar(255)`),
@@ -33655,7 +34288,7 @@ export const MJRubricEvaluationScoreSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Criterion: z.string().describe(`
+    Criterion: z.string().nullable().describe(`
         * * Field Name: Criterion
         * * Display Name: Criterion
         * * SQL Data Type: nvarchar(255)`),
@@ -33935,7 +34568,7 @@ export const MJRubricEvaluationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    SubjectEntity: z.string().describe(`
+    SubjectEntity: z.string().nullable().describe(`
         * * Field Name: SubjectEntity
         * * Display Name: Subject Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -34085,7 +34718,7 @@ export const MJRubricScaleLevelSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Scale: z.string().describe(`
+    Scale: z.string().nullable().describe(`
         * * Field Name: Scale
         * * Display Name: Scale
         * * SQL Data Type: nvarchar(255)`),
@@ -34330,7 +34963,7 @@ export const MJRubricVersionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Rubric: z.string().describe(`
+    Rubric: z.string().nullable().describe(`
         * * Field Name: Rubric
         * * Display Name: Rubric
         * * SQL Data Type: nvarchar(255)`),
@@ -34531,7 +35164,7 @@ export const MJScheduledJobRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ScheduledJob: z.string().describe(`
+    ScheduledJob: z.string().nullable().describe(`
         * * Field Name: ScheduledJob
         * * Display Name: Scheduled Job
         * * SQL Data Type: nvarchar(200)`),
@@ -34787,7 +35420,7 @@ export const MJScheduledJobSchema = z.object({
     *   * RunOnce
     *   * Skip
         * * Description: What this job does about fire times that passed while the scheduler was not running (a deploy, a crash, a sleeping machine). RunOnce (the default) performs a single catch-up run and then resumes the normal schedule — correct for digests, syncs and anything where only the latest state matters, and identical to the behavior every job had before this column existed. RunAll replays each missed occurrence, one per poll tick so a long outage drains gradually rather than dispatching at once — correct for per-period work such as billing or metric snapshots, where skipping a period loses data nothing else recreates. Skip performs no catch-up at all and simply advances to the next future occurrence — correct for work whose value expires, such as a cache warm. A run is only treated as missed when a LATER occurrence has also come due, so a job that merely became due seconds ago is never misclassified; this is evaluated cron-relatively rather than against a fixed grace window, which would misjudge both a per-minute job after a short pause and a monthly job that is a week late.`),
-    JobType: z.string().describe(`
+    JobType: z.string().nullable().describe(`
         * * Field Name: JobType
         * * Display Name: Job Type
         * * SQL Data Type: nvarchar(100)`),
@@ -34960,7 +35593,7 @@ export const MJScopedNotificationConfigSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    NotificationType: z.string().describe(`
+    NotificationType: z.string().nullable().describe(`
         * * Field Name: NotificationType
         * * Display Name: Notification Type Name
         * * SQL Data Type: nvarchar(100)`),
@@ -35109,7 +35742,7 @@ export const MJScopedPromptConfigSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Prompt: z.string().describe(`
+    Prompt: z.string().nullable().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt Name
         * * SQL Data Type: nvarchar(255)`),
@@ -35232,7 +35865,7 @@ export const MJScopedPromptPartSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Prompt: z.string().describe(`
+    Prompt: z.string().nullable().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
         * * SQL Data Type: nvarchar(255)`),
@@ -35503,11 +36136,11 @@ export const MJSearchScopeEntitySchema = z.object({
         * * Display Name: Required Metadata Keys
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of column or alias names the rendered ExtraFilter MUST reference for this lane to be considered safe, e.g. ["OrganizationID","ContentSourceID"]. Checked against the RENDERED filter at search time: if one is missing the lane is SKIPPED rather than queried, because a partially-rendered filter (an {% if %} clause dropped when its dimension was absent or discarded) is still valid SQL and silently widens the search. Same concept and same engine check as SearchScopeExternalIndex.RequiredMetadataKeys, applied to the SQL lane. NULL = no contract declared, which is the pre-migration behaviour.`),
-    SearchScope: z.string().describe(`
+    SearchScope: z.string().nullable().describe(`
         * * Field Name: SearchScope
         * * Display Name: Search Scope
         * * SQL Data Type: nvarchar(200)`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -35579,7 +36212,7 @@ export const MJSearchScopeExternalIndexSchema = z.object({
         * * Display Name: Required Metadata Keys
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of metadata key names the rendered MetadataFilter MUST constrain on for this lane to be considered safe, e.g. ["OrganizationID","ContentSourceID"]. Checked against the RENDERED filter at search time: if a key is missing the lane is SKIPPED rather than queried, because a partially-rendered filter silently widens the search. This also documents the ingest contract — these are the labels the writer must stamp on every document in the index, since a filter on a key that was never written either matches nothing or (on providers that ignore unknown keys) matches everything. NULL = no contract declared, which is the pre-migration behaviour.`),
-    SearchScope: z.string().describe(`
+    SearchScope: z.string().nullable().describe(`
         * * Field Name: SearchScope
         * * Display Name: Search Scope
         * * SQL Data Type: nvarchar(200)`),
@@ -35655,7 +36288,7 @@ export const MJSearchScopePermissionSchema = z.object({
         * * Display Name: Primary Scope Record ID
         * * SQL Data Type: uniqueidentifier
         * * Description: Optional tenant this grant is limited to, matched against SearchContext.PrimaryScopeRecordID at search time and type-checkable against the scope's own PrimaryScopeEntityID. NULL = applies to every tenant, which is the pre-migration behaviour for all existing rows. Deliberately NOT called OrganizationID: MJ is domain-agnostic and a scope's primary scope may be a Company, Client or Practice, so this reuses the existing primary-scope concept rather than inventing a parallel tenancy column.`),
-    SearchScope: z.string().describe(`
+    SearchScope: z.string().nullable().describe(`
         * * Field Name: SearchScope
         * * Display Name: Search Scope Name
         * * SQL Data Type: nvarchar(200)`),
@@ -35722,11 +36355,11 @@ export const MJSearchScopeProviderSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    SearchScope: z.string().describe(`
+    SearchScope: z.string().nullable().describe(`
         * * Field Name: SearchScope
         * * Display Name: Search Scope Name
         * * SQL Data Type: nvarchar(200)`),
-    SearchProvider: z.string().describe(`
+    SearchProvider: z.string().nullable().describe(`
         * * Field Name: SearchProvider
         * * Display Name: Search Provider Name
         * * SQL Data Type: nvarchar(200)`),
@@ -35772,11 +36405,11 @@ export const MJSearchScopeStorageAccountSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    SearchScope: z.string().describe(`
+    SearchScope: z.string().nullable().describe(`
         * * Field Name: SearchScope
         * * Display Name: Search Scope Name
         * * SQL Data Type: nvarchar(200)`),
-    FileStorageAccount: z.string().describe(`
+    FileStorageAccount: z.string().nullable().describe(`
         * * Field Name: FileStorageAccount
         * * Display Name: Storage Account Name
         * * SQL Data Type: nvarchar(200)`),
@@ -35834,7 +36467,7 @@ export const MJSearchScopeTestQuerySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    SearchScope: z.string().describe(`
+    SearchScope: z.string().nullable().describe(`
         * * Field Name: SearchScope
         * * Display Name: Search Scope Name
         * * SQL Data Type: nvarchar(200)`),
@@ -36003,11 +36636,11 @@ export const MJSignatureAccountSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    SignatureProvider: z.string().describe(`
+    SignatureProvider: z.string().nullable().describe(`
         * * Field Name: SignatureProvider
         * * Display Name: Signature Provider Name
         * * SQL Data Type: nvarchar(100)`),
-    Credential: z.string().describe(`
+    Credential: z.string().nullable().describe(`
         * * Field Name: Credential
         * * Display Name: Credential Name
         * * SQL Data Type: nvarchar(200)`),
@@ -36142,7 +36775,7 @@ export const MJSignatureRequestDocumentSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    SignatureRequest: z.string().describe(`
+    SignatureRequest: z.string().nullable().describe(`
         * * Field Name: SignatureRequest
         * * Display Name: Signature Request Name
         * * SQL Data Type: nvarchar(255)`),
@@ -36284,7 +36917,7 @@ export const MJSignatureRequestRecipientSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    SignatureRequest: z.string().describe(`
+    SignatureRequest: z.string().nullable().describe(`
         * * Field Name: SignatureRequest
         * * Display Name: Signature Request
         * * SQL Data Type: nvarchar(255)`),
@@ -36372,7 +37005,7 @@ export const MJSignatureRequestSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    SignatureAccount: z.string().describe(`
+    SignatureAccount: z.string().nullable().describe(`
         * * Field Name: SignatureAccount
         * * Display Name: Signature Account
         * * SQL Data Type: nvarchar(200)`),
@@ -36498,7 +37131,7 @@ export const MJStateProvinceSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Country: z.string().describe(`
+    Country: z.string().nullable().describe(`
         * * Field Name: Country
         * * Display Name: Country Name
         * * SQL Data Type: nvarchar(200)`),
@@ -36564,11 +37197,11 @@ export const MJTagAuditLogSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Tag: z.string().describe(`
+    Tag: z.string().nullable().describe(`
         * * Field Name: Tag
         * * Display Name: Tag Name
         * * SQL Data Type: nvarchar(255)`),
-    PerformedByUser: z.string().describe(`
+    PerformedByUser: z.string().nullable().describe(`
         * * Field Name: PerformedByUser
         * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
@@ -36621,11 +37254,11 @@ export const MJTagCoOccurrenceSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    TagA: z.string().describe(`
+    TagA: z.string().nullable().describe(`
         * * Field Name: TagA
         * * Display Name: Tag A
         * * SQL Data Type: nvarchar(255)`),
-    TagB: z.string().describe(`
+    TagB: z.string().nullable().describe(`
         * * Field Name: TagB
         * * Display Name: Tag B
         * * SQL Data Type: nvarchar(255)`),
@@ -36669,11 +37302,11 @@ export const MJTagScopeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Tag: z.string().describe(`
+    Tag: z.string().nullable().describe(`
         * * Field Name: Tag
         * * Display Name: Tag
         * * SQL Data Type: nvarchar(255)`),
-    ScopeEntity: z.string().describe(`
+    ScopeEntity: z.string().nullable().describe(`
         * * Field Name: ScopeEntity
         * * Display Name: Scope Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -36859,7 +37492,7 @@ export const MJTagSynonymSchema = z.object({
     *   * Pending
     *   * Rejected
         * * Description: Approval state of the synonym. Active = resolves to its tag during classification. Pending = proposed (e.g. by the LLM or a bulk import) and awaiting human review; does not resolve until approved. Rejected = reviewed and declined; retained for audit and to suppress re-proposal.`),
-    Tag: z.string().describe(`
+    Tag: z.string().nullable().describe(`
         * * Field Name: Tag
         * * Display Name: Tag Name
         * * SQL Data Type: nvarchar(255)`),
@@ -36907,11 +37540,11 @@ export const MJTaggedItemSchema = z.object({
         * * SQL Data Type: numeric(5, 4)
         * * Default Value: 1.0
         * * Description: Relevance weight of this tag association (0.0 to 1.0). 1.0 indicates the tag is highly relevant or was manually applied. Lower values indicate decreasing relevance as determined by LLM autotagging. Default 1.0 for manually applied tags.`),
-    Tag: z.string().describe(`
+    Tag: z.string().nullable().describe(`
         * * Field Name: Tag
         * * Display Name: Tag
         * * SQL Data Type: nvarchar(255)`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -37127,11 +37760,11 @@ export const MJTaskDependencySchema = z.object({
         * * Display Name: Exclusive Group
         * * SQL Data Type: nvarchar(255)
         * * Description: XOR group key: sibling edges leaving the same origin that share a non-null ExclusiveGroup are an exclusive fan-out. The highest-Priority satisfied edge wins, ties broken by ascending Sequence; the rest are Skipped. NULL (the default) means an ordinary dependency, so existing graphs are unaffected. An unevaluable condition anywhere in the group holds the whole group rather than firing every branch.`),
-    Task: z.string().describe(`
+    Task: z.string().nullable().describe(`
         * * Field Name: Task
         * * Display Name: Task Name
         * * SQL Data Type: nvarchar(255)`),
-    DependsOnTask: z.string().describe(`
+    DependsOnTask: z.string().nullable().describe(`
         * * Field Name: DependsOnTask
         * * Display Name: Depends On Task Name
         * * SQL Data Type: nvarchar(255)`),
@@ -37341,11 +37974,11 @@ export const MJTaskSchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
-    Type: z.string().describe(`
+    Type: z.string().nullable().describe(`
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(255)`),
-    Environment: z.string().describe(`
+    Environment: z.string().nullable().describe(`
         * * Field Name: Environment
         * * Display Name: Environment
         * * SQL Data Type: nvarchar(255)`),
@@ -37444,7 +38077,7 @@ export const MJTemplateCategorySchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -37566,11 +38199,11 @@ export const MJTemplateContentSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Template: z.string().describe(`
+    Template: z.string().nullable().describe(`
         * * Field Name: Template
         * * Display Name: Template
         * * SQL Data Type: nvarchar(255)`),
-    Type: z.string().describe(`
+    Type: z.string().nullable().describe(`
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(255)`),
@@ -37672,7 +38305,7 @@ export const MJTemplateParamSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Template Contents (vwTemplateContents.ID)
         * * Description: Optional reference to a specific template content. When NULL, this parameter applies to all content items within the template. When set, this parameter applies only to the specified template content.`),
-    Template: z.string().describe(`
+    Template: z.string().nullable().describe(`
         * * Field Name: Template
         * * Display Name: Template Name
         * * SQL Data Type: nvarchar(255)`),
@@ -37752,7 +38385,7 @@ export const MJTemplateSchema = z.object({
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(255)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -37821,7 +38454,7 @@ export const MJTestRubricSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Type: z.string().describe(`
+    Type: z.string().nullable().describe(`
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(100)`),
@@ -37886,11 +38519,11 @@ export const MJTestRunFeedbackSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    TestRun: z.string().describe(`
+    TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
         * * Display Name: Test Run
         * * SQL Data Type: nvarchar(255)`),
-    ReviewerUser: z.string().describe(`
+    ReviewerUser: z.string().nullable().describe(`
         * * Field Name: ReviewerUser
         * * Display Name: Reviewer User
         * * SQL Data Type: nvarchar(100)`),
@@ -38018,11 +38651,11 @@ export const MJTestRunOutputSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    TestRun: z.string().describe(`
+    TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
         * * Display Name: Test Run Name
         * * SQL Data Type: nvarchar(255)`),
-    OutputType: z.string().describe(`
+    OutputType: z.string().nullable().describe(`
         * * Field Name: OutputType
         * * Display Name: Output Type Name
         * * SQL Data Type: nvarchar(100)`),
@@ -38208,7 +38841,7 @@ export const MJTestRunSchema = z.object({
         * * Display Name: Resolved Variables
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON object containing the final resolved variable values used during test execution. Includes both the resolved values and the source of each value (run, suite, test, or type level). Stored for reproducibility and auditing.`),
-    Test: z.string().describe(`
+    Test: z.string().nullable().describe(`
         * * Field Name: Test
         * * Display Name: Test Name
         * * SQL Data Type: nvarchar(255)`),
@@ -38216,7 +38849,7 @@ export const MJTestRunSchema = z.object({
         * * Field Name: TestSuiteRun
         * * Display Name: Test Suite Run
         * * SQL Data Type: nvarchar(255)`),
-    RunByUser: z.string().describe(`
+    RunByUser: z.string().nullable().describe(`
         * * Field Name: RunByUser
         * * Display Name: Run By User
         * * SQL Data Type: nvarchar(100)`),
@@ -38392,11 +39025,11 @@ export const MJTestSuiteRunSchema = z.object({
         * * Display Name: Score
         * * SQL Data Type: decimal(9, 6)
         * * Description: Suite-level score (0..1): the mean score of the suite's executed (non-skipped) test runs.`),
-    Suite: z.string().describe(`
+    Suite: z.string().nullable().describe(`
         * * Field Name: Suite
         * * Display Name: Suite
         * * SQL Data Type: nvarchar(255)`),
-    RunByUser: z.string().describe(`
+    RunByUser: z.string().nullable().describe(`
         * * Field Name: RunByUser
         * * Display Name: Run By User
         * * SQL Data Type: nvarchar(100)`),
@@ -38457,11 +39090,11 @@ export const MJTestSuiteTestSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Suite: z.string().describe(`
+    Suite: z.string().nullable().describe(`
         * * Field Name: Suite
         * * Display Name: Suite
         * * SQL Data Type: nvarchar(255)`),
-    Test: z.string().describe(`
+    Test: z.string().nullable().describe(`
         * * Field Name: Test
         * * Display Name: Test
         * * SQL Data Type: nvarchar(255)`),
@@ -38731,7 +39364,7 @@ export const MJTestSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Rubrics (vwRubrics.ID)
         * * Description: The rubric this test's output is judged by. NULL = inherit from the suite (walking up ParentID). The latest published version is pinned when each run starts.`),
-    Type: z.string().describe(`
+    Type: z.string().nullable().describe(`
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(100)`),
@@ -38871,11 +39504,11 @@ export const MJUserApplicationEntitySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Application: z.string().describe(`
+    Application: z.string().nullable().describe(`
         * * Field Name: Application
         * * Display Name: Application
         * * SQL Data Type: nvarchar(100)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -38926,11 +39559,11 @@ export const MJUserApplicationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
-    Application: z.string().describe(`
+    Application: z.string().nullable().describe(`
         * * Field Name: Application
         * * Display Name: Application
         * * SQL Data Type: nvarchar(100)`),
@@ -39035,11 +39668,11 @@ export const MJUserNotificationPreferenceSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
-    NotificationType: z.string().describe(`
+    NotificationType: z.string().nullable().describe(`
         * * Field Name: NotificationType
         * * Display Name: Notification Type Name
         * * SQL Data Type: nvarchar(100)`),
@@ -39204,7 +39837,7 @@ export const MJUserNotificationSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: User Notification Types (vwUserNotificationTypes.ID)
         * * Description: Optional reference to notification type for categorization and delivery preferences`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -39329,11 +39962,11 @@ export const MJUserRoleSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
-    Role: z.string().describe(`
+    Role: z.string().nullable().describe(`
         * * Field Name: Role
         * * Display Name: Role
         * * SQL Data Type: nvarchar(50)`),
@@ -39393,7 +40026,7 @@ export const MJUserRoutineRecipientSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Routine: z.string().describe(`
+    Routine: z.string().nullable().describe(`
         * * Field Name: Routine
         * * Display Name: Routine Name
         * * SQL Data Type: nvarchar(255)`),
@@ -39492,7 +40125,7 @@ export const MJUserRoutineRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Routine: z.string().describe(`
+    Routine: z.string().nullable().describe(`
         * * Field Name: Routine
         * * Display Name: Routine Name
         * * SQL Data Type: nvarchar(255)`),
@@ -39710,7 +40343,7 @@ export const MJUserRoutineSchema = z.object({
         * * Display Name: Last Checked At
         * * SQL Data Type: datetimeoffset
         * * Description: Timestamp when the dispatcher last evaluated this routine's watched entities and wake gate conditions.`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
@@ -39765,7 +40398,7 @@ export const MJUserSettingSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -39819,11 +40452,11 @@ export const MJUserViewCategorySchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -39880,7 +40513,7 @@ export const MJUserViewRunDetailSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    UserViewRun: z.string().describe(`
+    UserViewRun: z.string().nullable().describe(`
         * * Field Name: UserViewRun
         * * Display Name: User View Run Name
         * * SQL Data Type: nvarchar(100)`),
@@ -39930,11 +40563,11 @@ export const MJUserViewRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    UserView: z.string().describe(`
+    UserView: z.string().nullable().describe(`
         * * Field Name: UserView
         * * Display Name: User View
         * * SQL Data Type: nvarchar(100)`),
-    RunByUser: z.string().describe(`
+    RunByUser: z.string().nullable().describe(`
         * * Field Name: RunByUser
         * * Display Name: Run By User
         * * SQL Data Type: nvarchar(100)`),
@@ -40373,11 +41006,11 @@ export const MJVectorIndexSchema = z.object({
         * * Display Name: Provider Configuration
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON object containing provider-specific configuration for this index. For Pinecone serverless: {"cloud":"aws","region":"us-east-1"}. For pod-based: {"environment":"us-east1-gcp","podType":"p1.x1","replicas":1}. Stored as a flexible JSON bag to support any provider without schema changes.`),
-    VectorDatabase: z.string().describe(`
+    VectorDatabase: z.string().nullable().describe(`
         * * Field Name: VectorDatabase
         * * Display Name: Vector Database Name
         * * SQL Data Type: nvarchar(100)`),
-    EmbeddingModel: z.string().describe(`
+    EmbeddingModel: z.string().nullable().describe(`
         * * Field Name: EmbeddingModel
         * * Display Name: Embedding Model Name
         * * SQL Data Type: nvarchar(50)`),
@@ -40506,15 +41139,15 @@ export const MJVersionLabelItemSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    VersionLabel: z.string().describe(`
+    VersionLabel: z.string().nullable().describe(`
         * * Field Name: VersionLabel
         * * Display Name: Version Label
         * * SQL Data Type: nvarchar(200)`),
-    RecordChange: z.string().describe(`
+    RecordChange: z.string().nullable().describe(`
         * * Field Name: RecordChange
         * * Display Name: Record Change
         * * SQL Data Type: nvarchar(750)`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -40606,11 +41239,11 @@ export const MJVersionLabelRestoreSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    VersionLabel: z.string().describe(`
+    VersionLabel: z.string().nullable().describe(`
         * * Field Name: VersionLabel
         * * Display Name: Version Label
         * * SQL Data Type: nvarchar(200)`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -40721,7 +41354,7 @@ export const MJVersionLabelSchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(200)`),
-    CreatedByUser: z.string().describe(`
+    CreatedByUser: z.string().nullable().describe(`
         * * Field Name: CreatedByUser
         * * Display Name: Created By User Name
         * * SQL Data Type: nvarchar(100)`),
@@ -41079,7 +41712,7 @@ export const MJWorkQueueDeduplicationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Topic: z.string().describe(`
+    Topic: z.string().nullable().describe(`
         * * Field Name: Topic
         * * Display Name: Topic
         * * SQL Data Type: nvarchar(200)`),
@@ -41217,7 +41850,7 @@ export const MJWorkQueueDeliverySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Subscription: z.string().describe(`
+    Subscription: z.string().nullable().describe(`
         * * Field Name: Subscription
         * * Display Name: Subscription
         * * SQL Data Type: nvarchar(200)`),
@@ -41293,7 +41926,7 @@ export const MJWorkQueueMessageSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Topic: z.string().describe(`
+    Topic: z.string().nullable().describe(`
         * * Field Name: Topic
         * * Display Name: Topic
         * * SQL Data Type: nvarchar(200)`),
@@ -41430,7 +42063,7 @@ export const MJWorkQueueSubscriptionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Topic: z.string().describe(`
+    Topic: z.string().nullable().describe(`
         * * Field Name: Topic
         * * Display Name: Topic
         * * SQL Data Type: nvarchar(200)`),
@@ -41517,7 +42150,7 @@ export const MJWorkQueueTopicSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Transport: z.string().describe(`
+    Transport: z.string().nullable().describe(`
         * * Field Name: Transport
         * * Display Name: Transport
         * * SQL Data Type: nvarchar(100)`),
@@ -41639,11 +42272,11 @@ export const MJWorkspaceItemSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Workspace: z.string().describe(`
+    Workspace: z.string().nullable().describe(`
         * * Field Name: Workspace
         * * Display Name: Workspace
         * * SQL Data Type: nvarchar(255)`),
-    ResourceType: z.string().describe(`
+    ResourceType: z.string().nullable().describe(`
         * * Field Name: ResourceType
         * * Display Name: Resource Type
         * * SQL Data Type: nvarchar(255)`),
@@ -41688,7 +42321,7 @@ export const MJWorkspaceSchema = z.object({
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON blob containing all workspace state: tabs, layout configuration, theme preferences, and active tab. Replaces WorkspaceItem table.`),
-    User: z.string().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -42357,7 +42990,7 @@ export class MJAIAgentArtifactTypeEntity extends BaseEntity<MJAIAgentArtifactTyp
     * * Display Name: Artifact Type
     * * SQL Data Type: nvarchar(100)
     */
-    get ArtifactType(): string {
+    get ArtifactType(): string | null {
         return this.Get('ArtifactType');
     }
 }
@@ -42949,7 +43582,7 @@ export class MJAIAgentClientToolEntity extends BaseEntity<MJAIAgentClientToolEnt
     * * Display Name: Tool Name
     * * SQL Data Type: nvarchar(200)
     */
-    get ClientToolDefinition(): string {
+    get ClientToolDefinition(): string | null {
         return this.Get('ClientToolDefinition');
     }
 }
@@ -43631,7 +44264,7 @@ export class MJAIAgentCredentialEntity extends BaseEntity<MJAIAgentCredentialEnt
     * * Display Name: Credential Name
     * * SQL Data Type: nvarchar(200)
     */
-    get Credential(): string {
+    get Credential(): string | null {
         return this.Get('Credential');
     }
 }
@@ -45141,7 +45774,7 @@ export class MJAIAgentModalityEntity extends BaseEntity<MJAIAgentModalityEntityT
     * * Display Name: Modality
     * * SQL Data Type: nvarchar(50)
     */
-    get Modality(): string {
+    get Modality(): string | null {
         return this.Get('Modality');
     }
 }
@@ -46449,7 +47082,7 @@ export class MJAIAgentPersonaEntity extends BaseEntity<MJAIAgentPersonaEntityTyp
     * * Display Name: Persona Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Persona(): string {
+    get Persona(): string | null {
         return this.Get('Persona');
     }
 }
@@ -46683,7 +47316,7 @@ export class MJAIAgentPromptEntity extends BaseEntity<MJAIAgentPromptEntityType>
     * * Display Name: Prompt
     * * SQL Data Type: nvarchar(255)
     */
-    get Prompt(): string {
+    get Prompt(): string | null {
         return this.Get('Prompt');
     }
 
@@ -48034,7 +48667,7 @@ export class MJAIAgentRubricEntity extends BaseEntity<MJAIAgentRubricEntityType>
     * * Display Name: Rubric
     * * SQL Data Type: nvarchar(255)
     */
-    get Rubric(): string {
+    get Rubric(): string | null {
         return this.Get('Rubric');
     }
 }
@@ -48323,7 +48956,7 @@ export class MJAIAgentRunMediaEntity extends BaseEntity<MJAIAgentRunMediaEntityT
     * * Display Name: Modality
     * * SQL Data Type: nvarchar(50)
     */
-    get Modality(): string {
+    get Modality(): string | null {
         return this.Get('Modality');
     }
 
@@ -50365,7 +50998,7 @@ export class MJAIAgentSearchScopeEntity extends BaseEntity<MJAIAgentSearchScopeE
     * * Display Name: Search Scope Name
     * * SQL Data Type: nvarchar(200)
     */
-    get SearchScope(): string {
+    get SearchScope(): string | null {
         return this.Get('SearchScope');
     }
 
@@ -50893,7 +51526,7 @@ export class MJAIAgentSessionBridgeEntity extends BaseEntity<MJAIAgentSessionBri
     * * Display Name: Provider
     * * SQL Data Type: nvarchar(100)
     */
-    get Provider(): string {
+    get Provider(): string | null {
         return this.Get('Provider');
     }
 }
@@ -51066,7 +51699,7 @@ export class MJAIAgentSessionChannelEntity extends BaseEntity<MJAIAgentSessionCh
     * * Display Name: Channel
     * * SQL Data Type: nvarchar(100)
     */
-    get Channel(): string {
+    get Channel(): string | null {
         return this.Get('Channel');
     }
 }
@@ -51690,7 +52323,7 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -51846,7 +52479,7 @@ export class MJAIAgentSkillEntity extends BaseEntity<MJAIAgentSkillEntityType> {
     * * Display Name: Skill Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Skill(): string {
+    get Skill(): string | null {
         return this.Get('Skill');
     }
 }
@@ -52024,7 +52657,7 @@ export class MJAIAgentStepPathEntity extends BaseEntity<MJAIAgentStepPathEntityT
     * * Display Name: Origin Step
     * * SQL Data Type: nvarchar(255)
     */
-    get OriginStep(): string {
+    get OriginStep(): string | null {
         return this.Get('OriginStep');
     }
 
@@ -52033,7 +52666,7 @@ export class MJAIAgentStepPathEntity extends BaseEntity<MJAIAgentStepPathEntityT
     * * Display Name: Destination Step
     * * SQL Data Type: nvarchar(255)
     */
-    get DestinationStep(): string {
+    get DestinationStep(): string | null {
         return this.Get('DestinationStep');
     }
 }
@@ -53555,7 +54188,7 @@ export class MJAIAgentUserPolicyEntity extends BaseEntity<MJAIAgentUserPolicyEnt
     * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -55115,7 +55748,7 @@ if this limit is exceeded.
     * * Display Name: Owner User
     * * SQL Data Type: nvarchar(100)
     */
-    get OwnerUser(): string {
+    get OwnerUser(): string | null {
         return this.Get('OwnerUser');
     }
 
@@ -55627,7 +56260,7 @@ export class MJAIBridgeAgentIdentityEntity extends BaseEntity<MJAIBridgeAgentIde
     * * Display Name: Provider Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Provider(): string {
+    get Provider(): string | null {
         return this.Get('Provider');
     }
 
@@ -55776,7 +56409,7 @@ export class MJAIBridgeProviderChannelEntity extends BaseEntity<MJAIBridgeProvid
     * * Display Name: Provider Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Provider(): string {
+    get Provider(): string | null {
         return this.Get('Provider');
     }
 
@@ -55785,7 +56418,7 @@ export class MJAIBridgeProviderChannelEntity extends BaseEntity<MJAIBridgeProvid
     * * Display Name: Channel Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Channel(): string {
+    get Channel(): string | null {
         return this.Get('Channel');
     }
 }
@@ -56346,7 +56979,7 @@ export class MJAIConfigurationParamEntity extends BaseEntity<MJAIConfigurationPa
     * * Display Name: Configuration
     * * SQL Data Type: nvarchar(100)
     */
-    get Configuration(): string {
+    get Configuration(): string | null {
         return this.Get('Configuration');
     }
 }
@@ -56947,7 +57580,7 @@ export class MJAICredentialBindingEntity extends BaseEntity<MJAICredentialBindin
     * * Display Name: Credential Name
     * * SQL Data Type: nvarchar(200)
     */
-    get Credential(): string {
+    get Credential(): string | null {
         return this.Get('Credential');
     }
 
@@ -57273,7 +57906,7 @@ export class MJAIModelActionEntity extends BaseEntity<MJAIModelActionEntityType>
     * * Display Name: AIModel
     * * SQL Data Type: nvarchar(50)
     */
-    get AIModel(): string {
+    get AIModel(): string | null {
         return this.Get('AIModel');
     }
 
@@ -57282,7 +57915,7 @@ export class MJAIModelActionEntity extends BaseEntity<MJAIModelActionEntityType>
     * * Display Name: AIAction
     * * SQL Data Type: nvarchar(50)
     */
-    get AIAction(): string {
+    get AIAction(): string | null {
         return this.Get('AIAction');
     }
 }
@@ -57473,7 +58106,7 @@ export class MJAIModelArchitectureEntity extends BaseEntity<MJAIModelArchitectur
     * * Display Name: Model Name
     * * SQL Data Type: nvarchar(50)
     */
-    get Model(): string {
+    get Model(): string | null {
         return this.Get('Model');
     }
 
@@ -57482,7 +58115,7 @@ export class MJAIModelArchitectureEntity extends BaseEntity<MJAIModelArchitectur
     * * Display Name: Architecture Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Architecture(): string {
+    get Architecture(): string | null {
         return this.Get('Architecture');
     }
 }
@@ -57823,7 +58456,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
     * * Display Name: Model Name
     * * SQL Data Type: nvarchar(50)
     */
-    get Model(): string {
+    get Model(): string | null {
         return this.Get('Model');
     }
 
@@ -57832,7 +58465,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
     * * Display Name: Vendor Name
     * * SQL Data Type: nvarchar(50)
     */
-    get Vendor(): string {
+    get Vendor(): string | null {
         return this.Get('Vendor');
     }
 
@@ -57841,7 +58474,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
     * * Display Name: Price Type Name
     * * SQL Data Type: nvarchar(100)
     */
-    get PriceType(): string {
+    get PriceType(): string | null {
         return this.Get('PriceType');
     }
 
@@ -57850,7 +58483,7 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
     * * Display Name: Unit Type Name
     * * SQL Data Type: nvarchar(100)
     */
-    get UnitType(): string {
+    get UnitType(): string | null {
         return this.Get('UnitType');
     }
 }
@@ -58060,7 +58693,7 @@ export class MJAIModelModalityEntity extends BaseEntity<MJAIModelModalityEntityT
     * * Display Name: Model
     * * SQL Data Type: nvarchar(50)
     */
-    get Model(): string {
+    get Model(): string | null {
         return this.Get('Model');
     }
 
@@ -58069,7 +58702,7 @@ export class MJAIModelModalityEntity extends BaseEntity<MJAIModelModalityEntityT
     * * Display Name: Modality
     * * SQL Data Type: nvarchar(50)
     */
-    get Modality(): string {
+    get Modality(): string | null {
         return this.Get('Modality');
     }
 }
@@ -58197,7 +58830,7 @@ export class MJAIModelPersonaEntity extends BaseEntity<MJAIModelPersonaEntityTyp
     * * Display Name: Model
     * * SQL Data Type: nvarchar(50)
     */
-    get Model(): string {
+    get Model(): string | null {
         return this.Get('Model');
     }
 
@@ -58206,7 +58839,7 @@ export class MJAIModelPersonaEntity extends BaseEntity<MJAIModelPersonaEntityTyp
     * * Display Name: Persona
     * * SQL Data Type: nvarchar(100)
     */
-    get Persona(): string {
+    get Persona(): string | null {
         return this.Get('Persona');
     }
 }
@@ -58822,10 +59455,11 @@ export interface MJAIModelTypeEntity_RealtimeUnitPrice {
 }
 
 /**
- * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
- * their own; the cost rows stay the authority for token prices. A price belongs to the host that
- * charges it, so set this on the model-vendor row: a price on the model or the model type would
- * reach every vendor that serves the model.
+ * Prices for realtime usage that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own: avatar video, and audio tokens, which providers bill at a different rate from the
+ * text tokens a cost row prices. The cost rows stay the authority for every other token price. A
+ * price belongs to the host that charges it, so set this on the model-vendor row: a price on the
+ * model or the model type would reach every vendor that serves the model.
  */
 export interface MJAIModelTypeEntity_RealtimePricingSettings {
     /**
@@ -58839,6 +59473,22 @@ export interface MJAIModelTypeEntity_RealtimePricingSettings {
      * at 6,192 tokens per second.
      */
     AvatarVideoOutput?: MJAIModelTypeEntity_RealtimeUnitPrice | null;
+    /**
+     * The price of audio input tokens, charged on a line of its own instead of at the cost row's
+     * input rate. Realtime providers bill audio tokens at a different rate from text tokens (GPT
+     * Realtime: several times the text rate), and a cost row holds one input rate. `'Per 1M Tokens'`
+     * only; any other unit is not applied. Cached audio input tokens are priced at the cost row's cache-read rate, not here. Without this
+     * price, audio input tokens are priced at the cost row's input rate and the run's default cost
+     * line is marked as blended.
+     */
+    AudioInput?: MJAIModelTypeEntity_RealtimeUnitPrice | null;
+    /**
+     * The price of audio output tokens, charged on a line of its own instead of at the cost row's
+     * output rate. `'Per 1M Tokens'` only; any other unit is not applied. Without this price, audio
+     * output tokens are priced at the cost row's output rate and the run's default cost line is
+     * marked as blended.
+     */
+    AudioOutput?: MJAIModelTypeEntity_RealtimeUnitPrice | null;
 }
 
 /** Realtime (speech-to-speech) knobs. */
@@ -59212,7 +59862,7 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
     * * Display Name: Default Input Modality Name
     * * SQL Data Type: nvarchar(50)
     */
-    get DefaultInputModality(): string {
+    get DefaultInputModality(): string | null {
         return this.Get('DefaultInputModality');
     }
 
@@ -59221,7 +59871,7 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
     * * Display Name: Default Output Modality Name
     * * SQL Data Type: nvarchar(50)
     */
-    get DefaultOutputModality(): string {
+    get DefaultOutputModality(): string | null {
         return this.Get('DefaultOutputModality');
     }
 }
@@ -59519,10 +60169,11 @@ export interface MJAIModelVendorEntity_RealtimeUnitPrice {
 }
 
 /**
- * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
- * their own; the cost rows stay the authority for token prices. A price belongs to the host that
- * charges it, so set this on the model-vendor row: a price on the model or the model type would
- * reach every vendor that serves the model.
+ * Prices for realtime usage that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own: avatar video, and audio tokens, which providers bill at a different rate from the
+ * text tokens a cost row prices. The cost rows stay the authority for every other token price. A
+ * price belongs to the host that charges it, so set this on the model-vendor row: a price on the
+ * model or the model type would reach every vendor that serves the model.
  */
 export interface MJAIModelVendorEntity_RealtimePricingSettings {
     /**
@@ -59536,6 +60187,22 @@ export interface MJAIModelVendorEntity_RealtimePricingSettings {
      * at 6,192 tokens per second.
      */
     AvatarVideoOutput?: MJAIModelVendorEntity_RealtimeUnitPrice | null;
+    /**
+     * The price of audio input tokens, charged on a line of its own instead of at the cost row's
+     * input rate. Realtime providers bill audio tokens at a different rate from text tokens (GPT
+     * Realtime: several times the text rate), and a cost row holds one input rate. `'Per 1M Tokens'`
+     * only; any other unit is not applied. Cached audio input tokens are priced at the cost row's cache-read rate, not here. Without this
+     * price, audio input tokens are priced at the cost row's input rate and the run's default cost
+     * line is marked as blended.
+     */
+    AudioInput?: MJAIModelVendorEntity_RealtimeUnitPrice | null;
+    /**
+     * The price of audio output tokens, charged on a line of its own instead of at the cost row's
+     * output rate. `'Per 1M Tokens'` only; any other unit is not applied. Without this price, audio
+     * output tokens are priced at the cost row's output rate and the run's default cost line is
+     * marked as blended.
+     */
+    AudioOutput?: MJAIModelVendorEntity_RealtimeUnitPrice | null;
 }
 
 /** Realtime (speech-to-speech) knobs. */
@@ -60092,7 +60759,7 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
     * * Display Name: Model Name
     * * SQL Data Type: nvarchar(50)
     */
-    get Model(): string {
+    get Model(): string | null {
         return this.Get('Model');
     }
 
@@ -60101,7 +60768,7 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
     * * Display Name: Vendor Name
     * * SQL Data Type: nvarchar(50)
     */
-    get Vendor(): string {
+    get Vendor(): string | null {
         return this.Get('Vendor');
     }
 
@@ -60110,7 +60777,7 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
     * * Display Name: Type
     * * SQL Data Type: nvarchar(50)
     */
-    get Type(): string {
+    get Type(): string | null {
         return this.Get('Type');
     }
 }
@@ -60408,10 +61075,11 @@ export interface MJAIModelEntity_RealtimeUnitPrice {
 }
 
 /**
- * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
- * their own; the cost rows stay the authority for token prices. A price belongs to the host that
- * charges it, so set this on the model-vendor row: a price on the model or the model type would
- * reach every vendor that serves the model.
+ * Prices for realtime usage that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own: avatar video, and audio tokens, which providers bill at a different rate from the
+ * text tokens a cost row prices. The cost rows stay the authority for every other token price. A
+ * price belongs to the host that charges it, so set this on the model-vendor row: a price on the
+ * model or the model type would reach every vendor that serves the model.
  */
 export interface MJAIModelEntity_RealtimePricingSettings {
     /**
@@ -60425,6 +61093,22 @@ export interface MJAIModelEntity_RealtimePricingSettings {
      * at 6,192 tokens per second.
      */
     AvatarVideoOutput?: MJAIModelEntity_RealtimeUnitPrice | null;
+    /**
+     * The price of audio input tokens, charged on a line of its own instead of at the cost row's
+     * input rate. Realtime providers bill audio tokens at a different rate from text tokens (GPT
+     * Realtime: several times the text rate), and a cost row holds one input rate. `'Per 1M Tokens'`
+     * only; any other unit is not applied. Cached audio input tokens are priced at the cost row's cache-read rate, not here. Without this
+     * price, audio input tokens are priced at the cost row's input rate and the run's default cost
+     * line is marked as blended.
+     */
+    AudioInput?: MJAIModelEntity_RealtimeUnitPrice | null;
+    /**
+     * The price of audio output tokens, charged on a line of its own instead of at the cost row's
+     * output rate. `'Per 1M Tokens'` only; any other unit is not applied. Without this price, audio
+     * output tokens are priced at the cost row's output rate and the run's default cost line is
+     * marked as blended.
+     */
+    AudioOutput?: MJAIModelEntity_RealtimeUnitPrice | null;
 }
 
 /** Realtime (speech-to-speech) knobs. */
@@ -61249,7 +61933,7 @@ export class MJAIPersonaVendorEntity extends BaseEntity<MJAIPersonaVendorEntityT
     * * Display Name: Persona Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Persona(): string {
+    get Persona(): string | null {
         return this.Get('Persona');
     }
 
@@ -61258,7 +61942,7 @@ export class MJAIPersonaVendorEntity extends BaseEntity<MJAIPersonaVendorEntityT
     * * Display Name: Vendor Name
     * * SQL Data Type: nvarchar(50)
     */
-    get Vendor(): string {
+    get Vendor(): string | null {
         return this.Get('Vendor');
     }
 
@@ -61267,7 +61951,7 @@ export class MJAIPersonaVendorEntity extends BaseEntity<MJAIPersonaVendorEntityT
     * * Display Name: Modality Name
     * * SQL Data Type: nvarchar(50)
     */
-    get Modality(): string {
+    get Modality(): string | null {
         return this.Get('Modality');
     }
 }
@@ -62020,10 +62704,11 @@ export interface MJAIPromptModelEntity_RealtimeUnitPrice {
 }
 
 /**
- * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
- * their own; the cost rows stay the authority for token prices. A price belongs to the host that
- * charges it, so set this on the model-vendor row: a price on the model or the model type would
- * reach every vendor that serves the model.
+ * Prices for realtime usage that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own: avatar video, and audio tokens, which providers bill at a different rate from the
+ * text tokens a cost row prices. The cost rows stay the authority for every other token price. A
+ * price belongs to the host that charges it, so set this on the model-vendor row: a price on the
+ * model or the model type would reach every vendor that serves the model.
  */
 export interface MJAIPromptModelEntity_RealtimePricingSettings {
     /**
@@ -62037,6 +62722,22 @@ export interface MJAIPromptModelEntity_RealtimePricingSettings {
      * at 6,192 tokens per second.
      */
     AvatarVideoOutput?: MJAIPromptModelEntity_RealtimeUnitPrice | null;
+    /**
+     * The price of audio input tokens, charged on a line of its own instead of at the cost row's
+     * input rate. Realtime providers bill audio tokens at a different rate from text tokens (GPT
+     * Realtime: several times the text rate), and a cost row holds one input rate. `'Per 1M Tokens'`
+     * only; any other unit is not applied. Cached audio input tokens are priced at the cost row's cache-read rate, not here. Without this
+     * price, audio input tokens are priced at the cost row's input rate and the run's default cost
+     * line is marked as blended.
+     */
+    AudioInput?: MJAIPromptModelEntity_RealtimeUnitPrice | null;
+    /**
+     * The price of audio output tokens, charged on a line of its own instead of at the cost row's
+     * output rate. `'Per 1M Tokens'` only; any other unit is not applied. Without this price, audio
+     * output tokens are priced at the cost row's output rate and the run's default cost line is
+     * marked as blended.
+     */
+    AudioOutput?: MJAIPromptModelEntity_RealtimeUnitPrice | null;
 }
 
 /** Realtime (speech-to-speech) knobs. */
@@ -62602,7 +63303,7 @@ export class MJAIPromptModelEntity extends BaseEntity<MJAIPromptModelEntityType>
     * * Display Name: Prompt
     * * SQL Data Type: nvarchar(255)
     */
-    get Prompt(): string {
+    get Prompt(): string | null {
         return this.Get('Prompt');
     }
 
@@ -62611,7 +63312,7 @@ export class MJAIPromptModelEntity extends BaseEntity<MJAIPromptModelEntityType>
     * * Display Name: Model
     * * SQL Data Type: nvarchar(50)
     */
-    get Model(): string {
+    get Model(): string | null {
         return this.Get('Model');
     }
 
@@ -62884,7 +63585,7 @@ export class MJAIPromptRunMediaEntity extends BaseEntity<MJAIPromptRunMediaEntit
     * * Display Name: Modality
     * * SQL Data Type: nvarchar(50)
     */
-    get Modality(): string {
+    get Modality(): string | null {
         return this.Get('Modality');
     }
 
@@ -64315,7 +65016,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     * * Display Name: Prompt
     * * SQL Data Type: nvarchar(255)
     */
-    get Prompt(): string {
+    get Prompt(): string | null {
         return this.Get('Prompt');
     }
 
@@ -64324,7 +65025,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     * * Display Name: Model
     * * SQL Data Type: nvarchar(50)
     */
-    get Model(): string {
+    get Model(): string | null {
         return this.Get('Model');
     }
 
@@ -64333,7 +65034,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     * * Display Name: Vendor
     * * SQL Data Type: nvarchar(50)
     */
-    get Vendor(): string {
+    get Vendor(): string | null {
         return this.Get('Vendor');
     }
 
@@ -64855,10 +65556,11 @@ export interface MJAIPromptEntity_RealtimeUnitPrice {
 }
 
 /**
- * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
- * their own; the cost rows stay the authority for token prices. A price belongs to the host that
- * charges it, so set this on the model-vendor row: a price on the model or the model type would
- * reach every vendor that serves the model.
+ * Prices for realtime usage that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own: avatar video, and audio tokens, which providers bill at a different rate from the
+ * text tokens a cost row prices. The cost rows stay the authority for every other token price. A
+ * price belongs to the host that charges it, so set this on the model-vendor row: a price on the
+ * model or the model type would reach every vendor that serves the model.
  */
 export interface MJAIPromptEntity_RealtimePricingSettings {
     /**
@@ -64872,6 +65574,22 @@ export interface MJAIPromptEntity_RealtimePricingSettings {
      * at 6,192 tokens per second.
      */
     AvatarVideoOutput?: MJAIPromptEntity_RealtimeUnitPrice | null;
+    /**
+     * The price of audio input tokens, charged on a line of its own instead of at the cost row's
+     * input rate. Realtime providers bill audio tokens at a different rate from text tokens (GPT
+     * Realtime: several times the text rate), and a cost row holds one input rate. `'Per 1M Tokens'`
+     * only; any other unit is not applied. Cached audio input tokens are priced at the cost row's cache-read rate, not here. Without this
+     * price, audio input tokens are priced at the cost row's input rate and the run's default cost
+     * line is marked as blended.
+     */
+    AudioInput?: MJAIPromptEntity_RealtimeUnitPrice | null;
+    /**
+     * The price of audio output tokens, charged on a line of its own instead of at the cost row's
+     * output rate. `'Per 1M Tokens'` only; any other unit is not applied. Without this price, audio
+     * output tokens are priced at the cost row's output rate and the run's default cost line is
+     * marked as blended.
+     */
+    AudioOutput?: MJAIPromptEntity_RealtimeUnitPrice | null;
 }
 
 /** Realtime (speech-to-speech) knobs. */
@@ -66154,7 +66872,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     * * Display Name: Template Text
     * * SQL Data Type: nvarchar(255)
     */
-    get Template(): string {
+    get Template(): string | null {
         return this.Get('Template');
     }
 
@@ -66172,7 +66890,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     * * Display Name: Type Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Type(): string {
+    get Type(): string | null {
         return this.Get('Type');
     }
 
@@ -66724,7 +67442,7 @@ export class MJAIResultCacheEntity extends BaseEntity<MJAIResultCacheEntityType>
     * * Display Name: AI Prompt
     * * SQL Data Type: nvarchar(255)
     */
-    get AIPrompt(): string {
+    get AIPrompt(): string | null {
         return this.Get('AIPrompt');
     }
 
@@ -66733,7 +67451,7 @@ export class MJAIResultCacheEntity extends BaseEntity<MJAIResultCacheEntityType>
     * * Display Name: AI Model
     * * SQL Data Type: nvarchar(50)
     */
-    get AIModel(): string {
+    get AIModel(): string | null {
         return this.Get('AIModel');
     }
 
@@ -66884,7 +67602,7 @@ export class MJAISkillActionEntity extends BaseEntity<MJAISkillActionEntityType>
     * * Display Name: Skill
     * * SQL Data Type: nvarchar(255)
     */
-    get Skill(): string {
+    get Skill(): string | null {
         return this.Get('Skill');
     }
 
@@ -66893,7 +67611,7 @@ export class MJAISkillActionEntity extends BaseEntity<MJAISkillActionEntityType>
     * * Display Name: Action
     * * SQL Data Type: nvarchar(425)
     */
-    get Action(): string {
+    get Action(): string | null {
         return this.Get('Action');
     }
 }
@@ -67077,7 +67795,7 @@ export class MJAISkillPermissionEntity extends BaseEntity<MJAISkillPermissionEnt
     * * Display Name: Skill
     * * SQL Data Type: nvarchar(255)
     */
-    get Skill(): string {
+    get Skill(): string | null {
         return this.Get('Skill');
     }
 
@@ -67268,7 +67986,7 @@ export class MJAISkillSearchScopeEntity extends BaseEntity<MJAISkillSearchScopeE
     * * Display Name: Skill
     * * SQL Data Type: nvarchar(255)
     */
-    get Skill(): string {
+    get Skill(): string | null {
         return this.Get('Skill');
     }
 
@@ -67277,7 +67995,7 @@ export class MJAISkillSearchScopeEntity extends BaseEntity<MJAISkillSearchScopeE
     * * Display Name: Search Scope
     * * SQL Data Type: nvarchar(200)
     */
-    get SearchScope(): string {
+    get SearchScope(): string | null {
         return this.Get('SearchScope');
     }
 }
@@ -67378,7 +68096,7 @@ export class MJAISkillSubAgentEntity extends BaseEntity<MJAISkillSubAgentEntityT
     * * Display Name: Skill
     * * SQL Data Type: nvarchar(255)
     */
-    get Skill(): string {
+    get Skill(): string | null {
         return this.Get('Skill');
     }
 
@@ -67625,7 +68343,7 @@ export class MJAISkillEntity extends BaseEntity<MJAISkillEntityType> {
     * * Display Name: Created By User
     * * SQL Data Type: nvarchar(100)
     */
-    get CreatedByUser(): string {
+    get CreatedByUser(): string | null {
         return this.Get('CreatedByUser');
     }
 }
@@ -67967,7 +68685,7 @@ export class MJAIVendorTypeEntity extends BaseEntity<MJAIVendorTypeEntityType> {
     * * Display Name: Vendor
     * * SQL Data Type: nvarchar(50)
     */
-    get Vendor(): string {
+    get Vendor(): string | null {
         return this.Get('Vendor');
     }
 
@@ -67976,7 +68694,7 @@ export class MJAIVendorTypeEntity extends BaseEntity<MJAIVendorTypeEntityType> {
     * * Display Name: Type
     * * SQL Data Type: nvarchar(50)
     */
-    get Type(): string {
+    get Type(): string | null {
         return this.Get('Type');
     }
 }
@@ -68274,10 +68992,11 @@ export interface MJAIVendorEntity_RealtimeUnitPrice {
 }
 
 /**
- * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
- * their own; the cost rows stay the authority for token prices. A price belongs to the host that
- * charges it, so set this on the model-vendor row: a price on the model or the model type would
- * reach every vendor that serves the model.
+ * Prices for realtime usage that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own: avatar video, and audio tokens, which providers bill at a different rate from the
+ * text tokens a cost row prices. The cost rows stay the authority for every other token price. A
+ * price belongs to the host that charges it, so set this on the model-vendor row: a price on the
+ * model or the model type would reach every vendor that serves the model.
  */
 export interface MJAIVendorEntity_RealtimePricingSettings {
     /**
@@ -68291,6 +69010,22 @@ export interface MJAIVendorEntity_RealtimePricingSettings {
      * at 6,192 tokens per second.
      */
     AvatarVideoOutput?: MJAIVendorEntity_RealtimeUnitPrice | null;
+    /**
+     * The price of audio input tokens, charged on a line of its own instead of at the cost row's
+     * input rate. Realtime providers bill audio tokens at a different rate from text tokens (GPT
+     * Realtime: several times the text rate), and a cost row holds one input rate. `'Per 1M Tokens'`
+     * only; any other unit is not applied. Cached audio input tokens are priced at the cost row's cache-read rate, not here. Without this
+     * price, audio input tokens are priced at the cost row's input rate and the run's default cost
+     * line is marked as blended.
+     */
+    AudioInput?: MJAIVendorEntity_RealtimeUnitPrice | null;
+    /**
+     * The price of audio output tokens, charged on a line of its own instead of at the cost row's
+     * output rate. `'Per 1M Tokens'` only; any other unit is not applied. Without this price, audio
+     * output tokens are priced at the cost row's output rate and the run's default cost line is
+     * marked as blended.
+     */
+    AudioOutput?: MJAIVendorEntity_RealtimeUnitPrice | null;
 }
 
 /** Realtime (speech-to-speech) knobs. */
@@ -68800,7 +69535,7 @@ export class MJAPIApplicationScopeEntity extends BaseEntity<MJAPIApplicationScop
     * * Display Name: Application Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Application(): string {
+    get Application(): string | null {
         return this.Get('Application');
     }
 
@@ -68809,7 +69544,7 @@ export class MJAPIApplicationScopeEntity extends BaseEntity<MJAPIApplicationScop
     * * Display Name: Scope Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Scope(): string {
+    get Scope(): string | null {
         return this.Get('Scope');
     }
 
@@ -69025,7 +69760,7 @@ export class MJAPIKeyApplicationEntity extends BaseEntity<MJAPIKeyApplicationEnt
     * * Display Name: API Key Value
     * * SQL Data Type: nvarchar(255)
     */
-    get APIKey(): string {
+    get APIKey(): string | null {
         return this.Get('APIKey');
     }
 
@@ -69034,7 +69769,7 @@ export class MJAPIKeyApplicationEntity extends BaseEntity<MJAPIKeyApplicationEnt
     * * Display Name: Application Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Application(): string {
+    get Application(): string | null {
         return this.Get('Application');
     }
 }
@@ -69207,7 +69942,7 @@ export class MJAPIKeyScopeEntity extends BaseEntity<MJAPIKeyScopeEntityType> {
     * * Display Name: API Key
     * * SQL Data Type: nvarchar(255)
     */
-    get APIKey(): string {
+    get APIKey(): string | null {
         return this.Get('APIKey');
     }
 
@@ -69216,7 +69951,7 @@ export class MJAPIKeyScopeEntity extends BaseEntity<MJAPIKeyScopeEntityType> {
     * * Display Name: Scope
     * * SQL Data Type: nvarchar(100)
     */
-    get Scope(): string {
+    get Scope(): string | null {
         return this.Get('Scope');
     }
 
@@ -69475,7 +70210,7 @@ export class MJAPIKeyUsageLogEntity extends BaseEntity<MJAPIKeyUsageLogEntityTyp
     * * Display Name: API Key
     * * SQL Data Type: nvarchar(255)
     */
-    get APIKey(): string {
+    get APIKey(): string | null {
         return this.Get('APIKey');
     }
 
@@ -69707,7 +70442,7 @@ export class MJAPIKeyEntity extends BaseEntity<MJAPIKeyEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -69716,7 +70451,7 @@ export class MJAPIKeyEntity extends BaseEntity<MJAPIKeyEntityType> {
     * * Display Name: Created By User
     * * SQL Data Type: nvarchar(100)
     */
-    get CreatedByUser(): string {
+    get CreatedByUser(): string | null {
         return this.Get('CreatedByUser');
     }
 }
@@ -70168,7 +70903,7 @@ export class MJAccessControlRuleEntity extends BaseEntity<MJAccessControlRuleEnt
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 
@@ -70177,7 +70912,7 @@ export class MJAccessControlRuleEntity extends BaseEntity<MJAccessControlRuleEnt
     * * Display Name: Granted By User
     * * SQL Data Type: nvarchar(100)
     */
-    get GrantedByUser(): string {
+    get GrantedByUser(): string | null {
         return this.Get('GrantedByUser');
     }
 }
@@ -70289,7 +71024,7 @@ export class MJActionAuthorizationEntity extends BaseEntity<MJActionAuthorizatio
     * * Display Name: Action
     * * SQL Data Type: nvarchar(425)
     */
-    get Action(): string {
+    get Action(): string | null {
         return this.Get('Action');
     }
 
@@ -70298,7 +71033,7 @@ export class MJActionAuthorizationEntity extends BaseEntity<MJActionAuthorizatio
     * * Display Name: Authorization
     * * SQL Data Type: nvarchar(100)
     */
-    get Authorization(): string {
+    get Authorization(): string | null {
         return this.Get('Authorization');
     }
 }
@@ -70685,7 +71420,7 @@ export class MJActionContextEntity extends BaseEntity<MJActionContextEntityType>
     * * Display Name: Action
     * * SQL Data Type: nvarchar(425)
     */
-    get Action(): string {
+    get Action(): string | null {
         return this.Get('Action');
     }
 
@@ -70941,7 +71676,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
     * * Display Name: Action Name
     * * SQL Data Type: nvarchar(425)
     */
-    get Action(): string {
+    get Action(): string | null {
         return this.Get('Action');
     }
 
@@ -70950,7 +71685,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
     * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -71198,7 +71933,7 @@ export class MJActionLibraryEntity extends BaseEntity<MJActionLibraryEntityType>
     * * Display Name: Action
     * * SQL Data Type: nvarchar(425)
     */
-    get Action(): string {
+    get Action(): string | null {
         return this.Get('Action');
     }
 
@@ -71207,7 +71942,7 @@ export class MJActionLibraryEntity extends BaseEntity<MJActionLibraryEntityType>
     * * Display Name: Library
     * * SQL Data Type: nvarchar(255)
     */
-    get Library(): string {
+    get Library(): string | null {
         return this.Get('Library');
     }
 }
@@ -71498,7 +72233,7 @@ export class MJActionParamEntity extends BaseEntity<MJActionParamEntityType> {
     * * Display Name: Action
     * * SQL Data Type: nvarchar(425)
     */
-    get Action(): string {
+    get Action(): string | null {
         return this.Get('Action');
     }
 }
@@ -71625,7 +72360,7 @@ export class MJActionResultCodeEntity extends BaseEntity<MJActionResultCodeEntit
     * * Display Name: Action
     * * SQL Data Type: nvarchar(425)
     */
-    get Action(): string {
+    get Action(): string | null {
         return this.Get('Action');
     }
 }
@@ -72749,7 +73484,7 @@ export class MJApplicationRoleEntity extends BaseEntity<MJApplicationRoleEntityT
     * * Display Name: Application Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Application(): string {
+    get Application(): string | null {
         return this.Get('Application');
     }
 
@@ -72758,7 +73493,7 @@ export class MJApplicationRoleEntity extends BaseEntity<MJApplicationRoleEntityT
     * * Display Name: Role Name
     * * SQL Data Type: nvarchar(50)
     */
-    get Role(): string {
+    get Role(): string | null {
         return this.Get('Role');
     }
 }
@@ -73606,7 +74341,7 @@ export class MJArchiveConfigurationEntityEntity extends BaseEntity<MJArchiveConf
     * * Display Name: Archive Configuration Name
     * * SQL Data Type: nvarchar(255)
     */
-    get ArchiveConfiguration(): string {
+    get ArchiveConfiguration(): string | null {
         return this.Get('ArchiveConfiguration');
     }
 
@@ -73615,7 +74350,7 @@ export class MJArchiveConfigurationEntityEntity extends BaseEntity<MJArchiveConf
     * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 }
@@ -73896,7 +74631,7 @@ export class MJArchiveConfigurationEntity extends BaseEntity<MJArchiveConfigurat
     * * Display Name: Created By User
     * * SQL Data Type: nvarchar(100)
     */
-    get CreatedByUser(): string {
+    get CreatedByUser(): string | null {
         return this.Get('CreatedByUser');
     }
 }
@@ -74109,7 +74844,7 @@ export class MJArchiveRunDetailEntity extends BaseEntity<MJArchiveRunDetailEntit
     * * Display Name: Archive Run
     * * SQL Data Type: nvarchar(255)
     */
-    get ArchiveRun(): string {
+    get ArchiveRun(): string | null {
         return this.Get('ArchiveRun');
     }
 
@@ -74118,7 +74853,7 @@ export class MJArchiveRunDetailEntity extends BaseEntity<MJArchiveRunDetailEntit
     * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 }
@@ -74369,7 +75104,7 @@ export class MJArchiveRunEntity extends BaseEntity<MJArchiveRunEntityType> {
     * * Display Name: Configuration Name
     * * SQL Data Type: nvarchar(255)
     */
-    get ArchiveConfiguration(): string {
+    get ArchiveConfiguration(): string | null {
         return this.Get('ArchiveConfiguration');
     }
 
@@ -74378,7 +75113,7 @@ export class MJArchiveRunEntity extends BaseEntity<MJArchiveRunEntityType> {
     * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 }
@@ -74548,7 +75283,7 @@ export class MJArtifactPermissionEntity extends BaseEntity<MJArtifactPermissionE
     * * Display Name: Artifact
     * * SQL Data Type: nvarchar(255)
     */
-    get Artifact(): string {
+    get Artifact(): string | null {
         return this.Get('Artifact');
     }
 
@@ -74557,7 +75292,7 @@ export class MJArtifactPermissionEntity extends BaseEntity<MJArtifactPermissionE
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -75011,7 +75746,7 @@ export class MJArtifactUseEntity extends BaseEntity<MJArtifactUseEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 }
@@ -75433,7 +76168,7 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
     * * Display Name: Artifact
     * * SQL Data Type: nvarchar(255)
     */
-    get Artifact(): string {
+    get Artifact(): string | null {
         return this.Get('Artifact');
     }
 
@@ -75442,7 +76177,7 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -75622,7 +76357,7 @@ export class MJArtifactEntity extends BaseEntity<MJArtifactEntityType> {
     * * Display Name: Environment
     * * SQL Data Type: nvarchar(255)
     */
-    get Environment(): string {
+    get Environment(): string | null {
         return this.Get('Environment');
     }
 
@@ -75631,7 +76366,7 @@ export class MJArtifactEntity extends BaseEntity<MJArtifactEntityType> {
     * * Display Name: Type
     * * SQL Data Type: nvarchar(100)
     */
-    get Type(): string {
+    get Type(): string | null {
         return this.Get('Type');
     }
 
@@ -75640,7 +76375,7 @@ export class MJArtifactEntity extends BaseEntity<MJArtifactEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 }
@@ -75999,7 +76734,7 @@ export class MJAuditLogEntity extends BaseEntity<MJAuditLogEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -76008,7 +76743,7 @@ export class MJAuditLogEntity extends BaseEntity<MJAuditLogEntityType> {
     * * Display Name: Audit Log Type
     * * SQL Data Type: nvarchar(50)
     */
-    get AuditLogType(): string {
+    get AuditLogType(): string | null {
         return this.Get('AuditLogType');
     }
 
@@ -76460,7 +77195,7 @@ export class MJAuthorizationRoleEntity extends BaseEntity<MJAuthorizationRoleEnt
     * * Display Name: Authorization
     * * SQL Data Type: nvarchar(100)
     */
-    get Authorization(): string {
+    get Authorization(): string | null {
         return this.Get('Authorization');
     }
 
@@ -76469,7 +77204,7 @@ export class MJAuthorizationRoleEntity extends BaseEntity<MJAuthorizationRoleEnt
     * * Display Name: Role
     * * SQL Data Type: nvarchar(50)
     */
-    get Role(): string {
+    get Role(): string | null {
         return this.Get('Role');
     }
 }
@@ -76860,7 +77595,7 @@ export class MJBrandKitAssetEntity extends BaseEntity<MJBrandKitAssetEntityType>
     * * Display Name: Brand Kit
     * * SQL Data Type: nvarchar(255)
     */
-    get BrandKit(): string {
+    get BrandKit(): string | null {
         return this.Get('BrandKit');
     }
 
@@ -76869,7 +77604,7 @@ export class MJBrandKitAssetEntity extends BaseEntity<MJBrandKitAssetEntityType>
     * * Display Name: File
     * * SQL Data Type: nvarchar(500)
     */
-    get File(): string {
+    get File(): string | null {
         return this.Get('File');
     }
 }
@@ -77445,7 +78180,7 @@ export class MJCalendarEventLinkEntity extends BaseEntity<MJCalendarEventLinkEnt
     * * Display Name: Communication Provider
     * * SQL Data Type: nvarchar(255)
     */
-    get CommunicationProvider(): string {
+    get CommunicationProvider(): string | null {
         return this.Get('CommunicationProvider');
     }
 
@@ -77454,7 +78189,7 @@ export class MJCalendarEventLinkEntity extends BaseEntity<MJCalendarEventLinkEnt
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 }
@@ -77593,7 +78328,7 @@ export class MJCalendarSyncStateEntity extends BaseEntity<MJCalendarSyncStateEnt
     * * Display Name: Communication Provider
     * * SQL Data Type: nvarchar(255)
     */
-    get CommunicationProvider(): string {
+    get CommunicationProvider(): string | null {
         return this.Get('CommunicationProvider');
     }
 }
@@ -77811,7 +78546,7 @@ export class MJClusterAnalysisEntity extends BaseEntity<MJClusterAnalysisEntityT
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -77975,7 +78710,7 @@ export class MJClusterAnalysisClusterEntity extends BaseEntity<MJClusterAnalysis
     * * Display Name: Cluster Analysis
     * * SQL Data Type: nvarchar(255)
     */
-    get ClusterAnalysis(): string {
+    get ClusterAnalysis(): string | null {
         return this.Get('ClusterAnalysis');
     }
 }
@@ -78117,7 +78852,7 @@ export class MJCollectionArtifactEntity extends BaseEntity<MJCollectionArtifactE
     * * Display Name: Collection Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Collection(): string {
+    get Collection(): string | null {
         return this.Get('Collection');
     }
 
@@ -78296,7 +79031,7 @@ export class MJCollectionPermissionEntity extends BaseEntity<MJCollectionPermiss
     * * Display Name: Collection
     * * SQL Data Type: nvarchar(255)
     */
-    get Collection(): string {
+    get Collection(): string | null {
         return this.Get('Collection');
     }
 
@@ -78305,7 +79040,7 @@ export class MJCollectionPermissionEntity extends BaseEntity<MJCollectionPermiss
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -78494,7 +79229,7 @@ export class MJCollectionEntity extends BaseEntity<MJCollectionEntityType> {
     * * Display Name: Environment
     * * SQL Data Type: nvarchar(255)
     */
-    get Environment(): string {
+    get Environment(): string | null {
         return this.Get('Environment');
     }
 
@@ -78879,7 +79614,7 @@ export class MJCommunicationLogEntity extends BaseEntity<MJCommunicationLogEntit
     * * Display Name: Communication Provider
     * * SQL Data Type: nvarchar(255)
     */
-    get CommunicationProvider(): string {
+    get CommunicationProvider(): string | null {
         return this.Get('CommunicationProvider');
     }
 
@@ -78888,7 +79623,7 @@ export class MJCommunicationLogEntity extends BaseEntity<MJCommunicationLogEntit
     * * Display Name: Communication Provider Message Type
     * * SQL Data Type: nvarchar(255)
     */
-    get CommunicationProviderMessageType(): string {
+    get CommunicationProviderMessageType(): string | null {
         return this.Get('CommunicationProviderMessageType');
     }
 
@@ -79040,7 +79775,7 @@ export class MJCommunicationProviderMessageTypeEntity extends BaseEntity<MJCommu
     * * Display Name: Communication Provider
     * * SQL Data Type: nvarchar(255)
     */
-    get CommunicationProvider(): string {
+    get CommunicationProvider(): string | null {
         return this.Get('CommunicationProvider');
     }
 
@@ -79049,7 +79784,7 @@ export class MJCommunicationProviderMessageTypeEntity extends BaseEntity<MJCommu
     * * Display Name: Communication Base Message Type
     * * SQL Data Type: nvarchar(100)
     */
-    get CommunicationBaseMessageType(): string {
+    get CommunicationBaseMessageType(): string | null {
         return this.Get('CommunicationBaseMessageType');
     }
 }
@@ -79549,7 +80284,7 @@ export class MJCommunicationRunEntity extends BaseEntity<MJCommunicationRunEntit
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 }
@@ -79929,7 +80664,7 @@ export class MJCompanyIntegrationEntityMapEntity extends BaseEntity<MJCompanyInt
     * * Display Name: Company Integration Name
     * * SQL Data Type: nvarchar(255)
     */
-    get CompanyIntegration(): string {
+    get CompanyIntegration(): string | null {
         return this.Get('CompanyIntegration');
     }
 
@@ -79938,7 +80673,7 @@ export class MJCompanyIntegrationEntityMapEntity extends BaseEntity<MJCompanyInt
     * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 }
@@ -80182,7 +80917,7 @@ export class MJCompanyIntegrationFieldMapEntity extends BaseEntity<MJCompanyInte
     * * Display Name: Entity Map
     * * SQL Data Type: nvarchar(500)
     */
-    get EntityMap(): string {
+    get EntityMap(): string | null {
         return this.Get('EntityMap');
     }
 }
@@ -80685,7 +81420,7 @@ export class MJCompanyIntegrationObjectFieldEntity extends BaseEntity<MJCompanyI
     * * Display Name: Company Integration Object
     * * SQL Data Type: nvarchar(255)
     */
-    get CompanyIntegrationObject(): string {
+    get CompanyIntegrationObject(): string | null {
         return this.Get('CompanyIntegrationObject');
     }
 
@@ -81447,7 +82182,7 @@ export class MJCompanyIntegrationObjectEntity extends BaseEntity<MJCompanyIntegr
     * * Display Name: Integration
     * * SQL Data Type: nvarchar(100)
     */
-    get Integration(): string {
+    get Integration(): string | null {
         return this.Get('Integration');
     }
 
@@ -81456,7 +82191,7 @@ export class MJCompanyIntegrationObjectEntity extends BaseEntity<MJCompanyIntegr
     * * Display Name: Company Integration
     * * SQL Data Type: nvarchar(255)
     */
-    get CompanyIntegration(): string {
+    get CompanyIntegration(): string | null {
         return this.Get('CompanyIntegration');
     }
 
@@ -81591,7 +82326,7 @@ export class MJCompanyIntegrationRecordMapEntity extends BaseEntity<MJCompanyInt
     * * Display Name: Company Integration
     * * SQL Data Type: nvarchar(255)
     */
-    get CompanyIntegration(): string {
+    get CompanyIntegration(): string | null {
         return this.Get('CompanyIntegration');
     }
 
@@ -81600,7 +82335,7 @@ export class MJCompanyIntegrationRecordMapEntity extends BaseEntity<MJCompanyInt
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 }
@@ -81763,7 +82498,7 @@ export class MJCompanyIntegrationRunAPILogEntity extends BaseEntity<MJCompanyInt
     * * Display Name: Company Integration Run
     * * SQL Data Type: nvarchar(100)
     */
-    get CompanyIntegrationRun(): string {
+    get CompanyIntegrationRun(): string | null {
         return this.Get('CompanyIntegrationRun');
     }
 }
@@ -82408,7 +83143,7 @@ export class MJCompanyIntegrationSyncWatermarkEntity extends BaseEntity<MJCompan
     * * Display Name: Entity Map Name
     * * SQL Data Type: nvarchar(500)
     */
-    get EntityMap(): string {
+    get EntityMap(): string | null {
         return this.Get('EntityMap');
     }
 }
@@ -83002,7 +83737,7 @@ export class MJComponentDependencyEntity extends BaseEntity<MJComponentDependenc
     * * Display Name: Component
     * * SQL Data Type: nvarchar(500)
     */
-    get Component(): string {
+    get Component(): string | null {
         return this.Get('Component');
     }
 
@@ -83011,7 +83746,7 @@ export class MJComponentDependencyEntity extends BaseEntity<MJComponentDependenc
     * * Display Name: Dependency Component
     * * SQL Data Type: nvarchar(500)
     */
-    get DependencyComponent(): string {
+    get DependencyComponent(): string | null {
         return this.Get('DependencyComponent');
     }
 }
@@ -83382,7 +84117,7 @@ export class MJComponentLibraryLinkEntity extends BaseEntity<MJComponentLibraryL
     * * Display Name: Component
     * * SQL Data Type: nvarchar(500)
     */
-    get Component(): string {
+    get Component(): string | null {
         return this.Get('Component');
     }
 
@@ -83391,7 +84126,7 @@ export class MJComponentLibraryLinkEntity extends BaseEntity<MJComponentLibraryL
     * * Display Name: Library
     * * SQL Data Type: nvarchar(500)
     */
-    get Library(): string {
+    get Library(): string | null {
         return this.Get('Library');
     }
 }
@@ -85674,7 +86409,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
     * * Display Name: Content Type Name
     * * SQL Data Type: nvarchar(255)
     */
-    get ContentType(): string {
+    get ContentType(): string | null {
         return this.Get('ContentType');
     }
 
@@ -85683,7 +86418,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
     * * Display Name: Content Source Type Name
     * * SQL Data Type: nvarchar(255)
     */
-    get ContentSourceType(): string {
+    get ContentSourceType(): string | null {
         return this.Get('ContentSourceType');
     }
 
@@ -85692,7 +86427,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
     * * Display Name: Content File Type Name
     * * SQL Data Type: nvarchar(255)
     */
-    get ContentFileType(): string {
+    get ContentFileType(): string | null {
         return this.Get('ContentFileType');
     }
 
@@ -86045,7 +86780,7 @@ export class MJContentProcessRunDetailEntity extends BaseEntity<MJContentProcess
     * * Display Name: Source Type Category
     * * SQL Data Type: nvarchar(255)
     */
-    get ContentSourceType(): string {
+    get ContentSourceType(): string | null {
         return this.Get('ContentSourceType');
     }
 }
@@ -87605,7 +88340,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     * * Display Name: Content Type Name
     * * SQL Data Type: nvarchar(255)
     */
-    get ContentType(): string {
+    get ContentType(): string | null {
         return this.Get('ContentType');
     }
 
@@ -87614,7 +88349,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     * * Display Name: Content Source Type Name
     * * SQL Data Type: nvarchar(255)
     */
-    get ContentSourceType(): string {
+    get ContentSourceType(): string | null {
         return this.Get('ContentSourceType');
     }
 
@@ -87623,7 +88358,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     * * Display Name: Content File Type Name
     * * SQL Data Type: nvarchar(255)
     */
-    get ContentFileType(): string {
+    get ContentFileType(): string | null {
         return this.Get('ContentFileType');
     }
 
@@ -88168,7 +88903,7 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
     * * Display Name: AI Model Name
     * * SQL Data Type: nvarchar(50)
     */
-    get AIModel(): string {
+    get AIModel(): string | null {
         return this.Get('AIModel');
     }
 
@@ -88306,7 +89041,7 @@ export class MJConversationArtifactPermissionEntity extends BaseEntity<MJConvers
     * * Display Name: Conversation Artifact
     * * SQL Data Type: nvarchar(255)
     */
-    get ConversationArtifact(): string {
+    get ConversationArtifact(): string | null {
         return this.Get('ConversationArtifact');
     }
 }
@@ -88509,7 +89244,7 @@ export class MJConversationArtifactVersionEntity extends BaseEntity<MJConversati
     * * Display Name: Conversation Artifact
     * * SQL Data Type: nvarchar(255)
     */
-    get ConversationArtifact(): string {
+    get ConversationArtifact(): string | null {
         return this.Get('ConversationArtifact');
     }
 }
@@ -88714,7 +89449,7 @@ export class MJConversationArtifactEntity extends BaseEntity<MJConversationArtif
     * * Display Name: Artifact Type
     * * SQL Data Type: nvarchar(100)
     */
-    get ArtifactType(): string {
+    get ArtifactType(): string | null {
         return this.Get('ArtifactType');
     }
 }
@@ -88941,7 +89676,7 @@ export class MJConversationBranchEntity extends BaseEntity<MJConversationBranchE
     * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 }
@@ -89484,7 +90219,7 @@ export class MJConversationDetailAttachmentEntity extends BaseEntity<MJConversat
     * * Display Name: Modality Record
     * * SQL Data Type: nvarchar(50)
     */
-    get Modality(): string {
+    get Modality(): string | null {
         return this.Get('Modality');
     }
 
@@ -89666,7 +90401,7 @@ export class MJConversationDetailRatingEntity extends BaseEntity<MJConversationD
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 }
@@ -90511,7 +91246,7 @@ export class MJConversationSkillEntity extends BaseEntity<MJConversationSkillEnt
     * * Display Name: Skill Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Skill(): string {
+    get Skill(): string | null {
         return this.Get('Skill');
     }
 
@@ -90895,7 +91630,7 @@ export class MJConversationWidgetInstanceEntity extends BaseEntity<MJConversatio
     * * Display Name: Application
     * * SQL Data Type: nvarchar(100)
     */
-    get Application(): string {
+    get Application(): string | null {
         return this.Get('Application');
     }
 
@@ -90913,7 +91648,7 @@ export class MJConversationWidgetInstanceEntity extends BaseEntity<MJConversatio
     * * Display Name: Guest Role
     * * SQL Data Type: nvarchar(50)
     */
-    get GuestRole(): string {
+    get GuestRole(): string | null {
         return this.Get('GuestRole');
     }
 }
@@ -91604,7 +92339,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -91631,7 +92366,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     * * Display Name: Environment
     * * SQL Data Type: nvarchar(255)
     */
-    get Environment(): string {
+    get Environment(): string | null {
         return this.Get('Environment');
     }
 
@@ -92407,7 +93142,7 @@ export class MJCredentialEntity extends BaseEntity<MJCredentialEntityType> {
     * * Display Name: Credential Type
     * * SQL Data Type: nvarchar(100)
     */
-    get CredentialType(): string {
+    get CredentialType(): string | null {
         return this.Get('CredentialType');
     }
 
@@ -92549,7 +93284,7 @@ export class MJDashboardCategoryEntity extends BaseEntity<MJDashboardCategoryEnt
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -92735,7 +93470,7 @@ export class MJDashboardCategoryLinkEntity extends BaseEntity<MJDashboardCategor
     * * Display Name: Dashboard Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Dashboard(): string {
+    get Dashboard(): string | null {
         return this.Get('Dashboard');
     }
 
@@ -92744,7 +93479,7 @@ export class MJDashboardCategoryLinkEntity extends BaseEntity<MJDashboardCategor
     * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -92923,7 +93658,7 @@ export class MJDashboardCategoryPermissionEntity extends BaseEntity<MJDashboardC
     * * Display Name: Dashboard Category
     * * SQL Data Type: nvarchar(100)
     */
-    get DashboardCategory(): string {
+    get DashboardCategory(): string | null {
         return this.Get('DashboardCategory');
     }
 
@@ -92932,7 +93667,7 @@ export class MJDashboardCategoryPermissionEntity extends BaseEntity<MJDashboardC
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -93283,7 +94018,7 @@ export class MJDashboardPermissionEntity extends BaseEntity<MJDashboardPermissio
     * * Display Name: Dashboard
     * * SQL Data Type: nvarchar(255)
     */
-    get Dashboard(): string {
+    get Dashboard(): string | null {
         return this.Get('Dashboard');
     }
 
@@ -93292,7 +94027,7 @@ export class MJDashboardPermissionEntity extends BaseEntity<MJDashboardPermissio
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -93483,7 +94218,7 @@ export class MJDashboardUserPreferenceEntity extends BaseEntity<MJDashboardUserP
     * * Display Name: Dashboard
     * * SQL Data Type: nvarchar(255)
     */
-    get Dashboard(): string {
+    get Dashboard(): string | null {
         return this.Get('Dashboard');
     }
 
@@ -93607,7 +94342,7 @@ export class MJDashboardUserStateEntity extends BaseEntity<MJDashboardUserStateE
     * * Display Name: Dashboard
     * * SQL Data Type: nvarchar(255)
     */
-    get Dashboard(): string {
+    get Dashboard(): string | null {
         return this.Get('Dashboard');
     }
 
@@ -93616,7 +94351,7 @@ export class MJDashboardUserStateEntity extends BaseEntity<MJDashboardUserStateE
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 }
@@ -93964,7 +94699,7 @@ export class MJDashboardEntity extends BaseEntity<MJDashboardEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -93991,7 +94726,7 @@ export class MJDashboardEntity extends BaseEntity<MJDashboardEntityType> {
     * * Display Name: Environment
     * * SQL Data Type: nvarchar(255)
     */
-    get Environment(): string {
+    get Environment(): string | null {
         return this.Get('Environment');
     }
 
@@ -94223,7 +94958,7 @@ export class MJDataContextItemEntity extends BaseEntity<MJDataContextItemEntityT
     * * Display Name: Data Context
     * * SQL Data Type: nvarchar(255)
     */
-    get DataContext(): string {
+    get DataContext(): string | null {
         return this.Get('DataContext');
     }
 
@@ -94374,7 +95109,7 @@ export class MJDataContextEntity extends BaseEntity<MJDataContextEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 }
@@ -94552,7 +95287,7 @@ export class MJDatasetItemEntity extends BaseEntity<MJDatasetItemEntityType> {
     * * Display Name: Dataset
     * * SQL Data Type: nvarchar(100)
     */
-    get Dataset(): string {
+    get Dataset(): string | null {
         return this.Get('Dataset');
     }
 
@@ -94561,7 +95296,7 @@ export class MJDatasetItemEntity extends BaseEntity<MJDatasetItemEntityType> {
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 }
@@ -95683,7 +96418,7 @@ export class MJDiagnosticSessionChunkEntity extends BaseEntity<MJDiagnosticSessi
     * * Display Name: Diagnostic Session
     * * SQL Data Type: nvarchar(255)
     */
-    get DiagnosticSession(): string {
+    get DiagnosticSession(): string | null {
         return this.Get('DiagnosticSession');
     }
 }
@@ -96021,7 +96756,7 @@ export class MJDiagnosticSessionEntity extends BaseEntity<MJDiagnosticSessionEnt
     * * Display Name: Created By User Name
     * * SQL Data Type: nvarchar(100)
     */
-    get CreatedByUser(): string {
+    get CreatedByUser(): string | null {
         return this.Get('CreatedByUser');
     }
 
@@ -96032,6 +96767,125 @@ export class MJDiagnosticSessionEntity extends BaseEntity<MJDiagnosticSessionEnt
     */
     get Company(): string | null {
         return this.Get('Company');
+    }
+}
+
+
+/**
+ * MJ: Document Sequence Counters - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: DocumentSequenceCounter
+ * * Base View: vwDocumentSequenceCounters
+ * * @description Atomic sequence counter storage for DocumentNumberingEngine, partitioned by (SequenceKey, ScopeKey).
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Document Sequence Counters')
+export class MJDocumentSequenceCounterEntity extends BaseEntity<MJDocumentSequenceCounterEntityType> {
+    /**
+    * Loads the MJ: Document Sequence Counters record from the database
+    * @param ID: string - primary key value to load the MJ: Document Sequence Counters record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJDocumentSequenceCounterEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: Document Sequence Counters - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJDocumentSequenceCounterEntity
+    * @throws {Error} - Save is not allowed for MJ: Document Sequence Counters, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    */
+    public override async Save(options?: EntitySaveOptions) : Promise<boolean> {
+        throw new Error('Save is not allowed for MJ: Document Sequence Counters, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
+    }
+
+    /**
+    * MJ: Document Sequence Counters - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJDocumentSequenceCounterEntity
+    * @throws {Error} - Delete is not allowed for MJ: Document Sequence Counters, to enable it set AllowDeleteAPI to 1 in the database.
+    */
+    public override async Delete(): Promise<boolean> {
+        throw new Error('Delete is not allowed for MJ: Document Sequence Counters, to enable it set AllowDeleteAPI to 1 in the database.');
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SequenceKey
+    * * Display Name: Sequence Key
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Globally unique logical sequence identifier (for example Orders.OrderNumber or Accounting.JournalEntry.EntryNumber).
+    */
+    get SequenceKey(): string {
+        return this.Get('SequenceKey');
+    }
+
+    /**
+    * * Field Name: ScopeKey
+    * * Display Name: Scope Key
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Deterministic partition key combining tenant, scope fields, and reset period (or __GLOBAL__ for unpartitioned sequences).
+    */
+    get ScopeKey(): string {
+        return this.Get('ScopeKey');
+    }
+
+    /**
+    * * Field Name: CurrentValue
+    * * Display Name: Current Value
+    * * SQL Data Type: bigint
+    * * Description: Most recently allocated integer value for this (SequenceKey, ScopeKey) partition.
+    */
+    get CurrentValue(): number {
+        return this.Get('CurrentValue');
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 
@@ -96366,7 +97220,7 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
     * * Display Name: Duplicate Run Detail Object
     * * SQL Data Type: nvarchar(500)
     */
-    get DuplicateRunDetail(): string {
+    get DuplicateRunDetail(): string | null {
         return this.Get('DuplicateRunDetail');
     }
 
@@ -96611,7 +97465,7 @@ export class MJDuplicateRunDetailEntity extends BaseEntity<MJDuplicateRunDetailE
     * * Display Name: Run Name
     * * SQL Data Type: nvarchar(255)
     */
-    get DuplicateRun(): string {
+    get DuplicateRun(): string | null {
         return this.Get('DuplicateRun');
     }
 }
@@ -96911,7 +97765,7 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
     * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 
@@ -96920,7 +97774,7 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
     * * Display Name: Started By User
     * * SQL Data Type: nvarchar(100)
     */
-    get StartedByUser(): string {
+    get StartedByUser(): string | null {
         return this.Get('StartedByUser');
     }
 
@@ -96947,7 +97801,7 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
     * * Display Name: Entity Document Name
     * * SQL Data Type: nvarchar(250)
     */
-    get EntityDocument(): string {
+    get EntityDocument(): string | null {
         return this.Get('EntityDocument');
     }
 }
@@ -97083,7 +97937,7 @@ export class MJEmployeeCompanyIntegrationEntity extends BaseEntity<MJEmployeeCom
     * * Display Name: Integration Name
     * * SQL Data Type: nvarchar(255)
     */
-    get CompanyIntegration(): string {
+    get CompanyIntegration(): string | null {
         return this.Get('CompanyIntegration');
     }
 }
@@ -97192,7 +98046,7 @@ export class MJEmployeeRoleEntity extends BaseEntity<MJEmployeeRoleEntityType> {
     * * Display Name: Role Name
     * * SQL Data Type: nvarchar(50)
     */
-    get Role(): string {
+    get Role(): string | null {
         return this.Get('Role');
     }
 }
@@ -97301,7 +98155,7 @@ export class MJEmployeeSkillEntity extends BaseEntity<MJEmployeeSkillEntityType>
     * * Display Name: Skill
     * * SQL Data Type: nvarchar(50)
     */
-    get Skill(): string {
+    get Skill(): string | null {
         return this.Get('Skill');
     }
 }
@@ -98075,7 +98929,7 @@ export class MJEncryptionKeyEntity extends BaseEntity<MJEncryptionKeyEntityType>
     * * Display Name: Encryption Key Source
     * * SQL Data Type: nvarchar(100)
     */
-    get EncryptionKeySource(): string {
+    get EncryptionKeySource(): string | null {
         return this.Get('EncryptionKeySource');
     }
 
@@ -98084,7 +98938,7 @@ export class MJEncryptionKeyEntity extends BaseEntity<MJEncryptionKeyEntityType>
     * * Display Name: Encryption Algorithm
     * * SQL Data Type: nvarchar(50)
     */
-    get EncryptionAlgorithm(): string {
+    get EncryptionAlgorithm(): string | null {
         return this.Get('EncryptionAlgorithm');
     }
 }
@@ -98155,6 +99009,22 @@ export interface MJEntityEntity_IEntityConfiguration {
      *   directly from `<BaseTable>`, preserving in-memory field values on the saved entity.
      */
     SaveReturnMode?: MJEntityEntity_EntitySaveReturnMode;
+
+    /**
+     * Optional declarative lifecycle configuration (state machine transitions, field-freeze rules,
+     * post-create immutability, and `WriteAuthority`: `'Standard' | 'AppendOnly' | 'ServerOperationOnly'`).
+     */
+    Lifecycle?: MJEntityEntity_IEntityLifecycleConfiguration;
+
+    /**
+     * Optional declarative document auto-numbering policy (or array of policies for multi-sequence entities).
+     */
+    AutoNumber?: MJEntityEntity_IDocumentNumberPolicyConfiguration | MJEntityEntity_IDocumentNumberPolicyConfiguration[];
+
+    /**
+     * Optional declarative cross-entity parent-state lock policies evaluated with transaction/batch memoization.
+     */
+    CrossEntityPolicies?: MJEntityEntity_IDeclarativeParentStateLockConfiguration[];
 }
 
 /**
@@ -98482,6 +99352,85 @@ export interface MJEntityEntity_IClonePreset {
      * copied to someone else, which does not apply to a record built to be copied.
      */
     TemplateSourceField?: string;
+}
+
+/**
+ * Declarative entity lifecycle policy stored in `MJ: Entities.Configuration.Lifecycle`.
+ */
+export interface MJEntityEntity_IEntityLifecycleConfiguration {
+    stateMachine?: MJEntityEntity_IEntityStateMachineConfiguration;
+    writeAuthority?: MJEntityEntity_IEntityWriteAuthorityConfiguration;
+}
+
+export interface MJEntityEntity_IStateTransitionRuleConfiguration {
+    from: string | '*';
+    to: string;
+    allowedRoles?: string[];
+    requireServerOperation?: boolean;
+    allowedOperations?: string[];
+    requiredFieldsOnEnter?: string[];
+    clearedFieldsOnTransition?: string[];
+    errorMessage?: string;
+}
+
+export interface MJEntityEntity_IEntityStateMachineConfiguration {
+    statusField: string;
+    initialStates?: string[];
+    transitions: MJEntityEntity_IStateTransitionRuleConfiguration[];
+    terminalStates?: string[];
+    freezeAllFieldsInTerminalStates?: boolean;
+    immutableAfterCreateFields?: string[];
+    editableFieldsByState?: Record<string, string[]>;
+    frozenFieldsByState?: Record<string, string[]>;
+    deletableInStates?: string[];
+    nonDeletableStates?: string[];
+    fieldFreezeExemptOperations?: string[];
+}
+
+export interface MJEntityEntity_IEntityWriteAuthorityConfiguration {
+    mode: 'Standard' | 'AppendOnly' | 'ServerOperationOnly';
+    perOperationMode?: Partial<Record<'Create' | 'Update' | 'Delete', 'Standard' | 'AppendOnly' | 'ServerOperationOnly'>>;
+    allowedOperations?: string[];
+    errorMessage?: string;
+}
+
+/**
+ * Declarative document auto-numbering policy stored in `MJ: Entities.Configuration.AutoNumber`.
+ */
+export interface MJEntityEntity_IDocumentNumberPolicyConfiguration {
+    targetField: string;
+    sequenceKey?: string;
+    pattern: string;
+    prefix?: string;
+    scopeFields?: string[];
+    scopeFieldFallbacks?: Record<string, string>;
+    scopeByTenant?: boolean;
+    resetPeriod?: 'Never' | 'CalendarYear' | 'CalendarMonth' | 'FiscalYear';
+    dateSourceField?: string;
+    fiscalYearStartMonth?: number;
+    startAt?: number;
+    incrementBy?: number;
+    manualValueMode?: 'AllowNonColliding' | 'AllowAny' | 'Forbid';
+    immutableAfterCreate?: boolean;
+    gapFreeTransactional?: boolean;
+}
+
+/**
+ * Declarative cross-entity parent-state lock policy stored in `MJ: Entities.Configuration.CrossEntityPolicies`.
+ */
+export interface MJEntityEntity_IDeclarativeParentStateLockConfiguration {
+    kind?: 'ParentStateLock';
+    policyKey?: string;
+    foreignKeyField: string;
+    parentEntityName: string;
+    parentKeyField?: string;
+    parentStatusField: string;
+    allowedParentStates?: string[];
+    forbiddenParentStates?: string[];
+    operations?: Array<'Create' | 'Update' | 'Delete'>;
+    allowOrphanWhenForeignKeyNull?: boolean;
+    exemptOperations?: string[];
+    errorMessage?: string;
 }
 
 /**
@@ -100026,7 +100975,7 @@ export class MJEntityAIActionEntity extends BaseEntity<MJEntityAIActionEntityTyp
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 
@@ -100035,7 +100984,7 @@ export class MJEntityAIActionEntity extends BaseEntity<MJEntityAIActionEntityTyp
     * * Display Name: AIModel
     * * SQL Data Type: nvarchar(50)
     */
-    get AIModel(): string {
+    get AIModel(): string | null {
         return this.Get('AIModel');
     }
 
@@ -100044,7 +100993,7 @@ export class MJEntityAIActionEntity extends BaseEntity<MJEntityAIActionEntityTyp
     * * Display Name: AIAction
     * * SQL Data Type: nvarchar(50)
     */
-    get AIAction(): string {
+    get AIAction(): string | null {
         return this.Get('AIAction');
     }
 
@@ -100185,7 +101134,7 @@ export class MJEntityActionFilterEntity extends BaseEntity<MJEntityActionFilterE
     * * Display Name: Action Filter Name
     * * SQL Data Type: nvarchar(MAX)
     */
-    get ActionFilter(): string {
+    get ActionFilter(): string | null {
         return this.Get('ActionFilter');
     }
 }
@@ -100422,7 +101371,7 @@ export class MJEntityActionInvocationEntity extends BaseEntity<MJEntityActionInv
     * * Display Name: Invocation Type Name
     * * SQL Data Type: nvarchar(255)
     */
-    get InvocationType(): string {
+    get InvocationType(): string | null {
         return this.Get('InvocationType');
     }
 }
@@ -100581,7 +101530,7 @@ export class MJEntityActionParamEntity extends BaseEntity<MJEntityActionParamEnt
     * * Display Name: Action Parameter Name
     * * SQL Data Type: nvarchar(255)
     */
-    get ActionParam(): string {
+    get ActionParam(): string | null {
         return this.Get('ActionParam');
     }
 }
@@ -100810,7 +101759,7 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
     * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 
@@ -100819,7 +101768,7 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
     * * Display Name: Action Name
     * * SQL Data Type: nvarchar(425)
     */
-    get Action(): string {
+    get Action(): string | null {
         return this.Get('Action');
     }
 
@@ -101046,7 +101995,7 @@ export class MJEntityAlternateBaseViewEntity extends BaseEntity<MJEntityAlternat
     * * Display Name: Entity Text
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 
@@ -101168,7 +102117,7 @@ export class MJEntityCommunicationFieldEntity extends BaseEntity<MJEntityCommuni
     * * Display Name: Message Type Name
     * * SQL Data Type: nvarchar(100)
     */
-    get EntityCommunicationMessageType(): string {
+    get EntityCommunicationMessageType(): string | null {
         return this.Get('EntityCommunicationMessageType');
     }
 }
@@ -101282,7 +102231,7 @@ export class MJEntityCommunicationMessageTypeEntity extends BaseEntity<MJEntityC
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 
@@ -101291,7 +102240,7 @@ export class MJEntityCommunicationMessageTypeEntity extends BaseEntity<MJEntityC
     * * Display Name: Base Message Type
     * * SQL Data Type: nvarchar(100)
     */
-    get BaseMessageType(): string {
+    get BaseMessageType(): string | null {
         return this.Get('BaseMessageType');
     }
 }
@@ -101421,7 +102370,7 @@ export class MJEntityDocumentRunEntity extends BaseEntity<MJEntityDocumentRunEnt
     * * Display Name: Entity Document
     * * SQL Data Type: nvarchar(250)
     */
-    get EntityDocument(): string {
+    get EntityDocument(): string | null {
         return this.Get('EntityDocument');
     }
 }
@@ -101545,7 +102494,7 @@ export class MJEntityDocumentSettingEntity extends BaseEntity<MJEntityDocumentSe
     * * Display Name: Entity Document
     * * SQL Data Type: nvarchar(250)
     */
-    get EntityDocument(): string {
+    get EntityDocument(): string | null {
         return this.Get('EntityDocument');
     }
 }
@@ -101984,7 +102933,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     * * Display Name: Type
     * * SQL Data Type: nvarchar(100)
     */
-    get Type(): string {
+    get Type(): string | null {
         return this.Get('Type');
     }
 
@@ -101993,7 +102942,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 
@@ -102011,7 +102960,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     * * Display Name: Template Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Template(): string {
+    get Template(): string | null {
         return this.Get('Template');
     }
 
@@ -102240,7 +103189,7 @@ export class MJEntityFieldPermissionEntity extends BaseEntity<MJEntityFieldPermi
     * * Display Name: Entity Field
     * * SQL Data Type: nvarchar(255)
     */
-    get EntityField(): string {
+    get EntityField(): string | null {
         return this.Get('EntityField');
     }
 
@@ -102249,7 +103198,7 @@ export class MJEntityFieldPermissionEntity extends BaseEntity<MJEntityFieldPermi
     * * Display Name: Role
     * * SQL Data Type: nvarchar(50)
     */
-    get Role(): string {
+    get Role(): string | null {
         return this.Get('Role');
     }
 }
@@ -102380,6 +103329,25 @@ export class MJEntityFieldValueEntity extends BaseEntity<MJEntityFieldValueEntit
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Source
+    * * Display Name: Source
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Manual
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Check
+    *   * Config
+    *   * Manual
+    * * Description: Where this value came from. Check = parsed from the column's CHECK constraint by CodeGen. Config = declared in the additionalSchemaInfo file and written by CodeGen. Manual = entered by a person or by any other process. CodeGen removes Config rows the file no longer declares (when retractRemovedSoftKeys is on) and never removes Manual rows.
+    */
+    get Source(): 'Check' | 'Config' | 'Manual' {
+        return this.Get('Source');
+    }
+    set Source(value: 'Check' | 'Config' | 'Manual') {
+        this.Set('Source', value);
     }
 
     /**
@@ -104358,7 +105326,7 @@ export class MJEntityFormContributionEntity extends BaseEntity<MJEntityFormContr
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 
@@ -104367,7 +105335,7 @@ export class MJEntityFormContributionEntity extends BaseEntity<MJEntityFormContr
     * * Display Name: Component
     * * SQL Data Type: nvarchar(500)
     */
-    get Component(): string {
+    get Component(): string | null {
         return this.Get('Component');
     }
 
@@ -104667,7 +105635,7 @@ export class MJEntityFormOverrideEntity extends BaseEntity<MJEntityFormOverrideE
     * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 
@@ -104676,7 +105644,7 @@ export class MJEntityFormOverrideEntity extends BaseEntity<MJEntityFormOverrideE
     * * Display Name: Component Name
     * * SQL Data Type: nvarchar(500)
     */
-    get Component(): string {
+    get Component(): string | null {
         return this.Get('Component');
     }
 
@@ -104974,7 +105942,7 @@ export class MJEntityOrganicKeyRelatedEntityEntity extends BaseEntity<MJEntityOr
     * * Display Name: Organic Key
     * * SQL Data Type: nvarchar(255)
     */
-    get EntityOrganicKey(): string {
+    get EntityOrganicKey(): string | null {
         return this.Get('EntityOrganicKey');
     }
 
@@ -104983,7 +105951,7 @@ export class MJEntityOrganicKeyRelatedEntityEntity extends BaseEntity<MJEntityOr
     * * Display Name: Related Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get RelatedEntity(): string {
+    get RelatedEntity(): string | null {
         return this.Get('RelatedEntity');
     }
 }
@@ -105184,11 +106152,29 @@ export class MJEntityOrganicKeyEntity extends BaseEntity<MJEntityOrganicKeyEntit
     }
 
     /**
+    * * Field Name: Source
+    * * Display Name: Source
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Manual
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Config
+    *   * Manual
+    * * Description: Where this organic key came from. Config = declared in the additionalSchemaInfo file and written by CodeGen. Manual = created by a person or by any other process. CodeGen removes Config keys the file no longer declares, with their related entities and unused bridge views (when retractRemovedSoftKeys is on), and never removes Manual keys.
+    */
+    get Source(): 'Config' | 'Manual' {
+        return this.Get('Source');
+    }
+    set Source(value: 'Config' | 'Manual') {
+        this.Set('Source', value);
+    }
+
+    /**
     * * Field Name: Entity
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 }
@@ -105660,7 +106646,7 @@ export class MJEntityRecordDocumentEntity extends BaseEntity<MJEntityRecordDocum
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 
@@ -105669,7 +106655,7 @@ export class MJEntityRecordDocumentEntity extends BaseEntity<MJEntityRecordDocum
     * * Display Name: Entity Document
     * * SQL Data Type: nvarchar(250)
     */
-    get EntityDocument(): string {
+    get EntityDocument(): string | null {
         return this.Get('EntityDocument');
     }
 
@@ -105678,7 +106664,7 @@ export class MJEntityRecordDocumentEntity extends BaseEntity<MJEntityRecordDocum
     * * Display Name: Vector Index
     * * SQL Data Type: nvarchar(255)
     */
-    get VectorIndex(): string {
+    get VectorIndex(): string | null {
         return this.Get('VectorIndex');
     }
 }
@@ -106738,7 +107724,7 @@ export class MJEntitySettingEntity extends BaseEntity<MJEntitySettingEntityType>
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 }
@@ -107245,7 +108231,7 @@ export class MJExperimentSessionIterationEntity extends BaseEntity<MJExperimentS
     * * Display Name: Experiment Session Name
     * * SQL Data Type: nvarchar(255)
     */
-    get ExperimentSession(): string {
+    get ExperimentSession(): string | null {
         return this.Get('ExperimentSession');
     }
 
@@ -107443,7 +108429,7 @@ export class MJExperimentSessionEntity extends BaseEntity<MJExperimentSessionEnt
     * * Display Name: Experiment Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Experiment(): string {
+    get Experiment(): string | null {
         return this.Get('Experiment');
     }
 
@@ -108297,7 +109283,7 @@ export class MJExternalDataSourceEntity extends BaseEntity<MJExternalDataSourceE
     * * Display Name: Type
     * * SQL Data Type: nvarchar(100)
     */
-    get Type(): string {
+    get Type(): string | null {
         return this.Get('Type');
     }
 
@@ -108817,7 +109803,7 @@ export class MJFeaturePipelineVersionEntity extends BaseEntity<MJFeaturePipeline
     * * Display Name: Record Process
     * * SQL Data Type: nvarchar(255)
     */
-    get RecordProcess(): string {
+    get RecordProcess(): string | null {
         return this.Get('RecordProcess');
     }
 
@@ -109161,7 +110147,7 @@ export class MJFeatureValueCacheEntity extends BaseEntity<MJFeatureValueCacheEnt
     * * Display Name: Prompt Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Prompt(): string {
+    get Prompt(): string | null {
         return this.Get('Prompt');
     }
 
@@ -109581,11 +110567,37 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     }
 
     /**
+    * * Field Name: EffectiveAsOf
+    * * Display Name: Effective As Of
+    * * SQL Data Type: datetimeoffset
+    * * Description: Instant from which this value is the record's value of the feature; as-of assembly reads the latest value with EffectiveAsOf at or before a row's decision date. On a Source = Model row it is the scoring as-of date. NULL = not effective-dated (ineligible for as-of assembly).
+    */
+    get EffectiveAsOf(): Date | null {
+        return this.Get('EffectiveAsOf');
+    }
+    set EffectiveAsOf(value: Date | null) {
+        this.Set('EffectiveAsOf', value);
+    }
+
+    /**
+    * * Field Name: InputAsOf
+    * * Display Name: Input As Of
+    * * SQL Data Type: datetimeoffset
+    * * Description: Instant of the input data the value was computed from (its provenance); never after EffectiveAsOf.
+    */
+    get InputAsOf(): Date | null {
+        return this.Get('InputAsOf');
+    }
+    set InputAsOf(value: Date | null) {
+        this.Set('InputAsOf', value);
+    }
+
+    /**
     * * Field Name: RecordProcess
     * * Display Name: Record Process
     * * SQL Data Type: nvarchar(255)
     */
-    get RecordProcess(): string {
+    get RecordProcess(): string | null {
         return this.Get('RecordProcess');
     }
 
@@ -109594,7 +110606,7 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 
@@ -109899,7 +110911,7 @@ export class MJFileEntityRecordLinkEntity extends BaseEntity<MJFileEntityRecordL
     * * Display Name: File
     * * SQL Data Type: nvarchar(500)
     */
-    get File(): string {
+    get File(): string | null {
         return this.Get('File');
     }
 
@@ -109908,7 +110920,7 @@ export class MJFileEntityRecordLinkEntity extends BaseEntity<MJFileEntityRecordL
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 }
@@ -110108,7 +111120,7 @@ export class MJFileStorageAccountPermissionEntity extends BaseEntity<MJFileStora
     * * Display Name: Storage Account Name
     * * SQL Data Type: nvarchar(200)
     */
-    get FileStorageAccount(): string {
+    get FileStorageAccount(): string | null {
         return this.Get('FileStorageAccount');
     }
 
@@ -110269,7 +111281,7 @@ export class MJFileStorageAccountEntity extends BaseEntity<MJFileStorageAccountE
     * * Display Name: Provider Type
     * * SQL Data Type: nvarchar(50)
     */
-    get Provider(): string {
+    get Provider(): string | null {
         return this.Get('Provider');
     }
 
@@ -110278,7 +111290,7 @@ export class MJFileStorageAccountEntity extends BaseEntity<MJFileStorageAccountE
     * * Display Name: Credential Name
     * * SQL Data Type: nvarchar(200)
     */
-    get Credential(): string {
+    get Credential(): string | null {
         return this.Get('Credential');
     }
 }
@@ -110667,7 +111679,7 @@ export class MJFileEntity extends BaseEntity<MJFileEntityType> {
     * * Display Name: Provider
     * * SQL Data Type: nvarchar(50)
     */
-    get Provider(): string {
+    get Provider(): string | null {
         return this.Get('Provider');
     }
 }
@@ -110900,7 +111912,7 @@ export class MJFormChromeRuleEntity extends BaseEntity<MJFormChromeRuleEntityTyp
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 
@@ -111302,7 +112314,7 @@ export class MJGeneratedCodeEntity extends BaseEntity<MJGeneratedCodeEntityType>
     * * Display Name: Category
     * * SQL Data Type: nvarchar(255)
     */
-    get Category(): string {
+    get Category(): string | null {
         return this.Get('Category');
     }
 
@@ -111311,7 +112323,7 @@ export class MJGeneratedCodeEntity extends BaseEntity<MJGeneratedCodeEntityType>
     * * Display Name: Generated By Model
     * * SQL Data Type: nvarchar(50)
     */
-    get GeneratedByModel(): string {
+    get GeneratedByModel(): string | null {
         return this.Get('GeneratedByModel');
     }
 
@@ -111792,7 +112804,7 @@ export class MJGraphConceptEntity extends BaseEntity<MJGraphConceptEntityType> {
     * * Display Name: Graph
     * * SQL Data Type: nvarchar(255)
     */
-    get Graph(): string {
+    get Graph(): string | null {
         return this.Get('Graph');
     }
 
@@ -111810,7 +112822,7 @@ export class MJGraphConceptEntity extends BaseEntity<MJGraphConceptEntityType> {
     * * Display Name: Concept Type
     * * SQL Data Type: nvarchar(100)
     */
-    get ConceptType(): string {
+    get ConceptType(): string | null {
         return this.Get('ConceptType');
     }
 
@@ -111986,7 +112998,7 @@ export class MJGraphEdgeProviderEntity extends BaseEntity<MJGraphEdgeProviderEnt
     * * Display Name: Graph
     * * SQL Data Type: nvarchar(255)
     */
-    get Graph(): string {
+    get Graph(): string | null {
         return this.Get('Graph');
     }
 }
@@ -112103,7 +113115,7 @@ export class MJGraphEdgeTypeEndpointEntity extends BaseEntity<MJGraphEdgeTypeEnd
     * * Display Name: Edge Type
     * * SQL Data Type: nvarchar(100)
     */
-    get EdgeType(): string {
+    get EdgeType(): string | null {
         return this.Get('EdgeType');
     }
 
@@ -112112,7 +113124,7 @@ export class MJGraphEdgeTypeEndpointEntity extends BaseEntity<MJGraphEdgeTypeEnd
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 }
@@ -112522,7 +113534,7 @@ export class MJGraphEdgeEntity extends BaseEntity<MJGraphEdgeEntityType> {
     * * Display Name: Graph
     * * SQL Data Type: nvarchar(255)
     */
-    get Graph(): string {
+    get Graph(): string | null {
         return this.Get('Graph');
     }
 
@@ -112531,7 +113543,7 @@ export class MJGraphEdgeEntity extends BaseEntity<MJGraphEdgeEntityType> {
     * * Display Name: Edge Type
     * * SQL Data Type: nvarchar(100)
     */
-    get EdgeType(): string {
+    get EdgeType(): string | null {
         return this.Get('EdgeType');
     }
 
@@ -112540,7 +113552,7 @@ export class MJGraphEdgeEntity extends BaseEntity<MJGraphEdgeEntityType> {
     * * Display Name: Source Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get SourceEntity(): string {
+    get SourceEntity(): string | null {
         return this.Get('SourceEntity');
     }
 
@@ -112549,7 +113561,7 @@ export class MJGraphEdgeEntity extends BaseEntity<MJGraphEdgeEntityType> {
     * * Display Name: Target Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get TargetEntity(): string {
+    get TargetEntity(): string | null {
         return this.Get('TargetEntity');
     }
 }
@@ -112849,7 +113861,7 @@ export class MJGraphEntity extends BaseEntity<MJGraphEntityType> {
     * * Display Name: Graph Type
     * * SQL Data Type: nvarchar(100)
     */
-    get GraphType(): string {
+    get GraphType(): string | null {
         return this.Get('GraphType');
     }
 }
@@ -113222,7 +114234,7 @@ export class MJIdentityClaimEntity extends BaseEntity<MJIdentityClaimEntityType>
     * * Display Name: Claim Type
     * * SQL Data Type: nvarchar(100)
     */
-    get ClaimType(): string {
+    get ClaimType(): string | null {
         return this.Get('ClaimType');
     }
 
@@ -113786,7 +114798,7 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
     * * Display Name: Integration Object
     * * SQL Data Type: nvarchar(255)
     */
-    get IntegrationObject(): string {
+    get IntegrationObject(): string | null {
         return this.Get('IntegrationObject');
     }
 
@@ -114450,7 +115462,7 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
     * * Display Name: Integration
     * * SQL Data Type: nvarchar(100)
     */
-    get Integration(): string {
+    get Integration(): string | null {
         return this.Get('Integration');
     }
 }
@@ -115244,7 +116256,7 @@ export class MJInteractionLinkEntity extends BaseEntity<MJInteractionLinkEntityT
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 }
@@ -115513,7 +116525,7 @@ export class MJInteractionOfferEntity extends BaseEntity<MJInteractionOfferEntit
     * * Display Name: Target User
     * * SQL Data Type: nvarchar(100)
     */
-    get TargetUser(): string {
+    get TargetUser(): string | null {
         return this.Get('TargetUser');
     }
 
@@ -116017,7 +117029,7 @@ export class MJKnowledgeHubSavedSearchEntity extends BaseEntity<MJKnowledgeHubSa
     * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 }
@@ -116271,7 +117283,7 @@ export class MJLibraryItemEntity extends BaseEntity<MJLibraryItemEntityType> {
     * * Display Name: Library
     * * SQL Data Type: nvarchar(255)
     */
-    get Library(): string {
+    get Library(): string | null {
         return this.Get('Library');
     }
 }
@@ -116404,7 +117416,7 @@ export class MJListCategoryEntity extends BaseEntity<MJListCategoryEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -116597,7 +117609,7 @@ export class MJListDetailEntity extends BaseEntity<MJListDetailEntityType> {
     * * Display Name: List
     * * SQL Data Type: nvarchar(100)
     */
-    get List(): string {
+    get List(): string | null {
         return this.Get('List');
     }
 }
@@ -116776,7 +117788,7 @@ export class MJListInvitationEntity extends BaseEntity<MJListInvitationEntityTyp
     * * Display Name: List Name
     * * SQL Data Type: nvarchar(100)
     */
-    get List(): string {
+    get List(): string | null {
         return this.Get('List');
     }
 
@@ -116785,7 +117797,7 @@ export class MJListInvitationEntity extends BaseEntity<MJListInvitationEntityTyp
     * * Display Name: Created By User
     * * SQL Data Type: nvarchar(100)
     */
-    get CreatedByUser(): string {
+    get CreatedByUser(): string | null {
         return this.Get('CreatedByUser');
     }
 }
@@ -116923,7 +117935,7 @@ export class MJListShareEntity extends BaseEntity<MJListShareEntityType> {
     * * Display Name: List Name
     * * SQL Data Type: nvarchar(100)
     */
-    get List(): string {
+    get List(): string | null {
         return this.Get('List');
     }
 
@@ -116932,7 +117944,7 @@ export class MJListShareEntity extends BaseEntity<MJListShareEntityType> {
     * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 }
@@ -117181,7 +118193,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
     * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 
@@ -117190,7 +118202,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
     * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -117415,7 +118427,7 @@ export class MJMCPServerConnectionPermissionEntity extends BaseEntity<MJMCPServe
     * * Display Name: MCP Server Connection
     * * SQL Data Type: nvarchar(255)
     */
-    get MCPServerConnection(): string {
+    get MCPServerConnection(): string | null {
         return this.Get('MCPServerConnection');
     }
 
@@ -117572,7 +118584,7 @@ export class MJMCPServerConnectionToolEntity extends BaseEntity<MJMCPServerConne
     * * Display Name: Connection Name
     * * SQL Data Type: nvarchar(255)
     */
-    get MCPServerConnection(): string {
+    get MCPServerConnection(): string | null {
         return this.Get('MCPServerConnection');
     }
 
@@ -117867,7 +118879,7 @@ export class MJMCPServerConnectionEntity extends BaseEntity<MJMCPServerConnectio
     * * Display Name: MCP Server
     * * SQL Data Type: nvarchar(255)
     */
-    get MCPServer(): string {
+    get MCPServer(): string | null {
         return this.Get('MCPServer');
     }
 
@@ -118115,7 +119127,7 @@ export class MJMCPServerToolEntity extends BaseEntity<MJMCPServerToolEntityType>
     * * Display Name: MCP Server
     * * SQL Data Type: nvarchar(255)
     */
-    get MCPServer(): string {
+    get MCPServer(): string | null {
         return this.Get('MCPServer');
     }
 
@@ -118720,7 +119732,7 @@ export class MJMCPToolExecutionLogEntity extends BaseEntity<MJMCPToolExecutionLo
     * * Display Name: Connection
     * * SQL Data Type: nvarchar(255)
     */
-    get MCPServerConnection(): string {
+    get MCPServerConnection(): string | null {
         return this.Get('MCPServerConnection');
     }
 
@@ -118738,7 +119750,7 @@ export class MJMCPToolExecutionLogEntity extends BaseEntity<MJMCPToolExecutionLo
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 }
@@ -118840,7 +119852,7 @@ export class MJMCPToolFavoriteEntity extends BaseEntity<MJMCPToolFavoriteEntityT
     * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -119029,7 +120041,7 @@ export class MJMLAlgorithmUseCaseRankingEntity extends BaseEntity<MJMLAlgorithmU
     * * Display Name: ML Algorithm
     * * SQL Data Type: nvarchar(255)
     */
-    get MLAlgorithm(): string {
+    get MLAlgorithm(): string | null {
         return this.Get('MLAlgorithm');
     }
 
@@ -119038,7 +120050,7 @@ export class MJMLAlgorithmUseCaseRankingEntity extends BaseEntity<MJMLAlgorithmU
     * * Display Name: ML Algorithm Use Case
     * * SQL Data Type: nvarchar(255)
     */
-    get MLAlgorithmUseCase(): string {
+    get MLAlgorithmUseCase(): string | null {
         return this.Get('MLAlgorithmUseCase');
     }
 }
@@ -119352,6 +120364,442 @@ export class MJMLAlgorithmEntity extends BaseEntity<MJMLAlgorithmEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: ML Evaluation Protocols - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLEvaluationProtocol
+ * * Base View: vwMLEvaluationProtocols
+ * * @description An Evaluation Protocol: the grading rules of a pipeline, saved before any candidate trains — the locked holdout, inner validation, primary proper score, fixed baselines, calibration, intervals, promotion rule and the three allowed outcomes (model, keep-simple-baseline, no-signal), the leakage audit, slices and budgets. Every training run references the exact version it was graded under. Versions are immutable rows; editing inserts the next version. Replaces the ValidationStrategy and LeakageGuard JSON of ML Training Pipelines.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Evaluation Protocols')
+export class MJMLEvaluationProtocolEntity extends BaseEntity<MJMLEvaluationProtocolEntityType> {
+    /**
+    * Loads the MJ: ML Evaluation Protocols record from the database
+    * @param ID: string - primary key value to load the MJ: ML Evaluation Protocols record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLEvaluationProtocolEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: LineageRootID
+    * * Display Name: Lineage Root ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Evaluation Protocols (vwMLEvaluationProtocols.ID)
+    * * Description: ID of version 1 of this protocol. Version 1 points at itself.
+    */
+    get LineageRootID(): string {
+        return this.Get('LineageRootID');
+    }
+    set LineageRootID(value: string) {
+        this.Set('LineageRootID', value);
+    }
+
+    /**
+    * * Field Name: Version
+    * * Display Name: Version
+    * * SQL Data Type: int
+    * * Description: Version number within the lineage, starting at 1. A saved version is never updated.
+    */
+    get Version(): number {
+        return this.Get('Version');
+    }
+    set Version(value: number) {
+        this.Set('Version', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name of the protocol.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What the protocol is for, in plain words.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Holdout
+    * * Display Name: Holdout
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON HoldoutSplit (guard field): {kind:"date-carved", dateColumn, cutoff, holdoutEnd, newEntityReport} or {kind:"rolling-origin", origins (>= 5), horizonPeriods, gapPeriods, minTrainPeriods, window}.
+    */
+    get Holdout(): string {
+        return this.Get('Holdout');
+    }
+    set Holdout(value: string) {
+        this.Set('Holdout', value);
+    }
+
+    /**
+    * * Field Name: InnerValidation
+    * * Display Name: Inner Validation
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON InnerValidation over development rows only: repeated-stratified-kfold, grouped-kfold or blocked-time.
+    */
+    get InnerValidation(): string {
+        return this.Get('InnerValidation');
+    }
+    set InnerValidation(value: string) {
+        this.Set('InnerValidation', value);
+    }
+
+    /**
+    * * Field Name: Seed
+    * * Display Name: Seed
+    * * SQL Data Type: int
+    * * Description: Random seed for every split, fold, bootstrap and estimator of a run under this protocol.
+    */
+    get Seed(): number {
+        return this.Get('Seed');
+    }
+    set Seed(value: number) {
+        this.Set('Seed', value);
+    }
+
+    /**
+    * * Field Name: HoldoutAccessBudget
+    * * Display Name: Holdout Access Budget
+    * * SQL Data Type: int
+    * * Default Value: 1
+    * * Value List Type: List
+    * * Possible Values 
+    *   * 1
+    * * Description: How many times the locked holdout may be scored per run: always 1, for one declared finalist.
+    */
+    get HoldoutAccessBudget(): 1 {
+        return this.Get('HoldoutAccessBudget');
+    }
+    set HoldoutAccessBudget(value: 1) {
+        this.Set('HoldoutAccessBudget', value);
+    }
+
+    /**
+    * * Field Name: PrimaryScore
+    * * Display Name: Primary Score
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON ProperScore {family, metric}: the only metric that ranks candidates and gates outcomes. Its family must equal the pipeline unit's task kind.
+    */
+    get PrimaryScore(): string {
+        return this.Get('PrimaryScore');
+    }
+    set PrimaryScore(value: string) {
+        this.Set('PrimaryScore', value);
+    }
+
+    /**
+    * * Field Name: SecondaryMetrics
+    * * Display Name: Secondary Metrics
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of secondary metric keys (auc, accuracy, f1, precision, recall, r2, calibration-slope); reported with intervals, never used to rank.
+    */
+    get SecondaryMetrics(): string {
+        return this.Get('SecondaryMetrics');
+    }
+    set SecondaryMetrics(value: string) {
+        this.Set('SecondaryMetrics', value);
+    }
+
+    /**
+    * * Field Name: Baselines
+    * * Display Name: Baselines
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of BaselineSpec fitted on every run: dummy, one-feature, glm, naive, seasonal-naive, incumbent-heuristic.
+    */
+    get Baselines(): string {
+        return this.Get('Baselines');
+    }
+    set Baselines(value: string) {
+        this.Set('Baselines', value);
+    }
+
+    /**
+    * * Field Name: Calibration
+    * * Display Name: Calibration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON CalibrationMethod: platt, isotonic or auto, always fit on a disjoint calibration fold; not-applicable for regression.
+    */
+    get Calibration(): string {
+        return this.Get('Calibration');
+    }
+    set Calibration(value: string) {
+        this.Set('Calibration', value);
+    }
+
+    /**
+    * * Field Name: Resampling
+    * * Display Name: Resampling
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON ResamplingSpec: {kind:"none"} or {kind:"in-fold", method}; resampling never touches holdout rows.
+    */
+    get Resampling(): string {
+        return this.Get('Resampling');
+    }
+    set Resampling(value: string) {
+        this.Set('Resampling', value);
+    }
+
+    /**
+    * * Field Name: Intervals
+    * * Display Name: Intervals
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON IntervalSpec: level 0.95, method, resamples and the paired test for model-versus-comparator differences.
+    */
+    get Intervals(): string {
+        return this.Get('Intervals');
+    }
+    set Intervals(value: string) {
+        this.Set('Intervals', value);
+    }
+
+    /**
+    * * Field Name: Promotion
+    * * Display Name: Promotion
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON PromotionRule (guard field): comparators, incumbent, margin (>= 0), lowerBoundLevel 0.95, pairedOn same-holdout-rows, decisionTable Q13+Q14+Q15.
+    */
+    get Promotion(): string {
+        return this.Get('Promotion');
+    }
+    set Promotion(value: string) {
+        this.Set('Promotion', value);
+    }
+
+    /**
+    * * Field Name: AllowedOutcomes
+    * * Display Name: Allowed Outcomes
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array, exactly ["model","keep-simple-baseline","no-signal"]: a protocol cannot omit no-signal.
+    */
+    get AllowedOutcomes(): string {
+        return this.Get('AllowedOutcomes');
+    }
+    set AllowedOutcomes(value: string) {
+        this.Set('AllowedOutcomes', value);
+    }
+
+    /**
+    * * Field Name: LeakageAudit
+    * * Display Name: Leakage Audit
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON LeakageAuditSpec (guard field): held-out single-feature AUC ceiling, time-shifted-label test, drop-column test, per-source-column importance aggregation, high-cardinality ID check.
+    */
+    get LeakageAudit(): string {
+        return this.Get('LeakageAudit');
+    }
+    set LeakageAudit(value: string) {
+        this.Set('LeakageAudit', value);
+    }
+
+    /**
+    * * Field Name: Exclusions
+    * * Display Name: Exclusions
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON ProtocolExclusions (guard field): {denyFields, denySources} — columns and sources that never enter the feature matrix (the former LeakageGuard deny lists).
+    */
+    get Exclusions(): string {
+        return this.Get('Exclusions');
+    }
+    set Exclusions(value: string) {
+        this.Set('Exclusions', value);
+    }
+
+    /**
+    * * Field Name: Slices
+    * * Display Name: Slices
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON SliceSpec: {outOfTime, subgroups} — each slice is reported with the primary score and its interval.
+    */
+    get Slices(): string {
+        return this.Get('Slices');
+    }
+    set Slices(value: string) {
+        this.Set('Slices', value);
+    }
+
+    /**
+    * * Field Name: PredictionIntervals
+    * * Display Name: Prediction Intervals
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON PredictionIntervalSpec {method, nominalCoverage} for continuous, count and non-negative tasks; NULL when not requested.
+    */
+    get PredictionIntervals(): string | null {
+        return this.Get('PredictionIntervals');
+    }
+    set PredictionIntervals(value: string | null) {
+        this.Set('PredictionIntervals', value);
+    }
+
+    /**
+    * * Field Name: ResidualDiagnostics
+    * * Display Name: Residual Diagnostics
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON ResidualDiagnosticsSpec {acfLags, ljungBoxAlpha} for series and panels; NULL otherwise.
+    */
+    get ResidualDiagnostics(): string | null {
+        return this.Get('ResidualDiagnostics');
+    }
+    set ResidualDiagnostics(value: string | null) {
+        this.Set('ResidualDiagnostics', value);
+    }
+
+    /**
+    * * Field Name: RetrainTriggers
+    * * Display Name: Retrain Triggers
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of RetrainTrigger declared for monitoring (outcome-degradation, calibration-drift).
+    */
+    get RetrainTriggers(): string {
+        return this.Get('RetrainTriggers');
+    }
+    set RetrainTriggers(value: string) {
+        this.Set('RetrainTriggers', value);
+    }
+
+    /**
+    * * Field Name: SearchStrategy
+    * * Display Name: Search Strategy
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON SearchStrategy: {kind:"random", candidates} or {kind:"guided", method, equalCostComparisonId}.
+    */
+    get SearchStrategy(): string {
+        return this.Get('SearchStrategy');
+    }
+    set SearchStrategy(value: string) {
+        this.Set('SearchStrategy', value);
+    }
+
+    /**
+    * * Field Name: Budgets
+    * * Display Name: Budgets
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON Budgets (guard field): maxComputeSeconds, maxTokens, maxCandidates, hardStop true.
+    */
+    get Budgets(): string {
+        return this.Get('Budgets');
+    }
+    set Budgets(value: string) {
+        this.Set('Budgets', value);
+    }
+
+    /**
+    * * Field Name: MinMinorityClassRows
+    * * Display Name: Min Minority Class Rows
+    * * SQL Data Type: int
+    * * Default Value: 20
+    * * Description: Smallest minority-class row count in the locked holdout for which a classification gate may return model; below it the gate cannot ship a model.
+    */
+    get MinMinorityClassRows(): number {
+        return this.Get('MinMinorityClassRows');
+    }
+    set MinMinorityClassRows(value: number) {
+        this.Set('MinMinorityClassRows', value);
+    }
+
+    /**
+    * * Field Name: GuardFieldsEditableBy
+    * * Display Name: Guard Fields Editable By
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: non-agent
+    * * Value List Type: List
+    * * Possible Values 
+    *   * human-only
+    *   * non-agent
+    * * Description: Who may change the guard fields (Holdout, Promotion, LeakageAudit, Exclusions, Budgets and this setting) in the next version: non-agent (default: any author except an agent tool call — a user, a non-agent API caller, a scheduled job or the system) or human-only (optional: only a version authored by a user). Every author's version passes the same guard-field validation.
+    */
+    get GuardFieldsEditableBy(): 'human-only' | 'non-agent' {
+        return this.Get('GuardFieldsEditableBy');
+    }
+    set GuardFieldsEditableBy(value: 'human-only' | 'non-agent') {
+        this.Set('GuardFieldsEditableBy', value);
+    }
+
+    /**
+    * * Field Name: AuthoredBy
+    * * Display Name: Authored By
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON Actor who authored this version.
+    */
+    get AuthoredBy(): string {
+        return this.Get('AuthoredBy');
+    }
+    set AuthoredBy(value: string) {
+        this.Set('AuthoredBy', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: LineageRoot
+    * * Display Name: Lineage Root
+    * * SQL Data Type: nvarchar(255)
+    */
+    get LineageRoot(): string | null {
+        return this.Get('LineageRoot');
     }
 }
 
@@ -119843,7 +121291,7 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
     * * Display Name: Pipeline
     * * SQL Data Type: nvarchar(255)
     */
-    get Pipeline(): string {
+    get Pipeline(): string | null {
         return this.Get('Pipeline');
     }
 
@@ -119852,7 +121300,7 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
     * * Display Name: Algorithm
     * * SQL Data Type: nvarchar(255)
     */
-    get Algorithm(): string {
+    get Algorithm(): string | null {
         return this.Get('Algorithm');
     }
 
@@ -119863,6 +121311,303 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
     */
     get ArtifactFile(): string | null {
         return this.Get('ArtifactFile');
+    }
+}
+
+
+/**
+ * MJ: ML Prediction Units - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLPredictionUnit
+ * * Base View: vwMLPredictionUnits
+ * * @description A Prediction Unit: what one training row is (one grain record, or one grain record per period of a dated child entity), its decision date, the outcome rule and the window over which the outcome is observed, how unresolved rows are censored, and the declared task type. Every ML Training Pipeline references exactly one version. Versions are immutable rows: editing a unit inserts the next version with the same LineageRootID, so a trained model keeps pointing at the version it used.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Prediction Units')
+export class MJMLPredictionUnitEntity extends BaseEntity<MJMLPredictionUnitEntityType> {
+    /**
+    * Loads the MJ: ML Prediction Units record from the database
+    * @param ID: string - primary key value to load the MJ: ML Prediction Units record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLPredictionUnitEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: LineageRootID
+    * * Display Name: Lineage Root ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Prediction Units (vwMLPredictionUnits.ID)
+    * * Description: ID of version 1 of this unit. Version 1 points at itself; every later version points at version 1.
+    */
+    get LineageRootID(): string {
+        return this.Get('LineageRootID');
+    }
+    set LineageRootID(value: string) {
+        this.Set('LineageRootID', value);
+    }
+
+    /**
+    * * Field Name: Version
+    * * Display Name: Version
+    * * SQL Data Type: int
+    * * Description: Version number within the lineage, starting at 1. A saved version is never updated.
+    */
+    get Version(): number {
+        return this.Get('Version');
+    }
+    set Version(value: number) {
+        this.Set('Version', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name of the unit, e.g. "Member renewal (person x membership period)".
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What the unit predicts and for whom, in plain words.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: UnitRows
+    * * Display Name: Unit Rows
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON UnitRows: {kind:"grain", grainEntity, decisionDate, filter} or {kind:"grain-x-periods", grainEntity, childEntity, foreignKey, periodDate, filter}. Defines what one row is and its decision date.
+    */
+    get UnitRows(): string {
+        return this.Get('UnitRows');
+    }
+    set UnitRows(value: string) {
+        this.Set('UnitRows', value);
+    }
+
+    /**
+    * * Field Name: LabelRule
+    * * Display Name: Label Rule
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON LabelRule: how the outcome of a row is read — a column on the row, the next period of the same grain record, or an event in a dated child entity — always within the window that starts LabelGapDays after the decision date and lasts LabelWindowDays.
+    */
+    get LabelRule(): string {
+        return this.Get('LabelRule');
+    }
+    set LabelRule(value: string) {
+        this.Set('LabelRule', value);
+    }
+
+    /**
+    * * Field Name: LabelWindowDays
+    * * Display Name: Label Window Days
+    * * SQL Data Type: int
+    * * Description: Length in days of the outcome window. A row whose window ends after the data cutoff is censored (excluded and counted).
+    */
+    get LabelWindowDays(): number {
+        return this.Get('LabelWindowDays');
+    }
+    set LabelWindowDays(value: number) {
+        this.Set('LabelWindowDays', value);
+    }
+
+    /**
+    * * Field Name: LabelGapDays
+    * * Display Name: Label Gap Days
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Days between the decision date and the start of the outcome window.
+    */
+    get LabelGapDays(): number {
+        return this.Get('LabelGapDays');
+    }
+    set LabelGapDays(value: number) {
+        this.Set('LabelGapDays', value);
+    }
+
+    /**
+    * * Field Name: TaskType
+    * * Display Name: Task Type
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON TaskType: binary {classOrder, adverseIndex}, multiclass {classOrder, adverseIndices}, continuous, count, non-negative {tweediePower}, or forecast {valueKind}. Which class a score refers to and the adverse direction are derived from it, never stored separately.
+    */
+    get TaskType(): string {
+        return this.Get('TaskType');
+    }
+    set TaskType(value: string) {
+        this.Set('TaskType', value);
+    }
+
+    /**
+    * * Field Name: LabelVersion
+    * * Display Name: Label Version
+    * * SQL Data Type: int
+    * * Description: Outcome-definition version: equals the previous version's LabelVersion when LabelRule, LabelWindowDays, LabelGapDays and TaskType are unchanged, and that plus one otherwise.
+    */
+    get LabelVersion(): number {
+        return this.Get('LabelVersion');
+    }
+    set LabelVersion(value: number) {
+        this.Set('LabelVersion', value);
+    }
+
+    /**
+    * * Field Name: Censoring
+    * * Display Name: Censoring Rule
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON CensoringRule: {rule:"exclude-unresolved", cutoff} where cutoff is {kind:"corpus-end", entity, field}, {kind:"now"} or {kind:"fixed", at}. Rows whose outcome window has not closed at the cutoff are excluded and counted.
+    */
+    get Censoring(): string {
+        return this.Get('Censoring');
+    }
+    set Censoring(value: string) {
+        this.Set('Censoring', value);
+    }
+
+    /**
+    * * Field Name: ChangeHistoryPolicy
+    * * Display Name: Change History Policy
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON ChangeHistoryPolicy: {onUncoveredRow:"refuse"|"exclude-and-count", externalSourceRows:"as-of-detection-time"|"ineligible"} — what as-of assembly does when a decision date precedes the change history of a field updated in place.
+    */
+    get ChangeHistoryPolicy(): string {
+        return this.Get('ChangeHistoryPolicy');
+    }
+    set ChangeHistoryPolicy(value: string) {
+        this.Set('ChangeHistoryPolicy', value);
+    }
+
+    /**
+    * * Field Name: GroupKey
+    * * Display Name: Group Key
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Field on the row whose value keeps one entity's rows together in grouped folds and the new-entity report; NULL means the grain record key.
+    */
+    get GroupKey(): string | null {
+        return this.Get('GroupKey');
+    }
+    set GroupKey(value: string | null) {
+        this.Set('GroupKey', value);
+    }
+
+    /**
+    * * Field Name: TemporalSpec
+    * * Display Name: Temporal Spec
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON TemporalSpec for series and panels: timeColumn, horizonPeriods, lags, rollingWindows, period, seasonality. Every lag and rolling-window endLag is at least horizonPeriods. Required when TaskType is forecast. Versioned with the unit.
+    */
+    get TemporalSpec(): string | null {
+        return this.Get('TemporalSpec');
+    }
+    set TemporalSpec(value: string | null) {
+        this.Set('TemporalSpec', value);
+    }
+
+    /**
+    * * Field Name: DecisionSpec
+    * * Display Name: Decision Spec
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON DecisionSpec: the action the prediction serves, the actor role, the capacity per period (for precision at capacity) and the period.
+    */
+    get DecisionSpec(): string {
+        return this.Get('DecisionSpec');
+    }
+    set DecisionSpec(value: string) {
+        this.Set('DecisionSpec', value);
+    }
+
+    /**
+    * * Field Name: IncumbentHeuristic
+    * * Display Name: Incumbent Heuristic
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON IncumbentHeuristic: {kind:"none"} or {kind:"rule", name, scoreExpression} — today's rule of thumb, scored as a named comparator on the same holdout.
+    */
+    get IncumbentHeuristic(): string {
+        return this.Get('IncumbentHeuristic');
+    }
+    set IncumbentHeuristic(value: string) {
+        this.Set('IncumbentHeuristic', value);
+    }
+
+    /**
+    * * Field Name: AuthoredBy
+    * * Display Name: Authored By
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON Actor who authored this version: {kind:"human", userId} (a user), or an automated author {kind:"agent", agentRunId}, {kind:"scheduled-job", scheduledJobRunId} or {kind:"system", component}.
+    */
+    get AuthoredBy(): string {
+        return this.Get('AuthoredBy');
+    }
+    set AuthoredBy(value: string) {
+        this.Set('AuthoredBy', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: LineageRoot
+    * * Display Name: Lineage Root
+    * * SQL Data Type: nvarchar(255)
+    */
+    get LineageRoot(): string | null {
+        return this.Get('LineageRoot');
     }
 }
 
@@ -120126,11 +121871,39 @@ export class MJMLTrainingPipelineEntity extends BaseEntity<MJMLTrainingPipelineE
     }
 
     /**
+    * * Field Name: PredictionUnitID
+    * * Display Name: Prediction Unit
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Prediction Units (vwMLPredictionUnits.ID)
+    * * Description: The exact Prediction Unit version this pipeline trains on. NULL only on a pipeline created before Predictive Studio 6.3 that has not been migrated; such a pipeline cannot be trained.
+    */
+    get PredictionUnitID(): string | null {
+        return this.Get('PredictionUnitID');
+    }
+    set PredictionUnitID(value: string | null) {
+        this.Set('PredictionUnitID', value);
+    }
+
+    /**
+    * * Field Name: EvaluationProtocolID
+    * * Display Name: Evaluation Protocol
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Evaluation Protocols (vwMLEvaluationProtocols.ID)
+    * * Description: The exact Evaluation Protocol version every training run of this pipeline is graded under. Its primary score family must equal the unit's task kind.
+    */
+    get EvaluationProtocolID(): string | null {
+        return this.Get('EvaluationProtocolID');
+    }
+    set EvaluationProtocolID(value: string | null) {
+        this.Set('EvaluationProtocolID', value);
+    }
+
+    /**
     * * Field Name: TargetEntity
     * * Display Name: Target Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get TargetEntity(): string {
+    get TargetEntity(): string | null {
         return this.Get('TargetEntity');
     }
 
@@ -120139,8 +121912,26 @@ export class MJMLTrainingPipelineEntity extends BaseEntity<MJMLTrainingPipelineE
     * * Display Name: Algorithm
     * * SQL Data Type: nvarchar(255)
     */
-    get Algorithm(): string {
+    get Algorithm(): string | null {
         return this.Get('Algorithm');
+    }
+
+    /**
+    * * Field Name: PredictionUnit
+    * * Display Name: Prediction Unit Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PredictionUnit(): string | null {
+        return this.Get('PredictionUnit');
+    }
+
+    /**
+    * * Field Name: EvaluationProtocol
+    * * Display Name: Evaluation Protocol Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get EvaluationProtocol(): string | null {
+        return this.Get('EvaluationProtocol');
     }
 }
 
@@ -120390,11 +122181,65 @@ export class MJMLTrainingRunEntity extends BaseEntity<MJMLTrainingRunEntityType>
     }
 
     /**
+    * * Field Name: TrainingSnapshotID
+    * * Display Name: Training Snapshot
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Training Snapshots (vwMLTrainingSnapshots.ID)
+    * * Description: The Training Snapshot this run trained on; NULL for a run refused before assembly and for runs before Predictive Studio 6.3.
+    */
+    get TrainingSnapshotID(): string | null {
+        return this.Get('TrainingSnapshotID');
+    }
+    set TrainingSnapshotID(value: string | null) {
+        this.Set('TrainingSnapshotID', value);
+    }
+
+    /**
+    * * Field Name: EvaluationProtocolID
+    * * Display Name: Evaluation Protocol
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Evaluation Protocols (vwMLEvaluationProtocols.ID)
+    * * Description: The Evaluation Protocol version the run was graded under, pinned when the run started.
+    */
+    get EvaluationProtocolID(): string | null {
+        return this.Get('EvaluationProtocolID');
+    }
+    set EvaluationProtocolID(value: string | null) {
+        this.Set('EvaluationProtocolID', value);
+    }
+
+    /**
+    * * Field Name: CodeVersion
+    * * Display Name: Code Version
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON CodeVersion: PS git commit, sidecar version, library versions, thread count and seed the run used.
+    */
+    get CodeVersion(): string | null {
+        return this.Get('CodeVersion');
+    }
+    set CodeVersion(value: string | null) {
+        this.Set('CodeVersion', value);
+    }
+
+    /**
+    * * Field Name: ComputeSeconds
+    * * Display Name: Compute Seconds
+    * * SQL Data Type: decimal(18, 3)
+    * * Description: Measured trainer compute time in seconds, as returned by the sidecar.
+    */
+    get ComputeSeconds(): number | null {
+        return this.Get('ComputeSeconds');
+    }
+    set ComputeSeconds(value: number | null) {
+        this.Set('ComputeSeconds', value);
+    }
+
+    /**
     * * Field Name: Pipeline
     * * Display Name: Pipeline
     * * SQL Data Type: nvarchar(255)
     */
-    get Pipeline(): string {
+    get Pipeline(): string | null {
         return this.Get('Pipeline');
     }
 
@@ -120412,8 +122257,594 @@ export class MJMLTrainingRunEntity extends BaseEntity<MJMLTrainingRunEntityType>
     * * Display Name: Algorithm
     * * SQL Data Type: nvarchar(255)
     */
-    get Algorithm(): string {
+    get Algorithm(): string | null {
         return this.Get('Algorithm');
+    }
+
+    /**
+    * * Field Name: TrainingSnapshot
+    * * Display Name: Training Snapshot
+    * * SQL Data Type: nvarchar(64)
+    */
+    get TrainingSnapshot(): string | null {
+        return this.Get('TrainingSnapshot');
+    }
+
+    /**
+    * * Field Name: EvaluationProtocol
+    * * Display Name: Evaluation Protocol Details
+    * * SQL Data Type: nvarchar(255)
+    */
+    get EvaluationProtocol(): string | null {
+        return this.Get('EvaluationProtocol');
+    }
+}
+
+
+/**
+ * MJ: ML Training Snapshots - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLTrainingSnapshot
+ * * Base View: vwMLTrainingSnapshots
+ * * @description A Training Snapshot: the frozen data one training run learned from — the feature matrix, the row manifest (row id, entity key, decision date, group key, period, role) and per-value provenance as three write-once files, plus the content hash that fingerprints them together with the unit, label, feature-spec and protocol versions. Immutable; identical assemblies share one snapshot (unique ContentHash). Retraining from a snapshot reproduces the run.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Training Snapshots')
+export class MJMLTrainingSnapshotEntity extends BaseEntity<MJMLTrainingSnapshotEntityType> {
+    /**
+    * Loads the MJ: ML Training Snapshots record from the database
+    * @param ID: string - primary key value to load the MJ: ML Training Snapshots record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLTrainingSnapshotEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ContentHash
+    * * Display Name: Content Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 (lower-case hex) of the canonical JSON of the three file hashes, the feature schema hash, PredictionUnitID, LabelVersion, FeatureSpecVersion, EvaluationProtocolID and DataCutoff.
+    */
+    get ContentHash(): string {
+        return this.Get('ContentHash');
+    }
+    set ContentHash(value: string) {
+        this.Set('ContentHash', value);
+    }
+
+    /**
+    * * Field Name: PipelineID
+    * * Display Name: Pipeline
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Training Pipelines (vwMLTrainingPipelines.ID)
+    * * Description: The ML Training Pipeline whose feature spec was assembled.
+    */
+    get PipelineID(): string {
+        return this.Get('PipelineID');
+    }
+    set PipelineID(value: string) {
+        this.Set('PipelineID', value);
+    }
+
+    /**
+    * * Field Name: PredictionUnitID
+    * * Display Name: Prediction Unit
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Prediction Units (vwMLPredictionUnits.ID)
+    * * Description: The exact Prediction Unit version whose rows were read.
+    */
+    get PredictionUnitID(): string {
+        return this.Get('PredictionUnitID');
+    }
+    set PredictionUnitID(value: string) {
+        this.Set('PredictionUnitID', value);
+    }
+
+    /**
+    * * Field Name: LabelVersion
+    * * Display Name: Label Version
+    * * SQL Data Type: int
+    * * Description: The unit's LabelVersion at assembly.
+    */
+    get LabelVersion(): number {
+        return this.Get('LabelVersion');
+    }
+    set LabelVersion(value: number) {
+        this.Set('LabelVersion', value);
+    }
+
+    /**
+    * * Field Name: FeatureSpecVersion
+    * * Display Name: Feature Spec Version
+    * * SQL Data Type: int
+    * * Description: The pipeline Version whose FeatureSteps produced the feature spec.
+    */
+    get FeatureSpecVersion(): number {
+        return this.Get('FeatureSpecVersion');
+    }
+    set FeatureSpecVersion(value: number) {
+        this.Set('FeatureSpecVersion', value);
+    }
+
+    /**
+    * * Field Name: EvaluationProtocolID
+    * * Display Name: Evaluation Protocol
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Evaluation Protocols (vwMLEvaluationProtocols.ID)
+    * * Description: The Evaluation Protocol version whose holdout rule assigned the manifest roles; NULL only for a legacy pipeline trained before its protocol was migrated.
+    */
+    get EvaluationProtocolID(): string | null {
+        return this.Get('EvaluationProtocolID');
+    }
+    set EvaluationProtocolID(value: string | null) {
+        this.Set('EvaluationProtocolID', value);
+    }
+
+    /**
+    * * Field Name: StorageProviderID
+    * * Display Name: Storage Provider
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: File Storage Providers (vwFileStorageProviders.ID)
+    * * Description: The File Storage Provider holding the three files.
+    */
+    get StorageProviderID(): string {
+        return this.Get('StorageProviderID');
+    }
+    set StorageProviderID(value: string) {
+        this.Set('StorageProviderID', value);
+    }
+
+    /**
+    * * Field Name: MatrixFileID
+    * * Display Name: Matrix File
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+    * * Description: MJ: Files row of matrix.jsonl (header line with column names, then one JSON array per manifest row).
+    */
+    get MatrixFileID(): string {
+        return this.Get('MatrixFileID');
+    }
+    set MatrixFileID(value: string) {
+        this.Set('MatrixFileID', value);
+    }
+
+    /**
+    * * Field Name: MatrixSha256
+    * * Display Name: Matrix SHA-256
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 of the matrix file bytes.
+    */
+    get MatrixSha256(): string {
+        return this.Get('MatrixSha256');
+    }
+    set MatrixSha256(value: string) {
+        this.Set('MatrixSha256', value);
+    }
+
+    /**
+    * * Field Name: MatrixSizeBytes
+    * * Display Name: Matrix Size (Bytes)
+    * * SQL Data Type: bigint
+    * * Description: Size of the matrix file in bytes.
+    */
+    get MatrixSizeBytes(): number {
+        return this.Get('MatrixSizeBytes');
+    }
+    set MatrixSizeBytes(value: number) {
+        this.Set('MatrixSizeBytes', value);
+    }
+
+    /**
+    * * Field Name: RowManifestFileID
+    * * Display Name: Row Manifest File
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+    * * Description: MJ: Files row of manifest.jsonl (one SnapshotRowKey per row; the locked-holdout rows are the stored holdout keys).
+    */
+    get RowManifestFileID(): string {
+        return this.Get('RowManifestFileID');
+    }
+    set RowManifestFileID(value: string) {
+        this.Set('RowManifestFileID', value);
+    }
+
+    /**
+    * * Field Name: RowManifestSha256
+    * * Display Name: Row Manifest SHA-256
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 of the manifest file bytes.
+    */
+    get RowManifestSha256(): string {
+        return this.Get('RowManifestSha256');
+    }
+    set RowManifestSha256(value: string) {
+        this.Set('RowManifestSha256', value);
+    }
+
+    /**
+    * * Field Name: RowManifestSizeBytes
+    * * Display Name: Row Manifest Size (Bytes)
+    * * SQL Data Type: bigint
+    * * Description: Size of the manifest file in bytes.
+    */
+    get RowManifestSizeBytes(): number {
+        return this.Get('RowManifestSizeBytes');
+    }
+    set RowManifestSizeBytes(value: number) {
+        this.Set('RowManifestSizeBytes', value);
+    }
+
+    /**
+    * * Field Name: ProvenanceFileID
+    * * Display Name: Provenance File
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+    * * Description: MJ: Files row of provenance.jsonl (for every row and column: source kind, source reference, source version, computed-at).
+    */
+    get ProvenanceFileID(): string {
+        return this.Get('ProvenanceFileID');
+    }
+    set ProvenanceFileID(value: string) {
+        this.Set('ProvenanceFileID', value);
+    }
+
+    /**
+    * * Field Name: ProvenanceSha256
+    * * Display Name: Provenance SHA-256
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 of the provenance file bytes.
+    */
+    get ProvenanceSha256(): string {
+        return this.Get('ProvenanceSha256');
+    }
+    set ProvenanceSha256(value: string) {
+        this.Set('ProvenanceSha256', value);
+    }
+
+    /**
+    * * Field Name: ProvenanceSizeBytes
+    * * Display Name: Provenance Size (Bytes)
+    * * SQL Data Type: bigint
+    * * Description: Size of the provenance file in bytes.
+    */
+    get ProvenanceSizeBytes(): number {
+        return this.Get('ProvenanceSizeBytes');
+    }
+    set ProvenanceSizeBytes(value: number) {
+        this.Set('ProvenanceSizeBytes', value);
+    }
+
+    /**
+    * * Field Name: ManifestRowCount
+    * * Display Name: Manifest Row Count
+    * * SQL Data Type: int
+    * * Description: Rows in the manifest (development plus locked holdout).
+    */
+    get ManifestRowCount(): number {
+        return this.Get('ManifestRowCount');
+    }
+    set ManifestRowCount(value: number) {
+        this.Set('ManifestRowCount', value);
+    }
+
+    /**
+    * * Field Name: HoldoutRowCount
+    * * Display Name: Holdout Row Count
+    * * SQL Data Type: int
+    * * Description: Manifest rows with role locked-holdout.
+    */
+    get HoldoutRowCount(): number {
+        return this.Get('HoldoutRowCount');
+    }
+    set HoldoutRowCount(value: number) {
+        this.Set('HoldoutRowCount', value);
+    }
+
+    /**
+    * * Field Name: FeatureSpec
+    * * Display Name: Feature Spec
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of the resolved FeatureColumnSpec (name, dated source, encoding, missing-value policy) assembled.
+    */
+    get FeatureSpec(): string {
+        return this.Get('FeatureSpec');
+    }
+    set FeatureSpec(value: string) {
+        this.Set('FeatureSpec', value);
+    }
+
+    /**
+    * * Field Name: FeatureSchema
+    * * Display Name: Feature Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of matrix columns {name, encoding, sourceColumn} in matrix order.
+    */
+    get FeatureSchema(): string {
+        return this.Get('FeatureSchema');
+    }
+    set FeatureSchema(value: string) {
+        this.Set('FeatureSchema', value);
+    }
+
+    /**
+    * * Field Name: FeatureSchemaHash
+    * * Display Name: Feature Schema Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 of the canonical JSON of FeatureSchema; compared before scoring.
+    */
+    get FeatureSchemaHash(): string {
+        return this.Get('FeatureSchemaHash');
+    }
+    set FeatureSchemaHash(value: string) {
+        this.Set('FeatureSchemaHash', value);
+    }
+
+    /**
+    * * Field Name: ColumnProvenance
+    * * Display Name: Column Provenance
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of ColumnProvenance: per matrix column, the source kind, source reference and source version.
+    */
+    get ColumnProvenance(): string {
+        return this.Get('ColumnProvenance');
+    }
+    set ColumnProvenance(value: string) {
+        this.Set('ColumnProvenance', value);
+    }
+
+    /**
+    * * Field Name: PinnedFeatureVersions
+    * * Display Name: Pinned Feature Versions
+    * * SQL Data Type: nvarchar(MAX)
+    * * Default Value: []
+    * * Description: JSON array of FeatureVersionPin for every Feature Value source read.
+    */
+    get PinnedFeatureVersions(): string {
+        return this.Get('PinnedFeatureVersions');
+    }
+    set PinnedFeatureVersions(value: string) {
+        this.Set('PinnedFeatureVersions', value);
+    }
+
+    /**
+    * * Field Name: RowsRead
+    * * Display Name: Rows Read
+    * * SQL Data Type: int
+    * * Description: Unit rows read from the source before exclusions; equals the source count (a truncated read is refused).
+    */
+    get RowsRead(): number {
+        return this.Get('RowsRead');
+    }
+    set RowsRead(value: number) {
+        this.Set('RowsRead', value);
+    }
+
+    /**
+    * * Field Name: ReadComplete
+    * * Display Name: Read Complete
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Always 1: a snapshot exists only for a complete read.
+    */
+    get ReadComplete(): boolean {
+        return this.Get('ReadComplete');
+    }
+    set ReadComplete(value: boolean) {
+        this.Set('ReadComplete', value);
+    }
+
+    /**
+    * * Field Name: CensoredRowsExcluded
+    * * Display Name: Censored Rows Excluded
+    * * SQL Data Type: int
+    * * Description: Rows excluded because their outcome window had not closed at DataCutoff.
+    */
+    get CensoredRowsExcluded(): number {
+        return this.Get('CensoredRowsExcluded');
+    }
+    set CensoredRowsExcluded(value: number) {
+        this.Set('CensoredRowsExcluded', value);
+    }
+
+    /**
+    * * Field Name: LabelKnownRowsExcluded
+    * * Display Name: Label Known Rows Excluded
+    * * SQL Data Type: int
+    * * Description: Rows excluded because their outcome was already recorded on or before the decision date (next-period rule).
+    */
+    get LabelKnownRowsExcluded(): number {
+        return this.Get('LabelKnownRowsExcluded');
+    }
+    set LabelKnownRowsExcluded(value: number) {
+        this.Set('LabelKnownRowsExcluded', value);
+    }
+
+    /**
+    * * Field Name: EmptyLabelRowsExcluded
+    * * Display Name: Empty Label Rows Excluded
+    * * SQL Data Type: int
+    * * Description: Rows excluded because their label was empty (NULL or an empty string) — unlabelled, never a class.
+    */
+    get EmptyLabelRowsExcluded(): number {
+        return this.Get('EmptyLabelRowsExcluded');
+    }
+    set EmptyLabelRowsExcluded(value: number) {
+        this.Set('EmptyLabelRowsExcluded', value);
+    }
+
+    /**
+    * * Field Name: UncoveredHistoryRowsExcluded
+    * * Display Name: Uncovered History Rows Excluded
+    * * SQL Data Type: nvarchar(MAX)
+    * * Default Value: []
+    * * Description: JSON array {entity, field, rows}: rows excluded because a field's change history did not cover their decision date (policy exclude-and-count).
+    */
+    get UncoveredHistoryRowsExcluded(): string {
+        return this.Get('UncoveredHistoryRowsExcluded');
+    }
+    set UncoveredHistoryRowsExcluded(value: string) {
+        this.Set('UncoveredHistoryRowsExcluded', value);
+    }
+
+    /**
+    * * Field Name: DuplicateRowsRemoved
+    * * Display Name: Duplicate Rows Removed
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Rows removed as exact duplicates of (entity key, decision date, period).
+    */
+    get DuplicateRowsRemoved(): number {
+        return this.Get('DuplicateRowsRemoved');
+    }
+    set DuplicateRowsRemoved(value: number) {
+        this.Set('DuplicateRowsRemoved', value);
+    }
+
+    /**
+    * * Field Name: ClassBalance
+    * * Display Name: Class Balance
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array {label, rows} over manifest rows for classification tasks; NULL otherwise.
+    */
+    get ClassBalance(): string | null {
+        return this.Get('ClassBalance');
+    }
+    set ClassBalance(value: string | null) {
+        this.Set('ClassBalance', value);
+    }
+
+    /**
+    * * Field Name: DataCutoff
+    * * Display Name: Data Cutoff
+    * * SQL Data Type: datetimeoffset
+    * * Description: The censoring cutoff the unit resolved to for this assembly.
+    */
+    get DataCutoff(): Date {
+        return this.Get('DataCutoff');
+    }
+    set DataCutoff(value: Date) {
+        this.Set('DataCutoff', value);
+    }
+
+    /**
+    * * Field Name: AssemblyCodeVersion
+    * * Display Name: Assembly Code Version
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Package version and git commit of the assembly code that built the snapshot.
+    */
+    get AssemblyCodeVersion(): string {
+        return this.Get('AssemblyCodeVersion');
+    }
+    set AssemblyCodeVersion(value: string) {
+        this.Set('AssemblyCodeVersion', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Pipeline
+    * * Display Name: Pipeline
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Pipeline(): string | null {
+        return this.Get('Pipeline');
+    }
+
+    /**
+    * * Field Name: PredictionUnit
+    * * Display Name: Prediction Unit
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PredictionUnit(): string | null {
+        return this.Get('PredictionUnit');
+    }
+
+    /**
+    * * Field Name: EvaluationProtocol
+    * * Display Name: Evaluation Protocol
+    * * SQL Data Type: nvarchar(255)
+    */
+    get EvaluationProtocol(): string | null {
+        return this.Get('EvaluationProtocol');
+    }
+
+    /**
+    * * Field Name: StorageProvider
+    * * Display Name: Storage Provider
+    * * SQL Data Type: nvarchar(50)
+    */
+    get StorageProvider(): string | null {
+        return this.Get('StorageProvider');
+    }
+
+    /**
+    * * Field Name: MatrixFile
+    * * Display Name: Matrix File
+    * * SQL Data Type: nvarchar(500)
+    */
+    get MatrixFile(): string | null {
+        return this.Get('MatrixFile');
+    }
+
+    /**
+    * * Field Name: RowManifestFile
+    * * Display Name: Row Manifest File
+    * * SQL Data Type: nvarchar(500)
+    */
+    get RowManifestFile(): string | null {
+        return this.Get('RowManifestFile');
+    }
+
+    /**
+    * * Field Name: ProvenanceFile
+    * * Display Name: Provenance File
+    * * SQL Data Type: nvarchar(500)
+    */
+    get ProvenanceFile(): string | null {
+        return this.Get('ProvenanceFile');
     }
 }
 
@@ -120698,7 +123129,7 @@ export class MJMagicLinkInviteApplicationEntity extends BaseEntity<MJMagicLinkIn
     * * Display Name: Application
     * * SQL Data Type: nvarchar(100)
     */
-    get Application(): string {
+    get Application(): string | null {
         return this.Get('Application');
     }
 }
@@ -120800,7 +123231,7 @@ export class MJMagicLinkInviteRoleEntity extends BaseEntity<MJMagicLinkInviteRol
     * * Display Name: Role
     * * SQL Data Type: nvarchar(50)
     */
-    get Role(): string {
+    get Role(): string | null {
         return this.Get('Role');
     }
 }
@@ -121133,7 +123564,7 @@ export class MJMagicLinkInviteEntity extends BaseEntity<MJMagicLinkInviteEntityT
     * * Display Name: Application
     * * SQL Data Type: nvarchar(100)
     */
-    get Application(): string {
+    get Application(): string | null {
         return this.Get('Application');
     }
 
@@ -121142,7 +123573,7 @@ export class MJMagicLinkInviteEntity extends BaseEntity<MJMagicLinkInviteEntityT
     * * Display Name: Role
     * * SQL Data Type: nvarchar(50)
     */
-    get Role(): string {
+    get Role(): string | null {
         return this.Get('Role');
     }
 
@@ -121151,7 +123582,7 @@ export class MJMagicLinkInviteEntity extends BaseEntity<MJMagicLinkInviteEntityT
     * * Display Name: Created By User
     * * SQL Data Type: nvarchar(100)
     */
-    get CreatedByUser(): string {
+    get CreatedByUser(): string | null {
         return this.Get('CreatedByUser');
     }
 
@@ -121439,7 +123870,7 @@ export class MJMaterializedResultQueryEntity extends BaseEntity<MJMaterializedRe
     * * Display Name: Query
     * * SQL Data Type: nvarchar(255)
     */
-    get Query(): string {
+    get Query(): string | null {
         return this.Get('Query');
     }
 }
@@ -122123,7 +124554,7 @@ export class MJMeetingParticipantEntity extends BaseEntity<MJMeetingParticipantE
     * * Display Name: Meeting
     * * SQL Data Type: nvarchar(255)
     */
-    get Meeting(): string {
+    get Meeting(): string | null {
         return this.Get('Meeting');
     }
 
@@ -122473,7 +124904,7 @@ export class MJMeetingEntity extends BaseEntity<MJMeetingEntityType> {
     * * Display Name: Host User
     * * SQL Data Type: nvarchar(100)
     */
-    get HostUser(): string {
+    get HostUser(): string | null {
         return this.Get('HostUser');
     }
 
@@ -123154,7 +125585,7 @@ export class MJOAuthAuthorizationStateEntity extends BaseEntity<MJOAuthAuthoriza
     * * Display Name: MCP Server Connection
     * * SQL Data Type: nvarchar(255)
     */
-    get MCPServerConnection(): string {
+    get MCPServerConnection(): string | null {
         return this.Get('MCPServerConnection');
     }
 
@@ -123163,7 +125594,7 @@ export class MJOAuthAuthorizationStateEntity extends BaseEntity<MJOAuthAuthoriza
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 }
@@ -123430,7 +125861,7 @@ export class MJOAuthClientRegistrationEntity extends BaseEntity<MJOAuthClientReg
     * * Display Name: MCP Server Connection
     * * SQL Data Type: nvarchar(255)
     */
-    get MCPServerConnection(): string {
+    get MCPServerConnection(): string | null {
         return this.Get('MCPServerConnection');
     }
 
@@ -123439,7 +125870,7 @@ export class MJOAuthClientRegistrationEntity extends BaseEntity<MJOAuthClientReg
     * * Display Name: MCP Server
     * * SQL Data Type: nvarchar(255)
     */
-    get MCPServer(): string {
+    get MCPServer(): string | null {
         return this.Get('MCPServer');
     }
 }
@@ -123616,7 +126047,7 @@ export class MJOAuthTokenEntity extends BaseEntity<MJOAuthTokenEntityType> {
     * * Display Name: MCP Server Connection
     * * SQL Data Type: nvarchar(255)
     */
-    get MCPServerConnection(): string {
+    get MCPServerConnection(): string | null {
         return this.Get('MCPServerConnection');
     }
 
@@ -123783,7 +126214,7 @@ export class MJOpenAppDependencyEntity extends BaseEntity<MJOpenAppDependencyEnt
     * * Display Name: Open App
     * * SQL Data Type: nvarchar(64)
     */
-    get OpenApp(): string {
+    get OpenApp(): string | null {
         return this.Get('OpenApp');
     }
 
@@ -124049,7 +126480,7 @@ export class MJOpenAppInstallHistoryEntity extends BaseEntity<MJOpenAppInstallHi
     * * Display Name: Open App
     * * SQL Data Type: nvarchar(64)
     */
-    get OpenApp(): string {
+    get OpenApp(): string | null {
         return this.Get('OpenApp');
     }
 
@@ -124058,7 +126489,7 @@ export class MJOpenAppInstallHistoryEntity extends BaseEntity<MJOpenAppInstallHi
     * * Display Name: Executed By User
     * * SQL Data Type: nvarchar(100)
     */
-    get ExecutedByUser(): string {
+    get ExecutedByUser(): string | null {
         return this.Get('ExecutedByUser');
     }
 }
@@ -124449,7 +126880,7 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
     * * Display Name: Installed By User
     * * SQL Data Type: nvarchar(100)
     */
-    get InstalledByUser(): string {
+    get InstalledByUser(): string | null {
         return this.Get('InstalledByUser');
     }
 }
@@ -125069,7 +127500,7 @@ export class MJPhoneNumberEntity extends BaseEntity<MJPhoneNumberEntityType> {
     * * Display Name: Provider
     * * SQL Data Type: nvarchar(100)
     */
-    get Provider(): string {
+    get Provider(): string | null {
         return this.Get('Provider');
     }
 
@@ -125333,7 +127764,7 @@ export class MJProcessRunDetailEntity extends BaseEntity<MJProcessRunDetailEntit
     * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 
@@ -125978,7 +128409,7 @@ export class MJProjectEntity extends BaseEntity<MJProjectEntityType> {
     * * Display Name: Environment
     * * SQL Data Type: nvarchar(255)
     */
-    get Environment(): string {
+    get Environment(): string | null {
         return this.Get('Environment');
     }
 
@@ -126238,7 +128669,7 @@ export class MJPublicLinkEntity extends BaseEntity<MJPublicLinkEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 }
@@ -126880,7 +129311,7 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     * * Display Name: SQL Dialect Name
     * * SQL Data Type: nvarchar(100)
     */
-    get SQLDialect(): string {
+    get SQLDialect(): string | null {
         return this.Get('SQLDialect');
     }
 
@@ -127085,7 +129516,7 @@ export class MJQueryCategoryEntity extends BaseEntity<MJQueryCategoryEntityType>
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -127289,7 +129720,7 @@ export class MJQueryDependencyEntity extends BaseEntity<MJQueryDependencyEntityT
     * * Display Name: Source Query Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Query(): string {
+    get Query(): string | null {
         return this.Get('Query');
     }
 
@@ -127298,7 +129729,7 @@ export class MJQueryDependencyEntity extends BaseEntity<MJQueryDependencyEntityT
     * * Display Name: Target Query Name
     * * SQL Data Type: nvarchar(255)
     */
-    get DependsOnQuery(): string {
+    get DependsOnQuery(): string | null {
         return this.Get('DependsOnQuery');
     }
 }
@@ -127447,7 +129878,7 @@ export class MJQueryEntityEntity extends BaseEntity<MJQueryEntityEntityType> {
     * * Display Name: Query
     * * SQL Data Type: nvarchar(255)
     */
-    get Query(): string {
+    get Query(): string | null {
         return this.Get('Query');
     }
 
@@ -127456,7 +129887,7 @@ export class MJQueryEntityEntity extends BaseEntity<MJQueryEntityEntityType> {
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 
@@ -127768,7 +130199,7 @@ export class MJQueryFieldEntity extends BaseEntity<MJQueryFieldEntityType> {
     * * Display Name: Query
     * * SQL Data Type: nvarchar(255)
     */
-    get Query(): string {
+    get Query(): string | null {
         return this.Get('Query');
     }
 
@@ -128018,7 +130449,7 @@ export class MJQueryParameterEntity extends BaseEntity<MJQueryParameterEntityTyp
     * * Display Name: Query
     * * SQL Data Type: nvarchar(255)
     */
-    get Query(): string {
+    get Query(): string | null {
         return this.Get('Query');
     }
 }
@@ -128118,7 +130549,7 @@ export class MJQueryPermissionEntity extends BaseEntity<MJQueryPermissionEntityT
     * * Display Name: Query
     * * SQL Data Type: nvarchar(255)
     */
-    get Query(): string {
+    get Query(): string | null {
         return this.Get('Query');
     }
 
@@ -128127,7 +130558,7 @@ export class MJQueryPermissionEntity extends BaseEntity<MJQueryPermissionEntityT
     * * Display Name: Role
     * * SQL Data Type: nvarchar(50)
     */
-    get Role(): string {
+    get Role(): string | null {
         return this.Get('Role');
     }
 }
@@ -128241,7 +130672,7 @@ export class MJQuerySQLEntity extends BaseEntity<MJQuerySQLEntityType> {
     * * Display Name: Query Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Query(): string {
+    get Query(): string | null {
         return this.Get('Query');
     }
 
@@ -128250,7 +130681,7 @@ export class MJQuerySQLEntity extends BaseEntity<MJQuerySQLEntityType> {
     * * Display Name: Dialect Name
     * * SQL Data Type: nvarchar(100)
     */
-    get SQLDialect(): string {
+    get SQLDialect(): string | null {
         return this.Get('SQLDialect');
     }
 }
@@ -128443,7 +130874,7 @@ export class MJQueueTaskEntity extends BaseEntity<MJQueueTaskEntityType> {
     * * Display Name: Queue
     * * SQL Data Type: nvarchar(50)
     */
-    get Queue(): string {
+    get Queue(): string | null {
         return this.Get('Queue');
     }
 }
@@ -128854,7 +131285,7 @@ export class MJQueueEntity extends BaseEntity<MJQueueEntityType> {
     * * Display Name: Queue Type
     * * SQL Data Type: nvarchar(50)
     */
-    get QueueType(): string {
+    get QueueType(): string | null {
         return this.Get('QueueType');
     }
 }
@@ -128999,7 +131430,7 @@ export class MJRSUPendingWorkEntity extends BaseEntity<MJRSUPendingWorkEntityTyp
     * * Display Name: Company Integration
     * * SQL Data Type: nvarchar(255)
     */
-    get CompanyIntegration(): string {
+    get CompanyIntegration(): string | null {
         return this.Get('CompanyIntegration');
     }
 }
@@ -129152,7 +131583,7 @@ export class MJRecommendationItemEntity extends BaseEntity<MJRecommendationItemE
     * * Display Name: Recommendation
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Recommendation(): string {
+    get Recommendation(): string | null {
         return this.Get('Recommendation');
     }
 
@@ -129161,7 +131592,7 @@ export class MJRecommendationItemEntity extends BaseEntity<MJRecommendationItemE
     * * Display Name: Destination Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get DestinationEntity(): string {
+    get DestinationEntity(): string | null {
         return this.Get('DestinationEntity');
     }
 }
@@ -129408,7 +131839,7 @@ export class MJRecommendationRunEntity extends BaseEntity<MJRecommendationRunEnt
     * * Display Name: Recommendation Provider
     * * SQL Data Type: nvarchar(255)
     */
-    get RecommendationProvider(): string {
+    get RecommendationProvider(): string | null {
         return this.Get('RecommendationProvider');
     }
 
@@ -129417,7 +131848,7 @@ export class MJRecommendationRunEntity extends BaseEntity<MJRecommendationRunEnt
     * * Display Name: Run By User
     * * SQL Data Type: nvarchar(100)
     */
-    get RunByUser(): string {
+    get RunByUser(): string | null {
         return this.Get('RunByUser');
     }
 }
@@ -129530,7 +131961,7 @@ export class MJRecommendationEntity extends BaseEntity<MJRecommendationEntityTyp
     * * Display Name: Recommendation Run
     * * SQL Data Type: nvarchar(255)
     */
-    get RecommendationRun(): string {
+    get RecommendationRun(): string | null {
         return this.Get('RecommendationRun');
     }
 
@@ -129539,7 +131970,7 @@ export class MJRecommendationEntity extends BaseEntity<MJRecommendationEntityTyp
     * * Display Name: Source Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get SourceEntity(): string {
+    get SourceEntity(): string | null {
         return this.Get('SourceEntity');
     }
 }
@@ -129671,7 +132102,7 @@ export class MJRecordChangeReplayRunEntity extends BaseEntity<MJRecordChangeRepl
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 }
@@ -130049,7 +132480,7 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
     * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 
@@ -130058,7 +132489,7 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -130307,7 +132738,7 @@ export class MJRecordCloneLogItemEntity extends BaseEntity<MJRecordCloneLogItemE
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 }
@@ -130741,7 +133172,7 @@ export class MJRecordCloneLogEntity extends BaseEntity<MJRecordCloneLogEntityTyp
     * * SQL Data Type: nvarchar(255)
     * * NOTE: Property renamed to `RootEntity_` to avoid conflict with BaseEntity.RootEntity
     */
-    get RootEntity_(): string {
+    get RootEntity_(): string | null {
         return this.Get('RootEntity');
     }
 
@@ -130750,7 +133181,7 @@ export class MJRecordCloneLogEntity extends BaseEntity<MJRecordCloneLogEntityTyp
     * * Display Name: Initiated By User
     * * SQL Data Type: nvarchar(100)
     */
-    get InitiatedByUser(): string {
+    get InitiatedByUser(): string | null {
         return this.Get('InitiatedByUser');
     }
 }
@@ -131035,7 +133466,7 @@ export class MJRecordGeoCodeEntity extends BaseEntity<MJRecordGeoCodeEntityType>
     * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 
@@ -131218,7 +133649,7 @@ export class MJRecordLinkEntity extends BaseEntity<MJRecordLinkEntityType> {
     * * Display Name: Source Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get SourceEntity(): string {
+    get SourceEntity(): string | null {
         return this.Get('SourceEntity');
     }
 
@@ -131227,7 +133658,7 @@ export class MJRecordLinkEntity extends BaseEntity<MJRecordLinkEntityType> {
     * * Display Name: Target Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get TargetEntity(): string {
+    get TargetEntity(): string | null {
         return this.Get('TargetEntity');
     }
 }
@@ -131358,7 +133789,7 @@ export class MJRecordMergeDeletionLogEntity extends BaseEntity<MJRecordMergeDele
     * * Display Name: Merge Log Summary
     * * SQL Data Type: nvarchar(450)
     */
-    get RecordMergeLog(): string {
+    get RecordMergeLog(): string | null {
         return this.Get('RecordMergeLog');
     }
 }
@@ -131574,7 +134005,7 @@ export class MJRecordMergeLogEntity extends BaseEntity<MJRecordMergeLogEntityTyp
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 
@@ -131583,7 +134014,7 @@ export class MJRecordMergeLogEntity extends BaseEntity<MJRecordMergeLogEntityTyp
     * * Display Name: Initiated By User Name
     * * SQL Data Type: nvarchar(100)
     */
-    get InitiatedByUser(): string {
+    get InitiatedByUser(): string | null {
         return this.Get('InitiatedByUser');
     }
 
@@ -131892,7 +134323,7 @@ export class MJRecordProcessWatermarkEntity extends BaseEntity<MJRecordProcessWa
     * * Display Name: Record Process Name
     * * SQL Data Type: nvarchar(255)
     */
-    get RecordProcess(): string {
+    get RecordProcess(): string | null {
         return this.Get('RecordProcess');
     }
 
@@ -131901,7 +134332,7 @@ export class MJRecordProcessWatermarkEntity extends BaseEntity<MJRecordProcessWa
     * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 }
@@ -132381,7 +134812,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
     * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 
@@ -133194,7 +135625,7 @@ export class MJResourceLinkEntity extends BaseEntity<MJResourceLinkEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -133203,7 +135634,7 @@ export class MJResourceLinkEntity extends BaseEntity<MJResourceLinkEntityType> {
     * * Display Name: Resource Type
     * * SQL Data Type: nvarchar(255)
     */
-    get ResourceType(): string {
+    get ResourceType(): string | null {
         return this.Get('ResourceType');
     }
 }
@@ -133464,7 +135895,7 @@ export class MJResourcePermissionEntity extends BaseEntity<MJResourcePermissionE
     * * Display Name: Resource Type
     * * SQL Data Type: nvarchar(255)
     */
-    get ResourceType(): string {
+    get ResourceType(): string | null {
         return this.Get('ResourceType');
     }
 
@@ -135036,7 +137467,7 @@ export class MJRubricCriterionLevelEntity extends BaseEntity<MJRubricCriterionLe
     * * Display Name: Criterion
     * * SQL Data Type: nvarchar(255)
     */
-    get Criterion(): string {
+    get Criterion(): string | null {
         return this.Get('Criterion');
     }
 
@@ -135498,7 +137929,7 @@ export class MJRubricEvaluationScoreEntity extends BaseEntity<MJRubricEvaluation
     * * Display Name: Criterion
     * * SQL Data Type: nvarchar(255)
     */
-    get Criterion(): string {
+    get Criterion(): string | null {
         return this.Get('Criterion');
     }
 
@@ -136377,7 +138808,7 @@ export class MJRubricEvaluationEntity extends BaseEntity<MJRubricEvaluationEntit
     * * Display Name: Subject Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get SubjectEntity(): string {
+    get SubjectEntity(): string | null {
         return this.Get('SubjectEntity');
     }
 
@@ -136769,7 +139200,7 @@ export class MJRubricScaleLevelEntity extends BaseEntity<MJRubricScaleLevelEntit
     * * Display Name: Scale
     * * SQL Data Type: nvarchar(255)
     */
-    get Scale(): string {
+    get Scale(): string | null {
         return this.Get('Scale');
     }
 }
@@ -137642,7 +140073,7 @@ export class MJRubricVersionEntity extends BaseEntity<MJRubricVersionEntityType>
     * * Display Name: Rubric
     * * SQL Data Type: nvarchar(255)
     */
-    get Rubric(): string {
+    get Rubric(): string | null {
         return this.Get('Rubric');
     }
 
@@ -138182,7 +140613,7 @@ export class MJScheduledJobRunEntity extends BaseEntity<MJScheduledJobRunEntityT
     * * Display Name: Scheduled Job
     * * SQL Data Type: nvarchar(200)
     */
-    get ScheduledJob(): string {
+    get ScheduledJob(): string | null {
         return this.Get('ScheduledJob');
     }
 
@@ -138835,7 +141266,7 @@ export class MJScheduledJobEntity extends BaseEntity<MJScheduledJobEntityType> {
     * * Display Name: Job Type
     * * SQL Data Type: nvarchar(100)
     */
-    get JobType(): string {
+    get JobType(): string | null {
         return this.Get('JobType');
     }
 
@@ -139303,7 +141734,7 @@ export class MJScopedNotificationConfigEntity extends BaseEntity<MJScopedNotific
     * * Display Name: Notification Type Name
     * * SQL Data Type: nvarchar(100)
     */
-    get NotificationType(): string {
+    get NotificationType(): string | null {
         return this.Get('NotificationType');
     }
 
@@ -139664,7 +142095,7 @@ export class MJScopedPromptConfigEntity extends BaseEntity<MJScopedPromptConfigE
     * * Display Name: Prompt Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Prompt(): string {
+    get Prompt(): string | null {
         return this.Get('Prompt');
     }
 
@@ -140002,7 +142433,7 @@ export class MJScopedPromptPartEntity extends BaseEntity<MJScopedPromptPartEntit
     * * Display Name: Prompt
     * * SQL Data Type: nvarchar(255)
     */
-    get Prompt(): string {
+    get Prompt(): string | null {
         return this.Get('Prompt');
     }
 
@@ -140713,7 +143144,7 @@ export class MJSearchScopeEntityEntity extends BaseEntity<MJSearchScopeEntityEnt
     * * Display Name: Search Scope
     * * SQL Data Type: nvarchar(200)
     */
-    get SearchScope(): string {
+    get SearchScope(): string | null {
         return this.Get('SearchScope');
     }
 
@@ -140722,7 +143153,7 @@ export class MJSearchScopeEntityEntity extends BaseEntity<MJSearchScopeEntityEnt
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 }
@@ -140939,7 +143370,7 @@ export class MJSearchScopeExternalIndexEntity extends BaseEntity<MJSearchScopeEx
     * * Display Name: Search Scope
     * * SQL Data Type: nvarchar(200)
     */
-    get SearchScope(): string {
+    get SearchScope(): string | null {
         return this.Get('SearchScope');
     }
 
@@ -141165,7 +143596,7 @@ export class MJSearchScopePermissionEntity extends BaseEntity<MJSearchScopePermi
     * * Display Name: Search Scope Name
     * * SQL Data Type: nvarchar(200)
     */
-    get SearchScope(): string {
+    get SearchScope(): string | null {
         return this.Get('SearchScope');
     }
 
@@ -141337,7 +143768,7 @@ export class MJSearchScopeProviderEntity extends BaseEntity<MJSearchScopeProvide
     * * Display Name: Search Scope Name
     * * SQL Data Type: nvarchar(200)
     */
-    get SearchScope(): string {
+    get SearchScope(): string | null {
         return this.Get('SearchScope');
     }
 
@@ -141346,7 +143777,7 @@ export class MJSearchScopeProviderEntity extends BaseEntity<MJSearchScopeProvide
     * * Display Name: Search Provider Name
     * * SQL Data Type: nvarchar(200)
     */
-    get SearchProvider(): string {
+    get SearchProvider(): string | null {
         return this.Get('SearchProvider');
     }
 
@@ -141468,7 +143899,7 @@ export class MJSearchScopeStorageAccountEntity extends BaseEntity<MJSearchScopeS
     * * Display Name: Search Scope Name
     * * SQL Data Type: nvarchar(200)
     */
-    get SearchScope(): string {
+    get SearchScope(): string | null {
         return this.Get('SearchScope');
     }
 
@@ -141477,7 +143908,7 @@ export class MJSearchScopeStorageAccountEntity extends BaseEntity<MJSearchScopeS
     * * Display Name: Storage Account Name
     * * SQL Data Type: nvarchar(200)
     */
-    get FileStorageAccount(): string {
+    get FileStorageAccount(): string | null {
         return this.Get('FileStorageAccount');
     }
 }
@@ -141630,7 +144061,7 @@ export class MJSearchScopeTestQueryEntity extends BaseEntity<MJSearchScopeTestQu
     * * Display Name: Search Scope Name
     * * SQL Data Type: nvarchar(200)
     */
-    get SearchScope(): string {
+    get SearchScope(): string | null {
         return this.Get('SearchScope');
     }
 }
@@ -142060,7 +144491,7 @@ export class MJSignatureAccountEntity extends BaseEntity<MJSignatureAccountEntit
     * * Display Name: Signature Provider Name
     * * SQL Data Type: nvarchar(100)
     */
-    get SignatureProvider(): string {
+    get SignatureProvider(): string | null {
         return this.Get('SignatureProvider');
     }
 
@@ -142069,7 +144500,7 @@ export class MJSignatureAccountEntity extends BaseEntity<MJSignatureAccountEntit
     * * Display Name: Credential Name
     * * SQL Data Type: nvarchar(200)
     */
-    get Credential(): string {
+    get Credential(): string | null {
         return this.Get('Credential');
     }
 
@@ -142408,7 +144839,7 @@ export class MJSignatureRequestDocumentEntity extends BaseEntity<MJSignatureRequ
     * * Display Name: Signature Request Name
     * * SQL Data Type: nvarchar(255)
     */
-    get SignatureRequest(): string {
+    get SignatureRequest(): string | null {
         return this.Get('SignatureRequest');
     }
 
@@ -142764,7 +145195,7 @@ export class MJSignatureRequestRecipientEntity extends BaseEntity<MJSignatureReq
     * * Display Name: Signature Request
     * * SQL Data Type: nvarchar(255)
     */
-    get SignatureRequest(): string {
+    get SignatureRequest(): string | null {
         return this.Get('SignatureRequest');
     }
 }
@@ -142978,7 +145409,7 @@ export class MJSignatureRequestEntity extends BaseEntity<MJSignatureRequestEntit
     * * Display Name: Signature Account
     * * SQL Data Type: nvarchar(200)
     */
-    get SignatureAccount(): string {
+    get SignatureAccount(): string | null {
         return this.Get('SignatureAccount');
     }
 
@@ -143308,7 +145739,7 @@ export class MJStateProvinceEntity extends BaseEntity<MJStateProvinceEntityType>
     * * Display Name: Country Name
     * * SQL Data Type: nvarchar(200)
     */
-    get Country(): string {
+    get Country(): string | null {
         return this.Get('Country');
     }
 }
@@ -143461,7 +145892,7 @@ export class MJTagAuditLogEntity extends BaseEntity<MJTagAuditLogEntityType> {
     * * Display Name: Tag Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Tag(): string {
+    get Tag(): string | null {
         return this.Get('Tag');
     }
 
@@ -143470,7 +145901,7 @@ export class MJTagAuditLogEntity extends BaseEntity<MJTagAuditLogEntityType> {
     * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
-    get PerformedByUser(): string {
+    get PerformedByUser(): string | null {
         return this.Get('PerformedByUser');
     }
 
@@ -143607,7 +146038,7 @@ export class MJTagCoOccurrenceEntity extends BaseEntity<MJTagCoOccurrenceEntityT
     * * Display Name: Tag A
     * * SQL Data Type: nvarchar(255)
     */
-    get TagA(): string {
+    get TagA(): string | null {
         return this.Get('TagA');
     }
 
@@ -143616,7 +146047,7 @@ export class MJTagCoOccurrenceEntity extends BaseEntity<MJTagCoOccurrenceEntityT
     * * Display Name: Tag B
     * * SQL Data Type: nvarchar(255)
     */
-    get TagB(): string {
+    get TagB(): string | null {
         return this.Get('TagB');
     }
 }
@@ -143731,7 +146162,7 @@ export class MJTagScopeEntity extends BaseEntity<MJTagScopeEntityType> {
     * * Display Name: Tag
     * * SQL Data Type: nvarchar(255)
     */
-    get Tag(): string {
+    get Tag(): string | null {
         return this.Get('Tag');
     }
 
@@ -143740,7 +146171,7 @@ export class MJTagScopeEntity extends BaseEntity<MJTagScopeEntityType> {
     * * Display Name: Scope Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get ScopeEntity(): string {
+    get ScopeEntity(): string | null {
         return this.Get('ScopeEntity');
     }
 }
@@ -144181,7 +146612,7 @@ export class MJTagSynonymEntity extends BaseEntity<MJTagSynonymEntityType> {
     * * Display Name: Tag Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Tag(): string {
+    get Tag(): string | null {
         return this.Get('Tag');
     }
 }
@@ -144308,7 +146739,7 @@ export class MJTaggedItemEntity extends BaseEntity<MJTaggedItemEntityType> {
     * * Display Name: Tag
     * * SQL Data Type: nvarchar(255)
     */
-    get Tag(): string {
+    get Tag(): string | null {
         return this.Get('Tag');
     }
 
@@ -144317,7 +146748,7 @@ export class MJTaggedItemEntity extends BaseEntity<MJTaggedItemEntityType> {
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 }
@@ -144879,7 +147310,7 @@ export class MJTaskDependencyEntity extends BaseEntity<MJTaskDependencyEntityTyp
     * * Display Name: Task Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Task(): string {
+    get Task(): string | null {
         return this.Get('Task');
     }
 
@@ -144888,7 +147319,7 @@ export class MJTaskDependencyEntity extends BaseEntity<MJTaskDependencyEntityTyp
     * * Display Name: Depends On Task Name
     * * SQL Data Type: nvarchar(255)
     */
-    get DependsOnTask(): string {
+    get DependsOnTask(): string | null {
         return this.Get('DependsOnTask');
     }
 }
@@ -145884,7 +148315,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     * * Display Name: Type
     * * SQL Data Type: nvarchar(255)
     */
-    get Type(): string {
+    get Type(): string | null {
         return this.Get('Type');
     }
 
@@ -145893,7 +148324,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     * * Display Name: Environment
     * * SQL Data Type: nvarchar(255)
     */
-    get Environment(): string {
+    get Environment(): string | null {
         return this.Get('Environment');
     }
 
@@ -146136,7 +148567,7 @@ export class MJTemplateCategoryEntity extends BaseEntity<MJTemplateCategoryEntit
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -146436,7 +148867,7 @@ export class MJTemplateContentEntity extends BaseEntity<MJTemplateContentEntityT
     * * Display Name: Template
     * * SQL Data Type: nvarchar(255)
     */
-    get Template(): string {
+    get Template(): string | null {
         return this.Get('Template');
     }
 
@@ -146445,7 +148876,7 @@ export class MJTemplateContentEntity extends BaseEntity<MJTemplateContentEntityT
     * * Display Name: Type
     * * SQL Data Type: nvarchar(255)
     */
-    get Type(): string {
+    get Type(): string | null {
         return this.Get('Type');
     }
 }
@@ -146698,7 +149129,7 @@ export class MJTemplateParamEntity extends BaseEntity<MJTemplateParamEntityType>
     * * Display Name: Template Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Template(): string {
+    get Template(): string | null {
         return this.Get('Template');
     }
 
@@ -146904,7 +149335,7 @@ export class MJTemplateEntity extends BaseEntity<MJTemplateEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 }
@@ -147077,7 +149508,7 @@ export class MJTestRubricEntity extends BaseEntity<MJTestRubricEntityType> {
     * * Display Name: Type
     * * SQL Data Type: nvarchar(100)
     */
-    get Type(): string {
+    get Type(): string | null {
         return this.Get('Type');
     }
 }
@@ -147277,7 +149708,7 @@ export class MJTestRunFeedbackEntity extends BaseEntity<MJTestRunFeedbackEntityT
     * * Display Name: Test Run
     * * SQL Data Type: nvarchar(255)
     */
-    get TestRun(): string {
+    get TestRun(): string | null {
         return this.Get('TestRun');
     }
 
@@ -147286,7 +149717,7 @@ export class MJTestRunFeedbackEntity extends BaseEntity<MJTestRunFeedbackEntityT
     * * Display Name: Reviewer User
     * * SQL Data Type: nvarchar(100)
     */
-    get ReviewerUser(): string {
+    get ReviewerUser(): string | null {
         return this.Get('ReviewerUser');
     }
 }
@@ -147621,7 +150052,7 @@ export class MJTestRunOutputEntity extends BaseEntity<MJTestRunOutputEntityType>
     * * Display Name: Test Run Name
     * * SQL Data Type: nvarchar(255)
     */
-    get TestRun(): string {
+    get TestRun(): string | null {
         return this.Get('TestRun');
     }
 
@@ -147630,7 +150061,7 @@ export class MJTestRunOutputEntity extends BaseEntity<MJTestRunOutputEntityType>
     * * Display Name: Output Type Name
     * * SQL Data Type: nvarchar(100)
     */
-    get OutputType(): string {
+    get OutputType(): string | null {
         return this.Get('OutputType');
     }
 }
@@ -148095,7 +150526,7 @@ export class MJTestRunEntity extends BaseEntity<MJTestRunEntityType> {
     * * Display Name: Test Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Test(): string {
+    get Test(): string | null {
         return this.Get('Test');
     }
 
@@ -148113,7 +150544,7 @@ export class MJTestRunEntity extends BaseEntity<MJTestRunEntityType> {
     * * Display Name: Run By User
     * * SQL Data Type: nvarchar(100)
     */
-    get RunByUser(): string {
+    get RunByUser(): string | null {
         return this.Get('RunByUser');
     }
 
@@ -148589,7 +151020,7 @@ export class MJTestSuiteRunEntity extends BaseEntity<MJTestSuiteRunEntityType> {
     * * Display Name: Suite
     * * SQL Data Type: nvarchar(255)
     */
-    get Suite(): string {
+    get Suite(): string | null {
         return this.Get('Suite');
     }
 
@@ -148598,7 +151029,7 @@ export class MJTestSuiteRunEntity extends BaseEntity<MJTestSuiteRunEntityType> {
     * * Display Name: Run By User
     * * SQL Data Type: nvarchar(100)
     */
-    get RunByUser(): string {
+    get RunByUser(): string | null {
         return this.Get('RunByUser');
     }
 }
@@ -148746,7 +151177,7 @@ export class MJTestSuiteTestEntity extends BaseEntity<MJTestSuiteTestEntityType>
     * * Display Name: Suite
     * * SQL Data Type: nvarchar(255)
     */
-    get Suite(): string {
+    get Suite(): string | null {
         return this.Get('Suite');
     }
 
@@ -148755,7 +151186,7 @@ export class MJTestSuiteTestEntity extends BaseEntity<MJTestSuiteTestEntityType>
     * * Display Name: Test
     * * SQL Data Type: nvarchar(255)
     */
-    get Test(): string {
+    get Test(): string | null {
         return this.Get('Test');
     }
 }
@@ -149670,7 +152101,7 @@ export class MJTestEntity extends BaseEntity<MJTestEntityType> {
     * * Display Name: Type
     * * SQL Data Type: nvarchar(100)
     */
-    get Type(): string {
+    get Type(): string | null {
         return this.Get('Type');
     }
 
@@ -150032,7 +152463,7 @@ export class MJUserApplicationEntityEntity extends BaseEntity<MJUserApplicationE
     * * Display Name: Application
     * * SQL Data Type: nvarchar(100)
     */
-    get Application(): string {
+    get Application(): string | null {
         return this.Get('Application');
     }
 
@@ -150041,7 +152472,7 @@ export class MJUserApplicationEntityEntity extends BaseEntity<MJUserApplicationE
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -150211,7 +152642,7 @@ export class MJUserApplicationEntity extends BaseEntity<MJUserApplicationEntityT
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -150220,7 +152651,7 @@ export class MJUserApplicationEntity extends BaseEntity<MJUserApplicationEntityT
     * * Display Name: Application
     * * SQL Data Type: nvarchar(100)
     */
-    get Application(): string {
+    get Application(): string | null {
         return this.Get('Application');
     }
 }
@@ -150501,7 +152932,7 @@ export class MJUserNotificationPreferenceEntity extends BaseEntity<MJUserNotific
     * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -150510,7 +152941,7 @@ export class MJUserNotificationPreferenceEntity extends BaseEntity<MJUserNotific
     * * Display Name: Notification Type Name
     * * SQL Data Type: nvarchar(100)
     */
-    get NotificationType(): string {
+    get NotificationType(): string | null {
         return this.Get('NotificationType');
     }
 }
@@ -150942,7 +153373,7 @@ export class MJUserNotificationEntity extends BaseEntity<MJUserNotificationEntit
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -151260,7 +153691,7 @@ export class MJUserRoleEntity extends BaseEntity<MJUserRoleEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -151269,7 +153700,7 @@ export class MJUserRoleEntity extends BaseEntity<MJUserRoleEntityType> {
     * * Display Name: Role
     * * SQL Data Type: nvarchar(50)
     */
-    get Role(): string {
+    get Role(): string | null {
         return this.Get('Role');
     }
 }
@@ -151415,7 +153846,7 @@ export class MJUserRoutineRecipientEntity extends BaseEntity<MJUserRoutineRecipi
     * * Display Name: Routine Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Routine(): string {
+    get Routine(): string | null {
         return this.Get('Routine');
     }
 
@@ -151653,7 +154084,7 @@ export class MJUserRoutineRunEntity extends BaseEntity<MJUserRoutineRunEntityTyp
     * * Display Name: Routine Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Routine(): string {
+    get Routine(): string | null {
         return this.Get('Routine');
     }
 
@@ -152259,7 +154690,7 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
     * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -152400,7 +154831,7 @@ export class MJUserSettingEntity extends BaseEntity<MJUserSettingEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 }
@@ -152546,7 +154977,7 @@ export class MJUserViewCategoryEntity extends BaseEntity<MJUserViewCategoryEntit
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 
@@ -152555,7 +154986,7 @@ export class MJUserViewCategoryEntity extends BaseEntity<MJUserViewCategoryEntit
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -152700,7 +155131,7 @@ export class MJUserViewRunDetailEntity extends BaseEntity<MJUserViewRunDetailEnt
     * * Display Name: User View Run Name
     * * SQL Data Type: nvarchar(100)
     */
-    get UserViewRun(): string {
+    get UserViewRun(): string | null {
         return this.Get('UserViewRun');
     }
 
@@ -152831,7 +155262,7 @@ export class MJUserViewRunEntity extends BaseEntity<MJUserViewRunEntityType> {
     * * Display Name: User View
     * * SQL Data Type: nvarchar(100)
     */
-    get UserView(): string {
+    get UserView(): string | null {
         return this.Get('UserView');
     }
 
@@ -152840,7 +155271,7 @@ export class MJUserViewRunEntity extends BaseEntity<MJUserViewRunEntityType> {
     * * Display Name: Run By User
     * * SQL Data Type: nvarchar(100)
     */
-    get RunByUser(): string {
+    get RunByUser(): string | null {
         return this.Get('RunByUser');
     }
 }
@@ -154556,7 +156987,7 @@ export class MJVectorIndexEntity extends BaseEntity<MJVectorIndexEntityType> {
     * * Display Name: Vector Database Name
     * * SQL Data Type: nvarchar(100)
     */
-    get VectorDatabase(): string {
+    get VectorDatabase(): string | null {
         return this.Get('VectorDatabase');
     }
 
@@ -154565,7 +156996,7 @@ export class MJVectorIndexEntity extends BaseEntity<MJVectorIndexEntityType> {
     * * Display Name: Embedding Model Name
     * * SQL Data Type: nvarchar(50)
     */
-    get EmbeddingModel(): string {
+    get EmbeddingModel(): string | null {
         return this.Get('EmbeddingModel');
     }
 }
@@ -154884,7 +157315,7 @@ export class MJVersionLabelItemEntity extends BaseEntity<MJVersionLabelItemEntit
     * * Display Name: Version Label
     * * SQL Data Type: nvarchar(200)
     */
-    get VersionLabel(): string {
+    get VersionLabel(): string | null {
         return this.Get('VersionLabel');
     }
 
@@ -154893,7 +157324,7 @@ export class MJVersionLabelItemEntity extends BaseEntity<MJVersionLabelItemEntit
     * * Display Name: Record Change
     * * SQL Data Type: nvarchar(750)
     */
-    get RecordChange(): string {
+    get RecordChange(): string | null {
         return this.Get('RecordChange');
     }
 
@@ -154902,7 +157333,7 @@ export class MJVersionLabelItemEntity extends BaseEntity<MJVersionLabelItemEntit
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 }
@@ -155121,7 +157552,7 @@ export class MJVersionLabelRestoreEntity extends BaseEntity<MJVersionLabelRestor
     * * Display Name: Version Label
     * * SQL Data Type: nvarchar(200)
     */
-    get VersionLabel(): string {
+    get VersionLabel(): string | null {
         return this.Get('VersionLabel');
     }
 
@@ -155130,7 +157561,7 @@ export class MJVersionLabelRestoreEntity extends BaseEntity<MJVersionLabelRestor
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 
@@ -155391,7 +157822,7 @@ export class MJVersionLabelEntity extends BaseEntity<MJVersionLabelEntityType> {
     * * Display Name: Created By User Name
     * * SQL Data Type: nvarchar(100)
     */
-    get CreatedByUser(): string {
+    get CreatedByUser(): string | null {
         return this.Get('CreatedByUser');
     }
 
@@ -156419,7 +158850,7 @@ export class MJWorkQueueDeduplicationEntity extends BaseEntity<MJWorkQueueDedupl
     * * Display Name: Topic
     * * SQL Data Type: nvarchar(200)
     */
-    get Topic(): string {
+    get Topic(): string | null {
         return this.Get('Topic');
     }
 }
@@ -156820,7 +159251,7 @@ export class MJWorkQueueDeliveryEntity extends BaseEntity<MJWorkQueueDeliveryEnt
     * * Display Name: Subscription
     * * SQL Data Type: nvarchar(200)
     */
-    get Subscription(): string {
+    get Subscription(): string | null {
         return this.Get('Subscription');
     }
 
@@ -157044,7 +159475,7 @@ export class MJWorkQueueMessageEntity extends BaseEntity<MJWorkQueueMessageEntit
     * * Display Name: Topic
     * * SQL Data Type: nvarchar(200)
     */
-    get Topic(): string {
+    get Topic(): string | null {
         return this.Get('Topic');
     }
 
@@ -157450,7 +159881,7 @@ export class MJWorkQueueSubscriptionEntity extends BaseEntity<MJWorkQueueSubscri
     * * Display Name: Topic
     * * SQL Data Type: nvarchar(200)
     */
-    get Topic(): string {
+    get Topic(): string | null {
         return this.Get('Topic');
     }
 }
@@ -157734,7 +160165,7 @@ export class MJWorkQueueTopicEntity extends BaseEntity<MJWorkQueueTopicEntityTyp
     * * Display Name: Transport
     * * SQL Data Type: nvarchar(100)
     */
-    get Transport(): string {
+    get Transport(): string | null {
         return this.Get('Transport');
     }
 }
@@ -158055,7 +160486,7 @@ export class MJWorkspaceItemEntity extends BaseEntity<MJWorkspaceItemEntityType>
     * * Display Name: Workspace
     * * SQL Data Type: nvarchar(255)
     */
-    get Workspace(): string {
+    get Workspace(): string | null {
         return this.Get('Workspace');
     }
 
@@ -158064,7 +160495,7 @@ export class MJWorkspaceItemEntity extends BaseEntity<MJWorkspaceItemEntityType>
     * * Display Name: Resource Type
     * * SQL Data Type: nvarchar(255)
     */
-    get ResourceType(): string {
+    get ResourceType(): string | null {
         return this.Get('ResourceType');
     }
 }
@@ -158188,7 +160619,7 @@ export class MJWorkspaceEntity extends BaseEntity<MJWorkspaceEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {
+    get User(): string | null {
         return this.Get('User');
     }
 }

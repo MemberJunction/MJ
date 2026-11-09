@@ -36,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (476 classes)
+// @memberjunction/core-entities (480 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -246,6 +246,7 @@ import {
     MJDiagnosticSenderRegistrationEntity,
     MJDiagnosticSessionChunkEntity,
     MJDiagnosticSessionEntity,
+    MJDocumentSequenceCounterEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -347,10 +348,13 @@ import {
     MJMLAlgorithmEntity,
     MJMLAlgorithmUseCaseEntity,
     MJMLAlgorithmUseCaseRankingEntity,
+    MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
     MJMLModelScoringBindingEntity,
+    MJMLPredictionUnitEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
+    MJMLTrainingSnapshotEntity,
     MJMagicLinkInviteAllowedDomainEntity,
     MJMagicLinkInviteAllowedPathEntity,
     MJMagicLinkInviteApplicationEntity,
@@ -745,7 +749,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (116 classes)
+// @memberjunction/ng-dashboards (120 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -817,9 +821,13 @@ import {
     MappingWorkspaceComponent,
     ModelManagementComponent,
     OverviewComponent,
+    PSModelEvaluationPanel,
     PSModelsResourceComponent,
+    PSPipelineBindingsPanel,
     PSPredictionsResourceComponent,
+    PSProtocolVersionsPanel,
     PSStudioResourceComponent,
+    PSUnitVersionsPanel,
     PermissionsAuditLogResourceComponent,
     PermissionsResourceAccessResourceComponent,
     PermissionsUserAccessResourceComponent,
@@ -1117,6 +1125,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJDiagnosticSenderRegistrationEntity,
     MJDiagnosticSessionChunkEntity,
     MJDiagnosticSessionEntity,
+    MJDocumentSequenceCounterEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -1218,10 +1227,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMLAlgorithmEntity,
     MJMLAlgorithmUseCaseEntity,
     MJMLAlgorithmUseCaseRankingEntity,
+    MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
     MJMLModelScoringBindingEntity,
+    MJMLPredictionUnitEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
+    MJMLTrainingSnapshotEntity,
     MJMagicLinkInviteAllowedDomainEntity,
     MJMagicLinkInviteAllowedPathEntity,
     MJMagicLinkInviteApplicationEntity,
@@ -1292,14 +1304,14 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRubricEntity,
     MJRubricEvaluationEntity,
     MJRubricEvaluationScoreEntity,
-    MJRubricScaleEntity,
-    MJRubricScaleLevelEntity,
-    MJRubricVersionEntity,
-    MJSQLDialectEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRubricScaleEntity,
+    MJRubricScaleLevelEntity,
+    MJRubricVersionEntity,
+    MJSQLDialectEntity,
     MJScheduledJobEntity,
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
@@ -1496,14 +1508,14 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJAIAgentSessionFormComponentExtended,
     MJAIPromptFormComponentExtended,
     MJAIPromptRunFormComponentExtended,
-    MJActionExecutionLogFormComponentExtended,
-    MJActionFormComponentExtended,
-    MJEntityActionFormComponentExtended,
-    MJEntityFormComponentExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    MJActionExecutionLogFormComponentExtended,
+    MJActionFormComponentExtended,
+    MJEntityActionFormComponentExtended,
+    MJEntityFormComponentExtended,
     MJFileFormComponentExtended,
     MJListFormComponentExtended,
     MJQueryFormComponentExtended,
@@ -1620,9 +1632,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MappingWorkspaceComponent,
     ModelManagementComponent,
     OverviewComponent,
+    PSModelEvaluationPanel,
     PSModelsResourceComponent,
+    PSPipelineBindingsPanel,
     PSPredictionsResourceComponent,
+    PSProtocolVersionsPanel,
     PSStudioResourceComponent,
+    PSUnitVersionsPanel,
     PermissionsAuditLogResourceComponent,
     PermissionsResourceAccessResourceComponent,
     PermissionsUserAccessResourceComponent,
@@ -1694,7 +1710,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 776;
+export const CLASS_REGISTRATIONS_COUNT = 784;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

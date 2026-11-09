@@ -80,10 +80,11 @@ function pushEntityMetadata() {
   try {
     status = run(process.execPath, [mjCli, 'sync', 'push', '--dir', path.join(root, 'metadata'), '--ci'], mjRoot);
   } finally {
-    // Keep metadata/entities/.pstruth-entities.json free of sync blocks in the working tree, whether or not the push worked.
+    // Keep metadata/entities/.pstruth-entities.json and .pstruth-c1-entities.json free of sync blocks in the working tree,
+    // whether or not the push worked.
     const rewrite = run(process.execPath, [path.join(root, 'scripts', 'gen-pstruth-ddl.mjs'), '--metadata'], root);
     if (rewrite !== 0) {
-      console.error('Could not rewrite metadata/entities/.pstruth-entities.json without sync blocks: run `node scripts/gen-pstruth-ddl.mjs --metadata`.');
+      console.error('Could not rewrite metadata/entities/.pstruth-entities.json and .pstruth-c1-entities.json without sync blocks: run `node scripts/gen-pstruth-ddl.mjs --metadata`.');
       status = status === 0 ? rewrite : status;
     }
   }

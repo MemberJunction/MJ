@@ -71,7 +71,10 @@ const { mockTryGetCachedRecords, mockActionEngineBaseConfig, actionEngineBaseSta
     actionEngineBaseState: { actions: [] as any[] },
 }));
 
-vi.mock('@memberjunction/core', () => ({
+vi.mock('@memberjunction/core', async () => ({
+    // The real SharedLoad, so Config's load sharing runs as it does in production. Imported from its
+    // own module: the whole of @memberjunction/core would load the @memberjunction/global mocked here.
+    SharedLoad: (await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core/dist/generic/sharedLoad.js')).SharedLoad,
     BaseEntity: class BaseEntity {
         // Matches the real BaseEntity.BaseEventCode static used by the catalog listener
         // to distinguish BaseEntity events from other ComponentEvents on the global bus.
@@ -169,6 +172,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
                         ChatCompletions: vi.fn(),
                         EmbedText: vi.fn(),
                     }),
+                    GetRegistration: vi.fn().mockReturnValue(null),
                 },
                 GetEventListener: vi.fn().mockReturnValue(eventListener),
             }
@@ -203,6 +207,10 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
         Base64ToFloat32Vector,
     };
 });
+
+vi.mock('@memberjunction/dynamic-packages', () => ({
+    ImportFromHost: vi.fn().mockResolvedValue({}),
+}));
 
 vi.mock('@memberjunction/core-entities', () => ({
     // Real behaviour, mirroring INJECTABLE_NOTE_STATUSES — the fallback-cache note filter calls
@@ -358,6 +366,7 @@ vi.mock('@memberjunction/templates-base-types', () => ({
 
 import { AIEngine, AIActionParams, EntityAIActionParams } from '../AIEngine';
 import { MJGlobal, Float32VectorToBase64 } from '@memberjunction/global';
+import { ImportFromHost } from '@memberjunction/dynamic-packages';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import { LogError, LogWarning } from '@memberjunction/core';
 import type { ChatMessageContent } from '@memberjunction/ai';
@@ -1095,6 +1104,32 @@ describe('AIEngine', () => {
     // GetStringOutputFromActionResults (protected)
     // ======================================================================
 
+    describe('getDriver', () => {
+        type DriverModel = { DriverClass: string; DriverImportPath: string | null };
+        function callGetDriver(model: DriverModel): Promise<unknown> {
+            return (engine as unknown as { getDriver(m: DriverModel, key: string): Promise<unknown> }).getDriver(model, 'key');
+        }
+
+        it('loads DriverImportPath from the host when the driver class is not registered (#3741)', async () => {
+            await callGetDriver({ DriverClass: 'CustomLLM', DriverImportPath: '@acme/custom-llm' });
+            expect(ImportFromHost).toHaveBeenCalledWith('@acme/custom-llm');
+            expect(MJGlobal.Instance.ClassFactory.CreateInstance).toHaveBeenCalled();
+        });
+
+        it('skips the import when the driver class is already registered', async () => {
+            vi.mocked(MJGlobal.Instance.ClassFactory.GetRegistration).mockReturnValueOnce({} as ReturnType<typeof MJGlobal.Instance.ClassFactory.GetRegistration>);
+            await callGetDriver({ DriverClass: 'OpenAILLM', DriverImportPath: '@memberjunction/ai-openai' });
+            expect(ImportFromHost).not.toHaveBeenCalled();
+            expect(MJGlobal.Instance.ClassFactory.CreateInstance).toHaveBeenCalled();
+        });
+
+        it('wraps an import failure with the driver names', async () => {
+            vi.mocked(ImportFromHost).mockRejectedValueOnce(new Error("Cannot find package '@acme/missing'"));
+            await expect(callGetDriver({ DriverClass: 'MissingLLM', DriverImportPath: '@acme/missing' }))
+                .rejects.toThrow("Error loading driver '@acme/missing' / 'MissingLLM' : Cannot find package '@acme/missing'");
+        });
+    });
+
     describe('GetStringOutputFromActionResults', () => {
         function callGetStringOutput(actionName: string, result: Record<string, unknown>): string {
             const action = { Name: actionName };
@@ -1385,6 +1420,48 @@ describe('AIEngine', () => {
     // ======================================================================
     // Loaded property
     // ======================================================================
+
+    describe('Config load sharing', () => {
+        /** Replaces the load with one that records its forceRefresh and lands when the test releases it. */
+        function gateLoads(): { Calls: Array<boolean | undefined>; Release: () => void } {
+            const calls: Array<boolean | undefined> = [];
+            const pending: Array<() => void> = [];
+            (engine as unknown as { innerLoad: (forceRefresh?: boolean) => Promise<void> }).innerLoad = (forceRefresh) => {
+                calls.push(forceRefresh);
+                return new Promise<void>((resolve) => pending.push(resolve));
+            };
+            (engine as unknown as Record<string, unknown>)['_loaded'] = false;
+            return { Calls: calls, Release: () => pending.shift()!() };
+        }
+
+        const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+        it('REGRESSION: a forced Config during a running load runs another load after it', async () => {
+            const loads = gateLoads();
+            const running = engine.Config(false, {} as never);
+            const forced = engine.Config(true, {} as never);
+            expect(loads.Calls).toEqual([false]);
+
+            loads.Release();
+            await running;
+            await settle();
+            expect(loads.Calls).toEqual([false, true]);
+
+            loads.Release();
+            await forced;
+        });
+
+        it('a Config without forceRefresh joins the running load', async () => {
+            const loads = gateLoads();
+            const running = engine.Config(true, {} as never);
+            const joined = engine.Config(false, {} as never);
+
+            loads.Release();
+            await Promise.all([running, joined]);
+            await settle();
+            expect(loads.Calls).toEqual([true]);
+        });
+    });
 
     describe('Loaded', () => {
         it('should return false when engine is not loaded', () => {
