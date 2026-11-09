@@ -4,7 +4,7 @@ import { RegisterClass, MJGlobal } from '@memberjunction/global';
 import { IRecordProcessor, RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import type { AIPromptParams, AIPromptRunResult, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
-import { FeatureValueCacheService } from '@memberjunction/feature-pipelines';
+import { FeatureValueCacheService, type DataFeatureSpec } from '@memberjunction/feature-pipelines';
 import { InferProcessor, type FeatureValueWriteParams } from '../processors/InferProcessor';
 import type { MJRecordProcessEntity, MJRecordProcessEntity_IRecordProcessChallengerConfig } from '@memberjunction/core-entities';
 import { OutputMappingConfig, WriteBackProcessor } from '@memberjunction/record-set-processor';
@@ -85,6 +85,9 @@ class ChallengerFeatureValueDouble {
         return true;
     }
 }
+
+/** A spec with one output and no write target, for the shadow-challenger tests. */
+const TITLE_SPEC = { Outputs: [{ Name: 'StandardTitle', Ref: '$.StandardTitle' }] } as Partial<DataFeatureSpec> as DataFeatureSpec;
 
 // Register with ClassFactory under a unique key
 RegisterClass(InferProcessor, 'MockInferHookSubclass')(MockInferHookSubclass);
@@ -571,7 +574,7 @@ describe('InferProcessor Lifecycle Hooks (P1-6)', () => {
         const processor = new CountingInferProcessor(
             'prompt-champion-1',
             undefined,
-            { Outputs: [{ Name: 'StandardTitle', Ref: '$.StandardTitle', Target: { Mode: 'none' } }] },
+            TITLE_SPEC,
             null,
         );
         processor.ChallengerConfig = config;
@@ -695,7 +698,7 @@ describe('InferProcessor Lifecycle Hooks (P1-6)', () => {
             const processor = new SlowPromptInferProcessor(
                 'prompt-champion-1',
                 undefined,
-                { Outputs: [{ Name: 'StandardTitle', Ref: '$.StandardTitle', Target: { Mode: 'none' } }] },
+                TITLE_SPEC,
                 null,
             );
             processor.MaxInFlightShadow = 2;
@@ -761,7 +764,7 @@ describe('InferProcessor Lifecycle Hooks (P1-6)', () => {
         const processor = new ShadowTestableInferProcessor(
             'prompt-champion-1',
             undefined,
-            { Outputs: [{ Name: 'StandardTitle', Ref: '$.StandardTitle', Target: { Mode: 'none' } }] },
+            TITLE_SPEC,
             null,
         );
         // The capture maps and hooks are private; reached the way the M2 test reaches buildComputeHooks.
@@ -773,7 +776,12 @@ describe('InferProcessor Lifecycle Hooks (P1-6)', () => {
             championPromptDataByRecord: Map<string, unknown>;
             championUserMessageByRecord: Map<string, unknown>;
         };
-        const context: RecordProcessorContext = { ContextUser: { ID: 'user-1' } as UserInfo, RecordProcessID: 'rp-p13', EntityID: 'ent-contacts' };
+        const context: RecordProcessorContext = {
+            ContextUser: { ID: 'user-1' } as UserInfo,
+            Provider: { EntityByID: () => undefined } as Partial<IMetadataProvider> as IMetadataProvider,
+            RecordProcessID: 'rp-p13',
+            EntityID: 'ent-contacts',
+        };
         const runChampionHooks = async (count: number, prefix: string) => {
             const hooks = internals.buildComputeHooks();
             for (let i = 0; i < count; i++) {
