@@ -50,7 +50,7 @@ Wall time per step comes from the run log timestamps and the file times of `gene
 | Intent / risks | fix / 4 | fix / 4 | fix / 2 | perf / 3 |
 | Sessions (end reason) | 4 success | 4 success | 1 success, 3 token budget | 2 success, 2 token budget |
 | Tests produced / failed | 10 / 0 | 11 / 0 | 10 / 2 | 9 / 1 |
-| Verdicts | 9 PassesBoth, 1 Weak | 10 PassesBoth, 1 Weak | 2 PassesBoth, 5 Weak, 3 Invalid | 4 PassesBoth, 5 Weak |
+| Verdicts | 9 PassesBoth, 1 Weak | 10 PassesBoth, 1 Weak | 2 PassesBoth, 5 Weak (3 test faults, 2 intended), 3 Invalid | 4 PassesBoth, 5 Weak |
 | Dropped by rule | 0 | 0 | 0 | 1 (PrivateAccess) |
 | Judge buckets (Opus / Gemini / GPT-5.1) | Low / Low / High | Low / Low / Low | 5 × Low / Low / High | 4 × Low / Low / High |
 | Medians | 1 Low | 1 Low | 5 Low | 4 Low |
@@ -110,8 +110,9 @@ No catch was reported on any PR. Every weak catch is listed, including the one d
 |---|---|---|---|
 | #6368 Haiku | `e35724a2` | A guarded `IF NOT EXISTS … EXEC` block converts to a `DO $mj$` block; head writes `-- SKIPPED: EXEC block (unparseable upsert)` | Real behaviour change, intended (the PR's stated fix) |
 | #6368 Opus | `8d33e7cf` | The skip marker text `(auto-conversion not supported)`; head writes `(unparseable upsert)` | Real behaviour change, intended |
-| #6122 | `8e9ff2ad`, `636cef2f`, `9ee5fe45` | An existing dialect `QuerySQL` row found in `QueryEngine`'s cache is updated; the tests stub the provider's `RunView` empty | Test fault: the tests pin the old lookup path that the PR replaced on purpose |
+| #6122 | `636cef2f`, `9ee5fe45` | An existing dialect `QuerySQL` row found in `QueryEngine`'s cache is updated; the tests stub the provider's `RunView` empty | Test fault: the tests pin the old lookup path that the PR replaced on purpose |
 | #6122 | `5a8f723b` | Same, asserted as "update existing, do not create new" | Test fault (same cause) |
+| #6122 | `8e9ff2ad` | The existing row is still updated with the converted SQL when the provider's `RunView` fails (`Success: false`) | Real behaviour change, intended (the PR adds the early return) |
 | #6122 | `d8aa4256` | A failed provider read still saves the converted SQL | Real behaviour change, intended (the PR adds the early return) |
 | #6357 | `5eead4fb`, `e3e5ab16`, `e8d85150`, `b5130334` | After a write lands between the staleness check's status read and the scoped reload, the next check finds nothing stale | Real behaviour change, intended: the PR reuses the first status read and its comment accepts one extra reload in that window |
 | #6357 | `8f18bb8b` (dropped, PrivateAccess) | Same race, reached through a test subclass that calls the protected `RefreshAfterMetadataMemberChange` | Real behaviour change, intended; the drop was not needed (same kind as the four judged ones) |
@@ -147,7 +148,7 @@ The five sessions stopped by the token budget under-count their output tokens; a
 1. **Token budget is too tight for Opus.** 5 of 12 Opus sessions stopped on `TokensPerSession` (400,000) at 28–40 turns, before `TurnsPerSession` (30 turns, counted by the SDK) or `UsdPerSession` (3 USD) could act. Cache reads (0.2 per million) count the same as input; one session wrote no test at all. Decide whether the budget counts cache reads, or raise it.
 2. **Cost of a stopped session runs low.** The host count keeps the first usage snapshot of each message, so output tokens and cost are low for every session that the token budget stops. A stream-event count or the final `message_delta` usage would fix it.
 3. **GPT-5.1 bucket judge says High on intended changes.** It gave High on 10 of 11 weak catches whose PR made the change on purpose, often with a reason that says the change is intended. Opus and Gemini agreed with each other on all 11. Revisit the GPT-5.1 prompt or the panel.
-4. **TP Prob is not calibrated.** `gpt-4.1-mini` gave 0.64–0.98 on the five #6122 test faults and 0.94 on one #6357 intended change.
+4. **TP Prob is not calibrated.** `gpt-4.1-mini` gave 0.64–0.97 on the three #6122 test faults and 0.94 on one #6357 intended change.
 5. **PrivateAccess drops a call through a test subclass.** A subclass that calls a protected extension point (the MJ pattern for extension points) is treated as private access. Gate-1 labels should decide whether such calls stay.
 6. **Abstract `BaseEntity` makes tests Invalid.** Three generated MetadataSync tests construct `BaseEntity` directly; they run but fail type-check. The generator prompt could name this, or `run_test` could type-check during the session.
 7. **Re-running a step after `run`.** `run` removes the base worktree at the end, so `execute --run` and `assess --run` work only on a run that failed. A fix to a later step needs a full new run.
