@@ -146,8 +146,9 @@ export function SaveParameterFromLiteral(field: EntityFieldInfo, literal: string
  * it, and so does this.
  */
 function finiteNumberFromLiteral(field: EntityFieldInfo, literal: string): number {
-  const value = Number(literal);
-  if (literal.trim() === '' || !Number.isFinite(value)) {
+  const raw = literal.trim();
+  const value = Number(raw);
+  if (!/^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(raw) || !Number.isFinite(value)) {
     throw new Error(`Field "${field.Name}" has value ${JSON.stringify(literal)}, which is not a number`);
   }
   return value;
