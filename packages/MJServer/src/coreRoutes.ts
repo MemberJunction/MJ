@@ -36,10 +36,17 @@ export interface CoreAuthenticatedRouters {
     Widget?: Router;
 }
 
-/** `/healthcheck` — mounted first so platform probes never meet the auth middleware. */
+/**
+ * `/healthcheck` (readiness) and `/healthcheck/live` (liveness) — mounted first so platform probes never
+ * meet the auth middleware. These answer once the server is ready; before that the startup gate
+ * (`startupGate.ts`) answers the same paths (503 with the phase, and 200 for liveness).
+ */
 export function MountHealthcheckRoute(app: Application): void {
     app.get(ApiRoute('/healthcheck'), cors<cors.CorsRequest>(), (_req, res) => {
         res.status(200).json({ status: 'ok' });
+    });
+    app.get(ApiRoute('/healthcheck/live'), cors<cors.CorsRequest>(), (_req, res) => {
+        res.status(200).json({ status: 'alive' });
     });
 }
 
@@ -55,7 +62,12 @@ export function MountPublicCoreRoutes(app: Application, publicUrl: string, log: 
     log.LogIf('verbose', `[eSignature] Webhook route registered at ${ApiRoute('/esignature')}/webhook/:driverKey`);
 
     // The `?token=` query param is the capability; an <audio>/<video> element can't send Authorization headers.
-    app.use(ApiRoute('/media'), cors<cors.CorsRequest>(), CreateMediaStreamRouter());
+    app.use(ApiRoute('/media'), cors<cors.CorsRequest>(), CreateMediaStreamRouter({
+        RateLimits: {
+            Upload: configInfo.rateLimiting?.routes?.mediaUpload,
+            Read: configInfo.rateLimiting?.routes?.mediaRead,
+        },
+    }));
     log.LogIf('verbose', `[Media] Streaming route registered at ${ApiRoute('/media')}/:fileId`);
 
     if (configInfo.realtime?.enabled) {
@@ -95,6 +107,10 @@ function mountOAuthCallback(app: Application, publicUrl: string, log: RouteLog):
         errorRedirectUrl: ApiRoute('/oauth/error', { absolute: true }),
         // Constrains where a caller-supplied frontendReturnUrl may point (open-redirect guard).
         allowedFrontendOrigins: configInfo.cors?.allowedOrigins ?? ['*'],
+        RateLimits: {
+            Callback: configInfo.rateLimiting?.routes?.oauthCallback,
+            Authenticated: configInfo.rateLimiting?.routes?.oauthAuthenticated,
+        },
     });
     // The callback is unauthenticated (called by the external auth server).
     app.use(ApiRoute('/oauth'), cors<cors.CorsRequest>(), callbackRouter);

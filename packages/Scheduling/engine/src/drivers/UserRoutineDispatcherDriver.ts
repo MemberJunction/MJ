@@ -278,6 +278,9 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             EntityName: 'MJ: User Routines',
             ExtraFilter: BuildDueRoutineFilter(now.toISOString()),
             ResultType: 'entity_object',
+            // Due-ness is live state and must come from the database. The per-tick timestamp in
+            // the filter would also mint a new, never-read cache key on every tick.
+            BypassCache: true,
         }, contextUser);
 
         if (!result.Success) {

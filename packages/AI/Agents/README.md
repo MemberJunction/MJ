@@ -408,6 +408,16 @@ Memory Cleanup Agent has been deprecated — its responsibilities are folded int
 
 For the full design (functional requirements, threshold rationale, decay curve, contradiction taxonomy), see [`specs/001-memory-consolidation/spec.md`](../../../specs/001-memory-consolidation/spec.md) and the implementation in [`src/memory-manager-agent.ts`](./src/memory-manager-agent.ts).
 
+### DuplicateReasoningAgentProvider
+
+The `'Agent'` reasoning mode for duplicate detection. It registers under the `'Agent'` key against
+`DuplicateReasoningProvider` (from `@memberjunction/ai-vector-dupe`) and runs the **Duplicate
+Resolution Agent** — or the entity document's `ReasoningAgentID` — over one matched set, returning the
+same per-candidate verdict, proposed survivor and field choices as the single-shot `'Prompt'` mode.
+The match rows record the run in `AIAgentRunID`. It lives here, not in the dupe package, because this
+package depends on that one. See the
+[Duplicate Management Guide](../../../guides/DUPLICATE_MANAGEMENT_GUIDE.md#6-the-llm-reasoning-layer).
+
 ## Usage
 
 ### Basic Agent Execution

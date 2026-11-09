@@ -408,6 +408,26 @@ describe('Realtime.Pricing — prices for output the token cost rows do not cove
 
         expect(ResolveEffectiveModelConfiguration(model, row)?.Realtime?.Pricing?.AvatarVideoOutput).toBeNull();
     });
+
+    it('merges the audio prices per key beside the avatar video price', () => {
+        const audioInput: RealtimeUnitPrice = { Price: 32, Unit: 'Per 1M Tokens', Currency: 'USD' };
+        const audioOutput: RealtimeUnitPrice = { Price: 64, Unit: 'Per 1M Tokens', Currency: 'USD' };
+        const vendorDefaults: AIModelConfiguration = { Realtime: { Pricing: { AudioInput: audioInput, AudioOutput: audioOutput } } };
+        const row: AIModelConfiguration = { Realtime: { Pricing: { AvatarVideoOutput: avatarVideo, AudioOutput: { Price: 48 } } } };
+
+        expect(ResolveEffectiveModelConfiguration(null, null, vendorDefaults, row)?.Realtime?.Pricing).toEqual({
+            AvatarVideoOutput: avatarVideo,
+            AudioInput: audioInput,
+            AudioOutput: { Price: 48, Unit: 'Per 1M Tokens', Currency: 'USD' },
+        });
+    });
+
+    it('an explicit null on a more specific layer withdraws an inherited audio price', () => {
+        const model: AIModelConfiguration = { Realtime: { Pricing: { AudioInput: { Price: 32, Unit: 'Per 1M Tokens', Currency: 'USD' } } } };
+        const row: AIModelConfiguration = { Realtime: { Pricing: { AudioInput: null } } };
+
+        expect(ResolveEffectiveModelConfiguration(model, row)?.Realtime?.Pricing?.AudioInput).toBeNull();
+    });
 });
 
 /** The fields of a MetadataSync record that the seed tests read. */

@@ -32,7 +32,7 @@ vi.mock('@memberjunction/generic-database-provider', () => ({
 }));
 
 import {
-    CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, MJAPI_PUBLISH_MODES, ResolveSharedCacheTTLSeconds, RouteSharedCacheEvent,
+    CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, MJAPI_PUBLISH_MODES, ResolveRedisReadTimeoutMs, ResolveSharedCacheTTLSeconds, RouteSharedCacheEvent,
     StartEngineSweeper,
     StartUserCacheChecks,
     StartMetadataSweep,
@@ -116,6 +116,22 @@ describe('shared cache configuration', () => {
             url: 'redis://h:1', keyPrefix: 'fleet', defaultTTLSeconds: 120, enablePubSub: true, enableLogging: true,
             publishModes: { RunViewCache: 'full', default: 'notice' }, defaultPublishMode: 'none',
         });
+    });
+
+    it('passes a read timeout to the provider: 2000 ms by default, else config, else env', () => {
+        const cfgOf = (s: CacheSettingsConfig | undefined, env: NodeJS.ProcessEnv) =>
+            (CreateSharedCacheFromEnvironment(s, { REDIS_URL: 'redis://h:1', ...env }) as unknown as { cfg: Record<string, unknown> }).cfg;
+        expect(cfgOf(undefined, {}).readTimeoutMs).toBe(2000);
+        expect(cfgOf(settings({ redisReadTimeoutMs: 500 }), {}).readTimeoutMs).toBe(500);
+        expect(cfgOf(settings({ redisReadTimeoutMs: 500 }), { REDIS_READ_TIMEOUT_MS: '0' }).readTimeoutMs).toBe(0);
+    });
+
+    it('lets REDIS_READ_TIMEOUT_MS override the configured timeout, and ignores junk', () => {
+        expect(ResolveRedisReadTimeoutMs(500, { REDIS_READ_TIMEOUT_MS: '750' })).toBe(750);
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        expect(ResolveRedisReadTimeoutMs(500, { REDIS_READ_TIMEOUT_MS: '-1' })).toBe(500);
+        expect(ResolveRedisReadTimeoutMs(undefined, { REDIS_READ_TIMEOUT_MS: 'fast' })).toBe(2000);
+        warn.mockRestore();
     });
 
     it('lets REDIS_TTL_SECONDS override the configured TTL, and ignores junk', () => {
