@@ -115,6 +115,11 @@ describe('HtmlRenderer', () => {
         expect(text).toContain('A');
     });
 
+    it('drops an out-of-range numeric entity instead of throwing', () => {
+        const text = collectText(renderHtml('<p>a&#1114112;b&#x110000;c</p>'));
+        expect(text).toContain('abc');
+    });
+
     it('renders tables including header and body cells', () => {
         const tree = renderHtml(
             '<table><thead><tr><th>Name</th><th>Age</th></tr></thead>' +

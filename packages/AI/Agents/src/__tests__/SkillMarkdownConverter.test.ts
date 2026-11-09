@@ -188,6 +188,12 @@ Second line.
             expect(result.frontmatter.name).toBe(name);
         });
 
+        it('round-trips a backslash written directly before a quote or another backslash', () => {
+            const name = 'Escaped: a\\"b and c\\\\d';
+            const result = SkillMarkdownConverter.Parse(SkillMarkdownConverter.Serialize({ name, instructions: 'Body.' }));
+            expect(result.frontmatter.name).toBe(name);
+        });
+
         it('round-trips a value that starts and ends with a quote', () => {
             const name = '"Quoted"';
             const result = SkillMarkdownConverter.Parse(SkillMarkdownConverter.Serialize({ name, instructions: 'Body.' }));

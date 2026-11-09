@@ -21,6 +21,7 @@ import {
 } from '@memberjunction/markdown-core';
 import { Colors, Radius, Spacing, Type } from '@/theme/tokens';
 import { HighlightCode } from './highlight';
+import { decodeEntities } from './decode-entities';
 
 /**
  * Native markdown renderer.
@@ -301,21 +302,6 @@ function openUrl(href: string | null | undefined): void {
     Linking.openURL(href).catch(() => {
         // Ignore failures (e.g. unsupported scheme) — nothing else to do.
     });
-}
-
-const MARKED_ENTITIES: Record<string, string> = {
-    '&amp;': '&',
-    '&lt;': '<',
-    '&gt;': '>',
-    '&quot;': '"',
-    '&#39;': "'",
-    '&#x27;': "'",
-};
-
-/** Decode the handful of HTML entities marked may emit in token text. */
-function decodeEntities(text: string): string {
-    // One pass, so a decoded '&' never starts a second entity (&amp;lt; -> &lt;, not <)
-    return text.replace(/&(?:amp|lt|gt|quot|#39|#x27);/g, (entity) => MARKED_ENTITIES[entity]);
 }
 
 function headingSize(depth: number) {

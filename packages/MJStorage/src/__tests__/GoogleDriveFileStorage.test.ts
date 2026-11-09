@@ -238,4 +238,31 @@ describe('Drive query escaping (CodeQL js/double-escaping)', () => {
     const queries = calls.list.mock.calls.map((c) => (c[0] as { q: string }).q);
     expect(queries[0]).toContain("name = 'dir\\\\x'");
   });
+
+  const listQueries = (calls: DriveCalls): string[] => calls.list.mock.calls.map((c) => (c[0] as { q: string }).q);
+
+  it('escapes folder names when PutObject creates the parent folders', async () => {
+    const { driver, calls } = driverWithFakeDrive();
+    await driver.PutObject("it's/file.txt", Buffer.from('x'), 'text/plain');
+    expect(listQueries(calls).some((q) => q.includes("name = 'it\\'s' and"))).toBe(true);
+    expect(listQueries(calls).some((q) => q.includes("name = 'it's'"))).toBe(false);
+  });
+
+  it('escapes folder names when CreateDirectory walks its parents', async () => {
+    const { driver, calls } = driverWithFakeDrive();
+    await driver.CreateDirectory("it's/sub/");
+    expect(listQueries(calls).some((q) => q.includes("name = 'it\\'s' and"))).toBe(true);
+    expect(listQueries(calls).some((q) => q.includes("name = 'it's'"))).toBe(false);
+  });
+
+  it('escapes file type and provider-specific values in SearchFiles', async () => {
+    const { driver, calls } = driverWithFakeDrive();
+    await driver.SearchFiles('report', {
+      fileTypes: ["application/x-o'brien"],
+      providerSpecific: { description: "it's" },
+    });
+    const q = listQueries(calls)[0];
+    expect(q).toContain("mimeType='application/x-o\\'brien'");
+    expect(q).toContain("description='it\\'s'");
+  });
 });

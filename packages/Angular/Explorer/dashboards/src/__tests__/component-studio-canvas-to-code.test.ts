@@ -154,6 +154,17 @@ describe('escaping (CodeQL js/incomplete-sanitization, js/double-escaping)', () 
         expect(code).toContain('value("AccountID")?.["Odd \\\\ \\"Name\\""]');
     });
 
+    it('writes a field name with a quote or backslash as one string literal', () => {
+        const s = schema();
+        s.fields[3].name = 'Odd \\ "Notes"';
+        const canvas = BuildEmptyCanvas('Customers', 'Customer');
+        canvas.sections[0].elements.push({ id: GenerateCanvasId('field'), type: 'field', fieldName: 'Odd \\ "Notes"', span: 1 });
+        const code = GenerateCodeFromCanvas(canvas, s, 'CustomerForm');
+        expect(code).toContain('value("Odd \\\\ \\"Notes\\"")');
+        expect(code).toContain('setField("Odd \\\\ \\"Notes\\"", ');
+        expect(code).not.toContain('value("Odd \\ "Notes"")');
+    });
+
     it('decodes each title entity once, so &amp;lt; stays &lt;', () => {
         const code = 'function X() { return <div><h2>A &amp;lt; B &amp; C</h2><div>{value("Name")}</div></div>; }';
         const result = ParseCanvasFromCode(code, schema());

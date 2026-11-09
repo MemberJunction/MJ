@@ -105,10 +105,15 @@ const NAMED_ENTITIES: Record<string, string> = {
 function decodeEntities(text: string): string {
     // One pass, so a decoded '&' never starts a second entity (&amp;lt; -> &lt;, not <)
     return text.replace(/&(#\d+|#[xX][0-9a-fA-F]+|[a-z]+);/g, (entity: string, body: string) => {
-        if (body.startsWith('#x') || body.startsWith('#X')) return String.fromCodePoint(parseInt(body.slice(2), 16));
-        if (body.startsWith('#')) return String.fromCodePoint(Number(body.slice(1)));
+        if (body.startsWith('#x') || body.startsWith('#X')) return safeCodePoint(parseInt(body.slice(2), 16));
+        if (body.startsWith('#')) return safeCodePoint(Number(body.slice(1)));
         return NAMED_ENTITIES[body] ?? entity;
     });
+}
+
+/** `String.fromCodePoint`, but an out-of-range code point yields '' instead of throwing a RangeError. */
+function safeCodePoint(code: number): string {
+    return Number.isFinite(code) && code >= 0 && code <= 0x10ffff ? String.fromCodePoint(code) : '';
 }
 
 /** Collapse insignificant whitespace in flow text (HTML-style). */
