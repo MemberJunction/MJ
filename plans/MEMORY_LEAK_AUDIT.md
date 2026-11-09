@@ -1,11 +1,38 @@
 # MemberJunction Memory & Resource Leak Audit
 
-**Generated:** 2026-10-24 (Round 20)
+**Generated:** 2026-11-07 (Round 21)
 **Prior Runs:** Round 19 (2026-10-17), Round 18 (2026-10-10) and Rounds 1–17 retained below as history.
 **Scope:** Full monorepo `packages/` tree, 10 parallel `Explore` subagents in two waves (5 broad + 5 deep-subtree) plus repo-wide static cross-check greps. This round concentrated on the **885 commits / 583 changed non-test source files** since Round 16, and re-verified every Round 16 finding at its cited location.
 **Re-run command:** `/audit-memory-leaks`
 
 This document is organised as: Round 20 (this round) first, then Round 19, Round 18 and earlier unchanged as history. Raw output lives in `plans/.memory-leak-snapshots/2026-10-17/` (git-ignored).
+
+## Round 21 Executive Summary (2026-11-07)
+
+Scope: 3 parallel `Explore` subagents (Angular; server/core; AI/actions) over the ~1,450 changed non-test source files since the Round 20 fix commit (`89d96c5fd`). Pattern-driven (grep + read hits), not line-by-line. Raw output: `plans/.memory-leak-snapshots/2026-11-07/` (git-ignored).
+
+| Status | Critical | High | Medium | Low |
+|---|---:|---:|---:|---:|
+| **New in Round 21** | 0 | 3 | 5 | 8 |
+| **Fixed in this round's PR** | 0 | 2 | 0 | 0 |
+
+### Fixed in this round's PR
+| # | Package | Finding | Fix | Tests |
+|---|---|---|---|---|
+| 1 | `@memberjunction/ng-list-management` | **High.** `ListManagementService.membershipCache` (root-provided, keyed by entity + record-ID set) was only cleared on list mutations and TTL was checked on read only, so it grew all session. | `MJLruCache` (`maxSize: 50`, 5 min TTL). | New `list-management-membership-cache.test.ts` (bound + cache-hit); suite 82/82, `ngc` clean. |
+| 2 | `@memberjunction/remote-browser-server` | **High.** `RemoteBrowserEngine.AchieveGoal` added an anonymous abort listener to the caller's session-scoped signal and never removed it: one per goal. | Named handler removed in `finally`. | New listener-detach test; suite 76/76, `tsc` clean. |
+
+Not run: the deterministic integration tier (needs a provisioned database; no schema/metadata change).
+
+### New findings, deferred
+- **High — `AI/Agents/src/realtime/realtime-recording-capture.ts:67-68,250`:** consented recording sessions keep every inbound/outbound PCM frame in memory until finalize (~5-6 MB/min; hundreds of MB on long calls). Bounding would drop audio, so the fix is a design change (spill frames to a temp file / stream to storage in chunks) — needs an owner decision.
+- **Medium — `MJCoreEntities/src/engines/conversations.ts:1229,3043`:** `_detailCache` keyed by conversation ID, trimmed only on delete/refresh. Swap for `MJLruCache`.
+- **Medium — `AI/PredictiveStudio/Sidecar/src/ml-sidecar.ts:249,257,264`:** sidecar stdout/stderr buffers grow for process life; failed `waitForReady` leaves the child running and flagged running.
+- **Medium — `communication-oauth-service.ts:310`:** abandoned OAuth sessions never swept.
+- **Medium — `AI/VideoStudio/RenderWorker/src/server.ts:166`:** rendered video bytes held for the 10-min TTL with no byte cap.
+- **Low:** `ai-test-harness.component.ts:2488-2499` typing interval not cleared in `ngOnDestroy`; `ng-code-editor.component.ts:735,740` anonymous focus/blur listeners; `ListManagementService.listCache` (bounded by entity+filter); `RSUPostRestartProgress.attachedRunIDs`; `compositionLookup.loggedPartialPaths`; plus 3 further Low items in the AI agent file.
+
+---
 
 ## Round 20 Executive Summary (2026-10-24)
 
