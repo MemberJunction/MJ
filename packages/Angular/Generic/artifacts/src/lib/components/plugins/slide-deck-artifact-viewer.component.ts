@@ -261,7 +261,7 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
             type="button"
             class="mj-slides-tool-btn"
             (click)="OnExportPptx()"
-            title="Export OpenXML PowerPoint (.pptx) with Frozen Live Data"
+            title="Export PowerPoint (.pptx) with Live Data Snapshots"
             data-testid="export-pptx-btn"
           >
             <i class="fa-solid fa-file-powerpoint"></i> .pptx
@@ -304,7 +304,7 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
         </div>
       </div>
 
-      <!-- O6 Presentation Freeze Banner (shown in Present and Presenter View modes) -->
+      <!-- Presentation Freeze Banner (shown in Present and Presenter View modes) -->
       @if (WorkspaceMode === 'present' || WorkspaceMode === 'presenter') {
         <div
           class="mj-slides-presentation-banner"
@@ -315,7 +315,7 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
           <div class="mj-slides-presentation-banner-info">
             <i class="fa-solid fa-snowflake"></i>
             <span>
-              <strong>Presentation Mode (O6):</strong> Live MJ Blocks are frozen at
+              <strong>Presentation Mode:</strong> Live Views &amp; Queries are paused at
               {{ PresentationFrozenAt | date:'shortTime' }} so metrics remain stable while presenting.
             </span>
           </div>
@@ -578,7 +578,7 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
                                 type="button"
                                 class="mj-slides-mini-btn"
                                 (click)="EmbedInlineWhiteboardInRegion(region)"
-                                title="Embed Interactive Whiteboard Canvas (§ 3.4.1)"
+                                title="Embed Interactive Whiteboard Canvas"
                                 [attr.data-testid]="'region-insert-whiteboard-' + region.RegionID"
                               >
                                 <i class="fa-solid fa-chalkboard"></i> + Whiteboard
@@ -588,7 +588,7 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
                                 type="button"
                                 class="mj-slides-mini-btn"
                                 (click)="OpenCommentForSlideRegion(DisplayedSlide.SlideID, region.RegionID, region.Label)"
-                                title="Add Anchored SlideRegion Comment"
+                                title="Comment on this slide section"
                                 [attr.data-testid]="'region-comment-btn-' + region.RegionID"
                               >
                                 <i class="fa-regular fa-comment-dots"></i>
@@ -618,7 +618,7 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
                                     @if (block.Mode === 'Frozen') {
                                       <i class="fa-solid fa-snowflake"></i> Frozen Snapshot
                                     } @else {
-                                      <i class="fa-solid fa-bolt"></i> Live (Viewer RLS/FLS)
+                                      <i class="fa-solid fa-bolt"></i> Live
                                     }
                                   </span>
                                 </div>
@@ -823,7 +823,7 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
                       </div>
                     </div>
                     <span class="mj-presenter-live-frozen-pill">
-                      <i class="fa-solid fa-snowflake"></i> O6 Frozen Snapshot
+                      <i class="fa-solid fa-snowflake"></i> Presentation Snapshot
                     </span>
                   </div>
 
@@ -854,13 +854,13 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
           }
         </main>
 
-        <!-- Right Drawer: Theme & Brand Seeds OR Anchored SlideRegion Comments -->
+        <!-- Right Drawer: Theme & Brand Colors OR Slide Comments -->
         @if (RightDrawerTab !== 'none' && WorkspaceMode !== 'present') {
           <aside class="mj-slides-right-drawer" data-testid="slides-right-drawer">
             @if (RightDrawerTab === 'theme') {
               <div class="mj-slides-drawer-section" data-testid="theme-brand-drawer">
                 <div class="mj-slides-drawer-header">
-                  <strong>Theme &amp; Brand Seeds</strong>
+                  <strong>Theme &amp; Brand Colors</strong>
                   <button type="button" class="mj-slides-icon-btn" (click)="RightDrawerTab = 'none'">
                     <i class="fa-solid fa-xmark"></i>
                   </button>
@@ -886,7 +886,7 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
                   }
                 </div>
 
-                <div class="mj-slides-drawer-subtitle">Organization Brand Color Seeds (Accept #4)</div>
+                <div class="mj-slides-drawer-subtitle">Organization Brand Colors</div>
                 <div class="mj-slides-brand-seed-form">
                   <label class="mj-slides-field">
                     <span>Organization Name</span>
@@ -934,7 +934,7 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
                     (click)="OnApplyOrganizationBrandSeeds()"
                     data-testid="apply-brand-seeds-btn"
                   >
-                    <i class="fa-solid fa-wand-magic-sparkles"></i> Apply Brand Theme Seeds
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Apply Brand Colors
                   </button>
                 </div>
 
@@ -952,7 +952,7 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
             @if (RightDrawerTab === 'comments') {
               <div class="mj-slides-drawer-section" data-testid="slide-comments-drawer">
                 <div class="mj-slides-drawer-header">
-                  <strong>Anchored SlideRegion Comments</strong>
+                  <strong>Slide Comments</strong>
                   <button type="button" class="mj-slides-icon-btn" (click)="RightDrawerTab = 'none'">
                     <i class="fa-solid fa-xmark"></i>
                   </button>
@@ -961,13 +961,13 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
                 @if (IsEditable) {
                   <div class="mj-slides-new-comment-box">
                     <div class="mj-slides-comment-target-pill">
-                      Anchor: <code>{{ PendingAnchorKey }}</code> ({{ PendingAnchorLabel }})
+                      Section: <strong>{{ PendingAnchorLabel }}</strong>
                     </div>
                     <textarea
                       class="mj-slides-input"
                       rows="3"
                       [(ngModel)]="NewCommentDraft"
-                      placeholder="Comment on this slide region or @SlidesAgent rewrite this slide..."
+                      placeholder="Comment on this slide or @SlidesAgent rewrite this slide..."
                       data-testid="slide-comment-draft-input"
                     ></textarea>
                     <button
@@ -976,7 +976,7 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
                       (click)="SubmitSlideRegionComment()"
                       data-testid="submit-slide-comment-btn"
                     >
-                      <i class="fa-solid fa-paper-plane"></i> Post Comment / Invoke &#64;SlidesAgent
+                      <i class="fa-solid fa-paper-plane"></i> Post Comment
                     </button>
                   </div>
                 }
@@ -990,7 +990,7 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
                     >
                       <div class="mj-slides-thread-header">
                         <span class="mj-slides-thread-anchor">
-                          <i class="fa-solid fa-thumbtack"></i> {{ thread.AnchorLabel }} (<code>{{ thread.AnchorKey }}</code>)
+                          <i class="fa-solid fa-thumbtack"></i> {{ thread.AnchorLabel }}
                         </span>
                         <span class="mj-slides-badge">{{ thread.Status }}</span>
                       </div>
@@ -1020,16 +1020,15 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
         }
       </div>
 
-      <!-- O5 Freeze Live Block Security Confirmation Modal -->
+      <!-- Freeze Live Block Confirmation Modal -->
       @if (PendingFreezeBlock && PendingFreezeRegion) {
         <div class="mj-slides-modal-backdrop" data-testid="slides-freeze-warning-modal">
           <div class="mj-slides-modal-card">
-            <h3><i class="fa-solid fa-triangle-exclamation"></i> Freeze Live Slide Block Snapshot (O5)</h3>
+            <h3><i class="fa-solid fa-triangle-exclamation"></i> Freeze Live Slide Snapshot</h3>
             <p>
               Freezing <strong>{{ PendingFreezeBlock.Title || PendingFreezeRegion.Label }}</strong> embeds the rows
-              currently visible under your MemberJunction Row-Level and Field-Level Security permissions directly into
-              this presentation's JSON specification. Every collaborator with read access to this presentation will
-              see these frozen rows.
+              currently visible under your user permissions directly into this presentation. Anyone with read access
+              to this presentation will see these frozen values.
             </p>
             <div class="mj-slides-modal-actions">
               <button
@@ -1977,8 +1976,8 @@ export class SlideDeckArtifactViewerComponent
     '',
     '## Core Architecture Pillars',
     '- Unified metadata governance across Docs, Slides, and Sheets',
-    '- Real-time Yjs CRDT co-editing per slide and region',
-    '- Viewer-scoped Row-Level and Field-Level Security',
+    '- Real-time collaborative editing per slide and section',
+    '- Live data views and queries scoped to each viewer',
     '',
     '## Live Portfolio Telemetry',
     ':::mj-block',
@@ -2442,7 +2441,7 @@ export class SlideDeckArtifactViewerComponent
       BlockID: `slide-blk-${this.ActiveSlide.SlideID}-${region.RegionID}`,
       Kind: 'EntityView',
       Mode: 'Live',
-      Title: 'Live Enterprise Artifacts (Viewer RLS/FLS)',
+      Title: 'Live Enterprise Artifacts',
       EntityName: 'MJ: Artifacts',
       ExtraFilter: 'IsActive = 1',
       DisplayMode: 'table',
@@ -2550,7 +2549,7 @@ export class SlideDeckArtifactViewerComponent
               y: 60,
               w: 180,
               h: 72,
-              text: 'Yjs CRDT Room',
+              text: 'Collaborative Sync',
               strokeColor: '#0EA5E9',
               fillColor: '#F0F9FF',
               strokeWidth: 2,
@@ -2680,18 +2679,18 @@ export class SlideDeckArtifactViewerComponent
       Columns: [
         { Name: 'Name', DisplayName: 'Artifact / Initiative', Type: 'nvarchar' },
         { Name: 'Type', DisplayName: 'Artifact Type', Type: 'nvarchar' },
-        { Name: 'Visibility', DisplayName: 'Viewer Scope', Type: 'nvarchar' },
+        { Name: 'Visibility', DisplayName: 'Status', Type: 'nvarchar' },
       ],
       Rows: [
         {
           Name: this.Deck.Title,
           Type: 'Presentation',
-          Visibility: 'RLS + FLS Verified',
+          Visibility: 'Active',
         },
         {
           Name: 'Q4 Strategic Roadmap Doc',
           Type: 'Markdown Document',
-          Visibility: 'RLS + FLS Verified',
+          Visibility: 'Active',
         },
       ],
       TotalRowCount: 2,
@@ -3116,8 +3115,8 @@ export class SlideDeckArtifactViewerComponent
       : `${slide.Title} (AI Refined)`;
     const updatedBullets = [
       `- **@${agentName} Synthesis:** ${cleanedInstruction || 'Executive summary refined'}`,
-      `- **Single-Slide Isolation (Accept #3):** Updated only \`${slide.SlideID}\` (\`${targetRegionId}\`)`,
-      `- **Governed Data Ready:** Compatible with viewer-scoped RLS/FLS live blocks`,
+      `- **Targeted Slide Update:** Updated \`${slide.SlideID}\` (\`${targetRegionId}\`)`,
+      `- **Live Data Ready:** Compatible with embedded Views and Queries`,
     ].join('\n');
 
     const { Deck: afterMeta } = SlideDeckEngine.Instance.UpdateSlideMetadata(
@@ -3386,7 +3385,7 @@ export class SlideDeckArtifactViewerComponent
 
     await this.hydrateAnchoredSlideThreadsFromServer(artifactId, currentUser);
 
-    // Seed an initial anchored SlideRegion comment thread so right-margin review is immediately inspectable
+    // Seed an initial slide comment thread so right-margin review is immediately inspectable
     if (this.AnchoredThreads.length === 0) {
       this.AnchoredThreads = [
         {
@@ -3402,7 +3401,7 @@ export class SlideDeckArtifactViewerComponent
               DetailID: 'slide-msg-1',
               UserName: 'Executive Reviewer',
               Role: 'User',
-              Message: 'Verify that Live MJ Blocks freeze automatically when entering Presentation Mode (O6).',
+              Message: 'Live Views and Queries pause automatically when entering Presentation Mode.',
               CreatedAt: new Date().toISOString(),
               Mentions: [],
             },

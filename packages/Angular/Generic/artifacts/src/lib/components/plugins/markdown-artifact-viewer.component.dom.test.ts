@@ -331,4 +331,105 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
     expect(f.componentInstance.MarkdownContent).toContain('"ViewID": "view-active-models"');
     expect(f.componentInstance.MarkdownContent).toContain('"ViewName": "Active Production Models"');
   });
+
+  it('supports Progressive Disclosure ribbon, reconfiguring existing Views, collapsible blocks/headings, bounded pagination, clickable PK/FK links, and Share modal', async () => {
+    const f = renderDocsViewer(INITIAL_DOC_CONTENT, false);
+    const comp = f.componentInstance;
+
+    // 1. Progressive Disclosure: Formatting ribbon & More Tools menu start hidden and toggle cleanly
+    expect(comp.ShowFormattingRibbon).toBe(false);
+    comp.ToggleFormattingRibbon();
+    expect(comp.ShowFormattingRibbon).toBe(true);
+
+    expect(comp.ShowMoreToolsMenu).toBe(false);
+    comp.ToggleMoreToolsMenu();
+    expect(comp.ShowMoreToolsMenu).toBe(true);
+    comp.CloseMoreToolsMenu();
+    expect(comp.ShowMoreToolsMenu).toBe(false);
+
+    // 2. Re-configuring an existing EntityView block in place without duplicating it
+    const liveBlockSeg = comp.DocumentSegments.find((s) => s.Descriptor?.BlockID === 'blk-live-1')!;
+    expect(liveBlockSeg).toBeDefined();
+
+    comp.OpenConfigureBlockModal(liveBlockSeg.Descriptor!);
+    f.detectChanges();
+    expect(comp.EditingBlockID).toBe('blk-live-1');
+    expect(comp.GetInsertModalTitle()).toBe('Configure Live View');
+    expect(comp.GetInsertConfirmButtonLabel()).toBe('Update View');
+
+    comp.NewBlockEntityName = 'MJ: Conversations';
+    comp.NewBlockViewSelectionMode = 'saved';
+    comp.NewBlockViewID = 'view-conv-open';
+    comp.NewBlockViewName = 'Open Discussions';
+    comp.NewBlockLabel = 'Conversations — Open Discussions';
+    comp.NewBlockPageSize = 25;
+    comp.NewBlockDefaultCollapsed = true;
+    comp.ConfirmBlockInsertModal();
+    f.detectChanges();
+
+    const updatedSeg = comp.DocumentSegments.find((s) => s.Descriptor?.BlockID === 'blk-live-1')!;
+    expect(updatedSeg.Descriptor?.EntityName).toBe('MJ: Conversations');
+    expect(updatedSeg.Descriptor?.ViewID).toBe('view-conv-open');
+    expect(updatedSeg.Descriptor?.ViewName).toBe('Open Discussions');
+    expect(updatedSeg.Descriptor?.PageSize).toBe(25);
+    expect(updatedSeg.Descriptor?.Collapsed).toBe(true);
+
+    // 3. Two-layer block collapse: starts collapsed per author default, then user override expands it
+    expect(comp.IsBlockCollapsed(updatedSeg.Descriptor!)).toBe(true);
+    comp.ToggleBlockCollapsed(updatedSeg.Descriptor!);
+    expect(comp.IsBlockCollapsed(updatedSeg.Descriptor!)).toBe(false);
+
+    // 4. Heading collapse hides child segments under the heading
+    const headingSeg = comp.DocumentSegments.find((s) => s.BlockKind === 'heading')!;
+    expect(comp.IsHeadingCollapsed(headingSeg)).toBe(false);
+    expect(comp.GetCollapsedChildCount(headingSeg)).toBeGreaterThan(0);
+    comp.ToggleHeadingCollapse(headingSeg);
+    expect(comp.IsHeadingCollapsed(headingSeg)).toBe(true);
+    const secondSeg = comp.DocumentSegments[1];
+    expect(comp.IsSegmentHiddenByCollapsedHeading(secondSeg)).toBe(true);
+    comp.ToggleHeadingCollapse(headingSeg);
+    expect(comp.IsSegmentHiddenByCollapsedHeading(secondSeg)).toBe(false);
+
+    // 5. Bounded pagination & clickable PK/FK record links
+    comp.SetBlockPageSize(updatedSeg.Descriptor!, 1);
+    const execResult = comp.GetBlockExecutionResult(updatedSeg.Descriptor!);
+    const page1Rows = comp.GetPaginatedBlockRows(updatedSeg.Descriptor!, execResult.Rows);
+    expect(page1Rows).toHaveLength(1);
+    expect(comp.GetBlockTotalPages(updatedSeg.Descriptor!, execResult.Rows.length)).toBe(2);
+
+    comp.ChangeBlockPage(updatedSeg.Descriptor!, 1, execResult.Rows.length);
+    expect(comp.GetBlockPageNumber(updatedSeg.Descriptor!)).toBe(2);
+
+    const emittedRecords: Array<{ entityName: string; keyStr: string }> = [];
+    comp.OpenEntityRecord.subscribe((evt) => {
+      emittedRecords.push({ entityName: evt.entityName, keyStr: evt.compositeKey.ToConcatenatedString() });
+    });
+
+    const nameCol = execResult.Columns.find((c) => c.Name === 'Name')!;
+    const fkCol = execResult.Columns.find((c) => c.Name === 'Type')!;
+    expect(comp.IsCellRecordLink(nameCol, execResult.Rows[0])).toBe(true);
+    expect(comp.IsCellRecordLink(fkCol, execResult.Rows[0])).toBe(true);
+
+    comp.OnBlockRecordCellClick(updatedSeg.Descriptor!, nameCol, execResult.Rows[0]);
+    comp.OnBlockRecordCellClick(updatedSeg.Descriptor!, fkCol, execResult.Rows[0]);
+    expect(emittedRecords).toHaveLength(2);
+    expect(emittedRecords[0].entityName).toBe('MJ: Conversations');
+    expect(emittedRecords[1].entityName).toBe('MJ: Artifact Types');
+
+    // 6. Share & Permissions modal
+    comp.OpenPermissionsModal();
+    expect(comp.ShowPermissionsModal).toBe(true);
+    comp.AvailableUsersForSharing = [{ ID: 'user-colleague-1', Name: 'Jane Reviewer', Email: 'jane@example.com' }];
+    comp.SelectedPermissionUserID = 'user-colleague-1';
+    comp.SelectedPermissionLevel = 'Edit';
+    await comp.GrantArtifactPermission();
+    const granted = comp.ArtifactPermissionEntries.find((e) => e.UserID === 'user-colleague-1');
+    expect(granted).toBeDefined();
+    expect(granted?.CanEdit).toBe(true);
+
+    await comp.RevokeArtifactPermission(granted!);
+    expect(comp.ArtifactPermissionEntries.some((e) => e.UserID === 'user-colleague-1')).toBe(false);
+    comp.ClosePermissionsModal();
+    expect(comp.ShowPermissionsModal).toBe(false);
+  });
 });

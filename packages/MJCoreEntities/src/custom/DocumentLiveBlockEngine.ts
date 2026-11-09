@@ -51,6 +51,18 @@ export interface DocumentBlockColumn {
     DisplayName: string;
     /** Optional data type hint (`'string' | 'number' | 'boolean' | 'date'`). */
     Type?: string;
+    /** True when this column is the entity's primary key. */
+    IsPrimaryKey?: boolean;
+    /** True when this column is the entity's primary NameField (links to this record). */
+    IsNameField?: boolean;
+    /** True when this column is a foreign key or companion virtual name field for a foreign key. */
+    IsForeignKey?: boolean;
+    /** Target entity name to open when a cell in this column is clicked. */
+    TargetEntityName?: string;
+    /** Row field name holding the target record's primary key ID (e.g. `'ID'` or `'UserID'`). */
+    RecordIDFieldName?: string;
+    /** Optional Font Awesome icon class for the target entity. */
+    TargetEntityIcon?: string;
 }
 
 /**
@@ -157,9 +169,13 @@ export interface DocumentBlockSpec {
     /** Optional chart ID (`'chart-1'`) when embedding a range chart from an `Excel Spreadsheet` artifact (`§ 6.3`, `Accept #5`). */
     SheetChartID?: string;
 
-    // --- Row Limits & Frozen State ---
+    // --- Row Limits, Pagination, Collapse & Frozen State ---
     /** Maximum rows to fetch in live mode (defaults to 100). */
     MaxRows?: number;
+    /** Default client-side page size for tabular display (defaults to 10). */
+    PageSize?: number;
+    /** Whether the block starts collapsed by default in the document (`false` when omitted). */
+    Collapsed?: boolean;
     /** Point-in-time snapshot used when `Mode === 'Frozen'`. */
     FrozenSnapshot?: FrozenBlockSnapshot | null;
 }
@@ -330,13 +346,30 @@ export class EntityViewDocumentBlock extends BaseDocumentBlock {
 
         const visibleFieldNames = requestedFields.filter((f) => !deniedFields.has(f.trim().toLowerCase()));
 
+        // Ensure Primary Key and companion FK ID columns are fetched so PK/FK cells are linkable
+        // first-pk-ok: entity record links resolve the entity's primary key column (or 'ID') for CompositeKey navigation
+        const pkFieldName = entityInfo.FirstPrimaryKey?.Name ?? 'ID';
+        const fetchFieldSet = new Set<string>(visibleFieldNames);
+        if (!deniedFields.has(pkFieldName.trim().toLowerCase())) {
+            fetchFieldSet.add(pkFieldName);
+        }
+        for (const fName of visibleFieldNames) {
+            const companionFk = entityInfo.Fields.find(
+                (f) => f.Name.trim().toLowerCase() === `${fName.trim().toLowerCase()}id` && Boolean(f.RelatedEntity)
+            );
+            if (companionFk && !deniedFields.has(companionFk.Name.trim().toLowerCase())) {
+                fetchFieldSet.add(companionFk.Name);
+            }
+        }
+        const fetchFields = Array.from(fetchFieldSet);
+
         const runParams: RunViewParams = {
             EntityName: entityInfo.Name,
             ViewID: spec.ViewID,
             ViewName: spec.ViewName,
             ExtraFilter: spec.ExtraFilter,
             OrderBy: spec.OrderBy,
-            Fields: visibleFieldNames.length > 0 ? visibleFieldNames : undefined,
+            Fields: fetchFields.length > 0 ? fetchFields : undefined,
             MaxRows: spec.MaxRows ?? 100,
             ResultType: 'simple'
         };
@@ -354,10 +387,41 @@ export class EntityViewDocumentBlock extends BaseDocumentBlock {
 
         const columns: DocumentBlockColumn[] = visibleFieldNames.map((fieldName) => {
             const fInfo = entityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase());
+            const isPk = Boolean(fInfo?.IsPrimaryKey) || fieldName.trim().toLowerCase() === pkFieldName.toLowerCase();
+            const isNameField = Boolean(fInfo?.IsNameField) || fieldName.trim().toLowerCase() === 'name';
+            const directFkEntity = fInfo?.RelatedEntity ? fInfo.RelatedEntity : undefined;
+            const companionFkField = !directFkEntity
+                ? entityInfo.Fields.find(
+                      (f) =>
+                          f.Name.trim().toLowerCase() === `${fieldName.trim().toLowerCase()}id` &&
+                          Boolean(f.RelatedEntity)
+                  )
+                : undefined;
+
+            const isFk = Boolean(directFkEntity || companionFkField?.RelatedEntity);
+            const targetEntityName = isFk
+                ? directFkEntity || companionFkField?.RelatedEntity
+                : isPk || isNameField
+                  ? entityInfo.Name
+                  : undefined;
+            const recordIdFieldName = isFk
+                ? fInfo?.Name && directFkEntity
+                    ? fInfo.Name
+                    : companionFkField?.Name
+                : isPk || isNameField
+                  ? pkFieldName
+                  : undefined;
+
             return {
                 Name: fInfo?.Name ?? fieldName,
                 DisplayName: fInfo?.DisplayNameOrName ?? fieldName,
-                Type: fInfo?.TSType?.toLowerCase() ?? 'string'
+                Type: fInfo?.TSType?.toLowerCase() ?? 'string',
+                IsPrimaryKey: isPk || undefined,
+                IsNameField: isNameField || undefined,
+                IsForeignKey: isFk || undefined,
+                TargetEntityName: targetEntityName,
+                RecordIDFieldName: recordIdFieldName,
+                TargetEntityIcon: entityInfo.Icon || undefined
             };
         });
 
@@ -473,11 +537,61 @@ export class SavedQueryDocumentBlock extends BaseDocumentBlock {
 
         const firstRow = rows[0] ?? {};
         const columnKeys = Object.keys(firstRow).filter((k) => !deniedColumnNames.has(k.trim().toLowerCase()));
-        const columns: DocumentBlockColumn[] = columnKeys.map((key) => ({
-            Name: key,
-            DisplayName: key,
-            Type: typeof firstRow[key] === 'number' ? 'number' : typeof firstRow[key] === 'boolean' ? 'boolean' : 'string'
-        }));
+        const primaryQueryEntity = referencedEntities[0];
+        const hasIdCol = columnKeys.some((k) => k.trim().toLowerCase() === 'id');
+        const columns: DocumentBlockColumn[] = columnKeys.map((key) => {
+            const lowerKey = key.trim().toLowerCase();
+            let isPk = false;
+            let isName = false;
+            let isFk = false;
+            let targetEntityName: string | undefined;
+            let recordIdFieldName: string | undefined;
+
+            if (primaryQueryEntity) {
+                const matchField = primaryQueryEntity.Fields.find((f) => f.Name.trim().toLowerCase() === lowerKey);
+                if (matchField?.IsPrimaryKey || lowerKey === 'id') {
+                    isPk = true;
+                    targetEntityName = primaryQueryEntity.Name;
+                    recordIdFieldName = key;
+                } else if ((matchField?.IsNameField || lowerKey === 'name') && hasIdCol) {
+                    isName = true;
+                    targetEntityName = primaryQueryEntity.Name;
+                    recordIdFieldName = columnKeys.find((k) => k.trim().toLowerCase() === 'id') ?? 'ID';
+                } else if (matchField?.RelatedEntity) {
+                    isFk = true;
+                    targetEntityName = matchField.RelatedEntity;
+                    recordIdFieldName = key;
+                } else {
+                    const companionFk = primaryQueryEntity.Fields.find(
+                        (f) => f.Name.trim().toLowerCase() === `${lowerKey}id` && Boolean(f.RelatedEntity)
+                    );
+                    const companionColKey = companionFk
+                        ? columnKeys.find((k) => k.trim().toLowerCase() === companionFk.Name.trim().toLowerCase())
+                        : undefined;
+                    if (companionFk?.RelatedEntity && companionColKey) {
+                        isFk = true;
+                        targetEntityName = companionFk.RelatedEntity;
+                        recordIdFieldName = companionColKey;
+                    }
+                }
+            }
+
+            return {
+                Name: key,
+                DisplayName: key,
+                Type:
+                    typeof firstRow[key] === 'number'
+                        ? 'number'
+                        : typeof firstRow[key] === 'boolean'
+                          ? 'boolean'
+                          : 'string',
+                IsPrimaryKey: isPk || undefined,
+                IsNameField: isName || undefined,
+                IsForeignKey: isFk || undefined,
+                TargetEntityName: targetEntityName,
+                RecordIDFieldName: recordIdFieldName
+            };
+        });
 
         return {
             BlockID: spec.BlockID,

@@ -313,7 +313,7 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
             type="button"
             class="mj-sheets-tool-btn"
             (click)="ExportWorkbookAsXlsx()"
-            title="Export Workbook as OpenXML .xlsx"
+            title="Export Workbook as Excel (.xlsx)"
             data-testid="sheet-export-xlsx-btn"
           >
             <i class="fa-solid fa-file-excel"></i> .xlsx
@@ -347,7 +347,7 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
             class="mj-sheets-tool-btn"
             [class.active]="ShowCommentsDrawer"
             (click)="ToggleCommentsDrawer()"
-            title="Toggle Anchored SheetRange Comments & @SheetsAgent"
+            title="Toggle Cell & Range Comments"
             data-testid="sheet-toggle-comments-btn"
           >
             <i class="fa-regular fa-comments"></i>
@@ -1001,7 +1001,7 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
           <div class="mj-sheets-modal-dialog" role="dialog" aria-modal="true">
             <div class="mj-sheets-modal-header">
               <i class="fa-solid fa-triangle-exclamation"></i>
-              <h3>Freeze Live Table Snapshot (O5 Security Warning)</h3>
+              <h3>Freeze Live Table Snapshot</h3>
             </div>
             <div class="mj-sheets-modal-body">
               <p>

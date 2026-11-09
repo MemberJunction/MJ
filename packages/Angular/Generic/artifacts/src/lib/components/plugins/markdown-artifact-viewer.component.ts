@@ -1,13 +1,16 @@
-import { Component, Input, OnInit, OnDestroy, OnChanges, SimpleChanges, ChangeDetectorRef, ViewChild, ElementRef, inject } from '@angular/core';
-import { DataSnapshot, Metadata, RunView, type EntityInfo, type QueryInfo } from '@memberjunction/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ChangeDetectorRef, ViewChild, ElementRef, inject } from '@angular/core';
+import { CompositeKey, DataSnapshot, Metadata, RunView, type EntityInfo, type QueryInfo } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
   DocumentLiveBlockEngine,
   ArtifactPermissionEngine,
+  UserInfoEngine,
+  type DocumentBlockColumn,
   type DocumentBlockSpec,
   type DocumentBlockExecutionResult,
   type DocumentBlockKind,
   type MJArtifactEntity,
+  type MJArtifactPermissionEntity,
   type MJArtifactVersionEntity,
   type MJConversationEntity,
   type MJConversationDetailEntity,
@@ -60,6 +63,17 @@ export interface DocsArtifactPickerOption {
   Type: string;
 }
 
+export interface DocsPermissionEntry {
+  ID: string;
+  UserID: string;
+  UserName: string;
+  UserEmail: string;
+  CanRead: boolean;
+  CanEdit: boolean;
+  CanShare: boolean;
+  IsOwner: boolean;
+}
+
 /**
  * Collaborative Rich Document Editor & Viewer plugin for `"Markdown Document"` artifacts (§ 4).
  *
@@ -81,18 +95,18 @@ export interface DocsArtifactPickerOption {
   selector: 'mj-markdown-artifact-viewer',
   template: `
     <div class="mj-docs-workspace" [ngClass]="cssClass" data-testid="mj-docs-workspace">
-      <!-- Top Collaboration & Formatting Toolbar -->
+      <!-- Tier 1: Calm Primary Collaboration & Mode Toolbar -->
       <div class="mj-docs-toolbar" data-testid="mj-docs-toolbar">
         <div class="mj-docs-toolbar__left">
           <button
             type="button"
             class="mj-docs-btn mj-docs-btn--icon"
             [class.mj-docs-btn--active]="ShowOutlineRail"
-            title="Toggle Document Outline (TOC)"
+            title="Toggle Document Outline"
             data-testid="toggle-outline-btn"
             (click)="ToggleOutlineRail()"
           >
-            <i class="fas fa-list-ul"></i>
+            <i class="fas fa-bars-staggered"></i>
             <span>Outline</span>
           </button>
 
@@ -102,18 +116,18 @@ export interface DocsArtifactPickerOption {
               class="mj-docs-mode-btn"
               [class.mj-docs-mode-btn--active]="ViewMode === 'edit'"
               [disabled]="!CanUserEdit"
-              title="Collaborative Edit Mode"
+              title="Write & Edit Document"
               data-testid="mode-edit-btn"
               (click)="SetViewMode('edit')"
             >
-              <i class="fas fa-pen-to-square"></i> Edit
+              <i class="fas fa-pen-to-square"></i> Write
             </button>
             <button
               type="button"
               class="mj-docs-mode-btn"
               [class.mj-docs-mode-btn--active]="ViewMode === 'suggest'"
               [disabled]="!CanUserEdit"
-              title="Suggest Edits Mode"
+              title="Suggest Tracked Edits"
               data-testid="mode-suggest-btn"
               (click)="SetViewMode('suggest')"
             >
@@ -126,81 +140,39 @@ export interface DocsArtifactPickerOption {
               type="button"
               class="mj-docs-mode-btn"
               [class.mj-docs-mode-btn--active]="ViewMode === 'preview'"
-              title="Reader Preview Mode"
+              title="Reader View"
               data-testid="mode-preview-btn"
               (click)="SetViewMode('preview')"
             >
-              <i class="fas fa-eye"></i> Preview
-            </button>
-            <button
-              type="button"
-              class="mj-docs-mode-btn"
-              [class.mj-docs-mode-btn--active]="ViewMode === 'source'"
-              title="Raw Markdown Source"
-              data-testid="mode-source-btn"
-              (click)="SetViewMode('source')"
-            >
-              <i class="fas fa-code"></i> Source
-            </button>
-            <button
-              type="button"
-              class="mj-docs-mode-btn"
-              [class.mj-docs-mode-btn--active]="ViewMode === 'diff'"
-              title="Version History Diff"
-              data-testid="mode-diff-btn"
-              (click)="SetViewMode('diff')"
-            >
-              <i class="fas fa-code-compare"></i> Diff
+              <i class="fas fa-eye"></i> Read
             </button>
           </div>
 
           @if (CanUserEdit && (ViewMode === 'edit' || ViewMode === 'suggest' || ViewMode === 'source')) {
-            <div class="mj-docs-format-group" aria-label="Formatting Tools">
-              <button type="button" class="mj-docs-btn" title="Heading 1" (click)="InsertFormattingSnippet('# ', '')">
-                <strong>H1</strong>
-              </button>
-              <button type="button" class="mj-docs-btn" title="Heading 2" (click)="InsertFormattingSnippet('## ', '')">
-                <strong>H2</strong>
-              </button>
-              <button type="button" class="mj-docs-btn" title="Heading 3" (click)="InsertFormattingSnippet('### ', '')">
-                <strong>H3</strong>
-              </button>
-              <button type="button" class="mj-docs-btn" title="Bold" (click)="InsertFormattingSnippet('**', '**')">
-                <i class="fas fa-bold"></i>
-              </button>
-              <button type="button" class="mj-docs-btn" title="Italic" (click)="InsertFormattingSnippet('*', '*')">
-                <i class="fas fa-italic"></i>
-              </button>
-              <button
-                type="button"
-                class="mj-docs-btn"
-                title="Callout Block"
-                (click)="InsertFormattingSnippet('> [!NOTE]\n> ', '')"
-              >
-                <i class="fas fa-circle-info"></i>
-              </button>
-              <button type="button" class="mj-docs-btn" title="Task List" (click)="InsertFormattingSnippet('- [ ] ', '')">
-                <i class="fas fa-list-check"></i>
-              </button>
-              <button
-                type="button"
-                class="mj-docs-btn"
-                title="Insert Table"
-                (click)="InsertFormattingSnippet('| Column 1 | Column 2 |\n| --- | --- |\n| Value 1 | Value 2 |\n', '')"
-              >
-                <i class="fas fa-table"></i>
-              </button>
-              <button
-                type="button"
-                class="mj-docs-btn mj-docs-btn--accent"
-                title="Open / Slash Command Menu"
-                data-testid="open-slash-menu-btn"
-                (click)="ToggleSlashMenu()"
-              >
-                <i class="fas fa-bolt"></i>
-                <span>/ Insert Block</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              class="mj-docs-btn"
+              [class.mj-docs-btn--active]="ShowFormattingRibbon"
+              [attr.aria-expanded]="ShowFormattingRibbon"
+              title="Toggle Formatting Ribbon"
+              data-testid="toggle-format-ribbon-btn"
+              (click)="ShowFormattingRibbon = !ShowFormattingRibbon"
+            >
+              <i class="fas fa-font"></i>
+              <span>Format</span>
+              <i class="fas" [ngClass]="ShowFormattingRibbon ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+            </button>
+
+            <button
+              type="button"
+              class="mj-docs-btn mj-docs-btn--accent"
+              title="Insert Live View, Query, or Whiteboard (/)"
+              data-testid="open-slash-menu-btn"
+              (click)="ToggleSlashMenu()"
+            >
+              <i class="fas fa-plus"></i>
+              <span>Insert View / Block</span>
+            </button>
           }
         </div>
 
@@ -236,46 +208,15 @@ export interface DocsArtifactPickerOption {
             (change)="OnImportFileSelected($event)"
           />
 
-          @if (CanUserEdit) {
-            <button
-              type="button"
-              class="mj-docs-btn"
-              title="Import .md or .docx"
-              data-testid="import-doc-btn"
-              (click)="TriggerFileImport()"
-            >
-              <i class="fas fa-file-import"></i> Import
-            </button>
-          }
-
           <button
             type="button"
             class="mj-docs-btn"
-            title="Export Markdown (.md)"
-            data-testid="export-md-btn"
-            (click)="OnExportMarkdown()"
+            title="Share & Document Permissions"
+            data-testid="open-permissions-modal-btn"
+            (click)="OpenPermissionsModal()"
           >
-            <i class="fas fa-file-lines"></i> .md
-          </button>
-
-          <button
-            type="button"
-            class="mj-docs-btn"
-            title="Export Word (.docx)"
-            data-testid="export-docx-btn"
-            (click)="OnExportDocx()"
-          >
-            <i class="fas fa-file-word"></i> .docx
-          </button>
-
-          <button
-            type="button"
-            class="mj-docs-btn"
-            title="Copy Markdown"
-            data-testid="copy-markdown-btn"
-            (click)="OnCopy()"
-          >
-            <i class="fas fa-copy"></i> Copy
+            <i class="fas fa-user-shield"></i>
+            <span>Share</span>
           </button>
 
           @if (CanUserEdit) {
@@ -287,8 +228,8 @@ export interface DocsArtifactPickerOption {
               data-testid="save-doc-version-btn"
               (click)="OnSaveDocumentVersion()"
             >
-              <i class="fas fa-cloud-arrow-up"></i>
-              <span>{{ IsSavingVersion ? 'Saving…' : 'Save Version' }}</span>
+              <i class="fas" [ngClass]="HasUnsavedChanges ? 'fa-cloud-arrow-up' : 'fa-check'"></i>
+              <span>{{ IsSavingVersion ? 'Saving…' : HasUnsavedChanges ? 'Save Version' : 'Saved' }}</span>
             </button>
           }
 
@@ -296,7 +237,7 @@ export interface DocsArtifactPickerOption {
             type="button"
             class="mj-docs-btn mj-docs-btn--icon"
             [class.mj-docs-btn--active]="ShowCommentsDrawer"
-            title="Toggle Anchored Comments & Suggestions"
+            title="Toggle Comments & Suggestions"
             data-testid="toggle-comments-btn"
             (click)="ToggleCommentsDrawer()"
           >
@@ -306,8 +247,139 @@ export interface DocsArtifactPickerOption {
               <span class="mj-docs-badge">{{ OpenThreadsCount }}</span>
             }
           </button>
+
+          <!-- Progressive Disclosure Overflow Menu (...) for Source, Version Diff, Import & Export -->
+          <div class="mj-docs-more-menu-wrap">
+            <button
+              type="button"
+              class="mj-docs-btn mj-docs-btn--icon"
+              [class.mj-docs-btn--active]="ShowMoreToolsMenu || ViewMode === 'source' || ViewMode === 'diff'"
+              [attr.aria-expanded]="ShowMoreToolsMenu"
+              title="More Tools: Markdown Source, Version History, Import & Export"
+              data-testid="toggle-more-tools-btn"
+              (click)="ShowMoreToolsMenu = !ShowMoreToolsMenu"
+            >
+              <i class="fas fa-ellipsis"></i>
+            </button>
+
+            <div class="mj-docs-more-menu" [hidden]="!ShowMoreToolsMenu" data-testid="docs-more-tools-menu">
+              <div class="mj-docs-more-menu__section">Document Views</div>
+              <button
+                type="button"
+                class="mj-docs-more-menu__item"
+                [class.mj-docs-more-menu__item--active]="ViewMode === 'source'"
+                data-testid="mode-source-btn"
+                (click)="SetViewMode('source'); ShowMoreToolsMenu = false"
+              >
+                <i class="fas fa-code"></i>
+                <span>Markdown Source</span>
+              </button>
+              <button
+                type="button"
+                class="mj-docs-more-menu__item"
+                [class.mj-docs-more-menu__item--active]="ViewMode === 'diff'"
+                data-testid="mode-diff-btn"
+                (click)="SetViewMode('diff'); ShowMoreToolsMenu = false"
+              >
+                <i class="fas fa-code-compare"></i>
+                <span>Version History &amp; Diff</span>
+              </button>
+
+              <div class="mj-docs-more-menu__divider"></div>
+              <div class="mj-docs-more-menu__section">Import &amp; Export</div>
+              <button
+                type="button"
+                class="mj-docs-more-menu__item"
+                data-testid="export-docx-btn"
+                (click)="OnExportDocx(); ShowMoreToolsMenu = false"
+              >
+                <i class="fas fa-file-word"></i>
+                <span>Export Word (.docx)</span>
+              </button>
+              <button
+                type="button"
+                class="mj-docs-more-menu__item"
+                data-testid="export-md-btn"
+                (click)="OnExportMarkdown(); ShowMoreToolsMenu = false"
+              >
+                <i class="fas fa-file-lines"></i>
+                <span>Export Markdown (.md)</span>
+              </button>
+              <button
+                type="button"
+                class="mj-docs-more-menu__item"
+                data-testid="copy-markdown-btn"
+                (click)="OnCopy(); ShowMoreToolsMenu = false"
+              >
+                <i class="fas fa-copy"></i>
+                <span>Copy Markdown</span>
+              </button>
+              @if (CanUserEdit) {
+                <button
+                  type="button"
+                  class="mj-docs-more-menu__item"
+                  data-testid="import-doc-btn"
+                  (click)="TriggerFileImport(); ShowMoreToolsMenu = false"
+                >
+                  <i class="fas fa-file-import"></i>
+                  <span>Import .docx or .md…</span>
+                </button>
+              }
+            </div>
+          </div>
         </div>
       </div>
+
+      <!-- Tier 2 (Progressive Disclosure): Collapsible Formatting Ribbon -->
+      @if (CanUserEdit && (ViewMode === 'edit' || ViewMode === 'suggest' || ViewMode === 'source')) {
+        <div
+          class="mj-docs-format-ribbon"
+          [hidden]="!ShowFormattingRibbon"
+          aria-label="Formatting Tools"
+          data-testid="docs-format-ribbon"
+        >
+          <button type="button" class="mj-docs-btn" title="Bold" (click)="InsertFormattingSnippet('**', '**')">
+            <i class="fas fa-bold"></i>
+          </button>
+          <button type="button" class="mj-docs-btn" title="Italic" (click)="InsertFormattingSnippet('*', '*')">
+            <i class="fas fa-italic"></i>
+          </button>
+          <span class="mj-docs-ribbon-sep"></span>
+          <button type="button" class="mj-docs-btn" title="Heading 1" (click)="InsertFormattingSnippet('# ', '')">
+            <strong>H1</strong>
+          </button>
+          <button type="button" class="mj-docs-btn" title="Heading 2" (click)="InsertFormattingSnippet('## ', '')">
+            <strong>H2</strong>
+          </button>
+          <button type="button" class="mj-docs-btn" title="Heading 3" (click)="InsertFormattingSnippet('### ', '')">
+            <strong>H3</strong>
+          </button>
+          <span class="mj-docs-ribbon-sep"></span>
+          <button type="button" class="mj-docs-btn" title="Task List" (click)="InsertFormattingSnippet('- [ ] ', '')">
+            <i class="fas fa-list-check"></i> Checklist
+          </button>
+          <button
+            type="button"
+            class="mj-docs-btn"
+            title="Insert Table"
+            (click)="InsertFormattingSnippet('| Column 1 | Column 2 |\n| --- | --- |\n| Value 1 | Value 2 |\n', '')"
+          >
+            <i class="fas fa-table"></i> Table
+          </button>
+          <button
+            type="button"
+            class="mj-docs-btn"
+            title="Callout Block"
+            (click)="InsertFormattingSnippet('> [!NOTE]\n> ', '')"
+          >
+            <i class="fas fa-circle-info"></i> Callout
+          </button>
+          <span class="mj-docs-ribbon-hint">
+            Tip: Type <kbd>/</kbd> anywhere to insert a live <strong>View</strong>, <strong>Query</strong>, or
+            <strong>Whiteboard</strong>
+          </span>
+        </div>
+      }
 
       <!-- Slash Command Palette Popover -->
       @if (ShowSlashMenu) {
@@ -492,6 +564,7 @@ export interface DocsArtifactPickerOption {
                     class="mj-docs-segment"
                     [class.mj-docs-segment--selected]="SelectedAnchorKey === seg.SegmentID"
                     [attr.data-segment-id]="seg.SegmentID"
+                    [hidden]="IsSegmentHiddenByCollapsedHeading(seg)"
                   >
                     <!-- Hover Block Handle & Actions -->
                     <div class="mj-docs-segment__gutter">
@@ -570,6 +643,18 @@ export interface DocsArtifactPickerOption {
                               >
                                 <button
                                   type="button"
+                                  class="mj-docs-collapse-btn"
+                                  [title]="IsHeadingCollapsed(seg) ? 'Expand section' : 'Collapse section'"
+                                  [attr.data-testid]="'toggle-heading-collapse-' + seg.SegmentID"
+                                  (click)="ToggleHeadingCollapse(seg)"
+                                >
+                                  <i
+                                    class="fas"
+                                    [ngClass]="IsHeadingCollapsed(seg) ? 'fa-chevron-right' : 'fa-chevron-down'"
+                                  ></i>
+                                </button>
+                                <button
+                                  type="button"
                                   class="mj-docs-heading-level-pill"
                                   title="Click to cycle heading level (H1–H4)"
                                   (click)="CycleHeadingLevel(seg)"
@@ -586,6 +671,16 @@ export interface DocsArtifactPickerOption {
                                   (blur)="CommitEditableHeading(seg, $event)"
                                   (keydown)="OnEditableBlockKeydown(seg, $event)"
                                 ></div>
+                                @if (IsHeadingCollapsed(seg)) {
+                                  <button
+                                    type="button"
+                                    class="mj-docs-collapsed-section-pill"
+                                    (click)="ToggleHeadingCollapse(seg)"
+                                  >
+                                    <i class="fas fa-layer-group"></i>
+                                    {{ GetCollapsedChildCount(seg) }} block(s) hidden · Expand
+                                  </button>
+                                }
                               </div>
                             }
                             @case ('table') {
@@ -776,15 +871,28 @@ export interface DocsArtifactPickerOption {
                           </div>
                         }
                       } @else if (seg.Descriptor && seg.Descriptor.Kind === 'Artifact') {
-                        <!-- Embedded "MS OLE" Artifact Block (Whiteboard, Child Document, etc. per § 3.4.1 / D12) -->
+                        <!-- Embedded Artifact Block (Whiteboard, Child Document, etc. per § 3.4.1 / D12) -->
                         <div
                           class="mj-docs-ole-block"
                           [class.mj-docs-ole-block--editing]="IsInlineEditingBlock(seg.Descriptor.BlockID)"
                           [class.mj-docs-ole-block--expanded]="ExpandedOleBlockID === seg.Descriptor.BlockID"
+                          [class.mj-docs-ole-block--collapsed]="IsBlockCollapsed(seg.Descriptor)"
                           [attr.data-testid]="'ole-artifact-block-' + seg.Descriptor.BlockID"
                         >
                           <div class="mj-docs-ole-block__header">
                             <div class="mj-docs-ole-block__title">
+                              <button
+                                type="button"
+                                class="mj-docs-collapse-btn"
+                                [title]="IsBlockCollapsed(seg.Descriptor) ? 'Expand embedded block' : 'Collapse embedded block'"
+                                [attr.data-testid]="'toggle-block-collapse-' + seg.Descriptor.BlockID"
+                                (click)="ToggleBlockCollapsed(seg.Descriptor)"
+                              >
+                                <i
+                                  class="fas"
+                                  [ngClass]="IsBlockCollapsed(seg.Descriptor) ? 'fa-chevron-right' : 'fa-chevron-down'"
+                                ></i>
+                              </button>
                               <i
                                 class="fas"
                                 [ngClass]="
@@ -805,6 +913,16 @@ export interface DocsArtifactPickerOption {
 
                             <div class="mj-docs-ole-block__actions">
                               @if (CanUserEdit) {
+                                <button
+                                  type="button"
+                                  class="mj-docs-btn"
+                                  title="Change Embedded Artifact or Display Settings"
+                                  [attr.data-testid]="'configure-block-btn-' + seg.Descriptor.BlockID"
+                                  (click)="OpenConfigureBlockModal(seg.Descriptor)"
+                                >
+                                  <i class="fas fa-sliders"></i>
+                                  <span>Configure</span>
+                                </button>
                                 <button
                                   type="button"
                                   class="mj-docs-btn"
@@ -867,6 +985,7 @@ export interface DocsArtifactPickerOption {
 
                           <div
                             class="mj-docs-ole-block__viewport"
+                            [hidden]="IsBlockCollapsed(seg.Descriptor)"
                             [style.height.px]="
                               ExpandedOleBlockID === seg.Descriptor.BlockID ? 680 : seg.Descriptor.HeightPx || 420
                             "
@@ -886,10 +1005,27 @@ export interface DocsArtifactPickerOption {
                         <div
                           class="mj-docs-live-block"
                           [class.mj-docs-live-block--frozen]="seg.Descriptor.Mode === 'Frozen'"
+                          [class.mj-docs-live-block--collapsed]="IsBlockCollapsed(seg.Descriptor)"
                           [attr.data-testid]="'live-mj-block-' + seg.Descriptor.BlockID"
                         >
                           <div class="mj-docs-live-block__header">
                             <div class="mj-docs-live-block__title">
+                              <button
+                                type="button"
+                                class="mj-docs-collapse-btn"
+                                [title]="
+                                  IsBlockCollapsed(seg.Descriptor)
+                                    ? 'Expand block (saved to your personal reading preferences)'
+                                    : 'Collapse block (saved to your personal reading preferences)'
+                                "
+                                [attr.data-testid]="'toggle-block-collapse-' + seg.Descriptor.BlockID"
+                                (click)="ToggleBlockCollapsed(seg.Descriptor)"
+                              >
+                                <i
+                                  class="fas"
+                                  [ngClass]="IsBlockCollapsed(seg.Descriptor) ? 'fa-chevron-right' : 'fa-chevron-down'"
+                                ></i>
+                              </button>
                               <i class="fas" [ngClass]="GetLiveBlockIcon(seg.Descriptor.Kind)"></i>
                               <strong>{{
                                 seg.Descriptor.Title ||
@@ -906,9 +1042,42 @@ export interface DocsArtifactPickerOption {
                                 {{ seg.Descriptor.Mode === 'Live' ? '● Live' : '❄ Frozen Snapshot' }}
                               </span>
                               <span class="mj-docs-badge">{{ GetBlockKindDisplayLabel(seg.Descriptor) }}</span>
+                              @if (seg.Descriptor.EntityName) {
+                                <span class="mj-docs-badge">
+                                  {{ seg.Descriptor.EntityName }}{{ seg.Descriptor.ViewName ? ' · ' + seg.Descriptor.ViewName : ' · Default View' }}
+                                </span>
+                              } @else if (seg.Descriptor.QueryName) {
+                                <span class="mj-docs-badge">{{ seg.Descriptor.QueryName }}</span>
+                              }
                             </div>
 
                             <div class="mj-docs-live-block__actions">
+                              @if (CanUserEdit) {
+                                <button
+                                  type="button"
+                                  class="mj-docs-btn"
+                                  [title]="
+                                    seg.Descriptor.Kind === 'EntityView'
+                                      ? 'Change Entity, View, Filter, or Display Settings'
+                                      : seg.Descriptor.Kind === 'SavedQuery'
+                                        ? 'Change Query or Display Settings'
+                                        : 'Configure Block Properties'
+                                  "
+                                  [attr.data-testid]="'configure-block-btn-' + seg.Descriptor.BlockID"
+                                  (click)="OpenConfigureBlockModal(seg.Descriptor)"
+                                >
+                                  <i class="fas fa-sliders"></i>
+                                  <span>
+                                    {{
+                                      seg.Descriptor.Kind === 'EntityView'
+                                        ? 'Change View'
+                                        : seg.Descriptor.Kind === 'SavedQuery'
+                                          ? 'Change Query'
+                                          : 'Configure'
+                                    }}
+                                  </span>
+                                </button>
+                              }
                               @if (seg.Descriptor.Mode === 'Live') {
                                 <button
                                   type="button"
@@ -975,33 +1144,129 @@ export interface DocsArtifactPickerOption {
                               </div>
                             }
 
-                            <div class="mj-docs-live-block__body">
+                            <div class="mj-docs-live-block__body" [hidden]="IsBlockCollapsed(seg.Descriptor)">
                               @if (!execResult.Success) {
                                 <div class="mj-docs-live-block__error">
                                   <i class="fas fa-triangle-exclamation"></i>
                                   <span>{{ execResult.ErrorMessage }}</span>
                                 </div>
                               } @else if (execResult.Columns.length > 0) {
-                                <table class="mj-docs-data-table">
-                                  <thead>
-                                    <tr>
-                                      @for (col of execResult.Columns; track col.Name) {
-                                        <th>{{ col.DisplayName || col.Name }}</th>
-                                      }
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    @for (row of execResult.Rows; track $index) {
+                                <div
+                                  class="mj-docs-table-scroll-viewport"
+                                  [attr.data-testid]="'block-scroll-viewport-' + seg.Descriptor.BlockID"
+                                >
+                                  <table class="mj-docs-data-table mj-docs-data-table--sticky">
+                                    <thead>
                                       <tr>
                                         @for (col of execResult.Columns; track col.Name) {
-                                          <td>{{ FormatCellValue(row[col.Name]) }}</td>
+                                          <th>
+                                            <span class="mj-docs-col-hdr">
+                                              <span>{{ col.DisplayName || col.Name }}</span>
+                                              @if (col.IsPrimaryKey) {
+                                                <i
+                                                  class="fas fa-key mj-docs-col-hdr__icon"
+                                                  title="Primary Key — click cell to open record"
+                                                ></i>
+                                              } @else if (col.IsForeignKey) {
+                                                <i
+                                                  class="fas fa-link mj-docs-col-hdr__icon"
+                                                  [title]="'Linked to ' + (col.TargetEntityName || 'related record') + ' — click cell to open'"
+                                                ></i>
+                                              }
+                                            </span>
+                                          </th>
                                         }
                                       </tr>
-                                    }
-                                  </tbody>
-                                </table>
-                                <div class="mj-docs-live-block__footer">
-                                  Showing {{ execResult.Rows.length }} of {{ execResult.TotalRowCount }} record(s)
+                                    </thead>
+                                    <tbody>
+                                      @for (row of GetPaginatedBlockRows(seg.Descriptor, execResult.Rows); track $index) {
+                                        <tr>
+                                          @for (col of execResult.Columns; track col.Name) {
+                                            <td>
+                                              @if (IsCellRecordLink(col, row)) {
+                                                <a
+                                                  href="javascript:void(0)"
+                                                  class="mj-docs-record-link"
+                                                  [class.mj-docs-record-link--pk]="col.IsPrimaryKey || col.IsNameField"
+                                                  [class.mj-docs-record-link--fk]="col.IsForeignKey"
+                                                  [title]="
+                                                    'Open ' +
+                                                    (col.TargetEntityName || seg.Descriptor.EntityName || 'Record') +
+                                                    ' record'
+                                                  "
+                                                  [attr.data-testid]="
+                                                    'record-link-' + seg.Descriptor.BlockID + '-' + col.Name
+                                                  "
+                                                  (click)="OnBlockRecordCellClick(seg.Descriptor, col, row, $event)"
+                                                >
+                                                  <i
+                                                    class="fas"
+                                                    [ngClass]="
+                                                      col.IsForeignKey
+                                                        ? 'fa-arrow-up-right-from-square'
+                                                        : 'fa-file-lines'
+                                                    "
+                                                  ></i>
+                                                  <span>{{ FormatCellValue(row[col.Name]) }}</span>
+                                                </a>
+                                              } @else {
+                                                {{ FormatCellValue(row[col.Name]) }}
+                                              }
+                                            </td>
+                                          }
+                                        </tr>
+                                      }
+                                    </tbody>
+                                  </table>
+                                </div>
+                                <div class="mj-docs-live-block__footer mj-docs-pager">
+                                  <span class="mj-docs-pager__summary">
+                                    Showing {{ GetBlockPageStartRow(seg.Descriptor, execResult.Rows.length) }}–{{
+                                      GetBlockPageEndRow(seg.Descriptor, execResult.Rows.length)
+                                    }}
+                                    of {{ execResult.TotalRowCount || execResult.Rows.length }} record(s)
+                                  </span>
+
+                                  <div class="mj-docs-pager__controls">
+                                    <label class="mj-docs-pager__size">
+                                      <span>Rows per page:</span>
+                                      <select
+                                        [ngModel]="GetBlockPageSize(seg.Descriptor)"
+                                        (ngModelChange)="SetBlockPageSize(seg.Descriptor, $event)"
+                                        [attr.data-testid]="'block-page-size-' + seg.Descriptor.BlockID"
+                                      >
+                                        <option [ngValue]="10">10</option>
+                                        <option [ngValue]="25">25</option>
+                                        <option [ngValue]="50">50</option>
+                                        <option [ngValue]="100">100</option>
+                                      </select>
+                                    </label>
+                                    <button
+                                      type="button"
+                                      class="mj-docs-btn"
+                                      [disabled]="GetBlockPageNumber(seg.Descriptor) <= 1"
+                                      [attr.data-testid]="'block-prev-page-' + seg.Descriptor.BlockID"
+                                      (click)="ChangeBlockPage(seg.Descriptor, -1, execResult.Rows.length)"
+                                    >
+                                      <i class="fas fa-chevron-left"></i> Prev
+                                    </button>
+                                    <span class="mj-docs-pager__page-num">
+                                      Page {{ GetBlockPageNumber(seg.Descriptor) }} /
+                                      {{ GetBlockTotalPages(seg.Descriptor, execResult.Rows.length) }}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      class="mj-docs-btn"
+                                      [disabled]="
+                                        GetBlockPageNumber(seg.Descriptor) >=
+                                        GetBlockTotalPages(seg.Descriptor, execResult.Rows.length)
+                                      "
+                                      [attr.data-testid]="'block-next-page-' + seg.Descriptor.BlockID"
+                                      (click)="ChangeBlockPage(seg.Descriptor, 1, execResult.Rows.length)"
+                                    >
+                                      Next <i class="fas fa-chevron-right"></i>
+                                    </button>
+                                  </div>
                                 </div>
                               } @else {
                                 <div class="mj-docs-live-block__empty">No records returned for current viewer scope.</div>
@@ -1198,10 +1463,10 @@ export interface DocsArtifactPickerOption {
                 into a static snapshot inside this document.
               </p>
               <div class="mj-docs-modal__warning-box">
-                <strong>Data Governance &amp; Security Notice (RLS / FLS):</strong>
-                Freezing captures the rows and fields currently visible under your user permissions and stores them
-                directly in the document version. Anyone with read access to this document will be able to view these
-                frozen values without re-running live Row-Level or Field-Level Security checks.
+                <strong>Data Access &amp; Governance Notice:</strong>
+                Freezing captures the rows and columns currently visible under your user permissions and stores them
+                directly in this document version. Anyone with read access to this document will be able to view these
+                frozen values as a static snapshot.
               </div>
               <label class="mj-docs-modal__checkbox">
                 <input
@@ -1513,24 +1778,24 @@ export interface DocsArtifactPickerOption {
                 <input type="text" [(ngModel)]="NewBlockLabel" data-testid="new-block-label-input" />
               </label>
 
-              <!-- Progressive Disclosure: Collapsible Advanced Options for EntityView -->
-              @if (PendingBlockInsertType === 'EntityView') {
-                <div class="mj-docs-advanced-section">
-                  <button
-                    type="button"
-                    class="mj-docs-advanced-toggle"
-                    [attr.aria-expanded]="ShowAdvancedBlockOptions"
-                    (click)="ShowAdvancedBlockOptions = !ShowAdvancedBlockOptions"
-                    data-testid="toggle-advanced-block-options-btn"
-                  >
-                    <span>
-                      <i class="fas fa-sliders"></i>
-                      Advanced Options (Filter, Display Format, Row Limit)
-                    </span>
-                    <i class="fas" [ngClass]="ShowAdvancedBlockOptions ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-                  </button>
+              <!-- Progressive Disclosure: Collapsible Advanced Options -->
+              <div class="mj-docs-advanced-section">
+                <button
+                  type="button"
+                  class="mj-docs-advanced-toggle"
+                  [attr.aria-expanded]="ShowAdvancedBlockOptions"
+                  (click)="ShowAdvancedBlockOptions = !ShowAdvancedBlockOptions"
+                  data-testid="toggle-advanced-block-options-btn"
+                >
+                  <span>
+                    <i class="fas fa-sliders"></i>
+                    Advanced Options (Filter, Pagination, Default Collapse)
+                  </span>
+                  <i class="fas" [ngClass]="ShowAdvancedBlockOptions ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                </button>
 
-                  <div class="mj-docs-advanced-body" [hidden]="!ShowAdvancedBlockOptions">
+                <div class="mj-docs-advanced-body" [hidden]="!ShowAdvancedBlockOptions">
+                  @if (PendingBlockInsertType === 'EntityView') {
                     <label class="mj-docs-field">
                       <span>Extra Filter (Optional SQL WHERE Clause)</span>
                       <input
@@ -1543,6 +1808,8 @@ export interface DocsArtifactPickerOption {
                         data-testid="new-block-filter-input"
                       />
                     </label>
+                  }
+                  @if (PendingBlockInsertType === 'EntityView' || PendingBlockInsertType === 'SavedQuery') {
                     <div class="mj-docs-advanced-grid">
                       <label class="mj-docs-field">
                         <span>Display Format</span>
@@ -1552,18 +1819,29 @@ export interface DocsArtifactPickerOption {
                         </select>
                       </label>
                       <label class="mj-docs-field">
-                        <span>Max Rows</span>
-                        <select [(ngModel)]="NewBlockMaxRows" class="mj-docs-select">
-                          <option [ngValue]="25">25 rows</option>
-                          <option [ngValue]="50">50 rows</option>
-                          <option [ngValue]="100">100 rows</option>
-                          <option [ngValue]="250">250 rows</option>
+                        <span>Rows Per Page</span>
+                        <select [(ngModel)]="NewBlockPageSize" class="mj-docs-select" data-testid="new-block-page-size-select">
+                          <option [ngValue]="10">10 rows / page</option>
+                          <option [ngValue]="25">25 rows / page</option>
+                          <option [ngValue]="50">50 rows / page</option>
+                          <option [ngValue]="100">100 rows / page</option>
                         </select>
                       </label>
                     </div>
-                  </div>
+                  }
+                  <label class="mj-docs-modal__checkbox">
+                    <input
+                      type="checkbox"
+                      [(ngModel)]="NewBlockDefaultCollapsed"
+                      data-testid="new-block-default-collapsed-checkbox"
+                    />
+                    <span>
+                      Start this block collapsed by default in the document (readers can still expand/collapse for their
+                      own session).
+                    </span>
+                  </label>
                 </div>
-              }
+              </div>
             </div>
             <div class="mj-docs-modal__footer">
               <button type="button" class="mj-docs-btn" (click)="CancelBlockInsertModal()">Cancel</button>
@@ -1574,6 +1852,109 @@ export interface DocsArtifactPickerOption {
                 (click)="ConfirmBlockInsertModal()"
               >
                 {{ GetInsertConfirmButtonLabel() }}
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Share & Permissions Modal -->
+      @if (ShowPermissionsModal) {
+        <div class="mj-docs-modal-backdrop" data-testid="docs-permissions-modal">
+          <div class="mj-docs-modal mj-docs-modal--picker" role="dialog" aria-labelledby="docs-permissions-modal-title">
+            <div class="mj-docs-modal__header mj-docs-modal__header--with-sub">
+              <div>
+                <h3 id="docs-permissions-modal-title"><i class="fas fa-user-shield"></i> Share &amp; Document Access</h3>
+                <p class="mj-docs-modal__subtitle">
+                  Manage who can view, comment on, edit, or share this artifact across MJ Docs, Sheets, and Slides.
+                </p>
+              </div>
+              <button
+                type="button"
+                class="mj-docs-btn mj-docs-btn--icon"
+                title="Close"
+                data-testid="close-permissions-modal-btn"
+                (click)="ClosePermissionsModal()"
+              >
+                <i class="fas fa-xmark"></i>
+              </button>
+            </div>
+
+            <div class="mj-docs-modal__body">
+              <div class="mj-docs-perm-summary">
+                <div>
+                  <strong>Your Effective Access:</strong>
+                  <span class="mj-docs-badge mj-docs-badge--brand">{{ CurrentUserEffectiveRoleLabel }}</span>
+                </div>
+                <span class="mj-docs-picker-muted">
+                  Live Views &amp; Queries inside this document always enforce each viewer's own entity permissions.
+                </span>
+              </div>
+
+              @if (CanUserShareArtifact) {
+                <div class="mj-docs-perm-grant-box" data-testid="grant-permission-form">
+                  <div class="mj-docs-field" style="flex: 1;">
+                    <span>Grant Access to User</span>
+                    <select [(ngModel)]="SelectedPermissionUserID" class="mj-docs-select" data-testid="perm-user-select">
+                      <option value="">Select a user…</option>
+                      @for (u of AvailableUsersForSharing; track u.ID) {
+                        <option [value]="u.ID">{{ u.Name }} ({{ u.Email }})</option>
+                      }
+                    </select>
+                  </div>
+                  <div class="mj-docs-field">
+                    <span>Role</span>
+                    <select [(ngModel)]="SelectedPermissionLevel" class="mj-docs-select" data-testid="perm-level-select">
+                      <option value="Read">Viewer (Read &amp; Comment)</option>
+                      <option value="Edit">Editor (Write &amp; Suggest)</option>
+                      <option value="Share">Co-Owner (Edit &amp; Share)</option>
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    class="mj-docs-btn mj-docs-btn--primary"
+                    [disabled]="!SelectedPermissionUserID || IsSavingPermission"
+                    data-testid="grant-permission-btn"
+                    (click)="GrantArtifactPermission()"
+                  >
+                    <i class="fas fa-user-plus"></i> Share
+                  </button>
+                </div>
+              }
+
+              <div class="mj-docs-field">
+                <span>People with Access ({{ ArtifactPermissionEntries.length }})</span>
+                <div class="mj-docs-saved-view-list">
+                  @for (perm of ArtifactPermissionEntries; track perm.ID) {
+                    <div class="mj-docs-saved-view-item" [attr.data-testid]="'perm-entry-' + perm.UserID">
+                      <i class="fas" [ngClass]="perm.IsOwner ? 'fa-crown' : 'fa-user-check'"></i>
+                      <div class="mj-docs-saved-view-item__text">
+                        <strong>{{ perm.UserName }}</strong>
+                        <span>{{ perm.UserEmail || 'Workspace Member' }}</span>
+                      </div>
+                      <span class="mj-docs-badge" [class.mj-docs-badge--brand]="perm.IsOwner || perm.CanEdit">
+                        {{ perm.IsOwner ? 'Owner' : perm.CanShare ? 'Co-Owner' : perm.CanEdit ? 'Editor' : 'Viewer' }}
+                      </span>
+                      @if (CanUserShareArtifact && !perm.IsOwner) {
+                        <button
+                          type="button"
+                          class="mj-docs-btn mj-docs-btn--icon"
+                          title="Revoke access"
+                          [attr.data-testid]="'revoke-perm-btn-' + perm.UserID"
+                          (click)="RevokeArtifactPermission(perm)"
+                        >
+                          <i class="fas fa-trash-can"></i>
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
+              </div>
+            </div>
+
+            <div class="mj-docs-modal__footer">
+              <button type="button" class="mj-docs-btn mj-docs-btn--primary" (click)="ClosePermissionsModal()">
+                Done
               </button>
             </div>
           </div>
@@ -2989,6 +3370,227 @@ export interface DocsArtifactPickerOption {
         gap: 10px;
       }
 
+      .mj-docs-format-ribbon {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 6px 12px;
+        background: var(--mj-bg-surface);
+        border-bottom: 1px solid var(--mj-border-default);
+      }
+
+      .mj-docs-ribbon-hint {
+        margin-left: auto;
+        font-size: 11px;
+        color: var(--mj-text-muted);
+      }
+
+      .mj-docs-ribbon-hint kbd {
+        padding: 1px 5px;
+        border: 1px solid var(--mj-border-default);
+        border-radius: 4px;
+        background: var(--mj-bg-surface-card);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 10px;
+      }
+
+      .mj-docs-more-menu-wrap {
+        position: relative;
+      }
+
+      .mj-docs-more-menu {
+        position: absolute;
+        top: calc(100% + 6px);
+        right: 0;
+        z-index: 85;
+        width: 240px;
+        padding: 6px;
+        background: var(--mj-bg-surface);
+        border: 1px solid var(--mj-border-strong);
+        border-radius: 8px;
+        box-shadow: 0 14px 32px rgba(0, 0, 0, 0.25);
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .mj-docs-more-menu__section-title {
+        padding: 4px 8px 2px 8px;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--mj-text-muted);
+      }
+
+      .mj-docs-more-menu__item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 10px;
+        font-size: 12px;
+        color: var(--mj-text-primary);
+        background: transparent;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        text-align: left;
+      }
+
+      .mj-docs-more-menu__item:hover,
+      .mj-docs-more-menu__item--active {
+        background: var(--mj-bg-surface-hover);
+        color: var(--mj-brand-primary);
+      }
+
+      .mj-docs-more-menu__divider {
+        height: 1px;
+        margin: 4px 0;
+        background: var(--mj-border-default);
+      }
+
+      .mj-docs-collapse-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        border: 1px solid var(--mj-border-default);
+        border-radius: 4px;
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-secondary);
+        font-size: 10px;
+        cursor: pointer;
+      }
+
+      .mj-docs-collapse-btn:hover {
+        color: var(--mj-brand-primary);
+        border-color: var(--mj-brand-primary);
+      }
+
+      .mj-docs-collapsed-section-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 9px;
+        font-size: 11px;
+        font-weight: 600;
+        border: 1px dashed var(--mj-border-strong);
+        border-radius: 999px;
+        background: var(--mj-bg-surface-card);
+        color: var(--mj-brand-primary);
+        cursor: pointer;
+      }
+
+      .mj-docs-table-scroll-viewport {
+        max-height: 340px;
+        overflow-y: auto;
+        overflow-x: auto;
+        border: 1px solid var(--mj-border-default);
+        border-radius: 6px;
+      }
+
+      .mj-docs-data-table--sticky thead th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: var(--mj-bg-surface-card);
+        box-shadow: 0 1px 0 var(--mj-border-default);
+      }
+
+      .mj-docs-col-hdr {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .mj-docs-col-hdr__icon {
+        font-size: 10px;
+        color: var(--mj-brand-primary);
+      }
+
+      .mj-docs-record-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        color: var(--mj-brand-primary);
+        text-decoration: none;
+        font-weight: 500;
+        cursor: pointer;
+      }
+
+      .mj-docs-record-link:hover {
+        text-decoration: underline;
+      }
+
+      .mj-docs-record-link i {
+        font-size: 10px;
+        opacity: 0.8;
+      }
+
+      .mj-docs-pager {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 8px;
+        padding-top: 6px;
+      }
+
+      .mj-docs-pager__controls {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .mj-docs-pager__size {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+      }
+
+      .mj-docs-pager__size select {
+        padding: 2px 6px;
+        font-size: 11px;
+        border: 1px solid var(--mj-border-default);
+        border-radius: 4px;
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-primary);
+      }
+
+      .mj-docs-pager__page-num {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--mj-text-secondary);
+      }
+
+      .mj-docs-perm-summary {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 10px 12px;
+        border: 1px solid var(--mj-border-default);
+        border-radius: 8px;
+        background: var(--mj-bg-surface-card);
+        font-size: 12px;
+      }
+
+      .mj-docs-perm-grant-box {
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+        padding: 10px 12px;
+        border: 1px solid var(--mj-border-default);
+        border-radius: 8px;
+        background: var(--mj-bg-surface-card);
+      }
+
       .mj-docs-modal__footer {
         display: flex;
         justify-content: flex-end;
@@ -3007,6 +3609,14 @@ export class MarkdownArtifactViewerComponent
 {
   @ViewChild('fileImportInput') public FileImportInput?: ElementRef<HTMLInputElement>;
   @ViewChild('printableCanvas') public PrintableCanvas?: ElementRef<HTMLElement>;
+
+  /**
+   * Emitted when a user clicks a primary key, record name, or foreign key link inside an embedded Live View or Query block.
+   * Picked up by `ArtifactTypePluginViewerComponent` and bubbled up to MJ Explorer to open the target entity record.
+   */
+  @Output() public OpenEntityRecord = new EventEmitter<{ entityName: string; compositeKey: CompositeKey }>();
+  /** @deprecated Use {@link OpenEntityRecord}. */
+  @Output() public openEntityRecord = this.OpenEntityRecord;
 
   /**
    * Optional WebSocket URL (or base URL) for `/collaboration/yjs` real-time Yjs room sync (§ 3.2).
@@ -3044,6 +3654,9 @@ export class MarkdownArtifactViewerComponent
 
   public ShowOutlineRail = true;
   public ShowCommentsDrawer = false;
+  public ShowFormattingRibbon = false;
+  public ShowMoreToolsMenu = false;
+  public ShowPermissionsModal = false;
   public ShowSlashMenu = false;
   public SlashSearchQuery = '';
   public ActiveSlashTargetSegmentID: string | null = null;
@@ -3063,9 +3676,22 @@ export class MarkdownArtifactViewerComponent
   public CollaborationStatus: CollaborationConnectionStatus = 'local';
   public Collaborators: CollaboratorPresence[] = [];
   public HasEditPermission = true;
+  public CanUserShareArtifact = true;
+  public CurrentUserEffectiveRoleLabel = 'Owner / Editor';
 
-  // Live block execution cache & inline OLE editing state
+  // Share & Permissions Modal State
+  public ArtifactPermissionEntries: DocsPermissionEntry[] = [];
+  public AvailableUsersForSharing: Array<{ ID: string; Name: string; Email: string }> = [];
+  public SelectedPermissionUserID = '';
+  public SelectedPermissionLevel: 'Read' | 'Edit' | 'Share' = 'Edit';
+  public IsSavingPermission = false;
+
+  // Live block execution cache, pagination, collapse overrides & inline editing state
   private blockResults = new Map<string, DocumentBlockExecutionResult>();
+  private blockPageNumbers = new Map<string, number>();
+  private blockPageSizes = new Map<string, number>();
+  private userCollapsedBlockOverrides = new Map<string, boolean>();
+  private collapsedHeadingIds = new Set<string>();
   private embeddedArtifactVersions = new Map<string, MJArtifactVersionEntity>();
   private inlineEditingBlockIds = new Set<string>();
 
@@ -3073,9 +3699,10 @@ export class MarkdownArtifactViewerComponent
   public PendingFreezeBlock: DocumentBlockSpec | null = null;
   public FreezeWarningAcknowledged = false;
 
-  // Insert Block Modal & Linked Entity/View/Query/Artifact Pickers
+  // Insert / Configure Block Modal & Linked Entity/View/Query/Artifact Pickers
   public PendingBlockInsertType: DocumentBlockKind | null = null;
   public PendingBlockIsWhiteboard = false;
+  public EditingBlockID: string | null = null;
   public NewBlockLabel = '';
   public NewBlockEntityName = 'MJ: Artifacts';
   public NewBlockViewSelectionMode: 'default' | 'saved' = 'default';
@@ -3084,6 +3711,8 @@ export class MarkdownArtifactViewerComponent
   public NewBlockExtraFilter = '';
   public NewBlockDisplayMode: 'table' | 'kpi' = 'table';
   public NewBlockMaxRows = 50;
+  public NewBlockPageSize = 10;
+  public NewBlockDefaultCollapsed = false;
   public NewBlockQueryName = '';
   public NewBlockArtifactID = '';
   public NewBlockArtifactTypeName = 'Whiteboard';
@@ -3208,6 +3837,21 @@ export class MarkdownArtifactViewerComponent
 
   public ToggleOutlineRail(): void {
     this.ShowOutlineRail = !this.ShowOutlineRail;
+    this.cdr.markForCheck();
+  }
+
+  public ToggleFormattingRibbon(): void {
+    this.ShowFormattingRibbon = !this.ShowFormattingRibbon;
+    this.cdr.markForCheck();
+  }
+
+  public ToggleMoreToolsMenu(): void {
+    this.ShowMoreToolsMenu = !this.ShowMoreToolsMenu;
+    this.cdr.markForCheck();
+  }
+
+  public CloseMoreToolsMenu(): void {
+    this.ShowMoreToolsMenu = false;
     this.cdr.markForCheck();
   }
 
@@ -3773,16 +4417,19 @@ export class MarkdownArtifactViewerComponent
     }
 
     if (cmd.Command === '/whiteboard') {
+      this.EditingBlockID = null;
       this.PendingBlockInsertType = 'Artifact';
       this.PendingBlockIsWhiteboard = true;
       this.NewBlockLabel = 'Interactive Architecture Whiteboard';
       this.NewBlockArtifactTypeName = 'Whiteboard';
       this.NewBlockArtifactID = `wb-${Date.now()}`;
+      this.NewBlockDefaultCollapsed = false;
       this.cdr.markForCheck();
       return;
     }
 
     if (cmd.BlockType) {
+      this.EditingBlockID = null;
       this.PendingBlockInsertType = cmd.BlockType;
       this.PendingBlockIsWhiteboard = false;
       this.ShowEntityPickerDropdown = false;
@@ -3792,6 +4439,8 @@ export class MarkdownArtifactViewerComponent
       this.NewBlockExtraFilter = '';
       this.NewBlockDisplayMode = 'table';
       this.NewBlockMaxRows = 50;
+      this.NewBlockPageSize = 10;
+      this.NewBlockDefaultCollapsed = false;
       this.NewBlockViewSelectionMode = 'default';
       this.NewBlockViewID = '';
       this.NewBlockViewName = '';
@@ -3818,9 +4467,59 @@ export class MarkdownArtifactViewerComponent
     }
   }
 
+  /**
+   * Opens the Block Configuration Modal pre-populated with an existing block's Entity, View, Query, or Artifact settings
+   * so the user can change the View, Query, Filter, Page Size, or Default Collapse at any time.
+   */
+  public OpenConfigureBlockModal(block: DocumentBlockSpec): void {
+    if (!this.CanUserEdit) {
+      return;
+    }
+    this.EditingBlockID = block.BlockID;
+    this.PendingBlockInsertType = block.Kind;
+    this.PendingBlockIsWhiteboard = block.Kind === 'Artifact' && block.EmbedMode === 'Inline';
+    this.ShowEntityPickerDropdown = false;
+    this.EntityPickerHighlightIndex = 0;
+    this.entitySearchFilteringActive = false;
+
+    this.NewBlockLabel = block.Title || block.EntityName || block.QueryName || block.Kind;
+    this.NewBlockDisplayMode = block.DisplayMode === 'kpi' ? 'kpi' : 'table';
+    this.NewBlockMaxRows = block.MaxRows ?? 50;
+    this.NewBlockPageSize = block.PageSize ?? this.GetBlockPageSize(block);
+    this.NewBlockDefaultCollapsed = Boolean(block.Collapsed);
+    this.ShowAdvancedBlockOptions = Boolean(block.ExtraFilter || block.Collapsed || block.PageSize);
+
+    if (block.Kind === 'EntityView') {
+      this.EntityPickerOptions = this.resolveEntityPickerOptions();
+      this.NewBlockEntityName = block.EntityName || 'MJ: Artifacts';
+      this.NewBlockExtraFilter = block.ExtraFilter || '';
+      if (block.ViewID || block.ViewName) {
+        this.NewBlockViewSelectionMode = 'saved';
+        this.NewBlockViewID = block.ViewID || '';
+        this.NewBlockViewName = block.ViewName || '';
+      } else {
+        this.NewBlockViewSelectionMode = 'default';
+        this.NewBlockViewID = '';
+        this.NewBlockViewName = '';
+      }
+      const entOpt = this.SelectedEntityOption;
+      void this.loadSavedViewsForEntity(this.NewBlockEntityName, entOpt?.ID);
+    } else if (block.Kind === 'SavedQuery') {
+      this.QueryPickerOptions = this.resolveQueryPickerOptions();
+      this.NewBlockQueryName = block.QueryName || '';
+    } else if (block.Kind === 'Artifact') {
+      this.NewBlockArtifactID = block.ArtifactID || '';
+      this.NewBlockArtifactTypeName = block.ArtifactType || 'Whiteboard';
+      void this.loadAvailableArtifactsForPicker();
+    }
+
+    this.cdr.markForCheck();
+  }
+
   public CancelBlockInsertModal(): void {
     this.PendingBlockInsertType = null;
     this.PendingBlockIsWhiteboard = false;
+    this.EditingBlockID = null;
     this.ShowEntityPickerDropdown = false;
     this.ActiveSlashTargetSegmentID = null;
     this.cdr.markForCheck();
@@ -3989,28 +4688,29 @@ export class MarkdownArtifactViewerComponent
   }
 
   public GetInsertModalTitle(): string {
+    const prefix = this.EditingBlockID ? 'Configure' : 'Insert';
     if (this.PendingBlockIsWhiteboard) {
-      return 'Insert Inline Whiteboard';
+      return `${prefix} Inline Whiteboard`;
     }
     switch (this.PendingBlockInsertType) {
       case 'EntityView':
-        return 'Insert Live View';
+        return `${prefix} Live View`;
       case 'SavedQuery':
-        return 'Insert Live Query';
+        return `${prefix} Live Query`;
       case 'DashboardPart':
-        return 'Insert Dashboard Part';
+        return `${prefix} Dashboard Part`;
       case 'InteractiveComponent':
-        return 'Insert Interactive Component';
+        return `${prefix} Interactive Component`;
       case 'Artifact':
-        return 'Embed Artifact';
+        return this.EditingBlockID ? 'Configure Embedded Artifact' : 'Embed Artifact';
       default:
-        return 'Insert Block';
+        return `${prefix} Block`;
     }
   }
 
   public GetInsertModalSubtitle(): string {
     if (this.PendingBlockIsWhiteboard) {
-      return 'Create an interactive Whiteboard canvas embedded directly inside this document.';
+      return 'Create or configure an interactive Whiteboard canvas embedded directly inside this document.';
     }
     switch (this.PendingBlockInsertType) {
       case 'EntityView':
@@ -4025,6 +4725,18 @@ export class MarkdownArtifactViewerComponent
   }
 
   public GetInsertConfirmButtonLabel(): string {
+    if (this.EditingBlockID) {
+      switch (this.PendingBlockInsertType) {
+        case 'EntityView':
+          return 'Update View';
+        case 'SavedQuery':
+          return 'Update Query';
+        case 'Artifact':
+          return 'Update Artifact';
+        default:
+          return 'Save Changes';
+      }
+    }
     if (this.PendingBlockIsWhiteboard) {
       return 'Insert Whiteboard';
     }
@@ -4192,14 +4904,15 @@ export class MarkdownArtifactViewerComponent
   }
 
   /**
-   * Inserts a configured `:::mj-block` directive into the document (and creates an inline
-   * Whiteboard child artifact when `PendingBlockIsWhiteboard === true`, § 3.4.1 / O4).
+   * Inserts a new `:::mj-block` directive or updates an existing block (`EditingBlockID`) in place,
+   * and creates an inline Whiteboard child artifact when `PendingBlockIsWhiteboard === true` (§ 3.4.1 / O4).
    */
   public ConfirmBlockInsertModal(): void {
     if (!this.PendingBlockInsertType) {
       return;
     }
-    const blockId = `blk-${Date.now()}`;
+    const isEditingExisting = Boolean(this.EditingBlockID);
+    const blockId = this.EditingBlockID || `blk-${Date.now()}`;
     const descriptor: DocumentBlockSpec = {
       BlockID: blockId,
       Kind: this.PendingBlockInsertType,
@@ -4207,6 +4920,14 @@ export class MarkdownArtifactViewerComponent
       DisplayMode: this.NewBlockDisplayMode || 'table',
       Title: this.NewBlockLabel || this.PendingBlockInsertType,
     };
+
+    if (this.NewBlockPageSize > 0) {
+      descriptor.PageSize = this.NewBlockPageSize;
+      this.blockPageSizes.set(blockId, this.NewBlockPageSize);
+    }
+    if (this.NewBlockDefaultCollapsed) {
+      descriptor.Collapsed = true;
+    }
 
     if (this.PendingBlockInsertType === 'EntityView') {
       descriptor.EntityName = this.NewBlockEntityName || 'MJ: Artifacts';
@@ -4235,89 +4956,534 @@ export class MarkdownArtifactViewerComponent
       descriptor.EmbedMode = this.PendingBlockIsWhiteboard ? 'Inline' : 'Link';
       descriptor.HeightPx = 440;
 
-      // Seed an inline Whiteboard version so it renders immediately
-      const defaultWbJson = JSON.stringify(
-        {
-          version: 2,
-          seq: 1,
-          idCounter: 4,
-          zCounter: 4,
-          pageCounter: 1,
-          activePageId: 'page-1',
-          pages: [
-            {
-              id: 'page-1',
-              name: descriptor.Title || 'Architecture Diagram',
-              author: 'user',
-              items: [
-                {
-                  ID: 'wb-1',
-                  Kind: 'shape',
-                  Shape: 'rect',
-                  X: 70,
-                  Y: 80,
-                  W: 190,
-                  H: 76,
-                  Text: 'MJ Docs Host Artifact',
-                  Sub: 'Markdown Document',
-                  Tag: 'Host',
-                  Author: 'user',
-                  Z: 1,
-                },
-                {
-                  ID: 'wb-2',
-                  Kind: 'shape',
-                  Shape: 'rect',
-                  X: 360,
-                  Y: 80,
-                  W: 210,
-                  H: 76,
-                  Text: 'Inline Whiteboard',
-                  Sub: 'WhiteboardState v2',
-                  Tag: 'Artifact Plugin',
-                  Author: 'agent',
-                  Z: 2,
-                },
-                {
-                  ID: 'wb-3',
-                  Kind: 'connector',
-                  X1: 260,
-                  Y1: 118,
-                  X2: 360,
-                  Y2: 118,
-                  FromId: 'wb-1',
-                  ToId: 'wb-2',
-                  Author: 'user',
-                  Z: 3,
-                },
-              ],
-            },
-          ],
-        },
-        null,
-        2,
-      );
-      this.embeddedArtifactVersions.set(
-        artifactId,
-        {
-          ID: `ver-${artifactId}-1`,
-          ArtifactID: artifactId,
-          VersionNumber: 1,
-          Name: descriptor.Title ?? 'Embedded Whiteboard',
-          Content: defaultWbJson,
-        } as unknown as MJArtifactVersionEntity,
-      );
-      this.inlineEditingBlockIds.add(blockId);
+      if (!isEditingExisting) {
+        // Seed an inline Whiteboard version so it renders immediately
+        const defaultWbJson = JSON.stringify(
+          {
+            version: 2,
+            seq: 1,
+            idCounter: 4,
+            zCounter: 4,
+            pageCounter: 1,
+            activePageId: 'page-1',
+            pages: [
+              {
+                id: 'page-1',
+                name: descriptor.Title || 'Architecture Diagram',
+                author: 'user',
+                items: [
+                  {
+                    ID: 'wb-1',
+                    Kind: 'shape',
+                    Shape: 'rect',
+                    X: 70,
+                    Y: 80,
+                    W: 190,
+                    H: 76,
+                    Text: 'MJ Docs Host Artifact',
+                    Sub: 'Markdown Document',
+                    Tag: 'Host',
+                    Author: 'user',
+                    Z: 1,
+                  },
+                  {
+                    ID: 'wb-2',
+                    Kind: 'shape',
+                    Shape: 'rect',
+                    X: 360,
+                    Y: 80,
+                    W: 210,
+                    H: 76,
+                    Text: 'Inline Whiteboard',
+                    Sub: 'WhiteboardState v2',
+                    Tag: 'Artifact Plugin',
+                    Author: 'agent',
+                    Z: 2,
+                  },
+                  {
+                    ID: 'wb-3',
+                    Kind: 'connector',
+                    X1: 260,
+                    Y1: 118,
+                    X2: 360,
+                    Y2: 118,
+                    FromId: 'wb-1',
+                    ToId: 'wb-2',
+                    Author: 'user',
+                    Z: 3,
+                  },
+                ],
+              },
+            ],
+          },
+          null,
+          2,
+        );
+        this.embeddedArtifactVersions.set(
+          artifactId,
+          {
+            ID: `ver-${artifactId}-1`,
+            ArtifactID: artifactId,
+            VersionNumber: 1,
+            Name: descriptor.Title ?? 'Embedded Whiteboard',
+            Content: defaultWbJson,
+          } as unknown as MJArtifactVersionEntity,
+        );
+        this.inlineEditingBlockIds.add(blockId);
 
-      // When connected to a live provider and host artifact is a persisted UUID, also create the delegated child MJ: Artifacts row (O4)
-      void this.persistInlineDelegatedArtifactIfConnected(descriptor, defaultWbJson);
+        // When connected to a live provider and host artifact is a persisted UUID, also create the delegated child MJ: Artifacts row (O4)
+        void this.persistInlineDelegatedArtifactIfConnected(descriptor, defaultWbJson);
+      }
+    }
+
+    this.PendingBlockInsertType = null;
+    this.PendingBlockIsWhiteboard = false;
+    this.EditingBlockID = null;
+
+    if (isEditingExisting) {
+      this.blockResults.delete(blockId);
+      this.blockPageNumbers.set(blockId, 1);
+      const updatedRes = DocumentLiveBlockEngine.Instance.UpdateBlockInMarkdown(
+        this.MarkdownContent,
+        blockId,
+        descriptor,
+      );
+      this.OnMarkdownChanged(updatedRes.Markdown);
+      void this.RefreshLiveBlock(descriptor);
+      this.StatusBannerMessage = `Updated "${descriptor.Title}" configuration.`;
+      return;
     }
 
     const directiveText = DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(descriptor);
-    this.PendingBlockInsertType = null;
-    this.PendingBlockIsWhiteboard = false;
     this.insertMarkdownAtTargetSegment(`${directiveText}\n`);
     this.StatusBannerMessage = `Inserted ${descriptor.Title} block into document.`;
+  }
+
+  /**
+   * Two-layer collapse check: returns the current user's personal collapse override (`MJ: User Settings` via `UserInfoEngine`)
+   * if set; otherwise falls back to the document author's default (`block.Collapsed`).
+   */
+  public IsBlockCollapsed(block: DocumentBlockSpec): boolean {
+    if (this.userCollapsedBlockOverrides.has(block.BlockID)) {
+      return Boolean(this.userCollapsedBlockOverrides.get(block.BlockID));
+    }
+    return Boolean(block.Collapsed);
+  }
+
+  /**
+   * Toggles the current user's collapse state for a block and persists it to `UserInfoEngine.Instance` (`MJ: User Settings`)
+   * without dirtying the shared document markdown.
+   */
+  public ToggleBlockCollapsed(block: DocumentBlockSpec): void {
+    const nextCollapsed = !this.IsBlockCollapsed(block);
+    this.userCollapsedBlockOverrides.set(block.BlockID, nextCollapsed);
+    this.persistCollapsedStateToUserSettings();
+    this.cdr.markForCheck();
+  }
+
+  public IsHeadingCollapsed(seg: DocumentRenderSegment): boolean {
+    return this.collapsedHeadingIds.has(seg.SegmentID);
+  }
+
+  public ToggleHeadingCollapse(seg: DocumentRenderSegment): void {
+    if (this.collapsedHeadingIds.has(seg.SegmentID)) {
+      this.collapsedHeadingIds.delete(seg.SegmentID);
+    } else {
+      this.collapsedHeadingIds.add(seg.SegmentID);
+    }
+    this.persistCollapsedStateToUserSettings();
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Returns true if `seg` falls underneath an earlier collapsed heading of higher/equal hierarchy.
+   */
+  public IsSegmentHiddenByCollapsedHeading(seg: DocumentRenderSegment): boolean {
+    if (this.collapsedHeadingIds.size === 0) {
+      return false;
+    }
+    const targetIdx = this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID);
+    if (targetIdx <= 0) {
+      return false;
+    }
+
+    let activeCollapsedLevel: number | null = null;
+    for (let i = 0; i < targetIdx; i++) {
+      const candidate = this.DocumentSegments[i];
+      if (candidate.Kind === 'markdown' && candidate.BlockKind === 'heading') {
+        const lvl = candidate.HeadingLevel ?? 1;
+        if (activeCollapsedLevel !== null && lvl <= activeCollapsedLevel) {
+          activeCollapsedLevel = null;
+        }
+        if (activeCollapsedLevel === null && this.collapsedHeadingIds.has(candidate.SegmentID)) {
+          activeCollapsedLevel = lvl;
+        }
+      }
+    }
+
+    if (activeCollapsedLevel === null) {
+      return false;
+    }
+    if (seg.Kind === 'markdown' && seg.BlockKind === 'heading') {
+      const segLvl = seg.HeadingLevel ?? 1;
+      if (segLvl <= activeCollapsedLevel) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  public GetCollapsedChildCount(headingSeg: DocumentRenderSegment): number {
+    const startIdx = this.DocumentSegments.findIndex((s) => s.SegmentID === headingSeg.SegmentID);
+    if (startIdx < 0) {
+      return 0;
+    }
+    const headingLvl = headingSeg.HeadingLevel ?? 1;
+    let count = 0;
+    for (let i = startIdx + 1; i < this.DocumentSegments.length; i++) {
+      const candidate = this.DocumentSegments[i];
+      if (candidate.Kind === 'markdown' && candidate.BlockKind === 'heading') {
+        const candidateLvl = candidate.HeadingLevel ?? 1;
+        if (candidateLvl <= headingLvl) {
+          break;
+        }
+      }
+      count++;
+    }
+    return count;
+  }
+
+  private getCollapsedBlocksUserSettingKey(): string {
+    const artifactId = this.artifactVersion?.ArtifactID || this.artifactVersion?.ID || 'default-doc';
+    return `MJ.Docs.CollapsedState.${artifactId}`;
+  }
+
+  private loadCollapsedStateFromUserSettings(): void {
+    this.userCollapsedBlockOverrides.clear();
+    this.collapsedHeadingIds.clear();
+    try {
+      const raw = UserInfoEngine.Instance.GetSetting(this.getCollapsedBlocksUserSettingKey());
+      if (!raw) {
+        return;
+      }
+      const parsed = JSON.parse(raw) as {
+        blocks?: Record<string, boolean>;
+        headings?: string[];
+      };
+      if (parsed.blocks && typeof parsed.blocks === 'object') {
+        for (const [k, v] of Object.entries(parsed.blocks)) {
+          this.userCollapsedBlockOverrides.set(k, Boolean(v));
+        }
+      }
+      if (Array.isArray(parsed.headings)) {
+        for (const h of parsed.headings) {
+          this.collapsedHeadingIds.add(String(h));
+        }
+      }
+    } catch {
+      // Ignore if UserInfoEngine is not initialized in unit tests
+    }
+  }
+
+  private persistCollapsedStateToUserSettings(): void {
+    try {
+      const blocksObj: Record<string, boolean> = {};
+      for (const [k, v] of this.userCollapsedBlockOverrides.entries()) {
+        blocksObj[k] = v;
+      }
+      const payload = JSON.stringify({
+        blocks: blocksObj,
+        headings: Array.from(this.collapsedHeadingIds),
+      });
+      UserInfoEngine.Instance.SetSettingDebounced(this.getCollapsedBlocksUserSettingKey(), payload);
+    } catch {
+      // Ignore if UserInfoEngine is not initialized in unit tests
+    }
+  }
+
+  // =========================================================================
+  // Bounded Block Pagination & Clickable PK / FK Record Links
+  // =========================================================================
+
+  public GetBlockPageSize(block: DocumentBlockSpec): number {
+    return this.blockPageSizes.get(block.BlockID) ?? block.PageSize ?? 10;
+  }
+
+  public SetBlockPageSize(block: DocumentBlockSpec, size: number): void {
+    const numeric = Number(size) || 10;
+    this.blockPageSizes.set(block.BlockID, numeric);
+    this.blockPageNumbers.set(block.BlockID, 1);
+    this.cdr.markForCheck();
+  }
+
+  public GetBlockPageNumber(block: DocumentBlockSpec): number {
+    return this.blockPageNumbers.get(block.BlockID) ?? 1;
+  }
+
+  public GetBlockTotalPages(block: DocumentBlockSpec, totalLoadedRows: number): number {
+    const pageSize = this.GetBlockPageSize(block);
+    return Math.max(1, Math.ceil(totalLoadedRows / pageSize));
+  }
+
+  public ChangeBlockPage(block: DocumentBlockSpec, delta: number, totalLoadedRows: number): void {
+    const totalPages = this.GetBlockTotalPages(block, totalLoadedRows);
+    const current = this.GetBlockPageNumber(block);
+    const next = Math.min(totalPages, Math.max(1, current + delta));
+    this.blockPageNumbers.set(block.BlockID, next);
+    this.cdr.markForCheck();
+  }
+
+  public GetPaginatedBlockRows(
+    block: DocumentBlockSpec,
+    rows: Record<string, unknown>[],
+  ): Record<string, unknown>[] {
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return [];
+    }
+    const pageSize = this.GetBlockPageSize(block);
+    const page = this.GetBlockPageNumber(block);
+    const start = (page - 1) * pageSize;
+    return rows.slice(start, start + pageSize);
+  }
+
+  public GetBlockPageStartRow(block: DocumentBlockSpec, totalLoadedRows: number): number {
+    if (totalLoadedRows === 0) {
+      return 0;
+    }
+    return (this.GetBlockPageNumber(block) - 1) * this.GetBlockPageSize(block) + 1;
+  }
+
+  public GetBlockPageEndRow(block: DocumentBlockSpec, totalLoadedRows: number): number {
+    if (totalLoadedRows === 0) {
+      return 0;
+    }
+    return Math.min(totalLoadedRows, this.GetBlockPageNumber(block) * this.GetBlockPageSize(block));
+  }
+
+  /**
+   * Returns true when a cell in a Live View or Query table represents a clickable Primary Key, NameField, or Foreign Key record link.
+   */
+  public IsCellRecordLink(col: DocumentBlockColumn, row: Record<string, unknown>): boolean {
+    const cellVal = row[col.Name];
+    if (cellVal === null || cellVal === undefined || cellVal === '') {
+      return false;
+    }
+    if (col.IsPrimaryKey || col.IsNameField || col.IsForeignKey) {
+      const idField = col.RecordIDFieldName || (col.IsPrimaryKey ? col.Name : 'ID');
+      const targetId = row[idField] ?? (col.IsPrimaryKey || col.IsForeignKey ? cellVal : undefined);
+      return targetId !== null && targetId !== undefined && String(targetId).trim().length > 0;
+    }
+    return false;
+  }
+
+  /**
+   * Opens the linked MemberJunction entity record in MJ Explorer when a user clicks a PK, NameField, or FK cell.
+   */
+  public OnBlockRecordCellClick(
+    block: DocumentBlockSpec,
+    col: DocumentBlockColumn,
+    row: Record<string, unknown>,
+    event?: MouseEvent,
+  ): void {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    const entityName = col.TargetEntityName || block.EntityName;
+    if (!entityName) {
+      return;
+    }
+    const idField = col.RecordIDFieldName || (col.IsPrimaryKey ? col.Name : 'ID');
+    const rawId = row[idField] ?? row[col.Name];
+    if (rawId === null || rawId === undefined || String(rawId).trim().length === 0) {
+      return;
+    }
+
+    const pkFieldName = col.IsForeignKey ? 'ID' : col.IsPrimaryKey ? col.Name : idField;
+    const compositeKey = new CompositeKey([{ FieldName: pkFieldName, Value: String(rawId) }]);
+    this.OpenEntityRecord.emit({ entityName, compositeKey });
+    this.StatusBannerMessage = `Opening ${entityName} record (${String(rawId)})…`;
+    this.cdr.markForCheck();
+  }
+
+  // =========================================================================
+  // Share & Permissions Modal (MJ: Artifact Permissions)
+  // =========================================================================
+
+  public OpenPermissionsModal(): void {
+    this.ShowPermissionsModal = true;
+    void this.loadArtifactPermissionsForModal();
+    this.cdr.markForCheck();
+  }
+
+  public ClosePermissionsModal(): void {
+    this.ShowPermissionsModal = false;
+    this.cdr.markForCheck();
+  }
+
+  private async loadArtifactPermissionsForModal(): Promise<void> {
+    const artifactId = this.artifactVersion?.ArtifactID;
+    const user = this.getSafeCurrentUser();
+    const entries: DocsPermissionEntry[] = [];
+
+    if (user) {
+      entries.push({
+        ID: `owner-${user.ID}`,
+        UserID: user.ID,
+        UserName: user.Name || 'Current User',
+        UserEmail: user.Email || '',
+        CanRead: true,
+        CanEdit: this.HasEditPermission,
+        CanShare: this.CanUserShareArtifact,
+        IsOwner: true,
+      });
+    }
+
+    if (this.isUuid(artifactId) && user && this.ProviderToUse) {
+      try {
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const [permRes, usersRes] = await Promise.all([
+          rv.RunView<{
+            ID: string;
+            UserID: string;
+            User?: string;
+            CanRead: boolean;
+            CanEdit: boolean;
+            CanShare: boolean;
+          }>(
+            {
+              EntityName: 'MJ: Artifact Permissions',
+              ExtraFilter: `ArtifactID='${this.escapeSql(artifactId)}'`,
+              MaxRows: 100,
+              ResultType: 'simple',
+            },
+            user,
+          ),
+          rv.RunView<{ ID: string; Name: string; Email: string }>(
+            {
+              EntityName: 'MJ: Users',
+              ExtraFilter: `IsActive=1`,
+              OrderBy: 'Name ASC',
+              Fields: ['ID', 'Name', 'Email'],
+              MaxRows: 100,
+              ResultType: 'simple',
+            },
+            user,
+          ),
+        ]);
+
+        if (usersRes.Success && Array.isArray(usersRes.Results)) {
+          this.AvailableUsersForSharing = usersRes.Results.filter((u) => !UUIDsEqual(u.ID, user.ID));
+        }
+
+        if (permRes.Success && Array.isArray(permRes.Results)) {
+          for (const p of permRes.Results) {
+            if (UUIDsEqual(p.UserID, user.ID)) {
+              continue;
+            }
+            const matchedUser = this.AvailableUsersForSharing.find((u) => UUIDsEqual(u.ID, p.UserID));
+            entries.push({
+              ID: p.ID,
+              UserID: p.UserID,
+              UserName: matchedUser?.Name || p.User || p.UserID,
+              UserEmail: matchedUser?.Email || '',
+              CanRead: Boolean(p.CanRead),
+              CanEdit: Boolean(p.CanEdit),
+              CanShare: Boolean(p.CanShare),
+              IsOwner: false,
+            });
+          }
+        }
+      } catch {
+        // Keep current user entry when offline
+      }
+    }
+
+    this.ArtifactPermissionEntries = entries;
+    this.cdr.markForCheck();
+  }
+
+  public async GrantArtifactPermission(): Promise<void> {
+    if (!this.SelectedPermissionUserID || this.IsSavingPermission) {
+      return;
+    }
+    const targetUser = this.AvailableUsersForSharing.find((u) => UUIDsEqual(u.ID, this.SelectedPermissionUserID));
+    const canEdit = this.SelectedPermissionLevel === 'Edit' || this.SelectedPermissionLevel === 'Share';
+    const canShare = this.SelectedPermissionLevel === 'Share';
+
+    this.IsSavingPermission = true;
+    this.cdr.markForCheck();
+    try {
+      const artifactId = this.artifactVersion?.ArtifactID;
+      const user = this.getSafeCurrentUser();
+      let savedId = `perm-${Date.now()}`;
+
+      if (this.isUuid(artifactId) && user && this.ProviderToUse) {
+        const permEntity = await this.ProviderToUse.GetEntityObject<MJArtifactPermissionEntity>(
+          'MJ: Artifact Permissions',
+          user,
+        );
+        permEntity.NewRecord();
+        permEntity.ArtifactID = artifactId;
+        permEntity.UserID = this.SelectedPermissionUserID;
+        permEntity.CanRead = true;
+        permEntity.CanEdit = canEdit;
+        permEntity.CanShare = canShare;
+        permEntity.SharedByUserID = user.ID;
+        const ok = await permEntity.Save();
+        if (ok) {
+          savedId = permEntity.ID;
+        }
+      }
+
+      const existingIdx = this.ArtifactPermissionEntries.findIndex((e) =>
+        UUIDsEqual(e.UserID, this.SelectedPermissionUserID),
+      );
+      const entry: DocsPermissionEntry = {
+        ID: savedId,
+        UserID: this.SelectedPermissionUserID,
+        UserName: targetUser?.Name || this.SelectedPermissionUserID,
+        UserEmail: targetUser?.Email || '',
+        CanRead: true,
+        CanEdit: canEdit,
+        CanShare: canShare,
+        IsOwner: false,
+      };
+      if (existingIdx >= 0) {
+        this.ArtifactPermissionEntries[existingIdx] = entry;
+      } else {
+        this.ArtifactPermissionEntries = [...this.ArtifactPermissionEntries, entry];
+      }
+      this.SelectedPermissionUserID = '';
+      this.StatusBannerMessage = `Shared document with ${entry.UserName}.`;
+    } finally {
+      this.IsSavingPermission = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  public async RevokeArtifactPermission(entry: DocsPermissionEntry): Promise<void> {
+    if (entry.IsOwner) {
+      return;
+    }
+    const user = this.getSafeCurrentUser();
+    if (this.isUuid(entry.ID) && user && this.ProviderToUse) {
+      try {
+        const permEntity = await this.ProviderToUse.GetEntityObject<MJArtifactPermissionEntity>(
+          'MJ: Artifact Permissions',
+          user,
+        );
+        const loaded = await permEntity.Load(entry.ID);
+        if (loaded) {
+          await permEntity.Delete();
+        }
+      } catch {
+        // Remove from local list if offline
+      }
+    }
+    this.ArtifactPermissionEntries = this.ArtifactPermissionEntries.filter((e) => e.ID !== entry.ID);
+    this.StatusBannerMessage = `Removed access for ${entry.UserName}.`;
+    this.cdr.markForCheck();
   }
 
   private isUuid(value: string | undefined | null): value is string {
@@ -4539,21 +5705,44 @@ export class MarkdownArtifactViewerComponent
       Mode: block.Mode,
       Success: true,
       Columns: [
-        { Name: 'Name', DisplayName: 'Name' },
-        { Name: 'Type', DisplayName: 'Type' },
+        {
+          Name: 'ID',
+          DisplayName: 'ID',
+          IsPrimaryKey: true,
+          TargetEntityName: block.EntityName || 'MJ: Artifacts',
+          RecordIDFieldName: 'ID',
+        },
+        {
+          Name: 'Name',
+          DisplayName: 'Name',
+          IsNameField: true,
+          TargetEntityName: block.EntityName || 'MJ: Artifacts',
+          RecordIDFieldName: 'ID',
+        },
+        {
+          Name: 'Type',
+          DisplayName: 'Type',
+          IsForeignKey: true,
+          TargetEntityName: 'MJ: Artifact Types',
+          RecordIDFieldName: 'TypeID',
+        },
         { Name: 'Status', DisplayName: 'Status' },
         { Name: 'Updated', DisplayName: 'Updated' },
       ],
       Rows: [
         {
+          ID: '22222222-AAAA-4BBB-8CCC-000000000001',
           Name: block.Title || block.EntityName || block.QueryName || 'Primary Record',
           Type: block.Kind,
-          Status: 'Active (RLS/FLS Verified)',
+          TypeID: 'AE674C7E-EA0D-49EA-89E4-0649F5EB20D4',
+          Status: 'Active',
           Updated: new Date().toISOString().slice(0, 10),
         },
         {
+          ID: '33333333-AAAA-4BBB-8CCC-000000000002',
           Name: 'Quarterly Executive Summary',
           Type: 'Markdown Document',
+          TypeID: 'AE674C7E-EA0D-49EA-89E4-0649F5EB20D4',
           Status: 'Shared',
           Updated: new Date().toISOString().slice(0, 10),
         },
@@ -5186,6 +6375,7 @@ export class MarkdownArtifactViewerComponent
     const raw = this.getContent();
     this.MarkdownContent = raw;
     this.initialLoadedMarkdown = raw;
+    this.loadCollapsedStateFromUserSettings();
     if (!this.userExplicitlySelectedMode) {
       this.ViewMode = this.CanUserEdit ? 'edit' : 'preview';
     }
@@ -5320,6 +6510,14 @@ export class MarkdownArtifactViewerComponent
     try {
       const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(this.ProviderToUse, artifactId, user);
       this.HasEditPermission = perms.CanEdit;
+      this.CanUserShareArtifact = perms.CanShare || perms.CanEdit;
+      this.CurrentUserEffectiveRoleLabel = perms.CanShare
+        ? 'Owner / Co-Owner'
+        : perms.CanEdit
+          ? 'Editor'
+          : perms.CanRead
+            ? 'Viewer'
+            : 'No Access';
       if (!perms.CanRead) {
         this.CollaborationStatus = 'revoked';
         this.ViewMode = 'preview';
@@ -5341,6 +6539,14 @@ export class MarkdownArtifactViewerComponent
           user,
         );
         this.HasEditPermission = updated.CanEdit;
+        this.CanUserShareArtifact = updated.CanShare || updated.CanEdit;
+        this.CurrentUserEffectiveRoleLabel = updated.CanShare
+          ? 'Owner / Co-Owner'
+          : updated.CanEdit
+            ? 'Editor'
+            : updated.CanRead
+              ? 'Viewer'
+              : 'No Access';
         if (!updated.CanRead) {
           this.CollaborationStatus = 'revoked';
           this.ViewMode = 'preview';
