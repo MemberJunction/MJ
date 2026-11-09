@@ -2134,7 +2134,7 @@ export class ResolverBase {
         if (entityObject.LatestResult?.ConcurrencyConflict) {
           await this.persistSaveInconsistencyErrorLog(entityObject, userInfo, {
             Message:
-              entityObject.LatestResult.Message ??
+              entityObject.LatestResult.CompleteMessage ??
               'Concurrent modification conflict detected inside save transaction.',
             ConflictingFields: entityObject.LatestResult.ConcurrencyConflict.ConflictingFields,
           });
