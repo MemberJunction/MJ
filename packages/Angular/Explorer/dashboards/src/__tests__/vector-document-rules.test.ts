@@ -15,6 +15,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { ExpectConsoleLines } from '@memberjunction/ng-test-utils/expected-console';
 
 // ── Angular and MJ mocks, so the component file can be imported without the runtime ──
 // Follows the node-preset pattern already used by database-preview-pane.test.ts and
@@ -220,6 +221,11 @@ import {
 } from '../AI/components/vectors/vector-document-rules';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { VectorManagementResourceComponent } from '../AI/components/vectors/vector-management-resource.component';
+
+/** The lines these tests log on purpose: the failed and refused saves the save-path tests drive. Any other line fails its test. */
+ExpectConsoleLines({
+  error: [/^\[VectorManagement\] (Failed to save entity document: simulated failure|Error saving entity document: An Entity Document named "Members - search" already exists for Orders)/],
+});
 
 const RECORD_DUPLICATE_ID = 'type-record-duplicate';
 
