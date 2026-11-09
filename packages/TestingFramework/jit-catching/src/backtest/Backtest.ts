@@ -26,7 +26,7 @@ export interface BacktestDeps {
 
 /**
  * One backtest call: the corpus slice and set, the generator model, the spending cap in USD and, optionally, the only PRs to run.
- * `RetryFailed` sets the Failed entries (within `Only`) back to Pending before the run.
+ * `RetryFailed` sets the Failed entries (within `Only`) back to Pending before the run; an entry's cost accumulates across attempts.
  */
 export interface BacktestOptions {
     CorpusPath: string; Slice: Slice; Set: 'Bug' | 'Clean' | 'Both'; Model: string; MaxUsd: number; Only?: number[]; RetryFailed?: boolean;
@@ -42,7 +42,7 @@ interface SelectedPR { PR: number; Set: 'Bug' | 'Clean'; MergeSHA: string; }
  *
  * Resume: refuses a ledger made for another corpus path, model, slice or set. Appends a Pending entry for each corpus PR of the
  * slice and set that the ledger lacks; entries whose PR left the slice stay as recorded and are named on stderr.
- * The cap counts the cost of the whole ledger and is checked before each run, so the last run can take the total above it.
+ * The cap counts the cost of the whole ledger, including every attempt of a retried entry, and is checked before each run, so the last run can take the total above it.
  * The run stops after 3 Failed entries in a row and leaves the rest Pending.
  */
 export async function BacktestStep(o: BacktestOptions): Promise<BacktestLedger> {
@@ -121,11 +121,11 @@ async function resumeLedger(ledger: BacktestLedger, selected: SelectedPR[], o: B
     return ledger;
 }
 
-/** Sets the Failed entries (within `only`) back to Pending with no run, error, match, cost or times. */
+/** Sets the Failed entries (within `only`) back to Pending with no run, error, match or times; the recorded cost stays. */
 function retryFailed(ledger: BacktestLedger, only: number[] | undefined): void {
     for (const e of ledger.Entries) {
         if (e.Status !== 'Failed' || (only && !only.includes(e.PR))) continue;
-        Object.assign(e, { Status: 'Pending', RunID: null, Error: null, Match: null, CostUSD: 0, StartedAt: null, EndedAt: null });
+        Object.assign(e, { Status: 'Pending', RunID: null, Error: null, Match: null, StartedAt: null, EndedAt: null });
     }
 }
 
@@ -164,7 +164,7 @@ function stopForSpend(ledger: BacktestLedger, maxUsd: number): boolean {
     return true;
 }
 
-/** Runs the pipeline for one entry and records its run, status, cost and times. A run that failed after Generate keeps its run ID and cost. */
+/** Runs the pipeline for one entry and records its run, status and times, and adds the run's cost to the entry's. A run that failed after Generate keeps its run ID and cost. */
 async function runOne(entry: LedgerEntry, o: BacktestOptions, deps: BacktestDeps): Promise<void> {
     entry.StartedAt = new Date().toISOString();
     let runID: string | null = null;
@@ -180,7 +180,7 @@ async function runOne(entry: LedgerEntry, o: BacktestOptions, deps: BacktestDeps
         entry.Error = errorLine(e instanceof RunAllError ? e.cause : e, deps.Redaction);
     }
     entry.RunID = runID;
-    entry.CostUSD = runID ? await costOf(runID, deps) : 0;
+    entry.CostUSD += runID ? await costOf(runID, deps) : 0;
     entry.EndedAt = new Date().toISOString();
 }
 

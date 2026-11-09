@@ -51,7 +51,7 @@ const USAGE = `usage: jit-catch <${COMMANDS.join('|')}> [options]
   assess        --run <run ID> [--settings <file>] [--store <dir>]
   corpus mine   --since <YYYY-MM-DD> --until <YYYY-MM-DD> --out <file>
   backtest      --corpus <file> --slice ${SliceSchema.options.join('|')} --set Bug|Clean|Both --model <generator> [--max-usd <n, default 50>] [--only <n,n>] [--retry-failed] [--settings <file>] [--store <dir>]
-                --max-usd counts the cost of the whole ledger and is checked before each run, so the last run can take the total above it.`;
+                --max-usd counts the cost of the whole ledger, every attempt of a --retry-failed entry included, and is checked before each run, so the last run can take the total above it.`;
 const SHA_RE = /^[0-9a-f]{7,40}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 

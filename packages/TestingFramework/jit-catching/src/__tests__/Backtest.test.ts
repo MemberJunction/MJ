@@ -139,14 +139,16 @@ describe('BacktestStep', () => {
     expect(stderr.join('')).toMatch(/stopped after 3 failed runs in a row/);
   });
 
-  it('runs a Failed entry again with RetryFailed', async () => {
+  it('runs a Failed entry again with RetryFailed and adds the new cost to the recorded one', async () => {
     const { root, corpus } = setup();
-    const failed = await BacktestStep(options(root, corpus, failing([1]), { Only: [1] }));
-    expect(failed.Entries[0].Status).toBe('Failed');
+    const first = fakes(async () => { throw new RunAllError('run-old', 'Execute', new Error('install failed')); });
+    first.CostOfRun = vi.fn(async () => 2);
+    const failed = await BacktestStep(options(root, corpus, first, { Only: [1] }));
+    expect(failed.Entries[0]).toEqual(expect.objectContaining({ Status: 'Failed', CostUSD: 2 }));
     const d = fakes();
     const l = await BacktestStep(options(root, corpus, d, { Only: [1], RetryFailed: true }));
     expect(d.calls.map((c) => c.PR)).toEqual([1]);
-    expect(l.Entries[0]).toEqual(expect.objectContaining({ Status: 'Assessed', RunID: 'run-1', Error: null, CostUSD: 1.5 }));
+    expect(l.Entries[0]).toEqual(expect.objectContaining({ Status: 'Assessed', RunID: 'run-1', Error: null, CostUSD: 3.5 }));
   });
 
   it('refuses to resume a ledger made for another model and leaves the file unchanged', async () => {
