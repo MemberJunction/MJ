@@ -7,6 +7,7 @@
 #   PrimaryKeyCompliance                      (packages/MJCore; the "Source guards" job)
 #   check:manifest-registrations              (an entity subclass missing from the committed manifests)
 #   check-migration-validator-seeds           (two migrations seeding one validator with different text)
+#   check:dynamic-imports                     (import() of a package the importer does not declare)
 #   check-turbo-root-inputs                   (a test reads repo-root data its turbo.json does not declare)
 #   check-explorer-prebundle-exclude          (a joined workspace's scopes in a committed angular.json)
 #
@@ -40,6 +41,9 @@ node .github/scripts/check-manifest-registrations.mjs || status=1
 
 # Competing GeneratedCode validator seeds across migrations (MJ#4673). Pure file reads.
 node .github/scripts/check-migration-validator-seeds.mjs || status=1
+# Dynamic import() of a package the importing package does not declare (#3741). Parses source with
+# the TypeScript compiler from the root node_modules; no build.
+node .github/scripts/check-dynamic-imports.mjs || status=1
 
 # Repo-root data a package's tests read must be in that package's turbo test inputs, or the
 # cached pass replays after the data changes. Pure file reads.
@@ -59,6 +63,7 @@ if [ "$status" -ne 0 ]; then
   echo "  platform-name branch (SQL path) -> read the fact from the dialect's facets (@memberjunction/sql-dialect)"
   echo "  entity class not in a manifest  -> regenerate with the pnpm run mj:manifest:* script the failure names"
   echo "  competing validator seeds       -> use the earlier migration's wording (.github/scripts/check-migration-validator-seeds.mjs)"
+  echo "  undeclared dynamic import       -> declare the package, or load a configured name with ImportFromHost (@memberjunction/dynamic-packages)"
   echo "  root data not a turbo input     -> add \$TURBO_ROOT\$/<dir>/** to the package turbo.json (see the script header)"
   echo "  angular.json prebundle exclude  -> run mj dev workspace clean, or revert the file's prebundle change"
 fi

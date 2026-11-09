@@ -136,6 +136,8 @@ jobs:
             # Same again for the competing validator-seed gate (guards job) and its baseline.
             .github/scripts/check-migration-validator-seeds.mjs
             .github/scripts/migration-validator-seeds-baseline.json
+            # The dynamic-import gate runs in the Source guards job; an edit to it alone must run it and its suite.
+            .github/scripts/check-dynamic-imports.mjs
             # Same again for the exact-pins guard: it runs in ci-exact-pins.yml, not here, but its
             # vitest suite lives in __tests__ — so an edit to the guard script alone must run it too.
             .github/scripts/check-exact-pins.mjs
@@ -489,6 +491,14 @@ jobs:
         # skip it whenever an earlier guard failed.
         if: ${{ !cancelled() }}
         run: pnpm run check:manifest-registrations
+
+      # Undeclared dynamic-import gate (#3741). A bare `import('pkg')` resolves from the importing
+      # package, so under pnpm an undeclared one fails at runtime even when the host installs it.
+      # Knip misses the `'pkg' as string` and `const id = 'pkg'; import(id)` forms; this gate parses
+      # them. Source text only (TypeScript from node_modules), no build.
+      - name: Undeclared dynamic-import gate
+        if: ${{ !cancelled() }}
+        run: pnpm run check:dynamic-imports
 
       # Python dialect tests against the COMMITTED sqlglot pin (issue #3252 review): the
       # sqlglot-ts vitest suite auto-skips when Python/sqlglot is absent, so CI never

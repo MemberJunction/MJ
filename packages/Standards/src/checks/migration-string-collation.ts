@@ -188,6 +188,10 @@ function exemptNames(value: unknown): Set<string> {
  * migrations cannot be edited, so they are named one by one instead of moving `FromVersion` past
  * them: a moved cutoff also skips every later-merging migration with an older timestamp (a branch's
  * migration is dated when it is written, not when it merges), while a name skips only that file.
+ *
+ * Upkeep: an uncollated migration from another branch can still merge to `next` before this list is
+ * updated. When merging `next` turns this check red on an already-merged file, add its name to
+ * `Exempt` in `.mj-standards.json` in that same merge; released migrations cannot be edited.
  */
 function run(context: CheckContext): CheckResult {
     const fromVersion = String(context.Options['FromVersion'] ?? '');

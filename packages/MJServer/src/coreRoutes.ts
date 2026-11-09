@@ -62,7 +62,12 @@ export function MountPublicCoreRoutes(app: Application, publicUrl: string, log: 
     log.LogIf('verbose', `[eSignature] Webhook route registered at ${ApiRoute('/esignature')}/webhook/:driverKey`);
 
     // The `?token=` query param is the capability; an <audio>/<video> element can't send Authorization headers.
-    app.use(ApiRoute('/media'), cors<cors.CorsRequest>(), CreateMediaStreamRouter());
+    app.use(ApiRoute('/media'), cors<cors.CorsRequest>(), CreateMediaStreamRouter({
+        RateLimits: {
+            Upload: configInfo.rateLimiting?.routes?.mediaUpload,
+            Read: configInfo.rateLimiting?.routes?.mediaRead,
+        },
+    }));
     log.LogIf('verbose', `[Media] Streaming route registered at ${ApiRoute('/media')}/:fileId`);
 
     if (configInfo.realtime?.enabled) {
@@ -102,6 +107,10 @@ function mountOAuthCallback(app: Application, publicUrl: string, log: RouteLog):
         errorRedirectUrl: ApiRoute('/oauth/error', { absolute: true }),
         // Constrains where a caller-supplied frontendReturnUrl may point (open-redirect guard).
         allowedFrontendOrigins: configInfo.cors?.allowedOrigins ?? ['*'],
+        RateLimits: {
+            Callback: configInfo.rateLimiting?.routes?.oauthCallback,
+            Authenticated: configInfo.rateLimiting?.routes?.oauthAuthenticated,
+        },
     });
     // The callback is unauthenticated (called by the external auth server).
     app.use(ApiRoute('/oauth'), cors<cors.CorsRequest>(), callbackRouter);

@@ -564,3 +564,32 @@ That should work.`;
         });
     });
 });
+
+describe('ResponseParser JSON extraction without backtracking regexes (#4589)', () => {
+    const payload = { reasoning: 'r', actions: [{ Type: 'Click', X: 1, Y: 2 }] };
+
+    it('parses a fenced block', () => {
+        const result = ResponseParser.ParseControllerResponse('Here:\n```\n' + JSON.stringify(payload) + '\n```\nDone.');
+        expect(result.Reasoning).toBe('r');
+        expect(result.Actions).toHaveLength(1);
+    });
+
+    it('parses a fenced block tagged json', () => {
+        const result = ResponseParser.ParseControllerResponse('Here:\n```json\n' + JSON.stringify(payload) + '\n```');
+        expect(result.Reasoning).toBe('r');
+    });
+
+    it('parses a bare object inside prose (first { to last })', () => {
+        const result = ResponseParser.ParseControllerResponse('I will click. ' + JSON.stringify(payload) + ' That is all.');
+        expect(result.Reasoning).toBe('r');
+        expect(result.Actions[0].Type).toBe('Click');
+    });
+
+    it('returns in bounded time on a long malformed reply of braces and backticks', () => {
+        const hostile = 'x' + '{'.repeat(50_000) + '`'.repeat(25_000) + '``' + '\n'.repeat(25_000);
+        const started = Date.now();
+        const result = ResponseParser.ParseControllerResponse(hostile);
+        expect(Date.now() - started).toBeLessThan(1000);
+        expect(result.Actions).toHaveLength(0);
+    });
+});
