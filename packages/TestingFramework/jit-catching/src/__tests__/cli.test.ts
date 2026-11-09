@@ -14,6 +14,8 @@ function deps(over: Partial<CliDeps> = {}): CliDeps {
     RunAll: vi.fn(async () => ({ RunID: 'r1', Reported: [] })),
     MineCorpus: vi.fn(async () => ({ Clean: [], Bug: [] })),
     CleanRun: vi.fn(async () => undefined),
+    LabelCatch: vi.fn(async () => undefined),
+    LabelPacket: vi.fn(async () => '# packet\n'),
     ...over,
   };
 }
@@ -79,5 +81,33 @@ describe('Main', () => {
     expect(await Main(['clean'], d)).toBe(2);
     expect(stderr.join('')).toMatch(/clean needs --run or --all-finished/);
     expect(d.CleanRun).not.toHaveBeenCalled();
+  });
+
+  it('label --catch --answer --user calls LabelCatch with the default store', async () => {
+    const d = deps(); const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    expect(await Main(['label', '--catch', id, '--answer', 'TestFault', '--user', 'octo'], d)).toBe(0);
+    expect(d.LabelCatch).toHaveBeenCalledWith(expect.objectContaining({ StoreDir: join('/repo', '.jit-catch', 'store'), CatchID: id, Answer: 'TestFault', User: 'octo' }));
+  });
+
+  it('label --run prints the packet to stdout', async () => {
+    const out: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((s: string | Uint8Array) => { out.push(String(s)); return true; });
+    const d = deps();
+    expect(await Main(['label', '--run', 'r1'], d)).toBe(0);
+    expect(d.LabelPacket).toHaveBeenCalledWith(expect.objectContaining({ RunID: 'r1', RepoRoot: '/repo', StoreDir: join('/repo', '.jit-catch', 'store') }));
+    expect(out.join('')).toBe('# packet\n');
+  });
+
+  it('label without --catch or --run is a usage error', async () => {
+    const d = deps();
+    expect(await Main(['label'], d)).toBe(2);
+    expect(stderr.join('')).toMatch(/usage/);
+  });
+
+  it('label with an --answer other than Bug, Intended or TestFault is a usage error', async () => {
+    const d = deps();
+    expect(await Main(['label', '--catch', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '--answer', 'AuthorChangedPR', '--user', 'octo'], d)).toBe(2);
+    expect(stderr.join('')).toMatch(/--answer must be one of Bug, Intended, TestFault/);
+    expect(d.LabelCatch).not.toHaveBeenCalled();
   });
 });

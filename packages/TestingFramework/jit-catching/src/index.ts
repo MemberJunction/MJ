@@ -35,5 +35,6 @@ export { AssessStep, type AssessDeps, type AssessOptions } from './pipeline/Asse
 export { RunAll, FinishRun, type RunAllOptions } from './pipeline/Run';
 export { SnapshotBaseSources, CheckedBaseSourceDir } from './pipeline/BaseSnapshot';
 export { CleanRun, FinishedRunIDs } from './pipeline/Clean';
+export { LabelCatch, LabelPacket, IsLabelAnswer, LABEL_ANSWERS, type LabelAnswer } from './pipeline/Label';
 export { SliceSchema, BugPairSchema, CleanEntrySchema, CorpusSchema, LoadCorpus, AssignSlices, RevisionsOf, type Corpus, type Slice } from './corpus/Corpus';
 export { MineClean, MineBugs, IsEligibleSource, PullRequestNumberOf, RemovedRangesByFile, MonthWindows, type CleanCandidate, type BugCandidate, type MinerDeps, type LineRange } from './corpus/Miner';

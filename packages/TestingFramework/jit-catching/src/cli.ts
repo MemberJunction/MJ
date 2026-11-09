@@ -15,6 +15,8 @@ import { RunAll } from './pipeline/Run';
 import { IsValidRunID } from './pipeline/RunDir';
 import { MineClean, MineBugs, type CleanCandidate, type BugCandidate } from './corpus/Miner';
 import { CleanRun, FinishedRunIDs } from './pipeline/Clean';
+import { IsLabelAnswer, LABEL_ANSWERS, LabelCatch, LabelPacket, type LabelAnswer } from './pipeline/Label';
+import { DefaultRedaction } from './pipeline/Deps';
 import { GitHub } from './git/GitHub';
 import { GitRepo } from './git/GitRepo';
 import { PackageMap } from './analyzer/PackageMap';
@@ -31,12 +33,14 @@ export interface CliDeps {
     RunAll: typeof RunAll;
     MineCorpus: (o: { RepoRoot: string; Since: string; Until: string }) => Promise<{ Clean: CleanCandidate[]; Bug: BugCandidate[] }>;
     CleanRun: typeof CleanRun;
+    LabelCatch: typeof LabelCatch;
+    LabelPacket: typeof LabelPacket;
 }
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_DEPS: CliDeps = {
     RepoRoot: async () => (await execFileAsync('git', ['rev-parse', '--show-toplevel'], { cwd: process.cwd() })).stdout.trim(),
-    GenerateStep, ExecuteStep, AssessStep, RunAll, CleanRun,
+    GenerateStep, ExecuteStep, AssessStep, RunAll, CleanRun, LabelCatch, LabelPacket,
     MineCorpus: async (o) => {
         const d = { GitHub: new GitHub(), Repo: new GitRepo(o.RepoRoot), PackageMap: PackageMap.Load(o.RepoRoot) };
         return { Clean: await MineClean(d, o), Bug: await MineBugs(d, o) };
@@ -47,6 +51,8 @@ const USAGE = `usage: jit-catch <${COMMANDS.join('|')}> [options]
   generate|run  --pr <n> | --head <sha> [--base <sha>]  [--trigger ${TriggerSchema.options.join('|')}] [--settings <file>] [--store <dir>]
   execute       --run <run ID> [--settings <file>]
   assess        --run <run ID> [--settings <file>] [--store <dir>]
+  label         --catch <catch ID> --answer ${LABEL_ANSWERS.join('|')} --user <login> [--store <dir>]
+  label         --run <run ID> [--store <dir>]
   corpus mine   --since <YYYY-MM-DD> --until <YYYY-MM-DD> --out <file>
   clean         --run <run ID> | --all-finished`;
 const SHA_RE = /^[0-9a-f]{7,40}$/;
@@ -55,7 +61,11 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** A command-line mistake; `Main` prints the usage and returns 2. */
 class UsageError extends Error {}
 
-interface Parsed { Command: CommandName; PR: number | null; RunID: string | null; Base?: string; Head?: string; Trigger: Trigger; SettingsPath?: string; Store?: string; Since?: string; Until?: string; Out?: string; AllFinished: boolean; }
+interface Parsed {
+    Command: CommandName; PR: number | null; RunID: string | null; Base?: string; Head?: string; Trigger: Trigger; SettingsPath?: string; Store?: string;
+    Since?: string; Until?: string; Out?: string; AllFinished: boolean;
+    Label?: { CatchID: string; Answer: LabelAnswer; User: string };
+}
 
 /** Parses argv and dispatches one command. Returns the process exit code: 0 done, 1 failed, 2 usage error. */
 export async function Main(argv: string[], deps: CliDeps = DEFAULT_DEPS): Promise<number> {
@@ -83,6 +93,7 @@ function parse(argv: string[]): Parsed {
         pr: { type: 'string' }, run: { type: 'string' }, base: { type: 'string' }, head: { type: 'string' },
         settings: { type: 'string' }, store: { type: 'string' }, trigger: { type: 'string' }, 'all-finished': { type: 'boolean' },
         since: { type: 'string' }, until: { type: 'string' }, out: { type: 'string' },
+        catch: { type: 'string' }, answer: { type: 'string' }, user: { type: 'string' },
     } });
     const command = COMMANDS.find((c) => c === positionals[0]);
     if (!command || positionals.length > (command === 'corpus' ? 2 : 1)) throw new UsageError(positionals[0] ? `unknown command ${positionals[0]}` : 'no command');
@@ -95,6 +106,7 @@ function parse(argv: string[]): Parsed {
     if ((command === 'generate' || command === 'run') && p.PR === null && !p.Head) throw new UsageError(`${command} needs --pr or --head`);
     if ((command === 'execute' || command === 'assess') && !p.RunID) throw new UsageError(`${command} needs --run`);
     if (command === 'clean' && (p.RunID === null) === !p.AllFinished) throw new UsageError('clean needs --run or --all-finished, not both');
+    if (command === 'label') p.Label = parseLabel(values.catch, values.answer, values.user, p.RunID);
     if (p.RunID !== null && !IsValidRunID(p.RunID)) throw new UsageError(`--run must be a run ID (letters, digits, '-' and '_'), not ${JSON.stringify(p.RunID)}`);
     return p;
 }
@@ -114,14 +126,26 @@ async function corpusMine(p: Parsed, deps: CliDeps): Promise<number> {
     return 0;
 }
 
+/** The label options: `--catch` with `--answer` and `--user`, or none of them when `--run` asks for a packet. */
+function parseLabel(catchID: string | undefined, answer: string | undefined, user: string | undefined, runID: string | null): Parsed['Label'] {
+    if (catchID === undefined) {
+        if (runID === null) throw new UsageError('label needs --catch or --run');
+        return undefined;
+    }
+    if (answer === undefined || !IsLabelAnswer(answer)) throw new UsageError(`--answer must be one of ${LABEL_ANSWERS.join(', ')}`);
+    if (!user) throw new UsageError('label --catch needs --user');
+    return { CatchID: catchID, Answer: answer, User: user };
+}
+
 async function dispatch(p: Parsed, deps: CliDeps): Promise<number> {
     if (p.Command === 'corpus') return corpusMine(p, deps);
     if (p.Command === 'clean') return clean(p, deps);
-    if (p.Command !== 'generate' && p.Command !== 'execute' && p.Command !== 'assess' && p.Command !== 'run') {
+    if (p.Command !== 'generate' && p.Command !== 'execute' && p.Command !== 'assess' && p.Command !== 'run' && p.Command !== 'label') {
         process.stderr.write(`${p.Command}: not implemented (phase 2/3)\n`);
         return 1;
     }
     const repoRoot = await deps.RepoRoot();
+    if (p.Command === 'label') return label(p, deps, repoRoot);
     const settings: Settings = LoadSettings(p.SettingsPath);
     const storeDir = p.Store ? resolve(p.Store) : join(repoRoot, '.jit-catch', 'store');
     const runID = p.RunID ?? '';
@@ -139,6 +163,15 @@ async function clean(p: Parsed, deps: CliDeps): Promise<number> {
     const repoRoot = await deps.RepoRoot();
     const repo = new GitRepo(repoRoot);
     for (const id of p.RunID !== null ? [p.RunID] : FinishedRunIDs(repoRoot)) await deps.CleanRun(repoRoot, id, repo);
+    return 0;
+}
+
+/** Records one label, or prints the label packet of a run to stdout. */
+async function label(p: Parsed, deps: CliDeps, repoRoot: string): Promise<number> {
+    const storeDir = p.Store ? resolve(p.Store) : join(repoRoot, '.jit-catch', 'store');
+    const redaction = DefaultRedaction();
+    if (p.Label) await deps.LabelCatch({ StoreDir: storeDir, CatchID: p.Label.CatchID, Answer: p.Label.Answer, User: p.Label.User, Redaction: redaction });
+    else process.stdout.write(await deps.LabelPacket({ StoreDir: storeDir, RepoRoot: repoRoot, RunID: p.RunID ?? '', Redaction: redaction }));
     return 0;
 }
 
