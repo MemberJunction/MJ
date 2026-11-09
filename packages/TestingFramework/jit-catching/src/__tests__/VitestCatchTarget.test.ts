@@ -268,9 +268,11 @@ describe('VitestCatchTarget FilePath checks', () => {
 describe('VitestCatchTarget.Coverage', () => {
   it('leaves out a test whose coverage run wrote no report, instead of counting zero covered lines', async () => {
     const { target } = fakeTarget(() => ({ Stdout: 'cat: /tmp/cov-x/coverage-final.json: No such file or directory', ExitCode: 1 }));
-    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    const out = await target.Coverage({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: jitRoot() }, [test(ID1)], { 'packages/MJCore/src/a.ts': [4] });
-    expect(out).toEqual([]);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      const out = await target.Coverage({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: jitRoot() }, [test(ID1)], { 'packages/MJCore/src/a.ts': [4] });
+      expect(out).toEqual([]);
+    } finally { stderr.mockRestore(); }
   });
 });
 
