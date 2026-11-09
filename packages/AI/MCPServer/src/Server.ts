@@ -20,8 +20,14 @@ import { UserCache } from "@memberjunction/generic-database-provider";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { createHash, randomUUID, timingSafeEqual } from 'crypto';
+import { randomUUID } from 'crypto';
 import { Readable } from 'stream';
+import {
+    DescribeSystemApiKeyRejection,
+    GetSystemApiKeyRejection,
+    IsSystemApiKeyMatch,
+    MIN_SYSTEM_API_KEY_LENGTH,
+} from './systemKeyAuth.js';
 import express, { Request, Response, NextFunction } from 'express';
 import sql from "mssql";
 import { z } from "zod";
@@ -222,7 +228,6 @@ function buildPoolConfig(): sql.config {
  * 1. x-api-key header
  * 2. x-mj-api-key header
  * 3. Authorization: Bearer <token> header
- * 4. URL query parameter (apiKey or api_key)
  *
  * @param request - The incoming HTTP request
  * @returns The extracted API key string, or null if not found
@@ -247,23 +252,27 @@ function extractAPIKeyFromRequest(request: Request | http.IncomingMessage): stri
     return apiKey || null;
 }
 
+let warnedAboutUnusableSystemApiKey = false;
+
 /**
- * Placeholder values that have shipped in example configs. A system key equal to one of these
- * (or shorter than 16 characters) is publicly known or trivially guessable, so system-key auth
- * is disabled rather than honored.
+ * Logs, once per process, that a system key is configured but will not be honored. Without this
+ * an operator whose key is a placeholder or too short only sees "invalid API key" and has no way
+ * to tell the key was refused on purpose. The key itself is never logged.
  */
-const placeholderSystemApiKeys = ['MY_API_KEY_FOR_MCP_SERVER'];
-
-function isUsableSystemApiKey(key: string): boolean {
-    const trimmed = key.trim();
-    return trimmed.length >= 16 && !placeholderSystemApiKeys.includes(trimmed);
-}
-
-/** Constant-time string comparison via SHA-256 digests (same pattern as MJServer's system-key check). */
-function timingSafeKeyCompare(a: string, b: string): boolean {
-    const hashA = createHash('sha256').update(a).digest();
-    const hashB = createHash('sha256').update(b).digest();
-    return timingSafeEqual(hashA, hashB);
+function warnOnceIfSystemApiKeyUnusable(configuredKey: string | null | undefined): void {
+    if (warnedAboutUnusableSystemApiKey) {
+        return;
+    }
+    const rejection = GetSystemApiKeyRejection(configuredKey);
+    if (rejection === null || rejection === 'missing') {
+        return;
+    }
+    warnedAboutUnusableSystemApiKey = true;
+    console.warn(
+        `[Auth] System API key authentication is DISABLED: ${DescribeSystemApiKeyRejection(rejection)}. ` +
+        `Set MCP_SYSTEM_API_KEY (or MJ_API_KEY) to a random value of at least ${MIN_SYSTEM_API_KEY_LENGTH} characters. ` +
+        `API Key Engine keys and OAuth are unaffected.`
+    );
 }
 
 /**
@@ -338,8 +347,9 @@ async function validateApiKey(
         const mcpSystemKey = _config.mcpServerSettings?.systemApiKey;
         const sharedApiKey = _config.apiKey;
         const configuredSystemApiKey = mcpSystemKey || sharedApiKey;
+        warnOnceIfSystemApiKeyUnusable(configuredSystemApiKey);
 
-        if (configuredSystemApiKey && isUsableSystemApiKey(configuredSystemApiKey) && timingSafeKeyCompare(apiKey, configuredSystemApiKey)) {
+        if (IsSystemApiKeyMatch(apiKey, configuredSystemApiKey)) {
             return {
                 valid: true,
                 user: systemUser,

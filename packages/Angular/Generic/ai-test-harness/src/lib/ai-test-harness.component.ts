@@ -12,6 +12,7 @@ import { ChatMessage } from '@memberjunction/ai';
 import { Subject, Subscription } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ParseJSONRecursive, ParseJSONOptions, UUIDsEqual, EscapeHTML } from '@memberjunction/global';
+import { RenderSafeMarkdownLink } from './markdown-link-safety';
 import {
     ParentTaskIDFromStepOutput,
     ReadPaneSizePair,
@@ -3630,17 +3631,9 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
         
         // Links — this HTML is marked trusted below, so Angular will NOT strip dangerous hrefs.
-        // Only http(s)/mailto (or scheme-less relative) URLs become anchors; javascript:, data:
-        // and every other scheme renders as plain text to block link-based script injection
-        // from model output.
-        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match: string, text: string, url: string) => {
-            const trimmedUrl = url.trim();
-            const hasScheme = /^[a-z][a-z0-9+.-]*:/i.test(trimmedUrl);
-            const isSafeScheme = /^(https?:|mailto:)/i.test(trimmedUrl);
-            return !hasScheme || isSafeScheme
-                ? `<a href="${trimmedUrl}" target="_blank" rel="noopener noreferrer" class="markdown-link">${text}</a>`
-                : text;
-        });
+        // RenderSafeMarkdownLink only emits an anchor for http(s)/mailto or scheme-less targets.
+        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match: string, text: string, url: string) =>
+            RenderSafeMarkdownLink(text, url));
         
         // Unordered lists
         html = html.replace(/^[*-+] (.+)$/gm, '<li>$1</li>');

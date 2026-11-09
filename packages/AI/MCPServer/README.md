@@ -180,7 +180,17 @@ module.exports = {
 
 ### API Key Authentication
 
-The server authenticates requests using MemberJunction API keys. The API key is passed via the `x-api-key` header and maps to a MemberJunction user context.
+The server authenticates requests using MemberJunction API keys. The API key is passed via the `x-api-key` (or `x-mj-api-key`) header, or as `Authorization: Bearer <key>`, and maps to a MemberJunction user context.
+
+API keys are **not** read from the URL. `?apiKey=` and `?api_key=` were accepted in earlier versions and are now ignored, because a key in a query string is written to access logs, proxies and browser history. Clients that used them must send a header instead.
+
+#### System API key
+
+A request that presents the system API key runs as the MemberJunction **system user**, so treat it like a root credential:
+
+- Set it with the `MCP_SYSTEM_API_KEY` environment variable (read by `mcpServerSettings.systemApiKey` in `mj.config.cjs`). When that is unset the server falls back to `MJ_API_KEY`.
+- Never commit a literal key to `mj.config.cjs`.
+- The key must be at least 16 characters. A shorter key, or the old `MY_API_KEY_FOR_MCP_SERVER` placeholder, is refused: the server logs one warning at the first authentication attempt and system-key authentication stays off. API Key Engine keys and OAuth keep working.
 
 ### OAuth 2.1 (Optional)
 
