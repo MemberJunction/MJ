@@ -17,7 +17,11 @@ export interface InterAgentCoordinationEnvelope {
     senderUserID: string;
     senderUserName: string;
     senderAgentID: string;
+    senderAgentName?: string;
     targetUserID: string;
+    targetAgentID?: string;
+    targetAgentName?: string;
+    deliveryMode?: 'InterAgent' | 'DirectUserRequest';
     workstreamKey?: string;
     taskID?: string;
     issueID?: string;
@@ -28,15 +32,17 @@ export interface InterAgentCoordinationEnvelope {
 }
 
 /**
- * Action that sends a structured inter-agent coordination request from the caller's Chief of Staff
- * to another user (or that user's Chief of Staff) via `MJ: AI Agent Requests`.
+ * Action that sends a structured inter-agent coordination request from the calling agent (defaulting
+ * to the executing agent in `params.Context`, or Chief of Staff outside an agent run) to another user
+ * or a specific target agent for that user via `MJ: AI Agent Requests`.
  *
  * Security & Policy Guardrails:
  * 1. Verifies the sender's `MJ: AI Agent User Policies` allows active follow-ups (`CoordinationMode`
- *    must be `'ActiveFollowUp'` or `'FullDelegate'`, and `AllowInterAgentCoordination` must not be `false`).
- * 2. Checks the target user's policy: if the target user has `AllowInterAgentCoordination === true`
- *    and an active Chief of Staff policy, marks `DeliveryMode = 'InterAgent'` so the target user's
- *    Chief of Staff can triage it on its next wake; otherwise delivers as `'DirectUserRequest'`.
+ *    must not be `'Observer'`, and `AllowInterAgentCoordination` must not be `false`).
+ * 2. Resolves the recipient's target agent (`TargetAgentID` / `TargetAgentName`, defaulting to
+ *    Chief of Staff) and checks the recipient's policy for that agent: if active with
+ *    `AllowInterAgentCoordination !== false`, marks `DeliveryMode = 'InterAgent'` so the recipient's
+ *    target agent wakes on arrival; otherwise delivers as `'DirectUserRequest'`.
  */
 @RegisterClass(BaseAction, 'Send Inter-Agent Request')
 export class SendInterAgentRequestAction extends BaseAction {
@@ -54,36 +60,32 @@ export class SendInterAgentRequestAction extends BaseAction {
 
             const targetUserId = this.getStringParam(params, 'TargetUserID');
             const subject = this.getStringParam(params, 'Subject');
-            const message = this.getStringParam(params, 'Message');
+            const message =
+                this.getStringParam(params, 'Message') ?? this.getStringParam(params, 'RequestBody');
             if (!targetUserId || !subject || !message) {
                 return {
                     Success: false,
                     ResultCode: 'VALIDATION_ERROR',
-                    Message: 'TargetUserID, Subject, and Message are required parameters.',
+                    Message: 'TargetUserID, Subject, and Message (or RequestBody) are required parameters.',
                     Params: params.Params,
                 };
             }
 
             await AIEngine.Instance.Config(false, contextUser);
-            const rawAgentId = this.getStringParam(params, 'AgentID');
-            const rawAgentName = this.getStringParam(params, 'AgentName') ?? (rawAgentId ? null : 'Chief of Staff');
-            const agent = rawAgentId
-                ? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, rawAgentId))
-                : AIEngine.Instance.Agents.find(
-                      (a) => a.Name.trim().toLowerCase() === (rawAgentName ?? '').trim().toLowerCase()
-                  );
-
-            if (!agent) {
-                return {
-                    Success: false,
-                    ResultCode: 'AGENT_NOT_FOUND',
-                    Message: `Agent "${ rawAgentId ?? rawAgentName }" not found.`,
-                    Params: params.Params,
-                };
+            const senderResolution = this.resolveSenderAgent(params);
+            if ('errorResult' in senderResolution) {
+                return senderResolution.errorResult;
             }
+            const senderAgent = senderResolution.agent;
+
+            const targetResolution = this.resolveRecipientAgent(params, senderAgent);
+            if ('errorResult' in targetResolution) {
+                return targetResolution.errorResult;
+            }
+            const targetAgent = targetResolution.agent;
 
             const senderPolicy = await AgentUserPolicyEngine.Instance.GetPolicyForAgentAndUser(
-                agent.ID,
+                senderAgent.ID,
                 contextUser.ID,
                 contextUser
             );
@@ -92,7 +94,7 @@ export class SendInterAgentRequestAction extends BaseAction {
                     return {
                         Success: false,
                         ResultCode: 'POLICY_DENIED',
-                        Message: 'Your Chief of Staff policy has AllowInterAgentCoordination disabled.',
+                        Message: `Your "${ senderAgent.Name }" policy has AllowInterAgentCoordination disabled.`,
                         Params: params.Params,
                     };
                 }
@@ -100,14 +102,14 @@ export class SendInterAgentRequestAction extends BaseAction {
                     return {
                         Success: false,
                         ResultCode: 'POLICY_APPROVAL_REQUIRED',
-                        Message: `Your Chief of Staff CoordinationMode is "Observer" (tracks and reports only). Outbound follow-ups to other users require upgrading CoordinationMode to Coordinator/Autonomous or explicit approval.`,
+                        Message: `Your "${ senderAgent.Name }" CoordinationMode is "Observer" (tracks and reports only). Outbound follow-ups to other users require upgrading CoordinationMode to Coordinator/Autonomous or explicit approval.`,
                         Params: params.Params,
                     };
                 }
             }
 
             const targetPolicy = await AgentUserPolicyEngine.Instance.GetPolicyForAgentAndUser(
-                agent.ID,
+                targetAgent.ID,
                 targetUserId,
                 contextUser
             );
@@ -130,8 +132,12 @@ export class SendInterAgentRequestAction extends BaseAction {
                 interAgentCoordination: true,
                 senderUserID: contextUser.ID,
                 senderUserName: contextUser.Name || contextUser.Email || contextUser.ID,
-                senderAgentID: agent.ID,
+                senderAgentID: senderAgent.ID,
+                senderAgentName: senderAgent.Name,
                 targetUserID: targetUserId,
+                targetAgentID: targetAgent.ID,
+                targetAgentName: targetAgent.Name,
+                deliveryMode,
                 ...(workstreamKey ? { workstreamKey } : {}),
                 ...(taskId ? { taskID: taskId } : {}),
                 ...(issueId ? { issueID: issueId } : {}),
@@ -156,13 +162,13 @@ export class SendInterAgentRequestAction extends BaseAction {
                 'MJ: AI Agent Requests',
                 contextUser
             );
-            requestEntity.AgentID = agent.ID;
+            requestEntity.AgentID = targetAgent.ID;
             requestEntity.RequestTypeID = approvalTypeId;
             requestEntity.RequestedAt = new Date();
             requestEntity.RequestForUserID = targetUserId;
             requestEntity.Status = 'Requested';
             requestEntity.Priority = priority;
-            requestEntity.Request = `[Chief of Staff Follow-Up from ${ envelope.senderUserName }] ${ subject }\n\n${ message }`;
+            requestEntity.Request = `[${ senderAgent.Name } Follow-Up from ${ envelope.senderUserName }] ${ subject }\n\n${ message }`;
             requestEntity.Comments = JSON.stringify(envelope);
             if (dueByISO) {
                 const parsedDue = new Date(dueByISO);
@@ -178,19 +184,20 @@ export class SendInterAgentRequestAction extends BaseAction {
                 return {
                     Success: false,
                     ResultCode: 'SAVE_FAILED',
-                    Message: `Failed to create Chief of Staff coordination request: ${ errMsg }`,
+                    Message: `Failed to create inter-agent coordination request: ${ errMsg }`,
                     Params: params.Params,
                 };
             }
 
             this.setOutputParam(params, 'AgentRequestID', requestEntity.ID);
             this.setOutputParam(params, 'TargetUserID', targetUserId);
+            this.setOutputParam(params, 'TargetAgentID', targetAgent.ID);
             this.setOutputParam(params, 'DeliveryMode', deliveryMode);
 
             return {
                 Success: true,
                 ResultCode: 'SUCCESS',
-                Message: `Created Chief of Staff coordination request (${ requestEntity.ID }) for user ${ targetUserId } via ${ deliveryMode }.`,
+                Message: `Created inter-agent coordination request (${ requestEntity.ID }) for user ${ targetUserId } targeting "${ targetAgent.Name }" via ${ deliveryMode }.`,
                 Params: params.Params,
             };
         } catch (error) {
@@ -203,6 +210,89 @@ export class SendInterAgentRequestAction extends BaseAction {
                 Params: params.Params,
             };
         }
+    }
+
+    private resolveSenderAgent(
+        params: RunActionParams
+    ): { agent: (typeof AIEngine.Instance.Agents)[number] } | { errorResult: ActionResultSimple } {
+        const rawAgentId = this.getStringParam(params, 'AgentID');
+        const rawAgentName = this.getStringParam(params, 'AgentName');
+        const contextAgentId = (params.Context as { AgentID?: string } | undefined)?.AgentID?.trim() || null;
+
+        let agent: (typeof AIEngine.Instance.Agents)[number] | undefined;
+        let requestedLabel: string;
+        if (rawAgentName) {
+            requestedLabel = rawAgentName;
+            agent = AIEngine.Instance.Agents.find(
+                (a) => a.Name.trim().toLowerCase() === rawAgentName.trim().toLowerCase()
+            );
+        } else {
+            const byId = rawAgentId
+                ? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, rawAgentId))
+                : undefined;
+            const byContext = contextAgentId
+                ? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, contextAgentId))
+                : undefined;
+            const defaultCos = !contextAgentId
+                ? AIEngine.Instance.Agents.find((a) => a.Name.trim().toLowerCase() === 'chief of staff')
+                : undefined;
+            agent = byId ?? byContext ?? defaultCos;
+            requestedLabel = rawAgentId ?? contextAgentId ?? 'Chief of Staff';
+        }
+
+        if (!agent) {
+            return {
+                errorResult: {
+                    Success: false,
+                    ResultCode: 'AGENT_NOT_FOUND',
+                    Message: `Agent "${ requestedLabel }" not found.`,
+                    Params: params.Params,
+                },
+            };
+        }
+        return { agent };
+    }
+
+    private resolveRecipientAgent(
+        params: RunActionParams,
+        senderAgent: (typeof AIEngine.Instance.Agents)[number]
+    ): { agent: (typeof AIEngine.Instance.Agents)[number] } | { errorResult: ActionResultSimple } {
+        const targetAgentId = this.getStringParam(params, 'TargetAgentID');
+        const targetAgentName = this.getStringParam(params, 'TargetAgentName');
+        if (targetAgentName) {
+            const found = AIEngine.Instance.Agents.find(
+                (a) => a.Name.trim().toLowerCase() === targetAgentName.trim().toLowerCase()
+            );
+            if (!found) {
+                return {
+                    errorResult: {
+                        Success: false,
+                        ResultCode: 'AGENT_NOT_FOUND',
+                        Message: `Target agent "${ targetAgentName }" not found.`,
+                        Params: params.Params,
+                    },
+                };
+            }
+            return { agent: found };
+        }
+        if (targetAgentId) {
+            const found = AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, targetAgentId));
+            if (!found) {
+                return {
+                    errorResult: {
+                        Success: false,
+                        ResultCode: 'AGENT_NOT_FOUND',
+                        Message: `Target agent "${ targetAgentId }" not found.`,
+                        Params: params.Params,
+                    },
+                };
+            }
+            return { agent: found };
+        }
+        const defaultCos = AIEngine.Instance.Agents.find(
+            (a) => a.Name.trim().toLowerCase() === 'chief of staff'
+        );
+        return { agent: defaultCos ?? senderAgent };
     }
 
     private clampPriority(raw: number): number {

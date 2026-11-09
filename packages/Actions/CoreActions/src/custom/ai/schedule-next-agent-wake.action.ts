@@ -67,17 +67,26 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
                 };
             }
 
-            const resumeState = this.parseObjectParam<Record<string, unknown>>(params, 'ResumeState') ?? {};
-            const watchedEntities =
-                this.parseObjectParam<MJUserRoutineEntity_IRoutineWakeConfiguration['watchedEntities']>(
-                    params,
-                    'WatchedEntities'
-                );
-            const wakeGate =
-                this.parseObjectParam<MJUserRoutineEntity_IRoutineWakeConfiguration['wakeGate']>(
-                    params,
-                    'WakeGate'
-                );
+            const fallbackWakeConfig =
+                this.parseObjectParam<Record<string, unknown>>(params, 'WakeConfigurationJSON') ?? null;
+            const resumeState =
+                this.parseObjectParam<Record<string, unknown>>(params, 'ResumeState') ??
+                (fallbackWakeConfig && typeof fallbackWakeConfig['resumeState'] === 'object' && fallbackWakeConfig['resumeState'] !== null
+                    ? (fallbackWakeConfig['resumeState'] as Record<string, unknown>)
+                    : {});
+            const rawWatchedEntities =
+                this.parseObjectParam<Array<Record<string, unknown>>>(params, 'WatchedEntities') ??
+                (fallbackWakeConfig && Array.isArray(fallbackWakeConfig['watchedEntities'])
+                    ? (fallbackWakeConfig['watchedEntities'] as Array<Record<string, unknown>>)
+                    : null);
+            const rawWakeGate =
+                this.parseObjectParam<Record<string, unknown>>(params, 'WakeGate') ??
+                (fallbackWakeConfig && typeof fallbackWakeConfig['wakeGate'] === 'object' && fallbackWakeConfig['wakeGate'] !== null
+                    ? (fallbackWakeConfig['wakeGate'] as Record<string, unknown>)
+                    : null);
+
+            const watchedEntities = rawWatchedEntities ? this.normalizeWatchedEntities(rawWatchedEntities) : null;
+            const wakeGate = rawWakeGate ? this.normalizeWakeGate(rawWakeGate) : null;
 
             const wakeConfig: MJUserRoutineEntity_IRoutineWakeConfiguration = {
                 workstreamKey,
@@ -165,22 +174,32 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
         await AIEngine.Instance.Config(false, params.ContextUser);
         const rawId = this.getStringParam(params, 'AgentID');
         const rawName = this.getStringParam(params, 'AgentName');
+        const contextAgentId = (params.Context as { AgentID?: string } | undefined)?.AgentID?.trim() || null;
 
-        const byName = rawName
-            ? AIEngine.Instance.Agents.find((a) => a.Name.trim().toLowerCase() === rawName.trim().toLowerCase())
-            : undefined;
-        const byId = rawId ? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, rawId)) : undefined;
-        const defaultCos = !rawName
-            ? AIEngine.Instance.Agents.find((a) => a.Name.trim().toLowerCase() === 'chief of staff')
-            : undefined;
-        const agent = byName ?? byId ?? defaultCos;
+        let agent: (typeof AIEngine.Instance.Agents)[number] | undefined;
+        let requestedLabel: string;
+
+        if (rawName) {
+            requestedLabel = rawName;
+            agent = AIEngine.Instance.Agents.find((a) => a.Name.trim().toLowerCase() === rawName.trim().toLowerCase());
+        } else {
+            const byId = rawId ? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, rawId)) : undefined;
+            const byContext = contextAgentId
+                ? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, contextAgentId))
+                : undefined;
+            const defaultCos = !contextAgentId
+                ? AIEngine.Instance.Agents.find((a) => a.Name.trim().toLowerCase() === 'chief of staff')
+                : undefined;
+            agent = byId ?? byContext ?? defaultCos;
+            requestedLabel = rawId ?? contextAgentId ?? 'Chief of Staff';
+        }
 
         if (!agent) {
             return {
                 errorResult: {
                     Success: false,
                     ResultCode: 'AGENT_NOT_FOUND',
-                    Message: `Target agent ${ rawId ?? rawName ?? 'Chief of Staff' } not found.`,
+                    Message: `Target agent ${ requestedLabel } not found.`,
                     Params: params.Params,
                 },
             };
@@ -198,6 +217,53 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
         }
 
         return { agentId: agent.ID, agentName: agent.Name };
+    }
+
+    /**
+     * Normalizes watched-entity rules so legacy prompt field names (`filter`, `trackChangesOnly`)
+     * map cleanly onto `RoutineWatchedEntityRule` (`extraFilter`, `includeRecordChanges`).
+     */
+    private normalizeWatchedEntities(
+        rawRules: Array<Record<string, unknown>>
+    ): NonNullable<MJUserRoutineEntity_IRoutineWakeConfiguration['watchedEntities']> {
+        return rawRules
+            .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
+            .map((item) => {
+                const clone: Record<string, unknown> = { ...item };
+                const existingExtraFilter = typeof clone['extraFilter'] === 'string' ? clone['extraFilter'].trim() : '';
+                const legacyFilter = typeof clone['filter'] === 'string' ? clone['filter'].trim() : '';
+                if (!existingExtraFilter && legacyFilter) {
+                    clone['extraFilter'] = legacyFilter;
+                }
+                delete clone['filter'];
+
+                if (clone['includeRecordChanges'] === undefined && typeof clone['trackChangesOnly'] === 'boolean') {
+                    clone['includeRecordChanges'] = clone['trackChangesOnly'];
+                }
+                delete clone['trackChangesOnly'];
+
+                return clone as unknown as NonNullable<MJUserRoutineEntity_IRoutineWakeConfiguration['watchedEntities']>[number];
+            });
+    }
+
+    /**
+     * Normalizes wake-gate settings so legacy prompt field names (`TotalChangedRecords` in
+     * `tier1Expression` and `tier2DecisionQuestion`) map onto `WakeGateEvaluator`'s canonical shape.
+     */
+    private normalizeWakeGate(
+        rawGate: Record<string, unknown>
+    ): NonNullable<MJUserRoutineEntity_IRoutineWakeConfiguration['wakeGate']> {
+        const clone: Record<string, unknown> = { ...rawGate };
+        if (typeof clone['tier1Expression'] === 'string') {
+            clone['tier1Expression'] = clone['tier1Expression'].replace(/\bTotalChangedRecords\b/g, 'totalChangedCount');
+        }
+        const legacyQuestion =
+            typeof clone['tier2DecisionQuestion'] === 'string' ? clone['tier2DecisionQuestion'].trim() : '';
+        if (legacyQuestion && (clone['tier2Decision'] === undefined || clone['tier2Decision'] === null)) {
+            clone['tier2Decision'] = { question: legacyQuestion };
+        }
+        delete clone['tier2DecisionQuestion'];
+        return clone as unknown as NonNullable<MJUserRoutineEntity_IRoutineWakeConfiguration['wakeGate']>;
     }
 
     private async findExistingWakeRoutine(

@@ -14,6 +14,7 @@ const {
     getPolicyMock,
     setCachedPolicyMock,
     buildSummaryMock,
+    triggerWakeForWorkstreamMock,
 } = vi.hoisted(() => ({
     agentsList: [] as Array<{ ID: string; Name: string }>,
     canUserRunAgentMock: vi.fn(),
@@ -22,6 +23,7 @@ const {
     getPolicyMock: vi.fn(),
     setCachedPolicyMock: vi.fn(),
     buildSummaryMock: vi.fn(),
+    triggerWakeForWorkstreamMock: vi.fn(),
 }));
 
 vi.mock('@memberjunction/global', async (importOriginal) => ({
@@ -78,9 +80,18 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
     },
 }));
 
+vi.mock('@memberjunction/ai-agents', () => ({
+    AgentWakeTriggerService: {
+        Instance: {
+            TriggerWakeForWorkstream: (...args: unknown[]) => triggerWakeForWorkstreamMock(...args),
+        },
+    },
+}));
+
 import { ScheduleNextAgentWakeAction } from '../custom/ai/schedule-next-agent-wake.action';
 import { ConfigureAgentUserPolicyAction } from '../custom/ai/configure-agent-user-policy.action';
-import { SendInterAgentRequestAction } from '../custom/ai/send-inter-agent-request.action';
+import { SendInterAgentRequestAction, InterAgentCoordinationEnvelope } from '../custom/ai/send-inter-agent-request.action';
+import { TriggerAgentWakeAction } from '../custom/ai/trigger-agent-wake.action';
 import {
     PrepareOutboundCallBriefAction,
     OutboundCallBrief,
@@ -114,6 +125,7 @@ describe('Chief of Staff Actions Suite', () => {
         getPolicyMock.mockReset().mockResolvedValue(null);
         setCachedPolicyMock.mockReset();
         buildSummaryMock.mockReset().mockReturnValue('## User Policy Summary');
+        triggerWakeForWorkstreamMock.mockReset();
     });
 
     describe('ScheduleNextAgentWakeAction', () => {
@@ -536,6 +548,194 @@ describe('Chief of Staff Actions Suite', () => {
             expect(params.Params.find((p: ActionParam) => p.Name === 'Status')?.Value).toBe('PENDING_APPROVAL');
             expect(params.Params.find((p: ActionParam) => p.Name === 'AgentRequestID')?.Value).toBe('call-req-1');
             expect(reqStub.RequestTypeID).toBe('approval-type-id');
+        });
+    });
+
+    describe('Multi-Agent Always-On Generalization (Phase 0)', () => {
+        beforeEach(() => {
+            agentsList.push({ ID: 'factory-agent-id', Name: 'Software Factory' });
+        });
+
+        it('ScheduleNextAgentWakeAction defaults to calling agent from params.Context.AgentID and normalizes legacy wake-gate fields', async () => {
+            const routineStub = {
+                ID: 'routine-factory-1',
+                UserID: '',
+                Name: '',
+                Description: '',
+                Status: 'Active' as MJUserRoutineEntity['Status'],
+                RoutineType: 'AgentWake' as MJUserRoutineEntity['RoutineType'],
+                ScheduleMode: 'Adaptive' as MJUserRoutineEntity['ScheduleMode'],
+                TargetType: 'Agent' as MJUserRoutineEntity['TargetType'],
+                TargetID: '',
+                Timezone: 'UTC',
+                CronExpression: null as string | null,
+                InitialMessage: null as string | null,
+                StartingPayload: null as string | null,
+                WakeConfigurationObject: null as Record<string, unknown> | null,
+                NextRunAt: null as Date | null,
+                ConversationID: null as string | null,
+                Save: vi.fn().mockResolvedValue(true),
+            };
+            getEntityObjectMock.mockResolvedValue(routineStub);
+
+            const params: RunActionParams = {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('dev-1', 'Dev One'),
+                Context: { AgentID: 'factory-agent-id' },
+                Filters: [],
+                Params: [
+                    { Name: 'WorkstreamKey', Type: 'Input', Value: 'task-881' },
+                    {
+                        Name: 'WatchedEntities',
+                        Type: 'Input',
+                        Value: [
+                            {
+                                entityName: 'MJ_BizApps_Tasks: Tasks',
+                                filter: "ID = 'task-881'",
+                                trackChangesOnly: true,
+                            },
+                        ],
+                    },
+                    {
+                        Name: 'WakeGate',
+                        Type: 'Input',
+                        Value: {
+                            skipIfUnchanged: true,
+                            tier1Expression: 'TotalChangedRecords > 0',
+                            tier2DecisionQuestion: 'Did CI or review status change meaningfully?',
+                        },
+                    },
+                ],
+            };
+
+            const res = await invokeAction(new ScheduleNextAgentWakeAction(), params);
+            expect(res.Success).toBe(true);
+            expect(routineStub.TargetID).toBe('factory-agent-id');
+            expect(routineStub.Name).toBe('Software Factory — Wake (task-881)');
+            const watched = routineStub.WakeConfigurationObject?.['watchedEntities'] as Array<Record<string, unknown>>;
+            expect(watched).toEqual([
+                {
+                    entityName: 'MJ_BizApps_Tasks: Tasks',
+                    extraFilter: "ID = 'task-881'",
+                    includeRecordChanges: true,
+                },
+            ]);
+            const gate = routineStub.WakeConfigurationObject?.['wakeGate'] as Record<string, unknown>;
+            expect(gate).toEqual({
+                skipIfUnchanged: true,
+                tier1Expression: 'totalChangedCount > 0',
+                tier2Decision: { question: 'Did CI or review status change meaningfully?' },
+            });
+        });
+
+        it('ConfigureAgentUserPolicyAction defaults to calling agent from params.Context.AgentID instead of Chief of Staff', async () => {
+            const policyStub = {
+                ID: 'policy-factory-1',
+                AgentID: '',
+                UserID: '',
+                Status: 'Active' as MJAIAgentUserPolicyEntity['Status'],
+                OnboardingStatus: 'Completed' as MJAIAgentUserPolicyEntity['OnboardingStatus'],
+                Save: vi.fn().mockResolvedValue(true),
+            };
+            getEntityObjectMock.mockResolvedValue(policyStub);
+
+            const params: RunActionParams = {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('dev-1', 'Dev One'),
+                Context: { AgentID: 'factory-agent-id' },
+                Filters: [],
+                Params: [{ Name: 'OnboardingStatus', Type: 'Input', Value: 'Completed' }],
+            };
+
+            const res = await invokeAction(new ConfigureAgentUserPolicyAction(), params);
+            expect(res.Success).toBe(true);
+            expect(policyStub.AgentID).toBe('factory-agent-id');
+            expect(policyStub.UserID).toBe('dev-1');
+        });
+
+        it('SendInterAgentRequestAction routes from calling agent to explicit TargetAgentName and accepts RequestBody alias', async () => {
+            getPolicyMock
+                .mockResolvedValueOnce({
+                    Status: 'Active',
+                    CoordinationMode: 'Autonomous',
+                    AllowInterAgentCoordination: true,
+                })
+                .mockResolvedValueOnce({
+                    Status: 'Active',
+                    AllowInterAgentCoordination: true,
+                });
+
+            const reqStub = {
+                ID: 'req-factory-to-cos',
+                AgentID: '',
+                RequestTypeID: null as string | null,
+                RequestedAt: null as Date | null,
+                RequestForUserID: null as string | null,
+                Status: 'Requested' as MJAIAgentRequestEntity['Status'],
+                Priority: 50,
+                Request: '',
+                Comments: null as string | null,
+                Save: vi.fn().mockResolvedValue(true),
+            };
+            getEntityObjectMock.mockResolvedValue(reqStub);
+
+            const params: RunActionParams = {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('dev-1', 'Dev One'),
+                Context: { AgentID: 'factory-agent-id' },
+                Filters: [],
+                Params: [
+                    { Name: 'TargetUserID', Type: 'Input', Value: 'reviewer-2' },
+                    { Name: 'TargetAgentName', Type: 'Input', Value: 'Software Factory' },
+                    { Name: 'Subject', Type: 'Input', Value: 'Cross-repo contract update' },
+                    { Name: 'RequestBody', Type: 'Input', Value: 'Shared schema PR is ready for review.' },
+                ],
+            };
+
+            const res = await invokeAction(new SendInterAgentRequestAction(), params);
+            expect(res.Success).toBe(true);
+            expect(reqStub.AgentID).toBe('factory-agent-id');
+            expect(reqStub.Request).toContain('[Software Factory Follow-Up from Dev One]');
+            const parsed = JSON.parse(reqStub.Comments ?? '{}') as InterAgentCoordinationEnvelope;
+            expect(parsed.senderAgentID).toBe('factory-agent-id');
+            expect(parsed.senderAgentName).toBe('Software Factory');
+            expect(parsed.targetAgentID).toBe('factory-agent-id');
+            expect(parsed.targetAgentName).toBe('Software Factory');
+            expect(parsed.deliveryMode).toBe('InterAgent');
+            expect(params.Params.find((p: ActionParam) => p.Name === 'TargetAgentID')?.Value).toBe('factory-agent-id');
+        });
+
+        it('TriggerAgentWakeAction delegates to AgentWakeTriggerService.TriggerWakeForWorkstream and populates output params', async () => {
+            triggerWakeForWorkstreamMock.mockResolvedValueOnce({
+                triggered: true,
+                resultCode: 'WAKE_SCHEDULED',
+                reason: 'Scheduled immediate wake for task:t-100',
+                routineID: 'routine-100',
+                targetUserID: 'dev-1',
+                targetAgentID: 'factory-agent-id',
+                workstreamKey: 'task:t-100',
+                nextRunAtISO: '2026-11-09T18:00:00.000Z',
+            });
+
+            const params: RunActionParams = {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('pm-1', 'Product Manager'),
+                Filters: [],
+                Params: [
+                    { Name: 'TargetUserID', Type: 'Input', Value: 'dev-1' },
+                    { Name: 'TargetAgentName', Type: 'Input', Value: 'Software Factory' },
+                    { Name: 'WorkstreamKey', Type: 'Input', Value: 'task:t-100' },
+                    { Name: 'WakeReason', Type: 'Input', Value: 'Task assigned to Software Factory' },
+                    { Name: 'ResumeState', Type: 'Input', Value: { taskID: 't-100' } },
+                ],
+            };
+
+            const res = await invokeAction(new TriggerAgentWakeAction(), params);
+            expect(res.Success).toBe(true);
+            expect(res.ResultCode).toBe('SUCCESS');
+            expect(triggerWakeForWorkstreamMock).toHaveBeenCalledTimes(1);
+            expect(params.Params.find((p: ActionParam) => p.Name === 'RoutineID')?.Value).toBe('routine-100');
+            expect(params.Params.find((p: ActionParam) => p.Name === 'TargetAgentID')?.Value).toBe('factory-agent-id');
         });
     });
 });

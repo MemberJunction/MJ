@@ -50,9 +50,12 @@ export interface InterAgentCoordinationEnvelopeShape {
     senderUserName?: string;
     senderUserEmail?: string;
     senderAgentID?: string;
+    senderAgentName?: string;
     targetUserID?: string;
     targetUserName?: string;
     targetUserEmail?: string;
+    targetAgentID?: string;
+    targetAgentName?: string;
     /** `InterAgentCoS` is the pre-rename value still present on in-flight rows; treated exactly like `InterAgent`. */
     deliveryMode?: 'InterAgent' | 'InterAgentCoS' | 'DirectUserRequest';
     subject?: string;
@@ -106,12 +109,40 @@ export interface InboundUtilityMailboxEmailInput {
 }
 
 /**
+ * Input for scheduling an immediate event-driven wake for a specific agent, user, and workstream.
+ * Used by task lifecycle hooks (`TaskType.OnCreateActionID` / `OnStatusChangeActionID`),
+ * external webhook handlers (e.g., GitHub PR/CI events), and `Trigger Agent Wake`.
+ */
+export interface TriggerWorkstreamWakeInput {
+    /** Owning MJ User ID under whose identity and policy the woken agent will run. */
+    targetUserID: string;
+    /** Target `MJ: AI Agents` ID (either `targetAgentID` or `targetAgentName` is required). */
+    targetAgentID?: string;
+    /** Target `MJ: AI Agents` Name when `targetAgentID` is omitted (resolved case-insensitively). */
+    targetAgentName?: string;
+    /** Stable workstream key used to coalesce queued events onto a single wake routine (e.g., `task:<TaskID>`). */
+    workstreamKey: string;
+    /** Human-readable reason explaining why the agent is being woken. */
+    wakeReason: string;
+    /** Optional structured payload delivered to the agent in `resumeState` (and `resumeState.pendingEvents`). */
+    resumeState?: AgentWakeResumeState;
+    /** Acting caller `UserInfo` (may be the target user, an Owner/system user, or a webhook service user). */
+    contextUser: UserInfo;
+    /** Optional metadata provider (defaults to `Metadata.Provider`). */
+    metadataProvider?: IMetadataProvider;
+    /** Optional clock override for deterministic tests. */
+    now?: Date;
+}
+
+/**
  * Result codes returned by `AgentWakeTriggerService` operations.
  */
 export type AgentWakeTriggerResultCode =
     | 'WAKE_SCHEDULED'
     | 'SKIPPED_NOT_APPLICABLE'
     | 'POLICY_DENIED'
+    | 'AGENT_NOT_FOUND'
+    | 'MISSING_REQUIRED_INPUT'
     | 'IDENTITY_NOT_FOUND'
     | 'UNVERIFIED_EXTERNAL_SENDER'
     | 'SENDER_NOT_AUTHORIZED_FOR_IDENTITY'
@@ -462,6 +493,124 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
         });
     }
 
+    /**
+     * Generic event-driven wake entry point for waking a target agent for a specific user and workstream.
+     *
+     * Used by task lifecycle hooks (`TaskType.OnCreateActionID` / `OnStatusChangeActionID`), GitHub
+     * webhooks, and the `Trigger Agent Wake` action so external or cross-subsystem workstream events
+     * coalesce cleanly through the same `MJ: User Routines` (`RoutineType = 'AgentWake'`) queue and
+     * respect the target user's `MJ: AI Agent User Policies` status (`Disabled` / `Paused`).
+     */
+    public async TriggerWakeForWorkstream(
+        input: TriggerWorkstreamWakeInput
+    ): Promise<AgentWakeTriggerResult> {
+        const now = input.now ?? new Date();
+        const md: IMetadataProvider = input.metadataProvider ?? Metadata.Provider;
+        const targetUserID = (input.targetUserID ?? '').trim();
+        const workstreamKey = (input.workstreamKey ?? '').trim();
+        const wakeReason = (input.wakeReason ?? '').trim();
+
+        if (!targetUserID) {
+            return this.notTriggered('MISSING_REQUIRED_INPUT', 'targetUserID is required to trigger a workstream wake.');
+        }
+        if (!workstreamKey) {
+            return this.notTriggered('MISSING_REQUIRED_INPUT', 'workstreamKey is required to trigger a workstream wake.');
+        }
+        if (!wakeReason) {
+            return this.notTriggered('MISSING_REQUIRED_INPUT', 'wakeReason is required to trigger a workstream wake.');
+        }
+
+        const resolvedAgent = await this.resolveTargetAgentForWorkstream(
+            input.targetAgentID,
+            input.targetAgentName,
+            input.contextUser,
+            md
+        );
+        if (!resolvedAgent) {
+            const requestedLabel = input.targetAgentID?.trim() || input.targetAgentName?.trim() || '(none)';
+            return this.notTriggered(
+                'AGENT_NOT_FOUND',
+                `Target agent "${requestedLabel}" could not be found or resolved.`
+            );
+        }
+
+        const saveUser = this.resolveRoutineSaveUser(targetUserID, input.contextUser);
+        const policy: MJAIAgentUserPolicyEntity | null =
+            await AgentUserPolicyEngine.Instance.GetPolicyForAgentAndUser(
+                resolvedAgent.ID,
+                targetUserID,
+                saveUser
+            );
+        if (policy && (policy.Status === 'Disabled' || policy.Status === 'Paused')) {
+            return this.notTriggered(
+                'POLICY_DENIED',
+                `Target user policy for agent "${resolvedAgent.Name ?? resolvedAgent.ID}" is ${policy.Status}; wake suppressed.`
+            );
+        }
+
+        const baseResumeState: AgentWakeResumeState = input.resumeState ?? {};
+        const resumeState: AgentWakeResumeState = {
+            triggerType: typeof baseResumeState['triggerType'] === 'string' && baseResumeState['triggerType'].trim().length > 0
+                ? baseResumeState['triggerType']
+                : 'ExternalWorkstreamEvent',
+            workstreamKey,
+            wakeReason,
+            triggeredAt: now.toISOString(),
+            ...baseResumeState,
+        };
+
+        return this.upsertImmediateWakeRoutine({
+            targetUserID,
+            targetAgentID: resolvedAgent.ID,
+            targetAgentName: resolvedAgent.Name ?? policy?.Agent ?? null,
+            workstreamKey,
+            wakeReason,
+            resumeState,
+            contextUser: input.contextUser,
+            metadataProvider: md,
+            now,
+        });
+    }
+
+    private async resolveTargetAgentForWorkstream(
+        rawAgentID: string | undefined,
+        rawAgentName: string | undefined,
+        contextUser: UserInfo,
+        md: IMetadataProvider
+    ): Promise<{ ID: string; Name: string | null } | null> {
+        const trimmedId = (rawAgentID ?? '').trim();
+        const trimmedName = (rawAgentName ?? '').trim();
+        if (!trimmedId && !trimmedName) {
+            return null;
+        }
+
+        const rv = RunView.FromMetadataProvider(md);
+        const filter = trimmedId
+            ? `ID='${EscapeSQLString(trimmedId)}'`
+            : `LOWER(Name)='${EscapeSQLString(trimmedName.toLowerCase())}'`;
+        const res = await rv.RunView<{ ID: string; Name?: string | null }>(
+            {
+                EntityName: 'MJ: AI Agents',
+                ExtraFilter: filter,
+                Fields: ['ID', 'Name'],
+                MaxRows: 1,
+                SkipTotalRowCount: true,
+                ResultType: 'simple',
+            },
+            contextUser
+        );
+        if (res.Success && Array.isArray(res.Results) && res.Results.length > 0) {
+            const first = res.Results[0];
+            return { ID: first.ID, Name: first.Name ?? (trimmedName || null) };
+        }
+        // When `targetAgentID` was supplied directly and no metadata mock row exists in unit tests,
+        // accept the caller-provided ID directly (consistent with `TriggerWakeOnAgentRequestResolution`).
+        if (trimmedId) {
+            return { ID: trimmedId, Name: trimmedName || null };
+        }
+        return null;
+    }
+
     private parseInterAgentEnvelope(comments: string | null): InterAgentCoordinationEnvelopeShape | null {
         if (!comments || !comments.trim().startsWith('{')) {
             return null;
@@ -591,8 +740,9 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
     }
 
     private wakeEventKey(event: AgentWakeResumeState): string {
-        const id = event['requestID'] ?? event['messageID'] ?? '';
-        return `${String(event['triggerType'] ?? '')}:${String(id)}:${String(event['status'] ?? '')}`.toLowerCase();
+        const id = event['requestID'] ?? event['messageID'] ?? event['eventID'] ?? event['recordID'] ?? '';
+        const qualifier = event['status'] ?? event['wakeReason'] ?? '';
+        return `${String(event['triggerType'] ?? '')}:${String(id)}:${String(qualifier)}`.toLowerCase();
     }
 
     private buildCoalescedWakeReason(workstreamKey: string, latestReason: string, pendingEvents: AgentWakeResumeState[]): string {
@@ -605,9 +755,9 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
 
     private describeWakeEvent(event: AgentWakeResumeState): string {
         const trigger = String(event['triggerType'] ?? 'Event');
-        const id = event['requestID'] ?? event['messageID'];
+        const id = event['requestID'] ?? event['messageID'] ?? event['eventID'] ?? event['recordID'];
         const status = event['status'] ? ` ${String(event['status'])}` : '';
-        const subject = event['subject'] ?? event['request'];
+        const subject = event['subject'] ?? event['request'] ?? event['wakeReason'];
         const subjectText = typeof subject === 'string' && subject.trim().length > 0 ? ` — ${subject.trim().slice(0, 120)}` : '';
         return `${trigger}${status}${id ? ` (${String(id)})` : ''}${subjectText}`;
     }

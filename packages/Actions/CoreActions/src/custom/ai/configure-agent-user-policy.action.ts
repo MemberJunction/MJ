@@ -37,24 +37,34 @@ export class ConfigureAgentUserPolicyAction extends BaseAction {
             await AIEngine.Instance.Config(false, contextUser);
             const rawAgentId = this.getStringParam(params, 'AgentID');
             const rawAgentName = this.getStringParam(params, 'AgentName');
-            const byName = rawAgentName
-                ? AIEngine.Instance.Agents.find(
-                      (a) => a.Name.trim().toLowerCase() === rawAgentName.trim().toLowerCase()
-                  )
-                : undefined;
-            const byId = rawAgentId
-                ? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, rawAgentId))
-                : undefined;
-            const defaultCos = !rawAgentName
-                ? AIEngine.Instance.Agents.find((a) => a.Name.trim().toLowerCase() === 'chief of staff')
-                : undefined;
-            const agent = byName ?? byId ?? defaultCos;
+            const contextAgentId = (params.Context as { AgentID?: string } | undefined)?.AgentID?.trim() || null;
+
+            let agent: (typeof AIEngine.Instance.Agents)[number] | undefined;
+            let requestedLabel: string;
+            if (rawAgentName) {
+                requestedLabel = rawAgentName;
+                agent = AIEngine.Instance.Agents.find(
+                    (a) => a.Name.trim().toLowerCase() === rawAgentName.trim().toLowerCase()
+                );
+            } else {
+                const byId = rawAgentId
+                    ? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, rawAgentId))
+                    : undefined;
+                const byContext = contextAgentId
+                    ? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, contextAgentId))
+                    : undefined;
+                const defaultCos = !contextAgentId
+                    ? AIEngine.Instance.Agents.find((a) => a.Name.trim().toLowerCase() === 'chief of staff')
+                    : undefined;
+                agent = byId ?? byContext ?? defaultCos;
+                requestedLabel = rawAgentId ?? contextAgentId ?? 'Chief of Staff';
+            }
 
             if (!agent) {
                 return {
                     Success: false,
                     ResultCode: 'AGENT_NOT_FOUND',
-                    Message: `Agent "${ rawAgentId ?? rawAgentName ?? 'Chief of Staff' }" not found.`,
+                    Message: `Agent "${ requestedLabel }" not found.`,
                     Params: params.Params,
                 };
             }

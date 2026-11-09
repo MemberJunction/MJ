@@ -1,7 +1,8 @@
-import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
+import { ActionParam, ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import { RunView, RunViewParams } from "@memberjunction/core";
+import { Metadata, RunView, RunViewParams } from "@memberjunction/core";
+import { AgentDataPolicyGuard } from "./agent-data-policy-guard";
 
 /**
  * Generic action for retrieving multiple records from any entity with filtering and sorting capabilities.
@@ -78,6 +79,30 @@ export class GetRecordsAction extends BaseAction {
                 };
             }
 
+            const md = params.Provider ?? Metadata.Provider;
+            const entityInfo = md?.EntityByName ? md.EntityByName(entityName) : undefined;
+            const callingAgentId = AgentDataPolicyGuard.GetCallingAgentID(params);
+            let policyState: Awaited<ReturnType<typeof AgentDataPolicyGuard.EvaluateRecordOperation>> = {
+                allowed: { active: false },
+            };
+            if (callingAgentId) {
+                if (!entityInfo) {
+                    return {
+                        Success: false,
+                        ResultCode: "ENTITY_NOT_FOUND",
+                        Message: `Entity "${entityName}" not found in metadata; refusing agent read.`
+                    };
+                }
+                policyState = await AgentDataPolicyGuard.EvaluateRecordOperation({
+                    params,
+                    entityInfo,
+                    operation: 'Read',
+                });
+                if ('blocked' in policyState) {
+                    return policyState.blocked;
+                }
+            }
+
             // Use RunView to execute the query.
             //
             // Typed as RunViewParams rather than `any` on purpose: the filter used to be assigned to
@@ -92,9 +117,11 @@ export class GetRecordsAction extends BaseAction {
                 ResultType: 'simple'
             };
 
-            // Add filter if provided
-            if (filter) {
-                runViewParams.ExtraFilter = filter;
+            const effectiveFilter = policyState.allowed.active
+                ? AgentDataPolicyGuard.CombineExtraFilters(filter, policyState.allowed.effectiveWhereClause)
+                : filter;
+            if (effectiveFilter) {
+                runViewParams.ExtraFilter = effectiveFilter;
             }
 
             // Add ordering if provided
@@ -107,7 +134,7 @@ export class GetRecordsAction extends BaseAction {
                 runViewParams.AlternateBaseView = alternateBaseView;
             }
 
-            const result = await rv.RunView(runViewParams, params.ContextUser);
+            const result = await rv.RunView<Record<string, unknown>>(runViewParams, params.ContextUser);
 
             if (!result.Success) {
                 return {
@@ -117,8 +144,21 @@ export class GetRecordsAction extends BaseAction {
                 };
             }
 
-            const records = result.Results || [];
-            const totalCount = result.TotalRowCount || records.length;
+            const rawRecords = result.Results || [];
+            const records = AgentDataPolicyGuard.FilterAndMaskRows({
+                rows: rawRecords,
+                evalState: policyState.allowed,
+                entityInfo,
+                contextUser: params.ContextUser,
+                provider: params.Provider,
+            });
+            const wasConditionFiltered =
+                policyState.allowed.active &&
+                policyState.allowed.hasRecordConditionRules &&
+                records.length !== rawRecords.length;
+            const totalCount = wasConditionFiltered
+                ? records.length
+                : (result.TotalRowCount || records.length);
 
             // Build success message
             let message = `Successfully retrieved ${records.length} records`;
@@ -182,7 +222,7 @@ export class GetRecordsAction extends BaseAction {
         }
     }
 
-    public get Params(): any[] {
+    public get Params(): ActionParam[] {
         return [
             {
                 Name: 'EntityName',
@@ -217,7 +257,7 @@ export class GetRecordsAction extends BaseAction {
         ];
     }
 
-    public get Returns(): any[] {
+    public get Returns(): ActionParam[] {
         return [
             {
                 Name: 'Records',

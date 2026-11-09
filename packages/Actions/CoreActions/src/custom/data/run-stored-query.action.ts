@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { RunQuery, RunQueryParams, RunQueryResult } from "@memberjunction/core";
+import { AgentDataPolicyGuard } from "../crud/agent-data-policy-guard";
 
 /**
  * Action that executes a stored query by ID or name using the full query pipeline.
@@ -33,6 +34,11 @@ export class RunStoredQueryAction extends BaseAction {
                     ResultCode: "MISSING_IDENTIFIER",
                     Message: "Either QueryID or QueryName is required to run a stored query."
                 } as ActionResultSimple;
+            }
+
+            const policyGuard = await AgentDataPolicyGuard.EvaluateStoredQuery(params, queryId, queryName);
+            if ('blocked' in policyGuard) {
+                return policyGuard.blocked;
             }
 
             // Parse parameters JSON if provided
@@ -74,7 +80,8 @@ export class RunStoredQueryAction extends BaseAction {
                 } as ActionResultSimple;
             }
 
-            const results = result.Results || [];
+            const rawResults = (result.Results || []) as Record<string, unknown>[];
+            const results = AgentDataPolicyGuard.MaskRows(rawResults, policyGuard.allowed.deniedFieldPatterns);
             const executionTimeMs = result.ExecutionTime || 0;
 
             // Format output

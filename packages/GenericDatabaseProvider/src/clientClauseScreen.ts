@@ -430,6 +430,106 @@ export class ClientClauseScreen {
     }
 
     /**
+     * Parses a read-only SQL statement and resolves every non-CTE FROM/JOIN relation to its
+     * corresponding {@link EntityInfo} (matching entity base views, usable alternate base views,
+     * or entity base tables). Throws if the statement is not a single read-only SELECT, if any
+     * subquery cannot be accounted for, or if any relation does not resolve unambiguously to an
+     * entity in `entities`.
+     */
+    public static ResolveStatementEntities(
+        sql: string,
+        entities: readonly EntityInfo[],
+        dialect: SQLParserDialect,
+        label = 'SQL',
+    ): EntityInfo[] {
+        ClientClauseScreen.AssertNoIdentifierAliasNames(sql, dialect, label);
+        ClientClauseScreen.AssertNoForbiddenFunctionCalls(sql, dialect, label);
+        const reads = ClientClauseScreen.readOnlyStatementReads(sql, dialect, label);
+        ClientClauseScreen.AssertEverySelectAccountedFor(sql, dialect, reads, label);
+        const viewAllowList = ClientClauseScreen.BuildEntityBaseViewAllowList(entities);
+        const tableAllowList = ClientClauseScreen.buildBaseTableAllowList(entities);
+        const resolved = new Map<string, EntityInfo>();
+        for (const relation of reads.Relations) {
+            if (relation.IsCTEReference) continue;
+            if (!relation.TableName) {
+                const fnName = relation.FunctionName;
+                if (fnName && !relation.SchemaName && ClientClauseScreen.ARGUMENT_ONLY_TABLE_FUNCTIONS.has(fnName.toLowerCase())) {
+                    continue;
+                }
+                const source = fnName ? `the table function '${[relation.SchemaName, fnName].filter(Boolean).join('.')}'` : 'a row source it cannot identify';
+                throw new Error(`Invalid ${label}: query may read only registered entities, not ${source}`);
+            }
+            const entity = ClientClauseScreen.resolveEntityRelation(viewAllowList, tableAllowList, relation.SchemaName, relation.TableName, label);
+            resolved.set(entity.ID || entity.Name, entity);
+        }
+        return Array.from(resolved.values());
+    }
+
+    /**
+     * Returns all bare/unquoted word and quoted-identifier tokens appearing in `sql` (quotes stripped),
+     * excluding string literals and comments. Used by agent data-policy guards to refuse ad-hoc SQL
+     * that references denied field names via column aliases or WHERE predicates.
+     */
+    public static ExtractStatementIdentifierTokens(sql: string, dialect: SQLParserDialect): string[] {
+        const tokens = LexSQL(sql, dialect);
+        const names = new Set<string>();
+        for (const token of tokens) {
+            if (token.Kind === 'word' || token.Kind === 'identifier') {
+                const stripped = ClientClauseScreen.StripIdentifierQuotes(token.Text).trim();
+                if (stripped.length > 0) {
+                    names.add(stripped);
+                }
+            }
+        }
+        return Array.from(names);
+    }
+
+    private static buildBaseTableAllowList(entities: readonly EntityInfo[]): EntityBaseViewAllowList {
+        const qualified = new Map<string, EntityInfo | null>();
+        const bare = new Map<string, EntityInfo | null>();
+        for (const e of entities) {
+            const table = ClientClauseScreen.StripIdentifierQuotes(e.BaseTable);
+            if (!table) continue;
+            const schema = ClientClauseScreen.StripIdentifierQuotes(e.SchemaName);
+            const bareKey = table.toLowerCase();
+            bare.set(bareKey, bare.has(bareKey) ? (bare.get(bareKey) === e ? e : null) : e);
+            if (schema) {
+                const qualKey = `${schema}.${table}`.toLowerCase();
+                const existing = qualified.get(qualKey);
+                qualified.set(qualKey, existing === undefined || existing === e ? e : null);
+            }
+        }
+        return { Qualified: qualified, Bare: bare };
+    }
+
+    private static resolveEntityRelation(
+        viewAllowList: EntityBaseViewAllowList,
+        tableAllowList: EntityBaseViewAllowList,
+        schema: string,
+        table: string,
+        label: string,
+    ): EntityInfo {
+        const unqualified = ClientClauseScreen.IsUnqualifiedSchema(schema);
+        const key = unqualified ? table.toLowerCase() : `${schema}.${table}`.toLowerCase();
+        const fromView = unqualified ? viewAllowList.Bare.get(key) : viewAllowList.Qualified.get(key);
+        const reference = `${schema ? schema + '.' : ''}${table}`;
+        if (fromView === null) {
+            throw new Error(`Invalid ${label}: '${reference}' matches multiple entities — qualify it unambiguously`);
+        }
+        if (fromView) {
+            return fromView;
+        }
+        const fromTable = unqualified ? tableAllowList.Bare.get(key) : tableAllowList.Qualified.get(key);
+        if (fromTable === null) {
+            throw new Error(`Invalid ${label}: '${reference}' matches multiple entity base tables — qualify it unambiguously`);
+        }
+        if (fromTable) {
+            return fromTable;
+        }
+        throw new Error(`Invalid ${label}: '${reference}' does not resolve to a registered MemberJunction entity`);
+    }
+
+    /**
      * Every FROM item in a parsed statement, and the number of SELECT nodes, from a walk of the
      * whole parse tree with CTE scope ({@link StatementRelation.IsCTEReference}); see
      * {@link StrictFragmentValidator.CollectStatementReads} in `@memberjunction/sql-parser`. `skip`

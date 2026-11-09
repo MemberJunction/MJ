@@ -350,31 +350,37 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
     /**
      * Resolve the routine owner's `UserInfo` from `UserCache` so target execution runs under
      * the routine owner's RBAC/RLS/FLS identity rather than the scheduler's system user.
-     * Fails closed when `UserCache` is populated and the owner is missing or inactive.
+     * Always fails closed when the owner ID is missing, `UserCache` is unavailable or empty,
+     * or the owning user is missing or inactive.
      */
     protected async resolveRoutineOwnerUser(
         routine: MJUserRoutineEntity,
         fallbackContextUser: UserInfo
     ): Promise<UserInfo> {
-        const ownerUserId = routine.UserID;
-        if (!ownerUserId || (fallbackContextUser?.ID && UUIDsEqual(ownerUserId, fallbackContextUser.ID))) {
+        const ownerUserId = routine.UserID?.trim();
+        if (!ownerUserId) {
+            throw new Error(`Routine "${routine.Name}" has no UserID — refusing to execute without a resolved owner.`);
+        }
+        if (fallbackContextUser?.ID && UUIDsEqual(ownerUserId, fallbackContextUser.ID)) {
+            if (fallbackContextUser.IsActive === false) {
+                throw new Error(`Routine "${routine.Name}" owner (${ownerUserId}) is inactive — refusing to execute.`);
+            }
             return fallbackContextUser;
         }
         const userCache = (globalThis as { ___SINGLETON__UserCache?: GlobalUserCacheLookup }).___SINGLETON__UserCache;
         if (!userCache || typeof userCache.FindUser !== 'function') {
-            return fallbackContextUser;
+            throw new Error(
+                `Routine "${routine.Name}" owner (${ownerUserId}) cannot be resolved because UserCache is unavailable — refusing to execute.`
+            );
         }
         const found = await userCache.FindUser({ ID: ownerUserId });
-        if (found) {
-            if (found.IsActive === false) {
-                throw new Error(`Routine "${routine.Name}" owner (${ownerUserId}) is inactive — refusing to execute.`);
-            }
-            return found;
-        }
-        if (Array.isArray(userCache.Users) && userCache.Users.length > 0) {
+        if (!found) {
             throw new Error(`Routine "${routine.Name}" owner (${ownerUserId}) not found in UserCache — refusing to execute.`);
         }
-        return fallbackContextUser;
+        if (found.IsActive === false) {
+            throw new Error(`Routine "${routine.Name}" owner (${ownerUserId}) is inactive — refusing to execute.`);
+        }
+        return found;
     }
 
     // ========================================================================

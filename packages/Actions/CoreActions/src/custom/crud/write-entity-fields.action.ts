@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseEntity, EntityInfo, IMetadataProvider, Metadata, LogError, CompositeKey } from "@memberjunction/core";
 import { BaseAction } from "@memberjunction/actions";
+import { AgentDataPolicyGuard } from "./agent-data-policy-guard";
 
 /**
  * The shape of the dynamic field-name -> value map this action accepts.
@@ -112,6 +113,22 @@ export class WriteEntityFieldsAction extends BaseAction {
 
             // Decide create vs. update based on whether a primary key was supplied.
             const isCreate = primaryKey === undefined;
+            const canonicalMutatedFields = Object.keys(fields).map((fieldName) => {
+                const match = entityInfo.Fields.find(
+                    (f) => f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase()
+                );
+                return match ? match.Name : fieldName;
+            });
+            const prePolicy = await AgentDataPolicyGuard.EvaluateRecordOperation({
+                params,
+                entityInfo,
+                operation: isCreate ? 'Create' : 'Update',
+                mutatedFields: canonicalMutatedFields,
+            });
+            if ('blocked' in prePolicy) {
+                return prePolicy.blocked;
+            }
+
             if (isCreate) {
                 if (!createIfMissing) {
                     return this.fail(
@@ -121,13 +138,57 @@ export class WriteEntityFieldsAction extends BaseAction {
                 }
                 entity.NewRecord();
             } else {
+                if (prePolicy.allowed.active && prePolicy.allowed.effectiveWhereClause) {
+                    const keyData: FieldMap = {};
+                    for (const pkField of entityInfo.PrimaryKeys) {
+                        if (pkField.Name in primaryKey) {
+                            keyData[pkField.Name] = primaryKey[pkField.Name];
+                        }
+                    }
+                    const rlsError = await AgentDataPolicyGuard.VerifyPrimaryKeyPassesWhereClause({
+                        params,
+                        entityInfo,
+                        primaryKey: CompositeKey.FromObject(keyData),
+                        effectiveWhereClause: prePolicy.allowed.effectiveWhereClause,
+                    });
+                    if (rlsError) {
+                        return rlsError;
+                    }
+                }
                 const loadError = await this.loadExistingRecord(entity, entityInfo, primaryKey, entityName);
                 if (loadError) {
                     return loadError;
                 }
+                if (prePolicy.allowed.active && prePolicy.allowed.hasRecordConditionRules) {
+                    const preCondError = AgentDataPolicyGuard.CheckRecordCondition({
+                        params,
+                        policy: prePolicy.allowed.policy,
+                        entityInfo,
+                        operation: 'Update',
+                        mutatedFields: canonicalMutatedFields,
+                        record: entity.GetAll(),
+                    });
+                    if (preCondError) {
+                        return preCondError;
+                    }
+                }
             }
 
             this.applyFieldMap(entity, entityInfo, fields);
+
+            if (prePolicy.allowed.active && prePolicy.allowed.hasRecordConditionRules) {
+                const postCondError = AgentDataPolicyGuard.CheckRecordCondition({
+                    params,
+                    policy: prePolicy.allowed.policy,
+                    entityInfo,
+                    operation: isCreate ? 'Create' : 'Update',
+                    mutatedFields: canonicalMutatedFields,
+                    record: entity.GetAll(),
+                });
+                if (postCondError) {
+                    return postCondError;
+                }
+            }
 
             const saved = await entity.Save();
             if (!saved) {

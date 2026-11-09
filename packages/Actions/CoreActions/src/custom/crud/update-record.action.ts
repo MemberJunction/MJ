@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseRecordMutationAction } from "./base-record-mutation.action";
 import { BaseAction } from '@memberjunction/actions';
+import { AgentDataPolicyGuard } from "./agent-data-policy-guard";
 
 /**
  * Generic action for updating existing entity records in the database.
@@ -76,9 +77,47 @@ export class UpdateRecordAction extends BaseRecordMutationAction {
             const fieldNamesError = this.validateFieldNames(entity!, entityInfo!, fields);
             if (fieldNamesError) return fieldNamesError;
 
+            const requestedMutatedFields = Object.keys(fields).map(
+                (fieldName) => this.resolveEntityFieldName(entity!, fieldName, entityInfo) ?? fieldName
+            );
+            const preLoadPolicy = await AgentDataPolicyGuard.EvaluateRecordOperation({
+                params,
+                entityInfo: entityInfo!,
+                operation: 'Update',
+                mutatedFields: requestedMutatedFields,
+            });
+            if ('blocked' in preLoadPolicy) {
+                return preLoadPolicy.blocked;
+            }
+            if (preLoadPolicy.allowed.active && preLoadPolicy.allowed.effectiveWhereClause) {
+                const rlsError = await AgentDataPolicyGuard.VerifyPrimaryKeyPassesWhereClause({
+                    params,
+                    entityInfo: entityInfo!,
+                    primaryKey,
+                    effectiveWhereClause: preLoadPolicy.allowed.effectiveWhereClause,
+                });
+                if (rlsError) {
+                    return rlsError;
+                }
+            }
+
             // Load the existing record
             const loadResult = await this.loadRecord(entity!, entityInfo!, primaryKey, entityName);
             if (!loadResult.success) return loadResult.error!;
+
+            if (preLoadPolicy.allowed.active && preLoadPolicy.allowed.hasRecordConditionRules) {
+                const preConditionError = AgentDataPolicyGuard.CheckRecordCondition({
+                    params,
+                    policy: preLoadPolicy.allowed.policy,
+                    entityInfo: entityInfo!,
+                    operation: 'Update',
+                    mutatedFields: requestedMutatedFields,
+                    record: entity!.GetAll(),
+                });
+                if (preConditionError) {
+                    return preConditionError;
+                }
+            }
 
             // Track which fields are actually being changed
             const updatedFields: Record<string, { oldValue: unknown, newValue: unknown }> = {};
@@ -105,6 +144,20 @@ export class UpdateRecordAction extends BaseRecordMutationAction {
                     ResultCode: 'NO_CHANGES',
                     Message: 'No fields were modified'
                 };
+            }
+
+            if (preLoadPolicy.allowed.active && preLoadPolicy.allowed.hasRecordConditionRules) {
+                const postConditionError = AgentDataPolicyGuard.CheckRecordCondition({
+                    params,
+                    policy: preLoadPolicy.allowed.policy,
+                    entityInfo: entityInfo!,
+                    operation: 'Update',
+                    mutatedFields: Object.keys(updatedFields),
+                    record: entity!.GetAll(),
+                });
+                if (postConditionError) {
+                    return postConditionError;
+                }
             }
 
             // Save the record

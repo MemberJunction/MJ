@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseRecordMutationAction } from "./base-record-mutation.action";
 import { BaseAction } from '@memberjunction/actions';
+import { AgentDataPolicyGuard } from "./agent-data-policy-guard";
 
 /**
  * Generic action for creating new entity records in the database.
@@ -74,6 +75,20 @@ export class CreateRecordAction extends BaseRecordMutationAction {
             
             // Set field values using base class method
             this.setFieldValues(entity!, fields, entityName, entityInfo);
+
+            const mutatedFields = Object.keys(fields).map(
+                (fieldName) => this.resolveEntityFieldName(entity!, fieldName, entityInfo) ?? fieldName
+            );
+            const policyOutcome = await AgentDataPolicyGuard.EvaluateRecordOperation({
+                params,
+                entityInfo: entityInfo!,
+                operation: 'Create',
+                mutatedFields,
+                record: entity!.GetAll(),
+            });
+            if ('blocked' in policyOutcome) {
+                return policyOutcome.blocked;
+            }
 
             // Save the record
             const saveResult = await entity!.Save();

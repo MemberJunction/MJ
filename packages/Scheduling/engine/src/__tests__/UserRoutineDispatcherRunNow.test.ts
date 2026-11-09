@@ -7,7 +7,7 @@
  * go through the claim at all, and must not be skipped by the wake gate the user is trying to
  * bypass; the post-run bookkeeping then sees NextRunAt still set and keeps the routine Active.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('@memberjunction/global', async (importOriginal) => ({
     ...(await importOriginal() as Record<string, unknown>),
@@ -62,13 +62,30 @@ function makeRun() {
 
 describe('UserRoutineDispatcherDriver.RunRoutineNow', () => {
     let driver: Driver;
+    const globalRef = globalThis as {
+        ___SINGLETON__UserCache?: {
+            Users: Array<{ ID: string; IsActive?: boolean }>;
+            FindUser(criteria: { ID?: string }): Promise<{ ID: string; IsActive?: boolean } | undefined>;
+        };
+    };
+    let prevCache: typeof globalRef.___SINGLETON__UserCache;
 
     beforeEach(() => {
+        prevCache = globalRef.___SINGLETON__UserCache;
+        const ownerUser = { ID: 'OWNER', IsActive: true };
+        globalRef.___SINGLETON__UserCache = {
+            Users: [ownerUser],
+            FindUser: async ({ ID }) => (ID === 'OWNER' ? ownerUser : undefined),
+        };
         driver = new UserRoutineDispatcherDriver() as Driver;
         driver.logError = vi.fn();
         driver.log = vi.fn();
         driver.claimRoutine = vi.fn(async () => true);
         driver.wakeGateEvaluator = { Evaluate: vi.fn(async () => ({ shouldWake: false, decidedByTier: 'Tier0', reason: 'unchanged' })) };
+    });
+
+    afterEach(() => {
+        globalRef.___SINGLETON__UserCache = prevCache;
     });
 
     it('runs the routine without claiming it, so a one-shot keeps its scheduled time and stays Active', async () => {

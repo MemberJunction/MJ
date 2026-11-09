@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseRecordMutationAction } from "./base-record-mutation.action";
 import { BaseAction } from '@memberjunction/actions';
+import { AgentDataPolicyGuard } from "./agent-data-policy-guard";
 
 /**
  * Generic action for deleting entity records from the database.
@@ -77,13 +78,51 @@ export class DeleteRecordAction extends BaseRecordMutationAction {
             if (primaryKeyResult.error) return primaryKeyResult.error;
             const primaryKey = primaryKeyResult.value!;
 
+            const policyOutcome = await AgentDataPolicyGuard.EvaluateRecordOperation({
+                params,
+                entityInfo: entityInfo!,
+                operation: 'Delete',
+            });
+            if ('blocked' in policyOutcome) {
+                return policyOutcome.blocked;
+            }
+            if (policyOutcome.allowed.active && policyOutcome.allowed.effectiveWhereClause) {
+                const rlsError = await AgentDataPolicyGuard.VerifyPrimaryKeyPassesWhereClause({
+                    params,
+                    entityInfo: entityInfo!,
+                    primaryKey,
+                    effectiveWhereClause: policyOutcome.allowed.effectiveWhereClause,
+                });
+                if (rlsError) {
+                    return rlsError;
+                }
+            }
+
             // Load the existing record
             const loadResult = await this.loadRecord(entity!, entityInfo!, primaryKey, entityName);
             if (!loadResult.success) return loadResult.error!;
 
             // Store the record data before deletion
             // fls-guard: loaded as params.ContextUser; width follows its user
-            const deletedRecordData = entity.GetAll();
+            const rawDeletedRecordData = entity.GetAll();
+            if (policyOutcome.allowed.active && policyOutcome.allowed.hasRecordConditionRules) {
+                const conditionError = AgentDataPolicyGuard.CheckRecordCondition({
+                    params,
+                    policy: policyOutcome.allowed.policy,
+                    entityInfo: entityInfo!,
+                    operation: 'Delete',
+                    record: rawDeletedRecordData,
+                });
+                if (conditionError) {
+                    return conditionError;
+                }
+            }
+            const deletedRecordData = policyOutcome.allowed.active
+                ? AgentDataPolicyGuard.MaskRecord(
+                      rawDeletedRecordData,
+                      policyOutcome.allowed.evalResult.deniedFieldPatterns
+                  )
+                : rawDeletedRecordData;
 
             // Delete the record
             const deleteResult = await entity.Delete();
