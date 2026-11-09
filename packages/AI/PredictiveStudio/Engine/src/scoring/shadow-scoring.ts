@@ -380,6 +380,8 @@ export class ShadowScoringCoordinator {
     }
 
     const latencyMs = Date.now() - startedAt;
+    // The challenger's lineage follows its WorkType: an 'ML Model' challenger is an MJ: ML Models row and never a prompt.
+    const isMLModelChallenger = envelope.ChallengerConfig.WorkType === 'ML Model';
     const auditRecord: ShadowFeatureValueAuditRecord = {
       RecordID: envelope.RecordID,
       EntityID: envelope.EntityID,
@@ -389,8 +391,8 @@ export class ShadowScoringCoordinator {
       FeatureName: envelope.FeatureName,
       Role: 'Challenger',
       ModelID: envelope.ChallengerConfig.ChallengerModelID,
-      MLModelID: envelope.ChallengerConfig.ChallengerModelID,
-      PromptID: envelope.ChallengerConfig.ChallengerPromptID,
+      MLModelID: isMLModelChallenger ? envelope.ChallengerConfig.ChallengerModelID : undefined,
+      PromptID: isMLModelChallenger ? undefined : envelope.ChallengerConfig.ChallengerPromptID,
       NumericValue: output?.Score ?? null,
       TextValue: output?.Label ?? null,
       Confidence: output?.Confidence ?? null,
@@ -754,8 +756,9 @@ export class FeatureValueShadowAuditSink implements IShadowScoreAuditSink {
     fv.ValueKeyHash = null;
     fv.RecordProcessID = record.RecordProcessID ?? null;
     fv.ProcessRunID = record.ProcessRunID ?? null;
-    fv.MLModelID = record.MLModelID ?? (record.PromptID ? null : (record.ModelID ?? null));
-    fv.AIModelID = record.AIModelID ?? (record.PromptID ? (record.ModelID ?? null) : null);
+    // Each lineage column takes only its own ID: ModelID is never guessed into AIModelID (an ML Model ID there fails its FK).
+    fv.MLModelID = record.MLModelID ?? null;
+    fv.AIModelID = record.AIModelID ?? null;
     fv.PromptID = record.PromptID ?? null;
     fv.ValueNumeric = record.NumericValue ?? null;
     fv.ValueText = record.TextValue ?? null;

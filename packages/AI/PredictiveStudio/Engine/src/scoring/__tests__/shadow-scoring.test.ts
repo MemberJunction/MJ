@@ -563,6 +563,44 @@ describe('ShadowScoringCoordinator', () => {
       expect(challengerSaved!.Confidence).toBeCloseTo(0.87, 5);
     });
 
+    it('saves an ML Model challenger configured with a ChallengerPromptID too with MLModelID only, never an ML Model ID in AIModelID (P12)', async () => {
+      const createdEntities: SavedFeatureValueDouble[] = [];
+      const fakeProvider = {
+        GetEntityObject: async <T>(): Promise<T> => {
+          const entity = new SavedFeatureValueDouble();
+          createdEntities.push(entity);
+          return entity as T;
+        },
+        EntityByName: () => ({ ID: 'Ent-Members' }) as ReturnType<IMetadataProvider['EntityByName']>,
+      } as unknown as IMetadataProvider;
+
+      const coordinator = new ShadowScoringCoordinator({
+        ChallengerRunner: { RunChallenger: async () => ({ Score: 0.7, Label: 'renew' }) },
+        AuditSink: new FeatureValueShadowAuditSink(),
+      });
+      await coordinator.ExecuteChallengerEnvelope(
+        {
+          RecordProcessID: 'RP-12',
+          EntityID: 'Ent-Members',
+          RecordID: 'Mem-12',
+          FeatureName: 'Renewed',
+          ChallengerConfig: { ...baseConfig, ChallengerPromptID: 'Prompt-Leftover-1' },
+          FrozenFeatures: { tenure: 3 },
+          DispatchedAt: '2026-11-02T12:00:00.000Z',
+        },
+        { ID: 'user-1' } as UserInfo,
+        fakeProvider,
+      );
+
+      expect(createdEntities).toHaveLength(1);
+      const row = createdEntities[0];
+      expect(row.LatestResult).toBeNull();
+      expect(row.SaveCalled).toBe(true);
+      expect(row.MLModelID).toBe('Model-Challenger-V2');
+      expect(row.AIModelID).toBeNull();
+      expect(row.PromptID).toBeNull();
+    });
+
     it('re-checks modelLoader.loadModel with each caller contextUser and reloads the artifact when ArtifactFileID changes (R9)', async () => {
       const observedModelLoadUsers: Array<string | undefined> = [];
       const observedArtifactLoads: string[] = [];
