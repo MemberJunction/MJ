@@ -339,19 +339,18 @@ describe('ShadowScoringCoordinator', () => {
     it('holds in-flight slots until slow sidecar calls settle so timeouts do not defeat MaxInFlight (S1)', async () => {
       let activeCalls = 0;
       let maxObservedActiveCalls = 0;
+      const signals: AbortSignal[] = [];
 
+      // A sidecar call that ignores the abort: it runs 100 ms even though the 15 ms timeout fires first.
       const slowRunner: IChallengerScoreRunner = {
-        RunChallenger: async (_env, signal) => {
+        RunChallenger: async (_env, _user, _provider, signal) => {
+          if (signal) {
+            signals.push(signal);
+          }
           activeCalls++;
           maxObservedActiveCalls = Math.max(maxObservedActiveCalls, activeCalls);
           try {
-            await new Promise<void>((resolve) => {
-              const timer = setTimeout(resolve, 60);
-              signal?.addEventListener('abort', () => {
-                clearTimeout(timer);
-                resolve();
-              });
-            });
+            await new Promise<void>((resolve) => setTimeout(resolve, 100));
             return { Score: 0.5 };
           } finally {
             activeCalls--;
@@ -363,23 +362,34 @@ describe('ShadowScoringCoordinator', () => {
         MaxInFlight: 4,
         ChallengerRunner: slowRunner,
       });
-
-      for (let i = 0; i < 36; i++) {
+      const dispatch = (i: number) =>
         coordinator.DispatchShadowScore({
           RecordID: `rec-${i}`,
           ChallengerConfig: { ...baseConfig, MaxLatencyMs: 15 },
           FrozenFeatures: { x: 1 },
           DispatchedAt: '2026-11-02T12:00:00.000Z',
         });
-      }
 
-      // Concurrency must never exceed MaxInFlight (4)
-      expect(maxObservedActiveCalls).toBeLessThanOrEqual(4);
-      expect(coordinator.DroppedCount).toBeGreaterThan(0);
+      for (let i = 0; i < 4; i++) {
+        dispatch(i);
+      }
+      // The four runners have started, and their timeouts have fired while the calls still run.
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+      expect(activeCalls).toBe(4);
+      expect(signals).toHaveLength(4);
+      expect(signals.every((signal) => signal instanceof AbortSignal && signal.aborted)).toBe(true);
+
+      // The slots are still held, so four more are dropped rather than started.
+      for (let i = 4; i < 8; i++) {
+        dispatch(i);
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+      expect(coordinator.DroppedCount).toBe(4);
+      expect(maxObservedActiveCalls).toBe(4);
 
       await coordinator.FlushInFlight();
       expect(coordinator.InFlightCount).toBe(0);
-      expect(maxObservedActiveCalls).toBeLessThanOrEqual(4);
+      expect(maxObservedActiveCalls).toBe(4);
     });
 
     it('persists champion audit row even when challenger task is dropped by in-flight cap (S5)', async () => {
