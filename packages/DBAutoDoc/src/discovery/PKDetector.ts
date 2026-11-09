@@ -9,6 +9,7 @@ import { TableDefinition, ColumnDefinition } from '../types/state.js';
 import { PKCandidate, PKEvidence, ColumnStatistics, CachedColumnStats } from '../types/discovery.js';
 import { RelationshipDiscoveryConfig } from '../types/config.js';
 import { ColumnStatsCache } from './ColumnStatsCache.js';
+import { BuildCachedColumnStats, HasBlankOrZero } from './ColumnStatsBuilder.js';
 import {
   ClassifySingleColumnKey, CompositeKeyIndexes,
   INDEX_KEY_BOOST, UNIQUE_COMPOSITE_CONFIDENCE
@@ -212,37 +213,20 @@ export class PKDetector {
         this.config.sampling.maxRowsPerTable
       );
 
-      // Detect data pattern
-      const dataPattern = this.detectDataPattern(stats.sampleValues, column.dataType);
-
-      const nullPercentage = stats.totalRows > 0 ? stats.nullCount / stats.totalRows : 0;
-      const uniqueness = stats.totalRows > 0 ? stats.distinctCount / stats.totalRows : 0;
-      const hasBlankOrZero = stats.sampleValues.some(v =>
-        v === '' || v === 0 || v === '0' || (typeof v === 'string' && v.trim() === '')
-      );
-
-      cachedStats = {
+      cachedStats = BuildCachedColumnStats({
         schemaName,
         tableName,
         columnName: column.name,
         dataType: column.dataType,
         totalRows: stats.totalRows,
         nullCount: stats.nullCount,
-        nullPercentage,
         distinctCount: stats.distinctCount,
-        uniqueness,
+        sampleValues: stats.sampleValues,
         minValue: stats.minValue,
         maxValue: stats.maxValue,
         avgLength: stats.avgLength,
-        dataPattern,
-        sampleValues: stats.sampleValues,
-        // Deterministic PK eligibility: zero nulls, zero blanks, 100% unique
-        pkEligible: stats.nullCount === 0 && !hasBlankOrZero && uniqueness === 1.0 && stats.totalRows > 0,
-        // FK eligibility computed later by FKDetector (default true, refined by data type/value checks)
-        fkEligible: true,
-        computedAt: new Date().toISOString(),
         queryTimeMs: Date.now() - startTime
-      };
+      });
 
       this.statsCache.setColumnStats(cachedStats);
     }
@@ -260,11 +244,7 @@ export class PKDetector {
       if (cachedStats.nullCount > 0) reasons.push(`${cachedStats.nullCount} nulls`);
       if (cachedStats.uniqueness < 1.0) reasons.push(`${(cachedStats.uniqueness * 100).toFixed(1)}% unique (must be 100%)`);
       if (cachedStats.totalRows === 0) reasons.push('empty table');
-      // Check for blanks in sample
-      const hasBlankOrZero = cachedStats.sampleValues?.some(v =>
-        v === '' || v === 0 || v === '0' || (typeof v === 'string' && v.trim() === '')
-      );
-      if (hasBlankOrZero) reasons.push('has blank/zero values');
+      if (HasBlankOrZero(cachedStats.sampleValues)) reasons.push('has blank/zero values');
       console.log(`[PKDetector] REJECT ${column.name} - not PK-eligible: ${reasons.join(', ')}`);
       return null;
     }
@@ -403,56 +383,6 @@ export class PKDetector {
 
     // Everything else
     return 0.4;
-  }
-
-  /**
-   * Detect data pattern (sequential, GUID, etc.)
-   */
-  private detectDataPattern(
-    sampleValues: Array<string | number | null>,
-    dataType?: string
-  ): 'sequential' | 'guid' | 'composite' | 'natural' | 'unknown' {
-    // GUID pattern
-    if (dataType && (
-        dataType.toLowerCase().includes('uniqueidentifier') ||
-        dataType.toLowerCase().includes('uuid') ||
-        dataType.toLowerCase().includes('guid'))) {
-      return 'guid';
-    }
-
-    // Check sample values for patterns
-    if (sampleValues && sampleValues.length > 1) {
-      const values = sampleValues.filter(v => v != null) as Array<string | number>;
-
-      // Check for GUID pattern in string values
-      if (values.length > 0 && typeof values[0] === 'string') {
-        const guidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (values.every(v => typeof v === 'string' && guidPattern.test(v))) {
-          return 'guid';
-        }
-      }
-
-      // Check for sequential numeric pattern
-      if (values.length > 0 && typeof values[0] === 'number') {
-        const numValues = values as number[];
-        const sorted = [...numValues].sort((a, b) => a - b);
-        const isSequential = sorted.every((val, idx) =>
-          idx === 0 || val === sorted[idx - 1] + 1
-        );
-        if (isSequential) {
-          return 'sequential';
-        }
-      }
-    }
-
-    // Natural key (string based on actual data)
-    if (dataType && (
-        dataType.toLowerCase().includes('varchar') ||
-        dataType.toLowerCase().includes('char'))) {
-      return 'natural';
-    }
-
-    return 'unknown';
   }
 
   /**

@@ -171,6 +171,7 @@ Based on the evidence above, generate a JSON response with this exact structure:
 2. **Reasoning**: Reference specific evidence (column names, FK relationships, sample values, cardinality patterns)
 3. **Confidence**: 0-1 scale. Be conservative. Use < 0.7 if ambiguous.
 4. **Column Descriptions**: Every column should be described. Explain its role and meaning. For columns marked as "Enum Candidate: Yes", include a `valueList` object with your verdict. Omit `valueList` for columns that are not enum candidates.
+   - **Date and time columns**: when the table has more than one, say for EACH what event it marks (row created, business event happened, row last changed, period start or end) and name the one that tracks changes to the row. Use the value ranges above as evidence: a change-tracking column spans the whole life of the table, a business-event column spans the period the data covers. Never describe two date columns with the same words.
 5. **Primary Key**: Identify the column(s) that most likely form this table's primary key.
    - Look for columns with 100% uniqueness, zero nulls, and names like `ID`, `TableNameID`, or `Code`
    - For junction/bridge tables (e.g., `ProductModelIllustration`), the PK is likely a composite of the FK columns

@@ -61,6 +61,12 @@ export class DiscoveryEngine {
 
     // Create stats cache and detectors
     this.statsCache = new ColumnStatsCache();
+    // The cache starts from what the sampling pass already measured, so discovery queries the
+    // database only for columns sampling did not cover.
+    const seededColumns = this.statsCache.SeedFromSchemas(this.schemas);
+    if (seededColumns > 0) {
+      this.onProgress('Seeded discovery statistics from sampling', { columns: seededColumns });
+    }
     this.pkDetector = new PKDetector(this.driver, this.config, this.statsCache);
     this.fkDetector = new FKDetector(this.driver, this.config, this.statsCache);
 
