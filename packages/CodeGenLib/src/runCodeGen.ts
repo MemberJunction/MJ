@@ -973,7 +973,7 @@ export class RunCodeGenBase {
         );
         const ok = await reporter.phase('generateAngular', async () => {
           for (const [dir, group] of angularGroups) {
-            const groupOk = angularGenerator.generateAngularCode(group, dir, '', currentUser, 'Angular');
+            const groupOk = await angularGenerator.generateAngularCode(group, dir, '', currentUser, 'Angular');
             if (!groupOk) {
               return false;
             }
