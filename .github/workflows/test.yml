@@ -133,6 +133,9 @@ jobs:
             # Same again for the EntityField Sequence gate: its vitest suite lives in __tests__, but an
             # edit to the gate script alone must run it too.
             .github/scripts/check-migration-entityfield-sequence.mjs
+            # Same again for the competing validator-seed gate (guards job) and its baseline.
+            .github/scripts/check-migration-validator-seeds.mjs
+            .github/scripts/migration-validator-seeds-baseline.json
             # The dynamic-import gate runs in the Source guards job; an edit to it alone must run it and its suite.
             .github/scripts/check-dynamic-imports.mjs
             # Same again for the exact-pins guard: it runs in ci-exact-pins.yml, not here, but its
@@ -284,6 +287,14 @@ jobs:
       - name: MJ CLI resolution guard
         if: ${{ !cancelled() }}
         run: node .github/scripts/check-mj-cli-resolution.mjs packages
+
+      # Competing validator-seed guard (MJ#4673). Two migrations that seed the same CodeGen
+      # validator row with different text are both guarded by existence checks, so filename order
+      # alone decides the message users see and the later text never applies. Released pairs are
+      # listed in migration-validator-seeds-baseline.json; a new pair fails here.
+      - name: Migration validator-seed guard
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/check-migration-validator-seeds.mjs
 
       # Citizen-builder template copy guard. `mj agent init` scaffolds from citizen-builder/, and
       # @memberjunction/cli commits a copy of it under src/init-templates/: that copy is the CLI's

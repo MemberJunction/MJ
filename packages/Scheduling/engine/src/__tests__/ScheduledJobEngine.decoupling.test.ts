@@ -741,13 +741,23 @@ describe('T10: Sweep frees cap-saturated slots after lease expiry', () => {
         mockBase.ScheduledJobs = [jobA, jobB];
 
         // First dispatch: A + B both hang and take cap slots.
+        let hungStarted = 0;
         mockPluginFactory = () => ({
-            Execute: vi.fn().mockImplementation(() => new Promise(() => {}))
+            Execute: vi.fn().mockImplementation(() => {
+                hungStarted++;
+                return new Promise(() => {});
+            })
         });
         queueAcquireRelease([1, 1], []);
         await engine.DispatchScheduledJobs(mockUser as never);
         // @ts-expect-error
         expect(engine.inflightJobPromises.size).toBe(2);
+        // Both executions must be inside their hung plugin before the factory is swapped below;
+        // DispatchScheduledJobs returns before B has created its plugin.
+        for (let i = 0; i < 20 && hungStarted < 2; i++) {
+            await new Promise(r => setTimeout(r, 0));
+        }
+        expect(hungStarted).toBe(2);
 
         // Add jobC. Cap is full. Sweep finds A and B stale; frees both.
         mockBase.ScheduledJobs = [jobA, jobB, jobC];
@@ -765,6 +775,10 @@ describe('T10: Sweep frees cap-saturated slots after lease expiry', () => {
         // abandonOrphanedRunRecords runs once per stale entry — return empty for both.
         mockRunViewQueue.push({ Success: true, Results: [] });
         mockRunViewQueue.push({ Success: true, Results: [] });
+
+        // The sweep counts each abandoned run as failed: one stats sproc call per swept job, ahead
+        // of jobC's acquire.
+        mockExecuteSQLQueue.push([], []);
 
         // Now jobC acquires after sweep frees slots.
         mockPluginFactory = () => ({

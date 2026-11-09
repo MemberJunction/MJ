@@ -13,17 +13,26 @@
  * re-runs the SAME single-feature-dominance check the {@link TrainingEngine} uses
  * (§6.4) over the model's frozen `FeatureImportance`, against the dominance
  * threshold from the producing pipeline's `LeakageGuard` (falling back to the
- * standard 0.6). This is deterministic and needs no extra state on the model.
+ * standard 0.6). A kept simple baseline stores no importance of its own (`{}`), so
+ * the run's leakage audit its Lineage records (the finalist importance's top feature
+ * and share) is judged against the same threshold: either one flags the model.
+ *
+ * ## Holds no sign-off overrides
+ * A model whose Lineage records a `calibrationHold` (its family is hidden for its
+ * holdout calibration) is never moved to Validated or Published, and a model whose
+ * artifact the sidecar's `/predict` does not serve (a forecast's series forecaster,
+ * {@link ModelReadiness.IsServedByPredict}) is never published.
  */
 
 import { RunView, LogError, LogStatus, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import { IsValidUUID } from '@memberjunction/global';
 import type { MJMLModelEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
-import { DOMINANCE_THRESHOLD_DEFAULT, type FeatureImportance, type LeakageGuard } from '@memberjunction/predictive-studio-core';
+import { CALIBRATION_SLOPE_RANGE, DOMINANCE_THRESHOLD_DEFAULT, type FeatureImportance, type LeakageGuard } from '@memberjunction/predictive-studio-core';
 
 import { DetectSingleFeatureDominance } from '../feature-assembly/leakage-guard';
 import { ModelScoringActionGenerator } from './model-scoring-action-generator';
-import { ModelHasTrainedArtifact, ModelNeedsTrainingMessage } from '../scoring/model-readiness';
+import { ModelHasTrainedArtifact, ModelNeedsTrainingMessage, ModelReadiness } from '../scoring/model-readiness';
+import { TrainerModelLineageReader } from '../training/trainer-model-lineage';
 import type {
   IModelPromotionGate,
   PromoteModelRequest,
@@ -39,6 +48,11 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
     const model = await this.loadModel(request.modelId, request.contextUser, request.provider);
     if (!model) {
       return { kind: 'not-found' };
+    }
+    // A hidden family is never offered: no sign-off overrides a calibration hold, so it is checked first.
+    const calibrationRefusal = this.CalibrationHoldRefusal(model, request.targetStatus);
+    if (calibrationRefusal !== null) {
+      return calibrationRefusal;
     }
 
     // Always evaluate leakage so a sign-off override of a FLAGGED model can be
@@ -58,6 +72,59 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
     }
 
     return this.transition(model, request.targetStatus, signOffNote, request.contextUser, request.provider);
+  }
+
+  /**
+   * The refusal of a calibration-held model ({@link TrainerModelLineageReader.CalibrationHoldOf}) moving to Validated or
+   * Published; null for any other model or target (a held model may still be archived).
+   */
+  protected CalibrationHoldRefusal(model: MJMLModelEntity, targetStatus: PromoteModelRequest['targetStatus']): PromoteModelOutcome | null {
+    if (targetStatus === 'Archived') return null;
+    const hold = TrainerModelLineageReader.CalibrationHoldOf(model.Lineage);
+    return hold === null ? null : { kind: 'refused-calibration', slope: hold.slope };
+  }
+
+  /**
+   * The plain-language refusal of a calibration-held model, shared by the Promote action and operation.
+   *
+   * @param modelId the `MJ: ML Models` id
+   * @param slope the held finalist's holdout calibration slope; null when it could not be measured
+   */
+  public static CalibrationRefusalMessage(modelId: string, slope: number | null): string {
+    const range = `${CALIBRATION_SLOPE_RANGE[0]}–${CALIBRATION_SLOPE_RANGE[1]}`;
+    const why = slope === null
+      ? 'its calibration slope could not be measured on the held-back rows'
+      : `its probabilities are miscalibrated on the held-back rows (calibration slope ${slope.toFixed(2)}, outside the ${range} range)`;
+    return (
+      `Model ${modelId} is held for calibration and cannot be validated or published: ${why}. A family outside the ` +
+      `${range} calibration range is hidden, so no sign-off overrides it; retrain to get a model whose calibration is in range.`
+    );
+  }
+
+  /**
+   * A short plain description of an outcome that did not promote, for callers that report why a model was not
+   * published (auto-train, the pipeline builder).
+   */
+  public static DescribeRefusal(outcome: PromoteModelOutcome): string {
+    switch (outcome.kind) {
+      case 'refused-leakage':
+      case 'signoff-reason-required':
+        return `possible target leakage on "${outcome.topFeature || 'a feature'}" needs human sign-off`;
+      case 'refused-calibration':
+        return outcome.slope === null
+          ? 'its calibration slope could not be measured, so its family is hidden (calibration hold)'
+          : `its calibration slope ${outcome.slope.toFixed(2)} is outside ${CALIBRATION_SLOPE_RANGE[0]}–${CALIBRATION_SLOPE_RANGE[1]}, so its family is hidden (calibration hold)`;
+      case 'not-servable':
+      case 'needs-training':
+      case 'save-failed':
+        return outcome.message;
+      case 'invalid-transition':
+        return `invalid transition from ${outcome.currentStatus}`;
+      case 'not-found':
+        return 'model not found';
+      case 'promoted':
+        return 'promoted';
+    }
   }
 
   /**
@@ -119,7 +186,11 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
   /**
    * Determine whether the model was leakage-flagged by re-running the
    * single-feature-dominance check over its frozen `FeatureImportance` against the
-   * producing pipeline's threshold.
+   * producing pipeline's threshold, and judging the run's leakage audit its Lineage
+   * records against the same (clamped) threshold: a kept simple baseline stores `{}`
+   * as its importance, so the finalist's audit is what can flag it. A model whose
+   * Lineage records no audit (trained before the audit existed) is judged by its
+   * importance alone.
    */
   protected async detectLeakage(
     model: MJMLModelEntity,
@@ -129,7 +200,15 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
     const importance = this.parseJson<FeatureImportance>(model.FeatureImportance, {});
     const threshold = await this.resolveThreshold(model.PipelineID, contextUser, provider);
     const dominance = DetectSingleFeatureDominance(importance, threshold);
-    return { flagged: dominance.Dominant, topFeature: dominance.TopFeature, topShare: dominance.TopShare };
+    if (dominance.Dominant) {
+      return { flagged: true, topFeature: dominance.TopFeature, topShare: dominance.TopShare };
+    }
+    // The same strict comparison as the importance check, against the threshold it applied.
+    const audit = TrainerModelLineageReader.LeakageAuditOf(model.Lineage);
+    if (audit !== null && audit.topShare > dominance.Threshold) {
+      return { flagged: true, topFeature: audit.topFeature, topShare: audit.topShare };
+    }
+    return { flagged: false, topFeature: dominance.TopFeature, topShare: dominance.TopShare };
   }
 
   /** Resolve the dominance threshold from the producing pipeline's `LeakageGuard`. */
@@ -205,6 +284,10 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
     // lifecycle rule, so an illegal jump is still reported as an invalid transition.
     if (targetStatus === 'Published' && !ModelHasTrainedArtifact(model)) {
       return { kind: 'needs-training', message: ModelNeedsTrainingMessage(model.ID) };
+    }
+    // An artifact /predict does not serve (a forecast's series forecaster) would fail every record once bound.
+    if (targetStatus === 'Published' && !ModelReadiness.IsServedByPredict(model)) {
+      return { kind: 'not-servable', message: ModelReadiness.NotServedByPredictMessage(model.ID) };
     }
     model.Status = targetStatus;
     const saved = await model.Save();
