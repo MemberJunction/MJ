@@ -64,7 +64,7 @@ export async function GenerateStep(o: GenerateOptions): Promise<{ RunID: string 
         Turns: results[i].Turns, Tokens: results[i].Tokens, TranscriptURL: results[i].TranscriptPath,
         Produced: results[i].Tests.filter((x) => x.GenerationOutcome === 'Produced').length, Failed: results[i].Tests.filter((x) => x.GenerationOutcome === 'Failed').length }));
     run.TokensByModel = SumTokens([{ ...t.Analyzer.Usage, Role: 'Analyzer' }, ...results.map((r) => ({ ...r.Tokens, Role: 'Generator' as const }))]); run.EndedAt = new Date().toISOString();
-    dir.WriteGeneration({ Run: run, Analysis: analysis, Tests: tests, BaseRootDir: base.RootDir, Sessions: sessions });
+    dir.WriteGeneration({ Run: run, Analysis: analysis, Tests: tests, BaseRootDir: base.RootDir, Sessions: sessions, BaseSourceDir: null });
     const produced = tests.filter((x) => x.GenerationOutcome === 'Produced').length;
     process.stdout.write(`run ${run.ID}: ${produced} produced, ${tests.length - produced} failed, ${requests.length} sessions\n`);
     return { RunID: run.ID };

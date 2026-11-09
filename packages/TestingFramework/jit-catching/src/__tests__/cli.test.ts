@@ -13,6 +13,7 @@ function deps(over: Partial<CliDeps> = {}): CliDeps {
     AssessStep: vi.fn(async () => ({ Catches: [], Promotions: [] })),
     RunAll: vi.fn(async () => ({ RunID: 'r1', Reported: [] })),
     MineCorpus: vi.fn(async () => ({ Clean: [], Bug: [] })),
+    CleanRun: vi.fn(async () => undefined),
     ...over,
   };
 }
@@ -65,5 +66,18 @@ describe('Main', () => {
     expect(d.MineCorpus).toHaveBeenCalledWith({ RepoRoot: '/repo', Since: '2026-01-01', Until: '2026-03-31' });
     expect(JSON.parse(readFileSync(out, 'utf8'))).toEqual({ Clean: clean, Bug: [] });
     expect(stdout.join('')).toMatch(/1 clean.*0 bug/);
+  });
+
+  it('clean --run <id> calls CleanRun with the repository root and the run ID', async () => {
+    const d = deps();
+    expect(await Main(['clean', '--run', 'r1'], d)).toBe(0);
+    expect(d.CleanRun).toHaveBeenCalledWith('/repo', 'r1', expect.anything());
+  });
+
+  it('returns 2 with a usage error for clean without --run or --all-finished', async () => {
+    const d = deps();
+    expect(await Main(['clean'], d)).toBe(2);
+    expect(stderr.join('')).toMatch(/clean needs --run or --all-finished/);
+    expect(d.CleanRun).not.toHaveBeenCalled();
   });
 });
