@@ -359,9 +359,40 @@ BEGIN
   INSERT INTO _uef_cols SELECT * FROM __mj."vwSQLColumnsAndEntityFields";
   ANALYZE _uef_cols;
 
-  CREATE TEMP TABLE IF NOT EXISTS _uef_fk AS SELECT * FROM __mj."vwForeignKeys" WITH NO DATA;
+  -- Two columns beside the view's: column_count (components in the constraint) and target_is_unique
+  -- (the referenced column is unique on its own). A composite FK's components are valid single-column
+  -- references only when their target is unique; the others would join a non-unique target and
+  -- multiply rows in the base view (#4534). Same create-once + TRUNCATE shape as the other snapshots.
+  CREATE TEMP TABLE IF NOT EXISTS _uef_fk AS
+  SELECT fk.*,
+         COUNT(*) OVER (PARTITION BY fk."FK_NAME", fk.schema_name, fk."table") AS column_count,
+         EXISTS (
+             SELECT 1
+             FROM pg_index ri
+             JOIN pg_class rc ON rc.oid = ri.indrelid
+             JOIN pg_namespace rn ON rn.oid = rc.relnamespace
+             JOIN pg_attribute ra ON ra.attrelid = rc.oid AND ra.attnum = ri.indkey[0]
+             WHERE ri.indisunique AND ri.indnkeyatts = 1 AND ri.indpred IS NULL
+               AND rn.nspname = fk.referenced_schema::text
+               AND rc.relname = fk.referenced_table::text
+               AND ra.attname = fk.referenced_column::text
+          ) AS target_is_unique
+  FROM __mj."vwForeignKeys" fk WITH NO DATA;
   TRUNCATE _uef_fk;
-  INSERT INTO _uef_fk SELECT * FROM __mj."vwForeignKeys";
+  INSERT INTO _uef_fk SELECT fk.*,
+         COUNT(*) OVER (PARTITION BY fk."FK_NAME", fk.schema_name, fk."table") AS column_count,
+         EXISTS (
+             SELECT 1
+             FROM pg_index ri
+             JOIN pg_class rc ON rc.oid = ri.indrelid
+             JOIN pg_namespace rn ON rn.oid = rc.relnamespace
+             JOIN pg_attribute ra ON ra.attrelid = rc.oid AND ra.attnum = ri.indkey[0]
+             WHERE ri.indisunique AND ri.indnkeyatts = 1 AND ri.indpred IS NULL
+               AND rn.nspname = fk.referenced_schema::text
+               AND rc.relname = fk.referenced_table::text
+               AND ra.attname = fk.referenced_column::text
+          ) AS target_is_unique
+  FROM __mj."vwForeignKeys" fk;
   ANALYZE _uef_fk;
 
   -- "KeyColumnCount": a column of a composite primary key is not unique on its own (#4536).
@@ -551,6 +582,7 @@ BEGIN
   INNER JOIN __mj."Entity" e ON ef."EntityID" = e."ID"
   LEFT JOIN _uef_fk fk
     ON ef."Name"::text = fk."column"::text AND e."BaseTable"::text = fk."table"::text AND e."SchemaName"::text = fk."schema_name"::text
+       AND (fk.column_count = 1 OR fk.target_is_unique)
   LEFT JOIN __mj."Entity" re
     ON re."BaseTable"::text = fk."referenced_table"::text AND re."SchemaName"::text = fk."referenced_schema"::text
   LEFT JOIN _uef_pk pk

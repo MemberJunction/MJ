@@ -4,6 +4,7 @@
  */
 
 import { DatabaseDocumentation, AnalysisRun, SchemaDefinition, TableDefinition, ColumnDefinition, ValueListVerdict } from '../types/state.js';
+import { ApplyBestPrimaryKeys } from '../discovery/ApplyPrimaryKeys.js';
 import { EnsureArray } from "../utils/ensureArray.js";
 import type { BaseAutoDocDriver } from "../drivers/BaseAutoDocDriver.js";
 import { CheckPKProposal } from "./PKProposalGate.js";
@@ -268,6 +269,13 @@ export class AnalysisEngine {
     }
 
     const kept = allPKs.length - removed;
+    // Pruning only changed candidate status; re-apply so a rejected candidate's columns are
+    // unflagged and each table keeps exactly its best surviving key (#6004).
+    if (removed > 0) {
+      const floor = (this.config.analysis.relationshipDiscovery?.confidence?.primaryKeyMinimum ?? 0.7) * 100;
+      const reapplied = ApplyBestPrimaryKeys(state, discoveryPhase.discovered.primaryKeys, floor);
+      this.onProgress('PK flags re-applied after pruning', { tablesFlagged: reapplied.TablesFlagged, columnsCleared: reapplied.ColumnsCleared });
+    }
     console.log(`[AnalysisEngine] PK pruning complete: ${removed} removed, ${kept} kept (model: ${effectiveModel})`);
     this.onProgress('PK pruning complete', { removed, kept, model: effectiveModel });
     this.stateManager.updateSummary(state);

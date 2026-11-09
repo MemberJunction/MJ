@@ -3162,8 +3162,24 @@ WHERE p.prokind IN ('f', 'p')
             : '';
         return `
 WITH fk_cache AS (
-   SELECT "column", "table", "schema_name", "referenced_table", "referenced_column", "referenced_schema"
-   FROM ${qs(schema, 'vwForeignKeys')}
+   -- Two columns beside the view's: column_count (components in the constraint) and target_is_unique
+   -- (the referenced column is unique on its own). A composite FK's components are valid single-column
+   -- references only when their target is unique; the others would join a non-unique target and
+   -- multiply rows in the base view (#4534).
+   SELECT fk."column", fk."table", fk."schema_name", fk."referenced_table", fk."referenced_column", fk."referenced_schema",
+          COUNT(*) OVER (PARTITION BY fk."FK_NAME", fk."schema_name", fk."table") AS column_count,
+          EXISTS (
+             SELECT 1
+             FROM pg_index ri
+             JOIN pg_class rc ON rc.oid = ri.indrelid
+             JOIN pg_namespace rn ON rn.oid = rc.relnamespace
+             JOIN pg_attribute ra ON ra.attrelid = rc.oid AND ra.attnum = ri.indkey[0]
+             WHERE ri.indisunique AND ri.indnkeyatts = 1 AND ri.indpred IS NULL
+               AND rn.nspname = fk."referenced_schema"::text
+               AND rc.relname = fk."referenced_table"::text
+               AND ra.attname = fk."referenced_column"::text
+          ) AS target_is_unique
+   FROM ${qs(schema, 'vwForeignKeys')} fk
 ),
 -- "KeyColumnCount": a column of a composite primary key is not unique on its own (#4536)
 pk_cache AS (
@@ -3228,6 +3244,7 @@ numbered_rows AS (
       ${qs(schema, 'Entity')} e ON sf."EntityID" = e."ID"
    LEFT OUTER JOIN
       fk_cache fk ON sf."FieldName" = fk."column" AND e."BaseTable" = fk."table" AND e."SchemaName" = fk."schema_name"
+         AND (fk.column_count = 1 OR fk.target_is_unique)
    LEFT OUTER JOIN
       ${qs(schema, 'Entity')} re ON re."BaseTable" = fk."referenced_table" AND re."SchemaName" = fk."referenced_schema"
    LEFT OUTER JOIN

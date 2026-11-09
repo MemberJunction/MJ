@@ -2055,9 +2055,25 @@ IF OBJECT_ID('tempdb..#__mj__CodeGen__vwForeignKeys') IS NOT NULL DROP TABLE #__
 IF OBJECT_ID('tempdb..#__mj__CodeGen__vwTablePrimaryKeys') IS NOT NULL DROP TABLE #__mj__CodeGen__vwTablePrimaryKeys;
 IF OBJECT_ID('tempdb..#__mj__CodeGen__vwTableUniqueKeys') IS NOT NULL DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
 
-SELECT [column], [table], [schema_name], referenced_table, referenced_column, [referenced_schema]
+-- Two columns beside the view's: ColumnCount (components in the constraint) and TargetIsUnique
+-- (the referenced column is unique on its own). A composite FK's components are valid single-column
+-- references only when their target is unique; the others would join a non-unique target and
+-- multiply rows in the base view (#4534).
+SELECT fk.[column], fk.[table], fk.[schema_name], fk.referenced_table, fk.referenced_column, fk.[referenced_schema],
+       COUNT(*) OVER (PARTITION BY fk.FK_NAME, fk.[schema_name], fk.[table]) AS ColumnCount,
+       CASE WHEN EXISTS (
+           SELECT 1
+           FROM sys.indexes ri
+           INNER JOIN sys.tables rt ON rt.object_id = ri.object_id
+           INNER JOIN sys.schemas rs ON rs.schema_id = rt.schema_id
+           INNER JOIN sys.index_columns ric ON ric.object_id = ri.object_id AND ric.index_id = ri.index_id AND ric.is_included_column = 0
+           INNER JOIN sys.columns rc ON rc.object_id = ric.object_id AND rc.column_id = ric.column_id
+           WHERE ri.is_unique = 1 AND ri.has_filter = 0
+             AND rs.name = fk.referenced_schema AND rt.name = fk.referenced_table AND rc.name = fk.referenced_column
+             AND (SELECT COUNT(*) FROM sys.index_columns k WHERE k.object_id = ri.object_id AND k.index_id = ri.index_id AND k.is_included_column = 0) = 1
+       ) THEN 1 ELSE 0 END AS TargetIsUnique
 INTO #__mj__CodeGen__vwForeignKeys
-FROM [${schema}].[vwForeignKeys];
+FROM [${schema}].[vwForeignKeys] fk;
 
 -- KeyColumnCount: a column of a composite primary key is not unique on its own (#4536)
 SELECT TableName, ColumnName, SchemaName,
@@ -2146,6 +2162,7 @@ NumberedRows AS (
    LEFT OUTER JOIN
       #__mj__CodeGen__vwForeignKeys fk
       ON sf.FieldName = fk.[column] AND e.BaseTable = fk.[table] AND e.SchemaName = fk.[schema_name]
+      AND (fk.ColumnCount = 1 OR fk.TargetIsUnique = 1)
    LEFT OUTER JOIN
       [${schema}].[Entity] re ON re.BaseTable = fk.referenced_table AND re.SchemaName = fk.[referenced_schema]
    LEFT OUTER JOIN
