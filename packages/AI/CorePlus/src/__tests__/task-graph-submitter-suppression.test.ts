@@ -54,6 +54,15 @@ describe('SuppressTaskGraphSubmission', () => {
     it('reports nothing suppressed on an ordinary host', () => {
         expect(TaskGraphSubmissionSuppressedBecause()).toBeNull();
     });
+
+    it('holds the switch process-wide, so a second copy of the module is suppressed too', async () => {
+        MJGlobal.Instance.ClassFactory.Register(TaskGraphSubmitter, WillingSubmitter, TASK_GRAPH_SUBMITTER_KEY);
+        SuppressTaskGraphSubmission('the dispatcher is disabled on this host');
+        vi.resetModules();
+        const secondCopy = await import('../task-graph/task-graph-submitter');
+        expect(secondCopy.TaskGraphSubmissionSuppressedBecause()).toBe('the dispatcher is disabled on this host');
+        expect(secondCopy.GetTaskGraphSubmitter()).toBeNull();
+    });
 });
 
 describe('RegisterTaskGraphSubmitter', () => {

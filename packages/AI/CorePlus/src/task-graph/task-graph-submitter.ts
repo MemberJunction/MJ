@@ -176,7 +176,7 @@ function isSubmitter(value: unknown): value is TaskGraphSubmitter {
  * so the contract is enforced here rather than trusted.
  */
 export function GetTaskGraphSubmitter(): TaskGraphSubmitter | null {
-    if (submissionSuppressedBecause) return null;
+    if (TaskGraphSubmissionSuppressedBecause()) return null;
     const explicit = explicitSubmitter();
     if (explicit) {
         return explicit;
@@ -187,8 +187,11 @@ export function GetTaskGraphSubmitter(): TaskGraphSubmitter | null {
     return typeof submitter?.Submit === 'function' ? submitter : null;
 }
 
-/** Set while this host has deliberately turned graph submission off. */
-let submissionSuppressedBecause: string | null = null;
+/**
+ * Where the reason this host turned graph submission off lives: the global object store, like the explicit
+ * submitter, so a bundle that loads this module twice cannot have one copy suppressed and the other not.
+ */
+const SUBMISSION_SUPPRESSED_KEY = '___TaskGraphSubmitter_SuppressedBecause';
 
 /**
  * Turns graph submission off for this process, so callers take the no-submitter path.
@@ -210,12 +213,16 @@ let submissionSuppressedBecause: string | null = null;
  * promising a follow-up that will never come.
  */
 export function SuppressTaskGraphSubmission(reason: string): void {
-    submissionSuppressedBecause = reason;
+    const store = GetGlobalObjectStore();
+    if (!store) return;
+    if (reason) store[SUBMISSION_SUPPRESSED_KEY] = reason;
+    else delete store[SUBMISSION_SUPPRESSED_KEY];
 }
 
 /** Why submission is suppressed here, or null when it is not. For diagnostics. */
 export function TaskGraphSubmissionSuppressedBecause(): string | null {
-    return submissionSuppressedBecause;
+    const reason: unknown = GetGlobalObjectStore()?.[SUBMISSION_SUPPRESSED_KEY];
+    return typeof reason === 'string' && reason ? reason : null;
 }
 
 /**
