@@ -4360,7 +4360,11 @@ export class TaskGraphDispatcher implements IShutdownable {
      * is the claim: when two dispatchers both get here, one insert succeeds and the other finds the
      * winner's row and treats the step as already materialized. Nothing is written to the forward step.
      *
-     * @returns true when this call created the row
+     * A compensation that can never be created (its action no longer resolves, the step's envelope
+     * cannot be read, or the insert fails with no other dispatcher's row behind it) is recorded as a
+     * failed one instead ({@link recordUncreatableSagaRow}), so the saga escalates it rather than waiting.
+     *
+     * @returns true when this call wrote a row
      */
     private async materializeCompensation(
         provider: IMetadataProvider,
@@ -4369,17 +4373,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         compensation: TaskCompensationStepMetadata,
     ): Promise<boolean> {
         const compActionID = await this.resolveCompensationActionID(provider, compensation);
-        if (!compActionID) {
-            LogError(`[TaskGraphDispatcher] Cannot compensate '${forwardTask.Name}' (${forwardTask.ID}): its compensation action could not be resolved.`);
-            return false;
-        }
         const envelope = this.compensationEnvelope(graph, forwardTask);
-        if ('Refusal' in envelope) {
-            LogError(`[TaskGraphDispatcher] Not compensating task ${forwardTask.ID}: ${envelope.Refusal}`);
-            return false;
-        }
-        const actingUser = await this.sagaActingUser(provider, graph, forwardTask);
-        const recordChanges = await this.loadCorrelatedRecordChanges(provider, forwardTask, actingUser);
         const compTask = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
         compTask.NewRecord();
         compTask.ParentID = graph.parentTaskID;
@@ -4392,24 +4386,74 @@ export class TaskGraphDispatcher implements IShutdownable {
         compTask.ActionID = compActionID;
         compTask.AgentRunID = forwardTask.AgentRunID ?? graph.parent?.AgentRunID ?? null;
         compTask.CompensatesTaskID = forwardTask.ID;
-        compTask.SecurityEnvelope = SerializeTaskSecurityEnvelope(envelope.Envelope);
-        compTask.InputPayload = JSON.stringify(this.buildForwardTaskCompensationInput(forwardTask, compensation, recordChanges));
+        // An envelope that cannot be read stays as stored, so the row is refused exactly as the step is.
+        compTask.SecurityEnvelope = 'Refusal' in envelope ? forwardTask.SecurityEnvelope : SerializeTaskSecurityEnvelope(envelope.Envelope);
         const compConfig: TaskStepConfiguration = {
             ...(compensation.retryCount != null ? { policy: { retryCount: compensation.retryCount } } : {}),
             compensation: {
-                compensationActionId: compActionID,
+                ...(compActionID ? { compensationActionId: compActionID } : {}),
                 ...(compensation.onCompensationFailure ? { onCompensationFailure: compensation.onCompensationFailure } : {}),
             },
         };
         compTask.Configuration = JSON.stringify(compConfig);
+        const cannotRun = !compActionID
+            ? 'its compensation action could not be resolved'
+            : 'Refusal' in envelope ? `its security envelope cannot be enforced: ${envelope.Refusal}` : null;
+        if (cannotRun) {
+            return this.recordUncreatableSagaRow(provider, compTask, `Cannot compensate '${forwardTask.Name}' (${forwardTask.ID}): ${cannotRun}.`);
+        }
+        const actingUser = await this.sagaActingUser(provider, graph, forwardTask);
+        const recordChanges = await this.loadCorrelatedRecordChanges(provider, forwardTask, actingUser);
+        compTask.InputPayload = JSON.stringify(this.buildForwardTaskCompensationInput(forwardTask, compensation, recordChanges));
         if (await compTask.Save()) {
             LogStatus(`[TaskGraphDispatcher] Compensating '${forwardTask.Name}' (${forwardTask.ID}) with task ${compTask.ID}.`);
             return true;
         }
         if (await this.rowCompensating(provider, forwardTask.ID)) {
             LogStatus(`[TaskGraphDispatcher] '${forwardTask.Name}' (${forwardTask.ID}) is already being compensated by another dispatcher.`);
-        } else {
-            LogError(`[TaskGraphDispatcher] Could not create the compensation task for ${forwardTask.ID}: ${compTask.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            return false;
+        }
+        return this.recordUncreatableSagaRow(provider, compTask,
+            `Could not create the compensation task for '${forwardTask.Name}' (${forwardTask.ID}): ${compTask.LatestResult?.CompleteMessage ?? 'unknown error'}.`);
+    }
+
+    /**
+     * Records a saga row that cannot be created as intended — a compensation, or the Human step escalating
+     * a failed one — as a `Failed` row carrying the reason. The saga then moves on by its own rules
+     * ({@link NextSagaStep}): a failed compensation escalates to a person (or halts or continues, per its
+     * `onCompensationFailure`), and a failed escalation ends the rollback, so the graph settles. Leaving
+     * the row unwritten kept the graph `In Progress` and its submitting run `Paused` forever, retrying a
+     * write that could not succeed and logging it on every poll.
+     *
+     * The row carries only what the saga reads plus the reason, none of the columns that can make an
+     * insert fail (payload, assignee, action), so it lands where the full row did not. It is claimed by
+     * the same unique `CompensatesTaskID`. When even it cannot be written the database itself is failing,
+     * and the next pass tries again.
+     *
+     * @returns true when this call wrote the row
+     */
+    private async recordUncreatableSagaRow(provider: IMetadataProvider, intended: MJTaskEntity, reason: string): Promise<boolean> {
+        const row = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+        row.NewRecord();
+        const nameLimit = row.EntityInfo?.Fields.find((f) => f.Name === 'Name')?.MaxLength;
+        row.ParentID = intended.ParentID;
+        row.TypeID = intended.TypeID;
+        row.Name = nameLimit ? intended.Name.slice(0, nameLimit) : intended.Name;
+        row.Description = intended.Description;
+        row.StepType = intended.StepType;
+        row.Status = 'Failed';
+        row.PercentComplete = 0;
+        row.CompletedAt = new Date();
+        row.ErrorMessage = reason;
+        row.CompensatesTaskID = intended.CompensatesTaskID;
+        row.SecurityEnvelope = intended.SecurityEnvelope;
+        row.Configuration = intended.Configuration;
+        if (await row.Save()) {
+            LogError(`[TaskGraphDispatcher] ${reason} Recorded as failed step ${row.ID} so the rollback can go on.`);
+            return true;
+        }
+        if (!(intended.CompensatesTaskID && await this.rowCompensating(provider, intended.CompensatesTaskID))) {
+            LogError(`[TaskGraphDispatcher] ${reason} Could not record that either (${row.LatestResult?.CompleteMessage ?? 'unknown error'}); the next pass retries.`);
         }
         return false;
     }
@@ -4421,9 +4465,10 @@ export class TaskGraphDispatcher implements IShutdownable {
      * escalation per failure however many dispatchers see it). The ordinary human-step machinery then
      * notifies the person and raises an `MJ: AI Agent Requests` row on behalf of the graph's agent — or,
      * for a graph with no agent, logs that once and leaves the step in the Tasks UI. Completing the step
-     * resumes the rollback; cancelling it (or letting it expire) stops it (see {@link NextSagaStep}).
+     * resumes the rollback; cancelling it (or letting it expire) stops it (see {@link NextSagaStep}). A step
+     * that cannot be created is recorded as a failed one ({@link recordUncreatableSagaRow}), which stops it too.
      *
-     * @returns true when this call created the step
+     * @returns true when this call wrote a row
      */
     private async escalateCompensationFailure(
         provider: IMetadataProvider,
@@ -4459,8 +4504,9 @@ export class TaskGraphDispatcher implements IShutdownable {
         if (await this.rowCompensating(provider, failedCompensation.ID)) {
             return false;
         }
-        LogError(`[TaskGraphDispatcher] Could not create the escalation step for compensation ${failedCompensation.ID}: ${human.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-        return false;
+        return this.recordUncreatableSagaRow(provider, human,
+            `Could not ask a person to undo '${forwardTask.Name}' (${forwardTask.ID}) after compensation ${failedCompensation.ID} failed: ` +
+            `${human.LatestResult?.CompleteMessage ?? 'unknown error'}.`);
     }
 
     /** Whether some task already undoes `taskID` — the row the unique `CompensatesTaskID` index let another dispatcher insert. */

@@ -414,6 +414,104 @@ describe('TaskGraphDispatcher saga coordinator', () => {
         expect(c.sagaStates.at(-1)).toBe('CompensationEscalated');
     });
 
+    describe('a compensation or escalation that can never be created (T5)', () => {
+        /** A provider whose inserts of matching rows fail as a constraint would, while every other insert lands. */
+        function refusingProvider(refuse: (row: MJTaskEntity) => boolean): IMetadataProvider {
+            return {
+                GetEntityObject: vi.fn(async () => {
+                    const entity = db.Entity();
+                    return new Proxy(entity, {
+                        get: (target, key) => (key === 'Save' && refuse(target)
+                            ? async () => { target.LatestResult!.CompleteMessage = 'The INSERT statement conflicted with the FOREIGN KEY constraint'; return false; }
+                            : Reflect.get(target, key)),
+                    });
+                }),
+            } as unknown as IMetadataProvider;
+        }
+
+        function coordinatorOver(provider: IMetadataProvider): () => Promise<{ Pending: boolean }> {
+            const dispatcher = new TaskGraphDispatcher(
+                { CreateProvider: vi.fn().mockResolvedValue(provider) }, { RunAgentForTask: vi.fn() }, SYSTEM_USER, { InstanceID: 'inst-t5' },
+            );
+            const internals = dispatcher as unknown as {
+                claims: Record<string, unknown>;
+                loadGraphState: unknown;
+                coordinateSagaCompensation: (p: IMetadataProvider, id: string, g: ReturnType<typeof graphOf>) => Promise<{ Pending: boolean }>;
+            };
+            internals.claims.TrySkipPending = vi.fn(async () => true);
+            internals.claims.TryWriteDebugFields = vi.fn(async () => true);
+            internals.loadGraphState = vi.fn(async () => graphOf(db, parentRow()));
+            return () => internals.coordinateSagaCompensation(provider, PARENT_ID, graphOf(db, parentRow()));
+        }
+
+        /** The invoice step names a compensation action that was renamed after the graph was submitted. */
+        function renamedCompensationAction(onCompensationFailure?: TaskCompensationStepMetadata['onCompensationFailure']): void {
+            checkoutGraph(db, { invoiceConfig: { compensationActionName: 'Void Invoice (renamed)', ...(onCompensationFailure ? { onCompensationFailure } : {}) } });
+            db.Actions.find((a) => a.ID === INVOICE)!.CompensationActionID = null;
+        }
+
+        it('records a compensation whose action no longer resolves as failed, escalates it to a person, and reports it once', async () => {
+            renamedCompensationAction();
+            const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const c = coordinator(db);
+
+            await c.pass();
+            const failed = compensationOf(db, 'T-B');
+            expect(failed?.Status).toBe('Failed');
+            expect(failed?.ErrorMessage).toContain('could not be resolved');
+            expect(failed?.ActionID).toBeNull();
+
+            await c.pass();
+            const human = [...db.Rows.values()].find((r) => r.StepType === 'Human');
+            expect(human?.CompensatesTaskID).toBe(failed!.ID);
+            expect(human?.Description).toContain('could not be resolved');
+
+            await c.pass();
+            expect(errors.mock.calls.filter((call) => String(call[0]).includes('Cannot compensate'))).toHaveLength(1);
+        });
+
+        it("records a compensation whose stored envelope cannot be read as failed, keeping the step's envelope", async () => {
+            checkoutGraph(db);
+            db.Rows.get('T-B')!.SecurityEnvelope = 'not an envelope';
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            await coordinator(db).pass();
+            const failed = compensationOf(db, 'T-B');
+            expect(failed?.Status).toBe('Failed');
+            expect(failed?.ErrorMessage).toContain('security envelope cannot be enforced');
+            expect(failed?.SecurityEnvelope).toBe('not an envelope');
+        });
+
+        it('records a compensation whose insert fails with no other dispatcher\'s row as failed, then escalates it', async () => {
+            checkoutGraph(db);
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const pass = coordinatorOver(refusingProvider((row) => row.StepType === 'Action' && row.Status === 'Pending'));
+
+            await pass();
+            const failed = compensationOf(db, 'T-B');
+            expect(failed?.Status).toBe('Failed');
+            expect(failed?.ErrorMessage).toContain('FOREIGN KEY');
+
+            await pass();
+            expect([...db.Rows.values()].find((r) => r.StepType === 'Human')?.CompensatesTaskID).toBe(failed!.ID);
+        });
+
+        it('ends the rollback when the escalation step cannot be created, so the graph can settle', async () => {
+            checkoutGraph(db);
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const pass = coordinatorOver(refusingProvider((row) => row.StepType === 'Human' && row.Status === 'Pending'));
+            await pass();
+            compensationOf(db, 'T-B')!.Status = 'Failed';
+
+            expect((await pass()).Pending).toBe(true);
+            const escalation = [...db.Rows.values()].find((r) => r.StepType === 'Human');
+            expect(escalation?.Status).toBe('Failed');
+            expect(escalation?.ErrorMessage).toContain('Could not ask a person');
+
+            expect((await pass()).Pending).toBe(false);
+            expect(compensationOf(db, 'T-A')).toBeUndefined();
+        });
+    });
+
     it('waits when a forward step is claimed elsewhere just before its skip, then undoes it first (M4)', async () => {
         checkoutGraph(db);
         // T-D runs after T-B, so it is undone before T-B — if the saga knows it ran.
@@ -572,6 +670,20 @@ describe('a graph rolling back does not settle under its saga (S7)', () => {
         expect(claims.TrySettleParent).not.toHaveBeenCalled();
         expect(claims.TryUpdateParentProgress).toHaveBeenCalledWith(provider, PARENT_ID, 'In Progress', expect.any(Number), SYSTEM_USER);
         expect(live.map((g) => g.parentTaskID)).toEqual([PARENT_ID]);
+    });
+
+    it('settles the graph Failed once a compensation that can never be created is recorded and its HaltSaga policy applies (T5)', async () => {
+        finishedForwardWork();
+        db.Rows.get('T-B')!.Configuration = JSON.stringify({ runtime: { actionLogID: 'log-B', isOutputTainted: true },
+            compensation: { compensationActionName: 'Void Invoice (renamed)', onCompensationFailure: 'HaltSaga' } });
+        db.Actions.find((a) => a.ID === INVOICE)!.CompensationActionID = null;
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const provider = { GetEntityObject: vi.fn(async () => db.Entity()) } as unknown as IMetadataProvider;
+
+        const first = await rollupPass(graphOf(db, parentRow()), provider);
+        expect(first.claims.TrySettleParent).not.toHaveBeenCalled();
+        const second = await rollupPass(graphOf(db, parentRow()), provider);
+        expect(second.claims.TrySettleParent).toHaveBeenCalledWith(provider, PARENT_ID, 'Failed', expect.any(Number), SYSTEM_USER);
     });
 
     it('settles the graph once the rollback has finished', async () => {
