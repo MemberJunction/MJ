@@ -120798,7 +120798,7 @@ export class MJMLEvaluationProtocolEntity extends BaseEntity<MJMLEvaluationProto
     * * Display Name: Lineage Root
     * * SQL Data Type: nvarchar(255)
     */
-    get LineageRoot(): string {
+    get LineageRoot(): string | null {
         return this.Get('LineageRoot');
     }
 }
@@ -121606,7 +121606,7 @@ export class MJMLPredictionUnitEntity extends BaseEntity<MJMLPredictionUnitEntit
     * * Display Name: Lineage Root
     * * SQL Data Type: nvarchar(255)
     */
-    get LineageRoot(): string {
+    get LineageRoot(): string | null {
         return this.Get('LineageRoot');
     }
 }
@@ -122789,7 +122789,7 @@ export class MJMLTrainingSnapshotEntity extends BaseEntity<MJMLTrainingSnapshotE
     * * Display Name: Pipeline
     * * SQL Data Type: nvarchar(255)
     */
-    get Pipeline(): string {
+    get Pipeline(): string | null {
         return this.Get('Pipeline');
     }
 
@@ -122798,7 +122798,7 @@ export class MJMLTrainingSnapshotEntity extends BaseEntity<MJMLTrainingSnapshotE
     * * Display Name: Prediction Unit
     * * SQL Data Type: nvarchar(255)
     */
-    get PredictionUnit(): string {
+    get PredictionUnit(): string | null {
         return this.Get('PredictionUnit');
     }
 
@@ -122816,7 +122816,7 @@ export class MJMLTrainingSnapshotEntity extends BaseEntity<MJMLTrainingSnapshotE
     * * Display Name: Storage Provider
     * * SQL Data Type: nvarchar(50)
     */
-    get StorageProvider(): string {
+    get StorageProvider(): string | null {
         return this.Get('StorageProvider');
     }
 
@@ -122825,7 +122825,7 @@ export class MJMLTrainingSnapshotEntity extends BaseEntity<MJMLTrainingSnapshotE
     * * Display Name: Matrix File
     * * SQL Data Type: nvarchar(500)
     */
-    get MatrixFile(): string {
+    get MatrixFile(): string | null {
         return this.Get('MatrixFile');
     }
 
@@ -122834,7 +122834,7 @@ export class MJMLTrainingSnapshotEntity extends BaseEntity<MJMLTrainingSnapshotE
     * * Display Name: Row Manifest File
     * * SQL Data Type: nvarchar(500)
     */
-    get RowManifestFile(): string {
+    get RowManifestFile(): string | null {
         return this.Get('RowManifestFile');
     }
 
@@ -122843,7 +122843,7 @@ export class MJMLTrainingSnapshotEntity extends BaseEntity<MJMLTrainingSnapshotE
     * * Display Name: Provenance File
     * * SQL Data Type: nvarchar(500)
     */
-    get ProvenanceFile(): string {
+    get ProvenanceFile(): string | null {
         return this.Get('ProvenanceFile');
     }
 }
