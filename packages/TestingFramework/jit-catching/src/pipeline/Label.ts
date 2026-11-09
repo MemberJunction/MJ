@@ -39,7 +39,7 @@ export async function LabelPacket(o: { StoreDir: string; RepoRoot: string; RunID
     const store = new FileCatchStore(o.StoreDir, o.Redaction);
     const run = await store.GetRun(o.RunID);
     if (!run) throw new Error(`run ${o.RunID} is not in the store`);
-    const catches = (await store.ListCatches(o.RunID)).filter((c) => c.Verdict.Label === 'WeakCatch' && c.DroppedByRule === null).sort(byRank);
+    const catches = (await store.ListCatches(o.RunID)).filter(IsWeakUndropped).sort(byRank);
     const dir = new RunDir(o.RepoRoot, o.RunID, o.Redaction);
     const tests = IndexByUUID(catches.length > 0 ? dir.ReadGeneration().Tests : []);
     const head = GroupByUUID(catches.length > 0 ? dir.ReadExecution().Results.filter((r) => r.Revision === 'Head') : [], (r) => r.CandidateTestID);
@@ -48,6 +48,9 @@ export async function LabelPacket(o: { StoreDir: string; RepoRoot: string; RunID
     o.Redaction.AssertClean(text, `label packet for run ${o.RunID}`);
     return text;
 }
+
+/** True for a weak catch that no drop rule removed. */
+export function IsWeakUndropped(c: Catch): boolean { return c.Verdict.Label === 'WeakCatch' && c.DroppedByRule === null; }
 
 /** Ranked catches first in rank order, unranked catches last. */
 function byRank(a: Catch, b: Catch): number { return (a.Rank ?? Number.MAX_SAFE_INTEGER) - (b.Rank ?? Number.MAX_SAFE_INTEGER); }

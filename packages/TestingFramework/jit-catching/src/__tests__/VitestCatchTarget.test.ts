@@ -282,3 +282,20 @@ describe('CountCoveredChangedLines', () => {
     expect(CountCoveredChangedLines(JSON.stringify(cov), { 'packages/MJCore/src/a.ts': [4, 8, 20] }, '/work')).toBe(1);
   });
 });
+
+describe('VitestCatchTarget.ApplyPatch', () => {
+  it('writes the patch to <WorkRoot>/fix.patch and applies it in the revision worktree with the host git', async () => {
+    const work = mkdtempSync(join(tmpdir(), 'jit-apply-'));
+    try {
+      const applyPatch = vi.fn(async () => false);
+      const sandbox = new Sandbox(DEFAULT_SETTINGS.Sandbox, async () => ({ ExitCode: 0, TimedOut: false, Stdout: '', Stderr: '', DurationMs: 1 }));
+      const target = new VitestCatchTarget({ Repo: { Root: '/repo', ApplyPatch: applyPatch } as never, Sandbox: sandbox, Settings: DEFAULT_SETTINGS, WorkRoot: work, StoreDir: join(work, 'pnpm-store'), PackageMap: {} as never });
+      const head = { Ref: { Kind: 'Head' as const, SHA: 'b'.repeat(40) }, RootDir: join(work, 'head') };
+      expect(await target.ApplyPatch(head, 'diff --git a/x b/x\n')).toBe(false);
+      expect(readFileSync(join(work, 'fix.patch'), 'utf8')).toBe('diff --git a/x b/x\n');
+      expect(applyPatch).toHaveBeenCalledWith(join(work, 'head'), join(work, 'fix.patch'));
+    } finally {
+      rmSync(work, { recursive: true, force: true });
+    }
+  });
+});
