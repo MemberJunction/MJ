@@ -555,7 +555,20 @@ describe('InferProcessor Lifecycle Hooks (P1-6)', () => {
             MaxLatencyMs: 5000,
         };
 
-        const processor = new ShadowTestableInferProcessor(
+        /** Renders a new prompt-data object and a numbered user message on every call, and counts the calls. */
+        class CountingInferProcessor extends ShadowTestableInferProcessor {
+            public PromptDataBuilds = 0;
+            public UserMessageBuilds = 0;
+            protected override async buildPromptData(_record: RecordRef, _ctx?: RecordProcessorContext): Promise<Record<string, unknown>> {
+                this.PromptDataBuilds++;
+                return { render: this.PromptDataBuilds };
+            }
+            protected override async BuildUserMessage(_record: RecordRef): Promise<string | null> {
+                this.UserMessageBuilds++;
+                return `user message #${this.UserMessageBuilds}`;
+            }
+        }
+        const processor = new CountingInferProcessor(
             'prompt-champion-1',
             undefined,
             { Outputs: [{ Name: 'StandardTitle', Ref: '$.StandardTitle', Target: { Mode: 'none' } }] },
@@ -592,7 +605,7 @@ describe('InferProcessor Lifecycle Hooks (P1-6)', () => {
                 EntityID: 'ent-contacts',
             };
 
-            // Emulate champion compute hooks capturing prompt data & user message
+            // The champion's compute hooks render once and capture what they rendered
             const hooks = (processor as unknown as { buildComputeHooks: () => {
                 BuildPromptData: (record: RecordRef, ctx: RecordProcessorContext) => Promise<Record<string, unknown>>;
                 BuildUserMessage: (record: RecordRef, ctx: RecordProcessorContext) => Promise<string | null>;
@@ -601,6 +614,7 @@ describe('InferProcessor Lifecycle Hooks (P1-6)', () => {
             const testRecord: RecordRef = { EntityID: 'ent-contacts', RecordID: 'rec-m2-1', Record: { title: 'Lead Architect' } };
             const capturedData = await hooks.BuildPromptData(testRecord, context);
             const capturedUserMsg = await hooks.BuildUserMessage(testRecord, context);
+            expect(capturedUserMsg).toBe('user message #1');
 
             await processor.InvokeWithFeatureValues({
                 Record: testRecord,
@@ -621,8 +635,11 @@ describe('InferProcessor Lifecycle Hooks (P1-6)', () => {
             await processor.FlushShadowInFlight();
 
             expect(processor.ChallengerCalls).toHaveLength(1);
-            expect(processor.ChallengerCalls[0].data).toEqual(capturedData);
-            expect(processor.ChallengerCalls[0].userMessage).toBe(capturedUserMsg ?? undefined);
+            // The challenger got the champion's own objects: nothing was rendered a second time.
+            expect(processor.ChallengerCalls[0].data).toBe(capturedData);
+            expect(processor.ChallengerCalls[0].conversationMessages?.[0]?.content).toBe(capturedUserMsg);
+            expect(processor.PromptDataBuilds).toBe(1);
+            expect(processor.UserMessageBuilds).toBe(1);
         } finally {
             AIEngine.Instance.Config = origConfig;
             if (origPromptsDescriptor) {
@@ -634,6 +651,7 @@ describe('InferProcessor Lifecycle Hooks (P1-6)', () => {
             FeatureValueCacheService.Instance.RecordFeatureValues = origRecordFeatureValues;
         }
     });
+
     it('keeps champion prompt inputs only while a challenger can sample them, and drops unused ones when the next batch starts (P13)', async () => {
         const processor = new ShadowTestableInferProcessor(
             'prompt-champion-1',
