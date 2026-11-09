@@ -90,6 +90,7 @@ type FilterOptionValue = string | number | boolean | null;
                   [ValuePrimitive]="true"
                   [Filterable]="!!field.filterable"
                   [Placeholder]="field.placeholder ?? ''"
+                  [AriaLabel]="field.label"
                   [ngModel]="getValue(field.key)"
                   (ngModelChange)="setValue(field.key, $event)">
                 </mj-dropdown>

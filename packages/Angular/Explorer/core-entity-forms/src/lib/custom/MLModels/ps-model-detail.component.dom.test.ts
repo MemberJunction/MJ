@@ -73,3 +73,37 @@ describe('PSModelDetailComponent (DOM) — importance containment', () => {
     expect(query(fixture, '[data-testid="ps-leakage-gate"]')?.textContent).toContain('Member Since Days');
   });
 });
+
+describe('PSModelDetailComponent (DOM) — the performance tiles', () => {
+  // each tile's lines (title | value | caption): Angular drops the whitespace between them, so they are read one by one
+  const tiles = (model: ModelDouble): string[] =>
+    queryAll(render(model), '.metric-pair .mtile').map((t) => Array.from(t.children).map((c) => (c.textContent || '').replace(/\s+/g, ' ').trim()).join(' | '));
+
+  it("titles a kept baseline's tiles by the metric it stores and shows its holdout score, never \"AUC\"", () => {
+    const shown = tiles(makeModel({ Metrics: '{}', HoldoutMetrics: '{"log-loss":0.3674}' }));
+    expect(shown[1]).toContain('Holdout Log Loss | 0.367');
+    expect(shown.join(' ')).not.toContain('AUC');
+  });
+
+  it("never shows another metric's number under the primary metric's title when the train metrics lack it", () => {
+    // Holdout stores only log-loss, so the tiles are titled Log Loss; the train metrics store AUC alone.
+    const shown = tiles(makeModel({ Metrics: '{"AUC":0.9}', HoldoutMetrics: '{"log-loss":0.3674}' }));
+    expect(shown[0]).toContain('Train Log Loss | —');
+    expect(shown[0]).not.toContain('0.900');
+  });
+
+  it("captions the train tile of a model trained under an Evaluation Protocol as the inner-CV estimate", () => {
+    const shown = tiles(makeModel({ Metrics: '{"mase":0.9}', HoldoutMetrics: '{"mase":0.82}', Lineage: JSON.stringify({ evaluationProtocolId: 'EP-1' }) }));
+    expect(shown[0]).toContain('inner-CV estimate');
+    expect(shown[0]).not.toContain('in-sample');
+  });
+
+  it('keeps the in-sample caption for an older model trained without a protocol', () => {
+    expect(tiles(makeModel({}))[0]).toContain('in-sample');
+  });
+
+  it('lists only holdout metrics in the stat bar beside the holdout tile, never the training metrics', () => {
+    const fixture = render(makeModel({ Metrics: '{"AUC":0.9,"Accuracy":0.95,"F1":0.93}', HoldoutMetrics: null }));
+    expect(query(fixture, '.stat-bar')).toBeNull();
+  });
+});
