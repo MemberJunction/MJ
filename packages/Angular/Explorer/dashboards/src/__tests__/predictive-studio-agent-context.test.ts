@@ -7,9 +7,10 @@ import {
   BuildPredictionsAgentContext,
   BuildStudioAgentContext,
   BuildModelsAgentContext,
+  type PredictionsAgentContextInput,
 } from '../PredictiveStudio/predictive-studio-agent-context';
 
-describe('capPSNames', () => {
+describe('CapPSNames', () => {
   it('caps to PS_AGENT_CONTEXT_NAME_LIST_CAP without mutating the input', () => {
     const input = Array.from({ length: 40 }, (_, i) => `n${i}`);
     const out = CapPSNames(input);
@@ -23,7 +24,7 @@ describe('capPSNames', () => {
   });
 });
 
-describe('resolvePSRecord', () => {
+describe('ResolvePSRecord', () => {
   const cards = [
     { ID: 'AAA', Name: 'Renewal Risk' },
     { ID: 'BBB', Name: 'Lapse Likelihood' },
@@ -52,7 +53,7 @@ describe('resolvePSRecord', () => {
   });
 });
 
-describe('buildPSNotFoundError', () => {
+describe('BuildPSNotFoundError', () => {
   it('samples available names', () => {
     const msg = BuildPSNotFoundError('xyz', [{ ID: '1', Name: 'Alpha' }, { ID: '2', Name: 'Beta' }], 'prediction');
     expect(msg).toContain('"xyz"');
@@ -78,7 +79,7 @@ describe('buildPSNotFoundError', () => {
   });
 });
 
-describe('buildPredictionsAgentContext', () => {
+describe('BuildPredictionsAgentContext', () => {
   it('publishes catalog counts + bounded names, and omits workspace/at-risk fields in catalog view', () => {
     const ctx = BuildPredictionsAgentContext({
       View: 'catalog',
@@ -107,7 +108,7 @@ describe('buildPredictionsAgentContext', () => {
       ReadyPredictionCount: 1,
       VisiblePredictionNames: ['Renewal Risk'],
       ChatOpen: false,
-      Selected: { Name: 'Renewal Risk', TrustGrade: 'Excellent', CanOpen: true },
+      Selected: { Name: 'Renewal Risk', TrustOutcome: 'model', CanOpen: true },
       AtRiskLoaded: true,
       AtRiskCount: 10,
       HighRiskCount: 4,
@@ -117,7 +118,7 @@ describe('buildPredictionsAgentContext', () => {
     });
     expect(ctx).toMatchObject({
       SelectedPredictionName: 'Renewal Risk',
-      SelectedPredictionTrust: 'Excellent',
+      SelectedPredictionTrust: 'model',
       SelectedPredictionCanAct: true,
       AtRiskCount: 10,
       HighRiskCount: 4,
@@ -132,7 +133,7 @@ describe('buildPredictionsAgentContext', () => {
       ReadyPredictionCount: 1,
       VisiblePredictionNames: ['Renewal Risk'],
       ChatOpen: false,
-      Selected: { Name: 'Renewal Risk', TrustGrade: 'Good', CanOpen: true },
+      Selected: { Name: 'Renewal Risk', TrustOutcome: 'keep-simple-baseline', CanOpen: true },
       AtRiskLoaded: false,
     });
     expect(ctx['SelectedPredictionName']).toBe('Renewal Risk');
@@ -141,7 +142,7 @@ describe('buildPredictionsAgentContext', () => {
   });
 });
 
-describe('buildStudioAgentContext', () => {
+describe('BuildStudioAgentContext', () => {
   it('publishes the active section, section labels, and workbench counts', () => {
     const ctx = BuildStudioAgentContext({
       ActiveSection: 'pipelines',
@@ -166,7 +167,7 @@ describe('buildStudioAgentContext', () => {
   });
 });
 
-describe('buildModelsAgentContext', () => {
+describe('BuildModelsAgentContext', () => {
   it('publishes the active section + lifecycle counts', () => {
     const ctx = BuildModelsAgentContext({
       ActiveSection: 'production',
@@ -188,13 +189,13 @@ describe('buildModelsAgentContext', () => {
 });
 
 describe('BuildPredictionsAgentContext — capped at-risk read', () => {
-  const input = (capped: boolean) => ({
-    View: 'workspace' as const,
+  const input = (capped: boolean): PredictionsAgentContextInput => ({
+    View: 'workspace',
     PredictionCount: 1,
     ReadyPredictionCount: 1,
     VisiblePredictionNames: ['Renewal Risk'],
     ChatOpen: false,
-    Selected: { Name: 'Renewal Risk', TrustGrade: 'Excellent', CanOpen: true },
+    Selected: { Name: 'Renewal Risk', TrustOutcome: 'model', CanOpen: true },
     AtRiskLoaded: true,
     AtRiskCount: 50000,
     AtRiskCapped: capped,

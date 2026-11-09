@@ -1,10 +1,12 @@
 import type { UserInfo, EntityInfo } from '@memberjunction/core';
 import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import type { UUIDMap } from '@memberjunction/global';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity, MJProcessRunEntity,
   MJProcessRunDetailEntity, PredictiveStudioScoreRecordSetInput,
   PredictiveStudioTrainAsOf, PredictiveStudioModelTargetStatus } from '@memberjunction/core-entities';
 import type { ModelingPlanSpec, TrustVerdict, ValidationStrategy, AsOfStrategy, ProblemType,
   PredictiveStudioRefusalCode } from '@memberjunction/predictive-studio-core';
+import type { ProvenanceCheck } from '../fixtures/provenance-resolver';
 import type { RunRecords } from './cleanup';
 
 export type WorldID = 'W1-signal' | 'W2-noise' | 'W3-leak-row' | 'W4-pit' | 'W5-censor' | 'W6-drift'
@@ -44,7 +46,7 @@ export interface TrainAttempt {
 
 export interface CandidateModel {
   // Status unions are derived from the generated entities (never widened to string), so a value CodeGen adds reaches
-  // every comparison as a compile-time change. `Trust` is Core's shipped TrustVerdict, whose members stay camelCase.
+  // every comparison as a compile-time change. `Trust` is Core's TrustVerdict: the model's training run's stored gate decision.
   ModelID: string; PipelineID: string; Algorithm: AlgorithmKey; Status: MJMLModelEntity['Status']; TrainingRowCount: number | null;
   HoldoutRowCount: number | null; Metrics: Record<string, number>; HoldoutMetrics: Record<string, number>;
   Trust: TrustVerdict; TrainingRunStatus: MJMLTrainingRunEntity['Status'] | null; TrainingRunNotes: string | null; LineageJSON: string | null;
@@ -81,6 +83,9 @@ export interface GateMeasurement {
   Detail: string;
 }
 
+/** One row of a world's truth.csv (`MembershipYearID,Cycle,TrueP,Drawn,Censored`). */
+export interface WorldTruthRow { readonly Cycle: number; readonly TrueP: number; readonly Censored: boolean }
+
 /** What `Promote` reports: whether the operation applied the transition and the model's status after it. */
 export interface PromoteAttempt { Promoted: boolean; Status: MJMLModelEntity['Status'] }
 
@@ -95,7 +100,7 @@ export interface TruthHarness {
   /** Never throws for a failed operation: Ok false, ModelID null, ErrorMessage set. */
   Train(pipeline: MJMLTrainingPipelineEntity, opts?: { MaxRows?: number; AsOf?: PredictiveStudioTrainAsOf }): Promise<TrainAttempt>;
   RunBuilderAgent(plan: ModelingPlanSpec): Promise<AgentStepResult>;
-  /** Trust = TrustVerdicts.DeriveTrustVerdict(<the loaded MJ: ML Models entity>) — the whole entity, so Lineage reaches the verdict. */
+  /** Trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults, Lineage }): the model's training run's stored gate decision, with the model's lineage. */
   ReadModel(modelId: string): Promise<CandidateModel>;
   ModelsForPipelineNamePrefix(prefix: string): Promise<CandidateModel[]>;
   Promote(modelId: string, target: PredictiveStudioModelTargetStatus, reason: string): Promise<PromoteAttempt>;
@@ -107,4 +112,12 @@ export interface TruthHarness {
   GenerateStory(modelId: string): Promise<string | null>;
   Judge<TOut>(module: string, args: string[]): Promise<TOut>;       // python -m truthsuite.judges.<module> … → JSON
   WriteArtifact(name: string, data: object): Promise<string>;      // $TRUTH_RESULTS_DIR/artifacts/<name>.json
+  /** The planted truth of a loaded W1–W8 seed, keyed by MembershipYearID (case-insensitive). */
+  ReadWorldTruth(dataset: LoadedDataset): Promise<UUIDMap<WorldTruthRow>>;
+  /** A seeded sample of n primary keys of the dataset's row table. */
+  SampleRowIds(dataset: LoadedDataset, n: number, seed: number): Promise<string[]>;
+  /** Whether one assembled value names its scored row and resolves to its source, source version and computed-at. */
+  ResolveProvenance(check: ProvenanceCheck): Promise<boolean>;
+  /** Route this process's in-process engine calls to the suite sidecar; returns its URL. */
+  UseSuiteSidecar(): string;
 }

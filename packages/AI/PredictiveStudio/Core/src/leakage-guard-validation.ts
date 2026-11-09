@@ -14,7 +14,7 @@
  * `["[CheckInTime", "Status]"]`, neither of which matches any column, so the two
  * most dangerous columns sail straight into the matrix.
  *
- * This module lives in Core (a dependency-free leaf) so the exact same rules are
+ * This module lives in Core (a browser-safe leaf with no server or database dependencies) so the exact same rules are
  * enforced in three places that must not drift:
  *
  * 1. the pipeline editor, at input time (fail early, with a good message);

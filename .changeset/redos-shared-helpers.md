@@ -12,7 +12,6 @@
 "@memberjunction/ng-user-routines": patch
 "@memberjunction/ng-whiteboard": patch
 "@memberjunction/predictive-studio-core": patch
-"@memberjunction/predictive-studio-sidecar": patch
 "@memberjunction/realtime-widget": patch
 "@memberjunction/server": patch
 "@memberjunction/storage": patch

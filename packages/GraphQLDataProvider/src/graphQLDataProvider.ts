@@ -3222,8 +3222,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             originalVal = originalVal.toString();
                         if (typeof returnedVal === 'number')
                             returnedVal = returnedVal.toString();
-                        // now compare the two values
-                        if (originalVal !== returnedVal) {
+                        // now compare the two values; a UUID key compares case-insensitively (the server echoes its own casing)
+                        const isUUIDKey = entity.EntityInfo.Fields.find((f) => f.Name === key.FieldName)?.IsUniqueIdentifier === true;
+                        const keysMatch = isUUIDKey ? UUIDsEqual(originalVal, returnedVal) : originalVal === returnedVal;
+                        if (!keysMatch) {
                             throw new Error (`Primary key value mismatch in server Delete response. Field: ${key.FieldName}, Original: ${originalVal}, Returned: ${returnedVal}`);
                         }
                     }
