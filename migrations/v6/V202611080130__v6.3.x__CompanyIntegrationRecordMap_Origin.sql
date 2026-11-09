@@ -150,15 +150,15 @@ GO
 
 /* SQL text to insert entity field value with ID 072783e6-30a8-4c19-a1d7-e5bf8f8e0686 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [Source], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('072783e6-30a8-4c19-a1d7-e5bf8f8e0686', '1CDBA536-0305-4DDC-8FC4-7DAD97BBE35C', 1, 'Adopted', 'Adopted', GETUTCDATE(), GETUTCDATE());
+                                       ('072783e6-30a8-4c19-a1d7-e5bf8f8e0686', '1CDBA536-0305-4DDC-8FC4-7DAD97BBE35C', 1, 'Adopted', 'Adopted', 'Check', GETUTCDATE(), GETUTCDATE());
 
 /* SQL text to insert entity field value with ID 315e63d5-e2b5-4c86-bc5d-7b9a9712b0e3 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [Source], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('315e63d5-e2b5-4c86-bc5d-7b9a9712b0e3', '1CDBA536-0305-4DDC-8FC4-7DAD97BBE35C', 2, 'Created', 'Created', GETUTCDATE(), GETUTCDATE());
+                                       ('315e63d5-e2b5-4c86-bc5d-7b9a9712b0e3', '1CDBA536-0305-4DDC-8FC4-7DAD97BBE35C', 2, 'Created', 'Created', 'Check', GETUTCDATE(), GETUTCDATE());
 
 /* SQL text to update ValueListType for entity field ID 1CDBA536-0305-4DDC-8FC4-7DAD97BBE35C */
 UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='1CDBA536-0305-4DDC-8FC4-7DAD97BBE35C';
@@ -218,11 +218,11 @@ SELECT
     MJEntity_EntityID.[Name] AS [Entity]
 FROM
     [${flyway:defaultSchema}].[CompanyIntegrationRecordMap] AS c
-INNER JOIN
+LEFT OUTER JOIN
     [${flyway:defaultSchema}].[CompanyIntegration] AS MJCompanyIntegration_CompanyIntegrationID
   ON
     [c].[CompanyIntegrationID] = MJCompanyIntegration_CompanyIntegrationID.[ID]
-INNER JOIN
+LEFT OUTER JOIN
     [${flyway:defaultSchema}].[Entity] AS MJEntity_EntityID
   ON
     [c].[EntityID] = MJEntity_EntityID.[ID]
