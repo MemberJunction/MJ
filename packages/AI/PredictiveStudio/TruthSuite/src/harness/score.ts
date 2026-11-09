@@ -104,6 +104,8 @@ export class HarnessScoring {
         EntityName: 'MJ: Process Run Details',
         ExtraFilter: `ProcessRunID='${EscapeSQLString(processRunId)}'`,
         Fields: ['RecordID', 'Status', 'ResultPayload', 'ErrorMessage'],
+        // A fixed order: callers sum and rank the details, so the same run must read back the same way every time.
+        OrderBy: 'RecordID ASC, ID ASC',
         ResultType: 'simple',
         IgnoreMaxRows: true,
         BypassCache: true,

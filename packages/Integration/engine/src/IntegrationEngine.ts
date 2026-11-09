@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { RefreshCatalogScope, RunInWarmedCatalogScope, UnpinCatalogObjects, WarmCatalogObject } from './CatalogScope.js';
 import { CompositeKey, DatabaseProviderBase, IMetadataProvider, LogError, LogStatusEx, Metadata, RunView, type UserInfo, TransactionGroupBase, BaseEntity, EntitySaveOptions, EntityDeleteOptions } from '@memberjunction/core';
 import { RunOwnershipLostError, RunOwnershipService, type TerminalRunStatus } from './RunOwnershipService.js';
-import { BaseSingleton, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import type {
     MJCompanyIntegrationEntity,
@@ -2934,6 +2934,43 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     }
 
     /**
+     * The result for a pull map that has no active field maps, returned BEFORE anything is fetched.
+     *
+     * Such a map cannot write a single column, so everything fetched for it is wasted: a soft-key
+     * table refuses every record (`KEYLESS_RECORD_REFUSED`, because the key is the first field the
+     * engine finds unmapped) and any other table gets rows with nothing in them. Observed on a
+     * per-connection NetForum catalog: 292 maps were created with no field maps, and the first sync
+     * that reached them fetched and refused 307,843 records until the refusals ran the API out of heap.
+     *
+     * The skip is reported where the run keeps its history, not only on the event stream: one
+     * Critical `CONFIGURATION_ERROR` (the run's ErrorLog is written from `Errors`) and the object on
+     * the incomplete list. No record is counted, because none was read.
+     */
+    private skipMapWithoutFieldMaps(entityMap: ICompanyIntegrationEntityMap, logger?: SyncLogger): SyncResult {
+        const objectName = entityMap.ExternalObjectName ?? entityMap.ID;
+        const message =
+            `'${objectName}' has no active field maps, so nothing fetched for it could be written. It was ` +
+            `skipped without fetching. Apply this object again for the connection to create its field maps.`;
+        logger?.Emit('sync.entity-map.skipped', {
+            externalObjectName: entityMap.ExternalObjectName,
+            skippedReason: 'ENTITY_MAP_HAS_NO_FIELD_MAPS',
+            message,
+        });
+        logger?.Warning(objectName, 'ENTITY_MAP_HAS_NO_FIELD_MAPS', message, { entityMapID: entityMap.ID });
+        console.error(`[IntegrationEngine] ENTITY_MAP_HAS_NO_FIELD_MAPS: ${message}`);
+        const result = this.emptyResult();
+        result.Errors.push({
+            ExternalID: '',
+            ChangeType: 'Skip',
+            ErrorMessage: message,
+            ErrorCode: 'CONFIGURATION_ERROR',
+            Severity: 'Critical',
+        });
+        this.markIncomplete(result, objectName);
+        return result;
+    }
+
+    /**
      * Pull sync: fetch from external → map → match → validate → apply to MJ.
      */
     private async processPullSync(
@@ -2954,6 +2991,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // we spend nothing on it; once it ages out the next attempt IS the recheck, so an object
         // the account later enables heals itself with no operator action.
         const fieldMaps = await this.loadFieldMaps(entityMapID, contextUser);
+        if (fieldMaps.length === 0) return this.skipMapWithoutFieldMaps(entityMap, logger);
         // Field-level exclusions declared by the connector (SourceFieldInfo.SyncDirective
         // -> IntegrationObjectField.Configuration). Resolved once per map, applied to every
         // batch below. Empty set on any lookup miss - exclusion can only ever narrow.
@@ -4819,6 +4857,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
     /**
      * Loads active field maps for a given entity map.
+     *
+     * @throws FIELD_MAPS_UNREADABLE when the read fails. An empty answer would read as a map that
+     *   HAS no field maps, which the pull path skips as a configuration error and the push path
+     *   skips as having nothing to push: a transient read failure must not be reported as either.
      */
     private async loadFieldMaps(
         entityMapID: string,
@@ -4827,13 +4869,19 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const rv = new RunView();
         const result = await rv.RunView<ICompanyIntegrationFieldMap>({
             EntityName: 'MJ: Company Integration Field Maps',
-            ExtraFilter: `EntityMapID='${entityMapID}' AND Status='Active'`,
+            ExtraFilter: `EntityMapID='${EscapeSQLString(entityMapID)}' AND Status='Active'`,
             OrderBy: 'Priority ASC',
             ResultType: 'entity_object',
             BypassCache: true, // field maps drive value mapping; a sync must see freshly-applied maps
         }, contextUser);
 
-        return result.Success ? result.Results : [];
+        if (!result.Success) {
+            throw new Error(
+                `FIELD_MAPS_UNREADABLE: could not read the field maps of entity map ${entityMapID}: ` +
+                `${result.ErrorMessage ?? 'unknown error'}`
+            );
+        }
+        return result.Results;
     }
 
     /** Parses the entity map's Configuration JSON (best-effort) for engine-side feature toggles. */
