@@ -262,16 +262,18 @@ export interface GraphEdgeApprovalVerdict {
 
 /**
  * True when saving these values is an approval decision that `Graph: Approve Edges` must authorize:
- * - creating an edge that starts out `Approved`, whatever its `Origin`;
- * - changing `Status` to `Approved` or `Rejected`, or away from `Approved` (a review decision);
+ * - creating an edge that does not start out `Proposed` or `Rejected`, whatever its `Origin`. A null `Status` counts:
+ *   `spCreateGraphEdge` stores the column default, `Approved`;
+ * - changing `Status` to `Approved` or `Rejected`, or away from `Approved` or `Rejected` (a review decision, or undoing one);
  * - changing what an `Approved` edge connects (`IdentityChanged`) or says (`ContentChanged`).
  */
 export function GraphEdgeSaveNeedsApproval(input: GraphEdgeApprovalInput): boolean {
     if (!input.IsSaved) {
-        return input.NextStatus === 'Approved';
+        return input.NextStatus !== 'Proposed' && input.NextStatus !== 'Rejected';
     }
     const statusChanged = input.PreviousStatus !== input.NextStatus;
-    if (statusChanged && (input.NextStatus === 'Approved' || input.NextStatus === 'Rejected' || input.PreviousStatus === 'Approved')) {
+    const reviewed = input.PreviousStatus === 'Approved' || input.PreviousStatus === 'Rejected';
+    if (statusChanged && (input.NextStatus === 'Approved' || input.NextStatus === 'Rejected' || reviewed)) {
         return true;
     }
     return input.NextStatus === 'Approved' && (input.IdentityChanged || input.ContentChanged);

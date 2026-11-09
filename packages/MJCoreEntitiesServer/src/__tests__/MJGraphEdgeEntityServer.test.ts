@@ -318,6 +318,22 @@ describe('EvaluateGraphEdgeApproval (Graph: Approve Edges, fail closed)', () => 
         expect(EvaluateGraphEdgeApproval({ ...create, User: curator }).Error).toBeNull();
     });
 
+    it('gates creating an edge with no Status, which the database stores as Approved (its column default)', () => {
+        for (const NextStatus of [null, undefined]) {
+            const create = approvalInput({ IsSaved: false, PreviousStatus: null, NextStatus, User: staff });
+            expect(GraphEdgeSaveNeedsApproval(create)).toBe(true);
+            expect(EvaluateGraphEdgeApproval(create).Error).not.toBeNull();
+        }
+        expect(GraphEdgeSaveNeedsApproval(approvalInput({ IsSaved: false, PreviousStatus: null, NextStatus: 'Rejected' }))).toBe(false);
+    });
+
+    it('gates undoing a rejection: Rejected -> Proposed needs Graph: Approve Edges', () => {
+        const undo = approvalInput({ PreviousStatus: 'Rejected', NextStatus: 'Proposed', User: staff });
+        expect(GraphEdgeSaveNeedsApproval(undo)).toBe(true);
+        expect(EvaluateGraphEdgeApproval(undo).Error).not.toBeNull();
+        expect(EvaluateGraphEdgeApproval({ ...undo, User: curator }).Error).toBeNull();
+    });
+
     it('gates every review decision, including Rejected -> Approved, and re-pointing an Approved edge', () => {
         expect(GraphEdgeSaveNeedsApproval(approvalInput({ PreviousStatus: 'Rejected', NextStatus: 'Approved' }))).toBe(true);
         expect(GraphEdgeSaveNeedsApproval(approvalInput({ PreviousStatus: 'Proposed', NextStatus: 'Rejected' }))).toBe(true);
