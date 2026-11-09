@@ -1,6 +1,6 @@
 import { 
     AssertClientInputWritableForUser, BaseEntity, CompositeKey, EntityDeleteOptions, EntityPermissionType, 
-    EntitySaveOptions, LogError, Metadata, UserInfo 
+    EntitySaveOptions, LogError, Metadata, ServerOperationScopeManager, UserInfo 
 } from '@memberjunction/core';
 import { ProjectValuesForCaller } from '../generic/fieldSecurityTransport.js';
 
@@ -13,6 +13,7 @@ export class EntityCRUDHandler {
      * Create a new entity
      */
     static async CreateEntity(entityName: string, data: any, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string, details?: any, validationErrors?: any[] }> {
+        return ServerOperationScopeManager.Instance.RunInClientCrudBoundary(async () => {
         try {
             // Get entity object
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
@@ -29,14 +30,16 @@ export class EntityCRUDHandler {
             // Create new record
             entity.NewRecord();
             
-            // Extract save options if provided
+            // Extract save options if provided (wire-unreachable flags like ReplayOnly/SkipRecordChanges are never honored)
             const options = new EntitySaveOptions();
             if (data.options) {
                 const { IgnoreDirtyState, SkipEntityAIActions, SkipEntityActions, ReplayOnly, SkipOldValuesCheck } = data.options;
                 if (IgnoreDirtyState !== undefined) options.IgnoreDirtyState = !!IgnoreDirtyState;
                 if (SkipEntityAIActions !== undefined) options.SkipEntityAIActions = !!SkipEntityAIActions;
                 if (SkipEntityActions !== undefined) options.SkipEntityActions = !!SkipEntityActions;
-                if (ReplayOnly !== undefined) options.ReplayOnly = !!ReplayOnly;
+                if (ReplayOnly) {
+                    LogError(`Ignoring ReplayOnly on a ${entityName} REST create requested by ${user?.Email ?? 'an unidentified caller'}`);
+                }
                 if (SkipOldValuesCheck !== undefined) options.SkipOldValuesCheck = !!SkipOldValuesCheck;
                 
                 // Remove options from data
@@ -80,6 +83,7 @@ export class EntityCRUDHandler {
             LogError(error);
             return { success: false, error: error?.message || 'Unknown error' };
         }
+        });
     }
 
     /** @deprecated Use {@link CreateEntity}. */
@@ -135,6 +139,7 @@ export class EntityCRUDHandler {
      * Update an existing entity
      */
     static async UpdateEntity(entityName: string, id: string | number, data: any, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string, details?: any, validationErrors?: any[] }> {
+        return ServerOperationScopeManager.Instance.RunInClientCrudBoundary(async () => {
         try {
             // Get entity object
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
@@ -161,14 +166,16 @@ export class EntityCRUDHandler {
                 };
             }
             
-            // Extract save options if provided
+            // Extract save options if provided (wire-unreachable flags like ReplayOnly/SkipRecordChanges are never honored)
             const options = new EntitySaveOptions();
             if (data.options) {
                 const { IgnoreDirtyState, SkipEntityAIActions, SkipEntityActions, ReplayOnly, SkipOldValuesCheck } = data.options;
                 if (IgnoreDirtyState !== undefined) options.IgnoreDirtyState = !!IgnoreDirtyState;
                 if (SkipEntityAIActions !== undefined) options.SkipEntityAIActions = !!SkipEntityAIActions;
                 if (SkipEntityActions !== undefined) options.SkipEntityActions = !!SkipEntityActions;
-                if (ReplayOnly !== undefined) options.ReplayOnly = !!ReplayOnly;
+                if (ReplayOnly) {
+                    LogError(`Ignoring ReplayOnly on a ${entityName} REST create requested by ${user?.Email ?? 'an unidentified caller'}`);
+                }
                 if (SkipOldValuesCheck !== undefined) options.SkipOldValuesCheck = !!SkipOldValuesCheck;
                 
                 // Remove options from data
@@ -219,6 +226,7 @@ export class EntityCRUDHandler {
             LogError(error);
             return { success: false, error: error?.message || 'Unknown error' };
         }
+        });
     }
 
     /** @deprecated Use {@link UpdateEntity}. */
@@ -230,6 +238,7 @@ export class EntityCRUDHandler {
      * Delete an entity
      */
     static async DeleteEntity(entityName: string, id: string | number, options: EntityDeleteOptions, user: UserInfo): Promise<{ success: boolean, error?: string, details?: any }> {
+        return ServerOperationScopeManager.Instance.RunInClientCrudBoundary(async () => {
         try {
             // Get entity object
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
@@ -256,6 +265,16 @@ export class EntityCRUDHandler {
                 };
             }
             
+            // Sanitize delete options from wire (never allow ReplayOnly or SkipRecordChanges)
+            if (options?.ReplayOnly) {
+                LogError(`Ignoring ReplayOnly on a ${entityName} REST delete requested by ${user?.Email ?? 'an unidentified caller'}`);
+                options.ReplayOnly = false;
+            }
+            if (options?.SkipRecordChanges) {
+                LogError(`Ignoring SkipRecordChanges on a ${entityName} REST delete requested by ${user?.Email ?? 'an unidentified caller'}`);
+                options.SkipRecordChanges = false;
+            }
+
             // Delete the entity
             const deleteSuccess = await entity.Delete(options);
             
@@ -273,6 +292,7 @@ export class EntityCRUDHandler {
             LogError(error);
             return { success: false, error: error?.message || 'Unknown error' };
         }
+        });
     }
 
     /** @deprecated Use {@link DeleteEntity}. */

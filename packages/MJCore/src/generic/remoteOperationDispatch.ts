@@ -8,6 +8,7 @@
 
 import { MJGlobal } from "@memberjunction/global";
 import { BaseRemotableOperation, RemoteOpServerContext } from "./baseRemotableOperation";
+import { ServerOperationScopeManager } from "./entityLifecyclePolicy";
 import { IMetadataProvider, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
 import { UserInfo } from "./securityInfo";
 
@@ -72,7 +73,20 @@ export async function DispatchRemoteOperationInProcess<TInput = unknown, TOutput
         sessionId: options.sessionId,
         apiKeyHash: options.apiKeyHash,
     };
-    return op.ExecuteServer(input, context);
+    if (op.GrantsServerWriteAuthority) {
+        return ServerOperationScopeManager.Instance.RunWithAuthority(
+            {
+                operationKey: op.OperationKey || operationKey,
+                source: 'RemotableOperation',
+                allowedEntities: op.AuthorizedWriteEntities,
+                userId: user.ID,
+            },
+            () => op.ExecuteServer(input, context),
+        );
+    }
+    return ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() =>
+        op.ExecuteServer(input, context),
+    );
 }
 
 /** @deprecated Use {@link DispatchRemoteOperationInProcess}. */

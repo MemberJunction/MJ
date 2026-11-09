@@ -81,4 +81,42 @@ describe('GraphQLDataProvider view properties on the wire', () => {
         expect(checked.success).toBe(false);
         expect(GraphQLWire.Requests).toHaveLength(0);
     });
+
+    it('forwards RunViewParams.Parameters on single, batched, and cache-check view runs', async () => {
+        GraphQLWire.EnqueueResponse(singleViewResponse('RunCRMCustomerDynamicView'));
+        await provider.CallInternalRunView({
+            EntityName: 'Customers',
+            ExtraFilter: 'Status = @status',
+            Parameters: { status: 'Active' },
+        });
+        expect(lastInputRecord()['Parameters']).toEqual({ status: 'Active' });
+
+        GraphQLWire.EnqueueResponse({ RunViews: [] });
+        await provider.CallInternalRunViews([
+            { EntityName: 'Customers', ExtraFilter: 'Status = @status', Parameters: { status: 'Active' } },
+            { EntityName: 'Customers' },
+        ]);
+        const batchInputs = GraphQLWire.LastInput as Record<string, unknown>[];
+        expect(batchInputs[0]['Parameters']).toEqual({ status: 'Active' });
+        expect(Object.prototype.hasOwnProperty.call(batchInputs[1], 'Parameters')).toBe(false);
+
+        GraphQLWire.EnqueueResponse({
+            RunViewsWithCacheCheck: {
+                success: true,
+                results: [{ viewIndex: 0, status: 'current' }],
+            },
+        });
+        await provider.RunViewsWithCacheCheck([
+            {
+                params: {
+                    EntityName: 'Customers',
+                    ExtraFilter: 'Status = @status',
+                    Parameters: { status: 'Active' },
+                },
+                cacheStatus: { maxUpdatedAt: '2026-01-01T00:00:00Z', rowCount: 1 },
+            },
+        ]);
+        const cacheCheckInputs = GraphQLWire.LastInput as Array<{ params: Record<string, unknown> }>;
+        expect(cacheCheckInputs[0].params['Parameters']).toEqual({ status: 'Active' });
+    });
 });

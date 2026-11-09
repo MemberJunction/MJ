@@ -85,6 +85,10 @@ class PartialRefreshProvider extends TestMetadataProvider {
     public refreshChecks = 0;
     /** When set, a scoped read (one carrying `1=0` filters) reports this item as failed. */
     public failScopedItem: string | null = null;
+    /** How many times the MJ_Metadata status was read. */
+    public statusReads = 0;
+    /** Runs once during the next scoped read, after the read has suspended, then clears. */
+    public onScopedRead: (() => void) | null = null;
 
     constructor() {
         super();
@@ -114,6 +118,12 @@ class PartialRefreshProvider extends TestMetadataProvider {
         this.readsJoinedTransaction.push(this.MetadataReadsJoinTransaction);
         const suppressed = new Set((itemFilters ?? []).filter(f => f.Filter === '1=0').map(f => f.ItemCode));
         const scoped = suppressed.size > 0;
+        if (scoped && this.onScopedRead) {
+            await new Promise(resolve => setTimeout(resolve, 0)); // a real read suspends here
+            const hook = this.onScopedRead;
+            this.onScopedRead = null;
+            hook();
+        }
         return {
             DatasetID: 'md',
             DatasetName: datasetName,
@@ -136,6 +146,7 @@ class PartialRefreshProvider extends TestMetadataProvider {
     }
 
     public override async GetDatasetStatusByName(datasetName: string): Promise<DatasetStatusResultType> {
+        this.statusReads++;
         const dates = ITEMS.map(item => ({
             EntityName: item.EntityName,
             EntityID: item.EntityID,
@@ -326,5 +337,44 @@ describe('ProviderBase — partial refresh of the saved-query family', () => {
         expect(provider.suppressedCodes(provider.datasetReads[1])).toEqual(EVERYTHING_ELSE);
         expect(provider.suppressedCodes(provider.datasetReads[2])).toEqual([]);
         expect(provider.Queries).toHaveLength(2);
+    });
+    it('a scoped member-change refresh reads the status once', async () => {
+        provider.touch('Queries', { ID: 'q2', Name: 'Second Query', Status: 'Pending', CategoryID: null });
+        provider.statusReads = 0;
+
+        await provider['RefreshAfterMetadataMemberChange']();
+
+        expect(provider.suppressedCodes(provider.lastRead())).toEqual(EVERYTHING_ELSE);
+        expect(provider.Queries).toHaveLength(2);
+        expect(provider.statusReads).toBe(1);
+    });
+
+    it('the scoped branch of RefreshIfNeeded reads the status once', async () => {
+        provider.touch('Queries', { ID: 'q2', Name: 'Second Query', Status: 'Pending', CategoryID: null });
+        provider.statusReads = 0;
+
+        await provider.RefreshIfNeeded(undefined, true);
+
+        expect(provider.suppressedCodes(provider.lastRead())).toEqual(EVERYTHING_ELSE);
+        expect(provider.Queries).toHaveLength(2);
+        expect(provider.statusReads).toBe(1);
+    });
+
+    it('a follow-up pass queued during a scoped reload reads the status again', async () => {
+        provider.touch('Queries', { ID: 'q2', Name: 'Second Query', Status: 'Pending', CategoryID: null });
+        provider.statusReads = 0;
+        let queued: Promise<boolean> | null = null;
+        provider.onScopedRead = () => {
+            provider.touch('Queries', { ID: 'q3', Name: 'Third Query', Status: 'Pending', CategoryID: null });
+            queued = provider['RefreshAfterMetadataMemberChange']();
+        };
+
+        await provider['RefreshAfterMetadataMemberChange']();
+        expect(queued).not.toBeNull();
+        await queued;
+
+        expect(provider.datasetReads).toHaveLength(3); // the cold boot, the first pass, the queued pass
+        expect(provider.Queries).toHaveLength(3);
+        expect(provider.statusReads).toBe(2);
     });
 });

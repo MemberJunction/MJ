@@ -75,7 +75,7 @@ jobs:
       relevant: ${{ steps.filter.outputs.relevant }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           filter: blob:none
@@ -133,6 +133,11 @@ jobs:
             # Same again for the EntityField Sequence gate: its vitest suite lives in __tests__, but an
             # edit to the gate script alone must run it too.
             .github/scripts/check-migration-entityfield-sequence.mjs
+            # Same again for the competing validator-seed gate (guards job) and its baseline.
+            .github/scripts/check-migration-validator-seeds.mjs
+            .github/scripts/migration-validator-seeds-baseline.json
+            # The dynamic-import gate runs in the Source guards job; an edit to it alone must run it and its suite.
+            .github/scripts/check-dynamic-imports.mjs
             # Same again for the exact-pins guard: it runs in ci-exact-pins.yml, not here, but its
             # vitest suite lives in __tests__ — so an edit to the guard script alone must run it too.
             .github/scripts/check-exact-pins.mjs
@@ -172,6 +177,8 @@ jobs:
             # The MJExplorer @angular/compiler guard (guards job). The manifest it reads is already
             # under packages/**; the script is not, so a PR weakening only the guard must still run it.
             .github/scripts/check-explorer-angular-compiler.mjs
+            # The angular.json prebundle exclude guard (guards job): same reason.
+            .github/scripts/check-explorer-prebundle-exclude.mjs
             # The AI model rank-lineage guard (guards job) reads metadata/ai-models, which is outside
             # packages/**. Without these entries a PR that edits only the catalog — the one change
             # that can introduce an inversion — never runs the guard.
@@ -187,6 +194,8 @@ jobs:
             # The remote-cache preflight runs as a step in this workflow (see "Verify turbo
             # remote-cache configuration"), and its own suite lives in __tests__ above.
             .github/scripts/check-turbo-cache-env.mjs
+            # The turbo root-data inputs guard runs in the guards job; its suite lives in __tests__ above.
+            .github/scripts/check-turbo-root-inputs.mjs
             # The turbo remote-cache coverage guard (turbo-remote-cache-coverage.test.mjs) asserts the
             # env wiring across EVERY workflow, plus the `secrets: inherit` at publish.yml's call site.
             # Its suite lives in __tests__ above, but without these entries a PR editing only one of
@@ -229,7 +238,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
           # Full history is needed for the base-ref diffs below, but the blobless partial clone
@@ -279,6 +288,14 @@ jobs:
         if: ${{ !cancelled() }}
         run: node .github/scripts/check-mj-cli-resolution.mjs packages
 
+      # Competing validator-seed guard (MJ#4673). Two migrations that seed the same CodeGen
+      # validator row with different text are both guarded by existence checks, so filename order
+      # alone decides the message users see and the later text never applies. Released pairs are
+      # listed in migration-validator-seeds-baseline.json; a new pair fails here.
+      - name: Migration validator-seed guard
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/check-migration-validator-seeds.mjs
+
       # Citizen-builder template copy guard. `mj agent init` scaffolds from citizen-builder/, and
       # @memberjunction/cli commits a copy of it under src/init-templates/: that copy is the CLI's
       # build-cache key for the template and what the CLI's tests scaffold from, so while it is
@@ -327,12 +344,30 @@ jobs:
           node .github/scripts/check-explorer-angular-compiler.mjs --self-test
           node .github/scripts/check-explorer-angular-compiler.mjs
 
+      # A committed angular.json prebundle exclude holds only "@memberjunction/*" (issue #3875).
+      # `mj dev workspace` adds a joined workspace's linked scopes there on join and `clean` takes
+      # them out; this keeps a developer's scopes from riding a PR. Self-test first.
+      - name: Angular prebundle exclude guard
+        if: ${{ !cancelled() }}
+        run: |
+          node .github/scripts/check-explorer-prebundle-exclude.mjs --self-test
+          node .github/scripts/check-explorer-prebundle-exclude.mjs
+
       # Within a model's version lineage (AIModel.PriorVersionID) a later model must not rank
       # below the model it succeeds, or rank-based model selection keeps preferring the older
       # one (MJ#4912). Reads metadata/ai-models only — no DB, no build.
       - name: AI model rank-lineage guard
         if: ${{ !cancelled() }}
         run: node .github/scripts/check-ai-model-ranks.mjs
+
+      # Turbo caches a package's `test` result on that package's own files, so a test reading
+      # repo-root data (e.g. migrations/, metadata/, metadata-optional/ and other repo-root
+      # directories) replays its cached pass after that data changes. Each such package declares the data in its own turbo.json
+      # (`$TURBO_ROOT$/<dir>/**`); this fails a PR that adds a root read without the declaration.
+      # Static scan of test sources only: no build, no turbo run.
+      - name: Turbo root-data test inputs guard
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/check-turbo-root-inputs.mjs
 
       # Every active AI Prompt Model row must point at an active model with an active Inference
       # Provider route for its vendor, or the prompt silently falls back to another candidate
@@ -366,6 +401,18 @@ jobs:
           src/__tests__/MultiProviderCompliance.test.ts
           src/__tests__/FieldSecurityEgressCompliance.test.ts
           src/__tests__/PlatformStringCompliance.test.ts
+
+      # The primary-key scanner is the same kind of repo-wide scan, hosted in MJCore. In MJCore's
+      # per-package `test` task it ran only when a PR touched MJCore (core sits at the bottom of the
+      # dependency graph, so the affected-package filter never selects it from a leaf change), and it
+      # ships with no baseline, so every violation it would have caught merged and failed on `next`.
+      # MJCore's own config, as in check-guards.sh: the shared one finds no project from inside MJCore.
+      - name: Repo-wide compliance scan (primary keys)
+        if: ${{ !cancelled() }}
+        run: >-
+          pnpm --filter @memberjunction/core exec vitest run
+          --passWithNoTests=false
+          src/__tests__/PrimaryKeyCompliance.test.ts
 
       - name: Generic DOM coverage ratchet
         if: ${{ !cancelled() }}
@@ -445,6 +492,14 @@ jobs:
         if: ${{ !cancelled() }}
         run: pnpm run check:manifest-registrations
 
+      # Undeclared dynamic-import gate (#3741). A bare `import('pkg')` resolves from the importing
+      # package, so under pnpm an undeclared one fails at runtime even when the host installs it.
+      # Knip misses the `'pkg' as string` and `const id = 'pkg'; import(id)` forms; this gate parses
+      # them. Source text only (TypeScript from node_modules), no build.
+      - name: Undeclared dynamic-import gate
+        if: ${{ !cancelled() }}
+        run: pnpm run check:dynamic-imports
+
       # Python dialect tests against the COMMITTED sqlglot pin (issue #3252 review): the
       # sqlglot-ts vitest suite auto-skips when Python/sqlglot is absent, so CI never
       # executed mj_postgres.py — which let the code reference exp.IfBlock (added in
@@ -512,7 +567,7 @@ jobs:
       has_tests: ${{ steps.plan.outputs.has_tests }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -536,7 +591,7 @@ jobs:
       # Restore-only here; the matching save runs after the build, and ONLY on the backstop
       # events. See the save step for why PRs deliberately don't write their own entry.
       - name: Restore turbo build cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: .turbo/cache
           # Exact key so a re-run of the SAME commit is a perfect hit; the prefix key falls
@@ -588,6 +643,7 @@ jobs:
       # shard: it is cheap against a warm build and a type error is a property of the code,
       # not of which shard happened to draw the package.
       - name: Build
+        id: build
         env:
           TURBO_FILTER: ${{ steps.scope.outputs.turbo_filter }}
         run: |
@@ -605,9 +661,23 @@ jobs:
       # `pnpm run build` has regenerated them, the leak is visible — but the freshness gate
       # exits 1 on ANY diff, so if it ran first the developer would see an opaque "manifest is
       # stale" message instead of "a server package leaked in".
+      #
+      # `!cancelled()` and the build-outcome check below apply to this gate and the freshness
+      # gate after it. With the default `success()`, a failed build SKIPPED both, and a skip
+      # reads the same as a pass: a merge that shipped a compile error and a stale manifest
+      # reported only the compile error, and the stale manifest rode `next` until someone else
+      # fixed the build. A failed build means the manifests were not regenerated, so there is
+      # nothing to compare; each gate now fails with "could not verify" instead of vanishing.
       - name: Browser manifest server-leakage gate (regenerated)
-        if: steps.scope.outputs.turbo_filter == ''
-        run: node .github/scripts/check-browser-manifest-leakage.mjs
+        if: ${{ !cancelled() && steps.scope.outputs.turbo_filter == '' }}
+        env:
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+        run: |
+          if [ "$BUILD_OUTCOME" != "success" ]; then
+            echo "::error::Browser manifest server-leakage gate could not verify manifests (build failed, so they were not regenerated). Fix the build; this gate then runs."
+            exit 1
+          fi
+          node .github/scripts/check-browser-manifest-leakage.mjs
 
       # Class-registration manifest freshness gate. The committed manifests (the anti-tree-
       # shaking import lists wiring 100+ packages of @RegisterClass classes) demonstrably go
@@ -616,10 +686,17 @@ jobs:
       # committed files means a package added/removed a registered class and the manifest
       # commit was forgotten. Fail loudly with the exact fix. (PR-filtered runs skip this:
       # `npx turbo run build` doesn't run the root postbuild, so there's nothing regenerated
-      # to compare — the merge backstop always catches it.)
+      # to compare — the merge backstop catches it, and a failed build on that backstop now
+      # fails this gate as "could not verify" rather than skipping it; see the leakage gate above.)
       - name: Class-registration manifest freshness gate
-        if: steps.scope.outputs.turbo_filter == ''
+        if: ${{ !cancelled() && steps.scope.outputs.turbo_filter == '' }}
+        env:
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
         run: |
+          if [ "$BUILD_OUTCOME" != "success" ]; then
+            echo "::error::Class-registration manifest freshness gate could not verify manifests (build failed, so they were not regenerated). Fix the build; this gate then runs."
+            exit 1
+          fi
           MANIFESTS=$(git ls-files '*mj-class-registrations.ts' '*class-registrations-manifest.ts' '*lazy-feature-config.ts')
           if ! git diff --exit-code -- $MANIFESTS; then
             echo "::error::Committed class-registration manifests are STALE — a @RegisterClass class was added/removed without regenerating them. Fix: run 'pnpm run mj:manifest' locally and commit the result. A stale manifest lets tree-shaking silently drop the class in bundled apps."
@@ -669,7 +746,7 @@ jobs:
           fi
 
       - name: Upload generated host artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: generated-host-artifacts
           path: generated-host-artifacts.tar.gz
@@ -696,7 +773,7 @@ jobs:
       # every PR's build restores from. run_attempt is in the key so a re-run rebuilds rather
       # than reading a half-written entry from the attempt that failed.
       - name: Save turbo cache for the test shards
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: .turbo/cache
           key: turbo-run-${{ github.run_id }}-${{ github.run_attempt }}
@@ -747,7 +824,7 @@ jobs:
       # is independent of whether the suite passed, and re-running shouldn't pay for a cold build.
       - name: Save turbo build cache
         if: always() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: .turbo/cache
           key: turbo-v1-${{ runner.os }}-${{ github.sha }}
@@ -803,7 +880,7 @@ jobs:
     steps:
       # fetch-depth 1: a shard runs tests against the working tree and never diffs a base ref.
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 1
@@ -813,7 +890,7 @@ jobs:
 
       - name: Restore the build job's turbo cache
         id: shard_cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: .turbo/cache
           key: turbo-run-${{ github.run_id }}-${{ github.run_attempt }}
@@ -829,7 +906,7 @@ jobs:
       # The gitignored class-registration manifests the root postbuild writes into the SOURCE
       # tree. See the build job's packaging step for why the turbo cache cannot carry these.
       - name: Download generated host artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: generated-host-artifacts
 
@@ -921,7 +998,7 @@ jobs:
       TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -930,7 +1007,7 @@ jobs:
       - uses: ./.github/actions/mj-setup
 
       - name: Restore the build job's turbo cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: .turbo/cache
           key: turbo-run-${{ github.run_id }}-${{ github.run_attempt }}
@@ -1055,7 +1132,7 @@ jobs:
       # comment on it nor close it. A red line push still shows as a red run, and line PRs gate first.
       - name: Checkout repo
         if: always() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 1
@@ -1194,7 +1271,7 @@ jobs:
       TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
           filter: blob:none
@@ -1204,7 +1281,7 @@ jobs:
       # Restore-only: this job never writes cache entries (the backstop's save is the
       # canonical writer). A warm restore makes the build below a near-total cache replay.
       - name: Restore turbo build cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: .turbo/cache
           key: turbo-v1-${{ runner.os }}-${{ github.sha }}
@@ -1250,7 +1327,7 @@ jobs:
 
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report
           path: coverage/

@@ -2,7 +2,8 @@
  * @fileoverview Model Performance Leaderboard.
  *
  * Ranks AI models by configurable metrics (Cost Efficiency, Speed, Reliability, Usage Volume).
- * Data is loaded from MJ: AI Prompt Runs and augmented with model metadata from AIEngineBase.
+ * Runs, success, tokens and cost come from the AIUsageHourly aggregate and latency percentiles
+ * from AIUsageByModel, so every run in range counts; model and vendor names come from AIEngineBase.
  */
 
 import {
@@ -11,31 +12,14 @@ import {
     ChangeDetectorRef, inject
 } from '@angular/core';
 import { Subject } from 'rxjs';
-import { RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { AIInstrumentationService } from '../../../services/ai-instrumentation.service';
+import { AIUsageByModelRow, AIUsageHourlyRow } from '../../../services/ai-usage-analytics.types';
+import { ComputeModelLeaderboard, CurrencyAmount, ModelUsageStats, SumRuns } from '../../../services/ai-usage-analytics.compute';
 
 // ── Interfaces ──
-
-interface PromptRunRecord {
-    ID: string;
-    RunAt: string;
-    CompletedAt: string | null;
-    ExecutionTimeMS: number | null;
-    Success: boolean;
-    Cost: number | null;
-    TotalCost: number | null;
-    TokensUsed: number | null;
-    TokensPrompt: number | null;
-    TokensCompletion: number | null;
-    TokensCacheRead: number | null;
-    TokensCacheWrite: number | null;
-    ModelID: string | null;
-    Model: string | null;
-    VendorID: string | null;
-    Vendor: string | null;
-}
 
 interface ModelLeaderboardRow {
     Rank: number;
@@ -45,27 +29,31 @@ interface ModelLeaderboardRow {
     Vendor: string;
     VendorID: string;
     Runs: number;
-    AvgLatencyMs: number;
-    AvgLatencyColor: string;
-    P95LatencyMs: number;
+    /** Median latency in ms; null when the range has no latency for this model. */
+    P50LatencyMs: number | null;
+    P50LatencyColor: string;
+    P95LatencyMs: number | null;
     SuccessRate: number;
     /** Null when no run in this group could be priced — never 0, which would read as free. */
     CostPer1KTokens: number | null;
+    /** The currency CostPer1KTokens is in (the model's primary one); null when unpriced. */
+    CostCurrency: string | null;
     CacheHitRate: number;
-    /** Null when no run in this group could be priced. */
-    TotalCost: number | null;
-    /** Runs whose Cost is NULL: unpriceable, not free. Surfaced so a total is never read as complete. */
+    /** Own cost, one figure per currency (never summed across currencies). Empty when nothing was priced. */
+    Costs: CurrencyAmount[];
+    /** Runs that could not be priced: unpriceable, not free. Surfaced so a total is never read as complete. */
     UnpricedRuns: number;
     RankClass: string;
 }
 
 type SortByOption = 'cost-efficiency' | 'speed' | 'reliability' | 'usage-volume';
 
-const FIELDS = [
-    'ID', 'RunAt', 'CompletedAt', 'ExecutionTimeMS', 'Success',
-    'Cost', 'TotalCost', 'TokensUsed', 'TokensPrompt', 'TokensCompletion',
-    'TokensCacheRead', 'TokensCacheWrite', 'ModelID', 'Model', 'VendorID', 'Vendor'
-];
+/** How far back each time-range option reaches, in milliseconds. */
+const RANGE_MS: Record<string, number> = {
+    '24h': 86400000,
+    '7d': 7 * 86400000,
+    '30d': 30 * 86400000,
+};
 
 @Component({
     standalone: false,
@@ -84,7 +72,7 @@ const FIELDS = [
                         <i class="fa-solid fa-trophy panel-header__icon"></i>
                         Model Performance Leaderboard
                     </div>
-                    <span class="panel-header__subtitle">sampled from {{ AllRuns.length | number }} recent runs</span>
+                    <span class="panel-header__subtitle">{{ TotalRuns | number }} runs in range</span>
                 </div>
                 <div class="table-wrapper">
                     <table class="leaderboard-table">
@@ -94,7 +82,7 @@ const FIELDS = [
                                 <th class="col-model">Model</th>
                                 <th class="col-vendor">Vendor</th>
                                 <th class="col-numeric">Runs</th>
-                                <th class="col-numeric">Avg Latency</th>
+                                <th class="col-numeric" title="Median latency per model">P50 Latency</th>
                                 <th class="col-numeric">P95 Latency</th>
                                 <th class="col-numeric">Success Rate</th>
                                 <th class="col-numeric" title="Share of input tokens served from the provider's prompt cache">Cache Hit</th>
@@ -106,7 +94,7 @@ const FIELDS = [
                             @if (Rows.length === 0) {
                                 <tr><td colspan="10" class="empty-row"><mj-empty-state Variant="no-results" Size="compact" Title="No model data" Message="No model activity in the selected period."></mj-empty-state></td></tr>
                             }
-                            @for (row of Rows; track row.ModelName) {
+                            @for (row of Rows; track row.ModelID) {
                                 <tr>
                                     <td>
                                         <span class="rank-badge" [class]="row.RankClass">
@@ -122,8 +110,8 @@ const FIELDS = [
                                     <td class="cell-vendor">{{ row.Vendor }}</td>
                                     <td class="cell-numeric">{{ row.Runs | number }}</td>
                                     <td class="cell-numeric">
-                                        <span [style.color]="row.AvgLatencyColor">
-                                            {{ FormatLatency(row.AvgLatencyMs) }}
+                                        <span [style.color]="row.P50LatencyColor">
+                                            {{ FormatLatency(row.P50LatencyMs) }}
                                         </span>
                                     </td>
                                     <td class="cell-numeric">{{ FormatLatency(row.P95LatencyMs) }}</td>
@@ -136,8 +124,16 @@ const FIELDS = [
                                         </div>
                                     </td>
                                     <td class="cell-numeric">{{ row.CacheHitRate > 0 ? ((row.CacheHitRate * 100 | number:'1.0-0') + '%') : '—' }}</td>
-                                    <td class="cell-numeric">{{ FormatCurrency(row.CostPer1KTokens, 4) }}</td>
-                                    <td class="cell-numeric cell-cost">{{ FormatCurrency(row.TotalCost) }}@if (row.UnpricedRuns > 0) {<span class="cell-unpriced" [title]="row.UnpricedRuns + ' run(s) could not be priced'"> ({{ row.UnpricedRuns }} unpriced)</span>}</td>
+                                    <td class="cell-numeric">{{ FormatCurrency(row.CostPer1KTokens, 4, row.CostCurrency) }}</td>
+                                    <td class="cell-numeric cell-cost">
+                                        @if (row.Costs.length === 0) {
+                                            {{ FormatCurrency(null) }}
+                                        }
+                                        @for (cost of row.Costs; track cost.Currency) {
+                                            <div class="cost-line">{{ FormatCurrency(cost.Amount, 2, cost.Currency) }}</div>
+                                        }
+                                        @if (row.UnpricedRuns > 0) {<span class="cell-unpriced" [title]="row.UnpricedRuns + ' run(s) could not be priced'">({{ row.UnpricedRuns | number }} unpriced)</span>}
+                                    </td>
                                 </tr>
                             }
                         </tbody>
@@ -306,9 +302,14 @@ const FIELDS = [
         }
 
         .cell-unpriced {
+            display: block;
             font-weight: 400;
             font-size: 0.85em;
             color: var(--mj-text-muted);
+        }
+
+        .cost-line {
+            white-space: nowrap;
         }
 
         /* ── Success Rate Mini Bar ── */
@@ -386,10 +387,15 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
     private destroy$ = new Subject<void>();
     private initialized = false;
 
+    private instrumentation = inject(AIInstrumentationService);
+
     public IsLoading = false;
     public Rows: ModelLeaderboardRow[] = [];
 
-    public AllRuns: PromptRunRecord[] = [];
+    /** Every run in range (from the hourly aggregate), across all vendors. */
+    public TotalRuns = 0;
+    private hourlyRows: AIUsageHourlyRow[] = [];
+    private byModelRows: AIUsageByModelRow[] = [];
 
     async ngOnInit(): Promise<void> {
         // AIEngineBase is deferred at startup — make sure it's loaded before
@@ -404,17 +410,25 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
         this.destroy$.complete();
     }
 
-    public FormatLatency(ms: number): string {
+    public FormatLatency(ms: number | null): string {
+        if (ms == null) return '—';
         if (ms < 1000) return Math.round(ms) + 'ms';
         return (ms / 1000).toFixed(2) + 's';
     }
 
-    public FormatCurrency(value: number | null, decimals = 2): string {
+    public FormatCurrency(value: number | null, decimals = 2, currency: string | null = 'USD'): string {
         // Unpriced is not free — an em dash, never $0.00.
         if (value == null) return '—';
-        if (value === 0) return '$0.00';
-        if (value < 0.01 && decimals < 4) decimals = 4;
-        return '$' + value.toFixed(decimals);
+        if (value !== 0 && value < 0.01 && decimals < 4) decimals = 4;
+        const code = currency ?? 'USD';
+        try {
+            return new Intl.NumberFormat(undefined, {
+                style: 'currency', currency: code, minimumFractionDigits: decimals, maximumFractionDigits: decimals
+            }).format(value);
+        } catch {
+            // An unrecognized code still shows the amount, with the code beside it.
+            return `${value.toFixed(decimals)} ${code}`;
+        }
     }
 
     // ── Data Loading ──
@@ -424,19 +438,16 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
         this.cdr.detectChanges();
 
         try {
-            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-            const dateFilter = this.buildDateFilter();
-
-            const result = await rv.RunView<PromptRunRecord>({
-                EntityName: 'MJ: AI Prompt Runs',
-                ExtraFilter: dateFilter,
-                Fields: FIELDS,
-                OrderBy: 'RunAt DESC',
-                MaxRows: 1000,
-                ResultType: 'simple'
-            });
-
-            this.AllRuns = (result?.Results ?? []) as PromptRunRecord[];
+            this.instrumentation.Provider = this.ProviderToUse;
+            const end = new Date();
+            const start = new Date(end.getTime() - (RANGE_MS[this.TimeRange] ?? RANGE_MS['7d']));
+            const [hourly, byModel] = await Promise.all([
+                this.instrumentation.GetUsageHourly(start, end),
+                this.instrumentation.GetUsageByModel(start, end),
+            ]);
+            this.hourlyRows = hourly;
+            this.byModelRows = byModel;
+            this.TotalRuns = SumRuns(hourly);
             this.buildRows();
         } catch (e) {
             console.error('Model Performance load error:', e);
@@ -449,26 +460,8 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
     // ── Row Building ──
 
     private buildRows(): void {
-        // Filter by vendor if needed
-        let runs = this.AllRuns;
-        if (this.SelectedVendor) {
-            runs = runs.filter(r => r.VendorID === this.SelectedVendor);
-        }
-
-        // Group by model
-        const groups = new Map<string, PromptRunRecord[]>();
-        for (const run of runs) {
-            const key = run.ModelID ?? 'unknown';
-            if (!groups.has(key)) groups.set(key, []);
-            groups.get(key)!.push(run);
-        }
-
-        // Compute metrics per model
-        const modelRows: ModelLeaderboardRow[] = [];
-        for (const [modelId, modelRuns] of groups) {
-            const row = this.computeModelMetrics(modelId, modelRuns);
-            modelRows.push(row);
-        }
+        const stats = ComputeModelLeaderboard(this.hourlyRows, this.byModelRows, this.SelectedVendor || null);
+        const modelRows = stats.map(s => this.toLeaderboardRow(s));
 
         // Sort by chosen metric
         this.sortRows(modelRows);
@@ -482,47 +475,16 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
         this.Rows = modelRows;
     }
 
-    private computeModelMetrics(modelId: string, runs: PromptRunRecord[]): ModelLeaderboardRow {
-        const totalRuns = runs.length;
-        const successCount = runs.filter(r => r.Success).length;
-        const successRate = totalRuns > 0 ? (successCount / totalRuns) * 100 : 0;
-
-        const latencies = runs
-            .filter(r => r.ExecutionTimeMS != null && r.ExecutionTimeMS > 0)
-            .map(r => r.ExecutionTimeMS!);
-
-        const avgLatency = latencies.length > 0
-            ? latencies.reduce((s, l) => s + l, 0) / latencies.length
-            : 0;
-
-        const p95Latency = this.computePercentile(latencies, 0.95);
-
-        // Effective rate uses TOTAL tokens the model processed, including cache reads/writes — so a
-        // model that caches heavily shows its true (lower) cost per token rather than dividing the
-        // discounted cost by only the uncached tokens.
-        const cacheRead = runs.reduce((s, r) => s + (r.TokensCacheRead ?? 0), 0);
-        const cacheWrite = runs.reduce((s, r) => s + (r.TokensCacheWrite ?? 0), 0);
-        const totalTokens = runs.reduce((s, r) => s + (r.TokensUsed ?? 0), 0) + cacheRead + cacheWrite;
-        // Own cost only (AIPromptRun.Cost). NOT TotalCost — that is Cost + DescendantCost, so summing
-        // it across runs double-counts a child's spend against its parent. And an unpriced run (Cost
-        // IS NULL) is not a free one: it is excluded from the sum and counted separately, so the
-        // column can say "unpriced" instead of quietly reporting a smaller number as if it were whole.
-        const priced = runs.filter((r) => r.Cost != null);
-        const unpricedRuns = runs.length - priced.length;
-        const totalCost = priced.length > 0 ? priced.reduce((s, r) => s + (r.Cost as number), 0) : null;
-        const costPer1K = totalCost != null && totalTokens > 0 ? (totalCost / totalTokens) * 1000 : null;
-
-        const inputForHit = runs.reduce((s, r) => s + (r.TokensPrompt ?? 0), 0) + cacheRead + cacheWrite;
-        const cacheHitRate = inputForHit > 0 ? cacheRead / inputForHit : 0;
-
-        const firstName = runs.find(r => r.Model != null);
-        const firstVendor = runs.find(r => r.Vendor != null);
-
-        // Look up model API name from engine
+    private toLeaderboardRow(stats: ModelUsageStats): ModelLeaderboardRow {
+        let modelName = 'Unknown';
         let apiId = '';
+        let vendorName = 'Unknown';
         try {
-            const model = AIEngineBase.Instance.Models.find(m => UUIDsEqual(m.ID, modelId));
+            const model = AIEngineBase.Instance.Models.find(m => UUIDsEqual(m.ID, stats.ModelID));
+            modelName = model?.Name ?? modelName;
             apiId = model?.APIName ?? '';
+            const vendor = AIEngineBase.Instance.Vendors.find(v => UUIDsEqual(v.ID, stats.VendorID));
+            vendorName = vendor?.Name ?? vendorName;
         } catch {
             // engine might not be ready
         }
@@ -530,20 +492,21 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
         return {
             Rank: 0,
             RankClass: 'rank-neutral',
-            ModelID: modelId,
-            ModelName: firstName?.Model ?? 'Unknown',
+            ModelID: stats.ModelID,
+            ModelName: modelName,
             ApiId: apiId,
-            Vendor: firstVendor?.Vendor ?? 'Unknown',
-            VendorID: firstVendor?.VendorID ?? '',
-            Runs: totalRuns,
-            AvgLatencyMs: avgLatency,
-            AvgLatencyColor: this.getLatencyColor(avgLatency),
-            P95LatencyMs: p95Latency,
-            SuccessRate: successRate,
-            CostPer1KTokens: costPer1K,
-            CacheHitRate: cacheHitRate,
-            TotalCost: totalCost,
-            UnpricedRuns: unpricedRuns
+            Vendor: vendorName,
+            VendorID: stats.VendorID,
+            Runs: stats.Runs,
+            P50LatencyMs: stats.LatencyP50,
+            P50LatencyColor: this.getLatencyColor(stats.LatencyP50),
+            P95LatencyMs: stats.LatencyP95,
+            SuccessRate: stats.SuccessRate,
+            CostPer1KTokens: stats.CostPer1KTokens,
+            CostCurrency: stats.CostCurrency,
+            CacheHitRate: stats.CacheHitRate,
+            Costs: stats.Costs,
+            UnpricedRuns: stats.UnpricedRuns
         };
     }
 
@@ -554,7 +517,8 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
                 rows.sort((a, b) => (a.CostPer1KTokens ?? Number.POSITIVE_INFINITY) - (b.CostPer1KTokens ?? Number.POSITIVE_INFINITY));
                 break;
             case 'speed':
-                rows.sort((a, b) => a.AvgLatencyMs - b.AvgLatencyMs);
+                // Models without a latency figure sort last rather than as the fastest.
+                rows.sort((a, b) => (a.P50LatencyMs ?? Number.POSITIVE_INFINITY) - (b.P50LatencyMs ?? Number.POSITIVE_INFINITY));
                 break;
             case 'reliability':
                 rows.sort((a, b) => b.SuccessRate - a.SuccessRate);
@@ -567,13 +531,6 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
 
     // ── Helpers ──
 
-    private computePercentile(sortedValues: number[], percentile: number): number {
-        if (sortedValues.length === 0) return 0;
-        const sorted = [...sortedValues].sort((a, b) => a - b);
-        const idx = Math.ceil(sorted.length * percentile) - 1;
-        return sorted[Math.max(0, idx)];
-    }
-
     private getRankClass(rank: number): string {
         if (rank === 1) return 'rank-badge rank-gold';
         if (rank === 2) return 'rank-badge rank-silver';
@@ -581,22 +538,11 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
         return 'rank-badge rank-neutral';
     }
 
-    private getLatencyColor(ms: number): string {
+    private getLatencyColor(ms: number | null): string {
+        if (ms == null) return 'var(--mj-text-muted)';
         if (ms < 1000) return 'var(--mj-status-success)';
         if (ms < 3000) return 'var(--mj-status-warning)';
         return 'var(--mj-status-error)';
-    }
-
-    private buildDateFilter(): string {
-        const now = new Date();
-        const msMap: Record<string, number> = {
-            '24h': 86400000,
-            '7d': 604800000,
-            '30d': 2592000000
-        };
-        const ms = msMap[this.TimeRange] ?? 604800000;
-        const start = new Date(now.getTime() - ms);
-        return `RunAt >= '${start.toISOString()}'`;
     }
 }
 

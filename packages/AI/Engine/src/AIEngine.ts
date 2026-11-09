@@ -12,9 +12,10 @@ import { SummarizeResult } from "@memberjunction/ai";
 import { AIModelConfiguration } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
-import { BaseEntity, BaseEntityEvent, BaseEngineRegistry, LogError, LogWarning, Metadata, UserInfo, IMetadataProvider, IStartupSink, RegisterForStartup } from "@memberjunction/core";
+import { BaseEntity, BaseEntityEvent, BaseEngineRegistry, LogError, LogWarning, Metadata, UserInfo, IMetadataProvider, IStartupSink, RegisterForStartup, SharedLoad } from "@memberjunction/core";
 import { BaseSingleton, MJGlobal, MJEventType, MJLruCache, ToEpochMs, UUIDsEqual } from "@memberjunction/global";
 import { createHash } from "crypto";
+import { ImportFromHost } from "@memberjunction/dynamic-packages";
 import { MJAIActionEntity, MJActionEntity,
          MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
          MJAIModelActionEntity, MJAIPromptModelEntity, MJAIPromptTypeEntity,
@@ -135,8 +136,8 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
 
     // Loading state management
     private _loaded: boolean = false;
-    private _loading: boolean = false;
-    private _loadingPromise: Promise<void> | null = null;
+    /** Shares concurrent loads; a forced `Config(true)` always gets a load that starts after it. */
+    private readonly _load = new SharedLoad();
     private _contextUser: UserInfo | undefined;
 
     // ========================================================================
@@ -560,8 +561,8 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
      * Configures the AIEngine by first ensuring AIEngineBase is configured,
      * then loading server-specific capabilities (embeddings, actions, etc.).
      *
-     * This method is safe to call from multiple places concurrently - it will
-     * return the same promise to all callers during loading.
+     * This method is safe to call from multiple places concurrently: callers share the load that
+     * is running, except that a `forceRefresh` call gets one more load after it (see SharedLoad).
      *
      * @param forceRefresh - If true, forces a full reload even if already loaded
      * @param contextUser - User context for server-side operations (required)
@@ -572,22 +573,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
         if (this._loaded && !forceRefresh) {
             return;
         }
-
-        // If currently loading, return the existing promise so all callers wait together
-        if (this._loading && this._loadingPromise) {
-            return this._loadingPromise;
-        }
-
-        // Start loading
-        this._loading = true;
-        this._loadingPromise = this.innerLoad(forceRefresh, contextUser, provider);
-
-        try {
-            await this._loadingPromise;
-        } finally {
-            this._loading = false;
-            this._loadingPromise = null;
-        }
+        return this._load.Run(forceRefresh === true, () => this.innerLoad(forceRefresh, contextUser, provider));
     }
 
     /**
@@ -1765,8 +1751,12 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
         const driverClassName = model.DriverClass;
         const driverModuleName = model.DriverImportPath;
         try {
-            if (driverModuleName && driverModuleName.length > 0) {
-                const driverModule = await import(driverModuleName);
+            // DriverImportPath names a package this package does not declare, so it loads from the
+            // host application (#3741). Skipped when the class is already registered, e.g. by the
+            // host's class-registration manifest.
+            const alreadyRegistered = MJGlobal.Instance.ClassFactory.GetRegistration(BaseModel, driverClassName) != null;
+            if (driverModuleName && driverModuleName.length > 0 && !alreadyRegistered) {
+                const driverModule = await ImportFromHost(driverModuleName);
                 if (!driverModule)
                     throw new Error(`Error loading driver module '${driverModuleName}'`);
             }

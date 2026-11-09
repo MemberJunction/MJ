@@ -469,6 +469,18 @@ sequenceDiagram
     Note over P,DB: Transaction auto-committed on success, rolled back on error
 ```
 
+### Startup and Health Checks
+
+`Serve()` binds its port before it boots, behind a startup gate, so a slow start answers probes instead of refusing connections:
+
+| Path (under `MJAPI_BASE_PATH`) | While starting | Once ready |
+|---|---|---|
+| `/healthcheck` (readiness) | `503` with `{ status: 'starting', phase, phaseElapsedMs, elapsedMs }` (`status: 'failed'` if the boot threw) | `200` `{ status: 'ok' }` |
+| `/healthcheck/live` (liveness) | `200` | `200` |
+| anything else, including WebSocket upgrades | `503` with `Retry-After` | handled by the app |
+
+`/healthcheck` keeps meaning "serve traffic", so load balancers, the Explorer reconnect poll and the MJAPI image's `HEALTHCHECK` work unchanged. Platforms that restart a container which is not live within a time limit can point their liveness probe at `/healthcheck/live`. A port already in use now fails at the start of boot rather than the end. A boot that throws logs the phase it failed in; the error text is not served.
+
 ### Per-Request Provider Isolation
 
 Each GraphQL request receives its own `SQLServerDataProvider` instance, ensuring complete transaction isolation between concurrent requests. Metadata is cached and reused across providers for efficiency.
@@ -625,7 +637,7 @@ The server includes resolvers for the following domains:
 | `UserViewResolver` | User view management |
 | `UserResolver` | User profile operations |
 | `UserFavoriteResolver` | Favorite record management |
-| `MergeRecordsResolver` | Record merge operations |
+| `MergeRecordsResolver` | `MergeRecords` mutation (requires `AllowRecordMerge` on the entity; API keys need the `entity:merge` scope), plus `GetEntityDependencies` / `GetRecordDependencies` queries. See the [Duplicate Management Guide](../../guides/DUPLICATE_MANAGEMENT_GUIDE.md). |
 | `SyncDataResolver` / `SyncRolesUsersResolver` | Data synchronization |
 | `FileResolver` / `FileCategoryResolver` | File and category management |
 | `EntityCommunicationsResolver` | Entity-level communications |
@@ -638,7 +650,8 @@ The server includes resolvers for the following domains:
 | `TelemetryResolver` | Server telemetry queries |
 | `ColorResolver` | Color palette operations |
 | `InfoResolver` | Server info queries |
-| `PotentialDuplicateRecordResolver` | Duplicate detection |
+| `PotentialDuplicateRecordResolver` | `GetRecordDuplicates` query: starts a list-based duplicate detection run (asynchronous; returns `Inprogress`) |
+| `DuplicateEntryCheckResolver` | `CheckDuplicateEntry` mutation: the entry-time duplicate check for a new record's values (API keys need `view:run` and `prompt:execute`) |
 | `RunTestResolver` | Test execution |
 | `RunTemplateResolver` | Template execution |
 | `TaskResolver` | Task orchestration |
