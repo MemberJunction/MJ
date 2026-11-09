@@ -1249,6 +1249,17 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             expect(entity.LatestResult.Message).toContain('Primary key value mismatch');
         });
 
+        it('accepts a UUID primary key the server echoes in another casing', async () => {
+            const entity = new TestCustomerEntity(BuildCustomerEntityInfo(), provider);
+            entity.LoadFromData({ ID: '8e56c3f7-b401-4684-b778-661756e947d8', Name: 'Lower-cased key', 'First Name': null, Tier: 'Gold', IsActive: true, Age: 42, SignedUpAt: new Date(SIGNED_UP_AT_MS), Photo: null, __mj_CreatedAt: CREATED_AT, __mj_UpdatedAt: UPDATED_AT });
+            GraphQLWire.EnqueueResponse({ DeleteCRMCustomer: { ID: '8E56C3F7-B401-4684-B778-661756E947D8' } });
+
+            const deleted = await provider.Delete(entity, new EntityDeleteOptions(), user);
+
+            expect(deleted).toBe(true);
+            expect(entity.LatestResult.Success).toBe(true);
+        });
+
         it('fails when the response lacks the mutation key', async () => {
             const entity = loadedCustomer();
             GraphQLWire.EnqueueResponse({ SomethingElse: {} });

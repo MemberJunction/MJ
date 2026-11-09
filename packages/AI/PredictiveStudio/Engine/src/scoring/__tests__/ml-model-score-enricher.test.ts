@@ -7,6 +7,7 @@ import type {
     ScoreRecordSetRequest,
     ScoreRecordSetResult,
 } from '../../actions/score-record-set.action';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /** A test enricher whose scorer is a deterministic fake — no DB / sidecar. */
 class FakeRunnerEnricher extends MLModelScoreEnricher {
@@ -95,18 +96,22 @@ describe('MLModelScoreEnricher', () => {
     });
 
     it('returns the rows unchanged (and never scores) when config lacks modelId/outputField', async () => {
+        const errors = ConsoleCapture.Errors();
         const enricher = new FakeRunnerEnricher(resultWith([{ recordId: 'a', score: 1 }]));
         const rows = [{ ID: 'a' }];
         const out = await enricher.EnrichResults({ rows, config: { outputField: 'S' }, provider: PROVIDER });
         expect(out).toBe(rows);
         expect('S' in out[0]).toBe(false);
         expect(enricher.captured.request).toBeUndefined();
+        expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("MLModelScoreEnricher: config requires string 'modelId' and 'outputField'; got {\"outputField\":\"S\"}")]);
     });
 
     it('returns rows unchanged when there are no primary keys to score', async () => {
+        const errors = ConsoleCapture.Errors();
         const enricher = new FakeRunnerEnricher(resultWith([{ recordId: 'a', score: 1 }]));
         const out = await enricher.EnrichResults({ rows: [{ Name: 'no-id' }], config: { modelId: 'M', outputField: 'S' }, provider: PROVIDER });
         expect('S' in out[0]).toBe(false);
         expect(enricher.captured.request).toBeUndefined();
+        expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("MLModelScoreEnricher: no 'ID' primary keys in the result rows; returning rows un-enriched")]);
     });
 });
