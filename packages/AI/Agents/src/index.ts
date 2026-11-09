@@ -16,6 +16,7 @@ export * from './agent-types/loop-agent-response-type';
 export * from './agent-types/loop-agent-prompt-params';
 export * from './base-agent';
 export * from './bound-action-params';
+export * from './unsafe-object-keys';
 export * from './decision-discovery';
 export * from './handoff-target';
 // The opening request, as discovery and catalog narrowing read it: the Decision Eval harness builds its state the same way.
