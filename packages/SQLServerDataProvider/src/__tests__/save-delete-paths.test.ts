@@ -1339,7 +1339,7 @@ describe('SQLServerDataProvider server-side concurrency check', () => {
     expect(entity.LatestResult?.Message).toContain('Concurrent modification conflict on Widgets for field(s): Name');
     // Only the locked SELECT ran; spUpdateWidget was never executed
     expect(mssqlState.Queries).toHaveLength(1);
-    expect(mssqlState.Queries[0].sql).toContain('SELECT [Name] FROM [dbo].[vwWidgets] WITH (UPDLOCK, ROWLOCK)');
+    expect(mssqlState.Queries[0].sql).toContain('SELECT [Name] FROM [dbo].[Widget] WITH (UPDLOCK, ROWLOCK)');
     expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'rollback']);
   });
 
@@ -1393,5 +1393,83 @@ describe('SQLServerDataProvider server-side concurrency check', () => {
     expect(saved).toEqual(updatedRow);
     expect(mssqlState.Queries).toHaveLength(1);
     expect(mssqlState.EventKinds()).toEqual(['query']);
+  });
+
+  it('defaults to ConcurrencyCheck === "log" on a fresh provider instance and honors per-save EntitySaveOptions.ConcurrencyCheck = "enforce"', async () => {
+    const freshProvider = new SaveDeleteTestProvider();
+    freshProvider.AttachPool(new MockConnectionPool());
+    expect(freshProvider.ConcurrencyCheck).toBe('log');
+
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    entity.Set('Name', 'Client Rename');
+
+    // Locked row read returns a concurrent change to Name ('Concurrent DB Rename' != baseline 'Widget One')
+    mssqlState.QueueResult({ rows: [{ Name: 'Concurrent DB Rename' }] });
+
+    const opts = new EntitySaveOptions();
+    opts.ConcurrencyCheck = 'enforce';
+    const saved = await freshProvider.Save(entity, TEST_USER, opts);
+    expect(saved).toBe(false);
+    expect(entity.LatestResult?.ConcurrencyConflict).toEqual({
+      ConflictingFields: ['Name'],
+    });
+    expect(mssqlState.Queries).toHaveLength(1);
+    expect(mssqlState.Queries[0].sql).toContain('SELECT [Name] FROM [dbo].[Widget] WITH (UPDLOCK, ROWLOCK)');
+  });
+
+  it('ignores untouched fields in ConcurrencyBaseline so concurrent DB edits to untouched columns never trigger false conflicts', async () => {
+    const provider = makeProvider();
+    provider.ConcurrencyCheck = 'enforce';
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    // Caller only modifies Name; Description is untouched on entity
+    entity.Set('Name', 'Client Rename');
+
+    // Locked row read only selects [Name] (which matches baseline 'Widget One'), never [Description]
+    mssqlState.QueueResult({ rows: [{ Name: 'Widget One' }] });
+    const updatedRow = { ...savedWidgetRow(), Name: 'Client Rename', Description: 'Concurrent Description Edit' };
+    mssqlState.QueueResult({ rows: [updatedRow] });
+
+    const opts = new EntitySaveOptions();
+    opts.ConcurrencyBaseline = {
+      Name: 'Widget One',
+      Description: 'First run', // untouched on entity (`entity.Get('Description') === 'First run'`)
+    };
+    const saved = await provider.Save(entity, TEST_USER, opts);
+    expect(saved).toEqual(updatedRow);
+    expect(mssqlState.Queries).toHaveLength(2);
+    expect(mssqlState.Queries[0].sql).toBe(`SELECT [Name] FROM [dbo].[Widget] WITH (UPDLOCK, ROWLOCK) WHERE [ID]='w-0001'`);
+  });
+
+  it('emits encrypted ciphertext (never plaintext) in simpleSQL (RenderReplayUpdateSQL) on delta updates', async () => {
+    const provider = makeProvider();
+    const entityInfo = makeWidgetEntityInfo();
+    const descField = entityInfo.Fields.find((f) => f.Name === 'Description')!;
+    Object.defineProperty(descField, 'Encrypt', { value: true, configurable: true });
+    Object.defineProperty(descField, 'EncryptionKeyID', { value: 'K0000000-0000-0000-0000-000000000001', configurable: true });
+
+    const encryptSpy = vi
+      .spyOn(
+        provider as unknown as {
+          EncryptFieldValuesForSave: (
+            e: BaseEntity,
+            map: Map<unknown, unknown>,
+            u: UserInfo,
+          ) => Promise<void>;
+        },
+        'EncryptFieldValuesForSave',
+      )
+      .mockImplementation(async (_e, map) => {
+        if (map.has(descField)) {
+          map.set(descField, '$ENC$v1$AES256GCM$ciphertext-payload');
+        }
+      });
+
+    const entity = makeSavedWidgetEntity(entityInfo, TEST_USER);
+    entity.Set('Description', 'top-secret-plaintext-token');
+
+    const saveSQL = await provider.SaveSQLForTest(entity, false, TEST_USER, new EntitySaveOptions());
+    expect(saveSQL.simpleSQL).toContain('$ENC$v1$AES256GCM$ciphertext-payload');
+    expect(saveSQL.simpleSQL).not.toContain('top-secret-plaintext-token');
+    encryptSpy.mockRestore();
   });
 });

@@ -5607,7 +5607,23 @@ export abstract class BaseEntity<T = unknown> {
                 parentSaveOptions.SkipEntityActions = _options.SkipEntityActions;
                 parentSaveOptions.ReplayOnly = _options.ReplayOnly;
                 parentSaveOptions.SkipOldValuesCheck = _options.SkipOldValuesCheck;
-                parentSaveOptions.ConcurrencyBaseline = _options.ConcurrencyBaseline;
+                if (_options.ConcurrencyBaseline) {
+                    const parentFieldNames = new Set(
+                        this._parentEntity.EntityInfo.Fields.flatMap((f) => [f.Name, f.CodeName]),
+                    );
+                    const filteredParentBaseline: Record<string, unknown> = {};
+                    let hasParentBaseline = false;
+                    for (const [k, v] of Object.entries(_options.ConcurrencyBaseline)) {
+                        if (parentFieldNames.has(k)) {
+                            filteredParentBaseline[k] = v;
+                            hasParentBaseline = true;
+                        }
+                    }
+                    if (hasParentBaseline) {
+                        parentSaveOptions.ConcurrencyBaseline = filteredParentBaseline;
+                    }
+                }
+                parentSaveOptions.ConcurrencyCheck = _options.ConcurrencyCheck;
                 parentSaveOptions.SkipAsyncValidation = _options.SkipAsyncValidation;
                 parentSaveOptions.IsParentEntitySave = true;
                 parentSaveOptions.ISAActiveChildEntityName = this.EntityInfo.Name;

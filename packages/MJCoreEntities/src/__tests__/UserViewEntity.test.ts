@@ -1785,3 +1785,28 @@ describe('MJUserViewEntityExtended.Validate: Properties', () => {
         expect(result.Errors.map((e) => e.Message)).toEqual(['Properties must be valid JSON.']);
     });
 });
+
+describe('MJUserViewEntityExtended.GenerateWhereClauseFromFilterState FLS enforcement', () => {
+    it('enforces field-level security when user is provided and a restricted field is referenced', () => {
+        const entityInfo = makeMockEntityInfo([
+            { Name: 'Name', NeedsQuotes: true, TSType: 'String' },
+            { Name: 'Salary', NeedsQuotes: false, TSType: 'Number' },
+        ]) as unknown as Record<string, unknown>;
+        entityInfo.FieldLevelSecurityApplies = true;
+        entityInfo.GetDeniedReadFields = () => new Set(['salary']);
+
+        const filterState = JSON.stringify({
+            logic: 'and',
+            filters: [{ field: 'Salary', operator: 'gt', value: 100000 }],
+        });
+        const restrictedUser = { ID: 'u-restricted', Name: 'Restricted User', Email: 'r@example.com' };
+
+        expect(() =>
+            MJUserViewEntityExtended.GenerateWhereClauseFromFilterState(
+                filterState,
+                entityInfo as never,
+                restrictedUser as never,
+            ),
+        ).toThrow(/Field 'Salary' does not exist on entity 'MJTestEntity' or you do not have access to it/);
+    });
+});

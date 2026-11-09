@@ -1895,11 +1895,9 @@ export class SQLServerDataProvider
    * (spUpdateGenerated off) makes no ISNULL promise, so it keeps the full-row form.
    */
   /**
-   * Reads the target record's columns from `[schema].[BaseView] WITH (UPDLOCK, ROWLOCK)` inside
-   * the save transaction so concurrent writers serialize on the row lock before `spUpdate*` executes.
-   * Uses `BaseView` because runtime SQL logins (`MJ_Connect`, `cdp_UI`) have `SELECT` permission on
-   * `BaseView` rather than `BaseTable`, and SQL Server propagates `UPDLOCK, ROWLOCK` to the
-   * underlying base table pages/rows.
+   * Reads the target record's physical columns from `[schema].[BaseTable] WITH (UPDLOCK, ROWLOCK)`
+   * inside the save transaction so concurrent writers serialize on the target row lock before
+   * `spUpdate*` executes, without propagating update locks to joined lookup tables in `BaseView`.
    */
   protected override RenderLockedRowReadSQL(
     entityInfo: EntityInfo,
@@ -1910,8 +1908,8 @@ export class SQLServerDataProvider
       return null;
     }
     const selectCols = columns.map((c) => this.QuoteIdentifier(c)).join(', ');
-    const viewRef = this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView);
-    return `SELECT ${selectCols} FROM ${viewRef} WITH (UPDLOCK, ROWLOCK) WHERE ${pkWhereClause}`;
+    const tableRef = this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseTable || entityInfo.BaseView);
+    return `SELECT ${selectCols} FROM ${tableRef} WITH (UPDLOCK, ROWLOCK) WHERE ${pkWhereClause}`;
   }
 
   protected override RenderReplayUpdateSQL(

@@ -79,6 +79,13 @@ export function ClientOldValueToFieldValue(
     if (val instanceof Date && field.TSType === EntityFieldTSType.Date) {
         return val;
     }
+    if (typeof val === 'boolean' && field.TSType === EntityFieldTSType.Boolean) {
+        return val;
+    }
+    if (typeof val === 'number' && !Number.isNaN(val) && field.TSType === EntityFieldTSType.Number) {
+        const integer = ['int', 'smallint', 'bigint', 'tinyint'].includes((field.Type as string).toLowerCase());
+        return integer ? Math.trunc(val) : val;
+    }
 
     const text = String(val);
     switch (field.TSType) {
@@ -286,36 +293,36 @@ export function DetectFieldConcurrencyConflicts<TBaseline, TNew, TStored>(
     const clientDiffFieldNames = new Set<string>();
     const fieldsToPreserveFromDB = new Set<string>();
 
-    if (rawDBDifferences.length > 0) {
-        for (const key of Object.keys(baselineValues)) {
-            const f = FindEntityFieldByCodeNameOrName(entityInfo, key);
-            const newVal: AnyVal | undefined =
-                key in newValues
-                    ? newValues[key]
-                    : f && f.Name in newValues
-                      ? newValues[f.Name]
-                      : f && f.CodeName in newValues
-                        ? newValues[f.CodeName]
-                        : undefined;
-            const hasNewKey =
-                key in newValues ||
-                Boolean(f && (f.Name in newValues || f.CodeName in newValues));
-            if (
-                hasNewKey &&
-                f &&
-                f.AllowUpdateAPI &&
-                !f.IsPrimaryKey &&
-                AreEntityFieldValuesDifferent(f, baselineValues[key], newVal, false)
-            ) {
-                rawClientDifferences.push({
-                    FieldName: key,
-                    ClientOldValue: baselineValues[key],
-                    ClientNewValue: newVal,
-                });
-                clientDiffFieldNames.add(key);
-            }
+    for (const key of Object.keys(baselineValues)) {
+        const f = FindEntityFieldByCodeNameOrName(entityInfo, key);
+        const newVal: AnyVal | undefined =
+            key in newValues
+                ? newValues[key]
+                : f && f.Name in newValues
+                  ? newValues[f.Name]
+                  : f && f.CodeName in newValues
+                    ? newValues[f.CodeName]
+                    : undefined;
+        const hasNewKey =
+            key in newValues ||
+            Boolean(f && (f.Name in newValues || f.CodeName in newValues));
+        if (
+            hasNewKey &&
+            f &&
+            f.AllowUpdateAPI &&
+            !f.IsPrimaryKey &&
+            AreEntityFieldValuesDifferent(f, baselineValues[key], newVal, false)
+        ) {
+            rawClientDifferences.push({
+                FieldName: key,
+                ClientOldValue: baselineValues[key],
+                ClientNewValue: newVal,
+            });
+            clientDiffFieldNames.add(key);
         }
+    }
 
+    if (rawDBDifferences.length > 0) {
         for (const dd of rawDBDifferences) {
             if (!clientDiffFieldNames.has(dd.FieldName)) {
                 fieldsToPreserveFromDB.add(dd.FieldName);

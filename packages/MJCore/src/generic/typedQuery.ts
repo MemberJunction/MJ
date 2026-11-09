@@ -234,7 +234,9 @@ function normalizeSignatureParamType(rawType: string | null | undefined): string
 }
 
 function normalizeSignatureFieldType(rawSqlType: string | null | undefined): string {
-    const cleaned = (rawSqlType ?? '').replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
+    const raw = rawSqlType ?? '';
+    const parenIdx = raw.indexOf('(');
+    const cleaned = (parenIdx >= 0 ? raw.slice(0, parenIdx) : raw).trim().toLowerCase();
     return cleaned || 'unknown';
 }
 
@@ -374,27 +376,7 @@ function rotr(n: number, x: number): number {
 }
 
 function utf8Bytes(str: string): number[] {
-    const bytes: number[] = [];
-    for (let i = 0; i < str.length; i++) {
-        let code = str.charCodeAt(i);
-        if (code < 0x80) {
-            bytes.push(code);
-        } else if (code < 0x800) {
-            bytes.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f));
-        } else if (code < 0xd800 || code >= 0xe000) {
-            bytes.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
-        } else {
-            i++;
-            code = 0x10000 + (((code & 0x3ff) << 10) | (str.charCodeAt(i) & 0x3ff));
-            bytes.push(
-                0xf0 | (code >> 18),
-                0x80 | ((code >> 12) & 0x3f),
-                0x80 | ((code >> 6) & 0x3f),
-                0x80 | (code & 0x3f),
-            );
-        }
-    }
-    return bytes;
+    return Array.from(new TextEncoder().encode(str));
 }
 
 function sha256Hex(asciiOrUtf8: string): string {

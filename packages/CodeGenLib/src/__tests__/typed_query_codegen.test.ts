@@ -241,4 +241,74 @@ describe('typed_query_codegen', () => {
         expect(code).toContain('OrdersByRegion: OperationsOrdersByRegion,');
         expect(code).toContain('OrdersByRegion: SalesOrdersByRegion,');
     });
+
+    it('disambiguates a leaf query whose identifier collides with a sibling child category in Queries', () => {
+        const leafCollidingWithCategory: TypedQueryCodeGenQuery = {
+            ID: 'bbbbbbbb-0000-0000-0000-000000000001',
+            Name: 'Reports',
+            Status: 'Approved',
+            Reusable: true,
+            CategoryPath: '/Sales/',
+            Parameters: [],
+            Fields: [{ Name: 'Total', SQLBaseType: 'decimal', InAllBranchVariants: true }],
+        };
+        const nestedUnderCategory: TypedQueryCodeGenQuery = {
+            ID: 'bbbbbbbb-0000-0000-0000-000000000002',
+            Name: 'Monthly Revenue',
+            Status: 'Approved',
+            Reusable: true,
+            CategoryPath: '/Sales/Reports/',
+            Parameters: [],
+            Fields: [{ Name: 'Revenue', SQLBaseType: 'decimal', InAllBranchVariants: true }],
+        };
+
+        const code = GenerateTypedQueriesFileContent(
+            [leafCollidingWithCategory, nestedUnderCategory],
+            sampleEntities,
+            { platform: 'sqlserver' },
+        );
+        // Child category takes `Reports: {`, while the sibling leaf query is disambiguated as `ReportsQuery: Reports,`
+        expect(code).toContain('Reports: {');
+        expect(code).toContain('MonthlyRevenue,');
+        expect(code).toContain('ReportsQuery: Reports,');
+    });
+
+    it('includes template-extracted parameters in Signature even when query.Parameters only lists a subset', () => {
+        const baseQuery: TypedQueryCodeGenQuery = {
+            ID: 'cccccccc-0000-0000-0000-000000000001',
+            Name: 'Partial Metadata Query',
+            Status: 'Approved',
+            Reusable: true,
+            CategoryPath: '/Sales/',
+            SQL: 'SELECT Total FROM Orders WHERE Region = {{ region | sqlString }} AND Total >= {{ minTotal | sqlNumber }}',
+            Parameters: [
+                {
+                    Name: 'region',
+                    Type: 'string',
+                    IsRequired: true,
+                    DefaultValue: null,
+                    DetectionMethod: 'Manual',
+                },
+            ],
+            Fields: [{ Name: 'Total', SQLBaseType: 'decimal', InAllBranchVariants: true }],
+        };
+
+        const singleParamQuery: TypedQueryCodeGenQuery = {
+            ...baseQuery,
+            SQL: 'SELECT Total FROM Orders WHERE Region = {{ region | sqlString }}',
+        };
+
+        const codeWithTemplateParam = GenerateTypedQueriesFileContent([baseQuery], sampleEntities, {
+            platform: 'sqlserver',
+        });
+        const codeSingleParam = GenerateTypedQueriesFileContent([singleParamQuery], sampleEntities, {
+            platform: 'sqlserver',
+        });
+
+        const sigWithTemplate = /Signature:\s*"([^"]+)"/.exec(codeWithTemplateParam)?.[1];
+        const sigSingle = /Signature:\s*"([^"]+)"/.exec(codeSingleParam)?.[1];
+        expect(sigWithTemplate).toBeDefined();
+        expect(sigSingle).toBeDefined();
+        expect(sigWithTemplate).not.toBe(sigSingle);
+    });
 });

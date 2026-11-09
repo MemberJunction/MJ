@@ -3,6 +3,7 @@ import { AggregateResult, DatasetItemFilterType, DatasetResultType, IMetadataPro
 import { AggregateExpression, RunViewParams, RunViewParametersKey, IsMaterializedDataSource, NormalizeAlternateBaseViewName } from "../views/runView";
 import { GetEffectiveAlternateBaseViewName } from "./alternateBaseViews";
 import { ViewPropertyValuesKey } from "../views/viewProperties";
+import { CompositeFilter } from "./filters/compositeFilter";
 import { CanonicalCompositeFilterKey } from "./filters/compositeFilterSQL";
 import { LogError, LogStatusEx, LogWarning } from "./logging";
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
@@ -2380,18 +2381,66 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
     /**
      * True when a saved row may be written into `fingerprint`'s slot in place: the slot is neither
-     * filtered (including row-security and field-security segments) nor a subset, and the row
-     * carries every column ({@link RowHasEveryField}) with no plaintext secrets. Otherwise the slot must be invalidated.
+     * filtered (including row-security and field-security segments) nor a subset — or its only
+     * narrowing predicate is a structured `CompositeFilter` (`cf:...`) that `row` satisfies — and
+     * the row carries every column ({@link RowHasEveryField}) with no plaintext secrets.
+     * Otherwise the slot must be invalidated.
      *
      * @param fingerprint - The slot to maintain
      * @param entity - The saved record's entity
      * @param row - The values the save carries
      */
     public CanUpsertRowIntoSlot(fingerprint: string, entity: EntityInfo | null | undefined, row: Record<string, unknown> | null | undefined): boolean {
-        return !this.isFilteredFingerprint(fingerprint)
+        return (!this.isFilteredFingerprint(fingerprint) || this.matchesStructuredFilterOnlyFingerprint(fingerprint, row))
             && !this.isSubsetFingerprint(fingerprint)
             && LocalCacheManager.RowHasEveryField(entity, row)
             && !LocalCacheManager.RowContainsPlaintextEncryptedField(entity, row);
+    }
+
+    /**
+     * Returns true when `fingerprint`'s only narrowing segment is one or more structured
+     * `CompositeFilter` segments (`cf:<json>`) and `row` satisfies every such filter in memory.
+     * Any SQL `ExtraFilter`, `OrderBy`, `UserSearch`, aggregate, or other narrowing segment
+     * (`vw:`, `rls:`, `fls:`, `abv:`, `prm:`, `ds:`, narrow `f:`) returns false.
+     */
+    protected matchesStructuredFilterOnlyFingerprint(
+        fingerprint: string,
+        row: Record<string, unknown> | null | undefined
+    ): boolean {
+        if (!row || typeof row !== 'object') {
+            return false;
+        }
+        const parts = fingerprint.split('|');
+        const BASE_SEGMENTS = 7;
+        if (parts.length < BASE_SEGMENTS) {
+            return false;
+        }
+        if ((parts[1] !== '_' && parts[1] !== '')
+            || this.hasOrderBy(parts)
+            || this.hasUserSearch(parts)
+            || this.hasAggregates(parts)) {
+            return false;
+        }
+        const cfSegments: string[] = [];
+        for (let i = BASE_SEGMENTS; i < parts.length; i++) {
+            const seg = parts[i];
+            if (!seg || seg.startsWith('imr:') || seg.includes('://') || seg === 'f:*') {
+                continue;
+            }
+            if (seg.startsWith('cf:')) {
+                cfSegments.push(seg.slice(3).replace(/\\u007c/g, '|'));
+                continue;
+            }
+            return false;
+        }
+        if (cfSegments.length === 0) {
+            return false;
+        }
+        try {
+            return cfSegments.every(cfJson => CompositeFilter.FromJSON(cfJson).Evaluate({ '': row }));
+        } catch {
+            return false;
+        }
     }
 
     /**

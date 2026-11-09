@@ -23,6 +23,7 @@ import { UserInfo } from '../generic/securityInfo';
 import { BaseEngine, BaseEnginePropertyConfig } from '../generic/baseEngine';
 import { BaseEntity } from '../generic/baseEntity';
 import { BaseEntityEvent } from '../generic/interfaces';
+import { LocalCacheManager } from '../generic/localCacheManager';
 import * as loggingModule from '../generic/logging';
 
 interface OrderFixtureRow {
@@ -309,31 +310,139 @@ describe('CompositeFilterSQLCompiler', () => {
             },
         ];
 
-        const filtersToTest: CompositeFilterDescriptor[] = [
-            f.And(f.Eq('Status', 'Active'), f.Gt('Total', 100)),
-            f.And(f.In('Region', ['NA', 'EU']), f.Neq('Status', 'Cancelled')),
-            f.And(f.NotIn('Region', ['APAC']), f.Between('Total', 50, 300)),
-            f.And(f.IsEmpty('Notes')),
-            f.And(f.IsNotEmpty('Notes'), f.StartsWith('Notes', 'Exp')),
-            f.And(f.IsNull('Notes')),
-            f.And(f.IsNotNull('Notes'), f.DoesNotContain('Notes', 'Standard')),
-            f.Or(
-                f.And(f.Eq('Region', 'NA'), f.Eq('IsPriority', true)),
-                f.And(f.Eq('Region', 'EU'), f.Gte('Total', 300)),
-            ),
+        const filtersWithExpectedRowIDs: Array<{
+            name: string;
+            descriptor: CompositeFilterDescriptor;
+            expectedIds: string[];
+            expectedWherePattern: RegExp;
+        }> = [
+            {
+                name: 'Status = Active AND Total > 100',
+                descriptor: f.And(f.Eq('Status', 'Active'), f.Gt('Total', 100)),
+                expectedIds: ['1', '4'],
+                expectedWherePattern: /\(\[Status\] = @f0\) AND \(\[Total\] > @f1\)/,
+            },
+            {
+                name: 'Region IN (NA, EU) AND Status <> Cancelled',
+                descriptor: f.And(f.In('Region', ['NA', 'EU']), f.Neq('Status', 'Cancelled')),
+                expectedIds: ['1', '2', '4'],
+                expectedWherePattern: /\(\[Region\] IN \(@f0, @f1\)\) AND \(\[Status\] <> @f2\)/,
+            },
+            {
+                name: 'Region NOT IN (APAC) AND Total BETWEEN 50 AND 300',
+                descriptor: f.And(f.NotIn('Region', ['APAC']), f.Between('Total', 50, 300)),
+                expectedIds: ['1', '2', '4'],
+                expectedWherePattern: /\(\[Region\] NOT IN \(@f0\)\) AND \(\[Total\] BETWEEN @f1 AND @f2\)/,
+            },
+            {
+                name: 'Notes isempty',
+                descriptor: f.And(f.IsEmpty('Notes')),
+                expectedIds: ['2', '3'],
+                expectedWherePattern: /\(\[Notes\] IS NULL OR \[Notes\] = ''\)/,
+            },
+            {
+                name: 'Notes isnotempty AND startswith Exp',
+                descriptor: f.And(f.IsNotEmpty('Notes'), f.StartsWith('Notes', 'Exp')),
+                expectedIds: ['1'],
+                expectedWherePattern: /\(\[Notes\] IS NOT NULL AND \[Notes\] <> ''\) AND \(\[Notes\] LIKE @f0\)/,
+            },
+            {
+                name: 'Notes isnull',
+                descriptor: f.And(f.IsNull('Notes')),
+                expectedIds: ['3'],
+                expectedWherePattern: /\(\[Notes\] IS NULL\)/,
+            },
+            {
+                name: 'Notes isnotnull AND doesnotcontain Standard',
+                descriptor: f.And(f.IsNotNull('Notes'), f.DoesNotContain('Notes', 'Standard')),
+                expectedIds: ['1', '2'],
+                expectedWherePattern: /\(\[Notes\] IS NOT NULL\) AND \(\[Notes\] NOT LIKE @f0\)/,
+            },
+            {
+                name: '(Region = NA AND IsPriority = true) OR (Region = EU AND Total >= 300)',
+                descriptor: f.Or(
+                    f.And(f.Eq('Region', 'NA'), f.Eq('IsPriority', true)),
+                    f.And(f.Eq('Region', 'EU'), f.Gte('Total', 300)),
+                ),
+                expectedIds: ['1', '4'],
+                expectedWherePattern: /\(\(\[Region\] = @f0\) AND \(\[IsPriority\] = @f1\)\) OR \(\(\[Region\] = @f2\) AND \(\[Total\] >= @f3\)\)/,
+            },
         ];
 
-        for (const descriptor of filtersToTest) {
-            const cf = CompositeFilter.FromDescriptor(descriptor);
+        for (const testCase of filtersWithExpectedRowIDs) {
+            const cf = CompositeFilter.FromDescriptor(testCase.descriptor);
             const evalIds = fixture
                 .filter((row) => cf.Evaluate({ '': row as unknown as Record<string, unknown> }))
                 .map((r) => r.ID);
-            const compiled = CompositeFilterSQLCompiler.Compile(descriptor, entity, {
+            const compiled = CompositeFilterSQLCompiler.Compile(testCase.descriptor, entity, {
                 platform: 'sqlserver',
             });
-            expect(compiled.whereClause.length).toBeGreaterThan(0);
-            expect(evalIds.length).toBeGreaterThan(0);
+            expect(evalIds, testCase.name).toEqual(testCase.expectedIds);
+            expect(compiled.whereClause, testCase.name).toMatch(testCase.expectedWherePattern);
         }
+    });
+
+    it('matches field names case-insensitively in both Evaluate() and Compile()', () => {
+        const entity = makeOrderEntity();
+        const descriptor: CompositeFilterDescriptor = {
+            logic: 'and',
+            filters: [{ field: 'status', operator: 'eq', value: 'Active' }],
+        };
+        const cf = CompositeFilter.FromDescriptor(descriptor);
+        expect(cf.Evaluate({ '': { Status: 'Active' } })).toBe(true);
+        expect(cf.Evaluate({ '': { Status: 'Closed' } })).toBe(false);
+
+        const compiled = CompositeFilterSQLCompiler.Compile(descriptor, entity, { platform: 'sqlserver' });
+        expect(compiled.whereClause).toBe('([Status] = @f0)');
+        expect(compiled.parameters).toEqual({ f0: 'Active' });
+    });
+
+    it('emits IS NULL / IS NOT NULL for eq/neq null on boolean fields by default and supports coerceNullBooleanToFalse', () => {
+        const entity = makeOrderEntity();
+        const eqNull: CompositeFilterDescriptor = {
+            logic: 'and',
+            filters: [{ field: 'IsPriority', operator: 'eq', value: null }],
+        };
+        const neqNull: CompositeFilterDescriptor = {
+            logic: 'and',
+            filters: [{ field: 'IsPriority', operator: 'neq', value: null }],
+        };
+
+        const cfEqNull = CompositeFilter.FromDescriptor(eqNull);
+        expect(cfEqNull.Evaluate({ '': { IsPriority: null } })).toBe(true);
+        expect(cfEqNull.Evaluate({ '': { IsPriority: false } })).toBe(false);
+
+        const compiledDefault = CompositeFilterSQLCompiler.Compile(eqNull, entity, { platform: 'sqlserver' });
+        expect(compiledDefault.whereClause).toBe('([IsPriority] IS NULL)');
+        expect(compiledDefault.parameters).toEqual({});
+
+        const compiledNeqDefault = CompositeFilterSQLCompiler.Compile(neqNull, entity, { platform: 'sqlserver' });
+        expect(compiledNeqDefault.whereClause).toBe('([IsPriority] IS NOT NULL)');
+
+        const compiledCoerced = CompositeFilterSQLCompiler.Compile(eqNull, entity, {
+            platform: 'sqlserver',
+            coerceNullBooleanToFalse: true,
+        });
+        expect(compiledCoerced.whereClause).toBe('([IsPriority] = @f0)');
+        expect(compiledCoerced.parameters).toEqual({ f0: false });
+
+        const literalDefault = CompositeFilterSQLCompiler.CompileLiteral(eqNull, entity);
+        expect(literalDefault).toBe('([IsPriority] IS NULL)');
+
+        const literalCoerced = CompositeFilterSQLCompiler.CompileLiteral(eqNull, entity, {
+            coerceNullBooleanToFalse: true,
+        });
+        expect(literalCoerced).toBe('([IsPriority] = 0)');
+    });
+
+    it('compares ISO date strings by parsed epoch instant in eq and neq', () => {
+        const eqFilter = CompositeFilter.FromDescriptor({
+            logic: 'and',
+            filters: [{ field: 'OrderedAt', operator: 'eq', value: '2026-01-15T12:00:00Z' }],
+        });
+        expect(eqFilter.Evaluate({ '': { OrderedAt: '2026-01-15T12:00:00.000Z' } })).toBe(true);
+        expect(eqFilter.Evaluate({ '': { OrderedAt: '2026-01-15T07:00:00-05:00' } })).toBe(true);
+        expect(eqFilter.Evaluate({ '': { OrderedAt: '2026-01-15T13:00:00Z' } })).toBe(false);
     });
 });
 
@@ -473,6 +582,57 @@ describe('BaseEngine structured Filter & Where()', () => {
             baseEntity: e1Cancelled,
         } as BaseEntityEvent);
         expect(engine.ActiveOrders.map((r) => r.Get('ID'))).toEqual(['2', '3']);
+    });
+
+    it('allows CanUpsertRowIntoSlot for structured cf: fingerprints when the row satisfies the filter and avoids cache thrashing on non-matching creates', async () => {
+        const entityInfo = makeOrderEntity();
+        const f = FilterOf<OrderFixtureRow>();
+        const filter = f.And(f.Eq('Status', 'Active'), f.Gte('Total', 100));
+        const cfSegment = `cf:${CanonicalCompositeFilterKey(filter).replace(/\|/g, '\\u007c')}`;
+        const fingerprint = `Orders|_|_|_|_|_|_|${cfSegment}`;
+
+        const matchingRow: Record<string, unknown> = {
+            ID: '10',
+            Status: 'Active',
+            Total: 250,
+            Region: 'NA',
+            IsPriority: true,
+            OrderedAt: null,
+            Notes: null,
+            InternalCost: 50,
+        };
+        const nonMatchingRow: Record<string, unknown> = {
+            ...matchingRow,
+            Status: 'Cancelled',
+        };
+
+        expect(LocalCacheManager.Instance.CanUpsertRowIntoSlot(fingerprint, entityInfo, matchingRow)).toBe(true);
+        expect(LocalCacheManager.Instance.CanUpsertRowIntoSlot(fingerprint, entityInfo, nonMatchingRow)).toBe(false);
+        expect(
+            LocalCacheManager.Instance.CanUpsertRowIntoSlot(`${fingerprint}|rls:abc`, entityInfo, matchingRow),
+        ).toBe(false);
+
+        const engine = TestOrderEngine.Instance;
+        engine.ActiveOrders = [];
+        const removeSpy = vi.spyOn(LocalCacheManager.Instance, 'RemoveSingleEntity').mockResolvedValue(true);
+        const nonMatchingEntity = makeMockOrderEntity(nonMatchingRow as unknown as OrderFixtureRow);
+
+        await engine.ExposeApplyImmediateMutation(
+            {
+                PropertyName: 'ActiveOrders',
+                EntityName: 'Orders',
+                Filter: filter,
+                CacheLocal: true,
+            },
+            {
+                type: 'save',
+                saveSubType: 'create',
+                baseEntity: nonMatchingEntity,
+            } as BaseEntityEvent,
+        );
+
+        expect(removeSpy).not.toHaveBeenCalled();
+        removeSpy.mockRestore();
     });
 });
 

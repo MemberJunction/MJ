@@ -49,6 +49,12 @@ export interface CompositeFilterSQLCompileOptions {
      * the source matches the target entity's Name, ClassName, or CodeName.
      */
     allowSourcePrefix?: boolean;
+    /**
+     * When true, `eq` / `neq` with `null` on a boolean field coerces `null` to `false` (`0` / `FALSE`)
+     * for legacy Kendo User View `FilterState` compatibility. Defaults to `false` so `eq: null` emits
+     * `IS NULL` and `neq: null` emits `IS NOT NULL` in parity with `CompositeFilter.Evaluate()`.
+     */
+    coerceNullBooleanToFalse?: boolean;
 }
 
 /**
@@ -122,6 +128,7 @@ export class CompositeFilterSQLCompiler {
             nextIndex: options?.startingParameterIndex ?? 0,
             maxInValues: options?.maxInValues ?? CompositeFilterSQLCompiler.DefaultMaxInValues,
             allowSourcePrefix: options?.allowSourcePrefix ?? false,
+            coerceNullBooleanToFalse: options?.coerceNullBooleanToFalse ?? false,
             parameters: {},
             literalMode: false,
         };
@@ -158,6 +165,7 @@ export class CompositeFilterSQLCompiler {
             nextIndex: 0,
             maxInValues: options?.maxInValues ?? CompositeFilterSQLCompiler.DefaultMaxInValues,
             allowSourcePrefix: options?.allowSourcePrefix ?? true,
+            coerceNullBooleanToFalse: options?.coerceNullBooleanToFalse ?? false,
             parameters: {},
             literalMode: true,
         };
@@ -300,14 +308,14 @@ export class CompositeFilterSQLCompiler {
                     ? `${col} IS NOT NULL AND ${col} <> ${state.dialect.QuoteStringLiteral('')}`
                     : `${col} IS NOT NULL`;
             case 'eq': {
-                if (rule.value == null && !isBooleanField) {
+                if (rule.value == null && !(isBooleanField && state.coerceNullBooleanToFalse)) {
                     return `${col} IS NULL`;
                 }
                 const operand = CompositeFilterSQLCompiler.renderScalarOperand(rule.value, fieldInfo, state);
                 return `${col} = ${operand}`;
             }
             case 'neq': {
-                if (rule.value == null && !isBooleanField) {
+                if (rule.value == null && !(isBooleanField && state.coerceNullBooleanToFalse)) {
                     return `${col} IS NOT NULL`;
                 }
                 const operand = CompositeFilterSQLCompiler.renderScalarOperand(rule.value, fieldInfo, state);
@@ -572,6 +580,7 @@ interface CompileState {
     nextIndex: number;
     maxInValues: number;
     allowSourcePrefix: boolean;
+    coerceNullBooleanToFalse: boolean;
     parameters: RunViewParameters;
     literalMode: boolean;
 }

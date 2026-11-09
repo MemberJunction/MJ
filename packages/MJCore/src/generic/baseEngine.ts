@@ -1495,6 +1495,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         recordDataJSON: string
     ): Promise<boolean> {
         try {
+            // Pre-check all matching configs before mutating any in-memory array so we never
+            // leave earlier configs half-mutated when a later config requires a full refresh.
+            if (!matchingConfigs.every(config => this.canUseImmediateMutation(config, /*skipAdditionalLoadingCheck*/ true))) {
+                return false;
+            }
+
             const recordData = JSON.parse(recordDataJSON);
             // Use this engine's bound provider (ProviderToUse) instead of `new Metadata()` so
             // multi-provider client setups instantiate entities against the correct server.
@@ -1504,11 +1510,6 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             await entity.LoadFromData(recordData);
 
             for (const config of matchingConfigs) {
-                // Skip the AdditionalLoading check because we call it ourselves after all mutations
-                if (!this.canUseImmediateMutation(config, /*skipAdditionalLoadingCheck*/ true)) {
-                    return false;
-                }
-
                 const currentData = (this as Record<string, unknown>)[config.PropertyName] as BaseEntity[] | undefined;
                 if (!currentData) continue;
 
@@ -2122,11 +2123,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                         this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                         this.NotifyDataChange(config, currentData, 'delete', entity);
                         this.emitPropertyChange(config.PropertyName);
-                    }
-                    if (config.CacheLocal) {
-                        this.syncLocalCacheForConfig(config, event).catch(e => {
-                            LogWarning(`BaseEngine: Failed to sync local cache for ${config.EntityName}: ${e}`, 'Cache');
-                        });
+                        if (config.CacheLocal) {
+                            this.syncLocalCacheForConfig(config, event).catch(e => {
+                                LogWarning(`BaseEngine: Failed to sync local cache for ${config.EntityName}: ${e}`, 'Cache');
+                            });
+                        }
                     }
                     return;
                 }

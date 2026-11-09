@@ -8,7 +8,7 @@ import { DispatchRemoteOperationInProcess } from "./remoteOperationDispatch";
 import { TransactionItem } from "./transactionGroup";
 import { CompositeKey } from "./compositeKey";
 import { EntityTransactionScope } from "./entityTransactionScope";
-import { LogError } from "./logging";
+import { LogError, LogWarning } from "./logging";
 import { LocalCacheManager } from "./localCacheManager";
 import { AssertClientInputWritableForUser } from "./entityValueFieldSecurity";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunQueryResult } from "./interfaces";
@@ -2358,6 +2358,15 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
                 if (entity.TransactionGroup && !bReplay) {
                     // ---- Transaction Group path ----
+                    if (
+                        !bNewRecord &&
+                        !bReplay &&
+                        (options?.ConcurrencyBaseline !== undefined || options?.ConcurrencyCheck === 'enforce')
+                    ) {
+                        LogWarning(
+                            `DatabaseProviderBase.Save: entity "${entity.EntityInfo.Name}" is queued in a TransactionGroup; per-save concurrency checking (ConcurrencyBaseline / ConcurrencyCheck: 'enforce') is bypassed for TransactionGroup items.`,
+                        );
+                    }
                     let sqlDetails = await this.GenerateSaveSQL(entity, bNewRecord, user, options);
                     const preSaveValues = capturePreSaveValues();
                     entity.RaiseReadyForTransaction();

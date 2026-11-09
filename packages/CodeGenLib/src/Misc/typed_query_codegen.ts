@@ -108,6 +108,7 @@ interface ResolvedParameterSpec {
     TSType: string;
     EffectiveType: string;
     SignatureType: string;
+    SignatureIsRequired: boolean;
     IsRequired: boolean;
     DefaultValue: string | null;
     Description: string | null;
@@ -184,10 +185,9 @@ const TS_RESERVED_WORDS = new Set([
  * corresponding TypeScript row property type (`'string' | 'number' | 'boolean' | 'Date'`).
  */
 export function MapSQLBaseTypeToTSType(sqlBaseType: string | null | undefined): 'string' | 'number' | 'boolean' | 'Date' {
-    const cleaned = (sqlBaseType ?? '')
-        .replace(/\s*\([^)]*\)\s*$/, '')
-        .trim()
-        .toLowerCase();
+    const raw = (sqlBaseType ?? '').trim();
+    const parenIndex = raw.indexOf('(');
+    const cleaned = (parenIndex >= 0 ? raw.slice(0, parenIndex) : raw).trim().toLowerCase();
     if (NUMBER_SQL_TYPES.has(cleaned)) {
         return 'number';
     }
@@ -421,34 +421,18 @@ function resolveQuerySpecs(
             const parameters = resolveParametersForQuery(query, fullPath, templateParams, docs?.Parameters ?? [], warn);
             const fields = resolveFieldsForQuery(query, entities, docs?.Fields ?? []);
 
-            const sigParams: TypedQuerySignatureParamInput[] =
-                query.Parameters && query.Parameters.length > 0
-                    ? query.Parameters.map((p) => ({
-                          Name: p.Name,
-                          Type: p.Type,
-                          IsRequired: p.IsRequired,
-                          DefaultValue: p.DefaultValue,
-                          IsServerSet: p.IsServerSet,
-                      }))
-                    : parameters.map((p) => ({
-                          Name: p.Name,
-                          Type: p.SignatureType,
-                          IsRequired: p.IsRequired,
-                          DefaultValue: p.DefaultValue,
-                          IsServerSet: false,
-                      }));
-            const sigFields: TypedQuerySignatureFieldInput[] =
-                query.Fields && query.Fields.length > 0
-                    ? query.Fields.map((f) => ({
-                          Name: f.Name,
-                          SQLBaseType: f.SQLBaseType,
-                          InAllBranchVariants: f.InAllBranchVariants,
-                      }))
-                    : fields.map((f) => ({
-                          Name: f.Name,
-                          SQLBaseType: f.SQLBaseType,
-                          InAllBranchVariants: !f.IsOptional,
-                      }));
+            const sigParams: TypedQuerySignatureParamInput[] = parameters.map((p) => ({
+                Name: p.Name,
+                Type: p.SignatureType,
+                IsRequired: p.SignatureIsRequired,
+                DefaultValue: p.DefaultValue,
+                IsServerSet: false,
+            }));
+            const sigFields: TypedQuerySignatureFieldInput[] = fields.map((f) => ({
+                Name: f.Name,
+                SQLBaseType: f.SQLBaseType,
+                InAllBranchVariants: !f.IsOptional,
+            }));
             const signature = ComputeTypedQuerySignature({
                 Parameters: sigParams,
                 Fields: sigFields,
@@ -578,6 +562,10 @@ function resolveParametersForQuery(
                   : Boolean(stored?.IsRequired);
 
         const isRequired = rawRequired && defaultValue === null;
+        const signatureIsRequired =
+            stored?.IsRequired !== undefined
+                ? Boolean(stored.IsRequired) && defaultValue === null
+                : isRequired;
         const description = doc?.Description?.trim() || stored?.Description?.trim() || null;
         const signatureType =
             storedType && VALID_DECLARED_PARAM_TYPES.has(storedType) ? storedType : effectiveType;
@@ -587,6 +575,7 @@ function resolveParametersForQuery(
             TSType: mapParamTypeToTSType(effectiveType),
             EffectiveType: effectiveType,
             SignatureType: signatureType,
+            SignatureIsRequired: signatureIsRequired,
             IsRequired: isRequired,
             DefaultValue: defaultValue,
             Description: description,
@@ -866,7 +855,19 @@ function renderNamespaceNode(node: NamespaceTreeNode, indentLevel: number): stri
     const queryKeys = [...node.queries.keys()].sort(ordinalCompare);
     for (const key of queryKeys) {
         const targetIdentifier = node.queries.get(key)!;
-        const propKey = formatPropertyKey(key);
+        let effectiveKey = key;
+        if (node.children.has(effectiveKey)) {
+            effectiveKey =
+                targetIdentifier !== effectiveKey && !node.children.has(targetIdentifier) && !node.queries.has(targetIdentifier)
+                    ? targetIdentifier
+                    : `${effectiveKey}Query`;
+            let suffix = 2;
+            while (node.children.has(effectiveKey) || (effectiveKey !== key && node.queries.has(effectiveKey))) {
+                effectiveKey = `${key}Query_${suffix}`;
+                suffix++;
+            }
+        }
+        const propKey = formatPropertyKey(effectiveKey);
         if (propKey === targetIdentifier) {
             lines.push(`${indent}${propKey},`);
         } else {

@@ -194,15 +194,38 @@ export class CompositeFilter {
 
     private static readValue(context: FilterEvalContext, field: string): unknown {
         const { Source, Name } = ParseFilterField(field);
-        const rec = context[Source ?? ''];
+        const sourceKey = Source ?? '';
+        let rec = context[sourceKey];
+        if (rec === undefined && sourceKey !== '') {
+            const lowerSource = sourceKey.trim().toLowerCase();
+            for (const k of Object.keys(context)) {
+                if (k.trim().toLowerCase() === lowerSource) {
+                    rec = context[k];
+                    break;
+                }
+            }
+        }
         if (rec == null) return undefined;
         if (Name.includes('.')) {
             return Name.split('.').reduce<unknown>((acc, part) => {
                 if (acc == null || typeof acc !== 'object') return undefined;
-                return (acc as Record<string, unknown>)[part];
+                return CompositeFilter.readPropertyCaseInsensitive(acc as Record<string, unknown>, part);
             }, rec);
         }
-        return rec[Name];
+        return CompositeFilter.readPropertyCaseInsensitive(rec, Name);
+    }
+
+    private static readPropertyCaseInsensitive(obj: Record<string, unknown>, propName: string): unknown {
+        if (propName in obj) {
+            return obj[propName];
+        }
+        const target = propName.trim().toLowerCase();
+        for (const key of Object.keys(obj)) {
+            if (key.trim().toLowerCase() === target) {
+                return obj[key];
+            }
+        }
+        return undefined;
     }
 
     private static compare(actual: unknown, operator: FilterOperator, expected: unknown): boolean {
@@ -278,7 +301,14 @@ export class CompositeFilter {
             const toBool = (v: unknown): boolean => v === true || v === 'true' || v === 1 || v === '1';
             return toBool(a) === toBool(b);
         }
-        if (a instanceof Date || b instanceof Date) {
+        if (
+            a instanceof Date ||
+            b instanceof Date ||
+            (typeof a === 'string' &&
+                typeof b === 'string' &&
+                CompositeFilter.isISODateCandidate(a) &&
+                CompositeFilter.isISODateCandidate(b))
+        ) {
             const na = CompositeFilter.num(a);
             const nb = CompositeFilter.num(b);
             if (!Number.isNaN(na) && !Number.isNaN(nb)) {
@@ -289,6 +319,11 @@ export class CompositeFilter {
             return CompositeFilter.num(a) === CompositeFilter.num(b);
         }
         return CompositeFilter.str(a) === CompositeFilter.str(b);
+    }
+
+    private static isISODateCandidate(v: string): boolean {
+        const trimmed = v.trim();
+        return /^\d{4}-\d{2}-\d{2}/.test(trimmed) && Number.isFinite(Date.parse(trimmed));
     }
 
     private static str(v: unknown): string {

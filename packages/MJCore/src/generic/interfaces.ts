@@ -416,6 +416,12 @@ export class EntitySaveOptions {
      * server-side `Save()`, the provider falls back to each dirty field's `EntityField.OldValue`.
      */
     ConcurrencyBaseline?: Record<string, unknown>;
+
+    /**
+     * Optional per-save override for server-side field-level concurrency checking (`'off' | 'log' | 'enforce'`).
+     * When omitted, the database provider's configured `ConcurrencyCheck` mode (`'log'` by default) applies.
+     */
+    ConcurrencyCheck?: ConcurrencyCheckMode;
     
     /**
      * When set to true, the entity will skip the asynchronous ValidateAsync() method during save.

@@ -10,6 +10,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import mssql from 'mssql';
 import {
+    CompositeFilter,
     EntityDeleteOptions,
     EntitySaveOptions,
     FilterOf,
@@ -25,7 +26,9 @@ import { UserCache } from '@memberjunction/generic-database-provider';
 import { SQLServerDataProvider } from '../SQLServerDataProvider';
 import { SQLServerProviderConfigData } from '../types';
 
-const INTEGRATION_DB = process.env.MJ_ORM_INTEGRATION_DB;
+const INTEGRATION_DB =
+    process.env.MJ_ORM_INTEGRATION_DB ||
+    (process.env.MJ_LIVE_DB_TEST === '1' ? process.env.DB_DATABASE ?? 'MJ_orm_6474' : undefined);
 const describeIfLiveDB = describe.skipIf(!INTEGRATION_DB);
 
 class LiveIntegrationSQLProvider extends SQLServerDataProvider {
@@ -209,6 +212,22 @@ describeIfLiveDB('ORM Layer Improvements — Live SQL Server Integration (MJ_orm
 
         expect(res.Success).toBe(true);
         expect(res.Results.map((r) => r.Name)).toEqual(['MJ: Entities', 'MJ: Tags', 'MJ: Users']);
+
+        // Verify exact row-ID set parity between live SQL Server compilation and in-memory CompositeFilter.Evaluate()
+        const allEntitiesRes = await rv.RunView<MJEntityEntity>(
+            {
+                EntityName: 'MJ: Entities',
+                OrderBy: 'Name ASC',
+                ResultType: 'simple',
+            },
+            sysUser,
+        );
+        expect(allEntitiesRes.Success).toBe(true);
+        const cf = CompositeFilter.FromDescriptor(entityFilter);
+        const inMemoryMatchingIds = allEntitiesRes.Results.filter((row) =>
+            cf.Evaluate({ '': row as unknown as Record<string, unknown> }),
+        ).map((r) => r.ID);
+        expect(res.Results.map((r) => r.ID)).toEqual(inMemoryMatchingIds);
 
         // Combine structured Filter with ExtraFilter
         const combinedRes = await rv.RunView<MJEntityEntity>(

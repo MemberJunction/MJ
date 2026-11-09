@@ -129,6 +129,7 @@ import { RenderPipeline, type RenderResult } from './renderPipeline.js';
 import { CRUDSprocType, UseJsonArgShape } from './crudSprocFieldRules.js';
 import { SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext } from './saveTypes.js';
 import {
+    AreEntityFieldValuesDifferent,
     ClientOldValueToFieldValue,
     DetectFieldConcurrencyConflicts,
     FindEntityFieldByCodeNameOrName,
@@ -1117,7 +1118,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * Dialect hook for reading a row under an exclusive/update row lock inside the save transaction
      * immediately before `spUpdate*` executes.
      *
-     * - SQL Server overrides to emit `SELECT [col1], ... FROM [schema].[BaseView] WITH (UPDLOCK, ROWLOCK) WHERE ...`
+     * - SQL Server overrides to emit `SELECT [col1], ... FROM [schema].[BaseTable] WITH (UPDLOCK, ROWLOCK) WHERE ...`
      * - PostgreSQL overrides to emit `SELECT "col1", ... FROM "schema"."BaseTable" WHERE ... FOR UPDATE`
      */
     protected RenderLockedRowReadSQL(
@@ -1128,11 +1129,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         return null;
     }
 
+    protected getEffectiveConcurrencyCheckMode(options?: EntitySaveOptions): ConcurrencyCheckMode {
+        return options?.ConcurrencyCheck ?? this.ConcurrencyCheck;
+    }
+
     protected override ShouldCheckUpdateConcurrency(
         entity: BaseEntity,
         options: EntitySaveOptions,
     ): boolean {
-        if (this.ConcurrencyCheck === 'off') {
+        if (this.getEffectiveConcurrencyCheckMode(options) === 'off') {
             return false;
         }
         if (options?.SkipOldValuesCheck || options?.IgnoreDirtyState || options?.ReplayOnly) {
@@ -1142,9 +1147,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             return false;
         }
         if (options?.ConcurrencyBaseline) {
-            for (const key of Object.keys(options.ConcurrencyBaseline)) {
+            for (const [key, rawBaseline] of Object.entries(options.ConcurrencyBaseline)) {
                 const f = FindEntityFieldByCodeNameOrName(entity.EntityInfo, key);
-                if (f && !f.ReadOnly && !f.IsVirtual && !f.IsPrimaryKey && !IsFieldOpaqueToClient(f)) {
+                if (!f || f.ReadOnly || f.IsVirtual || f.IsPrimaryKey || IsFieldOpaqueToClient(f)) {
+                    continue;
+                }
+                const coercedBaseline = ClientOldValueToFieldValue(f, rawBaseline);
+                const currentVal = entity.GetFieldByName(f.Name)?.Value;
+                if (AreEntityFieldValuesDifferent(f, coercedBaseline, currentVal, false)) {
                     return true;
                 }
             }
@@ -1169,6 +1179,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             return true;
         }
 
+        const effectiveMode = this.getEffectiveConcurrencyCheckMode(options);
         const baselineValues: Record<string, unknown> = {};
         const newValues: Record<string, unknown> = {};
 
@@ -1178,9 +1189,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 if (!f || f.ReadOnly || f.IsVirtual || f.IsPrimaryKey || IsFieldOpaqueToClient(f)) {
                     continue;
                 }
-                baselineValues[f.Name] = ClientOldValueToFieldValue(f, rawBaseline);
+                const coercedBaseline = ClientOldValueToFieldValue(f, rawBaseline);
                 const entityField = entity.GetFieldByName(f.Name);
-                newValues[f.Name] = entityField ? entityField.Value : undefined;
+                const currentVal = entityField ? entityField.Value : undefined;
+                if (AreEntityFieldValuesDifferent(f, coercedBaseline, currentVal, false)) {
+                    baselineValues[f.Name] = coercedBaseline;
+                    newValues[f.Name] = currentVal;
+                }
             }
         }
 
@@ -1256,7 +1271,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             category: 'GenericDatabaseProvider.CheckUpdateConcurrency',
             metadata: {
                 entityName: entity.EntityInfo.Name,
-                mode: this.ConcurrencyCheck,
+                mode: effectiveMode,
                 conflictingFields: checkResult.ConflictingFields,
                 clientDifferences: checkResult.ClientDifferences,
                 dbDifferences: checkResult.DBDifferences,
@@ -1264,7 +1279,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             },
         });
 
-        if (this.ConcurrencyCheck === 'enforce') {
+        if (effectiveMode === 'enforce') {
             entityResult.Success = false;
             entityResult.EndedAt = new Date();
             entityResult.ConcurrencyConflict = {
@@ -2272,10 +2287,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         const computeSimpleSQL = (): string => {
             if (cachedSimpleSQL === undefined) {
                 const replaySQL = isNew
-                    ? this.RenderReplaySaveSQL(binding, entity, fieldValueMap)
+                    ? this.RenderReplaySaveSQL(binding, entity, effectiveFieldValueMap)
                     : options?.IgnoreDirtyState
                       ? undefined
-                      : this.RenderReplayUpdateSQL(binding, entity, this.changedFieldValues(entity, fieldValueMap, dirtyFields));
+                      : this.RenderReplayUpdateSQL(
+                            binding,
+                            entity,
+                            useDeltaUpdate
+                                ? effectiveFieldValueMap
+                                : this.changedFieldValues(entity, effectiveFieldValueMap, dirtyFields),
+                        );
                 // A statement that runs with parameters is logged in its literal form, which replays alone.
                 cachedSimpleSQL = replaySQL ?? unprojectedSaveSQL.literalSQL ?? unprojectedSaveSQL.sql;
             }

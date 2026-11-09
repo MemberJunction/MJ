@@ -749,7 +749,11 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
           }]
         }`;
      */
-    public static GenerateWhereClauseFromFilterState(FilterState: string | Record<string, unknown>, entityInfo: EntityInfo): string {
+    public static GenerateWhereClauseFromFilterState(
+        FilterState: string | Record<string, unknown>,
+        entityInfo: EntityInfo,
+        user?: UserInfo
+    ): string {
         if (!FilterState) return '';
         const parsed = (typeof FilterState === 'string' ? JSON.parse(FilterState) : FilterState) as
             | CompositeFilterDescriptor
@@ -758,11 +762,13 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
         if (!parsed) return '';
         return CompositeFilterSQLCompiler.CompileLiteral(parsed, entityInfo, {
             allowSourcePrefix: true,
+            coerceNullBooleanToFalse: true,
+            user,
         });
     }
 
     protected GenerateWhereClause(FilterState: string, entityInfo: EntityInfo): string {
-        return MJUserViewEntityExtended.GenerateWhereClauseFromFilterState(FilterState, entityInfo);
+        return MJUserViewEntityExtended.GenerateWhereClauseFromFilterState(FilterState, entityInfo, this.ActiveUser);
     }
 }
 

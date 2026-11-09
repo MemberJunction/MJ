@@ -2100,7 +2100,6 @@ export class ResolverBase {
           const field = entityObject.EntityInfo.Fields.find((f) => f.CodeName === item.Key);
           oldValues[item.Key] = field ? this.ClientOldValueToFieldValue(field, item.Value) : item.Value;
         });
-        concurrencyBaseline = oldValues;
 
         // 1) load the old values, this will be the initial state of the object
         await entityObject.LoadFromData(oldValues);
@@ -2116,7 +2115,10 @@ export class ResolverBase {
       this.ListenForEntityMessages(entityObject, pubSub, userPayload);
 
       const saveOptions = new EntitySaveOptions();
-      if (concurrencyBaseline) {
+      if (Array.isArray(input.OldValues___) && input.OldValues___.length > 0) {
+        saveOptions.ConcurrencyCheck = 'enforce';
+      }
+      if (concurrencyBaseline && Object.keys(concurrencyBaseline).length > 0) {
         saveOptions.ConcurrencyBaseline = concurrencyBaseline;
       }
 
@@ -2129,6 +2131,14 @@ export class ResolverBase {
         // fls-guard: MapFieldNamesToCodeNames drops the fields the caller may not read
         return await this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll(), userInfo);
       } else {
+        if (entityObject.LatestResult?.ConcurrencyConflict) {
+          await this.persistSaveInconsistencyErrorLog(entityObject, userInfo, {
+            Message:
+              entityObject.LatestResult.Message ??
+              'Concurrent modification conflict detected inside save transaction.',
+            ConflictingFields: entityObject.LatestResult.ConcurrencyConflict.ConflictingFields,
+          });
+        }
         // CompleteMessage, not Message. A validation refusal puts its reasons in `Errors` and leaves
         // `Message` unset, so reading `Message` here fell through to 'Unknown error' and discarded
         // every field-named explanation the entity had just produced. CreateRecord already read
@@ -2459,30 +2469,7 @@ export class ResolverBase {
       });
 
       // Persist SAVE_INCONSISTENCY ErrorLog record on the entity's bound provider before rejecting
-      try {
-        const hasEntityObjectFactory = (
-          p: object | null | undefined
-        ): p is Pick<IMetadataProvider, 'GetEntityObject'> => Boolean(p && 'GetEntityObject' in p);
-        const providerCandidate = entityObject.ProviderToUse;
-        if (hasEntityObjectFactory(providerCandidate)) {
-          const errorLogEntity = await providerCandidate.GetEntityObject<MJErrorLogEntity>('MJ: Error Logs', contextUser);
-          // Code is NCHAR(20); a longer value is rejected at the database
-          errorLogEntity.Code = 'SAVE_INCONSISTENCY';
-          errorLogEntity.Message = `Entity save inconsistency detected for ${entityObject.EntityInfo.Name}: ${JSON.stringify(msg)}`;
-          errorLogEntity.Status = 'Warning';
-          errorLogEntity.Category = 'Entity Save';
-          errorLogEntity.CreatedBy = contextUser.Email || contextUser.Name;
-
-          const saveResult = await errorLogEntity.Save();
-          if (!saveResult) {
-            console.error(
-              `Failed to save ErrorLog record for ${entityObject.EntityInfo.Name}: ${errorLogEntity.LatestResult?.CompleteMessage}`
-            );
-          }
-        }
-      } catch (errorLogError) {
-        console.error('Error creating ErrorLog record:', errorLogError);
-      }
+      await this.persistSaveInconsistencyErrorLog(entityObject, contextUser, msg);
 
       throw new GraphQLError(
         `Concurrent modification conflict on ${entityObject.EntityInfo.Name} for field(s): ${conflictingFields.join(', ')}. Reload the record and retry your changes.`,
@@ -2510,7 +2497,42 @@ export class ResolverBase {
       entityObject.SetMany(clientNewValues);
     }
 
-    return clientOldValues;
+    const clientModifiedBaseline: Record<string, ConvertedFieldValue> = {};
+    for (const diff of checkResult.ClientDifferences) {
+      clientModifiedBaseline[diff.FieldName] = clientOldValues[diff.FieldName];
+    }
+    return clientModifiedBaseline;
+  }
+
+  protected async persistSaveInconsistencyErrorLog(
+    entityObject: BaseEntity,
+    contextUser: UserInfo | undefined,
+    diagnosticPayload: Record<string, unknown>,
+  ): Promise<void> {
+    try {
+      const hasEntityObjectFactory = (
+        p: object | null | undefined
+      ): p is Pick<IMetadataProvider, 'GetEntityObject'> => Boolean(p && 'GetEntityObject' in p);
+      const providerCandidate = entityObject.ProviderToUse;
+      if (hasEntityObjectFactory(providerCandidate)) {
+        const errorLogEntity = await providerCandidate.GetEntityObject<MJErrorLogEntity>('MJ: Error Logs', contextUser);
+        // Code is NCHAR(20); a longer value is rejected at the database
+        errorLogEntity.Code = 'SAVE_INCONSISTENCY';
+        errorLogEntity.Message = `Entity save inconsistency detected for ${entityObject.EntityInfo.Name}: ${JSON.stringify(diagnosticPayload)}`;
+        errorLogEntity.Status = 'Warning';
+        errorLogEntity.Category = 'Entity Save';
+        errorLogEntity.CreatedBy = contextUser?.Email || contextUser?.Name || '';
+
+        const saveResult = await errorLogEntity.Save();
+        if (!saveResult) {
+          console.error(
+            `Failed to save ErrorLog record for ${entityObject.EntityInfo.Name}: ${errorLogEntity.LatestResult?.CompleteMessage}`
+          );
+        }
+      }
+    } catch (errorLogError) {
+      console.error('Error creating ErrorLog record:', errorLogError);
+    }
   }
 
   protected async DeleteRecord(
