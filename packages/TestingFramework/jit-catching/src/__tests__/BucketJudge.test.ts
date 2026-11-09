@@ -42,4 +42,8 @@ describe('BucketJudge', () => {
     const llm = scripted({ content: '{"bucket":"High","reason":"x"} (see {a})' }); const s = await new BucketJudge(llm, 'm').Judge(ctx());
     expect(s).toMatchObject({ Bucket: 'High', Reason: 'x' }); expect(llm.Calls).toHaveLength(1);
   });
+  it('asks for an output budget that leaves room for thinking before the JSON reply', async () => {
+    const llm = scripted({ content: '{"bucket":"Low","reason":"x"}' }); await new BucketJudge(llm, 'claude-opus-5-5').Judge(ctx());
+    expect(llm.Calls[0].maxOutputTokens).toBeGreaterThanOrEqual(4000);
+  });
 });
