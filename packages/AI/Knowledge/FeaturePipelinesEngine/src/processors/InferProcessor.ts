@@ -1498,7 +1498,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
     public ShouldSampleChallenger(
         config: MJRecordProcessEntity_IRecordProcessChallengerConfig | null | undefined = this.ChallengerConfig,
     ): boolean {
-        if (!config || !InferProcessor.ChallengerCanSample(config)) {
+        if (!config || !InferProcessor.challengerCanSample(config)) {
             return false;
         }
         if (config.SampleRate >= 1) {
@@ -1508,7 +1508,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
     }
 
     /** Whether a challenger configuration can sample at all: enabled, `'Infer'`, a positive SampleRate and a prompt. */
-    private static ChallengerCanSample(config: MJRecordProcessEntity_IRecordProcessChallengerConfig): boolean {
+    private static challengerCanSample(config: MJRecordProcessEntity_IRecordProcessChallengerConfig): boolean {
         return config.Enabled === true && config.WorkType === 'Infer'
             && typeof config.SampleRate === 'number' && Number.isFinite(config.SampleRate) && config.SampleRate > 0
             && typeof config.ChallengerPromptID === 'string' && config.ChallengerPromptID.trim().length > 0;
@@ -1516,7 +1516,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
 
     /** Whether the compute hooks keep each record's champion prompt inputs: only while a challenger can sample them. */
     private get capturesChampionInputs(): boolean {
-        return !!this.ChallengerConfig && InferProcessor.ChallengerCanSample(this.ChallengerConfig);
+        return !!this.ChallengerConfig && InferProcessor.challengerCanSample(this.ChallengerConfig);
     }
 
     /**
