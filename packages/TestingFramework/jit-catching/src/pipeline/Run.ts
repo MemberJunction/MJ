@@ -8,12 +8,22 @@ import { AssessStep } from './Assess';
 import { CheckedBaseRootDir, RunDir } from './RunDir';
 import { SnapshotBaseSources } from './BaseSnapshot';
 import type { VitestCatchTarget } from '../target/VitestCatchTarget';
+import type { PackageMap } from '../analyzer/PackageMap';
 import { DefaultRedaction, DefaultRunTarget } from './Deps';
 import { PreflightEnv } from './Preflight';
 import { RedactTail } from '../sandbox/Redaction';
 
-/** `PR` null runs on `BaseSHA`/`HeadSHA` instead. `Trigger` defaults to `Local`. */
-export interface RunAllOptions { PR: number | null; BaseSHA?: string; HeadSHA?: string; Trigger?: Trigger; RepoRoot: string; Settings: Settings; StoreDir: string; }
+/** The target and package lookup `FinishRun` uses for one run folder. */
+export interface FinishTools { Target: Pick<VitestCatchTarget, 'Cleanup' | 'RemoveStore'>; PackageMap: Pick<PackageMap, 'Get'>; }
+
+/**
+ * `PR` null runs on `BaseSHA`/`HeadSHA` instead. `Trigger` defaults to `Local`.
+ * `FinishTools` builds the finish tools for the run folder; the real run target when not given.
+ */
+export interface RunAllOptions {
+    PR: number | null; BaseSHA?: string; HeadSHA?: string; Trigger?: Trigger; RepoRoot: string; Settings: Settings; StoreDir: string;
+    FinishTools?: (runPath: string) => FinishTools;
+}
 
 /**
  * A step failed after the run had an ID. Carries the run ID, so the run's recorded spend can still be read, and the original error as `cause`.
@@ -52,7 +62,7 @@ export async function RunAll(o: RunAllOptions): Promise<{ RunID: string; Reporte
 async function finishOrReport(o: RunAllOptions, runID: string): Promise<void> {
     try {
         const dir = new RunDir(o.RepoRoot, runID, DefaultRedaction());
-        const { Target, PackageMap } = DefaultRunTarget(o.RepoRoot, dir.Path, o.Settings);
+        const { Target, PackageMap } = o.FinishTools ? o.FinishTools(dir.Path) : DefaultRunTarget(o.RepoRoot, dir.Path, o.Settings);
         await FinishRun(dir, Target, PackageDirs(dir.ReadGeneration().Analysis.PackagesToTest, (n) => PackageMap.Get(n)?.Dir ?? null));
     } catch (e) {
         const message = e instanceof Error ? e.message : String(e);

@@ -2,9 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CleanupBase, FinishRun, RunAll, RunAllError } from '../pipeline/Run';
+import { CleanupBase, FinishRun, RunAll, RunAllError, type FinishTools } from '../pipeline/Run';
 import { ExecuteStep } from '../pipeline/Execute';
-import { DefaultRunTarget, type RunTarget } from '../pipeline/Deps';
 import { GenerateError, GenerateStep } from '../pipeline/Generate';
 import { DEFAULT_SETTINGS } from '../settings';
 import { RunDir } from '../pipeline/RunDir';
@@ -16,7 +15,6 @@ vi.mock('../pipeline/Preflight', () => ({ PreflightEnv: vi.fn() }));
 vi.mock('../pipeline/Generate', async (importOriginal) => ({ ...(await importOriginal<typeof import('../pipeline/Generate')>()), GenerateStep: vi.fn(async () => ({ RunID: 'r-7' })) }));
 vi.mock('../pipeline/Execute', () => ({ ExecuteStep: vi.fn(async () => undefined) }));
 vi.mock('../pipeline/Assess', () => ({ AssessStep: vi.fn(async () => ({ Catches: [], Promotions: [] })) }));
-vi.mock('../pipeline/Deps', async (importOriginal) => ({ ...(await importOriginal<typeof import('../pipeline/Deps')>()), DefaultRunTarget: vi.fn() }));
 
 describe('RunAll', () => {
   const o = { PR: 7, RepoRoot: '/repo', Settings: DEFAULT_SETTINGS, StoreDir: '/store' };
@@ -44,11 +42,11 @@ describe('RunAll finish', () => {
     dir.WriteGeneration(generation(base, [candidate(ID_A)]));
     const token = 'ghp_' + 'A1b2C3d4'.repeat(5);
     const target = { Cleanup: vi.fn(async () => { throw new Error(`worktree busy ${token}\n  at stack`); }), RemoveStore: vi.fn(async () => undefined) };
-    vi.mocked(DefaultRunTarget).mockReturnValueOnce({ Target: target, PackageMap: { Get: () => null } } as never as RunTarget);
+    const tools: FinishTools = { Target: target, PackageMap: { Get: () => null } };
     const stderr: string[] = [];
     const spy = vi.spyOn(process.stderr, 'write').mockImplementation((s: string | Uint8Array) => { stderr.push(String(s)); return true; });
     try {
-      await expect(RunAll({ PR: 7, RepoRoot: root, Settings: DEFAULT_SETTINGS, StoreDir: join(root, 'store') })).resolves.toEqual({ RunID: 'r-7', Reported: [] });
+      await expect(RunAll({ PR: 7, RepoRoot: root, Settings: DEFAULT_SETTINGS, StoreDir: join(root, 'store'), FinishTools: () => tools })).resolves.toEqual({ RunID: 'r-7', Reported: [] });
       expect(target.Cleanup).toHaveBeenCalledTimes(1);
       expect(stderr.filter((l) => l.startsWith('finish run r-7: '))).toHaveLength(1);
       expect(stderr.join('')).not.toContain(token);

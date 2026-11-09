@@ -143,13 +143,17 @@ describe('Main', () => {
   });
 
   it('corpus mine refuses to write a list that holds a key and leaves --out unwritten', async () => {
-    const out = join(mkdtempSync(join(tmpdir(), 'jit-cli-')), 'mined.json');
+    const dir = mkdtempSync(join(tmpdir(), 'jit-cli-')); const out = join(dir, 'mined.json');
     const token = 'ghp_' + 'A1b2C3d4'.repeat(5);
     const clean = [{ PR: 10, MergeSHA: 'a'.repeat(40), MergedAt: '2026-01-20T10:00:00Z', Title: `feat: ${token}`, Files: ['packages/X/src/a.ts'] }];
     const d = deps({ MineCorpus: vi.fn(async () => ({ Clean: clean, Bug: [] })) });
-    expect(await Main(['corpus', 'mine', '--since', '2026-01-01', '--until', '2026-03-31', '--out', out], d)).toBe(1);
-    expect(existsSync(out)).toBe(false);
-    expect(stderr.join('')).not.toContain(token);
+    try {
+      expect(await Main(['corpus', 'mine', '--since', '2026-01-01', '--until', '2026-03-31', '--out', out], d)).toBe(1);
+      expect(existsSync(out)).toBe(false);
+      expect(stderr.join('')).not.toContain(token);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('backtest --retry-failed sets RetryFailed', async () => {
