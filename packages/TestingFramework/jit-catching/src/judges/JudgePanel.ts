@@ -50,8 +50,9 @@ export class JudgePanel {
     constructor(private readonly judges: BaseCatchJudge[]) {}
 
     /**
-     * Never throws. A bucket judge that throws counts as Medium with the error as reason.
-     * A TP Prob judge that throws, or whose Reason starts with {@link JUDGE_ERROR_PREFIX}, gives a null TP Prob.
+     * Never throws. A judge that throws, or whose Reason starts with {@link JUDGE_ERROR_PREFIX}, errored:
+     * a bucket judge is then recorded with a null Bucket and left out of the median, and the TP Prob judge gives a null TP Prob.
+     * The median is null when no bucket judge answered.
      */
     public async Judge(c: CatchContext): Promise<PanelResult> {
         const all = await Promise.all(this.judges.map(async (j): Promise<JudgeScore | null> => {
@@ -59,13 +60,15 @@ export class JudgePanel {
                 return await j.Judge(c);
             } catch (e) {
                 if (j.Name === 'TpProb') return null;
-                return { Judge: j.Name, Model: modelOf(j), Score: 0, Bucket: 'Medium', Reason: `${JUDGE_ERROR_PREFIX}judge failed: ${e instanceof Error ? e.message : String(e)}` };
+                return { Judge: j.Name, Model: modelOf(j), Score: 0, Bucket: null, Reason: `${JUDGE_ERROR_PREFIX}judge failed: ${e instanceof Error ? e.message : String(e)}` };
             }
         }));
         const scores = all.filter((s): s is JudgeScore => s !== null);
-        const tp = scores.find((s) => s.Judge === 'TpProb' && !s.Reason.startsWith(JUDGE_ERROR_PREFIX));
-        const buckets: JudgeBucket[] = scores.flatMap((s) => (s.Bucket === null ? [] : [{ Model: s.Model, Bucket: s.Bucket, Reason: s.Reason }]));
-        const median = buckets.length ? GetConsensus(buckets.map((b) => BUCKET_SCORE[b.Bucket]), 'Median').Overall : null;
+        const errored = (s: JudgeScore): boolean => s.Reason.startsWith(JUDGE_ERROR_PREFIX);
+        const tp = scores.find((s) => s.Judge === 'TpProb' && !errored(s));
+        const buckets: JudgeBucket[] = scores.filter((s) => s.Judge !== 'TpProb').map((s) => ({ Model: s.Model, Bucket: errored(s) ? null : s.Bucket, Reason: s.Reason }));
+        const answered = buckets.flatMap((b) => (b.Bucket === null ? [] : [BUCKET_SCORE[b.Bucket]]));
+        const median = answered.length ? GetConsensus(answered, 'Median').Overall : null;
         const usage = scores.flatMap((s) => (s.Usage ? [s.Usage] : []));
         return { TPProb: tp?.Score ?? null, Buckets: buckets, Median: median === null ? null : toBucket(median), Usage: usage };
     }

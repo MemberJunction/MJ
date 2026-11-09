@@ -69,7 +69,7 @@ export class BucketJudge extends BaseCatchJudge {
 
     public get Model(): string { return this.model; }
 
-    /** A provider error returns Medium at once, without a retry, with a Reason that starts with {@link JUDGE_ERROR_PREFIX}. */
+    /** A provider error returns at once, without a retry, with a Reason that starts with {@link JUDGE_ERROR_PREFIX}; the panel then records no bucket for this judge. */
     public async Judge(c: CatchContext): Promise<JudgeScore> {
         const input = BuildJudgeInput(c);
         let usage: TokenUsage | null = null;

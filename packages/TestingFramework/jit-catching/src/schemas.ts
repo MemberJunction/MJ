@@ -39,7 +39,7 @@ export const ExecutionResultSchema = z.object({
 }).refine((r) => (r.Status === 'Pass') === (r.Failure === null), { error: 'Failure is required exactly when Status is not Pass' });
 
 export const VerdictSchema = z.object({ Label: z.enum(['WeakCatch', 'PassesBoth', 'ApiChanged', 'Invalid', 'Flaky']), Timeout: z.boolean(), Reason: z.string() });
-export const JudgeBucketSchema = z.object({ Model: z.string(), Bucket: BucketSchema, Reason: z.string() });
+export const JudgeBucketSchema = z.object({ Model: z.string(), Bucket: BucketSchema.nullable(), Reason: z.string() });
 export const CatchSchema = z.object({
     ID: z.string(), RunID: z.string(), CandidateTestID: z.string(), Verdict: VerdictSchema, DroppedByRule: z.string().nullable(), Boosts: z.array(z.string()),
     TPProb: z.number().min(-1).max(1).nullable(), JudgeBuckets: z.array(JudgeBucketSchema), Median: BucketSchema.nullable(), Rank: z.number().int().nullable(), Reported: z.boolean(), CommentID: z.string().nullable(),

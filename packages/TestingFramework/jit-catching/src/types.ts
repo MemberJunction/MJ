@@ -48,7 +48,8 @@ export interface ExecutionResult {
 }
 
 export interface Verdict { Label: VerdictLabel; Timeout: boolean; Reason: string; }
-export interface JudgeBucket { Model: string; Bucket: Bucket; Reason: string; }
+/** One bucket judge's answer. `Bucket` is null when the judge errored; `Reason` then holds the error. */
+export interface JudgeBucket { Model: string; Bucket: Bucket | null; Reason: string; }
 
 export interface Catch {
     ID: string; RunID: string; CandidateTestID: string; Verdict: Verdict; DroppedByRule: string | null; Boosts: string[];
