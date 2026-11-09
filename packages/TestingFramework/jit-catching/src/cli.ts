@@ -11,7 +11,7 @@ import type { Trigger } from './types';
 import { GenerateStep } from './pipeline/Generate';
 import { ExecuteStep } from './pipeline/Execute';
 import { AssessStep } from './pipeline/Assess';
-import { RunAll } from './pipeline/Run';
+import { RunAll, RunAllError } from './pipeline/Run';
 import { IsValidRunID } from './pipeline/RunDir';
 import { MineClean, MineBugs, type CleanCandidate, type BugCandidate } from './corpus/Miner';
 import { CleanRun, FinishedRunIDs } from './pipeline/Clean';
@@ -20,6 +20,8 @@ import { DefaultRedaction } from './pipeline/Deps';
 import { GitHub } from './git/GitHub';
 import { GitRepo } from './git/GitRepo';
 import { PackageMap } from './analyzer/PackageMap';
+import { SliceSchema, type Slice } from './corpus/Corpus';
+import { BacktestStep } from './backtest/Backtest';
 
 export const COMMANDS = ['generate', 'execute', 'assess', 'run', 'recheck', 'feedback', 'backtest', 'label', 'report', 'corpus', 'clean'] as const;
 export type CommandName = (typeof COMMANDS)[number];
@@ -35,6 +37,7 @@ export interface CliDeps {
     CleanRun: typeof CleanRun;
     LabelCatch: typeof LabelCatch;
     LabelPacket: typeof LabelPacket;
+    BacktestStep: typeof BacktestStep;
 }
 
 const execFileAsync = promisify(execFile);
@@ -45,6 +48,7 @@ const DEFAULT_DEPS: CliDeps = {
         const d = { GitHub: new GitHub(), Repo: new GitRepo(o.RepoRoot), PackageMap: PackageMap.Load(o.RepoRoot) };
         return { Clean: await MineClean(d, o), Bug: await MineBugs(d, o) };
     },
+    BacktestStep,
 };
 
 const USAGE = `usage: jit-catch <${COMMANDS.join('|')}> [options]
@@ -54,7 +58,9 @@ const USAGE = `usage: jit-catch <${COMMANDS.join('|')}> [options]
   label         --catch <catch ID> --answer ${LABEL_ANSWERS.join('|')} --user <login> [--store <dir>]
   label         --run <run ID> [--store <dir>]
   corpus mine   --since <YYYY-MM-DD> --until <YYYY-MM-DD> --out <file>
-  clean         --run <run ID> | --all-finished`;
+  clean         --run <run ID> | --all-finished
+  backtest      --corpus <file> --slice ${SliceSchema.options.join('|')} --set Bug|Clean|Both --model <generator> [--max-usd <n, default 50>] [--only <n,n>] [--retry-failed] [--settings <file>] [--store <dir>]
+                --max-usd counts the cost of the whole ledger, every attempt of a --retry-failed entry included, and is checked before each run, so the last run can take the total above it.`;
 const SHA_RE = /^[0-9a-f]{7,40}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -65,7 +71,10 @@ interface Parsed {
     Command: CommandName; PR: number | null; RunID: string | null; Base?: string; Head?: string; Trigger: Trigger; SettingsPath?: string; Store?: string;
     Since?: string; Until?: string; Out?: string; AllFinished: boolean;
     Label?: { CatchID: string; Answer: LabelAnswer; User: string };
+    Backtest?: BacktestArgs;
 }
+interface BacktestArgs { CorpusPath: string; Slice: Slice; Set: 'Bug' | 'Clean' | 'Both'; Model: string; MaxUsd: number; Only?: number[]; RetryFailed: boolean; }
+const BACKTEST_SETS = ['Bug', 'Clean', 'Both'] as const;
 
 /** Parses argv and dispatches one command. Returns the process exit code: 0 done, 1 failed, 2 usage error. */
 export async function Main(argv: string[], deps: CliDeps = DEFAULT_DEPS): Promise<number> {
@@ -94,6 +103,7 @@ function parse(argv: string[]): Parsed {
         settings: { type: 'string' }, store: { type: 'string' }, trigger: { type: 'string' }, 'all-finished': { type: 'boolean' },
         since: { type: 'string' }, until: { type: 'string' }, out: { type: 'string' },
         catch: { type: 'string' }, answer: { type: 'string' }, user: { type: 'string' },
+        corpus: { type: 'string' }, slice: { type: 'string' }, set: { type: 'string' }, model: { type: 'string' }, 'max-usd': { type: 'string' }, only: { type: 'string' }, 'retry-failed': { type: 'boolean' },
     } });
     const command = COMMANDS.find((c) => c === positionals[0]);
     if (!command || positionals.length > (command === 'corpus' ? 2 : 1)) throw new UsageError(positionals[0] ? `unknown command ${positionals[0]}` : 'no command');
@@ -103,6 +113,7 @@ function parse(argv: string[]): Parsed {
     if (!trigger.success) throw new UsageError(`--trigger must be one of ${TriggerSchema.options.join(', ')}`);
     const p: Parsed = { Command: command, PR: values.pr !== undefined ? Number(values.pr) : null, RunID: values.run ?? null, Base: values.base, Head: values.head, Trigger: trigger.data, SettingsPath: values.settings, Store: values.store, Since: values.since, Until: values.until, Out: values.out, AllFinished: values['all-finished'] ?? false };
     if (command === 'corpus') checkCorpusMine(positionals[1], p);
+    if (command === 'backtest') p.Backtest = parseBacktest(values);
     if ((command === 'generate' || command === 'run') && p.PR === null && !p.Head) throw new UsageError(`${command} needs --pr or --head`);
     if ((command === 'execute' || command === 'assess') && !p.RunID) throw new UsageError(`${command} needs --run`);
     if (command === 'clean' && (p.RunID === null) === !p.AllFinished) throw new UsageError('clean needs --run or --all-finished, not both');
@@ -116,6 +127,20 @@ function checkCorpusMine(sub: string | undefined, p: Parsed): void {
     if (sub !== 'mine') throw new UsageError(sub ? `unknown corpus subcommand ${sub}` : 'corpus needs the subcommand mine');
     for (const k of ['Since', 'Until'] as const) if (!p[k] || !DATE_RE.test(p[k])) throw new UsageError(`corpus mine needs --${k.toLowerCase()} as YYYY-MM-DD`);
     if (!p.Out) throw new UsageError('corpus mine needs --out');
+}
+
+/** Checks and converts the `backtest` options; --max-usd defaults to 50. */
+function parseBacktest(v: { corpus?: string; slice?: string; set?: string; model?: string; 'max-usd'?: string; only?: string; 'retry-failed'?: boolean }): BacktestArgs {
+    if (!v.corpus) throw new UsageError('backtest needs --corpus');
+    if (!v.model) throw new UsageError('backtest needs --model');
+    const slice = SliceSchema.safeParse(v.slice);
+    if (!slice.success) throw new UsageError(`--slice must be ${SliceSchema.options.join(' or ')}`);
+    const set = BACKTEST_SETS.find((s) => s === v.set);
+    if (!set) throw new UsageError('--set must be Bug, Clean or Both');
+    const maxUsd = Number(v['max-usd'] ?? '50');
+    if (!Number.isFinite(maxUsd) || maxUsd <= 0) throw new UsageError('--max-usd must be a positive number');
+    if (v.only !== undefined && !/^[1-9]\d*(,[1-9]\d*)*$/.test(v.only)) throw new UsageError('--only must be PR numbers separated by commas');
+    return { CorpusPath: resolve(v.corpus), Slice: slice.data, Set: set, Model: v.model, MaxUsd: maxUsd, Only: v.only?.split(',').map(Number), RetryFailed: v['retry-failed'] === true };
 }
 
 /** Mines the corpus candidates, writes `{ Clean, Bug }` to --out and prints the counts. */
@@ -137,10 +162,16 @@ function parseLabel(catchID: string | undefined, answer: string | undefined, use
     return { CatchID: catchID, Answer: answer, User: user };
 }
 
+/** The parsed `backtest` options; `parse` sets them for every backtest command. */
+function backtestArgs(p: Parsed): BacktestArgs {
+    if (!p.Backtest) throw new Error('backtest options were not parsed');
+    return p.Backtest;
+}
+
 async function dispatch(p: Parsed, deps: CliDeps): Promise<number> {
     if (p.Command === 'corpus') return corpusMine(p, deps);
     if (p.Command === 'clean') return clean(p, deps);
-    if (p.Command !== 'generate' && p.Command !== 'execute' && p.Command !== 'assess' && p.Command !== 'run' && p.Command !== 'label') {
+    if (p.Command !== 'generate' && p.Command !== 'execute' && p.Command !== 'assess' && p.Command !== 'run' && p.Command !== 'label' && p.Command !== 'backtest') {
         process.stderr.write(`${p.Command}: not implemented (phase 2/3)\n`);
         return 1;
     }
@@ -154,6 +185,7 @@ async function dispatch(p: Parsed, deps: CliDeps): Promise<number> {
         case 'execute': await deps.ExecuteStep({ RunID: runID, RepoRoot: repoRoot, Settings: settings }); break;
         case 'assess': await deps.AssessStep({ RunID: runID, RepoRoot: repoRoot, Settings: settings, StoreDir: storeDir }); break;
         case 'run': await deps.RunAll({ PR: p.PR, BaseSHA: p.Base, HeadSHA: p.Head, Trigger: p.Trigger, RepoRoot: repoRoot, Settings: settings, StoreDir: storeDir }); break;
+        case 'backtest': await deps.BacktestStep({ ...backtestArgs(p), RepoRoot: repoRoot, Settings: settings, StoreDir: storeDir }); break;
     }
     return 0;
 }
@@ -175,8 +207,9 @@ async function label(p: Parsed, deps: CliDeps, repoRoot: string): Promise<number
     return 0;
 }
 
-/** One redacted line for stderr: a zod error as `path: message` pairs, anything else as the first line of its message. */
+/** One redacted line for stderr: a `RunAllError` as its cause, a zod error as `path: message` pairs, anything else as the first line of its message. */
 export function OneLine(e: unknown): string {
+    if (e instanceof RunAllError) return OneLine(e.cause);
     if (e instanceof ZodError) return RedactTail(e.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; '));
     const message = e instanceof Error ? e.message : String(e);
     return RedactTail(message.split('\n').map((l) => l.trim()).find((l) => l.length > 0) ?? 'failed');

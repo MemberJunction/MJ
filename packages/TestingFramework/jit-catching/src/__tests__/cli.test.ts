@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { Main, type CliDeps } from '../cli';
 import { InfrastructureError } from '../target/VitestCatchTarget';
+import { RunAllError } from '../pipeline/Run';
+import { z } from 'zod';
 
 function deps(over: Partial<CliDeps> = {}): CliDeps {
   return {
@@ -16,6 +18,7 @@ function deps(over: Partial<CliDeps> = {}): CliDeps {
     CleanRun: vi.fn(async () => undefined),
     LabelCatch: vi.fn(async () => undefined),
     LabelPacket: vi.fn(async () => '# packet\n'),
+    BacktestStep: vi.fn(async () => ({ ID: 'l', CorpusPath: '/c.json', Slice: 'Tuning' as const, Set: 'Bug' as const, Model: 'm', CreatedAt: '2026-11-09T10:00:00.000Z', Entries: [] })),
     ...over,
   };
 }
@@ -42,6 +45,13 @@ describe('Main', () => {
     const d = deps({ ExecuteStep: vi.fn(async () => { throw new InfrastructureError('install failed on Head: offline\n  at stack line'); }) });
     expect(await Main(['execute', '--run', 'r1'], d)).toBe(1);
     expect(stderr.join('')).toBe('jit-catch execute: install failed on Head: offline\n');
+  });
+
+  it('prints the path: message pairs of a ZodError wrapped in a RunAllError', async () => {
+    const zodError = z.object({ Status: z.string() }).safeParse({ Status: 1 }).error;
+    const d = deps({ RunAll: vi.fn(async () => { throw new RunAllError('r1', 'Assess', zodError); }) });
+    expect(await Main(['run', '--pr', '12'], d)).toBe(1);
+    expect(stderr.join('')).toMatch(/^jit-catch run: Status: /);
   });
 
   it('redacts token-shaped text in the one-line error', async () => {
@@ -109,5 +119,34 @@ describe('Main', () => {
     expect(await Main(['label', '--catch', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '--answer', 'AuthorChangedPR', '--user', 'octo'], d)).toBe(2);
     expect(stderr.join('')).toMatch(/--answer must be one of Bug, Intended, TestFault/);
     expect(d.LabelCatch).not.toHaveBeenCalled();
+  });
+
+  it('backtest calls BacktestStep with the corpus, slice, set, model, the default --max-usd 50 and --only', async () => {
+    const d = deps();
+    expect(await Main(['backtest', '--corpus', 'c.json', '--slice', 'HeldOut', '--set', 'Both', '--model', 'gen-model', '--only', '3,5'], d)).toBe(0);
+    expect(d.BacktestStep).toHaveBeenCalledWith(expect.objectContaining({ CorpusPath: resolve('c.json'), Slice: 'HeldOut', Set: 'Both', Model: 'gen-model', MaxUsd: 50, Only: [3, 5], RepoRoot: '/repo', StoreDir: join('/repo', '.jit-catch', 'store') }));
+  });
+
+  it('backtest --retry-failed sets RetryFailed', async () => {
+    const d = deps();
+    expect(await Main(['backtest', '--corpus', 'c.json', '--slice', 'Tuning', '--set', 'Bug', '--model', 'm', '--retry-failed'], d)).toBe(0);
+    expect(d.BacktestStep).toHaveBeenCalledWith(expect.objectContaining({ RetryFailed: true }));
+  });
+
+  it('backtest returns 2 and names the option for a bad --slice, --set, --max-usd or --only, or a missing --corpus or --model', async () => {
+    const d = deps();
+    const base = { '--corpus': 'c.json', '--slice': 'Tuning', '--set': 'Bug', '--model': 'm' };
+    const cases: [Record<string, string | null>, RegExp][] = [
+      [{ '--slice': 'All' }, /--slice must be Tuning or HeldOut/], [{ '--set': 'Some' }, /--set must be Bug, Clean or Both/],
+      [{ '--model': null }, /backtest needs --model/], [{ '--corpus': null }, /backtest needs --corpus/],
+      [{ '--max-usd': '0' }, /--max-usd must be a positive number/], [{ '--only': '3,x' }, /--only must be PR numbers separated by commas/],
+    ];
+    for (const [over, message] of cases) {
+      stderr.length = 0;
+      const args = Object.entries({ ...base, ...over }).flatMap(([k, v]) => (v === null ? [] : [k, v]));
+      expect(await Main(['backtest', ...args], d)).toBe(2);
+      expect(stderr.join('')).toMatch(message);
+    }
+    expect(d.BacktestStep).not.toHaveBeenCalled();
   });
 });
