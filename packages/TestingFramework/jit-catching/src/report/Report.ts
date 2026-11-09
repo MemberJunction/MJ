@@ -232,7 +232,7 @@ function renderModel(m: ModelReport): string[] {
 
 /** PRs in the corpus slices, run, failed, and not run (neither run nor failed). */
 function prLine(s: { PRs: number; Run: number; Failed: number }): string {
-    return `PRs: ${s.PRs}; run ${s.Run}; failed ${s.Failed}; not run ${s.PRs - s.Run - s.Failed}`;
+    return `PRs: ${s.PRs}; run ${s.Run}; failed ${s.Failed}; not run ${Math.max(0, s.PRs - s.Run - s.Failed)}`;
 }
 
 function renderCost(m: ModelReport): string[] {
@@ -242,9 +242,9 @@ function renderCost(m: ModelReport): string[] {
         ...(k.UnpricedModels.length > 0 ? [`- Unpriced models: ${k.UnpricedModels.map(MarkdownText).join(', ')} (recorded cost used at table prices)`] : []), ''];
 }
 
-/** Text on one Markdown line: CR and LF become spaces, and a leading '#' or '-' is escaped. */
+/** Text on one Markdown line: CR and LF become spaces, and a leading heading, list, quote or ordered-list marker is escaped. */
 export function MarkdownText(text: string): string {
-    return text.replace(/[\r\n]/g, ' ').replace(/^([#-])/, '\\$1');
+    return text.replace(/[\r\n]/g, ' ').replace(/^([#>*+-]|\d+[.)])/, '\\$1');
 }
 
 function renderCounts(title: string, counts: Record<string, number>): string[] {
