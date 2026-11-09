@@ -3,7 +3,7 @@ import { Component, Input, HostBinding } from '@angular/core';
 export type MjProgressBarType = 'value' | 'infinite';
 
 /**
- * mj-progress-bar — Progress indicator. Replaces `<kendo-progressbar>`.
+ * mj-progress-bar — Progress indicator.
  */
 @Component({
   selector: 'mj-progress-bar',
