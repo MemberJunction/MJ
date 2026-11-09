@@ -15,6 +15,10 @@ function DataGrid({
   longTextDisplay = 'expand', // Options: 'truncate', 'expand', 'tooltip', 'wrap', 'none'
   longTextThreshold = 100, // Characters before truncation
   autoFitColumns = true, // Auto-fit columns to container width vs fixed widths with scroll
+  exportable = true, // Built-in CSV/Excel export icon; false renders the grid without it
+  exportLabel, // Export menu label and file name; defaults to entityName or 'Data'
+  exportGetRows, // Replaces the exported rows, e.g. EntityDataGrid loading every matching record rather than one page
+  headerStyle, // Optional header row colors: { background, color, borderColor }. Unset keeps the theme's header.
   onSelectionChanged,
   onPageChanged,
   onSortChanged,
@@ -27,6 +31,106 @@ function DataGrid({
   savedUserSettings,
   onSaveUserSettings
 }) {
+  // Built-in export: DataGrid renders its table inside the registry ExportableData component, which
+  // gives it CSV and Excel export of every row the user's filter and sort leave, across all pages.
+  // The helpers below decide the exported rows, columns and file label; they hold no React state.
+
+  const EXPORT_ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/;
+  const EXPORT_SNIFF_ROWS = 200;
+
+  /** Export column type from a SQL field type, or null when the type is unknown. */
+  function exportTypeFromFieldType(fieldType) {
+    const type = (fieldType || '').toLowerCase();
+    if (!type) return null;
+    if (type.includes('money')) return 'currency';
+    if (type === 'bit') return 'boolean';
+    if (type.includes('date') || type.includes('time')) return 'date';
+    if (/int|decimal|numeric|float|real/.test(type)) return 'number';
+    return 'string';
+  }
+
+  /** The type every non-empty value of `field` shares (number, boolean, date), else 'string'. */
+  function sniffExportType(rows, field) {
+    let found = null;
+    for (const row of rows.slice(0, EXPORT_SNIFF_ROWS)) {
+      const value = row ? row[field] : undefined;
+      if (value === null || value === undefined || value === '') continue;
+      let type = 'string';
+      if (typeof value === 'number') type = 'number';
+      else if (typeof value === 'boolean') type = 'boolean';
+      else if (value instanceof Date || (typeof value === 'string' && EXPORT_ISO_DATE_PATTERN.test(value))) type = 'date';
+      if (type === 'string' || (found && found !== type)) return 'string';
+      found = type;
+    }
+    return found || 'string';
+  }
+
+  /** One export column per displayed column, typed from entity metadata when known, else from the values. */
+  function buildExportColumns(tableColumns, entityInfo, rows) {
+    return tableColumns.map(column => {
+      const fieldInfo = entityInfo?.Fields?.find(f => f.Name === column.dataIndex);
+      const hasValueList = fieldInfo?.ValueListType === 'List' || fieldInfo?.ValueListType === 'ListOrUserEntry';
+      const metadataType = hasValueList ? 'string' : exportTypeFromFieldType(fieldInfo?.Type);
+      return {
+        field: column.dataIndex,
+        label: typeof column.title === 'string' ? column.title : String(column.dataIndex),
+        type: metadataType || sniffExportType(rows, column.dataIndex)
+      };
+    });
+  }
+
+  /**
+   * The record's primary key columns, placed first so an exported row can be found again, joined or
+   * re-imported. Keys come from `entityPrimaryKeys`, else from entity metadata; a key is added only when the
+   * rows carry it and the table does not already show it. Typed from metadata (a GUID stays text).
+   */
+  function buildKeyExportColumns(entityPrimaryKeys, entityInfo, tableColumns, rows) {
+    const declared = Array.isArray(entityPrimaryKeys) && entityPrimaryKeys.length > 0
+      ? entityPrimaryKeys
+      : (entityInfo?.Fields || []).filter(f => f.IsPrimaryKey).map(f => f.Name);
+    const shown = new Set(tableColumns.map(column => column.dataIndex));
+    const sample = rows.slice(0, EXPORT_SNIFF_ROWS);
+    return declared
+      .filter(field => !shown.has(field) && sample.some(row => row && row[field] !== undefined))
+      .map(field => {
+        const fieldInfo = entityInfo?.Fields?.find(f => f.Name === field);
+        return { field, label: field, type: exportTypeFromFieldType(fieldInfo?.Type) || sniffExportType(rows, field) };
+      });
+  }
+
+  /**
+   * The sort the table is showing: a controlled column's `sortOrder` when any column is controlled
+   * (as antd does), otherwise the sorter from the table's last onChange.
+   */
+  function activeTableSort(tableColumns, sortConfig) {
+    const controlled = tableColumns.filter(column => column.sortOrder !== undefined);
+    if (controlled.length > 0) {
+      const sorted = controlled.find(column => column.sortOrder === 'ascend' || column.sortOrder === 'descend');
+      return sorted ? { column: sorted, order: sorted.sortOrder } : null;
+    }
+    const sorter = Array.isArray(sortConfig) ? sortConfig.find(Boolean) : sortConfig;
+    if (!sorter || !sorter.order) return null;
+    const key = sorter.columnKey !== undefined ? sorter.columnKey : sorter.field;
+    const column = tableColumns.find(candidate => candidate.key === key);
+    return column ? { column, order: sorter.order } : null;
+  }
+
+  /** Rows in the order the table shows them: the column's own sorter, reversed for descend (antd's rule). */
+  function sortRowsLikeTable(rows, sort) {
+    if (!sort || typeof sort.column.sorter !== 'function') return rows;
+    const compare = sort.column.sorter;
+    return rows.slice().sort((a, b) => {
+      const result = compare(a, b, sort.order);
+      return sort.order === 'descend' ? -result : result;
+    });
+  }
+
+  /** A kebab-case export ID from the grid's label, so it is stable across renders. */
+  function gridExportID(label) {
+    const slug = String(label || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    return slug ? `${slug}-grid` : 'data-grid';
+  }
+
   // Always use the MJ unwrapLibraryComponents function to get components from global libraries like antd, this ensures
   // that various library build/package formats are handled correctly and transparently for your code!
   const { Table, Input, Space, Typography, Tag, Tooltip } = unwrapLibraryComponents(antd, 'Table', 'Input', 'Space', 'Typography', 'Tag', 'Tooltip');
@@ -392,6 +496,17 @@ function DataGrid({
   }, [normalizedColumns]);
   
   // Build table columns from column definitions with metadata-aware formatting
+  // Header row colors supplied by the caller, e.g. an organization's branding. Only
+  // the fields given are applied, so an unset field keeps the theme's header styling.
+  const headerCellStyle = React.useMemo(() => {
+    if (!headerStyle) return null;
+    const style = {};
+    if (headerStyle.background) style.background = headerStyle.background;
+    if (headerStyle.color) style.color = headerStyle.color;
+    if (headerStyle.borderColor) style.borderBottom = `2px solid ${headerStyle.borderColor}`;
+    return Object.keys(style).length > 0 ? style : null;
+  }, [headerStyle?.background, headerStyle?.color, headerStyle?.borderColor]);
+
   const tableColumns = React.useMemo(() => {
     return normalizedColumns.map(colDef => {
       const fieldName = colDef.field;
@@ -483,6 +598,7 @@ function DataGrid({
         align: align,
         width: colDef.width || columnWidth, // Use column-specific width if provided
         ellipsis: false, // We'll handle ellipsis manually for click expansion
+        onHeaderCell: headerCellStyle ? () => ({ style: headerCellStyle }) : undefined,
         sorter: (colDef.sortable !== undefined ? colDef.sortable : sorting) ? (a, b) => {
           const valA = a[fieldName];
           const valB = b[fieldName];
@@ -680,7 +796,7 @@ function DataGrid({
 
       return columnDef;
     });
-  }, [normalizedColumns, entityInfo, sorting, filtering, highlightFilterMatches, debouncedFilter, expandedCells, styles]);
+  }, [normalizedColumns, entityInfo, sorting, filtering, highlightFilterMatches, debouncedFilter, expandedCells, styles, headerCellStyle]);
   
   // Filter data based on search term
   // Handles null/undefined data gracefully and returns appropriate defaults
@@ -786,8 +902,11 @@ function DataGrid({
   
   // Handle table sort change
   const handleTableChange = (pag, filters, sorter) => {
-    if (sorter && onSortChanged) {
+    // Tracked even without onSortChanged: the export writes rows in the order the user sees.
+    if (sorter) {
       setSortConfig(sorter);
+    }
+    if (sorter && onSortChanged) {
 
       // Three-state sorting: ascend -> descend -> undefined (clear)
       if (sorter.order) {
@@ -872,7 +991,22 @@ function DataGrid({
     }));
   }, [filteredData, entityPrimaryKeys]);
   
-  return (
+  // Built-in export (see the export helpers at the top of the component). Callers never wrap DataGrid in ExportableData.
+  const { ExportableData } = components || {};
+  const exportEnabled = exportable !== false && Boolean(ExportableData);
+  const exportTitle = exportLabel || entityName || 'Data';
+  const exportColumns = React.useMemo(() => {
+    if (!exportEnabled) return [];
+    const rows = Array.isArray(data) ? data : [];
+    return [
+      ...buildKeyExportColumns(entityPrimaryKeys, entityInfo, tableColumns, rows),
+      ...buildExportColumns(tableColumns, entityInfo, rows)
+    ];
+  }, [exportEnabled, entityPrimaryKeys, tableColumns, entityInfo, data]);
+  // Read at export time, so the file has every filtered row (all pages) in the order the user sees.
+  const getExportRows = () => sortRowsLikeTable(filteredData, activeTableSort(tableColumns, sortConfig));
+
+  const grid = (
     <div className="data-grid-component" style={{ width: '100%' }}>
       <style>{`
         .data-grid-component .ant-table-wrapper,
@@ -894,7 +1028,7 @@ function DataGrid({
       `}</style>
       {filtering && (
         <Space direction="vertical" style={{ width: '100%', marginBottom: 16 }}>
-          <div style={{ position: 'relative' }}>
+          <div style={{ position: 'relative', paddingRight: exportEnabled ? 40 : 0 }}>
             <Search
               placeholder={`Search in ${filterFields ? filterFields.join(', ') : 'all fields'}`}
               value={filterText}
@@ -917,25 +1051,53 @@ function DataGrid({
         </Space>
       )}
       
-      <Table
-        columns={tableColumns}
-        dataSource={dataWithKeys}
-        rowSelection={rowSelection}
-        pagination={pagination}
-        onChange={handleTableChange}
-        scroll={autoFitColumns ? undefined : { x: 'max-content' }}  // Enable horizontal scrolling only when not auto-fitting
-        loading={data === null}  // Only show loading when data is explicitly null (not yet loaded)
-        locale={{
-          emptyText: `No ${entityName || 'records'} found`
-        }}
-        size="middle"
-        onRow={(record) => ({
-          onClick: () => handleRowClick(record),
-          style: {
-            cursor: (onRowClick || (entityName && entityPrimaryKeys && callbacks?.OpenEntityRecord)) ? 'pointer' : 'default'
-          }
-        })}
-      />
+      {/* Auto-fit lets columns shrink and wrap, but an unbreakable value (an email, a tag) can still make the
+          table wider than its container. Scroll inside the grid then, rather than spilling past the parent's
+          border and widening the whole page. `contain: inline-size` keeps the table's width out of the parent's
+          minimum size, so a flex item or grid track holding the grid shrinks to fit instead of growing; minWidth
+          keeps a squeezed grid usable (240px still fits a phone-width card). With
+          autoFitColumns off, antd's scroll.x scrolls the table itself. */}
+      <div style={autoFitColumns ? { width: '100%', maxWidth: '100%', minWidth: 240, overflowX: 'auto', contain: 'inline-size' } : undefined}>
+        <Table
+          columns={tableColumns}
+          dataSource={dataWithKeys}
+          rowSelection={rowSelection}
+          pagination={pagination}
+          onChange={handleTableChange}
+          scroll={autoFitColumns ? undefined : { x: 'max-content' }}  // Enable horizontal scrolling only when not auto-fitting
+          loading={data === null}  // Only show loading when data is explicitly null (not yet loaded)
+          locale={{
+            emptyText: `No ${entityName || 'records'} found`
+          }}
+          size="middle"
+          onRow={(record) => ({
+            onClick: () => handleRowClick(record),
+            style: {
+              cursor: (onRowClick || (entityName && entityPrimaryKeys && callbacks?.OpenEntityRecord)) ? 'pointer' : 'default'
+            }
+          })}
+        />
+      </div>
     </div>
   );
-} 
+
+  if (!exportEnabled) return grid;
+  // With a search row the export button is part of it (toolbar); without one it overlays the table's corner on hover.
+  return (
+    <ExportableData
+      exportID={gridExportID(exportTitle)}
+      label={exportTitle}
+      kind="table"
+      getRows={exportGetRows || getExportRows}
+      columns={exportColumns}
+      placement={filtering ? 'toolbar' : 'overlay'}
+      style={{ width: '100%' }}
+      utilities={utilities}
+      styles={styles}
+      components={components}
+      callbacks={callbacks}
+    >
+      {grid}
+    </ExportableData>
+  );
+}

@@ -8,6 +8,7 @@ import {
   EntityFieldInfo,
   EntityFieldTSType,
   EntityInfo,
+  EntityLifecyclePolicyEngine,
   EntityPermissionType,
   EntitySaveOptions,
   IMetadataProvider,
@@ -18,13 +19,16 @@ import {
   LogErrorEx,
   LogStatus,
   Metadata,
+  NormalizeRunViewParameters,
   ProjectEntityValuesForUser,
   ReadableFieldsTransportKey,
   RecordChangeFieldSecurityProjector,
   RecordChangePayloadFields,
   RunView,
+  RunViewParameters,
   RunViewParams,
   RunViewResult,
+  ServerOperationScopeManager,
   UserInfo,
   ViewPropertyValues,
 } from '@memberjunction/core';
@@ -695,7 +699,8 @@ export class ResolverBase {
           viewInput.IncludeBinaryFields,
           viewInput.AlternateBaseView,
           viewInput.Properties,
-          viewInput.SkipTotalRowCount
+          viewInput.SkipTotalRowCount,
+          viewInput.Parameters
         );
       }
       else {
@@ -745,7 +750,8 @@ export class ResolverBase {
         viewInput.IncludeBinaryFields,
         viewInput.AlternateBaseView,
         viewInput.Properties,
-        viewInput.SkipTotalRowCount
+        viewInput.SkipTotalRowCount,
+        viewInput.Parameters
       );
     } catch (err) {
       console.log(err);
@@ -796,7 +802,8 @@ export class ResolverBase {
         viewInput.IncludeBinaryFields,
         viewInput.AlternateBaseView,
         undefined,
-        viewInput.SkipTotalRowCount
+        viewInput.SkipTotalRowCount,
+        viewInput.Parameters
       );
     } catch (err) {
       console.log(err);
@@ -874,6 +881,7 @@ export class ResolverBase {
           skipTotalRowCount: viewInput.SkipTotalRowCount,
           alternateBaseView: viewInput.AlternateBaseView,
           properties: viewInput.Properties,
+          parameters: viewInput.Parameters,
         });
       } catch (err) {
         LogError(err);
@@ -1254,6 +1262,18 @@ export class ResolverBase {
   }
 
   /**
+   * Validates and normalizes a client-supplied {@link RunViewParameters} map at the GraphQL boundary
+   * using the shared {@link NormalizeRunViewParameters} validator from `@memberjunction/core`.
+   */
+  protected sanitizeRunViewParameters(raw: RunViewParameters | undefined): RunViewParameters | undefined {
+    const normalized = NormalizeRunViewParameters(raw);
+    if (normalized.size === 0) {
+      return undefined;
+    }
+    return Object.fromEntries(normalized);
+  }
+
+  /**
    * Optimized RunViewGenericInternal implementation with:
    * - Field filtering at source (Fix #7)
    * - Improved error handling (Fix #9)
@@ -1283,10 +1303,13 @@ export class ResolverBase {
     includeBinaryFields?: boolean,
     alternateBaseView?: string,
     properties?: ViewPropertyValues,
-    skipTotalRowCount?: boolean
+    skipTotalRowCount?: boolean,
+    parameters?: RunViewParameters
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
+
+      const sanitizedParameters = this.sanitizeRunViewParameters(parameters);
 
       // Prefer the authenticated session's payload user — it is the authoritative per-request
       // identity and (for magic-link sessions) carries the per-session resource scope / synthesized
@@ -1369,6 +1392,7 @@ export class ResolverBase {
           SkipTotalRowCount: skipTotalRowCount,
           AlternateBaseView: alternateBaseView,
           Properties: properties,
+          Parameters: sanitizedParameters,
           TimeZone: userPayload?.TimeZone,
           PreserveRestrictedApiCiphertext: true,
         },
@@ -1507,6 +1531,8 @@ export class ResolverBase {
           rt = 'count_only';
         }
 
+        const sanitizedParameters = this.sanitizeRunViewParameters(param.parameters);
+
         // Build parameters
         runViewParams.push({
           ViewID: param.viewInfo.ID,
@@ -1535,6 +1561,7 @@ export class ResolverBase {
           SkipTotalRowCount: param.skipTotalRowCount,
           AlternateBaseView: param.alternateBaseView,
           Properties: param.properties,
+          Parameters: sanitizedParameters,
           TimeZone: param.userPayload?.TimeZone,
           PreserveRestrictedApiCiphertext: true,
         });
@@ -1901,6 +1928,7 @@ export class ResolverBase {
   }
 
   protected async CreateRecord(entityName: string, input: any, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
+    return ServerOperationScopeManager.Instance.RunInClientCrudBoundary(async () => {
     // Check API key scope authorization for entity create operations
     await this.CheckAPIKeyScopeAuthorization('entity:create', entityName, userPayload);
 
@@ -1951,6 +1979,7 @@ export class ResolverBase {
         });
       }
     } else return null;
+    });
   }
 
   // Before/After CREATE Event Hooks for Sub-Classes to Override
@@ -1960,6 +1989,7 @@ export class ResolverBase {
   protected async AfterCreate(provider: DatabaseProviderBase, input: any) {}
 
   protected async UpdateRecord(entityName: string, input: any, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
+    return ServerOperationScopeManager.Instance.RunInClientCrudBoundary(async () => {
     // Check API key scope authorization for entity update operations
     await this.CheckAPIKeyScopeAuthorization('entity:update', entityName, userPayload);
 
@@ -2066,6 +2096,7 @@ export class ResolverBase {
       throw new GraphQLError('Save Canceled by BeforeSave() handler in ResolverBase', {
         extensions: { code: 'SAVE_ENTITY_ERROR', entityName },
       });
+    });
   }
   
   /**
@@ -2156,6 +2187,7 @@ export class ResolverBase {
     return (
       entityInfo.TrackRecordChanges ||
       ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW.has(entityInfo.Name.trim().toLowerCase()) ||
+      EntityLifecyclePolicyEngine.Instance.RequiresStoredTruthOnUpdate(entityInfo) ||
       !this.hasCompleteOldValues(entityInfo, input.OldValues___) ||
       hasDeniedReadFields ||
       hasNarrowedAuditPayload ||
@@ -2669,6 +2701,7 @@ export class ResolverBase {
     userPayload: UserPayload,
     pubSub: PubSubEngine
   ) {
+    return ServerOperationScopeManager.Instance.RunInClientCrudBoundary(async () => {
     // Check API key scope authorization for entity delete operations
     await this.CheckAPIKeyScopeAuthorization('entity:delete', entityName, userPayload);
 
@@ -2712,6 +2745,7 @@ export class ResolverBase {
         extensions: { code: 'DELETE_ENTITY_ERROR', entityName },
       });
     }
+    });
   }
 
   // Before/After DELETE Event Hooks for Sub-Classes to Override

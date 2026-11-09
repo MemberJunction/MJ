@@ -9,7 +9,7 @@
  */
 
 import { CompositeKey, IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UnwrapPhraseQuotes } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
 import type { LaneKind } from './ScopeExplanation';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeEntityConstraint } from './search.types';
@@ -170,7 +170,8 @@ export class EntitySearchProvider extends BaseSearchProvider {
         contextUser: UserInfo,
         scopeConstraints?: ScopeConstraints
     ): Promise<SearchResultItem[]> {
-        const trimmed = (query ?? '').trim();
+        // Measured without wrapping phrase quotes: the database searches `"a"` as `a`.
+        const trimmed = UnwrapPhraseQuotes((query ?? '').trim());
         if (trimmed.length < EntitySearchProvider.MIN_TERM_LENGTH) return [];
         try {
             // Honor per-provider query transform (e.g., FTS keyword extraction, AI rewrite)
@@ -497,7 +498,9 @@ export class EntitySearchProvider extends BaseSearchProvider {
     ): SearchResultItem[] {
         const md = this.Provider;
         const entityInfo = md.EntityByName(entityName);
-        const queryLower = query.toLowerCase().trim();
+        // Scored as the database searched it: a wrapping pair of phrase quotes is not record text. Left in,
+        // a quoted one-word query (`"SOW"`) matched no field here and every row it fetched was dropped.
+        const queryLower = UnwrapPhraseQuotes(query).toLowerCase().trim();
         const queryTokens = queryLower.split(/\s+/).filter(t => t.length >= 2);
 
         // Get searchable fields and classify them by importance
