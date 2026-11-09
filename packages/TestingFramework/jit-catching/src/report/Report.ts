@@ -1,0 +1,254 @@
+import { GetAgreement } from '@memberjunction/rubrics';
+import { UUIDMap, UUIDSet } from '@memberjunction/global';
+import type { BaseCatchStore } from '../contracts/BaseCatchStore';
+import type { BacktestLedger, LedgerEntry } from '../backtest/Ledger';
+import type { Corpus } from '../corpus/Corpus';
+import type { RunDir } from '../pipeline/RunDir';
+import { BUCKET_SCORE } from '../judges/JudgePanel';
+import { DEFAULT_SETTINGS, type Settings } from '../settings';
+import type { Catch, Feedback, Run, SessionRecord, TokenUsage } from '../types';
+import { CountBy, MeanOf, RateOf, type RateWithInterval } from './Stats';
+
+export type AgreementResult = ReturnType<typeof GetAgreement>;
+/** The human label of a catch, with AuthorChangedPR counted as Bug. */
+export type HumanLabel = 'Bug' | 'Intended' | 'TestFault';
+
+export interface ModelReport {
+    Model: string; Ledgers: string[];
+    /** Caught = run bug PRs whose reported catch matched the fix. */
+    BugSet: { PRs: number; Run: number; Failed: number; Caught: RateWithInterval; AnyWeakMatched: number; NoCatch: number; ApplyFailed: number };
+    /** FalseAlarms = run clean PRs with a reported catch labeled Intended or TestFault. */
+    CleanSet: { PRs: number; Run: number; Failed: number; Reported: number; Labeled: number; Pending: number; FalseAlarms: RateWithInterval; RealBugs: number };
+    Cost: { TotalUSD: number; PerPR: number | null; PerMatchedCatch: number | null; RecordedUSD: number; TableUSD: number };
+    /** Session end reason → count. */
+    Sessions: Record<string, number>;
+    /** Drop rule → count. */
+    Drops: Record<string, number>;
+    Judges: { Model: string; Agreement: AgreementResult; HighOnIntended: number; LowOnBug: number }[];
+    TPProb: Record<HumanLabel, { N: number; Mean: number | null }>;
+    /** Tests that passed on both revisions and have no coverage row. */
+    CoverageNotMeasured: number;
+}
+export interface GateReport { GeneratedAt: string; Models: ModelReport[]; }
+
+export interface GateReportOptions {
+    Ledgers: BacktestLedger[]; Corpus: Corpus; Store: BaseCatchStore; RunDirOf: (runID: string) => RunDir;
+    /** Prices per 1M tokens for TableUSD; the default settings' prices when not given. */
+    Prices?: Settings['Prices'];
+}
+
+/** A catch with its human label (latest feedback by `At`), or null when it has none. */
+type LabeledCatch = Catch & { Label: HumanLabel | null };
+interface RunData { Run: Run | null; Catches: LabeledCatch[]; Sessions: SessionRecord[]; CoverageNotMeasured: number; }
+/** A catch whose truth is known: +1 bug (label Bug or a matched test), −1 not a bug. `Intended` marks a label of Intended or TestFault. */
+interface Truth { Catch: LabeledCatch; Score: 1 | -1; Intended: boolean; }
+
+/**
+ * The gate-1 report: one section per generator model, combining that model's ledgers.
+ * The human label of a catch is its latest feedback by `At`; an AuthorChangedPR answer counts as Bug everywhere
+ * (not a false alarm, score +1, grouped under Bug in TPProb). Bug-set catches take their truth from the match:
+ * a matched test scores +1, an unmatched one −1. The store is read once per run ID; a run folder is read only
+ * when the run has a test that passed on both revisions.
+ */
+export async function BuildGateReport(o: GateReportOptions): Promise<GateReport> {
+    const runIDs = [...new Set(o.Ledgers.flatMap((l) => l.Entries.flatMap((e) => (e.RunID === null ? [] : [e.RunID]))))];
+    const data = new Map<string, RunData>();
+    for (const id of runIDs) data.set(id, await loadRun(id, o.Store, o.RunDirOf));
+    const prices = o.Prices ?? DEFAULT_SETTINGS.Prices;
+    return { GeneratedAt: new Date().toISOString(), Models: groupByModel(o.Ledgers).map((ls) => modelReportOf(ls, o.Corpus, data, prices)) };
+}
+
+async function loadRun(id: string, store: BaseCatchStore, runDirOf: (runID: string) => RunDir): Promise<RunData> {
+    const [run, catches, sessions] = await Promise.all([store.GetRun(id), store.ListCatches(id), store.ListSessions(id)]);
+    const labeled = await Promise.all(catches.map(async (c) => ({ ...c, Label: LatestLabel(await store.ListFeedback(c.ID)) })));
+    return { Run: run, Catches: labeled, Sessions: sessions, CoverageNotMeasured: coverageNotMeasured(catches, () => runDirOf(id)) };
+}
+
+/** The answer of the latest feedback by `At`, AuthorChangedPR as Bug; null when there is none. */
+export function LatestLabel(feedback: Feedback[]): HumanLabel | null {
+    const latest = [...feedback].sort((a, b) => a.At.localeCompare(b.At)).at(-1);
+    if (!latest) return null;
+    return latest.Answer === 'AuthorChangedPR' ? 'Bug' : latest.Answer;
+}
+
+/** Catches that passed on both revisions and have no coverage row in the run's execution file. */
+function coverageNotMeasured(catches: Catch[], dir: () => RunDir): number {
+    const passing = catches.filter((c) => c.Verdict.Label === 'PassesBoth');
+    if (passing.length === 0) return 0;
+    const covered = new UUIDSet(dir().ReadExecution().Coverage.map((c) => c.CandidateTestID));
+    return passing.filter((c) => !covered.Has(c.CandidateTestID)).length;
+}
+
+/** Ledgers grouped by Model, in order of first appearance. */
+function groupByModel(ledgers: BacktestLedger[]): BacktestLedger[][] {
+    const groups = new Map<string, BacktestLedger[]>();
+    for (const l of ledgers) groups.set(l.Model, [...(groups.get(l.Model) ?? []), l]);
+    return [...groups.values()];
+}
+
+/** The report of one model over its ledgers and the loaded run data. */
+function modelReportOf(ledgers: BacktestLedger[], corpus: Corpus, data: Map<string, RunData>, prices: Settings['Prices']): ModelReport {
+    const entries = uniqueEntries(ledgers);
+    const assessed = entries.filter((e) => e.Status === 'Assessed');
+    const runs = assessed.flatMap((e) => runData(e, data));
+    const catches = runs.flatMap((r) => r.Catches);
+    const bug = bugSetOf(entries.filter((e) => e.Set === 'Bug'), corpusPRs(ledgers, corpus, 'Bug'));
+    return {
+        Model: ledgers[0].Model, Ledgers: ledgers.map((l) => l.ID), BugSet: bug,
+        CleanSet: cleanSetOf(entries.filter((e) => e.Set === 'Clean'), corpusPRs(ledgers, corpus, 'Clean'), data),
+        Cost: costOf(entries, assessed.length, bug.AnyWeakMatched, data, prices),
+        Sessions: CountBy(runs.flatMap((r) => r.Sessions.map((s) => s.EndReason))),
+        Drops: CountBy(catches.flatMap((c) => (c.DroppedByRule === null ? [] : [c.DroppedByRule]))),
+        Judges: judgesOf(truthsOf(assessed, data)), TPProb: tpProbOf(catches),
+        CoverageNotMeasured: runs.reduce((s, r) => s + r.CoverageNotMeasured, 0),
+    };
+}
+
+/** Entries of all ledgers, one per set and PR; a later ledger's entry wins. */
+function uniqueEntries(ledgers: BacktestLedger[]): LedgerEntry[] {
+    const byKey = new Map<string, LedgerEntry>();
+    for (const e of ledgers.flatMap((l) => l.Entries)) byKey.set(`${e.Set}:${e.PR}`, e);
+    return [...byKey.values()];
+}
+
+function runData(e: LedgerEntry, data: Map<string, RunData>): RunData[] {
+    const d = e.RunID === null ? undefined : data.get(e.RunID);
+    return d ? [d] : [];
+}
+
+/** Corpus PRs of the set in the slices the ledgers cover for that set. */
+function corpusPRs(ledgers: BacktestLedger[], corpus: Corpus, set: 'Bug' | 'Clean'): number {
+    const slices = new Set(ledgers.filter((l) => l.Set === set || l.Set === 'Both').map((l) => l.Slice));
+    const prs = set === 'Bug' ? corpus.Bug.filter((b) => slices.has(b.Slice)).map((b) => b.BugPR) : corpus.Clean.filter((c) => slices.has(c.Slice)).map((c) => c.PR);
+    return new Set(prs).size;
+}
+
+function bugSetOf(entries: LedgerEntry[], prs: number): ModelReport['BugSet'] {
+    const run = entries.filter((e) => e.Status === 'Assessed');
+    const status = (s: string): number => run.filter((e) => e.Match?.Status === s).length;
+    return {
+        PRs: prs, Run: run.length, Failed: entries.filter((e) => e.Status === 'Failed').length,
+        Caught: RateOf(run.filter((e) => e.Match?.ReportedMatched === true).length, run.length),
+        AnyWeakMatched: status('Matched'), NoCatch: status('NoCatch'), ApplyFailed: status('ApplyFailed'),
+    };
+}
+
+function cleanSetOf(entries: LedgerEntry[], prs: number, data: Map<string, RunData>): ModelReport['CleanSet'] {
+    const run = entries.filter((e) => e.Status === 'Assessed');
+    const reported = run.map((e) => runData(e, data).flatMap((r) => r.Catches).filter((c) => c.Reported)).filter((cs) => cs.length > 0);
+    const any = (label: (l: HumanLabel | null) => boolean): number => reported.filter((cs) => cs.some((c) => label(c.Label))).length;
+    const pending = any((l) => l === null);
+    return {
+        PRs: prs, Run: run.length, Failed: entries.filter((e) => e.Status === 'Failed').length, Reported: reported.length,
+        Labeled: reported.length - pending, Pending: pending,
+        FalseAlarms: RateOf(any((l) => l === 'Intended' || l === 'TestFault'), run.length), RealBugs: any((l) => l === 'Bug'),
+    };
+}
+
+/** Recorded cost of every entry, and the cost of the runs' tokens at the table prices. */
+function costOf(entries: LedgerEntry[], runPRs: number, matched: number, data: Map<string, RunData>, prices: Settings['Prices']): ModelReport['Cost'] {
+    const recorded = entries.reduce((s, e) => s + e.CostUSD, 0);
+    const runIDs = new Set(entries.flatMap((e) => (e.RunID === null ? [] : [e.RunID])));
+    const table = [...runIDs].flatMap((id) => data.get(id)?.Run?.TokensByModel ?? []).reduce((s, u) => s + TableCostOf(u, prices), 0);
+    return { TotalUSD: recorded, PerPR: runPRs === 0 ? null : recorded / runPRs, PerMatchedCatch: matched === 0 ? null : recorded / matched, RecordedUSD: recorded, TableUSD: table };
+}
+
+/** Cost of one usage row at the per-1M-token prices, cache reads at the cached-input price; the recorded cost when the model has no price. */
+export function TableCostOf(u: TokenUsage, prices: Settings['Prices']): number {
+    const p = prices[u.Model];
+    if (!p) return u.CostUSD;
+    return (u.InputTokens * p.Input + u.OutputTokens * p.Output + u.CacheReadTokens * p.CachedInput) / 1_000_000;
+}
+
+/** Catches of run clean PRs with a label, and of run bug PRs whose test the match ran. */
+function truthsOf(assessed: LedgerEntry[], data: Map<string, RunData>): Truth[] {
+    return assessed.flatMap((e) => runData(e, data).flatMap((r) => (e.Set === 'Clean' ? labelTruths(r.Catches) : matchTruths(r.Catches, e))));
+}
+
+function labelTruths(catches: LabeledCatch[]): Truth[] {
+    return catches.flatMap((c) => (c.Label === null ? [] : [{ Catch: c, Score: c.Label === 'Bug' ? 1 as const : -1 as const, Intended: c.Label !== 'Bug' }]));
+}
+
+function matchTruths(catches: LabeledCatch[], e: LedgerEntry): Truth[] {
+    const tests = new UUIDMap(Object.entries(e.Match?.Tests ?? {}));
+    return catches.flatMap((c) => {
+        const matched = tests.Get(c.CandidateTestID);
+        return matched === undefined ? [] : [{ Catch: c, Score: matched ? 1 as const : -1 as const, Intended: false }];
+    });
+}
+
+/**
+ * Per bucket judge: agreement of its score with the truth, and its High buckets on Intended or TestFault labels
+ * and Low buckets on bugs. Scores are shifted by +1 to the categories 0..2 that the kappa needs; errored judges
+ * (null bucket) are left out of that catch's pair.
+ */
+function judgesOf(truths: Truth[]): ModelReport['Judges'] {
+    const models = [...new Set(truths.flatMap((t) => t.Catch.JudgeBuckets.map((b) => b.Model)))].sort();
+    return models.map((model) => {
+        const rated = truths.flatMap((t) => {
+            const b = t.Catch.JudgeBuckets.find((j) => j.Model === model)?.Bucket ?? null;
+            return b === null ? [] : [{ Truth: t, Bucket: b }];
+        });
+        return {
+            Model: model, Agreement: GetAgreement(rated.map((r) => [r.Truth.Score + 1, BUCKET_SCORE[r.Bucket] + 1])),
+            HighOnIntended: rated.filter((r) => r.Bucket === 'High' && r.Truth.Intended).length,
+            LowOnBug: rated.filter((r) => r.Bucket === 'Low' && r.Truth.Score === 1).length,
+        };
+    });
+}
+
+function tpProbOf(catches: LabeledCatch[]): ModelReport['TPProb'] {
+    const of = (label: HumanLabel): { N: number; Mean: number | null } => {
+        const values = catches.flatMap((c) => (c.Label === label && c.TPProb !== null ? [c.TPProb] : []));
+        return { N: values.length, Mean: MeanOf(values) };
+    };
+    return { Bug: of('Bug'), Intended: of('Intended'), TestFault: of('TestFault') };
+}
+
+/** The report as Markdown: a header, then one section per model with each rate followed by its 95% interval. */
+export function RenderMarkdown(r: GateReport): string {
+    return [`# Gate-1 report`, '', `Generated ${r.GeneratedAt}.`, '', ...r.Models.flatMap(renderModel)].join('\n') + '\n';
+}
+
+function renderModel(m: ModelReport): string[] {
+    const b = m.BugSet; const c = m.CleanSet;
+    return [
+        `## ${m.Model}`, '', `Ledgers: ${m.Ledgers.join(', ')}`, '',
+        `### Bug set`, '', `- PRs: ${b.PRs}; run ${b.Run}; failed ${b.Failed}`, `- Caught (reported and matched): ${rate(b.Caught)}`,
+        `- Any weak catch matched: ${b.AnyWeakMatched}; no catch: ${b.NoCatch}; fix did not apply: ${b.ApplyFailed}`, '',
+        `### Clean set`, '', `- PRs: ${c.PRs}; run ${c.Run}; failed ${c.Failed}`, `- With a reported catch: ${c.Reported}; labeled ${c.Labeled}; pending ${c.Pending}`,
+        `- False alarms (Intended or TestFault): ${rate(c.FalseAlarms)}`, `- Real bugs found: ${c.RealBugs}`, '',
+        ...renderCost(m), ...renderCounts('Session end reasons', m.Sessions), ...renderCounts('Drop rules', m.Drops), ...renderJudges(m), '',
+    ];
+}
+
+function renderCost(m: ModelReport): string[] {
+    const k = m.Cost;
+    return [`### Cost`, '', `- Total: ${usd(k.TotalUSD)} (recorded ${usd(k.RecordedUSD)}; at table prices ${usd(k.TableUSD)})`,
+        `- Per run PR: ${k.PerPR === null ? 'n/a' : usd(k.PerPR)}; per matched bug PR: ${k.PerMatchedCatch === null ? 'n/a' : usd(k.PerMatchedCatch)}`, ''];
+}
+
+function renderCounts(title: string, counts: Record<string, number>): string[] {
+    const rows = Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)).map(([k, n]) => `- ${k}: ${n}`);
+    return [`### ${title}`, '', ...(rows.length > 0 ? rows : ['- none']), ''];
+}
+
+function renderJudges(m: ModelReport): string[] {
+    const judges = m.Judges.map((j) => `- ${j.Model}: ${agreement(j.Agreement)}; High on Intended/TestFault ${j.HighOnIntended}; Low on bugs ${j.LowOnBug}`);
+    const tp = (['Bug', 'Intended', 'TestFault'] as const).map((l) => `- TPProb on ${l}: n=${m.TPProb[l].N}, mean ${m.TPProb[l].Mean === null ? 'n/a' : m.TPProb[l].Mean.toFixed(2)}`);
+    return [`### Judge calibration`, '', ...(judges.length > 0 ? judges : ['- no judged catch with a known truth']), ...tp,
+        `- Tests passing both revisions with no coverage measured: ${m.CoverageNotMeasured}`];
+}
+
+function agreement(a: AgreementResult): string {
+    if (a.Withheld) return `agreement withheld (n=${a.SampleSize} < ${a.MinimumSample})`;
+    const kappa = a.Kappa === null || a.Kappa === undefined ? 'n/a' : a.Kappa.toFixed(2);
+    return `kappa ${kappa}, alpha ${a.Alpha === undefined ? 'n/a' : a.Alpha.toFixed(2)} (n=${a.SampleSize})`;
+}
+
+function rate(r: RateWithInterval): string {
+    if (r.Rate === null) return `${r.K}/${r.N} = n/a`;
+    return `${r.K}/${r.N} = ${pct(r.Rate)} (95% CI ${pct(r.Low)}–${pct(r.High)})`;
+}
+function pct(v: number): string { return `${(v * 100).toFixed(1)}%`; }
+function usd(v: number): string { return `$${v.toFixed(2)}`; }

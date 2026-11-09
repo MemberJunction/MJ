@@ -40,3 +40,5 @@ export { SliceSchema, BugPairSchema, CleanEntrySchema, CorpusSchema, LoadCorpus,
 export { MineClean, MineBugs, IsEligibleSource, PullRequestNumberOf, RemovedRangesByFile, MonthWindows, type CleanCandidate, type BugCandidate, type MinerDeps, type LineRange } from './corpus/Miner';
 export { LedgerFile, LedgerID, MatchRecordSchema, LedgerEntrySchema, BacktestLedgerSchema, type MatchRecord, type LedgerEntry, type BacktestLedger } from './backtest/Ledger';
 export { BacktestStep, DefaultCostOfRun, type BacktestOptions, type BacktestDeps } from './backtest/Backtest';
+export { WilsonInterval, RateOf, type RateWithInterval } from './report/Stats';
+export { BuildGateReport, RenderMarkdown, LatestLabel, TableCostOf, type GateReport, type GateReportOptions, type ModelReport, type HumanLabel, type AgreementResult } from './report/Report';

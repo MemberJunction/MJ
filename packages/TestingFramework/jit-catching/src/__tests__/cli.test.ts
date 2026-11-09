@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { Main, type CliDeps } from '../cli';
@@ -20,6 +20,7 @@ function deps(over: Partial<CliDeps> = {}): CliDeps {
     LabelPacket: vi.fn(async () => '# packet\n'),
     BacktestStep: vi.fn(async () => ({ ID: 'l', CorpusPath: '/c.json', Slice: 'Tuning' as const, Set: 'Bug' as const, Model: 'm', CreatedAt: '2026-11-09T10:00:00.000Z', Entries: [] })),
     MatchStep: vi.fn(async () => ({ ID: 'l', CorpusPath: '/c.json', Slice: 'Tuning' as const, Set: 'Bug' as const, Model: 'm', CreatedAt: '2026-11-09T10:00:00.000Z', Entries: [] })),
+    BuildGateReport: vi.fn(async () => ({ GeneratedAt: '2026-11-09T10:00:00.000Z', Models: [] })),
     ...over,
   };
 }
@@ -163,5 +164,43 @@ describe('Main', () => {
       expect(stderr.join('')).toMatch(message);
     }
     expect(d.BacktestStep).not.toHaveBeenCalled();
+  });
+});
+
+describe('Main report', () => {
+  let root: string;
+  beforeEach(() => {
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    root = mkdtempSync(join(tmpdir(), 'jit-cli-report-'));
+    mkdirSync(join(root, '.jit-catch', 'backtests'), { recursive: true });
+    for (const [id, model] of [['c-Tuning-Bug-m1', 'm1'], ['c-Tuning-Clean-m2', 'm2']]) {
+      writeFileSync(join(root, '.jit-catch', 'backtests', `${id}.json`), JSON.stringify({ ID: id, CorpusPath: '/c.json', Slice: 'Tuning', Set: 'Bug', Model: model, CreatedAt: '2026-11-09T10:00:00.000Z', Entries: [] }));
+    }
+    writeFileSync(join(root, 'corpus.json'), JSON.stringify({ Version: 1, Seed: 1, Bug: [], Clean: [] }));
+  });
+  afterEach(() => { rmSync(root, { recursive: true, force: true }); vi.restoreAllMocks(); });
+
+  it('reads every --ledger and the corpus, builds the report and prints it to stdout', async () => {
+    const out: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((s: string | Uint8Array) => { out.push(String(s)); return true; });
+    const d = deps({ RepoRoot: async () => root });
+    expect(await Main(['report', '--ledger', 'c-Tuning-Bug-m1,c-Tuning-Clean-m2', '--corpus', join(root, 'corpus.json')], d)).toBe(0);
+    expect(d.BuildGateReport).toHaveBeenCalledWith(expect.objectContaining({
+      Ledgers: [expect.objectContaining({ ID: 'c-Tuning-Bug-m1' }), expect.objectContaining({ ID: 'c-Tuning-Clean-m2' })], Corpus: { Version: 1, Seed: 1, Bug: [], Clean: [] },
+    }));
+    expect(out.join('')).toMatch(/^# Gate-1 report/);
+  });
+
+  it('writes the report to --out', async () => {
+    const d = deps({ RepoRoot: async () => root }); const file = join(root, 'gate.md');
+    expect(await Main(['report', '--ledger', 'c-Tuning-Bug-m1', '--corpus', join(root, 'corpus.json'), '--out', file], d)).toBe(0);
+    expect(readFileSync(file, 'utf8')).toMatch(/^# Gate-1 report/);
+  });
+
+  it('returns 2 when one --ledger item is not a ledger ID, and 1 when a ledger file is missing', async () => {
+    const d = deps({ RepoRoot: async () => root });
+    expect(await Main(['report', '--ledger', 'c-Tuning-Bug-m1,../x', '--corpus', 'c.json'], d)).toBe(2);
+    expect(await Main(['report', '--ledger', 'nope', '--corpus', join(root, 'corpus.json')], d)).toBe(1);
+    expect(d.BuildGateReport).not.toHaveBeenCalled();
   });
 });
