@@ -286,4 +286,49 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
     expect(root.querySelector('[data-testid="docs-diff-view"]')).not.toBeNull();
     expect(f.componentInstance.CurrentDiff.AddedLines).toBeGreaterThan(0);
   });
+
+  it('supports Insert Live View dialog with searchable Entity Combobox and Default vs. Named View selection', () => {
+    const f = renderDocsViewer('# Live View Doc', false);
+    const root = f.nativeElement as HTMLElement;
+
+    const viewCmd = f.componentInstance.FilteredSlashCommands.find((c) => c.Command === '/entity-view')!;
+    expect(viewCmd.Label).toBe('Live View');
+
+    f.componentInstance.ExecuteSlashCommand(viewCmd);
+    f.detectChanges();
+
+    expect(f.componentInstance.GetInsertModalTitle()).toBe('Insert Live View');
+    expect(root.querySelector('[data-testid="new-block-entity-input"]')).not.toBeNull();
+
+    // Filter entities by typing in the combobox
+    f.componentInstance.OnEntitySearchInput('AI Models');
+    f.detectChanges();
+    expect(f.componentInstance.ShowEntityPickerDropdown).toBe(true);
+    expect(f.componentInstance.FilteredEntityPickerOptions.length).toBeGreaterThanOrEqual(1);
+
+    const aiModelsOpt = f.componentInstance.FilteredEntityPickerOptions.find((e) => e.Name === 'MJ: AI Models')!;
+    expect(aiModelsOpt).toBeDefined();
+
+    f.componentInstance.SelectEntityOption(aiModelsOpt);
+    f.detectChanges();
+    expect(f.componentInstance.NewBlockEntityName).toBe('MJ: AI Models');
+    expect(f.componentInstance.NewBlockLabel).toBe('AI Models — Default View');
+
+    // Switch to Named View mode and pick a saved view
+    f.componentInstance.AvailableEntityViews = [
+      { ID: 'view-active-models', Name: 'Active Production Models', Description: 'IsActive = 1' },
+    ];
+    f.componentInstance.SetBlockViewSelectionMode('saved');
+    f.detectChanges();
+    expect(f.componentInstance.NewBlockViewID).toBe('view-active-models');
+    expect(f.componentInstance.NewBlockViewName).toBe('Active Production Models');
+    expect(f.componentInstance.NewBlockLabel).toBe('AI Models — Active Production Models');
+
+    f.componentInstance.ConfirmBlockInsertModal();
+    f.detectChanges();
+
+    expect(f.componentInstance.MarkdownContent).toContain('"EntityName": "MJ: AI Models"');
+    expect(f.componentInstance.MarkdownContent).toContain('"ViewID": "view-active-models"');
+    expect(f.componentInstance.MarkdownContent).toContain('"ViewName": "Active Production Models"');
+  });
 });

@@ -77,7 +77,7 @@ export interface DocumentSlashCommand {
   Command: string;
   Label: string;
   Description: string;
-  Category: 'Structure' | 'Live Data' | 'OLE Artifact';
+  Category: 'Structure' | 'Live Data' | 'Embedded Artifact';
   Icon: string;
   BlockType?: DocumentBlockKind;
   Snippet?: string;
@@ -1142,23 +1142,23 @@ export class DocumentCollaborationService {
     },
     {
       Command: '/entity-view',
-      Label: 'Live MJ Entity View',
-      Description: 'Embed a live, viewer-scoped (RLS/FLS) MemberJunction Entity View',
+      Label: 'Live View',
+      Description: 'Embed a live MemberJunction View (Default View or Saved View)',
       Category: 'Live Data',
       Icon: 'fa-table-list',
       BlockType: 'EntityView',
     },
     {
       Command: '/saved-query',
-      Label: 'Live MJ Saved Query',
-      Description: 'Embed a parameterized Saved Query with live refresh or frozen snapshot',
+      Label: 'Live Query',
+      Description: 'Embed a parameterized MemberJunction Query with live refresh or snapshot',
       Category: 'Live Data',
       Icon: 'fa-database',
       BlockType: 'SavedQuery',
     },
     {
       Command: '/dashboard',
-      Label: 'MJ Dashboard Part',
+      Label: 'Dashboard Part',
       Description: 'Embed an interactive MemberJunction dashboard KPI or chart part',
       Category: 'Live Data',
       Icon: 'fa-chart-pie',
@@ -1175,16 +1175,16 @@ export class DocumentCollaborationService {
     {
       Command: '/whiteboard',
       Label: 'Inline Whiteboard',
-      Description: 'Embed an interactive Whiteboard canvas with inline editing & delegate permissions',
-      Category: 'OLE Artifact',
+      Description: 'Embed an interactive Whiteboard canvas with inline editing',
+      Category: 'Embedded Artifact',
       Icon: 'fa-chalkboard',
       BlockType: 'Artifact',
     },
     {
       Command: '/artifact',
-      Label: 'Embed Existing MJ Artifact',
-      Description: 'Embed any MJ Artifact by ID with version pinning and inline plugin rendering',
-      Category: 'OLE Artifact',
+      Label: 'Embed Existing Artifact',
+      Description: 'Embed any MemberJunction Artifact with version pinning and inline rendering',
+      Category: 'Embedded Artifact',
       Icon: 'fa-cube',
       BlockType: 'Artifact',
     },

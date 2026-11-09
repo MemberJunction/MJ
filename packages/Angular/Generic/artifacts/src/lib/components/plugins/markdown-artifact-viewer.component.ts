@@ -1,5 +1,5 @@
 import { Component, Input, OnInit, OnDestroy, OnChanges, SimpleChanges, ChangeDetectorRef, ViewChild, ElementRef, inject } from '@angular/core';
-import { DataSnapshot, RunView } from '@memberjunction/core';
+import { DataSnapshot, Metadata, RunView, type EntityInfo, type QueryInfo } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
   DocumentLiveBlockEngine,
@@ -31,6 +31,34 @@ import {
 import { DocumentImportExportService } from '../../services/document-import-export.service';
 
 export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
+
+export interface DocsEntityPickerOption {
+  ID: string;
+  Name: string;
+  DisplayName: string;
+  Icon: string;
+  Subtitle: string;
+  FieldCount: number;
+}
+
+export interface DocsSavedViewOption {
+  ID: string;
+  Name: string;
+  Description: string;
+}
+
+export interface DocsQueryPickerOption {
+  ID: string;
+  Name: string;
+  Category: string;
+  Description: string;
+}
+
+export interface DocsArtifactPickerOption {
+  ID: string;
+  Name: string;
+  Type: string;
+}
 
 /**
  * Collaborative Rich Document Editor & Viewer plugin for `"Markdown Document"` artifacts (§ 4).
@@ -875,9 +903,9 @@ export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
                                 [class.mj-docs-badge--frozen]="seg.Descriptor.Mode === 'Frozen'"
                                 [attr.data-testid]="'block-mode-badge-' + seg.Descriptor.BlockID"
                               >
-                                {{ seg.Descriptor.Mode === 'Live' ? '● Live (Viewer RLS/FLS)' : '❄ Frozen Snapshot' }}
+                                {{ seg.Descriptor.Mode === 'Live' ? '● Live' : '❄ Frozen Snapshot' }}
                               </span>
-                              <span class="mj-docs-badge">{{ seg.Descriptor.Kind }}</span>
+                              <span class="mj-docs-badge">{{ GetBlockKindDisplayLabel(seg.Descriptor) }}</span>
                             </div>
 
                             <div class="mj-docs-live-block__actions">
@@ -1202,50 +1230,264 @@ export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
         </div>
       }
 
-      <!-- Insert Live Block / Embed OLE Artifact Configuration Modal -->
+      <!-- Insert Live Block / Embedded Artifact Configuration Modal -->
       @if (PendingBlockInsertType) {
         <div class="mj-docs-modal-backdrop" data-testid="insert-block-modal">
-          <div class="mj-docs-modal" role="dialog" aria-labelledby="insert-block-modal-title">
-            <div class="mj-docs-modal__header">
-              <h3 id="insert-block-modal-title">
-                Configure {{ PendingBlockIsWhiteboard ? 'Inline Whiteboard' : PendingBlockInsertType }} Block
-              </h3>
+          <div class="mj-docs-modal mj-docs-modal--picker" role="dialog" aria-labelledby="insert-block-modal-title">
+            <div class="mj-docs-modal__header mj-docs-modal__header--with-sub">
+              <div>
+                <h3 id="insert-block-modal-title">{{ GetInsertModalTitle() }}</h3>
+                <p class="mj-docs-modal__subtitle">{{ GetInsertModalSubtitle() }}</p>
+              </div>
+              <button
+                type="button"
+                class="mj-docs-btn mj-docs-btn--icon"
+                title="Close"
+                (click)="CancelBlockInsertModal()"
+              >
+                <i class="fas fa-xmark"></i>
+              </button>
             </div>
+
             <div class="mj-docs-modal__body">
-              <label class="mj-docs-field">
-                <span>Block Title / Label</span>
-                <input type="text" [(ngModel)]="NewBlockLabel" data-testid="new-block-label-input" />
-              </label>
               @if (PendingBlockInsertType === 'EntityView') {
-                <label class="mj-docs-field">
-                  <span>Entity Name</span>
-                  <input
-                    type="text"
-                    [(ngModel)]="NewBlockEntityName"
-                    placeholder="e.g., MJ: Artifacts"
-                    data-testid="new-block-entity-input"
-                  />
-                </label>
-                <label class="mj-docs-field">
-                  <span>Extra Filter (Optional)</span>
-                  <input
-                    type="text"
-                    [(ngModel)]="NewBlockExtraFilter"
-                    placeholder="e.g., Name LIKE '%Report%'"
-                    data-testid="new-block-filter-input"
-                  />
-                </label>
+                <!-- 1. Searchable Entity Combobox Picker (matching mj-fk-search UX) -->
+                <div class="mj-docs-field mj-docs-picker-field">
+                  <div class="mj-docs-field__label-row">
+                    <span>Entity</span>
+                    @if (SelectedEntityOption; as selEnt) {
+                      <span class="mj-docs-picker-selected-pill">
+                        <i [class]="selEnt.Icon"></i>
+                        {{ selEnt.DisplayName }}
+                      </span>
+                    }
+                  </div>
+                  <div class="mj-docs-picker-combobox">
+                    <i class="fas fa-magnifying-glass mj-docs-picker-combobox__search-icon"></i>
+                    <input
+                      type="text"
+                      class="mj-docs-picker-combobox__input"
+                      [(ngModel)]="NewBlockEntityName"
+                      (ngModelChange)="OnEntitySearchInput($event)"
+                      (focus)="OpenEntityPickerDropdown()"
+                      (keydown)="OnEntityPickerKeydown($event)"
+                      placeholder="Start typing an entity name (e.g., Artifacts, Conversations, Users)…"
+                      autocomplete="off"
+                      autocorrect="off"
+                      autocapitalize="off"
+                      spellcheck="false"
+                      role="combobox"
+                      [attr.aria-expanded]="ShowEntityPickerDropdown"
+                      aria-autocomplete="list"
+                      data-testid="new-block-entity-input"
+                    />
+                    @if (NewBlockEntityName) {
+                      <button
+                        type="button"
+                        class="mj-docs-picker-combobox__clear"
+                        title="Clear entity"
+                        (click)="ClearSelectedEntity()"
+                      >
+                        <i class="fas fa-xmark"></i>
+                      </button>
+                    }
+                    <button
+                      type="button"
+                      class="mj-docs-picker-combobox__chevron"
+                      title="Browse all entities"
+                      (click)="ToggleEntityPickerDropdown()"
+                      data-testid="toggle-entity-picker-btn"
+                    >
+                      <i class="fas" [ngClass]="ShowEntityPickerDropdown ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                    </button>
+                  </div>
+
+                  @if (ShowEntityPickerDropdown) {
+                    <div class="mj-docs-picker-dropdown" role="listbox" data-testid="entity-picker-dropdown">
+                      <div class="mj-docs-picker-dropdown__meta">
+                        <span>
+                          Showing {{ FilteredEntityPickerOptions.length }} of {{ EntityPickerOptions.length }} entities
+                        </span>
+                        <span>↑↓ Navigate · Enter Select</span>
+                      </div>
+                      @if (FilteredEntityPickerOptions.length === 0) {
+                        <div class="mj-docs-picker-dropdown__empty">
+                          No matching entities found for "{{ NewBlockEntityName }}".
+                        </div>
+                      } @else {
+                        <div class="mj-docs-picker-dropdown__list">
+                          @for (opt of FilteredEntityPickerOptions; track opt.ID; let idx = $index) {
+                            <button
+                              type="button"
+                              role="option"
+                              class="mj-docs-picker-option"
+                              [class.mj-docs-picker-option--active]="
+                                idx === EntityPickerHighlightIndex || opt.Name === NewBlockEntityName
+                              "
+                              [attr.aria-selected]="opt.Name === NewBlockEntityName"
+                              (mousedown)="SelectEntityOption(opt); $event.preventDefault()"
+                            >
+                              <span class="mj-docs-picker-option__icon">
+                                <i [class]="opt.Icon"></i>
+                              </span>
+                              <span class="mj-docs-picker-option__content">
+                                <span class="mj-docs-picker-option__title">{{ opt.DisplayName }}</span>
+                                <span class="mj-docs-picker-option__sub">{{ opt.Name }} · {{ opt.Subtitle }}</span>
+                              </span>
+                              @if (opt.Name === NewBlockEntityName) {
+                                <i class="fas fa-check mj-docs-picker-option__check"></i>
+                              }
+                            </button>
+                          }
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+
+                <!-- 2. View Selection: Default View vs. Named Saved View -->
+                <div class="mj-docs-field">
+                  <div class="mj-docs-field__label-row">
+                    <span>View Configuration</span>
+                    @if (IsLoadingEntityViews) {
+                      <span class="mj-docs-picker-muted"><i class="fas fa-spinner fa-spin"></i> Loading views…</span>
+                    }
+                  </div>
+                  <div class="mj-docs-view-mode-cards" role="radiogroup" aria-label="View Mode">
+                    <button
+                      type="button"
+                      class="mj-docs-view-mode-card"
+                      [class.mj-docs-view-mode-card--active]="NewBlockViewSelectionMode === 'default'"
+                      (click)="SetBlockViewSelectionMode('default')"
+                      data-testid="view-mode-default-btn"
+                    >
+                      <div class="mj-docs-view-mode-card__top">
+                        <i class="fas fa-table-columns"></i>
+                        <strong>Default View</strong>
+                      </div>
+                      <span class="mj-docs-view-mode-card__desc">
+                        All records using default columns for {{ SelectedEntityDisplayName }}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      class="mj-docs-view-mode-card"
+                      [class.mj-docs-view-mode-card--active]="NewBlockViewSelectionMode === 'saved'"
+                      (click)="SetBlockViewSelectionMode('saved')"
+                      data-testid="view-mode-saved-btn"
+                    >
+                      <div class="mj-docs-view-mode-card__top">
+                        <i class="fas fa-bookmark"></i>
+                        <strong>Named View</strong>
+                        <span class="mj-docs-badge">{{ AvailableEntityViews.length }}</span>
+                      </div>
+                      <span class="mj-docs-view-mode-card__desc">
+                        Pick a saved View configured for {{ SelectedEntityDisplayName }}
+                      </span>
+                    </button>
+                  </div>
+
+                  @if (NewBlockViewSelectionMode === 'saved') {
+                    <div class="mj-docs-saved-view-picker" data-testid="saved-view-picker-panel">
+                      @if (AvailableEntityViews.length > 0) {
+                        <div class="mj-docs-saved-view-list">
+                          @for (viewOpt of AvailableEntityViews; track viewOpt.ID) {
+                            <button
+                              type="button"
+                              class="mj-docs-saved-view-item"
+                              [class.mj-docs-saved-view-item--active]="
+                                NewBlockViewID === viewOpt.ID || NewBlockViewName === viewOpt.Name
+                              "
+                              (click)="SelectSavedViewOption(viewOpt)"
+                              [attr.data-testid]="'saved-view-option-' + viewOpt.ID"
+                            >
+                              <i class="fas fa-table-list"></i>
+                              <div class="mj-docs-saved-view-item__text">
+                                <strong>{{ viewOpt.Name }}</strong>
+                                @if (viewOpt.Description) {
+                                  <span>{{ viewOpt.Description }}</span>
+                                }
+                              </div>
+                              @if (NewBlockViewID === viewOpt.ID || NewBlockViewName === viewOpt.Name) {
+                                <i class="fas fa-circle-check mj-docs-picker-option__check"></i>
+                              }
+                            </button>
+                          }
+                        </div>
+                      } @else if (!IsLoadingEntityViews) {
+                        <div class="mj-docs-saved-view-empty">
+                          No saved views found yet for <strong>{{ SelectedEntityDisplayName }}</strong>. You can enter a
+                          View Name below or use <strong>Default View</strong>.
+                        </div>
+                      }
+                      <label class="mj-docs-field">
+                        <span>Selected View Name</span>
+                        <input
+                          type="text"
+                          [(ngModel)]="NewBlockViewName"
+                          placeholder="Choose from list above or enter a saved View name…"
+                          data-testid="new-block-view-name-input"
+                        />
+                      </label>
+                    </div>
+                  }
+                </div>
               } @else if (PendingBlockInsertType === 'SavedQuery') {
-                <label class="mj-docs-field">
-                  <span>Saved Query Name</span>
-                  <input
-                    type="text"
-                    [(ngModel)]="NewBlockQueryName"
-                    placeholder="e.g., Monthly Active Users"
-                    data-testid="new-block-query-input"
-                  />
-                </label>
+                <div class="mj-docs-field mj-docs-picker-field">
+                  <span>Query</span>
+                  <div class="mj-docs-picker-combobox">
+                    <i class="fas fa-magnifying-glass mj-docs-picker-combobox__search-icon"></i>
+                    <input
+                      type="text"
+                      class="mj-docs-picker-combobox__input"
+                      [(ngModel)]="NewBlockQueryName"
+                      placeholder="Search or enter a Query name…"
+                      autocomplete="off"
+                      data-testid="new-block-query-input"
+                    />
+                  </div>
+                  @if (FilteredQueryPickerOptions.length > 0) {
+                    <div class="mj-docs-saved-view-list">
+                      @for (qOpt of FilteredQueryPickerOptions; track qOpt.ID) {
+                        <button
+                          type="button"
+                          class="mj-docs-saved-view-item"
+                          [class.mj-docs-saved-view-item--active]="NewBlockQueryName === qOpt.Name"
+                          (click)="SelectQueryOption(qOpt)"
+                        >
+                          <i class="fas fa-database"></i>
+                          <div class="mj-docs-saved-view-item__text">
+                            <strong>{{ qOpt.Name }}</strong>
+                            <span>{{ qOpt.Category || 'Query' }}{{ qOpt.Description ? ' · ' + qOpt.Description : '' }}</span>
+                          </div>
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
               } @else if (PendingBlockInsertType === 'Artifact' && !PendingBlockIsWhiteboard) {
+                @if (AvailableArtifactsForPicker.length > 0) {
+                  <div class="mj-docs-field">
+                    <span>Pick Existing Artifact</span>
+                    <div class="mj-docs-saved-view-list">
+                      @for (artOpt of AvailableArtifactsForPicker; track artOpt.ID) {
+                        <button
+                          type="button"
+                          class="mj-docs-saved-view-item"
+                          [class.mj-docs-saved-view-item--active]="NewBlockArtifactID === artOpt.ID"
+                          (click)="SelectArtifactOption(artOpt)"
+                        >
+                          <i class="fas fa-cube"></i>
+                          <div class="mj-docs-saved-view-item__text">
+                            <strong>{{ artOpt.Name }}</strong>
+                            <span>{{ artOpt.Type }}</span>
+                          </div>
+                        </button>
+                      }
+                    </div>
+                  </div>
+                }
                 <label class="mj-docs-field">
                   <span>Target Artifact ID</span>
                   <input
@@ -1256,13 +1498,71 @@ export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
                   />
                 </label>
                 <label class="mj-docs-field">
-                  <span>Artifact Type Name</span>
+                  <span>Artifact Type</span>
                   <input
                     type="text"
                     [(ngModel)]="NewBlockArtifactTypeName"
                     placeholder="e.g., Whiteboard"
                   />
                 </label>
+              }
+
+              <!-- Block Display Title -->
+              <label class="mj-docs-field">
+                <span>Display Title</span>
+                <input type="text" [(ngModel)]="NewBlockLabel" data-testid="new-block-label-input" />
+              </label>
+
+              <!-- Progressive Disclosure: Collapsible Advanced Options for EntityView -->
+              @if (PendingBlockInsertType === 'EntityView') {
+                <div class="mj-docs-advanced-section">
+                  <button
+                    type="button"
+                    class="mj-docs-advanced-toggle"
+                    [attr.aria-expanded]="ShowAdvancedBlockOptions"
+                    (click)="ShowAdvancedBlockOptions = !ShowAdvancedBlockOptions"
+                    data-testid="toggle-advanced-block-options-btn"
+                  >
+                    <span>
+                      <i class="fas fa-sliders"></i>
+                      Advanced Options (Filter, Display Format, Row Limit)
+                    </span>
+                    <i class="fas" [ngClass]="ShowAdvancedBlockOptions ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                  </button>
+
+                  <div class="mj-docs-advanced-body" [hidden]="!ShowAdvancedBlockOptions">
+                    <label class="mj-docs-field">
+                      <span>Extra Filter (Optional SQL WHERE Clause)</span>
+                      <input
+                        type="text"
+                        [(ngModel)]="NewBlockExtraFilter"
+                        placeholder="e.g., Name LIKE '%Report%'"
+                        autocorrect="off"
+                        autocapitalize="off"
+                        spellcheck="false"
+                        data-testid="new-block-filter-input"
+                      />
+                    </label>
+                    <div class="mj-docs-advanced-grid">
+                      <label class="mj-docs-field">
+                        <span>Display Format</span>
+                        <select [(ngModel)]="NewBlockDisplayMode" class="mj-docs-select">
+                          <option value="table">Data Table</option>
+                          <option value="kpi">KPI Summary Cards</option>
+                        </select>
+                      </label>
+                      <label class="mj-docs-field">
+                        <span>Max Rows</span>
+                        <select [(ngModel)]="NewBlockMaxRows" class="mj-docs-select">
+                          <option [ngValue]="25">25 rows</option>
+                          <option [ngValue]="50">50 rows</option>
+                          <option [ngValue]="100">100 rows</option>
+                          <option [ngValue]="250">250 rows</option>
+                        </select>
+                      </label>
+                    </div>
+                  </div>
+                </div>
               }
             </div>
             <div class="mj-docs-modal__footer">
@@ -1273,7 +1573,7 @@ export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
                 data-testid="confirm-insert-block-btn"
                 (click)="ConfirmBlockInsertModal()"
               >
-                Insert Block
+                {{ GetInsertConfirmButtonLabel() }}
               </button>
             </div>
           </div>
@@ -1889,6 +2189,14 @@ export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
         flex-direction: column;
         gap: 4px;
         padding-top: 4px;
+        opacity: 0;
+        transition: opacity 0.14s ease;
+      }
+
+      .mj-docs-segment:hover .mj-docs-segment__gutter,
+      .mj-docs-segment:focus-within .mj-docs-segment__gutter,
+      .mj-docs-segment--selected .mj-docs-segment__gutter {
+        opacity: 1;
       }
 
       .mj-docs-handle-btn {
@@ -2347,12 +2655,338 @@ export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
         font-size: 12px;
       }
 
-      .mj-docs-field input {
-        padding: 6px 10px;
+      .mj-docs-field input,
+      .mj-docs-select {
+        padding: 7px 10px;
         border: 1px solid var(--mj-border-default);
         border-radius: 6px;
         background: var(--mj-bg-surface);
         color: var(--mj-text-primary);
+        font-size: 13px;
+      }
+
+      .mj-docs-modal--picker {
+        max-width: 580px;
+        overflow: visible;
+      }
+
+      .mj-docs-modal__header--with-sub {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+      }
+
+      .mj-docs-modal__subtitle {
+        margin: 4px 0 0 0;
+        font-size: 12px;
+        color: var(--mj-text-muted);
+      }
+
+      .mj-docs-field__label-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .mj-docs-picker-field {
+        position: relative;
+      }
+
+      .mj-docs-picker-selected-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+        background: color-mix(in srgb, var(--mj-brand-primary) 16%, var(--mj-bg-surface));
+        color: var(--mj-brand-primary);
+      }
+
+      .mj-docs-picker-combobox {
+        position: relative;
+        display: flex;
+        align-items: center;
+        border: 1px solid var(--mj-border-strong);
+        border-radius: 8px;
+        background: var(--mj-bg-surface);
+        transition: border-color 0.14s ease, box-shadow 0.14s ease;
+      }
+
+      .mj-docs-picker-combobox:focus-within {
+        border-color: var(--mj-brand-primary);
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 22%, transparent);
+      }
+
+      .mj-docs-picker-combobox__search-icon {
+        padding-left: 11px;
+        color: var(--mj-text-muted);
+        font-size: 12px;
+      }
+
+      .mj-docs-picker-combobox__input {
+        flex: 1;
+        border: none !important;
+        background: transparent !important;
+        padding: 8px 10px !important;
+        font-size: 13px;
+        color: var(--mj-text-primary);
+        outline: none;
+      }
+
+      .mj-docs-picker-combobox__clear,
+      .mj-docs-picker-combobox__chevron {
+        border: none;
+        background: transparent;
+        color: var(--mj-text-muted);
+        padding: 6px 9px;
+        cursor: pointer;
+        font-size: 12px;
+      }
+
+      .mj-docs-picker-combobox__clear:hover,
+      .mj-docs-picker-combobox__chevron:hover {
+        color: var(--mj-text-primary);
+      }
+
+      .mj-docs-picker-dropdown {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
+        z-index: 95;
+        background: var(--mj-bg-surface);
+        border: 1px solid var(--mj-border-strong);
+        border-radius: 8px;
+        box-shadow: 0 14px 32px rgba(0, 0, 0, 0.28);
+        overflow: hidden;
+      }
+
+      .mj-docs-picker-dropdown__meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 10px;
+        font-size: 11px;
+        color: var(--mj-text-muted);
+        background: var(--mj-bg-surface-card);
+        border-bottom: 1px solid var(--mj-border-default);
+      }
+
+      .mj-docs-picker-dropdown__list {
+        max-height: 220px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .mj-docs-picker-dropdown__empty {
+        padding: 14px;
+        text-align: center;
+        font-size: 12px;
+        color: var(--mj-text-muted);
+      }
+
+      .mj-docs-picker-option {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        padding: 8px 12px;
+        border: none;
+        border-bottom: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-primary);
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .mj-docs-picker-option:hover,
+      .mj-docs-picker-option--active {
+        background: var(--mj-bg-surface-hover);
+      }
+
+      .mj-docs-picker-option__icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--mj-bg-surface-card);
+        color: var(--mj-brand-primary);
+        font-size: 13px;
+        flex-shrink: 0;
+      }
+
+      .mj-docs-picker-option__content {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .mj-docs-picker-option__title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--mj-text-primary);
+      }
+
+      .mj-docs-picker-option__sub {
+        font-size: 11px;
+        color: var(--mj-text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .mj-docs-picker-option__check {
+        color: var(--mj-brand-primary);
+        font-size: 13px;
+      }
+
+      .mj-docs-view-mode-cards {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .mj-docs-view-mode-card {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        padding: 10px 12px;
+        border: 1px solid var(--mj-border-default);
+        border-radius: 8px;
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-primary);
+        text-align: left;
+        cursor: pointer;
+        transition: border-color 0.14s ease, background 0.14s ease;
+      }
+
+      .mj-docs-view-mode-card:hover {
+        border-color: var(--mj-brand-primary);
+      }
+
+      .mj-docs-view-mode-card--active {
+        border-color: var(--mj-brand-primary);
+        background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      }
+
+      .mj-docs-view-mode-card__top {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+      }
+
+      .mj-docs-view-mode-card__desc {
+        font-size: 11px;
+        color: var(--mj-text-muted);
+        line-height: 1.35;
+      }
+
+      .mj-docs-saved-view-picker {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 6px;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface-card);
+      }
+
+      .mj-docs-saved-view-list {
+        max-height: 150px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .mj-docs-saved-view-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-primary);
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .mj-docs-saved-view-item:hover,
+      .mj-docs-saved-view-item--active {
+        border-color: var(--mj-brand-primary);
+        background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      }
+
+      .mj-docs-saved-view-item__text {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+      }
+
+      .mj-docs-saved-view-item__text strong {
+        font-size: 12px;
+      }
+
+      .mj-docs-saved-view-item__text span {
+        font-size: 11px;
+        color: var(--mj-text-muted);
+      }
+
+      .mj-docs-saved-view-empty {
+        font-size: 12px;
+        color: var(--mj-text-muted);
+        padding: 6px 4px;
+      }
+
+      .mj-docs-advanced-section {
+        border-top: 1px solid var(--mj-border-default);
+        padding-top: 8px;
+      }
+
+      .mj-docs-advanced-toggle {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 4px;
+        border: none;
+        background: transparent;
+        color: var(--mj-text-secondary);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .mj-docs-advanced-toggle:hover {
+        color: var(--mj-brand-primary);
+      }
+
+      .mj-docs-advanced-body {
+        margin-top: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .mj-docs-advanced-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
       }
 
       .mj-docs-modal__footer {
@@ -2439,15 +3073,29 @@ export class MarkdownArtifactViewerComponent
   public PendingFreezeBlock: DocumentBlockSpec | null = null;
   public FreezeWarningAcknowledged = false;
 
-  // Insert Block Modal
+  // Insert Block Modal & Linked Entity/View/Query/Artifact Pickers
   public PendingBlockInsertType: DocumentBlockKind | null = null;
   public PendingBlockIsWhiteboard = false;
   public NewBlockLabel = '';
   public NewBlockEntityName = 'MJ: Artifacts';
+  public NewBlockViewSelectionMode: 'default' | 'saved' = 'default';
+  public NewBlockViewID = '';
+  public NewBlockViewName = '';
   public NewBlockExtraFilter = '';
+  public NewBlockDisplayMode: 'table' | 'kpi' = 'table';
+  public NewBlockMaxRows = 50;
   public NewBlockQueryName = '';
   public NewBlockArtifactID = '';
   public NewBlockArtifactTypeName = 'Whiteboard';
+  public ShowEntityPickerDropdown = false;
+  public EntityPickerHighlightIndex = 0;
+  public ShowAdvancedBlockOptions = false;
+  public IsLoadingEntityViews = false;
+  public EntityPickerOptions: DocsEntityPickerOption[] = [];
+  public AvailableEntityViews: DocsSavedViewOption[] = [];
+  public QueryPickerOptions: DocsQueryPickerOption[] = [];
+  public AvailableArtifactsForPicker: DocsArtifactPickerOption[] = [];
+  private entitySearchFilteringActive = false;
 
   // Suggestions & Anchored Comments
   public Suggestions: DocumentSuggestionItem[] = [];
@@ -3137,12 +3785,35 @@ export class MarkdownArtifactViewerComponent
     if (cmd.BlockType) {
       this.PendingBlockInsertType = cmd.BlockType;
       this.PendingBlockIsWhiteboard = false;
-      this.NewBlockLabel = cmd.Label;
-      this.NewBlockEntityName = 'MJ: Artifacts';
+      this.ShowEntityPickerDropdown = false;
+      this.EntityPickerHighlightIndex = 0;
+      this.ShowAdvancedBlockOptions = false;
+      this.entitySearchFilteringActive = false;
       this.NewBlockExtraFilter = '';
-      this.NewBlockQueryName = 'Active Artifacts Overview';
-      this.NewBlockArtifactID = '';
-      this.NewBlockArtifactTypeName = 'Whiteboard';
+      this.NewBlockDisplayMode = 'table';
+      this.NewBlockMaxRows = 50;
+      this.NewBlockViewSelectionMode = 'default';
+      this.NewBlockViewID = '';
+      this.NewBlockViewName = '';
+
+      if (cmd.BlockType === 'EntityView') {
+        this.EntityPickerOptions = this.resolveEntityPickerOptions();
+        this.NewBlockEntityName = 'MJ: Artifacts';
+        const defaultEnt = this.SelectedEntityOption;
+        this.NewBlockLabel = defaultEnt ? `${defaultEnt.DisplayName} — Default View` : 'Artifacts — Default View';
+        void this.loadSavedViewsForEntity(this.NewBlockEntityName, defaultEnt?.ID);
+      } else if (cmd.BlockType === 'SavedQuery') {
+        this.QueryPickerOptions = this.resolveQueryPickerOptions();
+        this.NewBlockQueryName = this.QueryPickerOptions[0]?.Name ?? 'Active Artifacts Overview';
+        this.NewBlockLabel = this.NewBlockQueryName;
+      } else if (cmd.BlockType === 'Artifact') {
+        this.NewBlockArtifactID = '';
+        this.NewBlockArtifactTypeName = 'Whiteboard';
+        this.NewBlockLabel = 'Embedded Artifact';
+        void this.loadAvailableArtifactsForPicker();
+      } else {
+        this.NewBlockLabel = cmd.Label;
+      }
       this.cdr.markForCheck();
     }
   }
@@ -3150,8 +3821,374 @@ export class MarkdownArtifactViewerComponent
   public CancelBlockInsertModal(): void {
     this.PendingBlockInsertType = null;
     this.PendingBlockIsWhiteboard = false;
+    this.ShowEntityPickerDropdown = false;
     this.ActiveSlashTargetSegmentID = null;
     this.cdr.markForCheck();
+  }
+
+  public get SelectedEntityOption(): DocsEntityPickerOption | null {
+    const trimmed = (this.NewBlockEntityName ?? '').trim().toLowerCase();
+    if (!trimmed) {
+      return null;
+    }
+    return (
+      this.EntityPickerOptions.find(
+        (opt) => opt.Name.toLowerCase() === trimmed || opt.DisplayName.toLowerCase() === trimmed,
+      ) ?? null
+    );
+  }
+
+  public get SelectedEntityDisplayName(): string {
+    return this.SelectedEntityOption?.DisplayName || this.NewBlockEntityName || 'Entity';
+  }
+
+  public get FilteredEntityPickerOptions(): DocsEntityPickerOption[] {
+    if (!this.entitySearchFilteringActive) {
+      return this.EntityPickerOptions.slice(0, 60);
+    }
+    const query = (this.NewBlockEntityName ?? '').trim().toLowerCase();
+    if (!query) {
+      return this.EntityPickerOptions.slice(0, 60);
+    }
+    const prefixMatches: DocsEntityPickerOption[] = [];
+    const substringMatches: DocsEntityPickerOption[] = [];
+    for (const opt of this.EntityPickerOptions) {
+      const disp = opt.DisplayName.toLowerCase();
+      const name = opt.Name.toLowerCase();
+      const sub = opt.Subtitle.toLowerCase();
+      if (disp.startsWith(query) || name.startsWith(query)) {
+        prefixMatches.push(opt);
+      } else if (disp.includes(query) || name.includes(query) || sub.includes(query)) {
+        substringMatches.push(opt);
+      }
+    }
+    return [...prefixMatches, ...substringMatches].slice(0, 50);
+  }
+
+  public get FilteredQueryPickerOptions(): DocsQueryPickerOption[] {
+    const q = (this.NewBlockQueryName ?? '').trim().toLowerCase();
+    if (!q) {
+      return this.QueryPickerOptions.slice(0, 20);
+    }
+    return this.QueryPickerOptions.filter(
+      (opt) =>
+        opt.Name.toLowerCase().includes(q) ||
+        opt.Category.toLowerCase().includes(q) ||
+        opt.Description.toLowerCase().includes(q),
+    ).slice(0, 20);
+  }
+
+  public OpenEntityPickerDropdown(): void {
+    if (this.EntityPickerOptions.length === 0) {
+      this.EntityPickerOptions = this.resolveEntityPickerOptions();
+    }
+    this.entitySearchFilteringActive = false;
+    this.ShowEntityPickerDropdown = true;
+    this.EntityPickerHighlightIndex = 0;
+    this.cdr.markForCheck();
+  }
+
+  public ToggleEntityPickerDropdown(): void {
+    if (this.ShowEntityPickerDropdown) {
+      this.ShowEntityPickerDropdown = false;
+    } else {
+      this.OpenEntityPickerDropdown();
+    }
+    this.cdr.markForCheck();
+  }
+
+  public OnEntitySearchInput(value: string): void {
+    this.NewBlockEntityName = value;
+    this.entitySearchFilteringActive = true;
+    this.ShowEntityPickerDropdown = true;
+    this.EntityPickerHighlightIndex = 0;
+    this.cdr.markForCheck();
+  }
+
+  public ClearSelectedEntity(): void {
+    this.NewBlockEntityName = '';
+    this.entitySearchFilteringActive = false;
+    this.ShowEntityPickerDropdown = true;
+    this.EntityPickerHighlightIndex = 0;
+    this.AvailableEntityViews = [];
+    this.cdr.markForCheck();
+  }
+
+  public OnEntityPickerKeydown(event: KeyboardEvent): void {
+    const options = this.FilteredEntityPickerOptions;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      if (!this.ShowEntityPickerDropdown) {
+        this.OpenEntityPickerDropdown();
+      } else if (options.length > 0) {
+        this.EntityPickerHighlightIndex = (this.EntityPickerHighlightIndex + 1) % options.length;
+      }
+      this.cdr.markForCheck();
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (this.ShowEntityPickerDropdown && options.length > 0) {
+        this.EntityPickerHighlightIndex = (this.EntityPickerHighlightIndex - 1 + options.length) % options.length;
+      }
+      this.cdr.markForCheck();
+    } else if (event.key === 'Enter' && this.ShowEntityPickerDropdown && options.length > 0) {
+      event.preventDefault();
+      const target = options[this.EntityPickerHighlightIndex] ?? options[0];
+      if (target) {
+        this.SelectEntityOption(target);
+      }
+    } else if (event.key === 'Escape' && this.ShowEntityPickerDropdown) {
+      event.preventDefault();
+      this.ShowEntityPickerDropdown = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  public SelectEntityOption(opt: DocsEntityPickerOption): void {
+    this.NewBlockEntityName = opt.Name;
+    this.ShowEntityPickerDropdown = false;
+    this.entitySearchFilteringActive = false;
+    this.NewBlockViewSelectionMode = 'default';
+    this.NewBlockViewID = '';
+    this.NewBlockViewName = '';
+    this.NewBlockLabel = `${opt.DisplayName} — Default View`;
+    void this.loadSavedViewsForEntity(opt.Name, opt.ID);
+    this.cdr.markForCheck();
+  }
+
+  public SetBlockViewSelectionMode(mode: 'default' | 'saved'): void {
+    this.NewBlockViewSelectionMode = mode;
+    if (mode === 'default') {
+      this.NewBlockViewID = '';
+      this.NewBlockViewName = '';
+      this.NewBlockLabel = `${this.SelectedEntityDisplayName} — Default View`;
+    } else if (this.AvailableEntityViews.length > 0 && !this.NewBlockViewName) {
+      this.SelectSavedViewOption(this.AvailableEntityViews[0]);
+    }
+    this.cdr.markForCheck();
+  }
+
+  public SelectSavedViewOption(viewOpt: DocsSavedViewOption): void {
+    this.NewBlockViewSelectionMode = 'saved';
+    this.NewBlockViewID = viewOpt.ID;
+    this.NewBlockViewName = viewOpt.Name;
+    this.NewBlockLabel = `${this.SelectedEntityDisplayName} — ${viewOpt.Name}`;
+    this.cdr.markForCheck();
+  }
+
+  public SelectQueryOption(qOpt: DocsQueryPickerOption): void {
+    this.NewBlockQueryName = qOpt.Name;
+    this.NewBlockLabel = qOpt.Name;
+    this.cdr.markForCheck();
+  }
+
+  public SelectArtifactOption(artOpt: DocsArtifactPickerOption): void {
+    this.NewBlockArtifactID = artOpt.ID;
+    this.NewBlockArtifactTypeName = artOpt.Type || 'Whiteboard';
+    this.NewBlockLabel = artOpt.Name;
+    this.cdr.markForCheck();
+  }
+
+  public GetInsertModalTitle(): string {
+    if (this.PendingBlockIsWhiteboard) {
+      return 'Insert Inline Whiteboard';
+    }
+    switch (this.PendingBlockInsertType) {
+      case 'EntityView':
+        return 'Insert Live View';
+      case 'SavedQuery':
+        return 'Insert Live Query';
+      case 'DashboardPart':
+        return 'Insert Dashboard Part';
+      case 'InteractiveComponent':
+        return 'Insert Interactive Component';
+      case 'Artifact':
+        return 'Embed Artifact';
+      default:
+        return 'Insert Block';
+    }
+  }
+
+  public GetInsertModalSubtitle(): string {
+    if (this.PendingBlockIsWhiteboard) {
+      return 'Create an interactive Whiteboard canvas embedded directly inside this document.';
+    }
+    switch (this.PendingBlockInsertType) {
+      case 'EntityView':
+        return 'Pick an entity and choose its Default View or a Named View.';
+      case 'SavedQuery':
+        return 'Pick a parameterized MemberJunction Query to render live in this document.';
+      case 'Artifact':
+        return 'Pick an existing MemberJunction Artifact to embed inline.';
+      default:
+        return 'Configure how this live block appears inside your document.';
+    }
+  }
+
+  public GetInsertConfirmButtonLabel(): string {
+    if (this.PendingBlockIsWhiteboard) {
+      return 'Insert Whiteboard';
+    }
+    switch (this.PendingBlockInsertType) {
+      case 'EntityView':
+        return 'Insert View';
+      case 'SavedQuery':
+        return 'Insert Query';
+      case 'Artifact':
+        return 'Embed Artifact';
+      default:
+        return 'Insert Block';
+    }
+  }
+
+  public GetBlockKindDisplayLabel(descriptor: DocumentBlockSpec): string {
+    switch (descriptor.Kind) {
+      case 'EntityView':
+        return descriptor.ViewName ? `View · ${descriptor.ViewName}` : 'View';
+      case 'SavedQuery':
+        return 'Query';
+      case 'DashboardPart':
+        return 'Dashboard';
+      case 'InteractiveComponent':
+        return 'Component';
+      case 'Artifact':
+        return descriptor.ArtifactType || 'Artifact';
+      default:
+        return descriptor.Kind;
+    }
+  }
+
+  private resolveEntityPickerOptions(): DocsEntityPickerOption[] {
+    try {
+      const md = new Metadata();
+      const entities: EntityInfo[] = md.Entities ?? [];
+      if (entities.length > 0) {
+        return [...entities]
+          .sort((a, b) => (a.DisplayNameOrName || a.Name).localeCompare(b.DisplayNameOrName || b.Name))
+          .map((e) => ({
+            ID: e.ID,
+            Name: e.Name,
+            DisplayName: e.DisplayNameOrName || e.Name,
+            Icon: e.Icon || 'fa-solid fa-table',
+            Subtitle: `${e.SchemaName || '__mj'}.${e.BaseTable || ''} · ${e.Fields?.length || 0} fields`,
+            FieldCount: e.Fields?.length || 0,
+          }));
+      }
+    } catch {
+      // Fall back to curated defaults in isolated test environments
+    }
+    return [
+      {
+        ID: 'ent-artifacts',
+        Name: 'MJ: Artifacts',
+        DisplayName: 'Artifacts',
+        Icon: 'fa-solid fa-cube',
+        Subtitle: '__mj.Artifact · 14 fields',
+        FieldCount: 14,
+      },
+      {
+        ID: 'ent-conversations',
+        Name: 'MJ: Conversations',
+        DisplayName: 'Conversations',
+        Icon: 'fa-solid fa-comments',
+        Subtitle: '__mj.Conversation · 12 fields',
+        FieldCount: 12,
+      },
+      {
+        ID: 'ent-ai-models',
+        Name: 'MJ: AI Models',
+        DisplayName: 'AI Models',
+        Icon: 'fa-solid fa-microchip',
+        Subtitle: '__mj.AIModel · 18 fields',
+        FieldCount: 18,
+      },
+      {
+        ID: 'ent-users',
+        Name: 'MJ: Users',
+        DisplayName: 'Users',
+        Icon: 'fa-solid fa-user',
+        Subtitle: '__mj.User · 15 fields',
+        FieldCount: 15,
+      },
+    ];
+  }
+
+  private resolveQueryPickerOptions(): DocsQueryPickerOption[] {
+    try {
+      const md = new Metadata();
+      const queries: QueryInfo[] = md.Queries ?? [];
+      if (queries.length > 0) {
+        return [...queries]
+          .sort((a, b) => a.Name.localeCompare(b.Name))
+          .map((q) => ({
+            ID: q.ID,
+            Name: q.Name,
+            Category: q.Category || 'General',
+            Description: q.Description || '',
+          }));
+      }
+    } catch {
+      // Ignore in isolated test environments
+    }
+    return [];
+  }
+
+  private async loadSavedViewsForEntity(entityName: string, entityId?: string): Promise<void> {
+    this.IsLoadingEntityViews = true;
+    this.AvailableEntityViews = [];
+    this.cdr.markForCheck();
+
+    try {
+      const rv = new RunView();
+      const filter = entityId
+        ? `EntityID='${this.escapeSql(entityId)}'`
+        : `Entity='${this.escapeSql(entityName)}'`;
+      const res = await rv.RunView<{ ID: string; Name: string; Description: string }>({
+        EntityName: 'MJ: User Views',
+        ExtraFilter: filter,
+        OrderBy: 'Name ASC',
+        Fields: ['ID', 'Name', 'Description'],
+        MaxRows: 50,
+        ResultType: 'simple',
+      });
+      if (res.Success && Array.isArray(res.Results)) {
+        this.AvailableEntityViews = res.Results.map((r) => ({
+          ID: r.ID,
+          Name: r.Name,
+          Description: r.Description || '',
+        }));
+      }
+    } catch {
+      // Ignore in offline/unit-test contexts
+    } finally {
+      this.IsLoadingEntityViews = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  private async loadAvailableArtifactsForPicker(): Promise<void> {
+    try {
+      const rv = new RunView();
+      const res = await rv.RunView<{ ID: string; Name: string; Type: string }>({
+        EntityName: 'MJ: Artifacts',
+        ExtraFilter: `Visibility='Always'`,
+        OrderBy: '__mj_UpdatedAt DESC',
+        Fields: ['ID', 'Name', 'Type'],
+        MaxRows: 25,
+        ResultType: 'simple',
+      });
+      if (res.Success && Array.isArray(res.Results)) {
+        this.AvailableArtifactsForPicker = res.Results.map((r) => ({
+          ID: r.ID,
+          Name: r.Name,
+          Type: r.Type || 'Artifact',
+        }));
+        if (this.AvailableArtifactsForPicker.length > 0 && !this.NewBlockArtifactID) {
+          this.SelectArtifactOption(this.AvailableArtifactsForPicker[0]);
+        }
+      }
+    } catch {
+      // Ignore in offline/unit-test contexts
+    }
   }
 
   /**
@@ -3167,14 +4204,25 @@ export class MarkdownArtifactViewerComponent
       BlockID: blockId,
       Kind: this.PendingBlockInsertType,
       Mode: 'Live',
-      DisplayMode: 'table',
+      DisplayMode: this.NewBlockDisplayMode || 'table',
       Title: this.NewBlockLabel || this.PendingBlockInsertType,
     };
 
     if (this.PendingBlockInsertType === 'EntityView') {
       descriptor.EntityName = this.NewBlockEntityName || 'MJ: Artifacts';
+      if (this.NewBlockViewSelectionMode === 'saved') {
+        if (this.NewBlockViewID.trim()) {
+          descriptor.ViewID = this.NewBlockViewID.trim();
+        }
+        if (this.NewBlockViewName.trim()) {
+          descriptor.ViewName = this.NewBlockViewName.trim();
+        }
+      }
       if (this.NewBlockExtraFilter.trim()) {
         descriptor.ExtraFilter = this.NewBlockExtraFilter.trim();
+      }
+      if (this.NewBlockMaxRows > 0) {
+        descriptor.MaxRows = this.NewBlockMaxRows;
       }
     } else if (this.PendingBlockInsertType === 'SavedQuery') {
       descriptor.QueryName = this.NewBlockQueryName || 'Active Artifacts Overview';
@@ -4089,7 +5137,7 @@ export class MarkdownArtifactViewerComponent
   public GetCollaborationStatusLabel(): string {
     switch (this.CollaborationStatus) {
       case 'connected':
-        return 'Live Yjs Sync';
+        return 'Live Sync';
       case 'connecting':
         return 'Connecting…';
       case 'readonly':

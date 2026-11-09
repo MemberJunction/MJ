@@ -232,7 +232,7 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
             <span class="mj-slides-status-dot"></span>
             @switch (ConnectionStatus) {
               @case ('connected') {
-                <span>Live Yjs Sync</span>
+                <span>Live Sync</span>
               }
               @case ('readonly') {
                 <span>Read-Only</span>
@@ -241,7 +241,7 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
                 <span>Access Revoked</span>
               }
               @default {
-                <span>Local CRDT</span>
+                <span>Saved Locally</span>
               }
             }
           </span>
@@ -283,7 +283,7 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
               class="mj-slides-tool-btn"
               (click)="OnSaveVersionCheckpoint()"
               [disabled]="!HasUnsavedChanges"
-              [title]="HasUnsavedChanges ? 'Compact Yjs Room into MJ: Artifact Versions' : 'No unsaved changes to save'"
+              [title]="HasUnsavedChanges ? 'Save changes as a new version' : 'No unsaved changes to save'"
               data-testid="save-slide-version-btn"
             >
               <i class="fa-solid fa-cloud-arrow-up"></i>
@@ -798,7 +798,7 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
                   <div class="mj-slides-speaker-notes-bar" data-testid="speaker-notes-panel">
                     <div class="mj-slides-speaker-notes-header">
                       <span><i class="fa-regular fa-note-sticky"></i> Speaker Notes (Slide {{ ActiveSlideIndex + 1 }})</span>
-                      <span class="mj-slides-muted-hint">Synced per-slide via Yjs CRDT &amp; exported to .pptx notesSlides</span>
+                      <span class="mj-slides-muted-hint">Included in Presenter View &amp; PowerPoint export</span>
                     </div>
                     <textarea
                       class="mj-slides-speaker-notes-input"

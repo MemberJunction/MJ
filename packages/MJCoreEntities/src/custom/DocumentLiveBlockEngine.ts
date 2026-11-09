@@ -311,12 +311,22 @@ export class EntityViewDocumentBlock extends BaseDocumentBlock {
             ? entityInfo.GetDeniedReadFields(user)
             : new Set<string>();
 
-        const requestedFields =
-            Array.isArray(spec.Fields) && spec.Fields.length > 0
-                ? spec.Fields
-                : entityInfo.Fields.filter((f) => f.DefaultInView && !f.IsBinaryFieldType)
-                      .slice(0, 12)
-                      .map((f) => f.Name);
+        let requestedFields: string[] = [];
+        if (Array.isArray(spec.Fields) && spec.Fields.length > 0) {
+            requestedFields = spec.Fields;
+        } else {
+            const defaultInView = entityInfo.Fields.filter((f) => f.DefaultInView && !f.IsBinaryFieldType);
+            if (defaultInView.length > 0) {
+                requestedFields = defaultInView.slice(0, 12).map((f) => f.Name);
+            } else {
+                const nonSystemFields = entityInfo.Fields.filter(
+                    (f) => !f.IsBinaryFieldType && !f.Name.startsWith('__mj_') && f.Name !== 'ID'
+                );
+                requestedFields = (nonSystemFields.length > 0 ? nonSystemFields : entityInfo.Fields.filter((f) => !f.IsBinaryFieldType))
+                    .slice(0, 8)
+                    .map((f) => f.Name);
+            }
+        }
 
         const visibleFieldNames = requestedFields.filter((f) => !deniedFields.has(f.trim().toLowerCase()));
 

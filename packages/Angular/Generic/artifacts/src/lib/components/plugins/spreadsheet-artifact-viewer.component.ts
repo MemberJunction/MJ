@@ -334,7 +334,7 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
               class="mj-sheets-tool-btn mj-sheets-save-btn"
               (click)="SaveNewArtifactVersion()"
               [disabled]="IsSavingVersion || !HasUnsavedChanges"
-              [title]="HasUnsavedChanges ? 'Compact Yjs Working State into New MJ: Artifact Version' : 'No unsaved changes to save'"
+              [title]="HasUnsavedChanges ? 'Save changes as a new version' : 'No unsaved changes to save'"
               data-testid="sheet-save-version-btn"
             >
               <i class="fa-solid fa-floppy-disk"></i>
@@ -371,7 +371,7 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
                 <span>Access Revoked</span>
               }
               @default {
-                <span>Local CRDT</span>
+                <span>Saved Locally</span>
               }
             }
           </span>
